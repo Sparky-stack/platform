@@ -23,6 +23,17 @@ secrets:
     remoteKey: external-dns-cloudflare
     property: api-token
 
+# --- platform secrets (templates/secrets.yaml) ------------------------------------------------------------------------
+secrets:
+  store: platform             # values/role-mgmt.yaml -> platform; values/role-workload.yaml -> default
+  aws:
+    enabled: false            # true only for static IAM user credentials (prefer IRSA / Pod Identity)
+    remoteKey: external-dns-aws
+  cloudflare:
+    enabled: false            # true when using Cloudflare DNS (e.g. installations/<inst>/addons/external-dns/values.yaml)
+    remoteKey: external-dns-cloudflare
+    property: api-token
+
 # --- upstream external-dns chart (1.23.0 / app v0.23.0) ---------------------------------------------------------------
 external-dns:
   policy: upsert-only         # safe default: creates/updates records, never deletes

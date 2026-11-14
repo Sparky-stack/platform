@@ -1,8 +1,11 @@
 # Disabled overlay for OpenChoreo `ai-gateway-agentgateway` module (agentgateway v1.1.0 + agentgateway-crds v1.1.0).
 # Runs on mgmt alongside openchoreo-observability-plane so RCA and FinOps agents reach the AI gateway in-cluster.
 # To enable: see docs/ai-agents.md (uncomment agentgateway{,-crds} in Chart.yaml, add oci://cr.agentgateway.dev/* to
-# AppProject platform, rename this file + templates/ai-gateway-agentgateway.yaml.disabled to *.yaml, or promote to
-# a dedicated addons/agentgateway addon).
+# AppProject platform, merge these values into values.yaml or installations/<inst>/addons/openchoreo-observability-plane/values.yaml,
+# or promote to a dedicated addons/agentgateway addon).
+
+aiGateway:
+  enabled: true                # enables templates/ai-gateway-agentgateway.yaml (Gateway + AgentgatewayBackend + HTTPRoute + Secret)
 
 # agentgateway controller + GatewayClass `agentgateway` (upstream oci://cr.agentgateway.dev/charts/agentgateway v1.1.0)
 agentgateway:
@@ -30,11 +33,10 @@ agentgateway:
 openchoreo-observability-plane:
   rca:
     llm:
-      modelName: "openai/gpt-4o"
-      apiBase: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
+      modelName: "gpt-4o"
+      baseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
       auth: "api_key"
   finOpsAgent:
-    llmProvider: "openai"
-    llmModelName: "gpt-4o"
+    llmName: "gpt-4o"
     llmBaseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
     llmAuth: "api_key"

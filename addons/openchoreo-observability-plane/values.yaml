@@ -56,9 +56,9 @@ agentServerCA:
   configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap. VERIFY ESO generic target
 
 # Secrets from ClusterSecretStore `platform` (never committed; seeded by `make secrets` locally):
-#   key `openchoreo-observability`, properties:
-#     opensearch-username   must be `admin` (OpenSearch demo security config user)
-#     opensearch-password   >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
+#   key `openchoreo-observability`:
+#     opensearch-username     must be `admin` (OpenSearch demo security config user)
+#     opensearch-password     >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
 #     observer-client-secret  == Thunder client openchoreo-observer-resource-reader-client's secret
 #   key `openchoreo-ai` (only read when rca.enabled or finOpsAgent.enabled is true; docs/ai-agents.md):
 #     rca-llm-api-key            LLM key (or placeholder when routed through agentgateway)
@@ -70,11 +70,15 @@ secrets:
   remoteKey: openchoreo-observability
   aiRemoteKey: openchoreo-ai
 
+# Disabled by default; `values/ai-gateway-agentgateway.yaml.disabled` sets this to true (docs/ai-agents.md).
+aiGateway:
+  enabled: false
+
 openchoreo-observability-plane:
   observer:
     secretName: observer-secret             # templates/secrets.yaml (UID_RESOLVER_OAUTH_CLIENT_SECRET)
     # finOpsAdapter:                        # uncomment with finOpsAgent + observability-finops-opencost
-    #   url: "http://finops-adapter:9101"
+    #   url: "http://openchoreo-observability-plane-observability-finops-opencost-adapter:9101"
     #   timeout: "30s"
     controlPlaneApiUrl: "http://api.openchoreo.localhost:8080"
     cors:
@@ -135,38 +139,33 @@ openchoreo-observability-plane:
 
   # --- AI agents (all disabled by default; see docs/ai-agents.md) --------------------------------------------------
   # Enable only after seeding ClusterSecretStore `platform` key `openchoreo-ai`, enabling Thunder clients (53/60),
-  # enabling openchoreo-control-plane authz bindings (rca-agent-binding / finops-agent-binding), and deploying
-  # ai-gateway-agentgateway (or pointing apiBase/llmBaseUrl at an external OpenAI-compatible endpoint).
+  # enabling openchoreo-control-plane authz roles/mappings (rca-agent / finops-agent), and deploying
+  # ai-gateway-agentgateway (or pointing llm.baseUrl / llmBaseUrl at an external OpenAI-compatible endpoint).
   rca:
     enabled: false                           # platform: needs LLM endpoint + Thunder client openchoreo-rca-agent
-    # name: rca-agent
+    # name: sre-agent
+    # observerApiUrl: "http://observer:8080"
+    # openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+    # secretName: "rca-agent-secret"       # templates/secrets.yaml creates it via ESO (RCA_LLM_API_KEY, OAUTH_CLIENT_SECRET)
+    # externalSecrets:
+    #   enabled: true                        # skip upstream sre-agent/secret.yaml so templates/secrets.yaml owns rca-agent-secret
     # llm:
-    #   modelName: "openai/gpt-4o"           # e.g. openai/gpt-4o, anthropic/claude-3-5-sonnet, gemini/gemini-2.0-flash
-    #   apiBase: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
+    #   modelName: "gpt-4o"                  # e.g. gpt-4o, claude-3-5-sonnet, gemini-2.0-flash
+    #   baseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
     #   auth: "api_key"
-    # oauthClientId: "openchoreo-rca-agent"
-    # controlPlaneApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
-    # mcp:
-    #   openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080/mcp"
-    #   observerUrl: "http://observer:8080/mcp"
-    # secret:
-    #   create: false                      # templates/secrets.yaml creates rca-agent-secret via ESO (key openchoreo-ai)
+    # oauth:
+    #   clientId: "openchoreo-rca-agent"
   finOpsAgent:
     enabled: false                           # platform: needs OpenCost + LLM + Thunder client openchoreo-finops-agent
-    # llmProvider: "openai"                # openai | anthropic | gemini
-    # llmModelName: "gpt-4o"
+    # observabilityMcpServerUrl: "http://observer:8080/mcp"
+    # opencostMcpServerUrl: "http://openchoreo-observability-plane-observability-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081"
+    # openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+    # secretName: "finops-agent"           # templates/secrets.yaml creates it via ESO (LLM_API_KEY, OAUTH_CLIENT_SECRET)
+    # llmName: "gpt-4o"
     # llmBaseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
     # llmAuth: "api_key"
-    # oauthClientId: "openchoreo-finops-agent"
-    # controlPlaneApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
-    # prometheus:
-    #   host: "prometheus-operated"
-    #   port: 9090
-    # opencost:
-    #   host: "openchoreo-observability-plane-observability-finops-opencost"
-    #   port: 9003
-    # secret:
-    #   create: false                      # templates/secrets.yaml creates finops-agent-secret via ESO (key openchoreo-ai)
+    # oauth:
+    #   clientId: "openchoreo-finops-agent"
 
 # --- logs: OpenSearch single node (shared with traces and k8s events) + logs-adapter --------------------------------
 observability-logs-opensearch:
@@ -281,16 +280,17 @@ observability-metrics-prometheus:
 # observability-finops-opencost:
 #   enabled: true
 #   opencost:
-#     exporter:
-#       defaultClusterId: "cluster-default"
-#     prometheus:
-#       internal:
-#         enabled: true
-#         serviceName: "prometheus-operated"
-#         port: 9090
-#         namespaceName: "openchoreo-observability-plane"
-#     ui:
-#       enabled: false
+#     opencost:
+#       exporter:
+#         defaultClusterId: "cluster-default"
+#       prometheus:
+#         internal:
+#           enabled: true
+#           serviceName: "prometheus-operated"
+#           port: 9090
+#           namespaceName: "openchoreo-observability-plane"
+#       ui:
+#         enabled: false
 #   finopsAdapter:
 #     enabled: true
 #     name: finops-adapter

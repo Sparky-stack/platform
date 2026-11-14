@@ -51,4 +51,4 @@ The addon ApplicationSet (`charts/platform/templates/appset-addons.yaml`) loads 
 
 ## Untested / VERIFY
 - Live Route53 and Cloudflare reconciliation against real zones and IAM/token credentials.
-- `hack/test.sh` `installationParameters` evaluation for list values (`join "," .Values.dns.domainFilters`) once `external-dns` is added to `charts/platform/values.yaml`.
+- `hack/test.sh` `installationParameters` evaluation for list values (`{{- printf "{%s}" (join "," .Values.dns.domainFilters) -}}`) once `external-dns` is added to `charts/platform/values.yaml`.

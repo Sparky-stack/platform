@@ -5,6 +5,7 @@ templates:
   - templates/agent-server-ca.yaml
   - templates/secrets.yaml
   - templates/opensearch-tlsroute.yaml
+  - templates/ai-gateway-agentgateway.yaml
 tests:
   - it: registers ClusterObservabilityPlane default trusting the in-namespace agent cert
     template: templates/cluster-observability-plane.yaml
@@ -87,3 +88,60 @@ tests:
     template: templates/validate.yaml
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: ai-gateway-agentgateway is disabled by default
+    template: templates/ai-gateway-agentgateway.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: renders ai-gateway-agentgateway Gateway, Backend, HTTPRoute, and ExternalSecret when enabled
+    template: templates/ai-gateway-agentgateway.yaml
+    set:
+      aiGateway.enabled: true
+    asserts:
+      - hasDocuments: { count: 4 }
+      - isKind: { of: ExternalSecret }
+        documentIndex: 0
+      - equal: { path: metadata.name, value: openai-secret }
+        documentIndex: 0
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+        documentIndex: 0
+      - isKind: { of: Gateway }
+        documentIndex: 1
+      - equal: { path: spec.gatewayClassName, value: agentgateway }
+        documentIndex: 1
+      - isKind: { of: AgentgatewayBackend }
+        documentIndex: 2
+      - isKind: { of: HTTPRoute }
+        documentIndex: 3
+
+  - it: creates rca-agent-secret and finops-agent ExternalSecrets from openchoreo-ai when agents are enabled
+    template: templates/secrets.yaml
+    set:
+      openchoreo-observability-plane.rca.enabled: true
+      openchoreo-observability-plane.rca.openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+      openchoreo-observability-plane.rca.externalSecrets.enabled: true
+      openchoreo-observability-plane.finOpsAgent.enabled: true
+      openchoreo-observability-plane.finOpsAgent.openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+    asserts:
+      - hasDocuments: { count: 4 }
+      - equal: { path: metadata.name, value: rca-agent-secret }
+        documentIndex: 2
+      - contains:
+          path: spec.data
+          content: { secretKey: RCA_LLM_API_KEY, remoteRef: { key: openchoreo-ai, property: rca-llm-api-key } }
+        documentIndex: 2
+      - contains:
+          path: spec.data
+          content: { secretKey: OAUTH_CLIENT_SECRET, remoteRef: { key: openchoreo-ai, property: rca-oauth-client-secret } }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: finops-agent }
+        documentIndex: 3
+      - contains:
+          path: spec.data
+          content: { secretKey: LLM_API_KEY, remoteRef: { key: openchoreo-ai, property: finops-llm-api-key } }
+        documentIndex: 3
+      - contains:
+          path: spec.data
+          content: { secretKey: OAUTH_CLIENT_SECRET, remoteRef: { key: openchoreo-ai, property: finops-oauth-client-secret } }
+        documentIndex: 3
