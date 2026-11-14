@@ -71,7 +71,8 @@ tests:
     asserts:
       - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
       - equal: { path: spec.target.name, value: harbor-platform }
-      - exists: { path: 'spec.target.template.data.REGISTRY_HTPASSWD' }
+      # ESO 2.x sprig htpasswd takes (user, password, algorithm); two args fails at reconcile time, not render time
+      - equal: { path: 'spec.target.template.data.REGISTRY_HTPASSWD', value: '{{ htpasswd "harbor_registry_user" .registryPassword "bcrypt" }}' }
       - equal: { path: 'spec.target.template.data["robot-builder"]', value: '{{ index . "builder-secret" }}' }
       - notContains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
       - notExists: { path: 'spec.target.template.data["ghcr-token"]' }
