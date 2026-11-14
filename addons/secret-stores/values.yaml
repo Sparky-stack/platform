@@ -34,6 +34,10 @@ platformStore:
     - openchoreo-control-plane         # backstage-secrets (addon openchoreo-control-plane)
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)
     - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
+    - argo-events                      # falco-webhook (+ falco-notify when on) (addon argo-events)
+    # Per-run ExternalSecrets of ClusterWorkflows (${workflowplane.secretStore} = platform) render into the workflow
+    # plane namespace workflows-<org namespace>: promotion-gate (promotion-gate, promotion-gate-github).
+    - workflows-default
 
 repoCreds:
   name: platform-repo-creds

@@ -13,8 +13,14 @@ if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
 fi
 cd "$ROOT"
 
-# consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`
+# consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`. ExternalSecret
+# templates in (Cluster)Workflow resources count too: they render into the workflow plane namespace
+# workflows-<org namespace> and use ${workflowplane.secretStore} (= platform, addon openchoreo-workflow-plane).
 consumers() {
+  # shellcheck disable=SC2016  # ${workflowplane.secretStore} is a literal OpenChoreo template marker
+  yq -N 'select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .spec.resources[]?.template
+    | select(.kind == "ExternalSecret" and .spec.secretStoreRef.name == "${workflowplane.secretStore}")
+    | "workflows-" + strenv(ORG_NS) + " " + .kind + "/" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
   yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
     | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
                .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
@@ -26,6 +32,8 @@ allowed() {
   yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform") | .spec.conditions[].namespaces[]' "$1"
 }
 
+ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' charts/platform/values.yaml 2>/dev/null || echo default)
+export ORG_NS
 USED=""
 check() {   # check <label> <store render> <render>...
   local label=$1 store=$2; shift 2
