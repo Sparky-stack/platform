@@ -20,6 +20,11 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- $n := required (printf "apps[%d].name is required" $i) $a.name -}}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $n) -}}{{- fail (printf "apps[%d].name %q must be a DNS-1123 label" $i $n) -}}{{- end -}}
 {{- if hasKey $seen $n -}}{{- fail (printf "apps: duplicate name %q" $n) -}}{{- end -}}
+{{- /* The VAP openchoreo-gated-bindings-from-git trusts only Applications named <project>-<app>-<gated env>: a main
+Application <project>-<app> must never look like one. */ -}}
+{{- range $env := $.Values.promotion.gatedEnvironments | default list -}}
+{{- if hasSuffix (printf "-%s" $env) $n -}}{{- fail (printf "apps[%d].name %q must not end in -%s (gated environment: reserved for the gated Application)" $i $n $env) -}}{{- end -}}
+{{- end -}}
 {{- $_ := set $seen $n true -}}
 {{- $out = append $out (dict "name" $n "repoURL" (required (printf "apps[%d].repoURL is required" $i) $a.repoURL) "path" ($a.path | default $.Values.defaults.path) "revision" ($a.revision | default $.Values.defaults.revision) "promotionGates" (ne (toString (dig "promotionGates" true $a)) "false")) -}}
 {{- end -}}

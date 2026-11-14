@@ -37,6 +37,14 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: 'apps: duplicate name "a"' }
 
+  - it: rejects app names ending in -<gated environment> (they would pass as the gated Application in the VAP)
+    template: templates/appproject.yaml
+    set:
+      apps:
+        - { name: hotfix-production, repoURL: https://x/a.git }
+    asserts:
+      - failedTemplate: { errorMessage: 'apps[0].name "hotfix-production" must not end in -production (gated environment: reserved for the gated Application)' }
+
   - it: AppProject allows only the tenant's repos, the org namespace on mgmt and developer kinds
     template: templates/appproject.yaml
     asserts:

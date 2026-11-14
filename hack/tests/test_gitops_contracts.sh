@@ -106,4 +106,16 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
 done
 
+# Tenant projects: the VAP openchoreo-gated-bindings-from-git accepts a gated Application <project>-<app>-<env> for
+# bindings of <project>, so no project may be "<other project>-..." (its apps would look like the other's).
+for tdir in "$ROOT"/installations/*/tenants; do
+  [[ -d "$tdir" ]] || continue
+  projects=$(for f in "$tdir"/*.yaml; do [[ -f "$f" ]] && yq '.project' "$f"; done)
+  clash=""
+  for a in $projects; do for b in $projects; do
+    [[ "$a" != "$b" && "$b" == "$a-"* ]] && clash="$clash $b (prefix $a-)"
+  done; done
+  assert_eq "$clash" "" "tenant projects are not '<other project>-' prefixed ($(basename "$(dirname "$tdir")"))"
+done
+
 finish

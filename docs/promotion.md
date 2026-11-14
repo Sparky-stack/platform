@@ -61,9 +61,19 @@ Application excludes that file.
   - Production is rejected with a clear authz error, also for AI agents using MCP.
 - **ValidatingAdmissionPolicy** `openchoreo-gated-bindings-from-git` (Kubernetes GA, no Kyverno needed on mgmt):
   - Only `system:serviceaccount:argocd:argocd-application-controller` may create, update or delete a production
-    ReleaseBinding.
+    ReleaseBinding, **and only for the gated Application**: Argo CD writes for every Application with that one
+    identity, so the binding's `argocd.argoproj.io/tracking-id` annotation (set by the controller on every apply,
+    `<application>:<group>/<kind>:<namespace>/<name>`; a manifest cannot override it) must name
+    `<spec.owner.projectName>-<app>-<spec.environment>` (`oldObject` on DELETE). A production binding smuggled into
+    any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs through the main Application
+    `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on `production.yaml` cannot be
+    skipped. `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
+    projects named `<other project>-…` (their gated Applications would look like the other project's).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
-  - The garbage collector may delete.
+  - The garbage collector may delete. Consequence: deleting the Component (console / openchoreo-api, which
+    developers may do for their components) cascades to its production binding. Deleting a production component is
+    an offboarding decision; restrict `component:delete` for gated projects in Thunder roles if that must be
+    reviewed too (not done here).
   - Everyone else is denied: openchoreo-api acting for any user, kubectl, scripts.
   - Break glass: `promotion.gitOnly.breakGlassGroups` (empty by default).
 
@@ -164,7 +174,7 @@ developer: PR "staging: releaseName hello-world-<hash>" (review by the team) ─
        pipeline ✓ readiness ✓ smoke ✓ observer ✓ freeze ✓ ─► PR "promote(hello-world): hello-world-<hash> to production"
                                                              + status openchoreo/promotion-gate=success
 release manager (CODEOWNERS) approves ─► merge ─► Argo CD syncs demo-hello-world-production (not in a freeze)
-  └► VAP: written by argocd-application-controller ✓ ─► OpenChoreo renders for prod1
+  └► VAP: argocd-application-controller for Application demo-hello-world-production ✓ ─► OpenChoreo renders for prod1
        └► Kyverno on prod1: signature + SBOM + SLSA + vuln + digest ✓ ─► pods run
 ```
 

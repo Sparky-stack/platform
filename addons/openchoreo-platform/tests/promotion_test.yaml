@@ -78,6 +78,10 @@ tests:
       - matchRegex: { path: "spec.matchConditions[0].expression", pattern: 'in \["production"\]' }
       - matchRegex: { path: "spec.validations[0].expression", pattern: 'system:serviceaccount:argocd:argocd-application-controller' }
       - matchRegex: { path: "spec.validations[0].expression", pattern: 'object.spec == oldObject.spec' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'argocd-application-controller"\] && variables.gatedApp\)' }
+      - equal: { path: "spec.variables[1].expression", value: "request.operation == 'DELETE' ? oldObject : object" }
+      - matchRegex: { path: "spec.variables[2].expression", pattern: "argocd.argoproj.io/tracking-id" }
+      - matchRegex: { path: "spec.variables[3].expression", pattern: "startsWith\\(variables.binding.spec.owner.projectName \\+ '-'\\).*endsWith\\('-' \\+ variables.binding.spec.environment\\)" }
 
   - it: binding denies (not audits)
     template: templates/promotion-git-only.yaml

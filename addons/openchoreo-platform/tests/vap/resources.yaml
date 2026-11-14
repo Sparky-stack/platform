@@ -1,6 +1,11 @@
+# Synced by the gated Application demo-hello-world-production (charts/tenant): allowed for Argo CD only.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ReleaseBinding
-metadata: { name: hello-world-production, namespace: default }
+metadata:
+  name: hello-world-production
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: demo-hello-world-production:openchoreo.dev/ReleaseBinding:default/hello-world-production
 spec:
   owner: { projectName: demo, componentName: hello-world }
   environment: production

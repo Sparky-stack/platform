@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Kyverno CLI tests of rendered admission policies:
 #   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
-#                              bindings from Argo CD pass, from openchoreo-api are denied, staging is out of scope
+#                              bindings from the gated Argo CD Application pass; from openchoreo-api, from the app's
+#                              main Application, another tenant's Application or without tracking-id are denied;
+#                              staging is out of scope
 # and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
@@ -46,11 +48,12 @@ cp_chart="$ROOT/addons/openchoreo-control-plane"
 [[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
 helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
 helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
-for who in argocd:pass api:fail; do
-  out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/resources.yaml" --userinfo "$ocp/tests/vap/${who%%:*}.yaml" \
+# who:resources:expected  (staging bindings are out of scope and not counted)
+for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' argocd:smuggled:'pass: 0, fail: 3'; do
+  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
+  out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
     --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)
-  if [[ "${who##*:}" == pass ]]; then want='pass: 1, fail: 0'; else want='pass: 0, fail: 1'; fi
-  assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: ${who%%:*} -> ${who##*:} (staging skipped)"
+  assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"
 done
 
 finish
