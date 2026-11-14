@@ -67,6 +67,24 @@ hack/                           tests and helper scripts (task test); hack/lib/p
 mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
 ```
 
+## Current practice only
+
+No legacy patterns in this repo. Every addition uses the current upstream-recommended way; anything legacy found in
+review gets replaced, not copied.
+
+- **APIs:** current stable versions only (no deprecated or beta when GA exists): Gateway API instead of Ingress, CAPI
+  v1beta2 with ClusterClass topology, ESO v1, Kyverno CEL policy types (ValidatingPolicy, MutatingPolicy,
+  ImageValidatingPolicy) instead of new ClusterPolicy, ValidatingAdmissionPolicy where native fits, ApplicationSets with
+  goTemplate, server-side apply.
+- **Security defaults:** Pod Security `restricted` is the target (`baseline` Audit only as a step), no privileged
+  containers without a justifying comment, workload identity / OIDC instead of static cloud keys, secrets only via ESO,
+  keyless Sigstore signing with SBOM and provenance verified at admission, images pinned by digest and multi-arch,
+  never `latest`.
+- **Runtime:** Cilium eBPF with kube-proxy replacement, Istio ambient (no sidecars), OpenTelemetry (no vendor agents),
+  external cloud controller managers, OCI Helm charts, rootless BuildKit (no Docker-in-Docker), Crossplane v2.
+- **Delivery:** everything declarative from git; no imperative `kubectl` steps or hand-run scripts on the path to
+  production; CI providers are thin wrappers over the in-cluster OpenChoreo workflow plane.
+
 ## Working rules
 - Local mgmt context is `k3d-platform-mgmt`. The homelab context `koorikla` runs other production workloads: never
   deploy there.
