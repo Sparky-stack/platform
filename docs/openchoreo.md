@@ -42,6 +42,25 @@ There is no hard ordering between Applications; Argo CD retries cover it:
 References between OpenChoreo objects (Project -> DeploymentPipeline, Environment -> ClusterDataPlane, Component ->
 ComponentType) are not validated by the API server; the controllers reconcile once the target exists.
 
+### Argo CD requirements
+
+- `ServerSideApply=true` on the `gateway-api-crds` and `kgateway` Applications (CRDs of 244-520 KB exceed the
+  client-side last-applied annotation).
+- PVC health override in `argocd-cm` so a `Pending` PVC counts as Healthy: Thunder's PVCs are PreSync hooks and
+  local-path binds only when the setup Job (a later hook) mounts them; without it the PreSync phase never ends.
+
+  ```yaml
+  resource.customizations.health.PersistentVolumeClaim: |
+    hs = {}
+    if obj.status ~= nil and (obj.status.phase == "Bound" or obj.status.phase == "Pending") then
+      hs.status = "Healthy"; hs.message = obj.status.phase; return hs
+    end
+    hs.status = "Progressing"; hs.message = "Waiting for PVC"; return hs
+  ```
+- Retries with backoff on every generated Application (CRDs from other Applications).
+- Helm hooks run on every sync under Argo (Helm: install only). Thunder's setup Job is idempotent; the control
+  plane's authz bootstrap Job (PostSync) re-applies its roles.
+
 ## Trust model
 
 Upstream's multi-cluster recipe copies the agent's self-signed CA back to the control plane by hand, or copies the

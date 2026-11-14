@@ -6,6 +6,8 @@
 # free (upstream installs it into the plane namespace, we use the catalog namespace).
 # Proxies: Service type LoadBalancer (kgateway default) -> k3s klipper servicelb binds the listener ports as hostPorts
 # on the node containers (mgmt: 8080/8443 published by k3d; CAPD workload clusters: 19080 on the node IP).
+# kgateway-crds ships its CRDs under templates/ and gatewayparameters is ~520 KB: the addon Application needs
+# ServerSideApply=true (client-side apply's last-applied annotation is capped at 256 KiB).
 kgateway-crds: {}
 
 kgateway:
