@@ -54,17 +54,35 @@ eval_param() {
   if [[ -n "$path" ]]; then yq ".$path" "$INST_FILE"; else printf '%s\n' "$t"; fi
 }
 
-# render <addon> <role> <name> <provider> <environment> <region>
+# server_part <url> <url|host|port>: piece of an Argo cluster secret's server URL (catalog clusterServerParameters).
+server_part() {
+  local url=$1 rest
+  rest=${url#*://}; rest=${rest%%/*}
+  case "$2" in
+    url) printf '%s\n' "$url" ;;
+    host) printf '%s\n' "${rest%:*}" ;;
+    port) if [[ "$rest" == *:* ]]; then printf '%s\n' "${rest##*:}"; else echo 443; fi ;;
+  esac
+}
+SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
+MGMT_SERVER=https://kubernetes.default.svc
+
+# render <addon> <role> <name> <provider> <environment> <region> <cni> <server>
 render() {
-  local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 dir="addons/$1" ns vf p ip it
+  local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 dir="addons/$1" ns vf p ip it part
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
   for vf in "$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" \
-    "$INST_DIR/addons/$addon/values.yaml" "$INST_DIR/addons/$addon/env-$env.yaml" \
+    "$dir/values/cni-$cni.yaml" "$INST_DIR/addons/$addon/values.yaml" "$INST_DIR/addons/$addon/env-$env.yaml" \
     "$INST_DIR/addons/$addon/cluster-$name.yaml"; do
     if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
   done
-  vargs+=(--values "$INST_FILE" --set-string "cluster.name=$name,cluster.role=$role,cluster.provider=$prov,cluster.environment=$env,cluster.region=$region")
+  vargs+=(--values "$INST_FILE" --set-string "cluster.name=$name,cluster.role=$role,cluster.provider=$prov,cluster.environment=$env,cluster.cni=$cni,cluster.region=$region")
+  while IFS=$'\t' read -r p part; do
+    [[ -n "$p" ]] || continue
+    if [[ "$part" == port ]]; then vargs+=(--set "$p=$(server_part "$server" port)")
+    else vargs+=(--set-string "$p=$(server_part "$server" "$part")"); fi
+  done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" "$CATALOG" | tr -d '\r')
   while IFS= read -r p; do
     if [[ -n "$p" ]]; then vargs+=(--set-string "$p=$name"); fi
   done < <(yq ".addons[\"$addon\"].clusterNameParameters[]?" "$CATALOG" | tr -d '\r')
@@ -100,17 +118,26 @@ for dir in addons/*; do
     if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" \
       && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$m_prov"; }; then
       render "$addon" mgmt "$(yq '.mgmt.name // "mgmt"' "$INST_FILE")" "$m_prov" \
-        "$(yq '.mgmt.environment // "mgmt"' "$INST_FILE")" "$(yq '.mgmt.region // "local"' "$INST_FILE")"
+        "$(yq '.mgmt.environment // "mgmt"' "$INST_FILE")" "$(yq '.mgmt.region // "local"' "$INST_FILE")" \
+        "$(yq '.mgmt.cni // "flannel"' "$INST_FILE")" "$MGMT_SERVER"
     fi
   fi
   if printf '%s\n' "$roles" | grep -qx workload; then
     for cf in "$INST_DIR"/clusters/*.yaml; do
       [[ -f "$cf" ]] || continue
       c_prov=$(yq '.provider // "docker"' "$cf")
-      if enabled "$addon" "$(yq ".addons[\"$addon\"]" "$cf")" \
-        && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
-        render "$addon" workload "$(yq '.name' "$cf")" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
-          "$(yq '.region // "local"' "$cf")"
+      c_name=$(yq '.name' "$cf")
+      # Addon labels as charts/cluster renders them (some derive from facts, e.g. cilium from cni), else the file.
+      if [[ ! -f "$TMP/cluster-$c_name.yaml" ]]; then
+        helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
+          > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
+      fi
+      toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" \
+        "$TMP/cluster-$c_name.yaml" 2>/dev/null || true)
+      [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
+      if enabled "$addon" "$toggle" && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
+        render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
+          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER"
       fi
     done
   fi
