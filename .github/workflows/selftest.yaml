@@ -83,3 +83,16 @@ jobs:
       image_name: ci-selftest-elixir
       build_args: |
         APP_NAME=ci_selftest
+
+  ruby:
+    uses: ./.github/workflows/ruby.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: fixtures/ruby
+      image_name: ci-selftest-ruby
