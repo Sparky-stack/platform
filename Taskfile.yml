@@ -48,7 +48,7 @@ tasks:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} up'
 
   secrets:
-    desc: Seed/refresh platform-secrets from GITHUB_APP_* / GITHUB_TOKEN / GHCR_* env (gh CLI fallback; local backend only)
+    desc: Seed/refresh platform-secrets from GITHUB_APP_* / PLATFORM_GITHUB_TOKEN / GHCR_* env (gh CLI fallback; local backend only)
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} secrets'
 

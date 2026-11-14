@@ -69,7 +69,7 @@ labels you should *not* rename: [docs/forking.md](docs/forking.md).
 
 Individual bootstrap stages:
 
-- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `platform-github-app`, `openchoreo`) from `GITHUB_APP_*` / `GITHUB_TOKEN` / `GHCR_*` env vars, falling back to the `gh` CLI (preserves existing `openchoreo` secret keys; [docs/forking.md](docs/forking.md#seeding-locally-task-secrets))
+- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `platform-github-app`, `openchoreo`) from `GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` / `GHCR_*` env vars, falling back to the `gh` CLI (preserves existing `openchoreo` secret keys; [docs/forking.md](docs/forking.md#seeding-locally-task-secrets))
 - `task argocd` — install/upgrade Argo CD (`addons/argo-cd`) and apply `bootstrap/root-app.yaml`
 - `task ui` — Argo CD UI on http://localhost:8081; `task kubeconfig CLUSTER=dev1` — host-usable kubeconfig of a CAPD cluster
 
@@ -83,7 +83,7 @@ task up INST=aws-example
 task up INST=hetzner-example
 ```
 
-When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation and local `platform-secrets` seeding, installs Argo CD with `addons/argo-cd/values.yaml`, optionally seeds the bootstrap repo secret from `GITHUB_USER`/`GITHUB_TOKEN` if set, and applies `root-app.yaml` pointing at `installations/<inst>/installation.yaml`.
+When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation and local `platform-secrets` seeding, installs Argo CD with `addons/argo-cd/values.yaml`, optionally seeds the bootstrap repo secret from `GITHUB_APP_*` or `PLATFORM_GITHUB_TOKEN` if set, and applies `root-app.yaml` pointing at `installations/<inst>/installation.yaml`.
 
 ## Adding clusters, addons, and tenants
 

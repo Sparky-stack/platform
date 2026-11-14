@@ -92,7 +92,7 @@ tools and version drift against `mise.toml`.
 | shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint` |
 | python | 3.14.10 | core:python | `hack/crd2schema.py`, test helpers (stdlib only) |
 | task | 3.54.0 | aqua:go-task/task | entrypoint |
-| gh | 2.104.0 | aqua:cli/cli | `task secrets` falls back to `gh auth token` when no `GITHUB_APP_*` / `GITHUB_TOKEN` is set |
+| gh | 2.104.0 | aqua:cli/cli | `task secrets` falls back to `gh auth token` when no `GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` is set |
 
 Docker is the one prerequisite mise does not install (Docker Desktop, OrbStack, Colima, Rancher Desktop or Docker
 Engine). Git Bash comes with Git for Windows.

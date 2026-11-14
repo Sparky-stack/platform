@@ -62,9 +62,10 @@ rewrites:
 | `REPO` | required | `https://<host>/<owner>/<name>.git` (ssh URLs are rejected: Argo CD credentials here are HTTPS) |
 | `ORG` | `REPO` minus `/<name>.git` | repo-creds prefix, if your app repos live in another org than the platform repo |
 | `APPS_ORG` | `ORG` | org of the tenant app repos. `APPS_ORG=https://github.com/koorikla` keeps the upstream hello-world when you did not fork it |
-| `DOCS=1` | off | also rewrite `github.com/koorikla/` and `ghcr.io/koorikla/` links in `README.md`, `docs/*.md` and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`) |
+| `DOCS=1` | off | also rewrite links in `README.md`, `docs/*.md` (except this page: its fork and mirror steps must keep naming upstream) and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`): `koorikla/platform` URLs and `[koorikla/platform]` link texts become `REPO` (a renamed fork gets its own name), `koorikla/hello-world` and `ghcr.io/koorikla/` follow `APPS_ORG` |
+| `CI_ORG` | unset | with `DOCS=1`: org of your `koorikla/ci` fork. Unset, `koorikla/ci` links stay upstream |
 
-`make set-repo REPO=... ORG=... APPS_ORG=... DOCS=1` works too.
+`make set-repo REPO=... ORG=... APPS_ORG=... DOCS=1 CI_ORG=...` works too.
 
 What it deliberately leaves alone, and what you edit by hand if it applies:
 
@@ -72,7 +73,7 @@ What it deliberately leaves alone, and what you edit by hand if it applies:
 |---|---|
 | Label and annotation keys `platform.koorikla.io/*`, `addons.platform.koorikla.io/*` | **keep**: they are an API contract between the CAPI clusters, Argo CD cluster secrets and ApplicationSets (docs/conventions.md), not an org name. Renaming them means renaming every selector at once |
 | Chart defaults in `addons/*/values.yaml` (e.g. `addons/secret-stores` `installation.githubOrg`) | keep: only used when a chart renders standalone; every generated Application gets `installation.yaml`, which `set-repo` rewrote. The unit tests assert the defaults |
-| Prose and diagrams (`koorikla/platform`, `ghcr.io/koorikla/*`) | `DOCS=1`, or leave them: they describe upstream |
+| Links in prose and diagrams | `DOCS=1`, or leave them: they describe upstream. Plain-text mentions (`gh repo fork koorikla/platform`, diagram box titles) stay either way |
 | Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/koorikla/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
 | Your hello-world fork: `uses: koorikla/ci/.github/workflows/go.yaml@v1` | keep (public, but pin a SHA), or fork `koorikla/ci` and change the `uses:` owner |
 | `.devcontainer/devcontainer.json` name, `mise.toml` comment, schema cache dir `koorikla-platform` | cosmetic |
@@ -82,26 +83,26 @@ What it deliberately leaves alone, and what you edit by hand if it applies:
 Principles (AGENTS.md "Current practice only"): a **GitHub App** with short-lived installation tokens is the primary
 GitHub credential; a **fine-grained PAT**, scoped to the selected repos with an expiry, only as fallback; **no classic
 PATs**; cloud access through **workload identity / OIDC**, not static keys; image signing **keyless**. Every secret
-reaches the clusters through External Secrets Operator from one ClusterSecretStore, `platform`
-(docs/architecture.md "Secrets"):
+reaches the clusters through External Secrets Operator from one ClusterSecretStore, `platform`, which only the mgmt
+namespaces that consume it may read (docs/architecture.md "Secrets"):
 
 | `secrets.backend` | Where the keys below live | How you put them there |
 |---|---|---|
 | `kubernetes` (local) | namespace `platform-secrets` on mgmt | `task secrets` (part of `task up`) from the env vars below |
-| `aws` | AWS Secrets Manager, secret name `<secrets.aws.prefix><key>`, JSON object of properties | `aws secretsmanager create-secret --name platform-github --secret-string file://platform-github.json` |
+| `aws` | AWS Secrets Manager, secret name `<secrets.aws.prefix><key>`, JSON object of properties | `aws secretsmanager create-secret --name platform-github --secret-string file://platform-github.json` (create the file with `umask 077` and delete it afterwards, see below) |
 | `vault` | Vault / OpenBao KV v2 at `<secrets.vault.path>/<key>` | `vault kv put platform/platform-github githubAppID=... githubAppInstallationID=... githubAppPrivateKey=@app.pem` |
 
 ### What needs which credential
 
 | Need | Key (properties) | Least privilege | Seeded locally from |
 |---|---|---|---|
-| **(a)** Argo CD reads the fork (+ app repos) when private | `platform-github` (`githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey`) or fallback (`username`, `token`) | GitHub App, *Repository permissions*: **Contents: Read**, Metadata: Read; installed on *only select repositories*. Fallback: fine-grained PAT, same repos, Contents: Read-only, ≤ 90 days. Deploy keys are per repo and do not fit the org-wide repo-creds template | `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE`, or `GITHUB_TOKEN` [+ `GITHUB_USER`] |
-| **(b)** k3s nodes pull private images from GHCR | `platform-ghcr` (`username`, `token`) | Prefer **no credential**: make the packages public and set `secrets.nodeRegistryAuth.enabled: false`. GHCR does not accept GitHub App tokens or fine-grained PATs outside Actions (only classic PATs with `read:packages`; **VERIFY** before each use, GitHub may have closed the gap); a classic PAT goes against this repo's rules, so it needs an explicit security sign-off: dedicated machine user, `read:packages` only, short expiry. The long-term answer is the planned Harbor pull-through cache with robot accounts | `GHCR_TOKEN` + `GHCR_USER` |
+| **(a)** Argo CD reads the fork (+ app repos) when private | `platform-github` (`githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey`) or fallback (`username`, `token`) | GitHub App, *Repository permissions*: **Contents: Read**, Metadata: Read; installed on *only select repositories*. Fallback: fine-grained PAT, same repos, Contents: Read-only, ≤ 90 days. Deploy keys are per repo and do not fit the org-wide repo-creds template | `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE`, or `PLATFORM_GITHUB_TOKEN` [+ `PLATFORM_GITHUB_USER`] |
+| **(b)** k3s nodes pull private images from GHCR | `platform-ghcr` (`username`, `token`) | Prefer **no credential**: make the packages public and set `secrets.nodeRegistryAuth.enabled: false` (`installations/local` already does: the koorikla images are public). GHCR does not accept GitHub App tokens or fine-grained PATs outside Actions: ["GitHub Packages only supports authentication using a personal access token (classic)"](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry) (**VERIFY** before each use, GitHub may close the gap). A classic PAT goes against this repo's rules, so it needs an explicit security sign-off: dedicated machine user, `read:packages` only (UI trap: ticking `write:packages` also selects the whole `repo` scope), short expiry. The long-term answer is the planned Harbor pull-through cache with robot accounts | `GHCR_TOKEN` + `GHCR_USER` |
 | **(c)** The platform pushes to git: build-plane GitOps hand-off committing image refs, promotion PRs, Backstage scaffolder creating repos (planned: no consumer on `main` yet) | `platform-github-app` (`githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey`) | a **second** GitHub App: Contents: Read and write, Pull requests: Read and write, Metadata: Read; Workflows: Read and write only if it commits `.github/workflows/*` (scaffolder templates); Administration: Read and write only for scaffolder repo creation (org installation). Fallback: fine-grained PAT with the same permissions | `GITHUB_PUSH_APP_ID`, `GITHUB_PUSH_APP_INSTALLATION_ID`, `GITHUB_PUSH_APP_PRIVATE_KEY_FILE` |
 | **(d)** GitHub Actions in your forks (build, push to GHCR, sign, bump the Workload) | nothing to store | `GITHUB_TOKEN` with `packages: write`, `contents: write` for the bump commit, `id-token: write` for keyless cosign (Fulcio/Rekor); hello-world's `ci.yaml` already declares them | n/a |
 | **(e)** Cloud and extras | `capi-aws`, `capi-hetzner`; external-dns `external-dns-*`; OpenChoreo AI agents' LLM keys | see docs/providers.md (CAPA should use IRSA / Pod Identity instead of `AWS_B64ENCODED_CREDENTIALS` where possible; CAPH needs an hcloud token), and each addon's docs once merged | your secret manager |
 
-Two read Apps vs one read-write App: keep them separate so the Argo CD credential (which every sync uses) cannot
+One read App and one read-write App: keep them separate so the Argo CD credential (which every sync uses) cannot
 write. Both can be installed on the same repos.
 
 ### Creating the GitHub App (read, for Argo CD)
@@ -111,7 +112,7 @@ write. Both can be installed on the same repos.
 2. *Repository permissions*: Contents **Read-only** (Metadata Read-only is added automatically). Nothing else.
 3. *Where can this GitHub App be installed?* Only on this account. Create.
 4. Note the **App ID** on the app's page. *Generate a private key* (downloads a `.pem`; store it in your password
-   manager, delete the download after seeding).
+   manager, `chmod 600` it while it is on disk (`task secrets` warns otherwise), delete the download after seeding).
 5. *Install App* → *Only select repositories* → your platform fork (+ app repos). The **installation ID** is the last
    number of the URL you land on (`.../settings/installations/<id>`).
 6. Tell the secret-stores addon to template Argo CD's GitHub App fields instead of username/password: create
@@ -128,29 +129,45 @@ is stored.
 ### Seeding locally (`task secrets`)
 
 `task secrets` (run by `task up`, safe to re-run) writes the keys into namespace `platform-secrets` on the k3d mgmt.
-It picks GitHub read credentials in this order and tells you which it used:
+It picks GitHub read credentials in this order and tells you which it used. Keep tokens out of your shell history:
+read them without echo, or from your password manager:
 
 ```bash
-# Preferred: GitHub App (read-only)
+# Preferred: GitHub App (read-only). IDs are not secret; the key stays in its file.
 export GITHUB_APP_ID=123456 GITHUB_APP_INSTALLATION_ID=7890123 GITHUB_APP_PRIVATE_KEY_FILE=~/keys/platform-argocd.pem
-# Fallback: fine-grained PAT, Contents: Read-only on the selected repos
-export GITHUB_TOKEN=github_pat_... GITHUB_USER=<you>
+# Fallback: fine-grained PAT (github_pat_...), Contents: Read-only on the selected repos
+read -rs PLATFORM_GITHUB_TOKEN && export PLATFORM_GITHUB_TOKEN PLATFORM_GITHUB_USER=<you>
+#   or: export PLATFORM_GITHUB_TOKEN="$(op read op://Private/platform-argocd/token)"   # 1Password; `pass show ...` etc.
 # Optional: private GHCR images (see (b) above)
-export GHCR_USER=<machine-user> GHCR_TOKEN=...
+read -rs GHCR_TOKEN && export GHCR_TOKEN GHCR_USER=<machine-user>
 # Optional: push App (see (c) above)
 export GITHUB_PUSH_APP_ID=... GITHUB_PUSH_APP_INSTALLATION_ID=... GITHUB_PUSH_APP_PRIVATE_KEY_FILE=~/keys/platform-bot.pem
 task secrets
+unset PLATFORM_GITHUB_TOKEN GHCR_TOKEN
 ```
+
+`PLATFORM_GITHUB_TOKEN` is deliberately not `GITHUB_TOKEN`: dev shells, devcontainers and Codespaces often export a
+broad token under that name. `GITHUB_TOKEN` [+ `GITHUB_USER`] is still read, with a warning; classic (`ghp_`) and
+OAuth (`gho_`) tokens warn too.
 
 With none of these set it falls back to your `gh auth login` token (local convenience only: that OAuth token carries
 broad scopes; `NO_GH=1` disables the fallback) and, if there is no `gh` login either, skips `platform-github`, which
-is fine for a public fork (the `platform-repo-creds` ExternalSecret then reports a missing key; harmless). The same
-sources feed the bootstrap Argo CD secret `platform-repo-bootstrap` that lets Argo CD read a private fork before ESO
-runs. Generated platform secrets (`openchoreo`, `openchoreo-observability`: Thunder, Backstage, OpenSearch) are created
-once and kept on re-runs.
+is fine for a public fork (the `platform-repo-creds` ExternalSecret then reports a missing key; harmless). The gh token
+goes into `platform-ghcr` (and so onto every node) only when `nodeRegistryAuth` is on and the token has
+`read:packages`; a copy an earlier run left there is deleted once it is no longer wanted.
 
-**Public images, no GHCR token**: new cluster nodes wait for `platform-ghcr` while `secrets.nodeRegistryAuth` is on
-(the chart default), so turn it off in `installations/<inst>/installation.yaml`:
+The same sources feed the bootstrap Argo CD secret `platform-repo-bootstrap` that lets Argo CD read a private fork
+before ESO runs. Once ESO's `platform-repo-creds` is Ready for `installation.githubOrg`, the bootstrap secret is
+deleted: `task up` waits up to `REPO_CREDS_WAIT` seconds (default 600, `0` skips) for that, and any later
+`task argocd` finishes the job. Generated platform secrets (`openchoreo`, `openchoreo-observability`: Thunder,
+Backstage, OpenSearch) are created once and kept on re-runs.
+
+Every secret is built by `yq` from environment variables / files and applied with `kubectl apply --server-side`
+(field manager `platform-bootstrap`): no token appears in a process list, and no `last-applied-configuration` copy is
+stored.
+
+**Public images, no GHCR token** (the `installations/local` default): new cluster nodes wait for `platform-ghcr` while
+`secrets.nodeRegistryAuth` is on (the chart default), so turn it off in `installations/<inst>/installation.yaml`:
 
 ```yaml
 secrets:
@@ -161,13 +178,21 @@ secrets:
     enabled: false        # all images public: no k3s registries.yaml, no platform-ghcr
 ```
 
-`task secrets` warns when it is on and no GHCR credential was given.
+`task secrets` warns when it is on and no GHCR credential was given. For the AWS backend, build the JSON without
+leaving a readable file behind:
+
+```bash
+( umask 077 && read -rs TOKEN                       # subshell: your shell keeps its umask, TOKEN dies with it
+  printf '{"username":"git","token":"%s"}' "$TOKEN" > platform-github.json
+  aws secretsmanager create-secret --name platform-github --secret-string file://platform-github.json
+  rm -f platform-github.json )
+```
 
 ### Cloud installations
 
 With `secrets.backend: aws` or `vault`, `task up INST=<inst>` seeds nothing into the cluster; create the keys in the
 backend first (table above), with the same property names. Argo CD's bootstrap secret still comes from
-`GITHUB_APP_*` / `GITHUB_TOKEN` if you export them (no `gh` fallback outside the local backend). ESO authenticates to
+`GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` if you export them (no `gh` fallback outside the local backend). ESO authenticates to
 AWS with IRSA / EKS Pod Identity (`secrets.aws.role`), to Vault with its Kubernetes auth role: no static keys.
 
 ## 4. Boot
