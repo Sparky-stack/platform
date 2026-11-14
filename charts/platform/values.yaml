@@ -14,6 +14,17 @@ mgmt:
   environment: mgmt
   addons: {}
 
+# Git commit signature verification for Argo CD sources (AppProject sourceIntegrity, Argo CD >= 3.5; the older
+# `signatureKeys` is deprecated). Applies to the platform, fleet and tenant AppProjects. Off until every deployable
+# HEAD is signed: GitHub signs commits it creates (PR merges in the UI, REST API commits such as the promotion gate's)
+# with its web-flow key, so `head` mode with that key = only GitHub-made commits deploy. Public keys go into
+# addons/argo-cd `argo-cd.configs.gpg.keys`. docs/supply-chain.md.
+sourceIntegrity:
+  enabled: false
+  mode: head                         # none | head (HEAD commit/tag signed) | strict (every commit since the last signed tag)
+  keys: [B5690EEEBB952194]           # GitHub web-flow commit signing key (since 2024-01; VERIFY); add maintainers' keys
+  repos: ["{{ .Values.installation.githubOrg }}/*"]   # tpl over the installation values
+
 # Addon catalog. One ApplicationSet per entry, cluster generator selecting on:
 #   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
@@ -57,6 +68,10 @@ addons:
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }
+  # Platform event receiver on mgmt (docs/promotion.md, docs/observability.md "Falco response"): Falco escalation
+  # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. The workflow objects (WorkflowTemplate,
+  # Sensors) render once the workflow plane's Argo Workflows CRDs exist (addon openchoreo-workflow-plane, workflowPlane: auto).
+  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true }
   # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
   # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }

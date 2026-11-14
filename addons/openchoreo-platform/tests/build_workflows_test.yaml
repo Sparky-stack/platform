@@ -15,6 +15,7 @@ tests:
       - equal: { path: spec.runTemplate.spec.serviceAccountName, value: workflow-sa }
       - equal: { path: spec.runTemplate.spec.automountServiceAccountToken, value: false }
       - equal: { path: spec.runTemplate.spec.executor.serviceAccountName, value: workflow-sa }
+      - notExists: { path: spec.runTemplate.spec.podMetadata }   # builds never opt into platform-workflow egress
 
   - it: Backstage and the autoBuild matcher find the repository fields
     template: templates/build-workflows.yaml

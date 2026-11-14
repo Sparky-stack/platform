@@ -104,7 +104,7 @@ tests:
 
   - it: build run namespace is default-deny (ingress and egress)
     template: templates/run-network-policy.yaml
-    documentSelector: { path: kind, value: NetworkPolicy }
+    documentSelector: { path: metadata.name, value: build-runs-default-deny }
     asserts:
       - equal: { path: metadata.namespace, value: workflows-default }
       - equal: { path: spec.podSelector, value: {} }
@@ -113,7 +113,7 @@ tests:
 
   - it: egress only to DNS, the Harbor Gateway, the API server and public 80/443
     template: templates/run-network-policy.yaml
-    documentSelector: { path: kind, value: NetworkPolicy }
+    documentSelector: { path: metadata.name, value: build-runs-default-deny }
     asserts:
       - lengthEqual: { path: spec.egress, count: 5 }
       - equal:
@@ -136,14 +136,55 @@ tests:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: Delete=false }
         documentSelector: { path: kind, value: Namespace }
       - equal: { path: metadata.namespace, value: workflows-acme }
-        documentSelector: { path: kind, value: NetworkPolicy }
+        documentSelector: { path: metadata.name, value: build-runs-default-deny }
+      - equal: { path: metadata.namespace, value: workflows-acme }
+        documentSelector: { path: metadata.name, value: platform-workflows-openchoreo }
 
   - it: external registries need no Harbor rule
     template: templates/run-network-policy.yaml
-    documentSelector: { path: kind, value: NetworkPolicy }
+    documentSelector: { path: metadata.name, value: build-runs-default-deny }
     set: { registry.type: external }
     asserts:
       - lengthEqual: { path: spec.egress, count: 4 }
+
+  - it: platform workflows (label opt-in) may also reach the control-plane and observability Gateways, nothing else
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: metadata.name, value: platform-workflows-openchoreo }
+    asserts:
+      - equal: { path: spec.podSelector, value: { matchLabels: { platform.koorikla.io/egress: openchoreo } } }
+      - equal: { path: spec.policyTypes, value: [Egress] }
+      - notExists: { path: spec.ingress }
+      - lengthEqual: { path: spec.egress, count: 2 }
+      - equal:
+          path: spec.egress[0]
+          value:
+            to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: openchoreo-control-plane } }, podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: gateway-default } } }]
+            ports: [{ protocol: TCP, port: 8080 }]
+      - equal:
+          path: spec.egress[1]
+          value:
+            to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: openchoreo-observability-plane } }, podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: gateway-default } } }]
+            ports: [{ protocol: TCP, port: 11080 }]
+
+  - it: no observer egress without the observability plane; the port follows openchoreo.observability.httpPort
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: metadata.name, value: platform-workflows-openchoreo }
+    set: { openchoreo.observability.enabled: false }
+    asserts:
+      - lengthEqual: { path: spec.egress, count: 1 }
+
+  - it: observer port follows the installation
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: metadata.name, value: platform-workflows-openchoreo }
+    set: { openchoreo.observability.httpPort: 12080 }
+    asserts:
+      - equal: { path: 'spec.egress[1].ports', value: [{ protocol: TCP, port: 12080 }] }
+
+  - it: refuses an empty platform-workflow selector (it would widen egress for every run pod)
+    template: templates/run-network-policy.yaml
+    set: { runNetworkPolicy.platformWorkflows.podLabels: null }
+    asserts:
+      - failedTemplate: { errorPattern: "podLabels must not be empty" }
 
   - it: fails when the installation turns the workflow plane off
     template: templates/validate.yaml

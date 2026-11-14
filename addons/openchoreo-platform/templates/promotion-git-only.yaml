@@ -1,0 +1,76 @@
+{{- /*
+Native admission gate (ValidatingAdmissionPolicy, Kubernetes GA): ReleaseBindings of gated environments are created,
+changed and deleted only by Argo CD applying git (docs/promotion.md "Git is the only path"). openchoreo-api (console,
+occ, MCP), kubectl and any other identity are denied, whatever their RBAC. The OpenChoreo controller may still update
+metadata (finalizers) without touching spec; status is a subresource and not matched.
+Argo CD writes for every Application with one identity, so the writer must also BE the gated Application: Argo CD's
+tracking annotation (argocd.argoproj.io/tracking-id = <application>:<group>/<kind>:<namespace>/<name>, always set by
+the controller, a manifest cannot override it) must name <owner.projectName>-<app>-<spec.environment>, i.e. the
+Application charts/tenant renders for that environment's binding file (freeze windows, CODEOWNERS on that file). A
+binding smuggled into any other file of the app repo syncs through the main Application <project>-<app> and is
+denied; charts/tenant rejects app names that end in -<gated environment>.
+*/ -}}
+{{- $g := .Values.promotion }}
+{{- if and $g.gatedEnvironments $g.gitOnly.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openchoreo-gated-bindings-from-git
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [openchoreo.dev]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [releasebindings]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Values.openchoreo.orgNamespace }}
+  matchConditions:
+    - name: gated-environment
+      expression: >-
+        (request.operation == 'DELETE' ? oldObject.spec.environment : object.spec.environment)
+        in {{ $g.gatedEnvironments | toJson }}
+  variables:
+    - name: user
+      expression: request.userInfo.username
+    - name: binding
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+    - name: trackingApp
+      expression: >-
+        has(variables.binding.metadata.annotations)
+        && 'argocd.argoproj.io/tracking-id' in variables.binding.metadata.annotations
+        ? variables.binding.metadata.annotations['argocd.argoproj.io/tracking-id'].split(':')[0] : ''
+    - name: gatedApp
+      expression: >-
+        has(variables.binding.spec.owner) && has(variables.binding.spec.owner.projectName)
+        && variables.trackingApp.startsWith(variables.binding.spec.owner.projectName + '-')
+        && variables.trackingApp.endsWith('-' + variables.binding.spec.environment)
+        && size(variables.trackingApp) > size(variables.binding.spec.owner.projectName + '-' + variables.binding.spec.environment) + 1
+    - name: breakGlass
+      expression: 'request.userInfo.groups.exists(g, g in {{ $g.gitOnly.breakGlassGroups | default list | toJson }})'
+  validations:
+    - expression: >-
+        (variables.user in {{ $g.gitOnly.writers | toJson }} && variables.gatedApp)
+        || variables.breakGlass
+        || (request.operation == 'DELETE' && variables.user in {{ $g.gitOnly.deleters | toJson }})
+        || (request.operation == 'UPDATE' && variables.user in {{ $g.gitOnly.metadataWriters | toJson }}
+            && object.spec == oldObject.spec)
+      messageExpression: >-
+        variables.user in {{ $g.gitOnly.writers | toJson }}
+        ? 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through their gated Argo CD
+        Application <project>-<app>-<environment> (docs/promotion.md); denied for Application ' +
+        (variables.trackingApp == '' ? '(no tracking-id)' : variables.trackingApp)
+        : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' change only through a reviewed pull
+        request synced by Argo CD (docs/promotion.md); denied for ' + variables.user
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openchoreo-gated-bindings-from-git
+spec:
+  policyName: openchoreo-gated-bindings-from-git
+  validationActions: [Deny]
+{{- end }}

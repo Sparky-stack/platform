@@ -1,0 +1,11 @@
+# Installation registry + a platform cosign public key (throwaway test key; public keys are not secrets).
+registry:
+  host: harbor.openchoreo.localhost:9443
+  appsProject: apps
+imageVerification:
+  platformKey:
+    publicKey: |
+      -----BEGIN PUBLIC KEY-----
+      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsh6ZwbzFyNpzfgW535O+0d0BZFcl
+      FBrME4xvyRb63NkCwIZ98qq5XQjdfqdJDJIJlUjoMmmjFJeROpX4aF76ug==
+      -----END PUBLIC KEY-----

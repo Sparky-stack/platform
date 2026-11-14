@@ -66,3 +66,87 @@ ambientEnrollment:
     matchExpressions:
       - { key: openchoreo.dev/project, operator: Exists }
       - { key: openchoreo.dev/environment, operator: Exists }
+
+# --- Supply-chain gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md) -----------------------
+# templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`, one
+#   ImageValidatingPolicy  openchoreo-verify-images-<audit|enforce>   cosign signatures of trusted images
+#   ValidatingPolicy       openchoreo-trusted-registries-<audit|enforce>  every container image comes from a trusted
+#                                                                     registry (otherwise an unsigned docker.io image
+#                                                                     would simply not be matched by the image policy)
+# scoped to OpenChoreo cell namespaces by their label openchoreo.dev/environment. Platform namespaces are excluded like
+# every policy here. Pods (all container kinds, kubectl debug through pods/ephemeralcontainers) and their controllers
+# (Deployment, StatefulSet, CronJob, ... via Kyverno autogen) are checked, so a denied Deployment shows up as an apply
+# failure on the RenderedRelease. No digest mutation (it would fight OpenChoreo's agent re-applying the rendered
+# Deployment): where requireDigest is on (production) the Workload must already carry image@sha256 (koorikla/ci output
+# image_digest_ref); elsewhere tag references are only reported.
+imageVerification:
+  enabled: true
+  # environment -> Audit (PolicyReport only) | Deny (blocked at admission).
+  environments:
+    development: Audit
+    staging: Audit
+    production: Deny
+  # Action for cell namespaces of every environment NOT listed above (a new environment is never unchecked):
+  # Audit | Deny | "" (unlisted environments are not checked).
+  defaultAction: Audit
+  # failurePolicy per action: enforce fails closed (Kyverno down = no new production pods, rollouts pause; platform
+  # namespaces are never affected), audit never blocks.
+  failurePolicy:
+    Audit: Ignore
+    Deny: Fail
+  timeoutSeconds: 20               # webhook timeout (registry + Rekor/TUF lookups), max 30
+  # Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
+  cellNamespaceSelector:
+    matchLabels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+  # Images built by GitHub Actions through the shared reusable workflow koorikla/ci container.yaml: Sigstore keyless
+  # (cosign v3 bundle format, verified by Kyverno 1.20). The certificate subject is the REUSABLE workflow, which
+  # anyone can call (koorikla/ci is public): the GitHub workflow extensions pin the calling repository, ref and trigger,
+  # so every allowed (repository, ref, trigger) becomes one attestor (Kyverno matches extensions exactly, no regex).
+  # koorikla/ci also attaches signed SPDX SBOM, SLSA provenance and vulnerability-scan attestations: all required.
+  github:
+    enabled: true
+    prefixes: ["ghcr.io/koorikla/"]        # image reference prefixes this source covers
+    issuer: https://token.actions.githubusercontent.com
+    subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1
+    repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
+    refs: [refs/heads/main]                # extension githubWorkflowRef
+    # extension githubWorkflowTrigger: only builds of merged code. pull_request_target / workflow_run run on the main
+    # ref too but may build untrusted PR code; workflow_dispatch builds are not admitted where this is enforced.
+    triggers: [push]
+    rekorURL: https://rekor.sigstore.dev
+    attestations: [sbom, provenance, vuln] # names from `attestationTypes`
+  # Images built in-cluster by the OpenChoreo workflow plane and pushed to the installation registry's apps project:
+  # prefix <registry.host>/<registry.appsProject>/ (installation.yaml `registry`, passed to every addon), signed with the
+  # platform's cosign key (private key stays in the build plane; only the PUBLIC key is configured here, it is not a
+  # secret). Keyless needs an OIDC issuer Fulcio trusts (public cluster issuer / workload identity): follow-up.
+  # Without publicKey the registry is NOT trusted: its images fail the trusted-registries policy (denied in production,
+  # reported elsewhere) instead of skipping signature verification.
+  platformKey:
+    enabled: true
+    publicKey: ""                          # PEM: cosign.pub of store key cosign-platform (the key the workflow plane signs
+                                           # with); installations/<inst>/addons/kyverno-policies/values.yaml. Local: empty
+                                           # (fresh key per bootstrap), docs/supply-chain.md "Wiring the key"
+    rekor: false                           # in-cluster signing without a transparency log (cosign --tlog-upload=false)
+    attestations: []                       # workflow plane attests vuln + spdxjson (predicate https://spdx.dev/Document,
+                                           # not attestationTypes.sbom): add [vuln] once verified online
+  attestationTypes:                        # in-toto predicate types (as listed by `cosign verify` on koorikla images)
+    sbom: https://spdx.dev/Document/v2.3
+    provenance: https://slsa.dev/provenance/v1
+    vuln: https://cosign.sigstore.dev/attestation/vuln/v1
+  # Image references must carry a digest (current practice: images pinned by digest). Per action: production (Deny)
+  # denies tag-only references, development/staging only report them. koorikla/ci outputs image_digest_ref; app repos'
+  # Workload bump must write it (docs/supply-chain.md "Digest references").
+  requireDigest:
+    Audit: false
+    Deny: true
+  # Every container image in a checked cell namespace must match a trusted prefix: github.prefixes, the platform
+  # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
+  # would simply not be matched by the signature policy.
+  extraTrustedPrefixes: []
+
+# Installation image registry (installation.yaml `registry`, passed to every addon by the addon ApplicationSet; this is
+# the standalone default). host: image reference host[:port]; appsProject: project in-cluster builds push to.
+registry:
+  host: ""
+  appsProject: apps

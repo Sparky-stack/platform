@@ -10,6 +10,11 @@ pod in it. Check steps and Dockerfile RUN steps execute tenant code (rootless Bu
 Nothing else on mgmt (argocd-repo-server, harbor-core over HTTP, webhooks, other namespaces). No ingress at all.
 Enforced by k3s' network policy controller (flannel mgmt) or Cilium. Delete=false: removing the addon must not delete
 run history.
+Platform workflows (runNetworkPolicy.platformWorkflows): pods labelled podLabels (set only by platform-authored
+ClusterWorkflows in their runTemplate spec.podMetadata, e.g. promotion-gate of addon openchoreo-platform; build
+ClusterWorkflows never set it, parameters cannot) may additionally reach the OpenChoreo API/Thunder through the
+control-plane Gateway and the observer through the observability Gateway (the hosts coredns-local rewrites to them).
+NetworkPolicies are additive: this only widens egress for those pods.
 */ -}}
 {{- $np := .Values.runNetworkPolicy }}
 {{- if $np.enabled }}
@@ -57,4 +62,32 @@ spec:
         {{- range $np.internet.ports }}
         - { protocol: TCP, port: {{ . }} }
         {{- end }}
+{{- $pw := $np.platformWorkflows }}
+{{- if $pw.enabled }}
+{{- if not $pw.podLabels }}{{ fail "runNetworkPolicy.platformWorkflows.podLabels must not be empty (it would widen egress for every run pod)" }}{{ end }}
+{{- $obs := .Values.openchoreo.observability | default dict }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-workflows-openchoreo
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: {{ toJson $pw.podLabels }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $pw.controlPlane.namespace }} } }
+          podSelector: { matchLabels: {{ toJson $pw.controlPlane.podLabels }} }
+      ports:
+        - { protocol: TCP, port: {{ $pw.controlPlane.port }} }
+    {{- if $obs.enabled }}
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $pw.observability.namespace }} } }
+          podSelector: { matchLabels: {{ toJson $pw.observability.podLabels }} }
+      ports:
+        - { protocol: TCP, port: {{ required "openchoreo.observability.httpPort is required" $obs.httpPort }} }
+    {{- end }}
+{{- end }}
 {{- end }}

@@ -47,8 +47,11 @@ kyv_ns=$(yq -o=json -I=0 '.kyverno.config.webhooks.namespaceSelector.matchExpres
 kp_ns=$(yq -o=json -I=0 '.platformNamespaces' "$ROOT/addons/kyverno-policies/values.yaml")
 assert_eq "$kp_ns" "$kyv_ns" "kyverno webhook exclusions == kyverno-policies platformNamespaces"
 for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort -u); do
-  [[ "$ns" == default ]] && continue   # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
-  [[ "$ns" == harbor ]] && continue    # Harbor meets PSS baseline: policed like a workload (check 9)
+  case "$ns" in
+    default) continue ;;       # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
+    argo-events) continue ;;   # externally reachable webhook receiver: deliberately in scope (PSS, Kyverno reports)
+    harbor) continue ;;        # Harbor meets PSS baseline: policed like a workload (check 9)
+  esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
 
@@ -104,6 +107,17 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
 done
 
+# Tenant projects: the VAP openchoreo-gated-bindings-from-git accepts a gated Application <project>-<app>-<env> for
+# bindings of <project>, so no project may be "<other project>-..." (its apps would look like the other's).
+for tdir in "$ROOT"/installations/*/tenants; do
+  [[ -d "$tdir" ]] || continue
+  projects=$(for f in "$tdir"/*.yaml; do [[ -f "$f" ]] && yq '.project' "$f"; done)
+  clash=""
+  for a in $projects; do for b in $projects; do
+    [[ "$a" != "$b" && "$b" == "$a-"* ]] && clash="$clash $b (prefix $a-)"
+  done; done
+  assert_eq "$clash" "" "tenant projects are not '<other project>-' prefixed ($(basename "$(dirname "$tdir")"))"
+done
 # 8. Local Harbor: bootstrap/k3d-mgmt.yaml publishes the registry.host port on the load balancer (loopback), else
 #    host docker login and CAPD node pulls through the serverlb fail. Negative check: a k3d file without it is caught.
 k3d_publishes() {   # k3d_publishes <k3d file> <port> -> yes|no
@@ -134,5 +148,14 @@ helm template harbor "$ROOT/addons/harbor" --namespace harbor --values "$ROOT/in
 pss=$(yq 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob")' "$TMP/harbor.yaml" \
   | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
 assert_eq "$pss" "" "Harbor workloads meet Pod Security baseline (no privileged/host namespaces/hostPath/hostPort/added caps)"
+
+# 10. Platform-workflow egress: the promotion gate's pod labels are exactly the selector of the workflow plane's
+#     NetworkPolicy platform-workflows-openchoreo (else the gate cannot reach the OpenChoreo API / Thunder / observer).
+gate_labels=$(yq -o=json -I=0 '.promotionGate.podLabels' "$ROOT/addons/openchoreo-platform/values.yaml")
+wp_labels=$(yq -o=json -I=0 '.runNetworkPolicy.platformWorkflows.podLabels' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")
+assert_eq "$gate_labels" "$wp_labels" "promotionGate.podLabels == runNetworkPolicy.platformWorkflows.podLabels"
+assert_eq "$(yq '.runNetworkPolicy.platformWorkflows.controlPlane.port' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")" \
+  "$(yq '.promotionGate.controlPlanePort' "$ROOT/addons/openchoreo-platform/values.yaml")" \
+  "platform-workflow egress port == promotionGate.controlPlanePort"
 
 finish

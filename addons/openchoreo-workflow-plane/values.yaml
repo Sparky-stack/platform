@@ -24,6 +24,7 @@ openchoreo:
     host: openchoreo.localhost
   observability:
     enabled: true
+    httpPort: 11080
   workflowPlane:
     enabled: true
 
@@ -59,6 +60,19 @@ runNetworkPolicy:
   internet:
     ports: [80, 443]              # 80: Debian/Alpine package mirrors in Dockerfile RUN steps
     exceptCIDRs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+  # Extra egress for platform-authored workflows (promotion-gate, addon openchoreo-platform) whose pods carry podLabels:
+  # the OpenChoreo API and Thunder (api./thunder.<host>, rewritten by coredns-local to the control-plane Gateway) and the
+  # observer (observer.<host>:<openchoreo.observability.httpPort>, the observability Gateway). Builds never get it.
+  platformWorkflows:
+    enabled: true
+    podLabels: { platform.koorikla.io/egress: openchoreo }   # == openchoreo-platform promotionGate.podLabels
+    controlPlane:                 # Gateway gateway-default of addon openchoreo-control-plane, HTTP listener 8080
+      namespace: openchoreo-control-plane
+      podLabels: { gateway.networking.k8s.io/gateway-name: gateway-default }
+      port: 8080
+    observability:                # Gateway gateway-default of addon openchoreo-observability-plane (port: httpPort)
+      namespace: openchoreo-observability-plane
+      podLabels: { gateway.networking.k8s.io/gateway-name: gateway-default }
 
 # Images substituted into files/cluster-workflow-templates/*.yaml (@@NAME@@). Multi-arch, pinned by digest.
 images:

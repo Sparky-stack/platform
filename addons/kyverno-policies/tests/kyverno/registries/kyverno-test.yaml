@@ -1,0 +1,37 @@
+# Offline: trusted-registry gate per environment. Run by hack/tests/test_kyverno_policies.sh against the rendered
+# addon (policies.yaml is written there; helm-values.yaml, if present, is passed to helm template). Signature checks
+# need the network: ../signatures/kyverno-test.yaml. Platform registry WITH a key: ../platform-key.
+# Rendered with installation registry.host set and NO platformKey.publicKey: the platform registry is not trusted.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: openchoreo-trusted-registries
+policies: [policies.yaml]
+resources: [resources.yaml]
+variables: values.yaml
+results:
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-trusted]
+    result: pass
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources:
+      - dp-default-demo-production-1/prod-untrusted              # unsigned initContainer from docker.io
+      - dp-default-demo-production-1/prod-untrusted-ephemeral    # kubectl debug image
+      - dp-default-demo-production-1/prod-lookalike
+      - dp-default-demo-production-1/prod-registry-port          # old in-cluster registry prefix: never trusted
+      - dp-default-demo-production-1/prod-platform-unsigned      # unsigned image denied in production (no key)
+    result: fail
+  - policy: openchoreo-trusted-registries-audit
+    kind: Pod
+    resources: [dp-default-demo-staging-1/staging-untrusted, dp-default-demo-qa-1/qa-untrusted]
+    result: fail                                                 # qa is not listed: defaultAction Audit
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources: [dp-default-demo-staging-1/staging-untrusted, dp-default-demo-qa-1/qa-untrusted]
+    result: skip
+  - policy: openchoreo-trusted-registries-audit
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-untrusted]
+    result: skip

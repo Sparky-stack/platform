@@ -14,6 +14,7 @@ in app namespaces. Planes and trust in general: [openchoreo.md](openchoreo.md).
 | workload | `telemetry` | telemetry | Fluent Bit (container logs), Prometheus agent + kube-state-metrics (pod metrics), events collector (k8s events), OpenTelemetry Collector DaemonSet (OTLP fan-out) |
 | workload (opt-in) | `obi` | obi | OpenTelemetry eBPF Instrumentation v1.0.0: zero-code L7 RED metrics + traces for app namespaces |
 | mgmt + workload | `falco` | falco | Falco 0.45 (modern eBPF) + falcosidekick; Falco Talon on workload clusters |
+| mgmt | `argo-events` | argo-events | Argo Events 1.9: Falco escalation receiver -> WorkflowTemplate `falco-response`; rollout events -> promotion gate ([promotion.md](promotion.md)) |
 | mgmt | `charts/cluster` | – | `ClusterDataPlane.spec.observabilityPlaneRef` -> `ClusterObservabilityPlane default` |
 
 Switch: `openchoreo.observability.enabled` in `installations/<inst>/installation.yaml` (local: true). It drives the
@@ -98,7 +99,7 @@ Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://
 | `platform` / `openchoreo-observability` (mgmt) | `opensearch-username` (must be `admin`), `opensearch-password` (OpenSearch 3 policy: >= 8 chars, upper, lower, digit, special), `observer-client-secret` (== Thunder client `openchoreo-observer-resource-reader-client`) | OpenSearch admin + setup Jobs + adapters + trace receiver; observer UID resolver |
 | `default` / `openchoreo-observability` (workload) | `opensearch-username`, `opensearch-password` | Fluent Bit, events collector |
 | `default` / `datadog` (workload, optional) | `api-key` | collector datadog exporter (Secret `telemetry-datadog`, env `DD_API_KEY`) |
-| `default` or `platform` / `falco-webhook` (optional) | `url`, `token` | falcosidekick escalation webhook |
+| `default` or `platform` / `falco-webhook` | `url`, `token` | falcosidekick escalation webhook; addon argo-events validates `token` |
 | `default` or `platform` / `falco-slack` (optional) | `webhook-url` | falcosidekick Slack output |
 
 Known gap: data planes use the OpenSearch admin credentials (upstream recipe). A dedicated ingest-only OpenSearch user
@@ -188,13 +189,40 @@ Talon's ServiceAccount is trimmed to pods (get/list/update/patch/delete), pods/e
 Dry run per environment: rename `installations/local/addons/falco/env-development.yaml.disabled` to
 `env-<env>.yaml` (same rules with `dry_run: true`; it replaces `falco-talon.config.rulesOverride` as a whole).
 
-**Escalation** (shipped disabled): falcosidekick's webhook output POSTs Critical-and-above events to an event endpoint
-on mgmt (Argo Events webhook EventSource in the workflow plane, built later). Enable with `escalation.enabled: true`
-(addon values or an installation overlay) and store key `falco-webhook` (`url`, `token`). Contract:
+**Escalation** (on): falcosidekick's webhook output POSTs Critical-and-above events to addon `argo-events` on mgmt
+(`escalation.enabled: true`, store key `falco-webhook` with `url`, `token`; locally seeded by `make secrets` with
+`url=http://events.openchoreo.localhost:8080/falco` and copied to workload clusters by the cluster seed CRS):
+
+```
+data plane falcosidekick ── POST http://events.openchoreo.localhost:8080/falco (Bearer) ──► k3d serverlb :8080
+  ─► control-plane Gateway (HTTPRoute falco-escalation, ns argo-events) ─► EventSource platform (webhook, authSecret)
+  ─► EventBus (JetStream, 1 node) ─► Sensor falco-escalation (priority ∈ Emergency|Alert|Critical, uuid present)
+  ─► Workflow falco-<uuid> from WorkflowTemplate falco-response (Argo Workflows of the workflow plane on mgmt)
+       enrich: dp-* namespace + pod -> RenderedRelease (control plane) -> project, component, environment, workload,
+               Environment -> data plane (read-only RBAC in the org namespace; no data-plane credentials)
+       record: Kubernetes Event (reason FalcoCritical) on the OpenChoreo Component
+       rca:    POST sre-agent /api/v1alpha1/rca-agent/analyze      (only with falco.response.rca.enabled)
+       notify: POST <falco-notify.url>                             (only with falco.response.notify.enabled)
+```
+
+Name resolution needs no new rule: `events.openchoreo.localhost` matches the existing `*.openchoreo.localhost` rewrite
+of `coredns-local` (workload: to the serverlb; mgmt: to the control-plane Gateway Service). Containment stays with Talon
+on the data plane (label/terminate; NetworkPolicy isolation commented); the mgmt workflow holds no data-plane write
+credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (requests ~184Mi). Contract:
 
 - `POST <url>` (e.g. `https://events.openchoreo.<domain>/falco`), `Content-Type: application/json`,
   header `Authorization: Bearer <token>` (the EventSource validates it; rotate by changing the store key).
 - Sent only for `priority >= Critical` (`WEBHOOK_MINIMUMPRIORITY=critical`): Critical, Alert, Emergency.
+- Transport: locally the route sits on the Gateway's plain-HTTP listener (`falco.route.sectionName: http`, docker
+  network on one machine), so the bearer token travels in cleartext there. Every other installation must use an HTTPS
+  listener (`falco.route.sectionName`) and an `https://` `url` in `falco-webhook`.
+- One `falco-webhook` token is shared by all clusters: whoever holds it (any node of any cluster) can post events that
+  name another cluster. The response only records Events and asks the RCA agent; containment stays local with Talon.
+  Per-cluster tokens need one webhook endpoint per cluster in the EventSource (its `authSecret` takes one token) and
+  a per-cluster store key: follow-up.
+- argo-events renders WorkflowTemplate `falco-response` and Sensor `falco-escalation` only once the Argo Workflows
+  CRDs exist (`workflowPlane: auto`, addon openchoreo-workflow-plane); until then escalations reach the EventBus and
+  expire there (24h).
 - Body = the falcosidekick/Falco event, fields consumers may rely on:
 
   | Field | Example |

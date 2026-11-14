@@ -19,6 +19,8 @@ secrets:
   backend: kubernetes                         # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+  workloadSeed:                               # local backend: copied from mgmt `platform` into each workload cluster
+    keys: [openchoreo-observability, falco-webhook]
   # No k3s registries.yaml / platform-ghcr: every image this installation pulls from ghcr.io is public (koorikla/
   # hello-world, koorikla/ci-toolbox: anonymous pull checked 2026-11). Private images: true + GHCR_* (docs/forking.md).
   nodeRegistryAuth:
@@ -69,3 +71,16 @@ openchoreo:
   # `default`; build ClusterWorkflows in addon openchoreo-platform. docs/build-plane.md.
   workflowPlane:
     enabled: true                              # false: disable the addon and Backstage's workflow features
+
+# Promotion gates (docs/promotion.md). Read by charts/tenant (per-environment Applications, Argo CD sync windows) and
+# addon openchoreo-platform (production authz deny, promotion-gate ClusterWorkflow freeze check).
+promotion:
+  gatedEnvironments: [production]        # bindings change only by reviewed PR; developers denied in console/API/MCP
+  restrictedGroups: [developers]
+  bindingFile: release-bindings/{environment}.yaml
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]

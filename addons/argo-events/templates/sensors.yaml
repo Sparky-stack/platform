@@ -1,0 +1,203 @@
+{{- /*
+Sensors: falco-escalation (-> Workflow from WorkflowTemplate falco-response) and promotion-gate (-> OpenChoreo
+WorkflowRun of ClusterWorkflow promotion-gate). Triggers create objects with deterministic names (event uuid / rollout
+id), so a re-delivered event fails with AlreadyExists instead of running twice.
+Both need the workflow plane (Argo Workflows CRDs + controller, see _helpers.tpl): not rendered without it.
+*/ -}}
+{{- $wf := eq (include "ae.workflowPlane" .) "true" }}
+{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
+{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
+{{- if and .Values.falco.enabled $wf }}
+{{- $order := list "Emergency" "Alert" "Critical" "Error" "Warning" "Notice" "Informational" "Debug" }}
+{{- $min := .Values.falco.minimumPriority | title }}
+{{- if not (has $min $order) }}{{ fail (printf "falco.minimumPriority %q is not a Falco priority" .Values.falco.minimumPriority) }}{{ end }}
+{{- $prios := list }}
+{{- $stop := false }}
+{{- range $order }}{{ if not $stop }}{{ $prios = append $prios . }}{{ end }}{{ if eq . $min }}{{ $stop = true }}{{ end }}{{ end }}
+{{- $anchored := list }}{{ range $prios }}{{ $anchored = append $anchored (printf "^%s$" .) }}{{ end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: falco-escalation-sensor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: falco-escalation-sensor
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [create, get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: falco-escalation-sensor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: falco-escalation-sensor
+subjects:
+  - kind: ServiceAccount
+    name: falco-escalation-sensor
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: falco-escalation
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: falco-escalation-sensor
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
+  dependencies:
+    - name: falco
+      eventSourceName: platform
+      eventName: falco
+      filters:
+        data:
+          - path: body.priority
+            type: string
+            value: {{ $anchored | toJson }}   # each value is a regex
+          - path: body.uuid
+            type: string
+            value: ["^[0-9a-fA-F-]{8,64}$"]
+  triggers:
+    - template:
+        name: falco-response
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                name: falco-response-placeholder   # replaced: falco-<event uuid>
+                namespace: {{ .Release.Namespace }}
+                labels:
+                  platform.koorikla.io/trigger: falco
+              spec:
+                workflowTemplateRef:
+                  name: falco-response
+                arguments:
+                  parameters:
+                    - name: event
+                      value: "{}"
+          parameters:
+            - src:
+                dependencyName: falco
+                dataTemplate: {{ `'falco-{{ .Input.body.uuid | lower | trunc 50 }}'` }}
+              dest: metadata.name
+            - src:
+                dependencyName: falco
+                dataKey: body
+              dest: spec.arguments.parameters.0.value
+      retryStrategy:
+        steps: 3
+        duration: 2s
+{{- end }}
+{{- if and .Values.promotionGate.enabled $wf }}
+{{- $ns := .Values.openchoreo.orgNamespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promotion-gate-sensor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-events-promotion-gate
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [workflowruns]
+    verbs: [create, get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-events-promotion-gate
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-events-promotion-gate
+subjects:
+  - kind: ServiceAccount
+    name: promotion-gate-sensor
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: promotion-gate
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: promotion-gate-sensor
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
+  dependencies:
+    - name: rollout
+      eventSourceName: platform
+      eventName: releasebinding-rollout
+      filters:
+        data:
+          - path: body.spec.environment
+            type: string
+            value: {{ .Values.promotionGate.sourceEnvironments | toJson }}
+          - path: body.spec.releaseName
+            type: string
+            value: [".+"]
+          - path: body.status.delivery.succeededAt    # set once per rollout when every resource is healthy
+            type: string
+            value: [".+"]
+  triggers:
+    - template:
+        name: promotion-gate
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: openchoreo.dev/v1alpha1
+              kind: WorkflowRun
+              metadata:
+                name: promotion-gate-placeholder   # replaced: gate-<component>-<hash of the rollout id>
+                namespace: {{ $ns }}
+                labels:
+                  platform.koorikla.io/trigger: rollout
+              spec:
+                workflow:
+                  kind: ClusterWorkflow
+                  name: {{ .Values.promotionGate.workflow }}
+                  parameters:
+                    project: ""
+                    component: ""
+                    sourceEnvironment: ""
+                    release: ""
+          parameters:
+            - src:
+                dependencyName: rollout
+                dataTemplate: {{ `'gate-{{ .Input.body.spec.owner.componentName | trunc 40 | trimSuffix "-" }}-{{ .Input.body.status.delivery.rolloutId | sha256sum | trunc 10 }}'` }}
+              dest: metadata.name
+            - src: { dependencyName: rollout, dataKey: body.spec.owner.projectName }
+              dest: spec.workflow.parameters.project
+            - src: { dependencyName: rollout, dataKey: body.spec.owner.componentName }
+              dest: spec.workflow.parameters.component
+            - src: { dependencyName: rollout, dataKey: body.spec.environment }
+              dest: spec.workflow.parameters.sourceEnvironment
+            - src: { dependencyName: rollout, dataKey: body.spec.releaseName }
+              dest: spec.workflow.parameters.release
+{{- end }}

@@ -8,12 +8,31 @@ cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh
 source hack/lib/portable.sh
 
+# tools_table: "<tool> <version>" per entry of the [tools] table of mise.toml. Backend keys map to the binary name:
+#   "github:kyverno/kyverno" = "1.20.0"                              -> kyverno 1.20.0
+#   "github:owner/repo" = { version = "1.2.3", bin = "name" }        -> name 1.2.3
+tools_table() {
+  awk '
+    /^\[/ { in_tools = ($0 == "[tools]"); next }
+    !in_tools || /^[[:space:]]*(#|$)/ { next }
+    {
+      line = $0; sub(/[[:space:]]+#.*$/, "", line)
+      eq = index(line, "="); if (eq == 0) next
+      key = substr(line, 1, eq - 1); val = substr(line, eq + 1)
+      gsub(/[[:space:]"]/, "", key)
+      name = key; sub(/^.*:/, "", name); sub(/^.*\//, "", name)
+      if (val ~ /\{/) {
+        ver = val; if (!sub(/.*version[[:space:]]*=[[:space:]]*"/, "", ver)) ver = ""; sub(/".*/, "", ver)
+        bin = val; if (sub(/.*bin[[:space:]]*=[[:space:]]*"/, "", bin)) { sub(/".*/, "", bin); name = bin }
+      } else { ver = val; gsub(/[[:space:]"]/, "", ver) }
+      print name, ver
+    }
+  ' mise.toml
+}
+
 # pinned <tool>: version from the [tools] table of mise.toml ("" if absent).
 pinned() {
-  awk -v t="$1" '
-    /^\[/ { in_tools = ($0 == "[tools]") ; next }
-    in_tools && $1 == t && $2 == "=" { gsub(/"/, "", $3); print $3; exit }
-  ' mise.toml
+  tools_table | awk -v t="$1" '$1 == t { print $2; exit }'
 }
 
 # version_cmd <tool>: command printing the tool's version.
@@ -26,6 +45,7 @@ version_cmd() {
     argocd)      echo "argocd version --client --short" ;;
     kubeconform) echo "kubeconform -v" ;;
     crane)       echo "crane version" ;;
+    kyverno)     echo "kyverno version" ;;
     *)           echo "$1 --version" ;;
   esac
 }
@@ -58,7 +78,7 @@ cmd_check() {
   local tools=("$@") t want have missing=0 drift=0
   if (( ${#tools[@]} == 0 )); then
     while IFS= read -r t; do tools+=("$t"); done < <(
-      awk '/^\[/ { in_tools = ($0 == "[tools]"); next } in_tools && $2 == "=" { print $1 }' mise.toml)
+      tools_table | awk '{ print $1 }')
   fi
   for t in "${tools[@]}"; do
     want=$(pinned "$t")

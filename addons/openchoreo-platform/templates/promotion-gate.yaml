@@ -1,0 +1,175 @@
+{{- /*
+ClusterWorkflow promotion-gate (docs/promotion.md "Automated gate"): a generic OpenChoreo Workflow (WorkflowRun without
+a component). The run renders into the workflow plane (namespace workflows-<org namespace>, ServiceAccount workflow-sa
+injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Like the build
+ClusterWorkflows the step gets no ServiceAccount token (only Argo's executor does). The run namespace is default-deny
+(addon openchoreo-workflow-plane, NetworkPolicy build-runs-default-deny: DNS, public 80/443 incl. GitHub); podLabels
+opt the gate pod into NetworkPolicy platform-workflows-openchoreo (OpenChoreo API, Thunder, observer).
+Credentials: a per-run ExternalSecret against the workflow plane's ClusterSecretStore (owned by the run, deleted with
+it after ttlAfterCompletion; fetched once, never refreshed), mounted read-only as files into the one gate pod (pod
+deleted on completion). GitHub: the gate's own App (store key promotionGate.github.key); the gate mints a token for
+the single repository of the component's Workload and revokes it when done. Parameters are DNS-1123 constrained; the
+target repository is not a parameter.
+The gate never writes to a cluster: on success it opens/updates the promotion pull request in the app repo.
+*/ -}}
+{{- $g := .Values.promotionGate }}
+{{- if $g.enabled }}
+{{- $script := .Files.Get "files/promotion-gate/gate.py" }}
+{{- if or (contains "${" $script) (contains "{{" $script) }}{{ fail "files/promotion-gate/gate.py must not contain '${' or '{{' (CEL / Argo templating)" }}{{ end }}
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $apiURL := $g.apiURL | default (printf "http://api.%s:%v" $host $g.controlPlanePort) }}
+{{- $tokenURL := $g.tokenURL | default (printf "http://thunder.%s:%v/oauth2/token" $host $g.controlPlanePort) }}
+{{- $observerURL := $g.observerURL | default (printf "http://observer.%s:%v" $host .Values.openchoreo.observability.httpPort) }}
+{{- $observe := and $g.observe.enabled .Values.openchoreo.observability.enabled }}
+{{- $githubOwner := required "installation.githubOrg is required (GitHub owner the gate may open PRs in)" (dig "githubOrg" "" (.Values.installation | default dict)) }}
+{{- $label := "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterWorkflow
+metadata:
+  name: promotion-gate
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    openchoreo.dev/display-name: Promotion gate
+    openchoreo.dev/description: >-
+      Verifies a release in its source environment (pipeline path, readiness, HTTP smoke test, observer alerts and
+      error rate, freeze windows) and opens the promotion pull request for the target environment's ReleaseBinding.
+spec:
+  workflowPlaneRef:
+    kind: ClusterWorkflowPlane
+    name: {{ $g.workflowPlane }}
+  ttlAfterCompletion: {{ $g.ttlAfterCompletion | quote }}
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required: [project, component]
+      properties:
+        project:
+          type: string
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
+          description: OpenChoreo project of the component
+        component:
+          type: string
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
+          description: Component to promote (its Workload's spec.source.repository is the repo the PR goes to)
+        sourceEnvironment:
+          type: string
+          default: staging
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
+          description: Environment the release was verified in
+        targetEnvironment:
+          type: string
+          default: ""
+          maxLength: 63
+          pattern: {{ $label | quote }}
+          description: Environment to promote to (empty = the next one in the project's DeploymentPipeline)
+        release:
+          type: string
+          default: ""
+          maxLength: 253
+          pattern: "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
+          description: ComponentRelease to promote (empty = the one running in the source environment)
+        dryRun:
+          type: boolean
+          default: false
+          description: Run every check but do not open the pull request
+  resources:
+    - id: gate-credentials
+      template:
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
+        metadata:
+          name: ${metadata.workflowRunName}-gate
+          namespace: ${metadata.namespace}
+        spec:
+          refreshInterval: "0"            # fetch once for this run, never refreshed
+          secretStoreRef:
+            kind: ClusterSecretStore
+            name: ${workflowplane.secretStore}
+          target:
+            name: ${metadata.workflowRunName}-gate
+            creationPolicy: Owner
+            deletionPolicy: Delete
+          data:
+            - secretKey: client-secret
+              remoteRef: { key: {{ $g.clientSecret.key }}, property: {{ $g.clientSecret.property }} }
+            - secretKey: github-app-id
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppID }
+            - secretKey: github-app-installation-id
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppInstallationID }
+            - secretKey: github-app-private-key
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppPrivateKey }
+  runTemplate:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Workflow
+    metadata:
+      name: ${metadata.workflowRunName}
+      namespace: ${metadata.namespace}
+    spec:
+      entrypoint: gate
+      serviceAccountName: workflow-sa
+      automountServiceAccountToken: false     # the gate talks to the OpenChoreo API only; token just for Argo's executor
+      executor:
+        serviceAccountName: workflow-sa
+      podMetadata:
+        labels: {{ toJson (required "promotionGate.podLabels is required (egress to the OpenChoreo API, Thunder, observer)" $g.podLabels) }}
+      activeDeadlineSeconds: 900
+      podGC:
+        strategy: OnPodCompletion       # the pod that mounted the credentials goes away with the step
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: credentials
+          secret:
+            secretName: ${metadata.workflowRunName}-gate
+            defaultMode: 288            # 0440: owner root, group 65532 (fsGroup)
+      templates:
+        - name: gate
+          script:
+            image: {{ $g.image }}
+            command: [python3]
+            resources:
+              {{- toYaml $g.resources | nindent 14 }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: { drop: [ALL] }
+            volumeMounts:
+              - { name: credentials, mountPath: /var/run/secrets/promotion-gate, readOnly: true }
+            env:
+              - { name: RUN_NAME, value: "${metadata.workflowRunName}" }
+              - { name: NAMESPACE, value: "${metadata.namespaceName}" }
+              - { name: PROJECT, value: "${parameters.project}" }
+              - { name: COMPONENT, value: "${parameters.component}" }
+              - { name: SOURCE_ENV, value: "${parameters.sourceEnvironment}" }
+              - { name: TARGET_ENV, value: "${parameters.targetEnvironment}" }
+              - { name: RELEASE, value: "${parameters.release}" }
+              - { name: DRY_RUN, value: '${parameters.dryRun ? "true" : "false"}' }
+              - { name: GATED_TARGETS, value: {{ .Values.promotion.gatedEnvironments | default list | toJson | quote }} }
+              - { name: FREEZE_WINDOWS, value: {{ .Values.promotion.freezeWindows | default list | toJson | quote }} }
+              - { name: API_URL, value: {{ $apiURL | quote }} }
+              - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
+              - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
+              - { name: CLIENT_ID, value: {{ $g.clientID | quote }} }
+              - { name: SECRETS_DIR, value: /var/run/secrets/promotion-gate }
+              - { name: GITHUB_OWNER_URL, value: {{ $githubOwner | quote }} }
+              - { name: STATUS_CONTEXT, value: {{ $g.statusContext | quote }} }
+              - { name: BASE_BRANCH, value: {{ $g.baseBranch | quote }} }
+              - { name: BINDING_PATH, value: {{ $g.bindingPath | quote }} }
+              - { name: SMOKE_HTTP, value: {{ $g.smoke.http | toString | quote }} }
+              - { name: SMOKE_PATH, value: {{ $g.smoke.path | quote }} }
+              - { name: OBSERVE, value: {{ $observe | toString | quote }} }
+              - { name: OBSERVE_WINDOW_MINUTES, value: {{ $g.observe.windowMinutes | toString | quote }} }
+              - { name: MAX_ERROR_RATE, value: {{ $g.observe.maxErrorRate | toString | quote }} }
+            source: |
+              {{- $script | nindent 14 }}
+{{- end }}

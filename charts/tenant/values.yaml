@@ -5,11 +5,12 @@
 # --- the tenant file -------------------------------------------------------------------------------------------------
 project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
 description: ""
-apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main}]; name unique within the tenant
+apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
   name: local
+  githubOrg: https://github.com/koorikla
 openchoreo:
   orgNamespace: default
 
@@ -37,3 +38,30 @@ developerKinds:
   - ReleaseBinding
   - ComponentRelease
   - SecretReference
+# Promotion gates (docs/promotion.md); installation.yaml `promotion` overrides (shared with addon openchoreo-platform).
+promotion:
+  # Each gated environment's binding file syncs through its own Application <project>-<app>-<env> (excluded from the
+  # app's main Application), so the freeze windows below can stop exactly the production sync. Promotion there is a
+  # reviewed pull request (CODEOWNERS + required status `openchoreo/promotion-gate`); an app opts out with
+  # `promotionGates: false` in the tenant file.
+  gatedEnvironments: [production]
+  bindingFile: release-bindings/{environment}.yaml   # relative to the app path (app repo contract)
+  # Weekly windows -> Argo CD deny sync windows on the gated Applications (manual sync blocked too; break glass =
+  # change this list in git). PRs merged during a window sync when it ends.
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]
+
+# Git commit signature verification for Argo CD sources (AppProject sourceIntegrity, Argo CD >= 3.5; the older
+# `signatureKeys` is deprecated). Applies to the platform, fleet and tenant AppProjects. Off until every deployable
+# HEAD is signed: GitHub signs commits it creates (PR merges in the UI, REST API commits such as the promotion gate's)
+# with its web-flow key, so `head` mode with that key = only GitHub-made commits deploy. Public keys go into
+# addons/argo-cd `argo-cd.configs.gpg.keys`. docs/supply-chain.md.
+sourceIntegrity:
+  enabled: false
+  mode: head                         # none | head (HEAD commit/tag signed) | strict (every commit since the last signed tag)
+  keys: [B5690EEEBB952194]           # GitHub web-flow commit signing key (since 2024-01; VERIFY); add maintainers' keys
+  repos: ["{{ .Values.installation.githubOrg }}/*"]   # tpl over the installation values
