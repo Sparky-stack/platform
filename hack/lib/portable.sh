@@ -49,6 +49,17 @@ sha1() {
   fi
 }
 
+# sha256_file <file> -> hex digest (GNU sha256sum, macOS shasum; macOS 26's BSD sha256sum is avoided: other flags).
+sha256_file() {
+  if [[ "$(os_name)" != darwin ]] && command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  else
+    openssl dgst -sha256 -r "$1" | awk '{ print $1 }'
+  fi
+}
+
 # free_gb <path> -> free space in GiB (POSIX `df -P`, 1K blocks; GNU `df -BG --output` does not exist on macOS).
 free_gb() { df -Pk "${1:-.}" 2>/dev/null | awk 'NR==2 { print int($4 / 1048576) }'; }
 
@@ -66,6 +77,7 @@ native_path() {
 # the Microsoft Store, and python-build-standalone (mise) installs `python`, so probe by running, not command -v.
 pick_python() {
   local c
+  export PYTHONUTF8=1   # Windows defaults to cp1252 for files and pipes; CRDs contain UTF-8
   [[ -n "${PYTHON:-}" ]] && return 0
   for c in python3 python; do
     if command -v "$c" >/dev/null 2>&1 \
