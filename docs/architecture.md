@@ -88,12 +88,13 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
+`clusterIdParameters` (`<installation>-<cluster>`, unique across installations, e.g. the external-dns TXT owner),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
 of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md). `installationValueFiles`
 (templates over installation values, paths under `addons/<addon>/values/`) select value files by an installation fact
 that is not a cluster label, e.g. external-dns' DNS provider (docs/dns.md). `hack/lib/addons.sh` reproduces this
-layering for every offline render (test.sh, image-audit, contract tests), reading the parameters and value files from
-the rendered ApplicationSet.
+layering for every offline render (test.sh, image-audit, contract tests), reading the release name, value files,
+`valuesObject` and parameters from the rendered ApplicationSet (`hack/tests/test_addon_renderer.sh`).
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (from the fleet
 file, default `HEAD`) is the `targetRevision` of that cluster's addon Applications. Prod can follow a tag while dev

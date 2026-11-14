@@ -2,7 +2,8 @@
 # ClusterSecretStore `platform` (addon secret-stores) is limited by spec.conditions to platformStore.namespaces. Every
 # ExternalSecret that reads it must live in one of those namespaces, and every listed namespace must have a consumer
 # (no stale grants). On workload clusters, store `dns` (invariant 5 exception: the external-dns Cloudflare token) is
-# limited to namespace external-dns, and that token is never read through the tenant store `default`. Uses the manifests hack/test.sh rendered for each installation's mgmt cluster and CAPI clusters
+# limited to namespace external-dns, and that token is never read through the tenant store `default`. Uses the
+# manifests hack/test.sh rendered for each installation's mgmt cluster and CAPI clusters
 # (RENDERED_DIR), plus opt-in consumers rendered here.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"

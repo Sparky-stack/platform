@@ -44,6 +44,10 @@ server_param_args() {
   done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
 }
 SAMPLE_SERVER=https://192.0.2.10:6443        # stands in for a workload cluster's CAPI API endpoint (TEST-NET-1)
+# Opt-in mgmt addons (catalog default false) rendered with every installation's values even where not switched on, so
+# a values change cannot break them unnoticed. external-dns has its own suite (hack/tests/test_external_dns.sh: it
+# must fail where dns.provider is none).
+FORCED_OPT_IN=(agentgateway finops-opencost)
 MGMT_SERVER=https://kubernetes.default.svc   # = charts/platform cluster-mgmt.yaml
 
 check_kubeconform() {
@@ -110,7 +114,7 @@ for dir in addons/*; do
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" charts/platform/values.yaml)
 
   cn_params=()
-  read_lines cn_params yq ".addons[\"$addon\"].clusterNameParameters[]?" charts/platform/values.yaml
+  read_lines cn_params yq ".addons[\"$addon\"] | ((.clusterNameParameters // []) + (.clusterIdParameters // [])) | .[]" charts/platform/values.yaml
   standalone_sets=()
   for p in ${cn_params[@]+"${cn_params[@]}"}; do
     [[ -n "$p" ]] && standalone_sets+=(--set-string "${p}=sample" --set-string cluster.name=sample)
@@ -119,7 +123,8 @@ for dir in addons/*; do
   read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
   standalone_sets+=(${sp_args[@]+"${sp_args[@]}"})
 
-  helm template "$addon" "$dir" --namespace "$ns" ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
+  helm template "$(yq ".addons[\"$addon\"].releaseName // \"$addon\"" charts/platform/values.yaml)" "$dir" --namespace "$ns" \
+    ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
   check_kubeconform "addons/$addon (standalone)" "$TMP/addon-$addon-standalone.yaml"
 
   roles_raw=$(yq ".addons[\"$addon\"].roles[]?" charts/platform/values.yaml || true)
@@ -137,15 +142,21 @@ for dir in addons/*; do
       m_env=$(yq '.mgmt.environment // "mgmt"' "$inst_dir/installation.yaml")
       m_cni=$(yq '.mgmt.cni // "flannel"' "$inst_dir/installation.yaml")
       m_toggle=$(yq ".mgmt.addons[\"$addon\"]" "$inst_dir/installation.yaml")   # no // : yq treats false as empty
-      if [[ "$m_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$m_toggle" != "true" ]]; }; then
+      forced=""
+      if [[ "$m_toggle" != "false" && "$addon_default" == "false" && "$m_toggle" != "true" ]] \
+        && printf '%s\n' "${FORCED_OPT_IN[@]}" | grep -qx "$addon"; then
+        forced=" (forced opt-in)"
+      fi
+      if [[ -z "$forced" ]] && { [[ "$m_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$m_toggle" != "true" ]]; }; }; then
         echo "  SKIP addons/$addon ($inst/mgmt): disabled by label"
       elif [[ -z "$providers_filter" ]] || echo "$providers_filter" | grep -qx "$m_prov"; then
         # Same layering and precedence as the ApplicationSet (hack/lib/addons.sh), parameters from its render above.
         vargs=()
         read_lines vargs addon_helm_args "$addon" "$inst_dir" "$TMP/platform-$inst.yaml" mgmt "$m_name" "$m_prov" \
           "$m_env" "$(yq '.mgmt.region // "local"' "$inst_dir/installation.yaml")" "$m_cni" "$MGMT_SERVER"
-        helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-mgmt.yaml"
-        check_kubeconform "addons/$addon ($inst/mgmt)" "$TMP/addon-$addon-$inst-mgmt.yaml"
+        helm template "$(addon_release_name "$TMP/platform-$inst.yaml" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
+          > "$TMP/addon-$addon-$inst-mgmt.yaml"
+        check_kubeconform "addons/$addon ($inst/mgmt)$forced" "$TMP/addon-$addon-$inst-mgmt.yaml"
       fi
     fi
 
@@ -169,7 +180,8 @@ for dir in addons/*; do
         vargs=()
         read_lines vargs addon_helm_args "$addon" "$inst_dir" "$TMP/platform-$inst.yaml" workload "$c_name" "$c_prov" \
           "$c_env" "$(yq '.region // "local"' "$cf")" "$c_cni" "$SAMPLE_SERVER"
-        helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-$c_name.yaml"
+        helm template "$(addon_release_name "$TMP/platform-$inst.yaml" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
+          > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"
       done
     fi

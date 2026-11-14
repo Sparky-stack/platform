@@ -16,7 +16,8 @@ addon_installation_params() {
   local render=$1 addon=$2 p
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
-    addon_appset "$render" "$addon" | P="$p" yq -r '.spec.template.spec.source.helm.parameters[] | select(.name == strenv(P)) | [.name, .value] | @tsv' | tr -d '\r'
+    # string concatenation, not @tsv: @tsv would escape backslashes/tabs inside values
+    addon_appset "$render" "$addon" | P="$p" yq -r '.spec.template.spec.source.helm.parameters[] | select(.name == strenv(P)) | .name + "\t" + .value' | tr -d '\r'
   done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | keys | .[]" "$ADDONS_CATALOG" | tr -d '\r')
 }
 
@@ -37,13 +38,31 @@ addon_server_part() {
   esac
 }
 
+# addon_release_name <platform render> <addon> -> the Helm release name Argo CD uses (catalog releaseName, else addon).
+addon_release_name() {
+  local r
+  r=$(addon_appset "$1" "$2" | yq -r '.spec.template.spec.source.helm.releaseName // ""' | tr -d '\r')
+  printf '%s\n' "${r:-$2}"
+}
+
+# addon_values_object <platform render> <addon> <out file> -> writes the ApplicationSet's helm valuesObject (charts/platform
+# defaults merged with installation.yaml, minus `addons`) without its per-cluster `cluster:` block (goTemplate).
+addon_values_object() {
+  addon_appset "$1" "$2" | yq '.spec.template.spec.source.helm.valuesObject // {} | del(.cluster)' > "$3"
+}
+
 # addon_helm_args <addon> <inst dir> <platform render> <role> <name> <provider> <environment> <region> <cni> <server>
-# -> `helm template` arguments, one per line, in ApplicationSet precedence:
+# -> `helm template` arguments, one per line, in ApplicationSet precedence, all taken from the addon's ApplicationSet in
+#    the charts/platform render (Argo parity):
 #    valueFiles (chart, role, provider, cni, installationValueFiles, installation overlays) < valuesObject
-#    (installation.yaml + cluster.*) < parameters (clusterName, installation, clusterServer).
+#    (charts/platform values + installation.yaml, then cluster.*) < parameters (as rendered; the per-cluster goTemplate
+#    expressions - cluster name label, server parts - resolved for this cluster; forceString -> --set-string).
+# The release name is addon_release_name. <inst dir> locates the overlay files; the valuesObject file is written next to
+# <platform render> (the caller's temp dir).
 addon_helm_args() {
   local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10}
-  local dir="addons/$addon" vf p part ip iv
+  local dir="addons/$addon" vf p v fs part vo="$3.values-$1.yaml"
+  local name_expr='{{ index .metadata.labels "platform.koorikla.io/name" }}'
   local -a files=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
   while IFS= read -r vf; do
     if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
@@ -52,17 +71,15 @@ addon_helm_args() {
   for vf in "${files[@]}"; do
     if [[ -f "$vf" ]]; then printf '%s\n' --values "$vf"; fi   # ignoreMissingValueFiles: true
   done
-  printf '%s\n' --values "$inst_dir/installation.yaml" \
+  addon_values_object "$render" "$addon" "$vo"
+  printf '%s\n' --values "$vo" \
     --set-string "cluster.name=$name,cluster.role=$role,cluster.provider=$prov,cluster.environment=$env,cluster.cni=$cni,cluster.region=$region"
-  while IFS= read -r p; do
-    if [[ -n "$p" ]]; then printf '%s\n' --set-string "$p=$name"; fi
-  done < <(yq ".addons[\"$addon\"].clusterNameParameters[]?" "$ADDONS_CATALOG" | tr -d '\r')
-  while IFS=$'\t' read -r ip iv; do
-    if [[ -n "$ip" ]]; then printf '%s\n' --set "$ip=$iv"; fi   # Argo helm parameters are --set (typed), not --set-string
-  done < <(addon_installation_params "$render" "$addon")
-  while IFS=$'\t' read -r p part; do
+  while IFS=$'\t' read -r p v fs; do
     [[ -n "$p" ]] || continue
-    if [[ "$part" == port ]]; then printf '%s\n' --set "$p=$(addon_server_part "$server" port)"
-    else printf '%s\n' --set-string "$p=$(addon_server_part "$server" "$part")"; fi
-  done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" "$ADDONS_CATALOG" | tr -d '\r')
+    part=$(P="$p" yq -r ".addons[\"$addon\"].clusterServerParameters[strenv(P)] // \"\"" "$ADDONS_CATALOG" | tr -d '\r')
+    if [[ -n "$part" ]]; then v=$(addon_server_part "$server" "$part"); fi
+    v=${v//"$name_expr"/$name}
+    case "$v" in *"{{"*) echo "addon_helm_args: $addon parameter $p has an unresolved goTemplate: $v" >&2; return 1 ;; esac
+    if [[ "$fs" == true ]]; then printf '%s\n' --set-string "$p=$v"; else printf '%s\n' --set "$p=$v"; fi   # Argo: typed --set unless forceString
+  done < <(addon_appset "$render" "$addon" | yq -r '.spec.template.spec.source.helm.parameters[]? | .name + "\t" + .value + "\t" + ((.forceString // false) | tostring)' | tr -d '\r')
 }

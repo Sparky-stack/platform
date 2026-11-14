@@ -96,7 +96,8 @@ render() {
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
   read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
-  if ! helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/render.yaml" 2> "$TMP/render.err"; then
+  if ! helm template "$(addon_release_name "$PLATFORM_RENDER" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
+    > "$TMP/render.yaml" 2> "$TMP/render.err"; then
     echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
     return 0
   fi
@@ -119,6 +120,11 @@ helm template platform charts/platform --namespace argocd --values "$INST_FILE" 
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   addon=$(basename "$dir")
+  # external-dns runs nothing without a DNS provider (and refuses to render): not part of this installation's images.
+  if [[ "$addon" == external-dns && "$(yq '.dns.provider // "none"' "$INST_FILE")" == none ]]; then
+    echo "  skip external-dns: installation dns.provider is none" >&2
+    continue
+  fi
   roles=$(yq ".addons[\"$addon\"].roles[]?" "$CATALOG" | tr -d '\r')
   [[ -n "$roles" ]] || roles=$'mgmt\nworkload'
   provs=$(yq ".addons[\"$addon\"].providers[]?" "$CATALOG" | tr -d '\r')

@@ -6,7 +6,10 @@ installationParameters; an installation overlay must not contradict it).
   - external-dns.enabled and provider.name follow dns.provider (route53 -> aws).
   - domainFilters is never empty while running (ExternalDNS would manage every zone the credentials reach) and equals
     dns.domainFilters.
-  - txtOwnerId is the cluster name; policy is upsert-only or sync; Cloudflare reads its token from the ESO Secret.
+  - txtOwnerId is <installation>-<cluster> (the cluster name in standalone renders); policy is upsert-only or sync;
+    Cloudflare reads its token from the ESO Secret.
+  - extraArgs cannot widen zones or change ownership (domain/zone filters, TXT owner/prefix/suffix are owned by
+    installation.yaml and the catalog) and must scope the Gateways (gateway-name or gateway-label-filter).
   - Credentials never reach tenants: on workload clusters the Cloudflare token comes only from ClusterSecretStore `dns`
     (addon secret-stores, scoped to this namespace), never the tenant store `default`. Route 53 runs on IRSA / EKS Pod
     Identity only: static AWS keys (env, secrets.aws) are refused.
@@ -42,8 +45,10 @@ installationParameters; an installation overlay must not contradict it).
 {{- if ne (sortAlpha $filters | toJson) (sortAlpha ($ext.domainFilters | default list) | toJson) }}
 {{- fail (printf "external-dns.domainFilters %v must equal installation.yaml dns.domainFilters %v (catalog installationParameters; never set it in overlays)" $ext.domainFilters $filters) }}
 {{- end }}
-{{- if ne (toString $ext.txtOwnerId) (toString .Values.cluster.name) }}
-{{- fail (printf "external-dns.txtOwnerId (%v) must equal the cluster name %s (catalog clusterNameParameters)" $ext.txtOwnerId .Values.cluster.name) }}
+{{- $owner := toString .Values.cluster.name }}
+{{- with (.Values.installation).name }}{{ $owner = printf "%s-%s" . $owner }}{{ end }}
+{{- if ne (toString $ext.txtOwnerId) $owner }}
+{{- fail (printf "external-dns.txtOwnerId (%v) must equal %s (<installation>-<cluster>, catalog clusterIdParameters)" $ext.txtOwnerId $owner) }}
 {{- end }}
 {{- if not (has $ext.policy (list "upsert-only" "sync")) }}
 {{- fail (printf "external-dns.policy must be upsert-only (default) or sync, got %q" $ext.policy) }}
@@ -59,6 +64,23 @@ installationParameters; an installation overlay must not contradict it).
 {{- if and (eq (toString .Values.cluster.role) "workload") (ne (toString .Values.secrets.store) "dns") }}
 {{- fail (printf "dns.provider=cloudflare on workload cluster %s reads the zone-wide token from ClusterSecretStore %q: only store dns (addon secret-stores, scoped to namespace external-dns) is allowed; the tenant store default is readable by every tenant" .Values.cluster.name (toString .Values.secrets.store)) }}
 {{- end }}
+{{- end }}
+{{- if or $ext.txtPrefix $ext.txtSuffix }}
+{{- fail "external-dns.txtPrefix / txtSuffix are not allowed: they change which TXT records mark ownership (docs/dns.md)" }}
+{{- end }}
+{{- $argKeys := list }}
+{{- if kindIs "map" $ext.extraArgs }}
+{{- range $k, $v := $ext.extraArgs }}{{ if not (kindIs "invalid" $v) }}{{ $argKeys = append $argKeys $k }}{{ end }}{{ end }}
+{{- else }}
+{{- range ($ext.extraArgs | default list) }}{{ $argKeys = append $argKeys (regexReplaceAll "^--(no-)?([^=]+).*$" (toString .) "${2}") }}{{ end }}
+{{- end }}
+{{- range $argKeys }}
+{{- if has . (list "domain-filter" "regex-domain-filter" "zone-id-filter" "zone-name-filter" "txt-prefix" "txt-suffix" "txt-owner-id" "aws-zone-tags") }}
+{{- fail (printf "external-dns.extraArgs %s is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" .) }}
+{{- end }}
+{{- end }}
+{{- if not (or (has "gateway-name" $argKeys) (has "gateway-label-filter" $argKeys)) }}
+{{- fail "external-dns.extraArgs must scope the Gateways it publishes (gateway-name + gateway-namespace, or gateway-label-filter; values/role-*.yaml)" }}
 {{- end }}
 {{- /* secrets.aws.{region,role,prefix} is installation.yaml's ESO backend (valuesObject), not ours: only the removed
      static-key switches count. */}}

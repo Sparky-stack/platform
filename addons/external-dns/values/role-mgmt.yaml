@@ -1,3 +1,9 @@
 # mgmt cluster: read secrets from ClusterSecretStore `platform` (conventions.md).
 secrets:
   store: platform
+
+# Publish only Gateways explicitly marked public. mgmt's Gateways (console, api, thunder, observer, agents) are
+# internal by default: label a Gateway platform.koorikla.io/public-dns: "true" to publish its routes (docs/dns.md).
+external-dns:
+  extraArgs:
+    gateway-label-filter: platform.koorikla.io/public-dns=true

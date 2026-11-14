@@ -19,6 +19,7 @@ mgmt:
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
 # Optional helm parameters computed per cluster:
 #   clusterNameParameters:   [<param>]                 -> the cluster name
+#   clusterIdParameters:     [<param>]                 -> <installation.name>-<cluster name> (unique across installations)
 #   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
 #   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
 # Optional extra value files, selected by installation facts rather than cluster labels:
@@ -60,9 +61,9 @@ addons:
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
   # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. The DNS provider is installation.yaml
-  # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and the cluster name
-  # (TXT owner) become helm parameters.
-  external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterNameParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
+  # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and
+  # <installation>-<cluster> (TXT owner) become helm parameters.
+  external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterIdParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
   openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
   # AI agents (docs/ai-agents.md), opt-in: the OpenCost FinOps module next to the observability plane, and agentgateway
   # (LLM gateway the RCA / FinOps agents call instead of holding provider keys).

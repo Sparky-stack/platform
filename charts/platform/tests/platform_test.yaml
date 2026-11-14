@@ -153,7 +153,21 @@ tests:
           content: { name: external-dns.domainFilters, value: "{hetzner.example.com}" }
       - contains:
           path: spec.template.spec.source.helm.parameters
-          content: { name: external-dns.txtOwnerId, value: '{{ index .metadata.labels "platform.koorikla.io/name" }}' }
+          content: { name: external-dns.txtOwnerId, value: 'hetzner-example-{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
+
+  - it: clusterIdParameters are <installation>-<cluster> (unique across installations sharing a zone)
+    template: appset-addons.yaml
+    set:
+      addons:
+        idtest: { namespace: idtest, roles: [workload], clusterIdParameters: [x.owner], clusterNameParameters: [x.name] }
+    documentSelector: { path: metadata.name, value: addon-idtest }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: x.owner, value: 'local-{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: x.name, value: '{{ index .metadata.labels "platform.koorikla.io/name" }}' }
 
   - it: installationValueFiles sit after the cni overlay and before the installation overlays
     template: appset-addons.yaml

@@ -71,11 +71,18 @@ spec:
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
-          {{- if or $cfg.clusterNameParameters $cfg.installationParameters $cfg.clusterServerParameters }}
+          {{- if or $cfg.clusterNameParameters $cfg.clusterIdParameters $cfg.installationParameters $cfg.clusterServerParameters }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
               value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+            {{- end }}
+            {{- /* clusterIdParameters: <installation>-<cluster>, unique when several installations share something
+            external (e.g. external-dns TXT owner in a shared zone). */}}
+            {{- range $p := $cfg.clusterIdParameters }}
+            - name: {{ $p | quote }}
+              value: '{{ required "installation.name is required" $inst.name }}-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+              forceString: true
             {{- end }}
             {{- /* installationParameters: <helm param>: <template over installation values>, rendered here once per
             installation, so subchart values that must equal installation.yaml facts are never restated by hand. */}}

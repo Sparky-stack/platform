@@ -3,3 +3,10 @@
 # store `default` cannot read. Never `default`: tenants could sync the zone-wide token (templates/validate.yaml).
 secrets:
   store: dns
+
+# Publish only the OpenChoreo data plane's app Gateway (addon openchoreo-data-plane), not every Gateway a tenant or
+# addon creates.
+external-dns:
+  extraArgs:
+    gateway-name: gateway-default
+    gateway-namespace: openchoreo-data-plane

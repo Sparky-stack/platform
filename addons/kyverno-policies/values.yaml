@@ -41,7 +41,6 @@ platformNamespaces: &platformNamespaces
   - falco
   - telemetry
   - obi
-  - external-dns
   - agentgateway-system
 
 kyverno-policies:

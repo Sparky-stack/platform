@@ -11,9 +11,10 @@ resolves `*.openchoreo.localhost` inside the clusters.
 |---|---|---|
 | Sources | `gateway-httproute`, `gateway-grpcroute`, `gateway-tlsroute` | kgateway and OpenChoreo publish through Gateways. No Ingress, no Service source. Gateway API v1.5.1 standard serves all three as `gateway.networking.k8s.io/v1`, the version external-dns v0.23 watches. |
 | Policy | `upsert-only` | Creates and updates records, never deletes. `sync` (also deletes records of removed routes) only per installation, on a zone dedicated to the platform. `create-only` is rejected. |
-| Registry | TXT, owner = cluster name | `txtOwnerId` is the catalog `clusterNameParameters`, so clusters sharing a zone never touch each other's records. |
+| Gateways | workload: `gateway-default` in `openchoreo-data-plane` only; mgmt: Gateways labelled `platform.koorikla.io/public-dns: "true"` only | `values/role-*.yaml` (`--gateway-name`/`--gateway-namespace`, `--gateway-label-filter`). Without it every route on every Gateway would be published, on mgmt internal hostnames (thunder, observer, rca-agent, api) and private LB IPs included. No mgmt Gateway carries the label today, so mgmt publishes nothing until you mark one public. |
+| Registry | TXT, owner = `<installation>-<cluster>` | `txtOwnerId` is the catalog `clusterIdParameters`: unique even when two installations share a zone and both have a `dev1`. A cooperative marker, not a security boundary (see [Ownership](#ownership-and-what-txt-records-do-not-protect)). |
 | Zones | `installation.yaml` `dns.domainFilters` | Delivered as a catalog `installationParameters` entry; never empty while running (ExternalDNS would otherwise manage every zone its credentials reach). |
-| Image | `registry.k8s.io/external-dns/external-dns:v0.23.0@sha256:…` | Pinned by digest, multi-arch (amd64, arm64, arm). Pod Security restricted (chart defaults). |
+| Image | `registry.k8s.io/external-dns/external-dns:v0.23.0@sha256:…` | Pinned by digest, multi-arch (amd64, arm64, arm). Pod Security restricted (chart defaults), so namespace `external-dns` is **not** in the Kyverno-exempt platform namespaces: admission and policies apply. |
 
 ## Ownership and what TXT records do not protect
 
@@ -64,7 +65,7 @@ installation overlays. external-dns uses it to pick its DNS provider file:
 ```yaml
 # charts/platform/values.yaml
 external-dns: { namespace: external-dns, roles: [mgmt, workload], default: false,
-  clusterNameParameters: [external-dns.txtOwnerId],
+  clusterIdParameters: [external-dns.txtOwnerId],
   installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' },
   installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
 ```
@@ -84,12 +85,15 @@ running controller doing the wrong thing:
 - the addon is opted in on a cluster but the installation's `dns.provider` is `none`;
 - an overlay switches `provider.name` away from `dns.provider`, or the provider file was not layered;
 - `external-dns.domainFilters` differs from `dns.domainFilters`, or the list is empty;
-- `txtOwnerId` is not the cluster name; `policy` is not `upsert-only` or `sync`;
+- `txtOwnerId` is not `<installation>-<cluster>`; `policy` is not `upsert-only` or `sync`;
+- `extraArgs` sets `domain-filter`, `regex-domain-filter`, `zone-id-filter`, `zone-name-filter`, `aws-zone-tags`,
+  `txt-prefix`, `txt-suffix` or `txt-owner-id` (or `txtPrefix`/`txtSuffix` values): an overlay must not widen the zones
+  or change ownership; `extraArgs` no longer scopes the Gateways (`gateway-name` or `gateway-label-filter`);
 - Cloudflare without `CF_API_TOKEN` from Secret `external-dns-cloudflare`, or on a workload cluster from any store but
   `dns`;
 - static AWS keys (`secrets.aws`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` env).
 
-Helm parameters beat value files, so an overlay cannot widen the zones either.
+Helm parameters beat value files, so an overlay cannot replace the zones either.
 
 ## Credentials
 

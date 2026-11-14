@@ -44,7 +44,12 @@ expect_running() {   # expect_running <inst> <dns provider> <helm provider> <exp
     assert_eq "$(has_arg "$out" "--provider=$hp")" yes "$inst/$name ($prov infra): --provider=$hp from dns.provider=$dnsp"
     assert_eq "$(has_arg "$out" "--domain-filter=$zone")" yes "$inst/$name: zone from installation.yaml"
     assert_eq "$(args_of "$out" | grep -c -- '^--domain-filter=')" "$(yq '.dns.domainFilters | length' "$inst_dir/installation.yaml")" "$inst/$name: only the installation's zones"
-    assert_eq "$(has_arg "$out" "--txt-owner-id=$name")" yes "$inst/$name: TXT owner is the cluster name"
+    assert_eq "$(has_arg "$out" "--txt-owner-id=$inst-$name")" yes "$inst/$name: TXT owner is <installation>-<cluster>"
+    if [[ "$role" == mgmt ]]; then
+      assert_eq "$(has_arg "$out" "--gateway-label-filter=platform.koorikla.io/public-dns=true")" yes "$inst/$name: mgmt publishes only Gateways labelled public"
+    else
+      assert_eq "$(has_arg "$out" "--gateway-name=gateway-default")$(has_arg "$out" "--gateway-namespace=openchoreo-data-plane")" yesyes "$inst/$name: workload publishes only the data plane Gateway"
+    fi
     assert_eq "$(has_arg "$out" "--policy=upsert-only")" yes "$inst/$name: upsert-only by default"
     assert_eq "$(args_of "$out" | grep -c -- '^--source=gateway-')" 3 "$inst/$name: three Gateway API sources"
     assert_eq "$(args_of "$out" | grep -c -E -- '^--source=(ingress|service)$')" 0 "$inst/$name: no Ingress/Service source"
@@ -83,6 +88,22 @@ fi
 printf 'external-dns:\n  domainFilters: [evil.example.org]\n' > "$TMP/inst/addons/external-dns/values.yaml"
 render "$TMP/inst" "$TMP/platform-hetzner-example.yaml" mgmt mgmt hetzner "$TMP/edns-zone.yaml" || true
 assert_eq "$(has_arg "$TMP/edns-zone.yaml" "--domain-filter=evil.example.org")" no "overlay zones never beat installation.yaml (parameters win)"
+
+# Overlays cannot widen zones or take over ownership through extraArgs, nor drop the Gateway scope.
+for kv in "domain-filter: evil.example.org" "regex-domain-filter: '.*'" "zone-id-filter: Z123" "txt-owner-id: prod-fsn1" "txt-prefix: x-"; do
+  printf 'external-dns:\n  extraArgs:\n    %s\n' "$kv" > "$TMP/inst/addons/external-dns/values.yaml"
+  if render "$TMP/inst" "$TMP/platform-hetzner-example.yaml" workload dev-fsn1 hetzner "$TMP/edns-arg.yaml"; then
+    assert_eq rendered fails "overlay extraArgs ${kv%%:*} is refused"
+  else
+    assert_match "$(cat "$TMP/edns-arg.yaml.err")" "extraArgs ${kv%%:*} is not allowed" "overlay extraArgs ${kv%%:*} is refused"
+  fi
+done
+printf 'external-dns:\n  extraArgs:\n    gateway-name: null\n    gateway-namespace: null\n' > "$TMP/inst/addons/external-dns/values.yaml"
+if render "$TMP/inst" "$TMP/platform-hetzner-example.yaml" workload dev-fsn1 hetzner "$TMP/edns-gw.yaml"; then
+  assert_eq rendered fails "overlay dropping the Gateway scope is refused"
+else
+  assert_match "$(cat "$TMP/edns-gw.yaml.err")" 'must scope the Gateways' "overlay dropping the Gateway scope is refused"
+fi
 
 # Standalone (no installation): nothing runs.
 helm template external-dns addons/external-dns --namespace "$NS" > "$TMP/edns-standalone.yaml"

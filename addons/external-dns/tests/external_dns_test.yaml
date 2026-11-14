@@ -64,8 +64,8 @@ tests:
 
   - it: matching installation and overlays pass validation (sync allowed, filter order irrelevant)
     template: templates/validate.yaml
-    values: [../values/dns-cloudflare.yaml]
-    set: { installation.name: x, dns.provider: cloudflare, dns.domainFilters: [a.example.com, b.example.com], external-dns.domainFilters: [b.example.com, a.example.com], external-dns.txtOwnerId: sample, external-dns.policy: sync }
+    values: [../values/role-mgmt.yaml, ../values/dns-cloudflare.yaml]
+    set: { installation.name: x, dns.provider: cloudflare, dns.domainFilters: [a.example.com, b.example.com], external-dns.domainFilters: [b.example.com, a.example.com], external-dns.txtOwnerId: x-sample, external-dns.policy: sync }
     asserts:
       - hasDocuments: { count: 0 }
 
@@ -115,12 +115,48 @@ tests:
     asserts:
       - failedTemplate: {}
 
-  - it: rejects a TXT owner other than the cluster name
+  - it: rejects a TXT owner other than <installation>-<cluster>
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { installation.name: aws-example, cluster.name: dev1, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.txtOwnerId (dev1) must equal aws-example-dev1 (<installation>-<cluster>, catalog clusterIdParameters)" }
+
+  - it: rejects extraArgs that widen zones or take over TXT ownership (map and list form)
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.extraArgs.zone-id-filter: Z1 }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.extraArgs zone-id-filter is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" }
+
+  - it: rejects extraArgs in list form too
     template: templates/validate.yaml
     values: [../values/dns-route53.yaml]
-    set: { cluster.name: dev1, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: prod1 }
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.extraArgs: ["--gateway-label-filter=a=b", "--txt-owner-id=prod"] }
     asserts:
-      - failedTemplate: { errorMessage: external-dns.txtOwnerId (prod1) must equal the cluster name dev1 (catalog clusterNameParameters) }
+      - failedTemplate: { errorMessage: "external-dns.extraArgs txt-owner-id is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" }
+
+  - it: rejects txtPrefix (changes which TXT records mark ownership)
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.txtPrefix: x- }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.txtPrefix / txtSuffix are not allowed: they change which TXT records mark ownership (docs/dns.md)" }
+
+  - it: rejects running without a Gateway scope (would publish every Gateway's routes)
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.extraArgs must scope the Gateways it publishes (gateway-name + gateway-namespace, or gateway-label-filter; values/role-*.yaml)" }
+
+  - it: mgmt publishes only Gateways labelled public; workload only the data plane Gateway
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-mgmt.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --gateway-label-filter=platform.koorikla.io/public-dns=true }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --gateway-name=gateway-default }
 
   - it: rejects policy create-only
     template: templates/validate.yaml
@@ -145,14 +181,14 @@ tests:
 
   - it: rejects static AWS keys via secrets.aws (removed path)
     template: templates/validate.yaml
-    values: [../values/dns-route53.yaml]
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
     set: { secrets.aws.enabled: true, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
     asserts:
       - failedTemplate: { errorMessage: 'secrets.aws: static AWS keys are not supported; Route 53 uses IRSA or EKS Pod Identity (values/dns-route53.yaml)' }
 
   - it: rejects static AWS keys in env
     template: templates/validate.yaml
-    values: [../values/dns-route53.yaml]
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
     set:
       dns.provider: route53
       dns.domainFilters: [a.example.com]
