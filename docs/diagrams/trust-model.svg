@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-label="Trust model · what crosses which boundary"><title>Trust model · what crosses which boundary</title><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern><marker id="aha78bfa" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#a78bfa"/></marker><marker id="ahe2e8f0" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#e2e8f0"/></marker><marker id="ahfb7185" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb7185"/></marker></defs><rect width="1200" height="1200" fill="#020617"/><rect width="1200" height="1200" fill="url(#grid)"/><rect x="8" y="8" width="1184" height="1184" rx="14" fill="none" stroke="#1e293b" stroke-width="1"/>
+<rect x="16" y="124" width="240" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="16" y="124" width="240" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="400" y="124" width="360" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="400" y="124" width="360" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="920" y="124" width="264" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="920" y="124" width="264" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="16" y="370" width="240" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="16" y="370" width="240" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="400" y="370" width="360" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="400" y="370" width="360" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="920" y="370" width="264" height="230" rx="12" fill="#020617" stroke="none"/>
+<rect x="920" y="370" width="264" height="230" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="16" y="622" width="240" height="154" rx="12" fill="#020617" stroke="none"/>
+<rect x="16" y="622" width="240" height="154" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="400" y="622" width="360" height="154" rx="12" fill="#020617" stroke="none"/>
+<rect x="400" y="622" width="360" height="154" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="920" y="622" width="264" height="154" rx="12" fill="#020617" stroke="none"/>
+<rect x="920" y="622" width="264" height="154" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="16" y="798" width="240" height="254" rx="12" fill="#020617" stroke="none"/>
+<rect x="16" y="798" width="240" height="254" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="400" y="798" width="360" height="254" rx="12" fill="#020617" stroke="none"/>
+<rect x="400" y="798" width="360" height="254" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="920" y="798" width="264" height="254" rx="12" fill="#020617" stroke="none"/>
+<rect x="920" y="798" width="264" height="254" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<rect x="24" y="400" width="224" height="190" rx="12" fill="#020617" stroke="none"/>
+<rect x="24" y="400" width="224" height="190" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<text x="38.0" y="422.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#e2e8f0" text-anchor="start">secret backend</text>
+<path d="M 744.0 188.0 L 936.0 188.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 744.0 252.0 L 936.0 252.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 936.0 316.0 L 744.0 316.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 416.0 412.0 L 248.0 412.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 1052.0 464.0 L 1052.0 611.0 L 136.0 611.0 L 136.0 590.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 416.0 676.0 L 240.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 416.0 738.0 L 240.0 738.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 936.0 676.0 L 744.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 136.0 886.0 L 136.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 580.0 886.0 L 580.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 936.0 940.0 L 744.0 940.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 1052.0 962.0 L 1052.0 1064.0 L 248.0 1064.0 L 248.0 950.0 L 240.0 950.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 416.0 1018.0 L 240.0 1018.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<rect x="416" y="162" width="328" height="52" rx="6" fill="#0f172a"/>
+<rect x="416" y="162" width="328" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="580.0" y="184.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">agent CA · one per cluster</text>
+<text x="580.0" y="204.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">fleet/&lt;name&gt;-agent-ca · key stays</text>
+<rect x="416" y="226" width="328" height="52" rx="6" fill="#0f172a"/>
+<rect x="416" y="226" width="328" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="580.0" y="248.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">gateway CA</text>
+<text x="580.0" y="268.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">server cert of cluster-gateway · key stays</text>
+<rect x="416" y="290" width="328" height="52" rx="6" fill="#0f172a"/>
+<rect x="416" y="290" width="328" height="52" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
+<text x="580.0" y="312.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-gateway</text>
+<text x="580.0" y="332.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">client CA = that cluster&#x27;s agent CA</text>
+<rect x="936" y="162" width="232" height="52" rx="6" fill="#0f172a"/>
+<rect x="936" y="162" width="232" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="1052.0" y="184.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent-tls</text>
+<text x="1052.0" y="204.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">own cert + key, CA cert</text>
+<rect x="936" y="226" width="232" height="52" rx="6" fill="#0f172a"/>
+<rect x="936" y="226" width="232" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="1052.0" y="248.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-gateway-ca</text>
+<text x="1052.0" y="268.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ConfigMap · public cert</text>
+<rect x="936" y="290" width="232" height="52" rx="6" fill="#0f172a"/>
+<rect x="936" y="290" width="232" height="52" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
+<text x="1052.0" y="312.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent</text>
+<text x="1052.0" y="332.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">verifies gateway CA</text>
+<rect x="36" y="432" width="200" height="44" rx="6" fill="#0f172a"/>
+<rect x="36" y="432" width="200" height="44" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="136.0" y="450.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">kubernetes</text>
+<text x="136.0" y="469.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">local stand-in</text>
+<rect x="36" y="482" width="200" height="44" rx="6" fill="#0f172a"/>
+<rect x="36" y="482" width="200" height="44" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="136.0" y="500.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">AWS Secrets Manager</text>
+<text x="136.0" y="519.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
+<rect x="36" y="532" width="200" height="44" rx="6" fill="#0f172a"/>
+<rect x="36" y="532" width="200" height="44" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="136.0" y="550.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">Vault / OpenBao</text>
+<text x="136.0" y="569.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
+<rect x="416" y="400" width="328" height="64" rx="6" fill="#0f172a"/>
+<rect x="416" y="400" width="328" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="580.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ClusterSecretStore platform</text>
+<text x="580.0" y="440.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">platform-github, platform-ghcr,</text>
+<text x="580.0" y="456.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">capi-aws, capi-hetzner, openchoreo</text>
+<rect x="416" y="478" width="328" height="64" rx="6" fill="#0f172a"/>
+<rect x="416" y="478" width="328" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="580.0" y="499.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">mgmt-fleet · mgmt-openchoreo</text>
+<text x="580.0" y="518.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">read-only in-cluster stores:</text>
+<text x="580.0" y="534.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">kubeconfigs, agent certs, ca.crt</text>
+<rect x="936" y="400" width="232" height="64" rx="6" fill="#0f172a"/>
+<rect x="936" y="400" width="232" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="1052.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ClusterSecretStore default</text>
+<text x="1052.0" y="440.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo app secrets</text>
+<text x="1052.0" y="456.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">same backend, scoped</text>
+<rect x="32" y="652" width="208" height="112" rx="6" fill="#0f172a"/>
+<rect x="32" y="652" width="208" height="112" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="136.0" y="704.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Okta / Google</text>
+<text x="136.0" y="724.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">workforce IdP</text>
+<rect x="416" y="650" width="328" height="52" rx="6" fill="#0f172a"/>
+<rect x="416" y="650" width="328" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="580.0" y="672.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Thunder</text>
+<text x="580.0" y="692.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo IdP · console, API, CLI</text>
+<rect x="416" y="712" width="328" height="52" rx="6" fill="#0f172a"/>
+<rect x="416" y="712" width="328" height="52" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="580.0" y="734.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD SSO</text>
+<text x="580.0" y="754.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OIDC via Dex</text>
+<rect x="936" y="650" width="232" height="52" rx="6" fill="#0f172a"/>
+<rect x="936" y="650" width="232" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="1052.0" y="672.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kube-apiserver OIDC</text>
+<text x="1052.0" y="692.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s --oidc-issuer-url</text>
+<rect x="32" y="826" width="208" height="60" rx="6" fill="#0f172a"/>
+<rect x="32" y="826" width="208" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="136.0" y="845.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
+<text x="136.0" y="864.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless: Fulcio + Rekor</text>
+<text x="136.0" y="880.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci @ main</text>
+<rect x="32" y="918" width="208" height="64" rx="6" fill="#0f172a"/>
+<rect x="32" y="918" width="208" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
+<text x="136.0" y="939.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
+<text x="136.0" y="958.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*</text>
+<text x="136.0" y="974.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">images (+ sigs, planned)</text>
+<rect x="32" y="994" width="208" height="48" rx="6" fill="#0f172a"/>
+<rect x="32" y="994" width="208" height="48" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="136.0" y="1014.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub App</text>
+<text x="136.0" y="1034.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Backstage scaffolder</text>
+<rect x="416" y="826" width="328" height="60" rx="6" fill="#0f172a"/>
+<rect x="416" y="826" width="328" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="580.0" y="845.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
+<text x="580.0" y="864.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign sign with platform key</text>
+<text x="580.0" y="880.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(cosign-platform via ESO)</text>
+<rect x="416" y="918" width="328" height="44" rx="6" fill="#0f172a"/>
+<rect x="416" y="918" width="328" height="44" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="580.0" y="936.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor · apps</text>
+<text x="580.0" y="956.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign content trust</text>
+<rect x="416" y="994" width="328" height="48" rx="6" fill="#0f172a"/>
+<rect x="416" y="994" width="328" height="48" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="580.0" y="1014.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Backstage scaffolder</text>
+<text x="580.0" y="1034.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">new app repo + platform PR</text>
+<rect x="936" y="826" width="232" height="136" rx="6" fill="#0f172a"/>
+<rect x="936" y="826" width="232" height="136" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="1052.0" y="852.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno verifyImages</text>
+<text x="1052.0" y="871.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*:</text>
+<text x="1052.0" y="887.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless, issuer GitHub,</text>
+<text x="1052.0" y="902.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">subject …@refs/heads/main</text>
+<text x="1052.0" y="918.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">harbor apps/*:</text>
+<text x="1052.0" y="933.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">platform public key</text>
+<text x="1052.0" y="949.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Audit mode</text>
+<text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">Trust model · what crosses which boundary</text>
+<text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">rows = concern, columns = trust zone · gutter labels name exactly what crosses · arrow = initiator → target</text>
+<text x="30.0" y="112.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">external</text>
+<text x="414.0" y="112.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">mgmt cluster · trust root</text>
+<text x="934.0" y="112.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">workload cluster &lt;name&gt;</text>
+<text x="32.0" y="150.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">PKI · agent identity</text>
+<text x="32.0" y="178.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">CA private keys never</text>
+<text x="32.0" y="196.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">leave mgmt. One CA per</text>
+<text x="32.0" y="214.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster: delete the</text>
+<text x="32.0" y="232.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">fleet file = revoke.</text>
+<rect x="779.0" y="179.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="840.0" y="192.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">cert + key (CRS)</text>
+<rect x="775.4" y="243.5" width="129.2" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="840.0" y="256.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">public cert (CRS)</text>
+<rect x="779.0" y="307.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="840.0" y="320.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">wss + mTLS (out)</text>
+<text x="32.0" y="390.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">secrets</text>
+<rect x="270.5" y="403.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="328.0" y="416.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">reads flat keys</text>
+<rect x="429.8" y="602.5" width="300.3" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="580.0" y="615.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">reads app secrets directly (not via mgmt)</text>
+<text x="32.0" y="640.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">SSO · human identity</text>
+<rect x="270.5" y="667.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="328.0" y="680.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">OIDC federation</text>
+<rect x="288.4" y="729.5" width="79.3" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="328.0" y="742.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">OIDC (Dex)</text>
+<rect x="789.7" y="667.5" width="100.7" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="840.0" y="680.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">trusts issuer</text>
+<text x="32.0" y="816.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">supply chain · signing</text>
+<rect x="142.0" y="894.5" width="100.7" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="146.0" y="907.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#a78bfa" text-anchor="start">sign + attest</text>
+<rect x="586.0" y="894.5" width="36.5" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="590.0" y="907.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#a78bfa" text-anchor="start">push</text>
+<rect x="768.3" y="931.5" width="143.5" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="840.0" y="944.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">verify platform key</text>
+<rect x="426.3" y="1055.5" width="307.5" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="580.0" y="1068.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">verify keyless sig directly (not via mgmt)</text>
+<rect x="270.5" y="1009.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="328.0" y="1022.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">App token (ESO)</text>
+<text x="28.0" y="1102.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Legend</text>
+<rect x="28" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="28" y="1118" width="22" height="13" rx="3" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="58.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">external / git</text>
+<rect x="218" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="218" y="1118" width="22" height="13" rx="3" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.2"/>
+<text x="248.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">GitOps &amp; lifecycle</text>
+<rect x="408" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="408" y="1118" width="22" height="13" rx="3" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.2"/>
+<text x="438.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">security &amp; secrets</text>
+<rect x="598" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="598" y="1118" width="22" height="13" rx="3" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.2"/>
+<text x="628.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenChoreo</text>
+<rect x="788" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="788" y="1118" width="22" height="13" rx="3" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.2"/>
+<text x="818.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">registry &amp; data</text>
+<rect x="978" y="1118" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="978" y="1118" width="22" height="13" rx="3" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.2"/>
+<text x="1008.0" y="1129.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cloud / infra</text>
+<rect x="28" y="1140" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4"/>
+<text x="58.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">built (on main)</text>
+<rect x="218" y="1140" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4" stroke-dasharray="4,3"/>
+<text x="248.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned</text>
+<line x1="404" y1="1147" x2="430" y2="1147" stroke="#e2e8f0" stroke-width="1.8" marker-end="url(#ahe2e8f0)"/>
+<text x="438.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">flow</text>
+<line x1="594" y1="1147" x2="620" y2="1147" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#ahe2e8f0)"/>
+<text x="628.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned flow</text>
+<rect x="786" y="1136" width="26" height="20" rx="5" fill="#0f172a" fill-opacity="0.1" stroke="#7b8cab" stroke-width="1.2"/><line x1="790" y1="1142" x2="800" y2="1142" stroke="#e2e8f0" stroke-width="1.5"/>
+<text x="818.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster / zone</text>
+<line x1="974" y1="1147" x2="1000" y2="1147" stroke="#fb7185" stroke-width="1.8" marker-end="url(#ahfb7185)"/>
+<text x="1008.0" y="1151.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">trust / secret material</text>
+<line x1="24" y1="1169" x2="50" y2="1169" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#aha78bfa)"/>
+<text x="58.0" y="1173.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">artifact</text>
+</svg>
