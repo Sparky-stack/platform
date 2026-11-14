@@ -73,7 +73,16 @@ tests:
       - equal: { path: spec.target.name, value: harbor-platform }
       - exists: { path: 'spec.target.template.data.REGISTRY_HTPASSWD' }
       - equal: { path: 'spec.target.template.data["robot-builder"]', value: '{{ index . "builder-secret" }}' }
+      - notContains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
+      - notExists: { path: 'spec.target.template.data["ghcr-token"]' }
+
+  - it: GHCR credentials only when secrets.ghcrKey is set (private packages)
+    template: templates/secrets.yaml
+    set:
+      secrets.ghcrKey: platform-ghcr
+    asserts:
       - contains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
+      - exists: { path: 'spec.target.template.data["ghcr-token"]' }
 
   - it: desired state renders projects, proxy caches and robots
     template: templates/config.yaml

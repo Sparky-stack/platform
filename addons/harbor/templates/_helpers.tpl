@@ -33,9 +33,9 @@ containers:
       - name: HARBOR_ADMIN_PASSWORD
         valueFrom: { secretKeyRef: { name: {{ .Values.secrets.secretName }}, key: HARBOR_ADMIN_PASSWORD } }
       - name: GHCR_USERNAME
-        valueFrom: { secretKeyRef: { name: {{ .Values.secrets.secretName }}, key: ghcr-username } }
+        valueFrom: { secretKeyRef: { name: {{ .Values.secrets.secretName }}, key: ghcr-username, optional: true } }
       - name: GHCR_TOKEN
-        valueFrom: { secretKeyRef: { name: {{ .Values.secrets.secretName }}, key: ghcr-token } }
+        valueFrom: { secretKeyRef: { name: {{ .Values.secrets.secretName }}, key: ghcr-token, optional: true } }
       {{- range .Values.config.robots }}
       - name: {{ printf "ROBOT_%s" (.name | upper | replace "-" "_") }}
         valueFrom: { secretKeyRef: { name: {{ $.Values.secrets.secretName }}, key: {{ printf "robot-%s" .name }} } }

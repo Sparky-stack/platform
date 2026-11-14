@@ -79,7 +79,7 @@ def credential(kind):
     if kind == "ghcr":
         user, token = os.environ.get("GHCR_USERNAME", ""), os.environ.get("GHCR_TOKEN", "")
         if not (user and token):
-            raise HarborError("GHCR credentials missing (GHCR_USERNAME/GHCR_TOKEN)")
+            return None   # no secrets.ghcrKey: anonymous GHCR (public packages); replication needs a token
         return {"type": "basic", "access_key": user, "access_secret": token}
     raise HarborError(f"unknown credentials kind {kind}")
 
@@ -183,7 +183,11 @@ def main():
     registry_ids = {r["name"]: ensure_registry(r) for r in state.get("registries", [])}
     for p in state.get("projects", []):
         ensure_project(p, registry_ids)
+    cred_kind = {r["name"]: r.get("credentials") for r in state.get("registries", [])}
     for r in state.get("replication", []):
+        if cred_kind.get(r["registry"]) and credential(cred_kind[r["registry"]]) is None:
+            r = {**r, "enabled": False}   # e.g. GHCR listing needs a token; anonymous proxy cache still works
+            print(f"replication {r['name']}: no credentials, applied disabled")
         ensure_replication(r, registry_ids)
     for r in state.get("robots", []):
         ensure_robot(r)
