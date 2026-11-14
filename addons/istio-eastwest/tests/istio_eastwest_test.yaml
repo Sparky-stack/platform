@@ -1,7 +1,7 @@
 suite: istio-eastwest - ambient east-west gateway + reader RBAC
 templates:
   - templates/gateway.yaml
-  - templates/reader-binding.yaml
+  - templates/reader-rbac.yaml
 set:
   cluster.name: prod1
   mesh: { group: local, network: prod1 }
@@ -68,11 +68,63 @@ tests:
     asserts:
       - equal: { path: 'spec.infrastructure.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]', value: nlb }
 
-  - it: binds the reader user (client cert from mgmt) to the istiod chart's read-only ClusterRole
-    template: templates/reader-binding.yaml
+  - it: binds the reader user (client cert from mgmt) to the platform's own read-only ClusterRole, never upstream's
+    template: templates/reader-rbac.yaml
+    release:
+      namespace: istio-system
+    documentIndex: 1
+    asserts:
+      - isKind: { of: ClusterRoleBinding }
+      - equal: { path: roleRef, value: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: platform-istio-reader } }
+      - notEqual: { path: roleRef.name, value: istio-reader-clusterrole-istio-system }
+      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }
+
+  - it: grants exactly the discovery reads a peer istiod needs (pinned - any widening must change this test)
+    template: templates/reader-rbac.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ClusterRole }
+      - equal: { path: metadata.name, value: platform-istio-reader }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [""], resources: [services, endpoints, pods, namespaces, nodes], verbs: [get, list, watch] }
+            - { apiGroups: [discovery.k8s.io], resources: [endpointslices], verbs: [get, list, watch] }
+            - { apiGroups: [gateway.networking.k8s.io], resources: [gateways], verbs: [get, list, watch] }
+            - { apiGroups: [networking.istio.io, security.istio.io, telemetry.istio.io, extensions.istio.io], resources: ["*"], verbs: [get, list, watch] }
+            - { apiGroups: [multicluster.x-k8s.io], resources: [serviceimports], verbs: [get, list, watch] }
+            - { apiGroups: [apiextensions.k8s.io], resources: [customresourcedefinitions], verbs: [get, list, watch] }
+
+  - it: "negative: peers can never read Secrets/ConfigMaps cluster-wide, write serviceexports or create token/access reviews"
+    template: templates/reader-rbac.yaml
+    documentIndex: 0
+    asserts:
+      - notContains: { path: 'rules[0].resources', content: secrets }
+      - notContains: { path: 'rules[0].resources', content: configmaps }
+      - notContains: { path: 'rules[0].resources', content: "*" }
+      - notContains: { path: 'rules[4].resources', content: serviceexports }
+      - notContains: { path: rules, content: { apiGroups: [authentication.k8s.io], resources: [tokenreviews], verbs: [create] } }
+      - notContains: { path: rules, content: { apiGroups: [authorization.k8s.io], resources: [subjectaccessreviews], verbs: [create] } }
+      - notContains: { path: rules, content: { apiGroups: [""], resources: [secrets], verbs: [get, list, watch] } }
+      - lengthEqual: { path: 'rules[0].verbs', count: 3 }
+      - lengthEqual: { path: 'rules[3].verbs', count: 3 }
+
+  - it: lets peers read only the istio MeshConfig ConfigMap (trust domain) in istio-system
+    template: templates/reader-rbac.yaml
     release:
       namespace: istio-system
     asserts:
-      - isKind: { of: ClusterRoleBinding }
-      - equal: { path: roleRef.name, value: istio-reader-clusterrole-istio-system }
-      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }
+      - isKind: { of: Role }
+        documentIndex: 2
+      - equal: { path: metadata.namespace, value: istio-system }
+        documentIndex: 2
+      - equal:
+          path: rules
+          value: [{ apiGroups: [""], resources: [configmaps], resourceNames: [istio], verbs: [get, list, watch] }]
+        documentIndex: 2
+      - isKind: { of: RoleBinding }
+        documentIndex: 3
+      - equal: { path: roleRef.name, value: platform-istio-reader }
+        documentIndex: 3
+      - equal: { path: 'subjects[0].name', value: "platform:istio-reader" }
+        documentIndex: 3

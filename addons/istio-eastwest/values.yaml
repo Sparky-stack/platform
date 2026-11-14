@@ -32,7 +32,8 @@ gateway:
   loadBalancerSourceRanges: []   # restrict to the peers' egress CIDRs in real installations (docs/multicluster.md)
 
 # Peers authenticate as this user (client cert issued on mgmt from this cluster's k3s client CA, 7d); bound here to
-# the istiod chart's read-only ClusterRole istio-reader-clusterrole-istio-system.
+# ClusterRole platform-istio-reader (discovery reads only - no Secrets, no ConfigMaps but istio-system/istio, no writes;
+# templates/reader-rbac.yaml), never to upstream's istio-reader-clusterrole-istio-system (reads all Secrets).
 reader:
   enabled: true
   user: platform:istio-reader
