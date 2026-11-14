@@ -19,6 +19,23 @@ tests:
             - { secretKey: username, remoteRef: { key: platform-ghcr, property: username } }
             - { secretKey: token, remoteRef: { key: platform-ghcr, property: token } }
 
+  # cluster-api-k3s v0.5.0 does not watch files[].contentFrom Secrets: the Secret must exist before any KThreesConfig
+  # of this cluster is reconciled, i.e. Argo applies it (and waits for Ready) before the Cluster (default wave 0)
+  - it: is synced in a wave before the Cluster
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml]
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "-1"
+
+  - it: keeps the Cluster in the default wave (after the registries Secret)
+    template: templates/capi-cluster.yaml
+    values: [values/capi-docker.yaml]
+    asserts:
+      - notExists:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+
   # key name must match the ClusterClass files[].contentFrom.secret.key
   - it: templates the k3s registries.yaml for ghcr.io (ESO template v2, values escaped as JSON)
     template: templates/capi-registries.yaml

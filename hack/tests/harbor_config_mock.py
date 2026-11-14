@@ -102,9 +102,15 @@ class Handler(BaseHTTPRequestHandler):
         self.handle_any("PATCH")
 
 
+# Variables a child process needs to start on the host. Windows: without SYSTEMROOT Winsock cannot initialise
+# (WinError 10106), so every connection fails and the script's readiness loop would retry until its timeout.
+HOST_ENV = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP")
+
+
 def run(script, state, pw=ADMIN_PW):
-    env = {"PATH": os.environ.get("PATH", "/usr/bin"), "HARBOR_URL": f"http://127.0.0.1:{PORT}",
-           "HARBOR_ADMIN_PASSWORD": pw, "GHCR_USERNAME": "ghcr-user", **SECRETS}
+    env = {k: os.environ[k] for k in HOST_ENV if k in os.environ}
+    env.update({"HARBOR_URL": f"http://127.0.0.1:{PORT}", "HARBOR_READY_TIMEOUT": "15",
+                "HARBOR_ADMIN_PASSWORD": pw, "GHCR_USERNAME": "ghcr-user", **SECRETS})
     return subprocess.run([sys.executable, script, state], env=env, capture_output=True, text=True, timeout=120)
 
 

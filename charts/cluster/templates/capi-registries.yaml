@@ -9,6 +9,12 @@ k3s node registry config: Secret <name>-registries in ns fleet, written to every
                       endpoint when Harbor fails, so a Harbor outage slows pulls instead of breaking them
   registry-ca.crt   the registry CA's PUBLIC cert (ca.crt of harbor/harbor-ca-bundle via ClusterSecretStore
                     mgmt-harbor, name-scoped read); the CA key never leaves mgmt (ns cert-manager)
+Ordering: sync wave -1, before the Cluster (wave 0). cluster-api-k3s v0.5.0's bootstrap controller watches only
+KThreesConfigs, not the Secrets their files[].contentFrom reference: a KThreesConfig reconciled before this Secret
+exists fails with "secret not found" and is retried only on controller backoff or the 10 min resync. Argo applies the
+Cluster - and any change to it, e.g. registryAuth/registryCA turning on - only once this ExternalSecret is Ready (Argo
+CD's built-in ExternalSecret health check); until then (e.g. the Harbor CA is not issued yet) the sync fails and Argo
+retries, so no Machine is created before its registry config exists.
 Bootstrap data is rendered once per Machine: rotated tokens, robot secrets or mirror changes reach machines created
 afterwards only (roll them: CAPI topology `rollout.after`). VERIFY rotation story.
 */ -}}
@@ -25,6 +31,8 @@ metadata:
   namespace: fleet
   labels:
     platform.koorikla.io/name: {{ .Values.name | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # before the Cluster (wave 0): bootstrap reads this Secret
 spec:
   refreshInterval: 1h
   secretStoreRef:

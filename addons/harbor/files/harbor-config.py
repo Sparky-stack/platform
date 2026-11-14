@@ -11,8 +11,9 @@ Desired state: JSON file (argv[1], rendered from addons/harbor/values.yaml `conf
    "cveAllowlist": []}
 
 Env: HARBOR_URL (core, e.g. http://harbor-core), HARBOR_ADMIN_PASSWORD, GHCR_USERNAME/GHCR_TOKEN, and one env per
-robot (secretEnv). Secrets never reach stdout. Creates what is missing and updates what drifted; never deletes
-(removing an entry from values leaves the object in Harbor - delete it in the UI if intended).
+robot (secretEnv); HARBOR_READY_TIMEOUT (seconds to wait for /health, default 600). Secrets never reach stdout.
+Creates what is missing and updates what drifted; never deletes (removing an entry from values leaves the object in
+Harbor - delete it in the UI if intended).
 """
 import base64
 import json
@@ -58,7 +59,7 @@ def find(path, name, key="name"):
     return None
 
 
-def wait_ready(timeout=600):
+def wait_ready(timeout=int(os.environ.get("HARBOR_READY_TIMEOUT", "600"))):
     deadline = time.time() + timeout
     while True:
         try:
