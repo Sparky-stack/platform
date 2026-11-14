@@ -1,0 +1,17 @@
+{{- /*
+Argo ClusterWorkflowTemplates (cluster-scoped, on the workflow plane cluster) from files/cluster-workflow-templates/,
+verbatim except @@NAME@@ image placeholders (values.yaml `images`). The files hold Argo {{...}} expressions, so they
+are never run through Helm's template engine. SkipDryRun: the CRDs come with this same chart (argo-workflows).
+*/ -}}
+{{- range $path, $_ := .Files.Glob "files/cluster-workflow-templates/*.yaml" }}
+{{- $doc := $.Files.Get $path }}
+{{- range $k, $v := $.Values.images }}
+{{- $doc = replace (printf "@@%s@@" $k) $v $doc }}
+{{- end }}
+{{- if regexMatch "@@[A-Z_]+@@" $doc }}
+{{- fail (printf "%s: unresolved @@ placeholder (values.yaml images)" $path) }}
+{{- end }}
+---
+# Source: {{ $.Chart.Name }}/{{ $path }}
+{{ $doc }}
+{{- end }}

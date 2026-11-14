@@ -58,12 +58,29 @@ case "$*" in
   *) exit 1 ;;
 esac
 EOF
+# Fake docker: `cosign generate-key-pair` into the -v mounted dir (seed_cosign_secret); records the dir and whether
+# COSIGN_PASSWORD arrived through the environment.
+cat > "$BIN/docker" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "docker $*" >> "$HLOG/calls"
+[[ "${FAKE_DOCKER_FAIL:-}" == 1 ]] && { prev=""; for a in "$@"; do [[ "$prev" == -v ]] && printf '%s' "${a%%:*}" > "$HLOG/cosign-dir"; prev=$a; done; exit 1; }
+prev=""
+for a in "$@"; do
+  if [[ "$prev" == -v ]]; then
+    d=${a%%:*}; printf '%s' "$d" > "$HLOG/cosign-dir"
+    printf -- '-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\nFAKECOSIGNKEY\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----\n' > "$d/cosign.key"
+    printf -- '-----BEGIN PUBLIC KEY-----\nFAKEPUB\n-----END PUBLIC KEY-----\n' > "$d/cosign.pub"
+  fi
+  prev=$a
+done
+printf '%s' "${#COSIGN_PASSWORD}" > "$HLOG/cosign-pass-len"
+EOF
 chmod +x "$BIN/"*
 
 PEM="$TMP/app.pem"
 printf -- '-----BEGIN FAKE KEY-----\nFAKEPEMBODY\n-----END FAKE KEY-----\n' > "$PEM"
 chmod 600 "$PEM"
-SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY'
+SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY'
 
 # run <name> <call> [VAR=val ...]: run a bootstrap function in a clean environment; sets RC, OUT (stdout+stderr,
 # colours stripped) and HLOG (calls, apply.N.yaml).
@@ -230,6 +247,39 @@ assert_eq "$(keys platform-github-app)" "githubAppID,githubAppInstallationID,git
 assert_eq "$(val platform-github-app githubAppInstallationID)" 8 "push App: installation"
 run push_partial "$S" NO_GH=1 GITHUB_PUSH_APP_ID=9
 assert_eq "$RC" 1 "push App partial: fails closed"
+
+# --- platform-github-build (in-cluster build git credentials) -----------------------------------------------------
+run build_token "$S" NO_GH=1 PLATFORM_GITHUB_BUILD_TOKEN=github_pat_FAKE PLATFORM_GITHUB_BUILD_USER=builder
+assert_eq "$(keys platform-github-build)" "token,username" "build git: keys"
+assert_eq "$(val platform-github-build token)" github_pat_FAKE "build git: PLATFORM_GITHUB_BUILD_TOKEN"
+assert_eq "$(val platform-github-build username)" builder "build git: PLATFORM_GITHUB_BUILD_USER"
+run build_gh "$S"
+assert_eq "$(val platform-github-build token)" gho_FAKEGHTOKEN "build git: gh fallback (local)"
+assert_eq "$(has "$OUT" 'platform-github-build: gh CLI token')" yes "build git: gh fallback warns"
+run build_app "$S" GITHUB_APP_ID=1 GITHUB_APP_INSTALLATION_ID=2 GITHUB_APP_PRIVATE_KEY_FILE="$PEM"
+assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read App is never reused for builds"
+assert_eq "$(has "$OUT" 'platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN')" yes "build git: skipped with a hint"
+run build_readtoken "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE
+assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read-only token is never reused for builds"
+
+# --- harbor + cosign-platform ---------------------------------------------------------------------------------------
+run cosign "$S" NO_GH=1
+assert_eq "$RC" 0 "cosign: rc"
+assert_eq "$(keys harbor)" "admin-password,builder-secret,core-secret,csrf-key,database-password,jobservice-secret,nodes-secret,registry-http-secret,registry-password,secret-key" "harbor: keys"
+hk=$(val harbor secret-key); assert_eq "${#hk}" 16 "harbor: secret-key exactly 16 chars"
+hk=$(val harbor csrf-key); assert_eq "${#hk}" 32 "harbor: csrf-key exactly 32 chars"
+assert_eq "$(keys cosign-platform)" "cosign.key,cosign.password,cosign.pub" "cosign: keys"
+assert_match "$(val cosign-platform cosign.key)" 'FAKECOSIGNKEY' "cosign: private key from the generated file"
+cpass=$(val cosign-platform cosign.password)
+assert_eq "${#cpass}" 32 "cosign: 32-char password"
+assert_eq "$(cat "$HLOG/cosign-pass-len")" 32 "cosign: password reached docker through the environment"
+assert_eq "$(grep -c -- "$cpass" "$HLOG/calls" || true)" 0 "cosign: password not in argv"
+assert_eq "$(grep -c 'COSIGN_PASSWORD=' "$HLOG/calls" || true)" 0 "cosign: docker -e passes the name only"
+assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed"
+run cosign_fail "$S" NO_GH=1 FAKE_DOCKER_FAIL=1
+assert_eq "$([[ $RC -ne 0 ]] && echo failed || echo ok)" failed "cosign: docker failure fails the run"
+assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed on failure (trap)"
+assert_eq "$(applied cosign-platform)" "" "cosign: nothing applied on failure"
 
 # --- Argo CD bootstrap repo secret ----------------------------------------------------------------------------------
 B=seed_argocd_repo_secret

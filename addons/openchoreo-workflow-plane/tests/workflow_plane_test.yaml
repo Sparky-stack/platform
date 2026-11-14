@@ -1,0 +1,158 @@
+suite: openchoreo-workflow-plane - plane registration, agent trust, build templates
+templates:
+  - templates/cluster-workflow-plane.yaml
+  - templates/agent-server-ca.yaml
+  - templates/cluster-workflow-templates.yaml
+  - templates/validate.yaml
+  - templates/run-network-policy.yaml
+release:
+  name: openchoreo-workflow-plane
+  namespace: openchoreo-workflow-plane
+tests:
+  - it: registers ClusterWorkflowPlane default trusting only the agent's own cert, store platform
+    template: templates/cluster-workflow-plane.yaml
+    asserts:
+      - isKind: { of: ClusterWorkflowPlane }
+      - equal: { path: metadata.name, value: default }
+      - equal: { path: spec.planeID, value: default }
+      - equal:
+          path: spec.clusterAgent.clientCA.secretKeyRef
+          value: { name: cluster-agent-tls, namespace: openchoreo-workflow-plane, key: ca.crt }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.observabilityPlaneRef, value: { kind: ClusterObservabilityPlane, name: default } }
+
+  - it: no observabilityPlaneRef without the observability plane
+    template: templates/cluster-workflow-plane.yaml
+    set: { openchoreo.observability.enabled: false }
+    asserts:
+      - notExists: { path: spec.observabilityPlaneRef }
+
+  - it: agent gets only the gateway CA public cert through mgmt-openchoreo
+    template: templates/agent-server-ca.yaml
+    asserts:
+      - equal: { path: spec.secretStoreRef.name, value: mgmt-openchoreo }
+      - equal: { path: spec.data, value: [{ secretKey: ca.crt, remoteRef: { key: cluster-gateway-ca, property: ca.crt } }] }
+
+  - it: build templates use the digest-pinned toolbox and rootless BuildKit, no placeholder left
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - isKind: { of: ClusterWorkflowTemplate }
+      - equal:
+          path: 'spec.templates[?(@.name == "checkout")].container.image'
+          value: ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608
+      - matchRegex:
+          path: 'spec.templates[?(@.name == "build")].container.image'
+          pattern: '^docker\.io/moby/buildkit:v[0-9.]+-rootless@sha256:[0-9a-f]{64}$'
+
+  - it: rootless BuildKit is not privileged and runs as uid 1000 without privilege escalation
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - notExists: { path: 'spec.templates[?(@.name == "build")].container.securityContext.privileged' }
+      - equal: { path: 'spec.templates[?(@.name == "build")].container.securityContext.allowPrivilegeEscalation', value: false }
+      - equal: { path: 'spec.templates[?(@.name == "build")].securityContext.runAsUser', value: 1000 }
+      - equal: { path: 'spec.templates[?(@.name == "build")].container.securityContext.capabilities.drop', value: [ALL] }
+
+  - it: every other step meets Pod Security restricted at the workflow level
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - equal:
+          path: spec.securityContext
+          value: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+
+  - it: pipeline order - sign only after both scans, GitOps hand-off only after signing
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "sign")].depends', value: scan-image && sbom }
+      - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "gitops")].depends', value: sign }
+
+  - it: run pods get no ServiceAccount token, only the executor does (both templates)
+    template: templates/cluster-workflow-templates.yaml
+    asserts:
+      - equal: { path: spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.executor.serviceAccountName, value: workflow-sa }
+
+  - it: no step mounts a token explicitly or overrides the workflow default
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - notExists: { path: 'spec.templates[?(@.automountServiceAccountToken == true)]' }
+      - notExists: { path: 'spec.templates[?(@.serviceAccountName)]' }
+
+  - it: supply-chain steps keep HOME and the Trivy cache off the shared run volume
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - contains: { path: 'spec.templates[?(@.name == "scan-fs")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-fs")].container.env', content: { name: TRIVY_CACHE_DIR, value: /tmp/trivy } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-image")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-image")].container.env', content: { name: TRIVY_CACHE_DIR, value: /tmp/trivy } }
+      - contains: { path: 'spec.templates[?(@.name == "sbom")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "sign")].container.env', content: { name: HOME, value: /tmp } }
+      - notContains: { path: 'spec.templates[?(@.name == "sign")].container.env', content: { name: HOME, value: /work/home } }
+
+  - it: helm chart packaging reuses the build checkout
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-helm-chart }
+    asserts:
+      - equal:
+          path: 'spec.templates[0].dag.tasks[0].templateRef'
+          value: { name: koorikla-build, template: checkout, clusterScope: true }
+
+  - it: build run namespace is default-deny (ingress and egress)
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: kind, value: NetworkPolicy }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal: { path: spec.podSelector, value: {} }
+      - equal: { path: spec.policyTypes, value: [Ingress, Egress] }
+      - notExists: { path: spec.ingress }
+
+  - it: egress only to DNS, the Harbor Gateway, the API server and public 80/443
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: kind, value: NetworkPolicy }
+    asserts:
+      - lengthEqual: { path: spec.egress, count: 5 }
+      - equal:
+          path: spec.egress[0].to[0]
+          value: { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }, podSelector: { matchLabels: { k8s-app: kube-dns } } }
+      - equal:
+          path: spec.egress[1]
+          value:
+            to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: harbor } }, podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: harbor } } }]
+            ports: [{ protocol: TCP, port: 9443 }]
+      - equal: { path: 'spec.egress[4].to[0].ipBlock.except', value: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16] }
+      - equal: { path: 'spec.egress[4].ports', value: [{ protocol: TCP, port: 80 }, { protocol: TCP, port: 443 }] }
+
+  - it: the run namespace follows openchoreo.orgNamespace and survives addon removal
+    template: templates/run-network-policy.yaml
+    set: { openchoreo.orgNamespace: acme }
+    asserts:
+      - equal: { path: metadata.name, value: workflows-acme }
+        documentSelector: { path: kind, value: Namespace }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: Delete=false }
+        documentSelector: { path: kind, value: Namespace }
+      - equal: { path: metadata.namespace, value: workflows-acme }
+        documentSelector: { path: kind, value: NetworkPolicy }
+
+  - it: external registries need no Harbor rule
+    template: templates/run-network-policy.yaml
+    documentSelector: { path: kind, value: NetworkPolicy }
+    set: { registry.type: external }
+    asserts:
+      - lengthEqual: { path: spec.egress, count: 4 }
+
+  - it: fails when the installation turns the workflow plane off
+    template: templates/validate.yaml
+    set: { openchoreo.workflowPlane.enabled: false }
+    asserts:
+      - failedTemplate: { errorPattern: "openchoreo.workflowPlane.enabled is false" }
+
+  - it: refuses to copy the control plane CA
+    template: templates/validate.yaml
+    set: { openchoreo-workflow-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca }
+    asserts:
+      - failedTemplate: { errorPattern: "no control-plane CA key is copied" }

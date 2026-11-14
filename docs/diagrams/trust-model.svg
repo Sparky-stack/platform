@@ -34,8 +34,8 @@
 <path d="M 416.0 676.0 L 240.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 416.0 738.0 L 240.0 738.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 936.0 676.0 L 744.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
-<path d="M 136.0 886.0 L 136.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
-<path d="M 580.0 886.0 L 580.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 136.0 886.0 L 136.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
+<path d="M 580.0 886.0 L 580.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
 <path d="M 936.0 940.0 L 744.0 940.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 1052.0 826.0 L 1052.0 787.0 L 248.0 787.0 L 248.0 950.0 L 240.0 950.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 416.0 1018.0 L 240.0 1018.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
@@ -107,28 +107,28 @@
 <text x="1052.0" y="669.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kube-apiserver OIDC</text>
 <text x="1052.0" y="689.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s --oidc-issuer-url</text>
 <rect x="32" y="826" width="208" height="60" rx="6" fill="#0f172a"/>
-<rect x="32" y="826" width="208" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="32" y="826" width="208" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
 <text x="136.0" y="842.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
 <text x="136.0" y="861.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless: Fulcio + Rekor</text>
-<text x="136.0" y="877.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci @ main</text>
+<text x="136.0" y="877.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci @ v1 (optional)</text>
 <rect x="32" y="918" width="208" height="64" rx="6" fill="#0f172a"/>
 <rect x="32" y="918" width="208" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
 <text x="136.0" y="936.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
 <text x="136.0" y="955.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*</text>
-<text x="136.0" y="971.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">images (+ sigs, planned)</text>
+<text x="136.0" y="971.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">images + keyless sigs</text>
 <rect x="32" y="994" width="208" height="48" rx="6" fill="#0f172a"/>
 <rect x="32" y="994" width="208" height="48" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="136.0" y="1011.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub App</text>
 <text x="136.0" y="1031.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Backstage scaffolder</text>
 <rect x="416" y="826" width="328" height="60" rx="6" fill="#0f172a"/>
-<rect x="416" y="826" width="328" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="416" y="826" width="328" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
 <text x="580.0" y="842.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
 <text x="580.0" y="861.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign sign with platform key</text>
 <text x="580.0" y="877.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(cosign-platform via ESO)</text>
 <rect x="416" y="918" width="328" height="44" rx="6" fill="#0f172a"/>
-<rect x="416" y="918" width="328" height="44" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="416" y="918" width="328" height="44" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
 <text x="580.0" y="933.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor · apps</text>
-<text x="580.0" y="953.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign content trust</text>
+<text x="580.0" y="953.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">signed + scanned; CA on mgmt</text>
 <rect x="416" y="994" width="328" height="48" rx="6" fill="#0f172a"/>
 <rect x="416" y="994" width="328" height="48" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="580.0" y="1011.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Backstage scaffolder</text>

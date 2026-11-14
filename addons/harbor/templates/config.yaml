@@ -1,0 +1,96 @@
+{{- /*
+Declarative Harbor configuration (Harbor has no CRDs). files/harbor-config.py applies the desired state below through
+Harbor's API, idempotently: as an Argo CD PostSync hook after every sync and hourly as a CronJob (drift, rotated robot
+secrets). Chosen over Terraform/OpenTofu (state backend + provider credentials on mgmt) and over a Harbor operator
+(none maintained for Harbor 2.15): ~200 lines of stdlib Python, no state, re-runnable.
+*/ -}}
+{{- if .Values.config.enabled }}
+{{- $c := .Values.config }}
+{{- $proxy := include "harbor-addon.proxyProjects" . | fromJsonArray }}
+{{- /* registries: every proxy-cache upstream + every replication source */ -}}
+{{- $regNames := list }}
+{{- range .Values.registry.proxyCache }}{{ $regNames = append $regNames .upstream }}{{ end }}
+{{- range $c.replication }}{{ $regNames = append $regNames .endpoint }}{{ end }}
+{{- $registries := list }}
+{{- range $n := $regNames | uniq }}
+{{- $e := index $c.endpoints $n }}
+{{- $registries = append $registries (dict "name" $n "type" $e.type "url" $e.url "credentials" ($e.credentials | default "")) }}
+{{- end }}
+{{- $appsMeta := dict "auto_scan" $c.apps.autoScan "severity" $c.apps.severity "prevent_vul" $c.apps.preventVulnerable "enable_content_trust_cosign" $c.apps.contentTrustCosign "reuse_sys_cve_allowlist" true }}
+{{- $projects := list (dict "name" .Values.registry.appsProject "public" false "metadata" $appsMeta "storageLimit" $c.storageLimitGiB) }}
+{{- range $c.replication }}
+{{- $projects = append $projects (dict "name" .destProject "public" false "metadata" (dict "auto_scan" $c.apps.autoScan "reuse_sys_cve_allowlist" true) "storageLimit" $c.storageLimitGiB) }}
+{{- end }}
+{{- range .Values.registry.proxyCache }}
+{{- $projects = append $projects (dict "name" .project "public" false "registry" .upstream "metadata" (dict "auto_scan" false) "storageLimit" $c.storageLimitGiB) }}
+{{- end }}
+{{- $replication := list }}
+{{- range $c.replication }}
+{{- $replication = append $replication (dict "name" .name "enabled" .enabled "registry" .endpoint "destProject" .destProject "filters" .filters "cron" .cron) }}
+{{- end }}
+{{- $pullAccess := list (list "repository" "pull") (list "repository" "list") (list "artifact" "read") (list "artifact" "list") (list "tag" "list") }}
+{{- $pushAccess := concat $pullAccess (list (list "repository" "push") (list "tag" "create") (list "scan" "read") (list "sbom" "read")) }}
+{{- $robots := list }}
+{{- range $r := $c.robots }}
+{{- $perms := list }}
+{{- range $p := $r.push }}{{ $perms = append $perms (dict "project" (eq $p "appsProject" | ternary $.Values.registry.appsProject $p) "access" $pushAccess) }}{{ end }}
+{{- range $p := $r.pull }}
+{{- if eq $p "proxyCache" }}
+{{- range $proxy }}{{ $perms = append $perms (dict "project" . "access" $pullAccess) }}{{ end }}
+{{- else }}
+{{- $perms = append $perms (dict "project" $p "access" $pullAccess) }}
+{{- end }}
+{{- end }}
+{{- $robots = append $robots (dict "name" $r.name "description" $r.description "secretEnv" (printf "ROBOT_%s" ($r.name | upper | replace "-" "_")) "permissions" $perms) }}
+{{- end }}
+{{- $state := dict "registries" $registries "projects" $projects "replication" $replication "robots" $robots "cveAllowlist" list }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-config
+  namespace: {{ .Release.Namespace }}
+data:
+  harbor-config.py: |
+    {{- .Files.Get "files/harbor-config.py" | nindent 4 }}
+  state.json: |
+    {{- toPrettyJson $state | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: harbor-config
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 20                 # Harbor core may still be starting on the first sync
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: harbor-config }
+      annotations:
+        checksum/state: {{ toJson $state | sha256sum | trunc 16 }}
+    spec:
+      {{- include "harbor-addon.configPod" . | nindent 6 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: harbor-config
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $c.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: harbor-config }
+        spec:
+          {{- include "harbor-addon.configPod" . | nindent 10 }}
+{{- end }}

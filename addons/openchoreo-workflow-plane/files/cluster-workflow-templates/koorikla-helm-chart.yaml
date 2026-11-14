@@ -1,0 +1,180 @@
+# ClusterWorkflowTemplate koorikla-helm-chart: package a Helm chart as an OCI artifact with koorikla/ci scripts
+# (helm/check.sh: dependency build, lint --strict, helm-unittest; helm/package-push.sh), push it to the installation's
+# registry and cosign-sign it with the platform key. Behind the generic (non-component) ClusterWorkflow `helm-chart`
+# of addon openchoreo-platform. Source checkout reuses koorikla-build's checkout template.
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: koorikla-helm-chart
+  annotations:
+    workflows.argoproj.io/description: Lint, test, package, push and sign a Helm chart (OCI) with koorikla/ci scripts
+spec:
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: workflowrun-name
+      - name: git-repo
+      - name: git-allowed-prefixes         # space-separated URL prefixes the run's git token may be sent to
+      - name: branch
+        value: main
+      - name: commit
+        value: ""
+      - name: chart-path
+        value: "."
+      - name: chart-version
+        value: ""
+      - name: oci-registry                 # <registry>/<project>/charts (no oci:// prefix)
+      - name: registry-host
+      - name: push
+        value: "true"
+      - name: tlog-upload                  # "true": also record the signature in the public Rekor log
+        value: "false"
+      - name: workload-path                # checkout's loop guard; unused for charts
+        value: ".none/none"
+      - name: git-secret
+      - name: registry-secret
+      - name: registry-ca-secret
+      - name: cosign-secret
+  # No ServiceAccount token in the run's containers: check steps run tenant code in a tenant-chosen image, and
+  # workflow-sa may patch workflowtaskresults (another run's outputs, e.g. the digest that gets signed). Only Argo's
+  # executor (init/wait containers) gets the token, through executor.serviceAccountName.
+  automountServiceAccountToken: false
+  executor:
+    serviceAccountName: workflow-sa
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  volumeClaimTemplates:
+    - metadata:
+        name: work
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+  volumes:
+    - name: git
+      secret:
+        secretName: "{{workflow.parameters.git-secret}}"
+        optional: true
+    - name: registry-auth
+      secret:
+        secretName: "{{workflow.parameters.registry-secret}}"
+        items: [{ key: .dockerconfigjson, path: config.json }]
+    - name: registry-ca
+      secret:
+        secretName: "{{workflow.parameters.registry-ca-secret}}"
+        optional: true
+    - name: cosign
+      secret:
+        secretName: "{{workflow.parameters.cosign-secret}}"
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: checkout
+            templateRef:
+              name: koorikla-build
+              template: checkout
+              clusterScope: true
+          - name: package
+            depends: checkout
+            template: package
+          - name: sign
+            depends: package
+            when: "'{{workflow.parameters.push}}' == 'true'"
+            template: sign
+            arguments:
+              parameters:
+                - { name: digest-ref, value: "{{tasks.package.outputs.parameters.digest-ref}}" }
+
+    - name: package
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
+            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
+            export SSL_CERT_FILE=/tmp/ca.pem HELM_REGISTRY_CONFIG=/registry-auth/config.json
+            export CHART_PATH="/work/source/${CHART_DIR#./}"
+            "$CI_SCRIPTS/helm/check.sh"
+            "$CI_SCRIPTS/helm/package-push.sh"
+            if [ "$PUSH" = true ]; then cp "$CI_OUT_DIR/image_digest_ref" /tmp/digest-ref; else printf none > /tmp/digest-ref; fi
+        env:
+          - { name: CHART_DIR, value: "{{workflow.parameters.chart-path}}" }
+          - { name: CHART_VERSION, value: "{{workflow.parameters.chart-version}}" }
+          - { name: OCI_REGISTRY, value: "{{workflow.parameters.oci-registry}}" }
+          - { name: PUSH, value: "{{workflow.parameters.push}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: HOME, value: /work/home }
+          - { name: HELM_CACHE_HOME, value: /work/.cache/helm }
+          - { name: HELM_CONFIG_HOME, value: /work/home/.config/helm }
+          - { name: HELM_DATA_HOME, value: /work/home/.local/share/helm }
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits: { cpu: "1", memory: 1Gi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
+          - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+      outputs:
+        parameters:
+          - { name: digest-ref, valueFrom: { path: /tmp/digest-ref } }
+
+    - name: sign
+      inputs:
+        parameters:
+          - name: digest-ref
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
+            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
+            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
+            COSIGN_PASSWORD="$(cat /cosign/cosign.password 2>/dev/null || true)"
+            export COSIGN_PASSWORD
+            if [ "$TLOG_UPLOAD" != true ]; then
+              # Private by default (installation switch buildWorkflows.signing.transparencyLog): no public Rekor entry
+              # leaking repo names and digests. cosign v3 takes a signing config without a transparency log;
+              # koorikla/ci sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
+              printf '{ "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json", "rekorTlogConfig": {}, "tsaConfig": {} }\n' > /tmp/signing-config.json
+              real=$(command -v cosign); mkdir -p /tmp/bin
+              printf '#!/bin/sh\ncase "$1" in sign|attest) c=$1; shift; exec %s "$c" --signing-config /tmp/signing-config.json "$@" ;; esac\nexec %s "$@"\n' \
+                "$real" "$real" > /tmp/bin/cosign
+              chmod 0755 /tmp/bin/cosign; export PATH="/tmp/bin:$PATH"
+            fi
+            IMAGE_DIGEST_REF="$DIGEST_REF" RECURSIVE=false sign-image.sh
+        env:
+          - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
+          - { name: COSIGN_KEY, value: /cosign/cosign.key }
+          - { name: TLOG_UPLOAD, value: "{{workflow.parameters.tlog-upload}}" }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits: { cpu: "1", memory: 512Mi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
+          - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: cosign, mountPath: /cosign, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

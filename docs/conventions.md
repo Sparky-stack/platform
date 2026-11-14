@@ -11,7 +11,10 @@ Design and rationale: `architecture.md`. These are the rules every change must k
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
    `ClusterResourceSet` payloads templated by ESO.
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
-   `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`.
+   `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`. Only exception: read-only stores
+   that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
+   namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
+   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
@@ -52,9 +55,12 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 |---|---|---|
 | `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) |
 | `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, promotion PRs, scaffolder); reserved, no consumer yet (docs/forking.md) |
+| `platform-github-build` | `username`, `token` | in-cluster builds: clone + GitOps hand-off push, only to `buildWorkflows.git.allowedRepositoryPrefixes` (default `installation.githubOrg`/); fine-grained PAT, app repos only, Contents: Read and write (docs/build-plane.md) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
+| `harbor` | admin/robot/chart secrets (docs/build-plane.md) | addon harbor, build pushes (`builder-secret`), node pulls (`nodes-secret`) |
+| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane) |
 
 ## Layout and ownership
 ```
@@ -76,5 +82,6 @@ mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Ma
 - Tooling is OS/arch-agnostic (docs/dev-environment.md): tools only via `mise.toml` (aqua backends, `task tools:lock`
   after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step), scripts bash 3.2 + GNU/BSD/MSYS
   portable (use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty arrays). New images must be
-  multi-arch: `task images:audit`.
+  multi-arch: `task images:audit`. The only exceptions are listed, with an expiry, in `hack/image-audit.sh`
+  `ARCH_EXCEPTIONS` (today: Harbor 2.15, amd64-only until 2.16; docs/build-plane.md).
 - Conventional commits (`feat(cluster): …`). `grep -rn VERIFY` lists values inferred but not yet confirmed live.

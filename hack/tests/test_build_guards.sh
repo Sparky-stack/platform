@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# In-cluster build guards (addons openchoreo-platform + openchoreo-workflow-plane), negative tests first:
+#   - the ClusterWorkflow schema patterns reject foreign hosts/owners, traversal and option injection
+#   - BUILD_GUARDS (koorikla-build checkout/gitops) refuses foreign repositories and hands the git token only to the
+#     allowed prefixes (real `git credential fill`), https only
+#   - gitops rewrites only a real OpenChoreo Workload under deploy/openchoreo/ (no symlink out, no other kind)
+#   - signing skips the public Rekor log unless the installation opts in (cosign v3 signing config)
+#   - run pods get no ServiceAccount token (only Argo's executor containers do)
+# shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+
+echo "== test_build_guards =="
+cd "$ROOT"
+command -v git >/dev/null || { echo "  SKIP: git not found"; exit 0; }
+
+./hack/deps.sh >/dev/null 2>&1 || true
+helm template openchoreo-platform addons/openchoreo-platform --namespace default > "$TMP/platform.yaml"
+helm template openchoreo-workflow-plane addons/openchoreo-workflow-plane --namespace openchoreo-workflow-plane \
+  > "$TMP/plane.yaml"
+
+cw() { yq -r "select(.kind == \"ClusterWorkflow\" and .metadata.name == \"$1\") | $2" "$TMP/platform.yaml"; }
+cwt() { yq -r "select(.kind == \"ClusterWorkflowTemplate\" and .metadata.name == \"$1\") | $2" "$TMP/plane.yaml"; }
+S='.spec.parameters.openAPIV3Schema.properties'
+
+# accepts <label> <pattern> <value>... / rejects <label> <pattern> <value>...  (ERE == the RE2 subset used here)
+accepts() { local l=$1 re=$2 v; shift 2; for v in "$@"; do assert_eq "$([[ "$v" =~ $re ]] && echo yes || echo no)" yes "$l accepts '$v'"; done; }
+rejects() { local l=$1 re=$2 v; shift 2; for v in "$@"; do assert_eq "$([[ "$v" =~ $re ]] && echo yes || echo no)" no "$l rejects '$v'"; done; }
+
+# --- schema patterns --------------------------------------------------------------------------------------------
+for wf in go dockerfile; do
+  url=$(cw "$wf" "$S.repository.properties.url.pattern")
+  assert_nonempty "$url" "$wf: repository.url has a pattern"
+  accepts "$wf url" "$url" https://github.com/koorikla/hello-world https://github.com/koorikla/hello-world.git \
+    https://github.com/koorikla/a_b-c.d
+  rejects "$wf url" "$url" https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
+    https://github.com/koorikla/../platform https://github.com/koorikla/.. https://github.com/koorikla/a/b \
+    http://github.com/koorikla/x "https://github.com/koorikla/x?y=1" https://u:p@github.com/koorikla/x \
+    https://github.com.evil.io/koorikla/x file:///etc/passwd git@github.com:koorikla/x.git "" \
+    "$(printf 'https://github.com/koorikla/ok\nhttps://attacker.example/x')"
+  wl=$(cw "$wf" "$S.gitops.properties.workloadPath.pattern")
+  accepts "$wf workloadPath" "$wl" deploy/openchoreo/workload.yaml deploy/openchoreo/api.yaml
+  rejects "$wf workloadPath" "$wl" .github/workflows/ci.yaml deploy/openchoreo/../../.github/workflows/ci.yaml \
+    deploy/openchoreo/sub/x.yaml /deploy/openchoreo/x.yaml deploy/openchoreo/x.yml README.md deploy/openchoreo/.yaml
+  br=$(cw "$wf" "$S.repository.properties.revision.properties.branch.pattern")
+  accepts "$wf branch" "$br" main release/1.2 feature_x
+  rejects "$wf branch" "$br" --upload-pack=touch -b "" "a b"
+  co=$(cw "$wf" "$S.repository.properties.revision.properties.commit.pattern")
+  accepts "$wf commit" "$co" "" abc1234 0123456789abcdef0123456789abcdef01234567
+  rejects "$wf commit" "$co" --upload-pack=x main abc HEAD~1
+  for f in docker.properties.context docker.properties.filePath repository.properties.appPath; do
+    rp=$(cw "$wf" "$S.$f.pattern")
+    accepts "$wf $f" "$rp" . Dockerfile ./app app/sub/ .docker/Dockerfile build/Dockerfile.prod
+    rejects "$wf $f" "$rp" .. ../x a/../../registry-auth /registry-auth -x "" "a//b"
+  done
+done
+url=$(cw helm-chart "$S.repository.properties.url.pattern")
+rejects "helm-chart url" "$url" https://attacker.example/x.git https://github.com/other/x
+rejects "helm-chart chart.path" "$(cw helm-chart "$S.chart.properties.path.pattern")" ../x /etc
+
+# --- BUILD_GUARDS: repository allowlist and scoped credentials ----------------------------------------------------
+GUARDS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')
+assert_nonempty "$GUARDS" "BUILD_GUARDS present in gitops"
+assert_eq "$(cwt koorikla-build '.spec.templates[] | select(.name == "checkout") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')" \
+  "$GUARDS" "checkout and gitops share one BUILD_GUARDS"
+for step in checkout gitops; do
+  sc=$(cwt koorikla-build ".spec.templates[] | select(.name == \"$step\") | .container.args[0]")
+  assert_match "$sc" 'eval "\$BUILD_GUARDS"' "$step evaluates BUILD_GUARDS"
+  assert_match "$sc" 'git_access "\$REPO"' "$step calls git_access before any git command"
+done
+assert_eq "$(grep -c 'GIT_ASKPASS=' "$TMP/plane.yaml" || true)" 0 "no global GIT_ASKPASS anywhere"
+
+SEC="$TMP/git-secret"; mkdir -p "$SEC"; printf 'builder' > "$SEC/username"; printf 'TOKEN-FAKE-123' > "$SEC/password"
+# guard <cmd>: run cmd after BUILD_GUARDS in a clean environment (no user gitconfig); OUT = stdout+stderr, RC = rc
+guard() {
+  if env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$SEC" \
+      GIT_ALLOWED_PREFIXES="https://github.com/koorikla/ https://git.example.com/team/" \
+      GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; '"$1" > "$TMP/guard.out" 2>&1; then RC=0; else RC=$?; fi
+  OUT=$(cat "$TMP/guard.out")
+}
+mkdir -p "$TMP/home"
+fill() { printf 'git_access %q; printf "url=%%s\\n\\n" %q | git credential fill 2>&1 || true' "$1" "$2"; }
+
+guard "$(fill https://github.com/koorikla/hello-world.git https://github.com/koorikla/hello-world.git)"; out=$OUT
+assert_match "$out" 'password=TOKEN-FAKE-123' "allowed repo: credential helper answers"
+guard "$(fill https://git.example.com/team/app https://git.example.com/team/app)"; out=$OUT
+assert_match "$out" 'password=TOKEN-FAKE-123' "second allowed prefix: credential helper answers"
+for victim in https://attacker.example/koorikla/x.git https://github.com/other/x.git https://github.com/koorikla-evil/x.git \
+  https://git.example.com/other/x; do
+  guard "$(fill https://github.com/koorikla/hello-world.git "$victim")"; out=$OUT
+  assert_eq "$([[ "$out" == *TOKEN-FAKE-123* ]] && echo leaked || echo kept)" kept "token not sent to $victim (redirect/401)"
+done
+for bad in https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
+  https://github.com/koorikla/../platform https://github.com/koorikla/a/b "file:///$TMP" "ext::sh -c touch% /tmp/pwned" \
+  "$(printf 'https://github.com/koorikla/ok\nhttps://attacker.example/x')"; do
+  guard "git_access $(printf %q "$bad"); echo REACHED"; out=$OUT
+  assert_eq "$RC:$([[ "$out" == *REACHED* ]] && echo reached || echo stopped)" "1:stopped" "git_access refuses '$bad'"
+  assert_match "$out" 'not under an allowed prefix' "git_access says why for '$bad'"
+done
+guard 'GIT_ALLOWED_PREFIXES=""; git_access https://github.com/koorikla/x; echo REACHED'; out=$OUT
+assert_eq "$RC" 1 "empty allowlist refuses everything"
+for ref in --upload-pack=touch -b "a b"; do
+  guard "check_ref $(printf %q "$ref")"
+  assert_eq "$RC" 1 "check_ref refuses '$ref'"
+done
+guard 'check_ref main; check_ref ""; check_ref 0123abc'
+assert_eq "$RC" 0 "check_ref accepts main, empty, a sha"
+for wl in .github/workflows/ci.yaml deploy/openchoreo/../../x.yaml deploy/openchoreo/a/b.yaml; do
+  guard "check_workload_path $(printf %q "$wl")"
+  assert_eq "$RC" 1 "check_workload_path refuses '$wl'"
+done
+guard 'check_workload_path deploy/openchoreo/workload.yaml'
+assert_eq "$RC" 0 "check_workload_path accepts deploy/openchoreo/workload.yaml"
+# https only: file:// (and every other transport) is off even for a URL that slipped through
+git init -q --bare "$TMP/bare.git"
+guard "git_access https://github.com/koorikla/x; git ls-remote file://$TMP/bare.git && echo LISTED"; out=$OUT
+assert_eq "$([[ "$out" == *LISTED* ]] && echo listed || echo blocked)" blocked "protocol.allow never: file:// blocked"
+guard 'git_access https://github.com/koorikla/x; env | grep -c "^GIT_ASKPASS=" || true'; out=$OUT
+assert_eq "$out" 0 "git_access leaves no GIT_ASKPASS"
+rm -f "$TMP/git-credential"
+out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/none" GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+  GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; git_access https://github.com/koorikla/x; echo ok' 2>&1 || true)
+assert_eq "$out:$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" "ok:none" "no git secret: public clone, no helper"
+
+# --- gitops: only a real Workload under deploy/openchoreo/ is rewritten -------------------------------------------
+GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
+CHECK=$(printf '%s\n' "$GITOPS" | awk '/Only an OpenChoreo Workload/{f=1} f{print} /is not an OpenChoreo Workload/{exit}')
+assert_match "$CHECK" 'realpath -e' "gitops workload check extracted"
+wl_check() {   # wl_check <repo dir> <path> -> RC
+  if (cd "$1" && env -i PATH="$PATH" WORKLOAD_PATH="$2" REPO=r GITOPS_BRANCH=b CHECK="$CHECK" GUARDS="$GUARDS" \
+      bash -c 'set -euo pipefail; eval "$GUARDS"; eval "$CHECK"' >/dev/null 2>&1); then RC=0; else RC=$?; fi
+}
+R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
+printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
+printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
+printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
+ln -s ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml"
+wl_check "$R" deploy/openchoreo/workload.yaml; assert_eq "$RC" 0 "gitops: Workload accepted"
+wl_check "$R" deploy/openchoreo/deploy.yaml; assert_eq "$RC" 1 "gitops: another kind refused"
+wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
+wl_check "$R" deploy/openchoreo/missing.yaml; assert_eq "$RC" 1 "gitops: missing file refused"
+R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
+printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
+ln -s ../.github/workflows "$R2/deploy/openchoreo"
+wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked deploy/openchoreo directory refused"
+
+# --- build: context and Dockerfile must stay inside the checkout ---------------------------------------------------
+BUILD=$(cwt koorikla-build '.spec.templates[] | select(.name == "build") | .container.args[0]')
+assert_match "$BUILD" 'resolves outside the repository' "build refuses a context outside /work/source"
+
+# --- signing: no public Rekor upload unless the installation opts in ----------------------------------------------
+FAKE="$TMP/fakebin"; mkdir -p "$FAKE"
+printf '#!/bin/sh\necho "cosign $*"\n' > "$FAKE/cosign"; chmod +x "$FAKE/cosign"
+for t in koorikla-build koorikla-helm-chart; do
+  SIGN=$(cwt "$t" '.spec.templates[] | select(.name == "sign") | .container.args[0]')
+  SHIM=$(printf '%s\n' "$SIGN" | awk '/if \[ "\$TLOG_UPLOAD" != true \]/{f=1} f{print} f && /^fi$/{exit}')
+  assert_match "$SHIM" 'signing-config' "$t: sign has the transparency-log switch"
+  assert_eq "$(cwt "$t" '.spec.arguments.parameters[] | select(.name == "tlog-upload") | .value')" false "$t: tlog-upload defaults to false"
+  rm -rf "${TMP:?}/bin" "${TMP:?}/signing-config.json"
+  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=false SHIM="${SHIM//\/tmp\//$TMP/}" \
+    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1; cosign attest --yes --type vuln r@sha256:1; cosign verify r' 2>&1)
+  assert_match "$out" "cosign sign --signing-config $TMP/signing-config.json --yes --key k" "$t: sign gets the tlog-free signing config"
+  assert_match "$out" "cosign attest --signing-config $TMP/signing-config.json --yes --type vuln" "$t: attest gets it too"
+  assert_match "$out" "cosign verify r" "$t: other subcommands untouched"
+  assert_eq "$(yq -p json -o json -I0 '.' "$TMP/signing-config.json")" \
+    '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","rekorTlogConfig":{},"tsaConfig":{}}' "$t: signing config has no Rekor/TSA/Fulcio service"
+  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=true SHIM="${SHIM//\/tmp\//$TMP/}" \
+    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1' 2>&1)
+  assert_eq "$out" "cosign sign --yes --key k r@sha256:1" "$t: transparencyLog true: plain cosign (public Rekor)"
+done
+
+# --- every rendered step script parses (bash -n; build runs sh in the BuildKit image) ------------------------------
+for t in koorikla-build koorikla-helm-chart; do
+  for step in $(cwt "$t" '.spec.templates[] | select(.container.args) | .name'); do
+    cwt "$t" ".spec.templates[] | select(.name == \"$step\") | .container.args[0]" > "$TMP/step.sh"
+    sh_bin="bash"; [[ "$step" == build ]] && sh_bin="sh"
+    assert_eq "$("$sh_bin" -n "$TMP/step.sh" 2>&1 && echo ok)" ok "$t/$step script parses ($sh_bin -n)"
+  done
+done
+bash -n <(printf '%s\n' "$GUARDS") && assert_eq ok ok "BUILD_GUARDS parses"
+GITOPS_SCRIPT=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
+assert_match "$GITOPS_SCRIPT" 'export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME' "gitops: identity also covers rebase retries"
+
+# --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
+for t in koorikla-build koorikla-helm-chart; do
+  assert_eq "$(cwt "$t" '.spec.automountServiceAccountToken')" false "$t: no SA token in run pods"
+  assert_eq "$(cwt "$t" '.spec.executor.serviceAccountName')" workflow-sa "$t: executor (init/wait) uses workflow-sa"
+done
+for wf in go helm-chart; do
+  assert_eq "$(cw "$wf" '.spec.runTemplate.spec.automountServiceAccountToken')" false "$wf runTemplate: no SA token in run pods"
+  assert_eq "$(cw "$wf" '.spec.runTemplate.spec.executor.serviceAccountName')" workflow-sa "$wf runTemplate: executor SA"
+done
+
+finish

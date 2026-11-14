@@ -44,3 +44,19 @@ tests:
       - notMatchRegex:
           path: data["openchoreo.override"]
           pattern: 'openchoreo-observability-plane'
+
+  - it: mgmt sends the Harbor registry host to Harbor's Gateway Service before every other rule
+    values: [../values/role-mgmt.yaml]
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443" }
+    asserts:
+      - matchRegex:
+          path: data["openchoreo.override"]
+          pattern: '(?s)^rewrite stop \{\n\s+name regex \^harbor\\\.openchoreo\\\.localhost\\\.\$ harbor\.harbor\.svc\.cluster\.local\n.*gateway-default\.openchoreo-control-plane'
+  - it: no registry rule for an external registry or on workload clusters
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443" }
+    asserts:
+      - notMatchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'harbor\.harbor\.svc'

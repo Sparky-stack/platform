@@ -1,0 +1,26 @@
+{{- /* Render-time consistency with installation.yaml `registry` (the subchart's literals must match it). */ -}}
+{{- if ne (toString .Values.registry.type) "harbor" }}
+{{- fail (printf "registry.type is %q: disable addon harbor for mgmt (addons.platform.koorikla.io/harbor: \"false\")" .Values.registry.type) }}
+{{- end }}
+{{- $h := .Values.harbor }}
+{{- if ne $h.externalURL (printf "https://%s" .Values.registry.host) }}
+{{- fail (printf "harbor.externalURL (%s) must be https://%s (installation.yaml registry.host)" $h.externalURL .Values.registry.host) }}
+{{- end }}
+{{- if ne (toString $h.expose.type) "route" }}
+{{- fail "harbor.expose.type must be route (Gateway API, templates/gateway.yaml)" }}
+{{- end }}
+{{- if not (has (include "harbor-addon.hostname" .) $h.expose.route.hosts) }}
+{{- fail (printf "harbor.expose.route.hosts must contain %s (installation.yaml registry.host)" (include "harbor-addon.hostname" .)) }}
+{{- end }}
+{{- $parents := list }}{{ range $h.expose.route.parentRefs }}{{ $parents = append $parents .name }}{{ end }}
+{{- if not (has .Values.gateway.name $parents) }}
+{{- fail (printf "harbor.expose.route.parentRefs must reference Gateway %s" .Values.gateway.name) }}
+{{- end }}
+{{- if ne $h.core.secretName .Values.pki.tokenSecret }}
+{{- fail "harbor.core.secretName must equal pki.tokenSecret" }}
+{{- end }}
+{{- range .Values.registry.proxyCache }}
+{{- if not (hasKey $.Values.config.endpoints .upstream) }}
+{{- fail (printf "registry.proxyCache upstream %s has no config.endpoints entry" .upstream) }}
+{{- end }}
+{{- end }}
