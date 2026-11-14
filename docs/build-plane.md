@@ -206,9 +206,14 @@ The same change fixes a bug on main: `cni-flannel` replaced the control plane's 
 ### Images and architectures
 
 Harbor 2.15 publishes linux/amd64 images only (arm64 arrives as separate `-arm64` tags in 2.16, not as a manifest
-list), so `task images:audit` flags the Harbor images. On arm64 hosts use `registry.type: external`. Everything else
-added here (BuildKit, toolbox, Argo Workflows, cluster-agent, toolchains, Python, PostgreSQL) is multi-arch and pinned
-by digest.
+list). This is a **deliberate, expiring exception** to the multi-arch rule: the 8 Harbor images (`goharbor/harbor-core`,
+`harbor-db`, `harbor-jobservice`, `harbor-portal`, `harbor-registryctl`, `registry-photon`, `trivy-adapter-photon`,
+`valkey-photon`, tag prefix `v2.15.`) are listed in `hack/image-audit.sh` `ARCH_EXCEPTIONS` with an expiry
+(2027-03-31), so `task images:audit` stays green and reports them as `EXCEPTION`. A Harbor bump or the expiry date
+drops the exception and the audit fails again; remove the list at the Harbor 2.16 bump (arm64 tags).
+`hack/tests/test_image_audit.sh` pins the list to exactly those images. On arm64 hosts use `registry.type: external`.
+Everything else added here (BuildKit, toolbox, Argo Workflows, cluster-agent, toolchains, Python, PostgreSQL) is
+multi-arch and pinned by digest.
 
 ## Secrets (ClusterSecretStore `platform`)
 

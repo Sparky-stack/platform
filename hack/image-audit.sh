@@ -10,6 +10,54 @@
 # k3d node/helper images, the CAPD node + load balancer images, CAPI provider controllers (release components) and
 # the k3s system images (k3s-images.txt) of each Kubernetes version in use. Registry access via crane (mise).
 set -euo pipefail
+
+# --- deliberate multi-arch exceptions -------------------------------------------------------------------------------
+# AGENTS.md: new images must publish linux/amd64 AND linux/arm64. These are the only accepted exceptions, each visible
+# in review, documented (docs/build-plane.md "Images and architectures") and expiring. One entry per image:
+#   <repository:tag prefix>|<expires YYYY-MM-DD>|<why, and when to remove it>
+# An entry covers an image only while it matches the prefix (a version bump drops it: the bumped image must be
+# multi-arch or get a reviewed entry of its own) and the date has not passed (then the audit fails as EXPIRED).
+# Harbor 2.15 publishes linux/amd64 only; 2.16 adds arm64 as separate -arm64 tags. Remove this block at the Harbor
+# 2.16 bump (switch to the arm64-capable images or a manifest list) - accepted in PR #2 (workflow plane, Harbor).
+ARCH_EXCEPTIONS=(
+  "docker.io/goharbor/harbor-core:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/harbor-db:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/harbor-jobservice:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/harbor-portal:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/harbor-registryctl:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/registry-photon:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/trivy-adapter-photon:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+  "docker.io/goharbor/valkey-photon:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
+)
+
+# arch_exception <image> -> "ok:<why>" | "expired:<date>" | "" (no entry). TODAY (YYYY-MM-DD) overrides the date.
+arch_exception() {
+  local img=$1 e prefix rest exp why today
+  today=${TODAY:-$(date -u +%Y-%m-%d)}
+  for e in "${ARCH_EXCEPTIONS[@]}"; do
+    prefix=${e%%|*}; rest=${e#*|}; exp=${rest%%|*}; why=${rest#*|}
+    [[ "$img" == "$prefix"* ]] || continue
+    if [[ "$today" > "$exp" ]]; then echo "expired:$exp"; else echo "ok:$why (until $exp)"; fi
+    return 0
+  done
+}
+
+# eval_param <template>: resolve every "{{ .Values.a.b }}" in the template against the installation file (catalog
+# installationParameters, e.g. 'https://{{ .Values.registry.host }}'), like hack/test.sh.
+eval_param() {
+  local t=$1 path val
+  while :; do
+    path=$(printf '%s' "$t" | sed -nE 's/.*\{\{ *\.Values\.([A-Za-z0-9_.]+) *\}\}.*/\1/p')
+    [[ -n "$path" ]] || break
+    val=$(yq ".$path" "$INST_FILE")
+    t=$(printf '%s' "$t" | sed -E "s|\\{\\{ *\\.Values\\.${path} *\\}\\}|${val}|")   # a dot in path matches itself
+  done
+  printf '%s\n' "$t"
+}
+
+# Sourced (hack/tests/test_image_audit.sh): only the functions above.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh
 source hack/lib/portable.sh
@@ -45,19 +93,6 @@ add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 extract_images() {
   yq -N '.. | select(tag == "!!map" and has("image")) | .image | select(tag == "!!str")' 2>/dev/null \
     | tr -d '\r' | grep -E '^[a-z0-9]' || true
-}
-
-# eval_param <template>: resolve every "{{ .Values.a.b }}" in the template against the installation file (catalog
-# installationParameters, e.g. 'https://{{ .Values.registry.host }}'), like hack/test.sh.
-eval_param() {
-  local t=$1 path val
-  while :; do
-    path=$(printf '%s' "$t" | sed -nE 's/.*\{\{ *\.Values\.([A-Za-z0-9_.]+) *\}\}.*/\1/p')
-    [[ -n "$path" ]] || break
-    val=$(yq ".$path" "$INST_FILE")
-    t=$(printf '%s' "$t" | sed -E "s|\\{\\{ *\\.Values\\.${path} *\\}\\}|${val}|")   # a dot in path matches itself
-  done
-  printf '%s\n' "$t"
 }
 
 # server_part <url> <url|host|port>: piece of an Argo cluster secret's server URL (catalog clusterServerParameters).
@@ -233,7 +268,7 @@ arch_of() {
 }
 
 echo "==> Checking $total images for linux/amd64 + linux/arm64" >&2
-bad=0
+bad=0 excepted=0
 {
   echo "| image | linux platforms | result | used by |"
   echo "|---|---|---|---|"
@@ -245,11 +280,18 @@ while IFS=$'\t' read -r img src; do
     single:*) result="SINGLE-ARCH" ;;
     *) if [[ ",$plats," == *",amd64,"* && ",$plats," == *",arm64"* ]]; then result="ok"; else result="MISSING-ARCH"; fi ;;
   esac
-  [[ "$result" == ok ]] || bad=$((bad + 1))
+  if [[ "$result" == SINGLE-ARCH || "$result" == MISSING-ARCH ]]; then
+    exc=$(arch_exception "$img")
+    case "$exc" in
+      ok:*) result="EXCEPTION"; plats="$plats - ${exc#ok:}"; excepted=$((excepted + 1)) ;;
+      expired:*) result="EXPIRED-EXCEPTION"; plats="$plats - exception expired ${exc#expired:}" ;;
+    esac
+  fi
+  [[ "$result" == ok || "$result" == EXCEPTION ]] || bad=$((bad + 1))
   printf '%-12s %-75s %s\n' "$result" "$img" "$plats"
   # shellcheck disable=SC2016  # literal markdown backticks
   printf '| `%s` | %s | %s | %s |\n' "$img" "$plats" "$result" "$src" >> "$TMP/report.md"
 done < "$TMP/images.tsv"
 if [[ -n "$REPORT" ]]; then cp "$TMP/report.md" "$REPORT"; fi
-echo "$total images, $bad not multi-arch (amd64+arm64) or not resolvable" >&2
+echo "$total images, $bad not multi-arch (amd64+arm64) or not resolvable, $excepted deliberate exceptions (ARCH_EXCEPTIONS)" >&2
 (( bad == 0 ))

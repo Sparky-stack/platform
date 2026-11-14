@@ -79,5 +79,6 @@ mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Ma
 - Tooling is OS/arch-agnostic (docs/dev-environment.md): tools only via `mise.toml` (aqua backends, `task tools:lock`
   after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step), scripts bash 3.2 + GNU/BSD/MSYS
   portable (use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty arrays). New images must be
-  multi-arch: `task images:audit`.
+  multi-arch: `task images:audit`. The only exceptions are listed, with an expiry, in `hack/image-audit.sh`
+  `ARCH_EXCEPTIONS` (today: Harbor 2.15, amd64-only until 2.16; docs/build-plane.md).
 - Conventional commits (`feat(cluster): …`). `grep -rn VERIFY` lists values inferred but not yet confirmed live.
