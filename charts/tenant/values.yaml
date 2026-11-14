@@ -1,0 +1,39 @@
+# Rendered by Application tenant-<project> (charts/platform templates/tenants.yaml) with two value files, in order:
+#   installations/<inst>/installation.yaml         -> installation, openchoreo.orgNamespace, ...
+#   installations/<inst>/tenants/<project>.yaml    -> project, description, apps (schema below)
+
+# --- the tenant file -------------------------------------------------------------------------------------------------
+project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
+description: ""
+apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main}]; name unique within the tenant
+
+# --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
+installation:
+  name: local
+openchoreo:
+  orgNamespace: default
+
+# --- chart settings (platform-wide; override in installation.yaml only if needed) ---------------------------------
+argocd:
+  namespace: argocd
+  server: https://kubernetes.default.svc   # mgmt itself: OpenChoreo resources go to the control plane
+defaults:
+  path: deploy/openchoreo
+  revision: main
+# Must match addon openchoreo-platform deploymentPipeline: one ProjectReleaseBinding per environment provisions the
+# project's namespace on that environment's data plane.
+deploymentPipeline:
+  name: default
+  environments: [development, staging, production]
+projectType:
+  kind: ClusterProjectType
+  name: default
+# The only kinds an app repo may sync (namespaced, group openchoreo.dev, org namespace only). Project /
+# ProjectReleaseBinding stay platform-owned (this chart); platform kinds (Environment, DeploymentPipeline,
+# *ComponentType, *Trait, planes, authz) are never allowed.
+developerKinds:
+  - Component
+  - Workload
+  - ReleaseBinding
+  - ComponentRelease
+  - SecretReference

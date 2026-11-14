@@ -1,0 +1,121 @@
+suite: tenant (AppProject + OpenChoreo Project + app Applications)
+templates:
+  - templates/appproject.yaml
+  - templates/project.yaml
+  - templates/applications.yaml
+set:
+  project: demo
+  description: Demo project
+  apps:
+    - name: hello-world
+      repoURL: https://github.com/koorikla/hello-world.git
+    - name: other
+      repoURL: https://github.com/koorikla/other.git
+      path: ops/oc
+      revision: v1.2.3
+tests:
+  - it: requires a project name
+    template: templates/project.yaml
+    set:
+      project: ""
+    asserts:
+      - failedTemplate: { errorMessage: "project is required (tenant file)" }
+
+  - it: rejects non DNS-1123 project names
+    template: templates/project.yaml
+    set:
+      project: Demo_1
+    asserts:
+      - failedTemplate: { errorMessage: 'project "Demo_1" must be a DNS-1123 label' }
+
+  - it: rejects duplicate app names (first template rendering the app list fails)
+    template: templates/appproject.yaml
+    set:
+      apps:
+        - { name: a, repoURL: https://x/a.git }
+        - { name: a, repoURL: https://x/b.git }
+    asserts:
+      - failedTemplate: { errorMessage: 'apps: duplicate name "a"' }
+
+  - it: AppProject allows only the tenant's repos, the org namespace on mgmt and developer kinds
+    template: templates/appproject.yaml
+    asserts:
+      - isKind: { of: AppProject }
+      - equal: { path: metadata.name, value: tenant-demo }
+      - equal: { path: metadata.namespace, value: argocd }
+      - equal:
+          path: spec.sourceRepos
+          value: [https://github.com/koorikla/hello-world.git, https://github.com/koorikla/other.git]
+      - equal:
+          path: spec.destinations
+          value: [{ server: "https://kubernetes.default.svc", namespace: default }]
+      - equal: { path: spec.clusterResourceWhitelist, value: [] }
+      - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Component } }
+      - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: ReleaseBinding } }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Project } }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Environment } }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: "*", kind: "*" } }
+
+  - it: AppProject with no apps has no source repos
+    template: templates/appproject.yaml
+    set:
+      apps: []
+    asserts:
+      - equal: { path: spec.sourceRepos, value: [] }
+
+  - it: OpenChoreo Project on the default pipeline and project type
+    template: templates/project.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: Project }
+      - equal: { path: metadata.name, value: demo }
+      - equal: { path: metadata.namespace, value: default }
+      - equal: { path: spec.deploymentPipelineRef.name, value: default }
+      - equal: { path: spec.type, value: { kind: ClusterProjectType, name: default } }
+
+  - it: one ProjectReleaseBinding per pipeline environment
+    template: templates/project.yaml
+    asserts:
+      - hasDocuments: { count: 4 }
+      - isKind: { of: ProjectReleaseBinding }
+        documentIndex: 3
+      - equal: { path: metadata.name, value: demo-production }
+        documentIndex: 3
+      - equal: { path: spec, value: { owner: { projectName: demo }, environment: production } }
+        documentIndex: 3
+
+  - it: one Application per app with defaults applied, in the tenant AppProject
+    template: templates/applications.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: metadata.name, value: demo-hello-world }
+        documentIndex: 0
+      - equal: { path: spec.project, value: tenant-demo }
+        documentIndex: 0
+      - equal:
+          path: spec.source
+          value: { repoURL: "https://github.com/koorikla/hello-world.git", targetRevision: main, path: deploy/openchoreo }
+        documentIndex: 0
+      - equal:
+          path: spec.source
+          value: { repoURL: "https://github.com/koorikla/other.git", targetRevision: v1.2.3, path: ops/oc }
+        documentIndex: 1
+      - equal:
+          path: spec.destination
+          value: { server: "https://kubernetes.default.svc", namespace: default }
+        documentIndex: 1
+
+  - it: follows the installation's org namespace everywhere
+    set:
+      openchoreo.orgNamespace: acme
+    asserts:
+      - equal:
+          path: spec.destinations[0].namespace
+          value: acme
+        template: templates/appproject.yaml
+      - equal: { path: metadata.namespace, value: acme }
+        template: templates/project.yaml
+        documentIndex: 0
+      - equal: { path: spec.destination.namespace, value: acme }
+        template: templates/applications.yaml
+        documentIndex: 0

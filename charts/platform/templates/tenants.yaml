@@ -1,0 +1,57 @@
+{{- /*
+Tenants: installations/<inst>/tenants/<project>.yaml -> Application tenant-<project> (AppProject `platform`) rendering
+charts/tenant with installation.yaml + the tenant file as value files. charts/tenant emits AppProject
+tenant-<project>, the OpenChoreo Project (+ ProjectReleaseBindings) and one Application per app repo.
+Removing a tenant file deletes all of it (cascade: the app Applications carry the resources finalizer).
+*/ -}}
+{{- $inst := required "installation.name is required" .Values.installation.name }}
+{{- $repo := required "installation.repoURL is required" .Values.installation.repoURL }}
+{{- $rev := .Values.installation.revision | default "HEAD" }}
+{{- $orgNs := (.Values.openchoreo | default dict).orgNamespace | default "default" }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenants
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: {{ $repo }}
+        revision: {{ $rev }}
+        files:
+          - path: installations/{{ $inst }}/tenants/*.yaml
+  template:
+    metadata:
+      name: {{ `'tenant-{{ .project }}'` }}
+      labels:
+        app.kubernetes.io/part-of: platform
+        platform.koorikla.io/tenant: {{ `'{{ .project }}'` }}
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      source:
+        repoURL: {{ $repo }}
+        targetRevision: {{ $rev }}
+        path: charts/tenant
+        helm:
+          valueFiles:
+            - ../../installations/{{ $inst }}/installation.yaml
+            - {{ `'../../{{ .path.path }}/{{ .path.filename }}'` }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: {{ $orgNs }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 20               # OpenChoreo CRDs may not exist yet on a fresh mgmt
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 5m

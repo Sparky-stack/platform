@@ -1,0 +1,40 @@
+{{- /*
+One Argo CD Application per app repo: <repo>/<path> (plain manifests: Component, Workload, ReleaseBindings ...) ->
+the control plane's org namespace, in AppProject tenant-<project>. OpenChoreo then renders and delivers the workloads
+to the data planes through their cluster-agents; Argo never touches a workload cluster for apps.
+*/ -}}
+{{- $p := include "tenant.project" . }}
+{{- range $app := include "tenant.apps" . | fromYamlArray }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $p }}-{{ $app.name }}
+  namespace: {{ $.Values.argocd.namespace }}
+  labels:
+    {{- include "tenant.labels" $ | nindent 4 }}
+    platform.koorikla.io/app: {{ $app.name }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io   # offboarding (app removed from the tenant file) deletes its resources
+spec:
+  project: tenant-{{ $p }}
+  source:
+    repoURL: {{ $app.repoURL | quote }}
+    targetRevision: {{ $app.revision | quote }}
+    path: {{ $app.path | quote }}
+  destination:
+    server: {{ $.Values.argocd.server }}
+    namespace: {{ $.Values.openchoreo.orgNamespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+{{- end }}
