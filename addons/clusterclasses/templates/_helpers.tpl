@@ -1,0 +1,75 @@
+{{/*
+Template names carry a hash of their spec: provider webhooks make machine templates immutable, and CAPI's way to change
+a ClusterClass template is "new template + update the reference". A spec change in git therefore renders a new name,
+the ClusterClass follows, the topology controller rolls the clusters, and Argo prunes the old template.
+Usage: include "clusterclasses.templateName" (list "<base>" (include "<spec define>" .))
+*/}}
+{{- define "clusterclasses.templateName" -}}
+{{- printf "%s-%s" (index . 0) (sha256sum (index . 1) | trunc 8) -}}
+{{- end }}
+
+{{/* Provider CRDs are installed by the operator after this app's first sync attempt. */}}
+{{- define "clusterclasses.annotations" -}}
+argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+{{- end }}
+
+{{/*
+k3s private registry auth: /etc/rancher/k3s/registries.yaml (k3s' default --private-registry path) from Secret
+<cluster>-registries (key registries.yaml, ns fleet), rendered by charts/cluster (capi-registries.yaml). The k3s
+bootstrap provider resolves files[].contentFrom.secret in the KThreesConfig's namespace at bootstrap time and retries
+until the Secret exists. The CAPI template (`{{ .builtin.cluster.name }}`) is evaluated by the topology controller.
+*/}}
+{{- define "clusterclasses.registriesFile" -}}
+path: /etc/rancher/k3s/registries.yaml
+owner: root:root
+permissions: "0600"
+contentFrom:
+  secret:
+    name: {{`"{{ .builtin.cluster.name }}-registries"`}}
+    key: registries.yaml
+{{- end }}
+
+{{/*
+jsonPatch adding the registries file. Args: (list "<path to files>" <base template already has files: bool>)
+*/}}
+{{- define "clusterclasses.registriesPatch" -}}
+{{- $path := index . 0 -}}
+{{- $append := index . 1 -}}
+- op: add
+  path: {{ $path }}{{ if $append }}/-{{ end }}
+  valueFrom:
+    template: |
+      {{- if $append }}
+      {{- include "clusterclasses.registriesFile" . | nindent 6 }}
+      {{- else }}
+      - {{ include "clusterclasses.registriesFile" . | indent 8 | trim }}
+      {{- end }}
+{{- end }}
+
+{{/* Variable shared by every class. */}}
+{{- define "clusterclasses.commonVariables" -}}
+- name: registryAuth
+  required: false
+  schema:
+    openAPIV3Schema:
+      type: boolean
+      default: false
+      description: Write /etc/rancher/k3s/registries.yaml from Secret <cluster>-registries (charts/cluster).
+{{- end }}
+
+{{/* Machine health checks for cloud worker pools (docker: none, a dead container is a dead test). */}}
+{{- define "clusterclasses.workerHealthCheck" -}}
+healthCheck:
+  checks:
+    nodeStartupTimeoutSeconds: 900
+    unhealthyNodeConditions:
+      - type: Ready
+        status: Unknown
+        timeoutSeconds: 300
+      - type: Ready
+        status: "False"
+        timeoutSeconds: 300
+  remediation:
+    triggerIf:
+      unhealthyLessThanOrEqualTo: 40%
+{{- end }}
