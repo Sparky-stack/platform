@@ -22,6 +22,7 @@ consumers() {
                .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
                .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
     | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
+  # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
   ORG_NS="${ORG_NS:-default}" WP_STORE="${WP_STORE:-platform}" yq -N '
     select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
     | .spec.resources[]?.template | select(.kind == "ExternalSecret")
