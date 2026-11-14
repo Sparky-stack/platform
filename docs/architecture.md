@@ -58,6 +58,11 @@ CAPI-managed from this mgmt either; that case is out of scope.
    delivered into the workload cluster by a CAPI `ClusterResourceSet` whose payload ESO templates from those secrets;
    `ClusterDataPlane <name>` trusting that per-cluster CA; `Environment`s bound to it.
 
+Considered and rejected for step 2: [capi2argo-cluster-operator](https://github.com/dntosas/capi2argo-cluster-operator)
+(an extra controller, built on CAPI 1.10/v1beta1, lightly maintained, labels copied after the fact). Its one advantage
+is picking up clusters created outside git; if self-service cluster creation ever lands, swap the ExternalSecret for it
+(`ENABLE_AUTO_LABEL_COPY=true`) as a mgmt addon.
+
 Removing the file deletes the cluster (Argo prune → CAPI delete) and all its registrations with it.
 
 ### Addons: catalog + labels (GitOps-Bridge style)
