@@ -1,0 +1,29 @@
+# Production data plane on AWS: HA control plane (embedded etcd, 3 servers) and workers in two AZs.
+name: prod-euc1
+provider: aws
+region: eu-central-1
+environment: production
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 3
+  machineType: m6i.large
+workers:
+  - name: md-a
+    replicas: 2
+    machineType: m6i.xlarge
+    failureDomain: eu-central-1a
+  - name: md-b
+    replicas: 2
+    machineType: m6i.xlarge
+    failureDomain: eu-central-1b
+providerSpec:
+  ami: ami-0123456789abcdef0                  # VERIFY (see dev-euc1.yaml)
+  sshKeyName: ""
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: apps.aws.example.com
+    gatewayPort: 443
+    environments: [production]
+addonsRevision: HEAD                          # pin to a tag for production rings
+addons: {}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: aws-ccm
+description: AWS cloud-controller-manager for k3s-aws workload clusters (wrapper)
+type: application
+version: 0.1.0
+dependencies:
+  - name: aws-cloud-controller-manager
+    version: 0.0.12
+    repository: https://kubernetes.github.io/cloud-provider-aws

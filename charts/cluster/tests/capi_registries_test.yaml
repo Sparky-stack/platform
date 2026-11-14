@@ -1,0 +1,49 @@
+suite: capi-registries - k3s registries.yaml for private GHCR, from ClusterSecretStore/platform
+templates:
+  - templates/capi-registries.yaml
+  - templates/capi-cluster.yaml     # defines capi.validate
+tests:
+  - it: renders ExternalSecret <name>-registries in fleet from platform-ghcr
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml]
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - isAPIVersion: { of: external-secrets.io/v1 }
+      - equal: { path: metadata.name, value: dev1-registries }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.name, value: dev1-registries }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: username, remoteRef: { key: platform-ghcr, property: username } }
+            - { secretKey: token, remoteRef: { key: platform-ghcr, property: token } }
+
+  # key name must match the ClusterClass files[].contentFrom.secret.key
+  - it: templates the k3s registries.yaml for ghcr.io (ESO template v2, values escaped as JSON)
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml]
+    asserts:
+      - equal: { path: spec.target.template.engineVersion, value: v2 }
+      - equal:
+          path: spec.target.template.data["registries.yaml"]
+          value: |
+            configs:
+              "ghcr.io":
+                auth:
+                  username: {{ .username | toJson }}
+                  password: {{ .token | toJson }}
+
+  - it: renders nothing when node registry auth is disabled
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml]
+    set: { secrets.nodeRegistryAuth.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails on an unusable fleet file like the Cluster does
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml]
+    set: { kubernetesVersion: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "`kubernetesVersion` is required" }

@@ -1,0 +1,171 @@
+suite: capi-cluster - CAPI topology Cluster rendered from the fleet file
+templates:
+  - templates/capi-cluster.yaml
+tests:
+  - it: renders a v1beta2 topology Cluster in namespace fleet with class k3s-<provider>
+    values: [values/capi-docker.yaml]
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: Cluster }
+      - isAPIVersion: { of: cluster.x-k8s.io/v1beta2 }
+      - equal: { path: metadata.name, value: dev1 }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.topology.classRef, value: { name: k3s-docker, namespace: fleet } }
+      - equal: { path: spec.topology.version, value: v1.35.10+k3s1 }
+      - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
+
+  - it: carries the cluster facts as labels (docs/conventions.md)
+    values: [values/capi-docker.yaml]
+    asserts:
+      - equal:
+          path: metadata.labels
+          value:
+            platform.koorikla.io/name: dev1
+            platform.koorikla.io/role: workload
+            platform.koorikla.io/provider: docker
+            platform.koorikla.io/region: local
+            platform.koorikla.io/environment: development
+            platform.koorikla.io/installation: local
+      - equal:
+          path: 'metadata.annotations["platform.koorikla.io/addons-revision"]'
+          value: HEAD
+
+  - it: turns addon overrides into addons.platform.koorikla.io/<addon> string labels
+    values: [values/capi-aws.yaml]
+    asserts:
+      - equal:
+          path: 'metadata.labels["addons.platform.koorikla.io/openchoreo-data-plane"]'
+          value: "false"
+      - equal:
+          path: 'metadata.labels["addons.platform.koorikla.io/aws-ccm"]'
+          value: "true"
+      - equal:
+          path: 'metadata.annotations["platform.koorikla.io/addons-revision"]'
+          value: v1.2.0
+
+  - it: maps workers to machineDeployments of class default-worker (replicas 0 kept)
+    values: [values/capi-docker.yaml]
+    asserts:
+      - equal:
+          path: spec.topology.workers.machineDeployments
+          value:
+            - { class: default-worker, name: md-0, replicas: 0 }
+
+  - it: omits workers when the fleet file has none
+    values: [values/capi-docker.yaml]
+    set: { workers: [] }
+    asserts:
+      - notExists: { path: spec.topology.workers }
+
+  - it: defaults worker replicas to 1
+    values: [values/capi-docker.yaml]
+    set: { workers: [{ name: md-0 }] }
+    asserts:
+      - equal:
+          path: spec.topology.workers.machineDeployments[0].replicas
+          value: 1
+
+  - it: docker passes only registryAuth (machine types are meaningless on CAPD)
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.machineType: ignored, workers: [{ name: md-0, replicas: 1, machineType: ignored }] }
+    asserts:
+      - equal: { path: spec.topology.variables, value: [{ name: registryAuth, value: true }] }
+      - notExists:
+          path: spec.topology.workers.machineDeployments[0].variables
+
+  - it: aws passes region, machine types and providerSpec as ClusterClass variables (sorted)
+    values: [values/capi-aws.yaml]
+    asserts:
+      - equal: { path: spec.topology.classRef.name, value: k3s-aws }
+      - equal: { path: spec.topology.controlPlane.replicas, value: 3 }
+      - equal:
+          path: spec.topology.variables
+          value:
+            - { name: ami, value: ami-0123456789abcdef0 }
+            - { name: controlPlaneMachineType, value: m6i.large }
+            - { name: region, value: eu-central-1 }
+            - { name: registryAuth, value: true }
+            - { name: sshKeyName, value: platform }
+
+  - it: aws worker machineType becomes a per-MachineDeployment variable override
+    values: [values/capi-aws.yaml]
+    asserts:
+      - equal:
+          path: spec.topology.workers.machineDeployments
+          value:
+            - class: default-worker
+              name: md-a
+              replicas: 2
+              failureDomain: eu-central-1a
+              variables: { overrides: [{ name: workerMachineType, value: m6i.xlarge }] }
+            - { class: default-worker, name: md-b, replicas: 2, failureDomain: eu-central-1b }
+
+  - it: hetzner uses class k3s-hetzner with region and sshKey variables
+    values: [values/capi-hetzner.yaml]
+    asserts:
+      - equal: { path: spec.topology.classRef.name, value: k3s-hetzner }
+      - contains: { path: spec.topology.variables, content: { name: region, value: fsn1 } }
+      - contains: { path: spec.topology.variables, content: { name: sshKey, value: platform } }
+      - contains: { path: spec.topology.variables, content: { name: controlPlaneMachineType, value: cpx31 } }
+
+  - it: providerSpec overrides generated variables
+    values: [values/capi-hetzner.yaml]
+    set: { providerSpec.region: nbg1 }
+    asserts:
+      - contains: { path: spec.topology.variables, content: { name: region, value: nbg1 } }
+      - notContains: { path: spec.topology.variables, content: { name: region, value: fsn1 } }
+
+  - it: passes registryAuth=false when node registry auth is disabled
+    values: [values/capi-docker.yaml]
+    set: { secrets.nodeRegistryAuth.enabled: false }
+    asserts:
+      - equal: { path: spec.topology.variables, value: [{ name: registryAuth, value: false }] }
+
+  # --- fail clearly on unusable fleet files ---------------------------------------------------------------------
+  - it: fails without a name
+    values: [values/capi-docker.yaml]
+    set: { name: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "`name` is required" }
+
+  - it: fails on a name that is not a DNS label
+    values: [values/capi-docker.yaml]
+    set: { name: Dev_1 }
+    asserts:
+      - failedTemplate: { errorPattern: "must be a DNS label" }
+
+  - it: fails without kubernetesVersion
+    values: [values/capi-docker.yaml]
+    set: { kubernetesVersion: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "`kubernetesVersion` is required" }
+
+  - it: fails on a kubernetesVersion that is not a k3s release
+    values: [values/capi-docker.yaml]
+    set: { kubernetesVersion: v1.35.10 }
+    asserts:
+      - failedTemplate: { errorPattern: "is not a k3s release" }
+
+  - it: fails on an unknown provider
+    values: [values/capi-docker.yaml]
+    set: { provider: gcp }
+    asserts:
+      - failedTemplate: { errorPattern: "must be one of docker, aws, hetzner" }
+
+  - it: fails when the provider is disabled in the installation
+    values: [values/capi-docker.yaml]
+    set: { provider: aws, region: eu-central-1 }
+    asserts:
+      - failedTemplate: { errorPattern: "provider aws is not enabled in installation.yaml capi.providers" }
+
+  - it: fails on a non-boolean addon override
+    values: [values/capi-docker.yaml]
+    set: { addons: { kgateway: "no" } }
+    asserts:
+      - failedTemplate: { errorPattern: "addons.kgateway must be true or false" }
+
+  - it: fails on a worker without a name
+    values: [values/capi-docker.yaml]
+    set: { workers: [{ replicas: 1 }] }
+    asserts:
+      - failedTemplate: { errorPattern: "workers\\[0\\].name is required" }

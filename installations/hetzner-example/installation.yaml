@@ -1,0 +1,41 @@
+# Installation "hetzner-example": reference only - renders and schema-checks, never booted (no credentials).
+# mgmt is any conformant cluster (e.g. k3s on a Hetzner server); workload clusters are CAPH k3s clusters on Hetzner
+# Cloud (ClusterClass k3s-hetzner). Adding a cluster: docs/providers.md.
+installation:
+  name: hetzner-example
+  repoURL: https://github.com/koorikla/platform.git
+  revision: main
+  githubOrg: https://github.com/koorikla
+  domain: hetzner.example.com                 # VERIFY: a DNS zone you own
+
+mgmt:
+  name: mgmt
+  provider: hetzner
+  region: fsn1
+  environment: mgmt
+  addons: {}
+
+secrets:
+  backend: vault                              # ClusterSecretStore/platform -> Vault / OpenBao (no native manager)
+  vault:
+    server: https://vault.hetzner.example.com # VERIFY shape vs addons/secret-stores
+    path: platform                            # KV v2 mount
+    version: v2
+    auth:
+      kubernetes:
+        mountPath: kubernetes
+        role: external-secrets
+  nodeRegistryAuth:
+    enabled: true
+
+capi:
+  providers:
+    docker: false
+    aws: false
+    hetzner: true                             # CAPH v1.1.12; token: key capi-hetzner (property hcloud)
+
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.hetzner.example.com
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.hetzner.example.com/ws   # VERIFY port/path with OC 1.3.3

@@ -1,0 +1,117 @@
+{{- /*
+CAPI topology Cluster for this fleet file, in namespace fleet, class k3s-<provider>.
+Helpers are prefixed capi.* and live here (charts/cluster templates are split by concern and owner):
+  capi.validate  - fails rendering on an unusable fleet file
+  capi.labels    - platform.koorikla.io/* + addons.platform.koorikla.io/* (docs/conventions.md); the Argo CD cluster
+                   secret must carry exactly these labels -> include "capi.labels" there too.
+*/ -}}
+{{- define "capi.validate" -}}
+{{- $v := .Values -}}
+{{- if not $v.name -}}
+{{- fail "cluster: `name` is required (installations/<inst>/clusters/<name>.yaml)" -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" $v.name) -}}
+{{- fail (printf "cluster: name %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name) -}}
+{{- end -}}
+{{- if not $v.kubernetesVersion -}}
+{{- fail (printf "cluster %s: `kubernetesVersion` is required (k3s release, e.g. v1.35.10+k3s1)" $v.name) -}}
+{{- end -}}
+{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+\\+k3s[0-9]+$" $v.kubernetesVersion) -}}
+{{- fail (printf "cluster %s: kubernetesVersion %q is not a k3s release (vX.Y.Z+k3sN)" $v.name $v.kubernetesVersion) -}}
+{{- end -}}
+{{- if not (has $v.provider (list "docker" "aws" "hetzner")) -}}
+{{- fail (printf "cluster %s: provider %q must be one of docker, aws, hetzner" $v.name $v.provider) -}}
+{{- end -}}
+{{- $providers := (($v.capi | default dict).providers | default dict) -}}
+{{- if and (hasKey $providers $v.provider) (not (index $providers $v.provider)) -}}
+{{- fail (printf "cluster %s: provider %s is not enabled in installation.yaml capi.providers" $v.name $v.provider) -}}
+{{- end -}}
+{{- if and (ne $v.provider "docker") (not $v.region) -}}
+{{- fail (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider) -}}
+{{- end -}}
+{{- range $addon, $on := $v.addons -}}
+{{- if not (kindIs "bool" $on) -}}
+{{- fail (printf "cluster %s: addons.%s must be true or false" $v.name $addon) -}}
+{{- end -}}
+{{- end -}}
+{{- range $i, $w := $v.workers -}}
+{{- if not $w.name -}}
+{{- fail (printf "cluster %s: workers[%d].name is required" $v.name $i) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{- define "capi.labels" -}}
+platform.koorikla.io/name: {{ .Values.name | quote }}
+platform.koorikla.io/role: workload
+platform.koorikla.io/provider: {{ .Values.provider | quote }}
+platform.koorikla.io/region: {{ .Values.region | quote }}
+platform.koorikla.io/environment: {{ .Values.environment | quote }}
+platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
+{{- range $addon, $on := .Values.addons }}
+addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "capi.annotations" -}}
+platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
+{{- end }}
+
+{{- include "capi.validate" . }}
+{{- /* ClusterClass variables: generated facts first, providerSpec (fleet file) last so it can override them */ -}}
+{{- $vars := dict "registryAuth" (.Values.secrets.nodeRegistryAuth.enabled | default false) }}
+{{- if ne .Values.provider "docker" }}
+{{- $_ := set $vars "region" .Values.region }}
+{{- with .Values.controlPlane.machineType }}
+{{- $_ := set $vars "controlPlaneMachineType" . }}
+{{- end }}
+{{- end }}
+{{- range $k, $val := .Values.providerSpec }}
+{{- $_ := set $vars $k $val }}
+{{- end }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: {{ .Values.name }}
+  namespace: fleet
+  labels:
+    {{- include "capi.labels" . | nindent 4 }}
+  annotations:
+    {{- include "capi.annotations" . | nindent 4 }}
+spec:
+  clusterNetwork:             # k3s defaults (the k3s provider does not pass these on; kept for CAPI/tools)
+    pods:
+      cidrBlocks: [10.42.0.0/16]
+    services:
+      cidrBlocks: [10.43.0.0/16]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: k3s-{{ .Values.provider }}
+      namespace: fleet
+    version: {{ .Values.kubernetesVersion }}
+    controlPlane:
+      replicas: {{ .Values.controlPlane.replicas | default 1 }}
+    {{- with .Values.workers }}
+    workers:
+      machineDeployments:
+        {{- range . }}
+        - class: default-worker
+          name: {{ .name }}
+          replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
+          {{- with .failureDomain }}
+          failureDomain: {{ . | quote }}
+          {{- end }}
+          {{- if and .machineType (ne $.Values.provider "docker") }}
+          variables:
+            overrides:
+              - name: workerMachineType
+                value: {{ .machineType | quote }}
+          {{- end }}
+        {{- end }}
+    {{- end }}
+    variables:
+      {{- range $k := keys $vars | sortAlpha }}
+      - name: {{ $k }}
+        value: {{ index $vars $k | toJson }}
+      {{- end }}

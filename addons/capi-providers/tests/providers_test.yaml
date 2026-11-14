@@ -1,0 +1,110 @@
+suite: capi-providers - core, k3s and the infrastructure providers enabled by the installation
+templates:
+  - templates/providers.yaml
+  - templates/credentials.yaml
+tests:
+  - it: installs core, k3s bootstrap + control plane and only CAPD by default
+    template: templates/providers.yaml
+    asserts:
+      - containsDocument: { kind: CoreProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: cluster-api, namespace: capi-system , any: true }
+      - containsDocument: { kind: BootstrapProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: k3s, namespace: capi-k3s-bootstrap-system , any: true }
+      - containsDocument: { kind: ControlPlaneProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: k3s, namespace: capi-k3s-control-plane-system , any: true }
+      - hasDocuments: { count: 1, filterAware: true }
+        documentSelector: { path: kind, value: InfrastructureProvider, matchMany: true }
+      - equal: { path: metadata.name, value: docker }
+        documentSelector: { path: kind, value: InfrastructureProvider }
+
+  - it: enables ClusterTopology on core (default false in CAPI 1.13)
+    template: templates/providers.yaml
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - equal: { path: spec.version, value: v1.13.8 }
+      - equal: { path: spec.manager.featureGates.ClusterTopology, value: true }
+
+  # ClusterResourceSet is GA in core 1.13: the gate no longer exists and an unknown gate crashes the manager
+  - it: does not pass a ClusterResourceSet feature gate (CRS is always on in 1.13)
+    template: templates/providers.yaml
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - notExists: { path: spec.manager.featureGates.ClusterResourceSet }
+
+  - it: fetches the k3s providers from the GitHub release (not a clusterctl built-in)
+    template: templates/providers.yaml
+    asserts:
+      - equal:
+          path: spec.fetchConfig.url
+          value: https://github.com/k3s-io/cluster-api-k3s/releases/v0.5.0/bootstrap-components.yaml
+        documentSelector: { path: kind, value: BootstrapProvider }
+      - equal:
+          path: spec.fetchConfig.url
+          value: https://github.com/k3s-io/cluster-api-k3s/releases/v0.5.0/control-plane-components.yaml
+        documentSelector: { path: kind, value: ControlPlaneProvider }
+
+  - it: creates a namespace per provider
+    template: templates/providers.yaml
+    asserts:
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-system , any: true }
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-k3s-bootstrap-system , any: true }
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-k3s-control-plane-system , any: true }
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capd-system , any: true }
+
+  - it: toggles infrastructure providers from capi.providers
+    template: templates/providers.yaml
+    set: { capi.providers: { docker: false, aws: true, hetzner: true } }
+    asserts:
+      - hasDocuments: { count: 2, filterAware: true }
+        documentSelector: { path: kind, value: InfrastructureProvider, matchMany: true }
+      - containsDocument: { kind: InfrastructureProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: aws, namespace: capa-system , any: true }
+      - containsDocument: { kind: InfrastructureProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: hetzner, namespace: caph-system , any: true }
+
+  - it: gives CAPA its clusterctl variables from configSecret capa-variables, without CAPI feature gates
+    template: templates/providers.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: metadata.name, value: aws }
+    asserts:
+      - isKind: { of: InfrastructureProvider }
+      - equal: { path: spec.version, value: v2.13.1 }
+      - equal: { path: spec.configSecret, value: { name: capa-variables, namespace: capa-system } }
+      - notExists: { path: spec.manager }
+
+  - it: installs CAPH without feature gates or configSecret
+    template: templates/providers.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: metadata.name, value: hetzner }
+    asserts:
+      - equal: { path: spec.version, value: v1.1.12 }
+      - notExists: { path: spec.manager }
+      - notExists: { path: spec.configSecret }
+
+  - it: fails when no infrastructure provider is enabled
+    template: templates/providers.yaml
+    set: { capi.providers: { docker: false, aws: false, hetzner: false } }
+    asserts:
+      - failedTemplate: { errorPattern: "enable at least one infrastructure provider" }
+
+  - it: renders no credentials for docker-only installations
+    template: templates/credentials.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  # cloud credentials never come from git
+  - it: pulls CAPA credentials from ClusterSecretStore/platform key capi-aws
+    template: templates/credentials.yaml
+    set: { capi.providers.aws: true }
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.namespace, value: capa-system }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.name, value: capa-variables }
+      - equal:
+          path: spec.data
+          value:
+            - secretKey: AWS_B64ENCODED_CREDENTIALS
+              remoteRef: { key: capi-aws, property: AWS_B64ENCODED_CREDENTIALS }
+
+  - it: uses empty static credentials when CAPA runs with a pod identity
+    template: templates/credentials.yaml
+    set: { capi.providers.aws: true, infrastructure.aws.credentialsFromStore: false }
+    asserts:
+      - isKind: { of: Secret }
+      - equal: { path: stringData.AWS_B64ENCODED_CREDENTIALS, value: "" }

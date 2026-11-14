@@ -1,0 +1,27 @@
+# Fleet file + installation facts for an AWS cluster (charts/cluster capi_* suites).
+installation: { name: aws-example }
+capi:
+  providers: { docker: false, aws: true, hetzner: false }
+name: prod-euc1
+provider: aws
+region: eu-central-1
+environment: production
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 3
+  machineType: m6i.large
+workers:
+  - name: md-a
+    replicas: 2
+    machineType: m6i.xlarge
+    failureDomain: eu-central-1a
+  - name: md-b
+    replicas: 2
+    failureDomain: eu-central-1b
+providerSpec:
+  ami: ami-0123456789abcdef0
+  sshKeyName: platform
+addonsRevision: v1.2.0
+addons:
+  openchoreo-data-plane: false
+  aws-ccm: true

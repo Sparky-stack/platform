@@ -1,0 +1,21 @@
+# Same shape as installations/local/clusters/dev1.yaml (charts/cluster capi_* suites).
+installation: { name: local }
+capi:
+  providers: { docker: true, aws: false, hetzner: false }
+name: dev1
+provider: docker
+region: local
+environment: development
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 1
+workers:
+  - name: md-0
+    replicas: 0
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev1.apps.localhost
+    environments: [development, staging]
+addonsRevision: HEAD
+addons: {}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: capi-operator
+description: Cluster API operator (wrapper). Providers are declared as CRs by the capi-providers addon.
+type: application
+version: 0.1.0
+dependencies:
+  - name: cluster-api-operator
+    version: 0.30.0
+    repository: https://kubernetes-sigs.github.io/cluster-api-operator
