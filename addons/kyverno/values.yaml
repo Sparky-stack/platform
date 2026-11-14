@@ -50,6 +50,7 @@ kyverno:
               - falco
               - telemetry
               - obi
+              - argo-events
     # ...and the engine skips them too (background scans, reports).
     resourceFiltersIncludeNamespaces: *platformNamespaces
 

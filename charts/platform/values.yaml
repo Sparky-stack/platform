@@ -52,6 +52,9 @@ addons:
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }
+  # Platform event receiver on mgmt (docs/promotion.md, docs/observability.md "Falco response"): Falco escalation
+  # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. Needs the workflow plane on mgmt.
+  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true }
   # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
   # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Promotion gate script (addons/openchoreo-platform/files/promotion-gate/gate.py): Python unit tests of its pure
-# functions (freeze windows incl. DST, releaseName edit, endpoint URLs, pipeline lookup) and the templating guard.
+# Workflow scripts (stdlib Python run by Argo Workflows): unit tests of their pure functions and template guards.
+#   addons/openchoreo-platform/files/promotion-gate/gate.py  freeze windows incl. DST, releaseName edit, endpoints, pipeline
+#   addons/argo-events/files/falco_response.py               priority filter, pod -> OpenChoreo component mapping
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_promotion_gate =="
+echo "== test_workflow_scripts =="
 dir="$ROOT/addons/openchoreo-platform/files/promotion-gate"
 if ! pick_python; then
   echo "  SKIP python >= 3.9 not found"
@@ -23,6 +24,12 @@ if out=$(cd "$dir" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_ga
 else
   echo "$out" >&2
   assert_eq failed ok "gate.py unit tests"
+fi
+if out=$(cd "$ROOT/addons/argo-events/files" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_falco_response 2>&1); then
+  assert_eq ok ok "falco_response.py unit tests"
+else
+  echo "$out" >&2
+  assert_eq failed ok "falco_response.py unit tests"
 fi
 # The ClusterWorkflow embeds gate.py in a CEL template (and Argo templates it again).
 # shellcheck disable=SC2016  # literal template markers

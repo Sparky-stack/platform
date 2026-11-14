@@ -41,6 +41,7 @@ platformNamespaces: &platformNamespaces
   - falco
   - telemetry
   - obi
+  - argo-events
 
 kyverno-policies:
   podSecurityStandard: baseline

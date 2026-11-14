@@ -19,6 +19,8 @@ secrets:
   backend: kubernetes                         # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+  workloadSeed:                               # local backend: copied from mgmt `platform` into each workload cluster
+    keys: [openchoreo-observability, falco-webhook]
 
 capi:
   providers:

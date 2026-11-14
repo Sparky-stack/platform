@@ -1,0 +1,135 @@
+{{- /*
+EventBus + EventSource `platform` (Falco escalation webhook, OpenChoreo ReleaseBinding events) + their plumbing:
+bearer-token Secret from the store, Service exposure through the control-plane Gateway, read-only RBAC on bindings.
+*/ -}}
+{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
+{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
+apiVersion: argoproj.io/v1alpha1
+kind: EventBus
+metadata:
+  name: default
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  jetstream:
+    version: {{ .Values.eventBus.natsVersion | quote }}
+    replicas: 1
+    containerTemplate:
+      resources: {{- toYaml .Values.eventBus.resources.nats | nindent 8 }}
+    reloaderContainerTemplate:
+      resources: {{- toYaml .Values.eventBus.resources.reloader | nindent 8 }}
+    metricsContainerTemplate:
+      resources: {{- toYaml .Values.eventBus.resources.metrics | nindent 8 }}
+    settings: |
+      max_memory_store: {{ .Values.eventBus.maxMemoryStore }}
+      max_file_store: {{ .Values.eventBus.maxFileStore }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-eventsource
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: platform
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: platform-eventsource
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
+  {{- if .Values.falco.enabled }}
+  service:
+    ports:
+      - name: falco
+        port: {{ .Values.falco.port }}
+        targetPort: {{ .Values.falco.port }}
+  webhook:
+    falco:
+      port: {{ .Values.falco.port | quote }}
+      endpoint: {{ .Values.falco.endpoint }}
+      method: POST
+      authSecret:                       # requests without "Authorization: Bearer <token>" are rejected (401)
+        name: falco-webhook
+        key: token
+  {{- end }}
+  {{- if .Values.promotionGate.enabled }}
+  resource:
+    releasebinding-rollout:
+      namespace: {{ .Values.openchoreo.orgNamespace }}
+      group: openchoreo.dev
+      version: v1alpha1
+      resource: releasebindings
+      eventTypes: [ADD, UPDATE]
+  {{- end }}
+{{- if .Values.promotionGate.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-events-releasebinding-reader
+  namespace: {{ .Values.openchoreo.orgNamespace }}
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [releasebindings]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-events-releasebinding-reader
+  namespace: {{ .Values.openchoreo.orgNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-events-releasebinding-reader
+subjects:
+  - kind: ServiceAccount
+    name: platform-eventsource
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.falco.enabled }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: falco-webhook
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.falco.tokenSecret.store }}
+  target:
+    name: falco-webhook
+  data:
+    - secretKey: token
+      remoteRef: { key: {{ .Values.falco.tokenSecret.key }}, property: {{ .Values.falco.tokenSecret.property }} }
+{{- if .Values.falco.route.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: falco-escalation
+spec:
+  parentRefs:
+    - name: {{ .Values.falco.route.gateway.name }}
+      namespace: {{ .Values.falco.route.gateway.namespace }}
+      sectionName: http
+  hostnames:
+    - {{ printf "%s.%s" .Values.falco.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
+  rules:
+    - matches:
+        - path: { type: Exact, value: {{ .Values.falco.endpoint }} }
+          method: POST
+      backendRefs:
+        - name: platform-eventsource-svc   # Service the controller creates for EventSource `platform`
+          port: {{ .Values.falco.port }}
+{{- end }}
+{{- end }}

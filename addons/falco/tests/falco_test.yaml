@@ -28,12 +28,12 @@ tests:
           pattern: '- Platform shell in app container\n\s+dry_run: false\n\s+actions:\n\s+- action: Platform label suspicious\n\s+# - action'
   - it: no output secret unless escalation or slack is enabled
     template: templates/outputs-secret.yaml
+    set:
+      escalation.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
-  - it: escalation webhook from store key falco-webhook with a bearer header, critical and above
+  - it: escalation webhook (on by default) from store key falco-webhook with a bearer header, critical and above
     template: templates/outputs-secret.yaml
-    set:
-      escalation.enabled: true
     asserts:
       - equal: { path: spec.secretStoreRef.name, value: default }
       - equal: { path: spec.target.template.data.WEBHOOK_MINIMUMPRIORITY, value: critical }
