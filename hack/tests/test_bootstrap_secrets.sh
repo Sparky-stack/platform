@@ -58,16 +58,20 @@ case "$*" in
   *) exit 1 ;;
 esac
 EOF
-# Fake docker: `cosign generate-key-pair` into the -v mounted dir (seed_cosign_secret); records the dir and whether
-# COSIGN_PASSWORD arrived through the environment.
+# Fake docker: `cosign generate-key-pair` into the -v mounted dir (seed_cosign_secret); records the dir, the workdir,
+# whether Git Bash path conversion was off and whether COSIGN_PASSWORD arrived through the environment. The host dir
+# is everything before the last `:` (on Windows it is C:/Users/..., a drive colon of its own).
 cat > "$BIN/docker" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "docker $*" >> "$HLOG/calls"
-[[ "${FAKE_DOCKER_FAIL:-}" == 1 ]] && { prev=""; for a in "$@"; do [[ "$prev" == -v ]] && printf '%s' "${a%%:*}" > "$HLOG/cosign-dir"; prev=$a; done; exit 1; }
+printf '%s' "${MSYS_NO_PATHCONV:-}" > "$HLOG/cosign-noconv"
+[[ "${FAKE_DOCKER_FAIL:-}" == 1 ]] && { prev=""; for a in "$@"; do [[ "$prev" == -v ]] && printf '%s' "${a%:*}" > "$HLOG/cosign-dir"; prev=$a; done; exit 1; }
 prev=""
 for a in "$@"; do
+  [[ "$prev" == -w ]] && printf '%s' "$a" > "$HLOG/cosign-workdir"
   if [[ "$prev" == -v ]]; then
-    d=${a%%:*}; printf '%s' "$d" > "$HLOG/cosign-dir"
+    d=${a%:*}; printf '%s' "$d" > "$HLOG/cosign-dir"
+    [[ "${a##*:}" == /keys && -d "$d" ]] || { echo "fake docker: bad bind mount $a" >&2; exit 1; }
     printf -- '-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\nFAKECOSIGNKEY\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----\n' > "$d/cosign.key"
     printf -- '-----BEGIN PUBLIC KEY-----\nFAKEPUB\n-----END PUBLIC KEY-----\n' > "$d/cosign.pub"
   fi
@@ -283,6 +287,8 @@ assert_eq "$(cat "$HLOG/cosign-pass-len")" 32 "cosign: password reached docker t
 assert_eq "$(grep -c -- "$cpass" "$HLOG/calls" || true)" 0 "cosign: password not in argv"
 assert_eq "$(grep -c 'COSIGN_PASSWORD=' "$HLOG/calls" || true)" 0 "cosign: docker -e passes the name only"
 assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed"
+assert_eq "$(cat "$HLOG/cosign-workdir")" /keys "cosign: container workdir /keys"
+assert_eq "$(cat "$HLOG/cosign-noconv")" 1 "cosign: Git Bash argument path conversion off for docker"
 run cosign_fail "$S" NO_GH=1 FAKE_DOCKER_FAIL=1
 assert_eq "$([[ $RC -ne 0 ]] && echo failed || echo ok)" failed "cosign: docker failure fails the run"
 assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed on failure (trap)"

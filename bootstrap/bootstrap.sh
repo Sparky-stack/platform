@@ -320,7 +320,11 @@ seed_cosign_secret() {
   cosign_pass=$(rand_alnum 32)
   log "  cosign-platform: generating the platform cosign key pair"
   # The password reaches docker and cosign only through the environment (-e NAME, no value in argv).
-  COSIGN_PASSWORD="$cosign_pass" docker run --rm -u "$(id -u):$(id -g)" -e COSIGN_PASSWORD \
+  # Git Bash rewrites POSIX-looking arguments of native programs (`-w /keys` would become C:/Program Files/Git/keys
+  # and the bind mount a `;`-joined path list): MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL switch that off (no-ops
+  # elsewhere), and native_path hands docker.exe the host dir as C:/Users/... itself.
+  COSIGN_PASSWORD="$cosign_pass" MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+    docker run --rm -u "$(id -u):$(id -g)" -e COSIGN_PASSWORD \
     -v "$(native_path "$COSIGN_TMP"):/keys" -w /keys --entrypoint cosign "$COSIGN_IMAGE" generate-key-pair >/dev/null
   apply_secret platform-secrets cosign-platform cosign.key=@"$COSIGN_TMP/cosign.key" \
     cosign.pub=@"$COSIGN_TMP/cosign.pub" cosign.password=cosign_pass
