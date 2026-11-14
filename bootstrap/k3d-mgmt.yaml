@@ -7,6 +7,7 @@ metadata:
   name: platform-mgmt
 servers: 1
 agents: 0
+image: rancher/k3s:v1.35.10-k3s1   # same k3s as the workload clusters; OpenChoreo CRDs need a recent API server (CEL)
 network: kind
 options:
   k3d:
