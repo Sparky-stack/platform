@@ -34,7 +34,7 @@ openchoreo-data-plane:
     # App ingress: listener http :19080 (upstream k3d port range). kgateway's default Service type LoadBalancer ->
     # k3s klipper binds hostPort 19080 on every node (CAPD: node container IPs on docker network `kind`, reachable
     # from the Linux host). == cluster file openchoreo.dataPlane.gatewayPort (ClusterDataPlane gateway.ingress).
-    httpPort: 19080
+    httpPort: 19080         # VERIFY reachable from the host at <CAPD node IP>:19080 (klipper on CAPD k3s)
     httpsPort: 19443
     tls:
       enabled: false        # HTTPS needs a real wildcard cert for the gateway host; v1 serves HTTP only

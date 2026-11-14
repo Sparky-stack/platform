@@ -55,7 +55,7 @@ openchoreo-control-plane:
         - openchoreo.localhost
     features:
       workflows:
-        enabled: false          # platform: no workflow plane in v1 (docs/openchoreo.md "Adding planes")
+        enabled: false          # platform: no workflow plane in v1 (docs/openchoreo.md "Adding planes"). VERIFY console
       observability:
         enabled: false          # platform: no observability plane in v1
     resources:                  # platform: upstream requests 200m/256Mi, limits 2/2Gi
@@ -95,6 +95,6 @@ openchoreo-control-plane:
 
   gateway:
     httpPort: 8080          # == k3d published port, so in-cluster and browser URLs are identical
-    httpsPort: 8443         # TLS passthrough listener for cluster-gateway (no https listener: tls off)
+    httpsPort: 8443         # TLS passthrough listener for cluster-gateway (no https listener: tls off). VERIFY klipper exposes it
     tls:
       enabled: false
