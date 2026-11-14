@@ -1,0 +1,14 @@
+# Gateway API CRDs only, no controller. kgateway v2.3.1 and OpenChoreo 1.3.3 need v1.5.1 *standard*: it carries
+# TLSRoute gateway.networking.k8s.io/v1, which the control plane's cluster-gateway TLS passthrough route uses.
+# Envoy's chart is a Helm packaging of upstream standard-install.yaml with the CRDs under templates/ (not crds/), so
+# Argo CD applies upgrades too. httproutes is ~244 KB: the addon Application needs ServerSideApply=true (the
+# last-applied annotation would exceed 256 KiB).
+# Pruning a CRD here deletes every Gateway/HTTPRoute of that kind on the cluster: never disable this addon on a cluster
+# that runs kgateway/OpenChoreo.
+gateway-crds-helm:
+  crds:
+    gatewayAPI:
+      enabled: true
+      channel: standard     # chart default is experimental
+    envoyGateway:
+      enabled: false        # gateway.envoyproxy.io CRDs: we do not run Envoy Gateway

@@ -1,0 +1,4 @@
+# mgmt: pods (Backstage, openchoreo-api, Thunder clients) reach Thunder/API at the browser URLs through the
+# control-plane Gateway Service; its port 8080 == the Gateway's http listener == the k3d published port.
+rewrite:
+  target: gateway-default.openchoreo-control-plane.svc.cluster.local

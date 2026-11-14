@@ -1,0 +1,15 @@
+# OpenChoreo prerequisite. Gateway API CRDs come from the gateway-api-crds addon; kgateway-crds only carries the
+# gateway.kgateway.dev CRDs (GatewayParameters, HTTPListenerPolicy, TrafficPolicy, ...), which the OpenChoreo charts use
+# (HTTPListenerPolicy `enable-websocket`) and the OpenChoreo component types render (TrafficPolicy).
+# The controller creates GatewayClass `kgateway` at startup (not rendered here, Argo does not own it). It watches
+# Gateways in every namespace and deploys one envoy proxy per Gateway in the Gateway's namespace; its own namespace is
+# free (upstream installs it into the plane namespace, we use the catalog namespace).
+# Proxies: Service type LoadBalancer (kgateway default) -> k3s klipper servicelb binds the listener ports as hostPorts
+# on the node containers (mgmt: 8080/8443 published by k3d; CAPD workload clusters: 19080 on the node IP).
+kgateway-crds: {}
+
+kgateway:
+  controller:
+    resources:              # chart sets none; modest requests for a laptop, no CPU limit
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 512Mi }
