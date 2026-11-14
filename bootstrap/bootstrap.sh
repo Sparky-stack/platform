@@ -103,7 +103,8 @@ apply_kv_secret() {
 }
 
 rand_alnum() {
-  LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24
+  # openssl, not `tr </dev/urandom | head`: under pipefail the reader closing early kills tr with SIGPIPE (exit 141).
+  openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24
 }
 
 seed_openchoreo_secret() {
