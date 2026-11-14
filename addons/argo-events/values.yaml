@@ -23,6 +23,8 @@ openchoreo:
     host: openchoreo.localhost
   observability:
     enabled: true
+  workflowPlane:
+    enabled: true                    # installation.yaml; false: no workflow objects even if Argo CRDs exist (auto)
 
 argo-events:
   fullnameOverride: argo-events

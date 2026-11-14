@@ -38,6 +38,16 @@ tests:
       - isKind: { of: Sensor }
         documentSelector: { path: metadata.name, value: promotion-gate }
 
+  - it: auto follows the installation switch (workflow plane off = no workflow objects, even with Argo CRDs present)
+    templates: [templates/sensors.yaml, templates/falco-response.yaml]
+    set:
+      workflowPlane: auto
+      openchoreo.workflowPlane.enabled: false
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - hasDocuments: { count: 0 }
+
   - it: the EventSource renders without the workflow plane
     template: templates/eventsource.yaml
     set:
