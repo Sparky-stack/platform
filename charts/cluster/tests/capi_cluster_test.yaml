@@ -199,6 +199,55 @@ tests:
     asserts:
       - failedTemplate: { errorPattern: "workers\\[0\\].name is required" }
 
+  # --- control plane size: k3s servers are embedded etcd voters (docs/providers.md "Control plane size and rollouts")
+  - it: fails on an even control plane size (no extra etcd failure tolerance; 2 is the unsafe rollout state)
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.replicas: 2 }
+    asserts:
+      - failedTemplate: { errorPattern: "controlPlane.replicas 2 must be odd" }
+
+  - it: fails on a control plane of 0 servers
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.replicas: 0 }
+    asserts:
+      - failedTemplate: { errorPattern: "controlPlane.replicas 0 must be odd" }
+
+  - it: fails on a non-integer control plane size
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.replicas: three }
+    asserts:
+      - failedTemplate: { errorPattern: "controlPlane.replicas three must be a whole number" }
+
+  - it: accepts 3 and 5 servers
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.replicas: 5 }
+    asserts:
+      - equal: { path: spec.topology.controlPlane.replicas, value: 5 }
+
+  - it: defaults to a single server when replicas is omitted
+    values: [values/capi-docker.yaml]
+    set: { controlPlane.replicas: null }
+    asserts:
+      - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
+
+  - it: fails on a single-server production cluster on a cloud provider
+    values: [values/capi-aws.yaml]
+    set: { controlPlane.replicas: 1 }
+    asserts:
+      - failedTemplate: { errorPattern: "production on aws needs controlPlane.replicas >= 3" }
+
+  - it: allows a single-server development cluster on a cloud provider
+    values: [values/capi-hetzner.yaml]
+    set: { environment: development, controlPlane.replicas: 1 }
+    asserts:
+      - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
+
+  - it: allows a single-server production cluster on docker (local CAPD clusters are disposable)
+    values: [values/capi-docker.yaml]
+    set: { environment: production }
+    asserts:
+      - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
+
   - it: harbor registry adds registryCA and, on docker, the node host alias to the k3d serverlb
     template: templates/capi-cluster.yaml
     values: [values/capi-docker.yaml, values/registry-harbor.yaml]
