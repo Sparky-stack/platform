@@ -84,7 +84,7 @@ tests:
     asserts:
       - equal: { path: "spec.patches[1].name", value: registryAuth }
       - equal: { path: "spec.patches[1].enabledIf", value: "{{ .registryAuth }}" }
-      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
       - matchRegex:
           path: "spec.patches[1].definitions[0].jsonPatches[0].valueFrom.template"
           pattern: 'name: "\{\{ \.builtin\.cluster\.name \}\}-registries"'
@@ -144,13 +144,13 @@ tests:
       - equal: { path: spec.data, value: [{ secretKey: hcloud, remoteRef: { key: capi-hetzner, property: hcloud } }] }
         documentSelector: { path: kind, value: ExternalSecret }
 
-  - it: k3s-hetzner appends the registry file after its own k3s config drop-in
+  - it: k3s-hetzner appends the registry file after the CNI config drop-in
     template: templates/k3s-hetzner.yaml
     set: { capi.providers.hetzner: true }
     asserts:
       - equal:
           path: "spec.template.spec.kthreesConfigSpec.files[0].path"
-          value: /etc/rancher/k3s/config.yaml.d/10-platform.yaml
+          value: /etc/rancher/k3s/config.yaml.d/10-cni.yaml
         documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
       - equal: { path: "spec.patches[3].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
         documentSelector: { path: kind, value: ClusterClass }
@@ -162,3 +162,70 @@ tests:
     asserts:
       - equal: { path: "spec.variables[0].name", value: region }
       - equal: { path: "spec.variables[0].schema.openAPIV3Schema.enum", value: [fsn1, hel1, nbg1, ash, hil, sin] }
+
+  # --- cni (cilium | flannel) ----------------------------------------------------------------------------------------
+  - it: every class has variable cni (cilium | flannel, default cilium)
+    templates: [templates/k3s-docker.yaml, templates/k3s-aws.yaml, templates/k3s-hetzner.yaml]
+    set: { capi.providers.aws: true, capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass, matchMany: true }
+    asserts:
+      - contains:
+          path: spec.variables
+          content:
+            name: cni
+            required: false
+            schema:
+              openAPIV3Schema:
+                type: string
+                enum: [cilium, flannel]
+                default: cilium
+                description: >-
+                  Pod network, fixed at birth (fleet file `cni`; switching = rebuild). cilium: k3s without flannel,
+                  kube-proxy and its network-policy controller; Cilium arrives as an Argo CD addon. flannel: k3s' bundled one.
+
+  - it: control planes boot k3s for Cilium by default (no flannel, kube-proxy, network-policy controller)
+    templates: [templates/k3s-docker.yaml, templates/k3s-aws.yaml, templates/k3s-hetzner.yaml]
+    set: { capi.providers.aws: true, capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate, matchMany: true }
+    asserts:
+      - equal: { path: "spec.template.spec.kthreesConfigSpec.files[0].path", value: /etc/rancher/k3s/config.yaml.d/10-cni.yaml }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^flannel-backend: none$" }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^disable-kube-proxy: true$" }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^disable-network-policy: true$" }
+
+  - it: "cni: flannel replaces the drop-in with k3s' flannel (vxlan on docker)"
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[2].name", value: cni-flannel }
+      - equal: { path: "spec.patches[2].enabledIf", value: '{{ if eq .cni "flannel" }}true{{ end }}' }
+      - equal: { path: "spec.patches[2].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/0/content }
+      - matchRegex: { path: "spec.patches[2].definitions[0].jsonPatches[0].value", pattern: "(?m)^flannel-backend: vxlan$" }
+
+  - it: "cni: flannel on hetzner keeps flannel's wireguard-native backend"
+    template: templates/k3s-hetzner.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[4].name", value: cni-flannel }
+      - matchRegex: { path: "spec.patches[4].definitions[0].jsonPatches[0].value", pattern: "(?m)^flannel-backend: wireguard-native$" }
+
+  - it: k3s-aws opens Cilium's node-to-node ports by default and only flannel VXLAN for cni=flannel
+    template: templates/k3s-aws.yaml
+    set: { capi.providers.aws: true }
+    asserts:
+      - equal:
+          path: spec.template.spec.network.cni.cniIngressRules
+          value:
+            - { description: cilium vxlan, protocol: udp, fromPort: 8472, toPort: 8472 }
+            - { description: cilium wireguard, protocol: udp, fromPort: 51871, toPort: 51871 }
+            - { description: cilium health, protocol: tcp, fromPort: 4240, toPort: 4240 }
+            - { description: cilium health icmp, protocol: icmp, fromPort: -1, toPort: -1 }
+            - { description: hubble peer (relay to agents), protocol: tcp, fromPort: 4244, toPort: 4244 }
+        documentSelector: { path: kind, value: AWSClusterTemplate }
+      - equal: { path: "spec.patches[4].name", value: cni-flannel-security-groups }
+        documentSelector: { path: kind, value: ClusterClass }
+      - equal:
+          path: "spec.patches[4].definitions[0].jsonPatches[0].value"
+          value: [{ description: flannel vxlan, protocol: udp, fromPort: 8472, toPort: 8472 }]
+        documentSelector: { path: kind, value: ClusterClass }

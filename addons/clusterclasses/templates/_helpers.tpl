@@ -46,7 +46,7 @@ jsonPatch adding the registries file. Args: (list "<path to files>" <base templa
       {{- end }}
 {{- end }}
 
-{{/* Variable shared by every class. */}}
+{{/* Variables shared by every class. */}}
 {{- define "clusterclasses.commonVariables" -}}
 - name: registryAuth
   required: false
@@ -55,6 +55,55 @@ jsonPatch adding the registries file. Args: (list "<path to files>" <base templa
       type: boolean
       default: false
       description: Write /etc/rancher/k3s/registries.yaml from Secret <cluster>-registries (charts/cluster).
+- name: cni
+  required: false
+  schema:
+    openAPIV3Schema:
+      type: string
+      enum: [cilium, flannel]
+      default: cilium
+      description: >-
+        Pod network, fixed at birth (fleet file `cni`; switching = rebuild). cilium: k3s without flannel,
+        kube-proxy and its network-policy controller; Cilium arrives as an Argo CD addon. flannel: k3s' bundled one.
+{{- end }}
+
+{{/*
+CNI choice as a k3s config drop-in on the servers (/etc/rancher/k3s/config.yaml.d/ is merged over the config.yaml the
+bootstrap provider writes; the KThreesServerConfig API has no field for these flags). Agents need nothing: they take
+flannel-backend, disable-kube-proxy and disable-network-policy from the servers. The base templates carry the cilium
+file as files[0]; patch `cni-flannel` replaces its content. Arg: k3s config for the flannel case.
+*/}}
+{{- define "clusterclasses.cniConfigPath" -}}
+/etc/rancher/k3s/config.yaml.d/10-cni.yaml
+{{- end }}
+
+{{- define "clusterclasses.cniFile" -}}
+- path: {{ include "clusterclasses.cniConfigPath" . }}
+  owner: root:root
+  permissions: "0600"
+  content: |
+    # cni: cilium (ClusterClass variable cni)
+    flannel-backend: none
+    disable-network-policy: true
+    disable-kube-proxy: true
+{{- end }}
+
+{{/* Patch for cni=flannel on the KThreesControlPlaneTemplate. Arg: the flannel k3s config (string). */}}
+{{- define "clusterclasses.cniFlannelPatch" -}}
+- name: cni-flannel
+  enabledIf: {{`'{{ if eq .cni "flannel" }}true{{ end }}'`}}
+  definitions:
+    - selector:
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+        kind: KThreesControlPlaneTemplate
+        matchResources:
+          controlPlane: true
+      jsonPatches:
+        - op: replace
+          path: /spec/template/spec/kthreesConfigSpec/files/0/content
+          value: |
+            # cni: flannel (ClusterClass variable cni)
+            {{- . | nindent 12 }}
 {{- end }}
 
 {{/* Machine health checks for cloud worker pools (docker: none, a dead container is a dead test). */}}
