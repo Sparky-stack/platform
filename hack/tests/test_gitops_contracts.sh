@@ -94,4 +94,13 @@ helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-se
 wl_store=$(yq 'select(.kind == "ClusterSecretStore" and .metadata.name == "default") | .metadata.name' "$TMP/ss-wl.yaml")
 assert_eq "$wl_store" "default" "workload secret-stores creates ClusterSecretStore default"
 
+# ClusterClass patches: CAPI's webhook rejects replace/remove ops on array elements (".../files/0/content"); the
+# offline simulator does not, so guard it here for every installation's classes.
+for inst_file in "$ROOT"/installations/*/installation.yaml; do
+  idx_paths=$(helm template cc "$ROOT/addons/clusterclasses" --values "$inst_file" 2>/dev/null \
+    | yq 'select(.kind == "ClusterClass") | .spec.patches[].definitions[].jsonPatches[] | select(.op == "replace" or .op == "remove") | .path' \
+    | grep -E '/[0-9]+(/|$)' || true)
+  assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
+done
+
 finish

@@ -199,8 +199,8 @@ tests:
     asserts:
       - equal: { path: "spec.patches[2].name", value: cni-flannel }
       - equal: { path: "spec.patches[2].enabledIf", value: '{{ if eq .cni "flannel" }}true{{ end }}' }
-      - equal: { path: "spec.patches[2].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/0/content }
-      - matchRegex: { path: "spec.patches[2].definitions[0].jsonPatches[0].value", pattern: "(?m)^flannel-backend: vxlan$" }
+      - equal: { path: "spec.patches[2].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
+      - matchRegex: { path: "spec.patches[2].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: vxlan$" }
 
   - it: "cni: flannel on hetzner keeps flannel's wireguard-native backend"
     template: templates/k3s-hetzner.yaml
@@ -208,7 +208,7 @@ tests:
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
       - equal: { path: "spec.patches[4].name", value: cni-flannel }
-      - matchRegex: { path: "spec.patches[4].definitions[0].jsonPatches[0].value", pattern: "(?m)^flannel-backend: wireguard-native$" }
+      - matchRegex: { path: "spec.patches[4].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: wireguard-native$" }
 
   - it: k3s-aws opens Cilium's node-to-node ports by default and only flannel VXLAN for cni=flannel
     template: templates/k3s-aws.yaml

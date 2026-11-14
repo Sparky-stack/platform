@@ -71,7 +71,7 @@ jsonPatch adding the registries file. Args: (list "<path to files>" <base templa
 CNI choice as a k3s config drop-in on the servers (/etc/rancher/k3s/config.yaml.d/ is merged over the config.yaml the
 bootstrap provider writes; the KThreesServerConfig API has no field for these flags). Agents need nothing: they take
 flannel-backend, disable-kube-proxy and disable-network-policy from the servers. The base templates carry the cilium
-file as files[0]; patch `cni-flannel` replaces its content. Arg: k3s config for the flannel case.
+file as their only files entry; patch `cni-flannel` replaces the whole list (CAPI forbids array-element replace paths). Arg: k3s config for the flannel case.
 */}}
 {{- define "clusterclasses.cniConfigPath" -}}
 /etc/rancher/k3s/config.yaml.d/10-cni.yaml
@@ -99,11 +99,18 @@ file as files[0]; patch `cni-flannel` replaces its content. Arg: k3s config for 
         matchResources:
           controlPlane: true
       jsonPatches:
+        # CAPI's ClusterClass webhook rejects array-element paths in replace ops, so the whole files list is replaced.
+        # The base templates' files list holds only the CNI file; keep it that way (add other files via preK3sCommands
+        # or a separate list) or this patch drops them.
         - op: replace
-          path: /spec/template/spec/kthreesConfigSpec/files/0/content
-          value: |
-            # cni: flannel (ClusterClass variable cni)
-            {{- . | nindent 12 }}
+          path: /spec/template/spec/kthreesConfigSpec/files
+          value:
+            - path: {{ include "clusterclasses.cniConfigPath" nil }}
+              owner: root:root
+              permissions: "0600"
+              content: |
+                # cni: flannel (ClusterClass variable cni)
+                {{- . | nindent 16 }}
 {{- end }}
 
 {{/* Machine health checks for cloud worker pools (docker: none, a dead container is a dead test). */}}
