@@ -23,7 +23,24 @@ secrets:
         mountPath: kubernetes
         role: external-secrets
 
+# Namespaces on mgmt allowed to read ClusterSecretStore `platform` (spec.conditions). Every current consumer is listed;
+# a new one must be added here (hack/tests/test_secret_store_scope.sh fails otherwise).
+platformStore:
+  namespaces:
+    - argocd                           # platform-repo-creds (this chart)
+    - fleet                            # <cluster>-registries, <cluster>-seed-* (charts/cluster); hetzner (addon clusterclasses)
+    - capa-system                      # capa-variables (addon capi-providers, AWS)
+    - thunder                          # thunder-bootstrap (addon thunder)
+    - openchoreo-control-plane         # backstage-secrets (addon openchoreo-control-plane)
+    - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)
+    - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
+    - harbor                           # harbor-platform: admin, robot and component secrets (addon harbor)
+
 repoCreds:
   name: platform-repo-creds
   namespace: argocd
   remoteKey: platform-github
+  # token: properties username + token (fine-grained PAT, read-only Contents). githubApp: properties githubAppID,
+  # githubAppInstallationID, githubAppPrivateKey (preferred: Argo CD mints short-lived installation tokens).
+  # Per installation: installations/<inst>/addons/secret-stores/values.yaml. docs/forking.md "Credentials".
+  auth: token

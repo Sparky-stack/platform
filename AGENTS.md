@@ -11,7 +11,8 @@ Design and rationale: `docs/architecture.md`. Contracts below are mirrored from 
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
    `ClusterResourceSet` payloads templated by ESO.
-5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform`; on workload clusters `ClusterSecretStore/default`.
+5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
+   `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`.
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
@@ -50,7 +51,8 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 
 | Key | Properties | Used by |
 |---|---|---|
-| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey`) | Argo CD repo-creds for `https://github.com/koorikla` |
+| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) |
+| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, promotion PRs, scaffolder); reserved, no consumer yet (docs/forking.md) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |

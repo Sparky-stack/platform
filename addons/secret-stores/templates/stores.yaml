@@ -1,3 +1,15 @@
+{{- /*
+ClusterSecretStore `platform` holds every platform credential (GitHub read + write Apps, GHCR, cloud, OpenChoreo):
+only the mgmt namespaces in platformStore.namespaces may reference it. hack/tests/test_secret_store_scope.sh checks
+that every rendered ExternalSecret using it is in that list.
+*/ -}}
+{{- define "secret-stores.platformConditions" -}}
+{{- $ns := .Values.platformStore.namespaces | default list -}}
+{{- if not $ns }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
+conditions:
+  - namespaces:
+      {{- toYaml $ns | nindent 6 }}
+{{- end -}}
 {{- $backend := .Values.secrets.backend | default "kubernetes" -}}
 {{- if eq .Values.role "mgmt" -}}
 {{- if eq $backend "kubernetes" -}}
@@ -37,6 +49,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     kubernetes:
       remoteNamespace: {{ $platformNs | quote }}
@@ -67,6 +80,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     aws:
       service: SecretsManager
@@ -91,6 +105,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     vault:
       server: {{ .Values.secrets.vault.server | quote }}
@@ -224,15 +239,22 @@ spec:
   secretStoreRef:
     kind: ClusterSecretStore
     name: platform
+  {{- $rcKey := .Values.repoCreds.remoteKey | default "platform-github" }}
+  {{- $rcAuth := .Values.repoCreds.auth | default "token" }}
+  {{- if not (has $rcAuth (list "token" "githubApp")) }}
+  {{- fail (printf "repoCreds.auth must be token or githubApp (got %s)" $rcAuth) }}
+  {{- end }}
+  {{- $rcProps := list "username" "token" }}
+  {{- if eq $rcAuth "githubApp" }}
+  {{- $rcProps = list "githubAppID" "githubAppInstallationID" "githubAppPrivateKey" }}
+  {{- end }}
   data:
-    - secretKey: username
+    {{- range $rcProps }}
+    - secretKey: {{ . }}
       remoteRef:
-        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
-        property: username
-    - secretKey: token
-      remoteRef:
-        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
-        property: token
+        key: {{ $rcKey | quote }}
+        property: {{ . }}
+    {{- end }}
   target:
     name: {{ .Values.repoCreds.name | default "platform-repo-creds" | quote }}
     creationPolicy: Owner
@@ -245,8 +267,15 @@ spec:
       data:
         type: git
         url: {{ .Values.installation.githubOrg | quote }}
+        {{- if eq $rcAuth "githubApp" }}
+        # Argo CD mints short-lived installation tokens from the App key itself (docs/forking.md).
+        githubAppID: '{{ "{{" }} .githubAppID {{ "}} " | trim }}'
+        githubAppInstallationID: '{{ "{{" }} .githubAppInstallationID {{ "}} " | trim }}'
+        githubAppPrivateKey: '{{ "{{" }} .githubAppPrivateKey {{ "}} " | trim }}'
+        {{- else }}
         username: '{{ "{{" }} .username {{ "}} " | trim }}'
         password: '{{ "{{" }} .token {{ "}} " | trim }}'
+        {{- end }}
 {{- else -}}
 {{- if eq $backend "kubernetes" -}}
 {{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}
