@@ -99,12 +99,51 @@ ensure_k3d() {
   kubectl --context "$CTX" wait --for=condition=Ready node --all --timeout=3m >/dev/null
 }
 
-# apply_secret <ns> <name> <kubectl create secret generic args...>: create or replace (properties not passed are
-# dropped, so switching platform-github from token to GitHub App leaves no stale token behind).
+# Every object bootstrap writes goes through kapply: server-side apply with its own field manager. Fields it stops
+# sending are pruned (switching platform-github from token to GitHub App leaves no stale token) and, unlike client-side
+# apply, no kubectl.kubernetes.io/last-applied-configuration copy of the data is written. Objects an older bootstrap
+# wrote client-side are migrated by kubectl on first contact (their field ownership moves to platform-bootstrap and the
+# re-apply drops the old annotation).
+kapply() {
+  kubectl --context "$CTX" apply --server-side --field-manager=platform-bootstrap --force-conflicts -f - >/dev/null
+}
+
+ensure_namespace() {
+  NS=$1 yq -n '.apiVersion = "v1" | .kind = "Namespace" | .metadata.name = strenv(NS)' | kapply
+}
+
+# secret_manifest <ns> <name> <spec>... -> v1 Secret on stdout. Specs name where a value is, never the value itself:
+#   key=VAR             data key from shell variable VAR (any scope; `vals[2]` works too)
+#   key=@FILE           data key from the content of FILE
+#   label:key=VAR       metadata label / annotation from shell variable VAR
+#   annotation:key=VAR
+# yq gets each value through its environment (readable only by the same user) or reads the file itself, so no secret
+# value is ever a process argument (/proc/<pid>/cmdline, `ps`: readable by every local user). Works in Git Bash too
+# (no process substitution, no temp files).
+secret_manifest() {
+  local __sm_ns=$1 __sm_name=$2 __sm_spec __sm_key __sm_ref __sm_path __sm_val __sm_expr __sm_doc; shift 2
+  __sm_doc=$(NS=$__sm_ns NAME=$__sm_name yq -n \
+    '.apiVersion = "v1" | .kind = "Secret" | .metadata.name = strenv(NAME) | .metadata.namespace = strenv(NS) | .type = "Opaque"')
+  for __sm_spec in "$@"; do
+    __sm_key=${__sm_spec%%=*}; __sm_ref=${__sm_spec#*=}; __sm_path=.data
+    case "$__sm_key" in
+      label:*)      __sm_path=.metadata.labels;      __sm_key=${__sm_key#label:} ;;
+      annotation:*) __sm_path=.metadata.annotations; __sm_key=${__sm_key#annotation:} ;;
+    esac
+    if [[ "$__sm_ref" == @* ]]; then
+      __sm_val=${__sm_ref#@}; __sm_expr='load_str(strenv(V))'
+    else
+      __sm_val=${!__sm_ref}; __sm_expr='strenv(V)'
+    fi
+    [[ "$__sm_path" == .data ]] && __sm_expr="$__sm_expr | @base64"
+    __sm_doc=$(printf '%s\n' "$__sm_doc" | K=$__sm_key V=$__sm_val yq "${__sm_path}[strenv(K)] = (${__sm_expr})")
+  done
+  printf '%s\n' "$__sm_doc"
+}
+
+# apply_secret <ns> <name> <spec>...: secret_manifest | kapply (create or replace; keys not passed are dropped).
 apply_secret() {
-  local ns=$1 name=$2; shift 2
-  kubectl --context "$CTX" create secret generic "$name" --namespace "$ns" "$@" \
-    --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+  secret_manifest "$@" | kapply
 }
 
 # require_app_env <ID var> <INSTALLATION_ID var> <PRIVATE_KEY_FILE var>: all three set, key file readable.
@@ -152,8 +191,8 @@ rand_alnum() {
 # policies like OpenSearch 3), keeps existing values on re-runs.
 seed_generated_secret() {
   local name=$1; shift
-  local -a args=()
-  local spec k fixed val
+  local -a specs=() vals=()
+  local spec k fixed val i=0
   for spec in "$@"; do
     k=${spec%%=*}; fixed=""; [[ "$spec" == *=* ]] && fixed=${spec#*=}
     val=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o "jsonpath={.data['${k}']}" 2>/dev/null | b64dec 2>/dev/null || true)
@@ -164,12 +203,11 @@ seed_generated_secret() {
         *)       val=$fixed ;;
       esac
     fi
-    args+=(--from-literal="${k}=${val}")
+    vals[i]=$val
+    specs+=("${k}=vals[$i]")
+    i=$((i + 1))
   done
-  kubectl --context "$CTX" create secret generic "$name" \
-    --namespace platform-secrets \
-    "${args[@]}" \
-    --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+  apply_secret platform-secrets "$name" "${specs[@]}"
 }
 
 seed_openchoreo_secret() {
@@ -191,21 +229,19 @@ cmd_secrets() {
   resolve_github_creds 1
 
   log "Seeding ns platform-secrets"
-  kubectl --context "$CTX" create namespace platform-secrets --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+  ensure_namespace platform-secrets
 
   # platform-github: Argo CD repo-creds for installation.githubOrg (read-only).
   case "$GH_MODE" in
     app)
-      apply_secret platform-secrets platform-github \
-        --from-literal=githubAppID="$GITHUB_APP_ID" \
-        --from-literal=githubAppInstallationID="$GITHUB_APP_INSTALLATION_ID" \
-        --from-file=githubAppPrivateKey="$GITHUB_APP_PRIVATE_KEY_FILE"
+      apply_secret platform-secrets platform-github githubAppID=GITHUB_APP_ID \
+        githubAppInstallationID=GITHUB_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_APP_PRIVATE_KEY_FILE"
       log "  platform-github: GitHub App $GITHUB_APP_ID, installation $GITHUB_APP_INSTALLATION_ID" ;;
     token)
-      apply_secret platform-secrets platform-github --from-literal=username="$GH_LOGIN" --from-literal=token="$GH_SECRET"
+      apply_secret platform-secrets platform-github username=GH_LOGIN token=GH_SECRET
       log "  platform-github: GITHUB_TOKEN (user $GH_LOGIN)" ;;
     gh)
-      apply_secret platform-secrets platform-github --from-literal=username="$GH_LOGIN" --from-literal=token="$GH_SECRET"
+      apply_secret platform-secrets platform-github username=GH_LOGIN token=GH_SECRET
       warn "  platform-github: gh CLI token of $GH_LOGIN (broad scopes). Least privilege: GITHUB_APP_* or a read-only fine-grained GITHUB_TOKEN" ;;
     none)
       warn "  platform-github: no GITHUB_APP_*, GITHUB_TOKEN or gh login: skipped (fine for a public fork)" ;;
@@ -223,7 +259,7 @@ cmd_secrets() {
   fi
   if [[ -n "$ghcr_token" ]]; then
     [[ -n "$ghcr_user" ]] || die "GHCR_TOKEN is set: also set GHCR_USER (the GitHub login that owns the token)"
-    apply_secret platform-secrets platform-ghcr --from-literal=username="$ghcr_user" --from-literal=token="$ghcr_token"
+    apply_secret platform-secrets platform-ghcr username=ghcr_user token=ghcr_token
     log "  platform-ghcr: $ghcr_src (user $ghcr_user)"
   elif [[ "$(yq '.secrets.nodeRegistryAuth.enabled // true' "$INST_FILE")" == true ]]; then
     warn "  platform-ghcr: no GHCR_TOKEN: skipped, but secrets.nodeRegistryAuth is on and new cluster nodes wait for it."
@@ -235,10 +271,8 @@ cmd_secrets() {
   # platform-github-app: write access (GitOps hand-off commits, promotion PRs, scaffolder). Optional.
   if [[ -n "${GITHUB_PUSH_APP_ID:-}${GITHUB_PUSH_APP_INSTALLATION_ID:-}${GITHUB_PUSH_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_PUSH_APP_ID GITHUB_PUSH_APP_INSTALLATION_ID GITHUB_PUSH_APP_PRIVATE_KEY_FILE
-    apply_secret platform-secrets platform-github-app \
-      --from-literal=githubAppID="$GITHUB_PUSH_APP_ID" \
-      --from-literal=githubAppInstallationID="$GITHUB_PUSH_APP_INSTALLATION_ID" \
-      --from-file=githubAppPrivateKey="$GITHUB_PUSH_APP_PRIVATE_KEY_FILE"
+    apply_secret platform-secrets platform-github-app githubAppID=GITHUB_PUSH_APP_ID \
+      githubAppInstallationID=GITHUB_PUSH_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_PUSH_APP_PRIVATE_KEY_FILE"
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
   fi
 
@@ -256,24 +290,17 @@ seed_argocd_repo_secret() {
     warn "No GITHUB_APP_*/GITHUB_TOKEN/gh auth token available; skipping bootstrap repo secret (fine if repo is public)"
     return 0
   fi
-  local cred_url="${GITHUB_ORG:-$REPO_URL}" cred_type="repository"
+  local cred_url="${GITHUB_ORG:-$REPO_URL}" cred_type="repository" git_type=git login="${GH_LOGIN:-git}"
   [[ -n "$GITHUB_ORG" ]] && cred_type="repo-creds"
-  local -a auth
+  local -a specs=(type=git_type url=cred_url label:argocd.argoproj.io/secret-type=cred_type)
   if [[ "$GH_MODE" == app ]]; then
-    auth=(--from-literal=githubAppID="$GITHUB_APP_ID" --from-literal=githubAppInstallationID="$GITHUB_APP_INSTALLATION_ID"
-      --from-file=githubAppPrivateKey="$GITHUB_APP_PRIVATE_KEY_FILE")
+    specs+=(githubAppID=GITHUB_APP_ID githubAppInstallationID=GITHUB_APP_INSTALLATION_ID
+      githubAppPrivateKey=@"$GITHUB_APP_PRIVATE_KEY_FILE")
   else
-    auth=(--from-literal=username="${GH_LOGIN:-git}" --from-literal=password="$GH_SECRET")
+    specs+=(username=login password=GH_SECRET)
   fi
   log "Creating Argo CD bootstrap ${cred_type} secret 'platform-repo-bootstrap' for $cred_url ($GH_MODE)"
-  kubectl --context "$CTX" create secret generic platform-repo-bootstrap \
-    --namespace argocd \
-    --from-literal=type=git \
-    --from-literal=url="$cred_url" \
-    "${auth[@]}" \
-    --dry-run=client -o yaml | \
-    CRED_TYPE="$cred_type" yq '.metadata.labels["argocd.argoproj.io/secret-type"] = strenv(CRED_TYPE)' | \
-    kubectl --context "$CTX" apply -f - >/dev/null
+  apply_secret argocd platform-repo-bootstrap "${specs[@]}"
 }
 
 cmd_argocd() {
