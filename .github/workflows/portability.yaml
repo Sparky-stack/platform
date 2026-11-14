@@ -1,0 +1,103 @@
+# Proof that the developer toolchain is OS- and CPU-arch-agnostic: the same `mise install` + `task lint test`
+# (offline validation, no clusters) on Linux amd64/arm64, macOS arm64 (scripts forced onto the system bash 3.2) and
+# Windows amd64 (Git Bash), plus the devcontainer built and used on amd64 and arm64. docs/dev-environment.md.
+name: portability
+
+on:
+  push:
+    branches: [main, agent/portable]
+    paths: &paths
+      - mise.toml
+      - mise.lock
+      - Taskfile.yml
+      - Makefile
+      - .gitattributes
+      - .devcontainer/**
+      - bootstrap/**
+      - hack/**
+      - .github/workflows/portability.yaml
+  pull_request:
+    paths: *paths
+  schedule:
+    - cron: "17 4 * * 1"   # weekly: catches upstream asset/registry drift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  toolchain:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      GITHUB_TOKEN: ${{ github.token }}   # GitHub API quota for mise downloads
+      MISE_YES: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use macOS's /bin/bash 3.2 for every script (the stock bash on a fresh Mac)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/bash32"
+          ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
+          echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: 2026.11.8
+          install: true
+          cache: true
+
+      - name: Environment
+        run: |
+          uname -a
+          bash --version | head -n1
+          command -v bash task helm python || true
+          git config --get core.autocrlf || true
+
+      - name: task doctor
+        run: task doctor
+
+      - name: task lint
+        run: task lint
+
+      - name: task test
+        run: task test
+
+      - name: Makefile shim
+        if: runner.os != 'Windows'
+        run: make -n lint test up INST=local
+
+  devcontainer:
+    name: devcontainer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          push: never
+          env: GITHUB_TOKEN
+          runCmd: |
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            eval "$(mise activate bash --shims)"
+            task doctor
+            docker version --format 'docker engine {{.Server.Version}} {{.Server.Arch}}'
+            task lint

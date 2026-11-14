@@ -37,6 +37,6 @@ while IFS= read -r -d '' sf; do
   if command -v shellcheck >/dev/null 2>&1; then
     shellcheck -x -P SCRIPTDIR "$sf"
   fi
-done < <(find bootstrap hack -type f -name '*.sh' -print0)
+done < <(find bootstrap hack .devcontainer -type f -name '*.sh' -print0)
 
 echo "lint OK"

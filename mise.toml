@@ -27,6 +27,7 @@ gh = "2.104.0"             # aqua:cli/cli; `task secrets` seeds GitHub credentia
 
 [env]
 # helm-unittest plugin version installed by the postinstall hook / `task tools:plugins`.
+# renovate: datasource=github-releases depName=helm-unittest/helm-unittest extractVersion=^v(?<version>.+)$
 HELM_UNITTEST_VERSION = "1.2.1"
 
 [hooks]
