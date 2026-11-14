@@ -39,3 +39,16 @@ openchoreo:
     enabled: true                              # false: no observabilityPlaneRef; disable the two addons too
     httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
     tlsPort: 11085
+
+# Promotion gates (docs/promotion.md). Read by charts/tenant (per-environment Applications, Argo CD sync windows) and
+# addon openchoreo-platform (production authz deny, promotion-gate ClusterWorkflow freeze check).
+promotion:
+  gatedEnvironments: [production]        # bindings change only by reviewed PR; developers denied in console/API/MCP
+  restrictedGroups: [developers]
+  bindingFile: release-bindings/{environment}.yaml
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]

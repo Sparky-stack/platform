@@ -1,19 +1,35 @@
 {{- /*
-One Argo CD Application per app repo: <repo>/<path> (plain manifests: Component, Workload, ReleaseBindings ...) ->
-the control plane's org namespace, in AppProject tenant-<project>. OpenChoreo then renders and delivers the workloads
-to the data planes through their cluster-agents; Argo never touches a workload cluster for apps.
+One Argo CD Application per app repo: <repo>/<path> (plain manifests, recursive: Component, Workload,
+release-bindings/<env>.yaml ...) -> the control plane's org namespace, in AppProject tenant-<project>. OpenChoreo then
+renders and delivers the workloads to the data planes through their cluster-agents; Argo never touches a workload
+cluster for apps.
+Gated environments (promotion.gatedEnvironments, docs/promotion.md): their binding file is excluded from the main
+Application and synced by its own Application <project>-<app>-<env>, which the AppProject's freeze windows can stop
+without stopping development/staging.
 */ -}}
 {{- $p := include "tenant.project" . }}
 {{- range $app := include "tenant.apps" . | fromYamlArray }}
+{{- $gated := include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}
+{{- $files := list }}
+{{- range $gated }}{{ $files = append $files (include "tenant.bindingFile" (list . $)) }}{{ end }}
+{{- $units := list (dict "suffix" "" "env" "" "directory" (dict "recurse" true "exclude" (ternary (printf "{%s}" (join "," $files)) (join "," $files) (gt (len $files) 1)))) }}
+{{- range $env := $gated }}
+{{- $units = append $units (dict "suffix" (printf "-%s" $env) "env" $env "directory" (dict "recurse" true "include" (include "tenant.bindingFile" (list $env $)))) }}
+{{- end }}
+{{- range $u := $units }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ $p }}-{{ $app.name }}
+  name: {{ $p }}-{{ $app.name }}{{ $u.suffix }}
   namespace: {{ $.Values.argocd.namespace }}
   labels:
     {{- include "tenant.labels" $ | nindent 4 }}
     platform.koorikla.io/app: {{ $app.name }}
+    {{- if $u.env }}
+    platform.koorikla.io/environment: {{ $u.env }}
+    platform.koorikla.io/promotion-gated: "true"
+    {{- end }}
   finalizers:
     - resources-finalizer.argocd.argoproj.io   # offboarding (app removed from the tenant file) deletes its resources
 spec:
@@ -22,6 +38,14 @@ spec:
     repoURL: {{ $app.repoURL | quote }}
     targetRevision: {{ $app.revision | quote }}
     path: {{ $app.path | quote }}
+    directory:
+      recurse: true
+      {{- with $u.directory.include }}
+      include: {{ . | quote }}
+      {{- end }}
+      {{- with $u.directory.exclude }}
+      exclude: {{ . | quote }}
+      {{- end }}
   destination:
     server: {{ $.Values.argocd.server }}
     namespace: {{ $.Values.openchoreo.orgNamespace }}
@@ -37,4 +61,5 @@ spec:
         duration: 15s
         factor: 2
         maxDuration: 5m
+{{- end }}
 {{- end }}

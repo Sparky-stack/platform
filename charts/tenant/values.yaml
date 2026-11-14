@@ -5,7 +5,7 @@
 # --- the tenant file -------------------------------------------------------------------------------------------------
 project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
 description: ""
-apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main}]; name unique within the tenant
+apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
@@ -37,3 +37,19 @@ developerKinds:
   - ReleaseBinding
   - ComponentRelease
   - SecretReference
+# Promotion gates (docs/promotion.md); installation.yaml `promotion` overrides (shared with addon openchoreo-platform).
+promotion:
+  # Each gated environment's binding file syncs through its own Application <project>-<app>-<env> (excluded from the
+  # app's main Application), so the freeze windows below can stop exactly the production sync. Promotion there is a
+  # reviewed pull request (CODEOWNERS + required status `openchoreo/promotion-gate`); an app opts out with
+  # `promotionGates: false` in the tenant file.
+  gatedEnvironments: [production]
+  bindingFile: release-bindings/{environment}.yaml   # relative to the app path (app repo contract)
+  # Weekly windows -> Argo CD deny sync windows on the gated Applications (manual sync blocked too; break glass =
+  # change this list in git). PRs merged during a window sync when it ends.
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]

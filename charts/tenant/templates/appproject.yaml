@@ -33,3 +33,26 @@ spec:
     - group: openchoreo.dev
       kind: {{ . }}
     {{- end }}
+  {{- /* Freeze windows (docs/promotion.md): deny syncs of the gated-environment Applications, manual syncs included. */}}
+  {{- $windows := list }}
+  {{- range $w := .Values.promotion.freezeWindows | default list }}
+  {{- $names := list }}
+  {{- range $app := $apps }}
+  {{- range $env := include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}
+  {{- if or (not $w.environments) (has $env $w.environments) }}{{ $names = append $names (printf "%s-%s-%s" $p $app.name $env) }}{{ end }}
+  {{- end }}
+  {{- end }}
+  {{- if $names }}{{ $windows = append $windows (dict "w" $w "names" $names) }}{{ end }}
+  {{- end }}
+  {{- with $windows }}
+  syncWindows:
+    {{- range . }}
+    - kind: deny
+      {{- include "tenant.syncWindowTiming" .w | nindent 6 }}
+      timeZone: {{ .w.timeZone | default "UTC" }}
+      applications:
+        {{- toYaml .names | nindent 8 }}
+      manualSync: false
+      description: {{ printf "freeze %s: no promotions to %s (%s - %s %s)" (.w.name | default "window") (join ", " (.w.environments | default (list "gated environments"))) .w.start .w.end (.w.timeZone | default "UTC") | quote }}
+    {{- end }}
+  {{- end }}
