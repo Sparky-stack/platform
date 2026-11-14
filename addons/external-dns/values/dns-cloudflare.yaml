@@ -2,7 +2,7 @@
 #
 # Credentials: a Cloudflare API token (not the global API key) scoped to Zone:Zone:Read + Zone:DNS:Edit on the zones of
 # dns.domainFilters only. Key `external-dns-cloudflare`, property `api-token`, in the cluster's store (`platform` on
-# mgmt, `default` on workload clusters); templates/secrets.yaml syncs it to Secret external-dns-cloudflare.
+# mgmt; on workload clusters `dns`, which addon secret-stores scopes to namespace external-dns - never `default`); templates/secrets.yaml syncs it to Secret external-dns-cloudflare.
 secrets:
   cloudflare:
     enabled: true

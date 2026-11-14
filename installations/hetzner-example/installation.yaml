@@ -28,6 +28,12 @@ secrets:
       kubernetes:
         mountPath: kubernetes
         role: external-secrets
+  # Workload ClusterSecretStore `dns` (dns.provider cloudflare below): the Cloudflare token stays out of reach of the
+  # tenant store `default`. VERIFY: Vault role bound to external-secrets/eso-vault-dns whose policy reads only key
+  # external-dns-cloudflare, and the `external-secrets` role's policy denies it (docs/dns.md "Credentials").
+  dnsStore:
+    vault:
+      role: external-secrets-dns
   nodeRegistryAuth:
     enabled: true
 

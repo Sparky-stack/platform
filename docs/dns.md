@@ -15,6 +15,27 @@ resolves `*.openchoreo.localhost` inside the clusters.
 | Zones | `installation.yaml` `dns.domainFilters` | Delivered as a catalog `installationParameters` entry; never empty while running (ExternalDNS would otherwise manage every zone its credentials reach). |
 | Image | `registry.k8s.io/external-dns/external-dns:v0.23.0@sha256:…` | Pinned by digest, multi-arch (amd64, arm64, arm). Pod Security restricted (chart defaults). |
 
+## Ownership and what TXT records do not protect
+
+The TXT registry is a cooperative marker, not a security boundary. It keeps honest controllers apart; it does not stop
+a cluster whose credentials can write the zone:
+
+- **First claim wins.** With `upsert-only` and owner checks, the first cluster to publish a hostname owns it; another
+  cluster's controller skips it. A dev cluster can therefore squat a name before prod publishes it (a route with a
+  prod hostname on a dev Gateway), and prod's controller will leave the dev record in place.
+- **Credentials decide, not owners.** Anyone holding the zone credential can rewrite any record, TXT owners included.
+  That is why the Cloudflare token never goes through a tenant-readable store (store `dns` on workload clusters) and
+  why Route 53 has no static keys.
+
+Recommendations, strongest first:
+
+1. **One zone per environment** (`dev.example.com`, `prod.example.com`, delegated from the apex), each with its own
+   credential. `dns.domainFilters` is installation-wide and overlays cannot change it, so this means one installation
+   (or at least one credential) per environment's zone. A dev credential then cannot touch prod names at all.
+2. **Route 53:** per-cluster roles with the `route53:ChangeResourceRecordSetsNormalizedRecordNames` condition (see
+   [Route 53](#route-53-workload-identity)).
+3. **Cloudflare:** API tokens scope to zones, not names; only separate zones separate clusters.
+
 ## Installation facts: `dns:`
 
 ```yaml
@@ -51,7 +72,7 @@ external-dns: { namespace: external-dns, roles: [mgmt, workload], default: false
 | File | Layered when | Sets |
 |---|---|---|
 | `addons/external-dns/values.yaml` | always | sources, policy, registry; `external-dns.enabled: false` (Chart.yaml condition) |
-| `values/role-mgmt.yaml` / `role-workload.yaml` | by role | ESO store `platform` / `default` |
+| `values/role-mgmt.yaml` / `role-workload.yaml` | by role | ESO store `platform` / `dns` (never the tenant store `default`) |
 | `values/dns-route53.yaml` | `dns.provider: route53` | `enabled: true`, `provider.name: aws`, `aws-zone-type: public` |
 | `values/dns-cloudflare.yaml` | `dns.provider: cloudflare` | `enabled: true`, `provider.name: cloudflare`, `CF_API_TOKEN` from the ESO Secret |
 | `installations/<inst>/addons/external-dns/values.yaml` | always | tuning only |
@@ -64,7 +85,9 @@ running controller doing the wrong thing:
 - an overlay switches `provider.name` away from `dns.provider`, or the provider file was not layered;
 - `external-dns.domainFilters` differs from `dns.domainFilters`, or the list is empty;
 - `txtOwnerId` is not the cluster name; `policy` is not `upsert-only` or `sync`;
-- Cloudflare without `CF_API_TOKEN` from Secret `external-dns-cloudflare`.
+- Cloudflare without `CF_API_TOKEN` from Secret `external-dns-cloudflare`, or on a workload cluster from any store but
+  `dns`;
+- static AWS keys (`secrets.aws`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` env).
 
 Helm parameters beat value files, so an overlay cannot widen the zones either.
 
@@ -72,27 +95,44 @@ Helm parameters beat value files, so an overlay cannot widen the zones either.
 
 ### Route 53: workload identity
 
-No static keys and no ExternalSecret by default. The AWS SDK default chain picks up whichever identity is present:
+No static keys and no ExternalSecret: the render fails on `secrets.aws` or AWS key env vars. Two identities only:
 
 - **IRSA**: set `external-dns.serviceAccount.annotations."eks.amazonaws.com/role-arn"` in the installation overlay. On
   CAPA k3s clusters this needs the cluster's service-account issuer registered as an IAM OIDC provider plus the pod
   identity webhook.
 - **EKS Pod Identity**: a PodIdentityAssociation for `external-dns/external-dns`; no annotation.
-- **EC2 instance profile** of the nodes (CAPA `iamInstanceProfile`): no annotation; IMDSv2 hop limit >= 2 for pods. Every
-  pod on the node gets the role, so prefer the two above.
+
+Not the nodes' EC2 instance profile: pods reach IMDS only with metadata hop limit 2, which hands the node role (and
+its DNS write access) to every pod on the node.
 
 IAM policy: `route53:ChangeResourceRecordSets` on the hosted zones of `dns.domainFilters` only, plus
-`route53:ListHostedZones`, `route53:ListResourceRecordSets`, `route53:ListTagsForResources`.
-
-Last resort for clusters with none of these (commented in `values/dns-route53.yaml`): key `external-dns-aws`
-(`access-key-id`, `secret-access-key`), `secrets.aws.enabled: true`, and the two `env` entries.
+`route53:ListHostedZones`, `route53:ListResourceRecordSets`, `route53:ListTagsForResources`. One role per cluster,
+with `ChangeResourceRecordSets` conditioned on `route53:ChangeResourceRecordSetsNormalizedRecordNames` (`ForAllValues`,
+`StringLike` the cluster's own names, e.g. `*.dev-euc1.aws.example.com`), so a cluster cannot claim another's
+hostnames (see [Ownership](#ownership-and-what-txt-records-do-not-protect)).
 
 ### Cloudflare: scoped API token from ESO
 
 Create an API token (not the global API key) with `Zone:Zone:Read` and `Zone:DNS:Edit` on the zones of
-`dns.domainFilters` only. Store it as key `external-dns-cloudflare`, property `api-token`, in the store of every
-opted-in cluster: `platform` on mgmt (namespace `external-dns` is in secret-stores `platformStore.namespaces`), `default`
-on workload clusters. `templates/secrets.yaml` syncs it to Secret `external-dns-cloudflare`. Records are DNS-only
+`dns.domainFilters` only. Store it as key `external-dns-cloudflare`, property `api-token`:
+
+- **mgmt**: store `platform` (namespace `external-dns` is in secret-stores `platformStore.namespaces`).
+- **workload clusters**: store `dns`, never `default`. `default` is the ClusterDataPlane `secretStoreRef`, so any
+  tenant SecretReference / ExternalSecret could sync a key from it and get `DNS:Edit` on every zone, prod's and mgmt's
+  records included. Addon secret-stores renders `ClusterSecretStore/dns` on workload clusters while
+  `dns.provider: cloudflare`, with `conditions` admitting namespace `external-dns` only (AGENTS.md invariant 5
+  exception, covered by `hack/tests/test_secret_store_scope.sh`), reading from a location `default` cannot:
+
+  | Backend | Store `dns` reads | You provide |
+  |---|---|---|
+  | `kubernetes` | namespace `external-dns-credentials` (SA `eso-workload-dns`) | the Secret there (`default` reads `openchoreo-secrets`) |
+  | `aws` | Secrets Manager via SA `eso-aws-dns`, role `secrets.dnsStore.aws.role` | an IAM role that reads only this key; deny it in the `default` role (`secrets.aws.role`) |
+  | `vault` | Vault role `secrets.dnsStore.vault.role` (SA `eso-vault-dns`), path `secrets.dnsStore.vault.path` (default: `secrets.vault.path`) | a policy that reads only this key; deny it in the `default` role's policy |
+
+  The render fails when the dedicated role is missing or equals the tenant store's; addon external-dns fails on a
+  workload cluster whose Cloudflare token is not from store `dns`.
+
+`templates/secrets.yaml` syncs it to Secret `external-dns-cloudflare`. Records are DNS-only
 (`cloudflare-proxied` off) unless the installation overlay sets `cloudflare-proxied: true`.
 
 ## Turning it on

@@ -50,7 +50,7 @@ expect_running() {   # expect_running <inst> <dns provider> <helm provider> <exp
     assert_eq "$(args_of "$out" | grep -c -E -- '^--source=(ingress|service)$')" 0 "$inst/$name: no Ingress/Service source"
     assert_match "$(yq -N 'select(.kind == "Deployment") | .spec.template.spec.containers[0].image' "$out")" '@sha256:[0-9a-f]{64}$' "$inst/$name: image pinned by digest"
     if [[ "$hp" == cloudflare ]]; then
-      local want=default; [[ "$role" == mgmt ]] && want=platform
+      local want=dns; [[ "$role" == mgmt ]] && want=platform   # never the tenant store default
       assert_eq "$(yq -N 'select(.kind == "ExternalSecret") | .spec.secretStoreRef.name' "$out")" "$want" "$inst/$name: Cloudflare token from store $want"
       assert_eq "$(has_arg "$out" "--aws-zone-type=public")" no "$inst/$name: no AWS flags on Cloudflare"
     else

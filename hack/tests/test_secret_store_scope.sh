@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ClusterSecretStore `platform` (addon secret-stores) is limited by spec.conditions to platformStore.namespaces. Every
 # ExternalSecret that reads it must live in one of those namespaces, and every listed namespace must have a consumer
-# (no stale grants). Uses the manifests hack/test.sh rendered for each installation's mgmt cluster and CAPI clusters
+# (no stale grants). On workload clusters, store `dns` (invariant 5 exception: the external-dns Cloudflare token) is
+# limited to namespace external-dns, and that token is never read through the tenant store `default`. Uses the manifests hack/test.sh rendered for each installation's mgmt cluster and CAPI clusters
 # (RENDERED_DIR), plus opt-in consumers rendered here.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -96,6 +97,66 @@ helm template openchoreo-observability-plane addons/openchoreo-observability-pla
   > "$TMP/obs-ai-agents.yaml"
 check "opt-in mgmt consumers (external-dns, agentgateway, AI agents)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" \
   "$TMP/external-dns-mgmt.yaml" "$TMP/agentgateway-mgmt.yaml" "$TMP/obs-ai-agents.yaml"
+
+# --- workload store `dns` -------------------------------------------------------------------------------------------
+# es_reading <store> <file>... -> "<namespace> <name> <remote keys>" for every ExternalSecret using that store.
+es_reading() {
+  local store=$1; shift
+  S="$store" yq -N 'select(.kind == "ExternalSecret" and .spec.secretStoreRef.name == strenv(S))
+    | (.metadata.namespace // "<none>") + " " + .metadata.name + " " + ([.spec.data[]?.remoteRef.key] | join(","))' "$@" 2>/dev/null | grep -v '^$' || true
+}
+# shellcheck source=../lib/portable.sh
+source hack/lib/portable.sh
+# shellcheck source=../lib/addons.sh
+source hack/lib/addons.sh
+dns_checked=0
+for inst_dir in installations/*; do
+  [[ -f "$inst_dir/installation.yaml" ]] || continue
+  inst=$(basename "$inst_dir") dnsp=$(yq '.dns.provider // "none"' "$inst_dir/installation.yaml")
+  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$TMP/platform-$inst.yaml"
+  for cf in "$inst_dir"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    c=$(yq '.name' "$cf") store="$RENDERED_DIR/addon-secret-stores-$inst-$c.yaml"
+    [[ -f "$store" ]] || continue
+    n_dns=$(yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "dns") | .metadata.name' "$store" | grep -c . || true)
+    if [[ "$dnsp" != cloudflare ]]; then
+      assert_eq "$n_dns" 0 "$inst/$c: no store dns without dns.provider cloudflare"
+      continue
+    fi
+    assert_eq "$n_dns" 1 "$inst/$c: store dns exists (dns.provider cloudflare)"
+    assert_eq "$(yq -N -o json -I0 'select(.kind == "ClusterSecretStore" and .metadata.name == "dns") | .spec.conditions' "$store")" \
+      '[{"namespaces":["external-dns"]}]' "$inst/$c: store dns readable from namespace external-dns only"
+    # external-dns forced on, rendered like its ApplicationSet; every other workload addon as test.sh rendered it
+    args=()
+    read_lines args addon_helm_args external-dns "$inst_dir" "$TMP/platform-$inst.yaml" workload "$c" "$(yq '.provider' "$cf")" \
+      "$(yq '.environment // "development"' "$cf")" "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" https://192.0.2.10:6443
+    helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" "${args[@]}" > "$TMP/edns-$inst-$c.yaml"
+    files=("$TMP/edns-$inst-$c.yaml")
+    for f in "$RENDERED_DIR"/addon-*-"$inst"-"$c".yaml; do [[ -f "$f" ]] && files+=("$f"); done
+    while read -r ns name keys; do
+      [[ -n "$ns" ]] || continue
+      dns_checked=$((dns_checked + 1))
+      assert_eq "$ns" external-dns "$inst/$c: ExternalSecret $name reads store dns from namespace external-dns"
+    done <<EOF
+$(es_reading dns "${files[@]}")
+EOF
+    assert_eq "$(es_reading default "${files[@]}" | awk '$3 ~ /(^|,)external-dns-/' | head -1)" "" \
+      "$inst/$c: no external-dns credential through the tenant store default"
+  done
+done
+assert_match "$dns_checked" '^[1-9]' "store dns consumers found (hetzner-example, Cloudflare)"
+
+# Negative: an overlay pointing the Cloudflare token at the tenant store is refused at render time.
+mkdir -p "$TMP/neg/clusters" "$TMP/neg/addons/external-dns"
+cp installations/hetzner-example/installation.yaml "$TMP/neg/"
+printf 'secrets:\n  store: default\n' > "$TMP/neg/addons/external-dns/values.yaml"
+args=()
+read_lines args addon_helm_args external-dns "$TMP/neg" "$TMP/platform-hetzner-example.yaml" workload dev-fsn1 hetzner development fsn1 cilium https://192.0.2.10:6443
+if helm template external-dns addons/external-dns --namespace external-dns "${args[@]}" > /dev/null 2> "$TMP/neg.err"; then
+  assert_eq rendered fails "workload Cloudflare token via store default is refused"
+else
+  assert_match "$(cat "$TMP/neg.err")" 'only store dns' "workload Cloudflare token via store default is refused"
+fi
 
 # No stale grants: every allowed namespace has a consumer somewhere.
 while read -r ns; do

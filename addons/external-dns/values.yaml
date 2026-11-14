@@ -15,16 +15,14 @@ dns:
   domainFilters: []           # zones ExternalDNS may touch (installation.yaml)
 
 # --- platform glue (templates/) -------------------------------------------------------------------------------------
-# ExternalSecrets for provider credentials. Store: `platform` on mgmt (values/role-mgmt.yaml), `default` on workload
-# clusters (values/role-workload.yaml); AGENTS.md invariant 5.
+# ExternalSecret for the Cloudflare token. Store: `platform` on mgmt (values/role-mgmt.yaml), `dns` on workload clusters
+# (values/role-workload.yaml; scoped to this namespace, never the tenant store `default`). Route 53 has no secret:
+# IRSA / EKS Pod Identity only, static AWS keys are refused (templates/validate.yaml).
 secrets:
   store: platform
   cloudflare:
     enabled: false            # values/dns-cloudflare.yaml
     remoteKey: external-dns-cloudflare   # property api-token: Cloudflare API token scoped to Zone:Read + DNS:Edit
-  aws:
-    enabled: false            # last resort only (static IAM user keys): commented block in values/dns-route53.yaml
-    remoteKey: external-dns-aws          # properties access-key-id, secret-access-key
 
 # --- upstream chart (external-dns 1.23.0 / app v0.23.0) -------------------------------------------------------------
 external-dns:

@@ -121,7 +121,10 @@ Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backe
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
-Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice.
+Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice. Every
+tenant can read through `default`, so platform credentials never live behind it: the only one on workload clusters,
+the external-dns Cloudflare token, has its own `ClusterSecretStore/dns` (namespace `external-dns` only, separate
+backend location and identity; docs/dns.md "Credentials").
 Key names are flat (`platform-github`, `platform-ghcr`, `capi-aws`, `capi-hetzner`) so they map onto every backend.
 `platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces that consume it
 (addon secret-stores `platformStore.namespaces`: argocd, fleet, capa-system, thunder, openchoreo-control-plane,

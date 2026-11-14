@@ -1,3 +1,5 @@
-# Workload clusters: read secrets from ClusterSecretStore `default` (conventions.md).
+# Workload clusters: provider credentials from ClusterSecretStore `dns` (addon secret-stores renders it while
+# installation.yaml dns.provider is cloudflare), scoped to namespace external-dns and backed by a location the tenant
+# store `default` cannot read. Never `default`: tenants could sync the zone-wide token (templates/validate.yaml).
 secrets:
-  store: default
+  store: dns

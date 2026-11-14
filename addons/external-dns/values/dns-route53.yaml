@@ -1,13 +1,15 @@
 # installation.yaml dns.provider: route53 (catalog installationValueFiles). Any infra provider: the zone lives in AWS.
 #
-# Credentials: workload identity, no static keys. The AWS SDK default chain picks up whichever is present:
+# Credentials: workload identity only, no static keys (templates/validate.yaml refuses AWS key env vars and secrets).
 #   - IRSA: annotate the service account with the role (per installation, see below). On CAPA k3s clusters this needs
 #     the cluster's service-account issuer published as an IAM OIDC provider + the pod identity webhook.
 #   - EKS Pod Identity: a PodIdentityAssociation for external-dns/external-dns; no annotation needed.
-#   - EC2 instance profile of the nodes (CAPA AWSMachineTemplate iamInstanceProfile): no annotation needed; pods reach
-#     IMDSv2 only with a metadata hop limit >= 2. Grants every pod on the node the role: least preferred of the three.
+# Not the nodes' EC2 instance profile: reaching IMDS from pods needs metadata hop limit 2, which hands the node role to
+# every pod on the node.
 # IAM policy: route53:ChangeResourceRecordSets on the hosted zone ARNs of dns.domainFilters only, plus
-# route53:ListHostedZones, route53:ListResourceRecordSets, route53:ListTagsForResources on *.
+# route53:ListHostedZones, route53:ListResourceRecordSets, route53:ListTagsForResources on *. Per cluster, also
+# condition ChangeResourceRecordSets on route53:ChangeResourceRecordSetsNormalizedRecordNames (the cluster's own name
+# suffix) so one cluster cannot claim another's hostnames (docs/dns.md "Ownership").
 external-dns:
   enabled: true
   provider:
@@ -19,16 +21,3 @@ external-dns:
     annotations: {}
     # IRSA, in installations/<inst>/addons/external-dns/values.yaml:
     #   eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/external-dns
-
-# LAST RESORT, not recommended (long-lived keys): only for clusters with none of the identities above. Seed key
-# `external-dns-aws` (access-key-id, secret-access-key) in the cluster's store, then in
-# installations/<inst>/addons/external-dns/values.yaml:
-# secrets:
-#   aws:
-#     enabled: true
-# external-dns:
-#   env:
-#     - name: AWS_ACCESS_KEY_ID
-#       valueFrom: { secretKeyRef: { name: external-dns-aws, key: access-key-id } }
-#     - name: AWS_SECRET_ACCESS_KEY
-#       valueFrom: { secretKeyRef: { name: external-dns-aws, key: secret-access-key } }

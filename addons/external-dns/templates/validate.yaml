@@ -7,6 +7,9 @@ installationParameters; an installation overlay must not contradict it).
   - domainFilters is never empty while running (ExternalDNS would manage every zone the credentials reach) and equals
     dns.domainFilters.
   - txtOwnerId is the cluster name; policy is upsert-only or sync; Cloudflare reads its token from the ESO Secret.
+  - Credentials never reach tenants: on workload clusters the Cloudflare token comes only from ClusterSecretStore `dns`
+    (addon secret-stores, scoped to this namespace), never the tenant store `default`. Route 53 runs on IRSA / EKS Pod
+    Identity only: static AWS keys (env, secrets.aws) are refused.
 */ -}}
 {{- $dns := .Values.dns | default dict }}
 {{- $provider := $dns.provider | default "none" }}
@@ -52,6 +55,19 @@ installationParameters; an installation overlay must not contradict it).
 {{- end }}
 {{- if not (and $token .Values.secrets.cloudflare.enabled) }}
 {{- fail "dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml)" }}
+{{- end }}
+{{- if and (eq (toString .Values.cluster.role) "workload") (ne (toString .Values.secrets.store) "dns") }}
+{{- fail (printf "dns.provider=cloudflare on workload cluster %s reads the zone-wide token from ClusterSecretStore %q: only store dns (addon secret-stores, scoped to namespace external-dns) is allowed; the tenant store default is readable by every tenant" .Values.cluster.name (toString .Values.secrets.store)) }}
+{{- end }}
+{{- end }}
+{{- /* secrets.aws.{region,role,prefix} is installation.yaml's ESO backend (valuesObject), not ours: only the removed
+     static-key switches count. */}}
+{{- if or ((.Values.secrets.aws).enabled) ((.Values.secrets.aws).remoteKey) }}
+{{- fail "secrets.aws: static AWS keys are not supported; Route 53 uses IRSA or EKS Pod Identity (values/dns-route53.yaml)" }}
+{{- end }}
+{{- range ($ext.env | default list) }}
+{{- if has .name (list "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_SHARED_CREDENTIALS_FILE") }}
+{{- fail (printf "external-dns.env %s: static AWS credentials are not supported; Route 53 uses IRSA or EKS Pod Identity" .name) }}
 {{- end }}
 {{- end }}
 {{- end }}

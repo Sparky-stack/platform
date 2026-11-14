@@ -16,6 +16,9 @@ Design and rationale: `docs/architecture.md`. Contracts below are mirrored from 
    that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
    namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
    `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
+   Second exception, for a credential tenants must not reach: on workload clusters the external-dns Cloudflare token
+   comes from `ClusterSecretStore/dns` (only while `dns.provider: cloudflare`; conditions: namespace `external-dns`
+   only; its own backend location and identity that `default`, the tenants' `secretStoreRef`, cannot read).
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
@@ -62,8 +65,7 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
 | `harbor` | admin/robot/chart secrets (docs/build-plane.md) | addon harbor, build pushes (`builder-secret`), node pulls (`nodes-secret`) |
 | `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane) |
-| `external-dns-cloudflare` | `api-token` | addon external-dns, `dns.provider: cloudflare` (also in `default` on workload clusters; docs/dns.md) |
-| `external-dns-aws` | `access-key-id`, `secret-access-key` | addon external-dns, last resort only (Route 53 uses workload identity) |
+| `external-dns-cloudflare` | `api-token` | addon external-dns, `dns.provider: cloudflare` (on workload clusters in store `dns`, never `default`; docs/dns.md). Route 53 has no key: IRSA / Pod Identity only |
 | `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on (docs/ai-agents.md) |
 
 ## Layout and ownership
