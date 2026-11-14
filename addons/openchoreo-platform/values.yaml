@@ -10,6 +10,8 @@
 #   ClusterAuthzRoles  the control-plane chart's authz bootstrap Job (openchoreoApi.config.security.authorization)
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
+installation:
+  githubOrg: https://github.com/koorikla
 openchoreo:
   orgNamespace: default
 
@@ -44,9 +46,16 @@ buildWorkflows:
   ttlAfterCompletion: 1d
   platforms: linux/amd64,linux/arm64         # default per run; a run may narrow it (e.g. the node's arch only)
   gitAuthor: OpenChoreo build <build@openchoreo.invalid>
+  # Repositories builds may clone and push to: https URL prefixes ending in "/" (one owner each). Empty = the
+  # installation's githubOrg. Enforced three times: the ClusterWorkflow schema pattern on repository.url, the checkout
+  # and gitops scripts (BUILD_GUARDS in koorikla-build), and git's credential helper, registered only for these
+  # prefixes, so the run's token is never sent to any other host or owner.
+  git:
+    allowedRepositoryPrefixes: []
   # Per-run Secrets (ExternalSecrets in workflows-<org ns>, store = the ClusterWorkflowPlane's secretStoreRef):
   secrets:
-    git: platform-github                     # username, token: clone + GitOps push (contents:write on app repos)
+    git: platform-github-build               # username, token: clone + GitOps push (Contents: Read and write on app
+                                             # repos only); not Argo CD's read-only platform-github
     cosign: cosign-platform                  # cosign.key (encrypted), cosign.password; cosign.pub is public
     harbor:                                  # registry.type harbor
       robot: robot$builder                   # == addons/harbor config.robots[name=builder]

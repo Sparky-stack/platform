@@ -7,6 +7,42 @@
 {{- end -}}
 {{- end }}
 
+{{- /*
+Git repository allowlist: URL prefixes (https, ending in "/") builds may clone from and push to; default the
+installation's githubOrg. build.gitPrefixes -> space-separated (the Argo parameter); build.repoUrlPattern -> the
+schema pattern for repository.url (one path segment after a prefix, starting alphanumeric: no "..", no "/").
+*/ -}}
+{{- define "build.gitPrefixList" -}}
+{{- $p := .Values.buildWorkflows.git.allowedRepositoryPrefixes | default list -}}
+{{- if not $p -}}
+{{- $org := required "installation.githubOrg (or buildWorkflows.git.allowedRepositoryPrefixes) is required" .Values.installation.githubOrg -}}
+{{- $p = list (printf "%s/" (trimSuffix "/" $org)) -}}
+{{- end -}}
+{{- range $p -}}
+{{- if not (regexMatch "^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9][A-Za-z0-9._-]*/)+$" .) -}}
+{{- fail (printf "buildWorkflows.git.allowedRepositoryPrefixes: %q must be https://<host>/<owner>/ (ending in /)" .) -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $p -}}
+{{- end }}
+
+{{- define "build.gitPrefixes" -}}
+{{- include "build.gitPrefixList" . | fromJsonArray | join " " -}}
+{{- end }}
+
+{{- define "build.repoUrlPattern" -}}
+{{- $q := list -}}
+{{- range (include "build.gitPrefixList" . | fromJsonArray) -}}
+{{- $q = append $q (regexQuoteMeta .) -}}
+{{- end -}}
+{{- printf "^(%s)[A-Za-z0-9][A-Za-z0-9._-]*$" (join "|" $q) -}}
+{{- end }}
+
+{{- /* Repository-relative path (appPath, docker.context, docker.filePath, chart.path): no "..", no absolute path. */ -}}
+{{- define "build.relPathPattern" -}}
+^(\.|(\./)?\.?[A-Za-z0-9_][A-Za-z0-9._-]*(/\.?[A-Za-z0-9_][A-Za-z0-9._-]*)*/?)$
+{{- end }}
+
 {{- /* Repository prefix builds push under (component/chart name appended by the caller). */ -}}
 {{- define "build.repoPrefix" -}}
 {{- if eq (toString .Values.registry.type) "harbor" -}}

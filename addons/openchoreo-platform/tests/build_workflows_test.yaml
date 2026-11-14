@@ -58,6 +58,65 @@ tests:
             - { secretKey: cosign.password, remoteRef: { key: cosign-platform, property: cosign.password } }
       - equal: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.target.template.type', value: kubernetes.io/basic-auth }
 
+  - it: repository.url is limited to the installation's githubOrg (no token for other hosts or owners)
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - equal:
+          path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
+          value: '^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$'
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/koorikla/" } }
+      - equal: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.data[0].remoteRef.key', value: platform-github-build }
+
+  - it: the allowlist follows installation.githubOrg (trailing slash normalized)
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    set: { installation.githubOrg: "https://github.com/acme/" }
+    asserts:
+      - equal:
+          path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
+          value: '^(https://github\.com/acme/)[A-Za-z0-9][A-Za-z0-9._-]*$'
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/acme/" } }
+
+  - it: explicit allowedRepositoryPrefixes replace githubOrg, one alternative per prefix
+    template: templates/helm-chart-workflow.yaml
+    set:
+      buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/koorikla/", "https://git.example.com:8443/team/apps/"]
+    asserts:
+      - equal:
+          path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
+          value: '^(https://github\.com/koorikla/|https://git\.example\.com:8443/team/apps/)[A-Za-z0-9][A-Za-z0-9._-]*$'
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/koorikla/ https://git.example.com:8443/team/apps/" } }
+
+  - it: rejects an allowlist prefix that is not https://<host>/<owner>/
+    template: templates/helm-chart-workflow.yaml
+    set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/"] }
+    asserts:
+      - failedTemplate: { errorPattern: "must be https://<host>/<owner>/" }
+
+  - it: rejects a prefix without the closing slash (would also match koorikla-evil)
+    template: templates/helm-chart-workflow.yaml
+    set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/koorikla"] }
+    asserts:
+      - failedTemplate: { errorPattern: "ending in /" }
+
+  - it: rejects a non-https prefix
+    template: templates/helm-chart-workflow.yaml
+    set: { buildWorkflows.git.allowedRepositoryPrefixes: ["http://github.com/koorikla/"] }
+    asserts:
+      - failedTemplate: { errorPattern: "must be https://" }
+
+  - it: gitops writes only deploy/openchoreo/<name>.yaml, refs and paths cannot inject options or traverse
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: nextjs }
+    asserts:
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.gitops.properties.workloadPath.pattern, value: '^deploy/openchoreo/[A-Za-z0-9][A-Za-z0-9._-]*\.yaml$' }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.repository.properties.revision.properties.branch.pattern, value: '^[A-Za-z0-9_][A-Za-z0-9._/-]*$' }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.repository.properties.revision.properties.commit.pattern, value: '^([0-9a-f]{7,40})?$' }
+      - exists: { path: spec.parameters.openAPIV3Schema.properties.docker.properties.context.pattern }
+      - exists: { path: spec.parameters.openAPIV3Schema.properties.docker.properties.filePath.pattern }
+      - exists: { path: spec.parameters.openAPIV3Schema.properties.repository.properties.appPath.pattern }
+
   - it: dockerfile has no language checks, elixir offers the PostgreSQL sidecar
     template: templates/build-workflows.yaml
     asserts:

@@ -248,6 +248,20 @@ assert_eq "$(val platform-github-app githubAppInstallationID)" 8 "push App: inst
 run push_partial "$S" NO_GH=1 GITHUB_PUSH_APP_ID=9
 assert_eq "$RC" 1 "push App partial: fails closed"
 
+# --- platform-github-build (in-cluster build git credentials) -----------------------------------------------------
+run build_token "$S" NO_GH=1 PLATFORM_GITHUB_BUILD_TOKEN=github_pat_FAKE PLATFORM_GITHUB_BUILD_USER=builder
+assert_eq "$(keys platform-github-build)" "token,username" "build git: keys"
+assert_eq "$(val platform-github-build token)" github_pat_FAKE "build git: PLATFORM_GITHUB_BUILD_TOKEN"
+assert_eq "$(val platform-github-build username)" builder "build git: PLATFORM_GITHUB_BUILD_USER"
+run build_gh "$S"
+assert_eq "$(val platform-github-build token)" gho_FAKEGHTOKEN "build git: gh fallback (local)"
+assert_eq "$(has "$OUT" 'platform-github-build: gh CLI token')" yes "build git: gh fallback warns"
+run build_app "$S" GITHUB_APP_ID=1 GITHUB_APP_INSTALLATION_ID=2 GITHUB_APP_PRIVATE_KEY_FILE="$PEM"
+assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read App is never reused for builds"
+assert_eq "$(has "$OUT" 'platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN')" yes "build git: skipped with a hint"
+run build_readtoken "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE
+assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read-only token is never reused for builds"
+
 # --- harbor + cosign-platform ---------------------------------------------------------------------------------------
 run cosign "$S" NO_GH=1
 assert_eq "$RC" 0 "cosign: rc"

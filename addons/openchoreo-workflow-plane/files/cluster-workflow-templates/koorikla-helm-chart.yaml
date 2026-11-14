@@ -14,6 +14,7 @@ spec:
     parameters:
       - name: workflowrun-name
       - name: git-repo
+      - name: git-allowed-prefixes         # space-separated URL prefixes the run's git token may be sent to
       - name: branch
         value: main
       - name: commit

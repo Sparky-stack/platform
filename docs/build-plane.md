@@ -81,7 +81,10 @@ build: `checkout` skips commits that only touch the GitOps directory (loop guard
 
 `gitops` clones the source repo at the built branch, sets `spec.container.image` (`<repo>:<short sha>@sha256:<digest>`)
 and `spec.source.commit` in `deploy/openchoreo/workload.yaml` with yq, commits as `OpenChoreo build`, and pushes with
-rebase retries. Credentials: key `platform-github` (needs `contents: write` on the app repos). Argo CD (Application
+rebase retries. Credentials: key `platform-github-build` (fine-grained PAT, app repos only, Contents: Read and write;
+not Argo CD's read-only `platform-github`). Only an OpenChoreo `Workload` at `deploy/openchoreo/<name>.yaml` is ever
+rewritten (schema pattern on `gitops.workloadPath`, plus a script check: no symlink on the path, `kind: Workload`).
+Argo CD (Application
 `<project>-<app>`) syncs; `autoDeploy` cuts the ComponentRelease and binds development; staging/production stay
 promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
 
@@ -94,6 +97,17 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
 
 ### Security posture of build pods
 
+- **Repository allowlist.** Builds clone from and push to only the installation's allowed repository prefixes
+  (`buildWorkflows.git.allowedRepositoryPrefixes`, default `installation.githubOrg` + `/`, each `https://<host>/<owner>/`).
+  Three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name after a prefix); `BUILD_GUARDS`
+  in the checkout and gitops scripts (same check, git config only from the environment, `protocol.allow=never` except
+  https); and git's credential helper registered per prefix (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so
+  the token never answers a 401 from another host or owner, redirects included. Branch, commit and path parameters
+  have patterns against option injection (`--upload-pack=…`) and traversal; the build step refuses a context or
+  Dockerfile that resolves outside the checkout (that pod also mounts the registry push credentials).
+  `hack/tests/test_build_guards.sh` exercises all of it with real `git credential fill` (negative cases first).
+  Residual: any build may use any repo under an allowed owner (a tenant can rebuild another tenant's repo at an old
+  commit); per-repo GitHub App installation tokens (`platform-github-app`) close that (deferred).
 - Pod Security `restricted` for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
   capabilities dropped, read-only root where the tool allows) **except `build`**: rootless BuildKit runs as uid 1000,
   no privilege escalation, no added capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user
@@ -198,11 +212,13 @@ by digest.
 |---|---|---|
 | `harbor` | `admin-password`, `secret-key` (16), `core-secret`, `csrf-key` (32), `jobservice-secret`, `registry-http-secret`, `registry-password`, `database-password`, `builder-secret`, `nodes-secret` | addon harbor; builds (`builder-secret`); nodes (`nodes-secret`) |
 | `cosign-platform` | `cosign.key` (encrypted), `cosign.pub`, `cosign.password` | build signing; admission policies trust `cosign.pub` |
-| `platform-github` | `username`, `token` (`contents: write` on app repos) | clone + GitOps commit |
+| `platform-github-build` | `username`, `token` (fine-grained PAT, app repos only, Contents: Read and write) | clone + GitOps commit, sent only to the allowed repository prefixes |
 | `platform-ghcr` | `username`, `token` | Harbor GHCR proxy cache + replication; external registry type |
 
-`task secrets` seeds `harbor` (random, policy-conformant) and generates `cosign-platform` once with cosign from the
-toolbox image (Docker, no host install).
+`task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the
+toolbox image (Docker, no host install; password only through the environment, key files removed on any exit), and
+seeds `platform-github-build` from `PLATFORM_GITHUB_BUILD_TOKEN` (local fallback: the `gh` CLI token, with a warning;
+Argo CD's read-only `platform-github` is never reused).
 
 ## Ports and DNS (local)
 

@@ -30,6 +30,7 @@ spec:
       - name: workflowrun-name
       # source
       - name: git-repo
+      - name: git-allowed-prefixes         # space-separated URL prefixes the run's git token may be sent to
       - name: branch
         value: main
       - name: commit
@@ -165,8 +166,8 @@ spec:
                 - { name: short-sha, value: "{{tasks.checkout.outputs.parameters.short-sha}}" }
 
     # --- source ------------------------------------------------------------------------------------------------------
-    # Shallow fetch of the requested commit (or branch head) with the run's git credentials (basic auth via
-    # GIT_ASKPASS; never in the URL or the logs). Loop guard: a commit that only touches the GitOps directory (the
+    # Shallow fetch of the requested commit (or branch head) with the run's git credentials (credential helper scoped
+    # to the allowed repository prefixes, see BUILD_GUARDS; never in the URL or the logs). Loop guard: a commit that only touches the GitOps directory (the
     # hand-off commit of a previous run, or a manual promotion) is not rebuilt - relevant once autoBuild webhooks are on,
     # because OpenChoreo's webhook matcher treats appPath "." as "every change".
     - name: checkout
@@ -178,11 +179,9 @@ spec:
         command: [bash, -euo, pipefail, -c]
         args:
           - |
-            if [ -f /secrets/git/password ]; then
-              printf '#!/bin/sh\ncase "$1" in Username*) cat /secrets/git/username ;; *) cat /secrets/git/password ;; esac\n' > /tmp/askpass
-              chmod 0700 /tmp/askpass
-              export GIT_ASKPASS=/tmp/askpass GIT_TERMINAL_PROMPT=0
-            fi
+            eval "$BUILD_GUARDS"
+            check_ref "$BRANCH"; check_ref "$COMMIT"
+            git_access "$REPO"
             rm -rf /work/source && mkdir -p /work/source /work/out /work/home && cd /work/source
             git init -q . && git remote add origin "$REPO"
             ref="${COMMIT:-$BRANCH}"
@@ -203,10 +202,57 @@ spec:
             echo ">> $(git log -1 --format='%h %an: %s')"
         env:
           - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
+          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
           - { name: BRANCH, value: "{{workflow.parameters.branch}}" }
           - { name: COMMIT, value: "{{workflow.parameters.commit}}" }
           - { name: WORKLOAD_PATH, value: "{{workflow.parameters.workload-path}}" }
-          - { name: HOME, value: /work/home }
+          - { name: HOME, value: /tmp }
+          # Build guards, sourced by checkout and gitops (eval "$BUILD_GUARDS"). The run's git token only ever reaches
+          # the installation's allowed repository prefixes (GIT_ALLOWED_PREFIXES, rendered by addon openchoreo-platform
+          # from installation.githubOrg; the ClusterWorkflow schema enforces the same pattern on repository.url, this
+          # is the second line): the URL is checked first, git config comes only from the environment (no system or
+          # global gitconfig, https only), and the credential helper is registered per prefix, so git never answers a
+          # 401 from any other host or owner. Ref and path parameters are checked against option injection and
+          # traversal.
+          - &build-guards
+            name: BUILD_GUARDS
+            value: |
+              die() { echo ">> $*" >&2; exit 1; }
+              # bash [[ =~ ]] matches the whole value (grep would accept any single matching line of a multi-line one)
+              re_name='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+              re_ref='^[A-Za-z0-9_][A-Za-z0-9._/-]*$'
+              re_workload='^deploy/openchoreo/[A-Za-z0-9][A-Za-z0-9._-]*\.yaml$'
+              check_repo() {
+                local p rest
+                for p in $GIT_ALLOWED_PREFIXES; do
+                  rest=${1#"$p"}
+                  if [[ "$rest" != "$1" && "$rest" =~ $re_name ]]; then return 0; fi
+                done
+                die "repository '$1' is not under an allowed prefix (${GIT_ALLOWED_PREFIXES:-none})"
+              }
+              check_ref() {
+                [[ -z "$1" || "$1" =~ $re_ref ]] || die "invalid git ref '$1'"
+              }
+              check_workload_path() {
+                [[ "$1" =~ $re_workload ]] || die "gitops.workloadPath must be deploy/openchoreo/<name>.yaml (got '$1')"
+              }
+              git_access() {
+                local n=0 p helper="${TMPDIR:-/tmp}/git-credential" dir="${GIT_SECRET_DIR:-/secrets/git}"
+                check_repo "$1"
+                unset GIT_ASKPASS SSH_ASKPASS
+                export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+                cfg() { export "GIT_CONFIG_KEY_$n=$1" "GIT_CONFIG_VALUE_$n=$2"; n=$((n + 1)); }
+                cfg protocol.allow never
+                cfg protocol.https.allow always
+                cfg credential.useHttpPath true
+                if [ -f "$dir/password" ]; then
+                  printf '#!/bin/sh\n[ "$1" = get ] || exit 0\necho "username=$(cat %s/username)"\necho "password=$(cat %s/password)"\n' \
+                    "$dir" "$dir" > "$helper"
+                  chmod 0700 "$helper"
+                  for p in $GIT_ALLOWED_PREFIXES; do cfg "credential.${p}.helper" "$helper"; done
+                fi
+                export GIT_CONFIG_COUNT=$n
+              }
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { cpu: "1", memory: 512Mi }
@@ -404,6 +450,11 @@ spec:
             ctx="/work/source/${DOCKER_CONTEXT#./}"
             df="/work/source/${DOCKERFILE_PATH#./}"
             [ -f "$df" ] || { echo ">> Dockerfile not found: $DOCKERFILE_PATH"; exit 1; }
+            # The context and Dockerfile must resolve inside the checkout: this pod also mounts the registry push
+            # credentials, which a ../ or a symlinked context root would otherwise hand to COPY.
+            for p in "$ctx" "$(dirname "$df")"; do
+              case "$(realpath "$p")/" in /work/source/*) ;; *) echo ">> $p resolves outside the repository"; exit 1 ;; esac
+            done
             set -- --opt "build-arg:VERSION=$SHORT_SHA"
             # build-args: JSON [{"name":..,"value":..}] -> --opt build-arg:NAME=VALUE (no jq in this image)
             printf '%s' "$BUILD_ARGS" | tr -d '\n' | sed -e 's/^\[//' -e 's/\]$//' -e 's/},[[:space:]]*{/}\n{/g' > /tmp/args
@@ -584,14 +635,19 @@ spec:
         command: [bash, -euo, pipefail, -c]
         args:
           - |
-            if [ -f /secrets/git/password ]; then
-              printf '#!/bin/sh\ncase "$1" in Username*) cat /secrets/git/username ;; *) cat /secrets/git/password ;; esac\n' > /tmp/askpass
-              chmod 0700 /tmp/askpass
-              export GIT_ASKPASS=/tmp/askpass GIT_TERMINAL_PROMPT=0
-            fi
-            git clone -q --depth 20 --branch "$GITOPS_BRANCH" "$REPO" /tmp/gitops
+            eval "$BUILD_GUARDS"
+            check_ref "$GITOPS_BRANCH"; check_workload_path "$WORKLOAD_PATH"
+            git_access "$REPO"
+            git clone -q --depth 20 --branch "$GITOPS_BRANCH" -- "$REPO" /tmp/gitops
             cd /tmp/gitops
-            [ -f "$WORKLOAD_PATH" ] || { echo ">> $WORKLOAD_PATH not found in $REPO@$GITOPS_BRANCH"; exit 1; }
+            # Only an OpenChoreo Workload under deploy/openchoreo/ is ever rewritten (no symlink out of it).
+            [ -f "$WORKLOAD_PATH" ] && [ ! -L "$WORKLOAD_PATH" ] && [ ! -L deploy ] && [ ! -L deploy/openchoreo ] \
+              || die "$WORKLOAD_PATH not found (or a symlink on its path) in $REPO@$GITOPS_BRANCH"
+            case "$(realpath -e "$WORKLOAD_PATH")" in
+              "$(realpath -e deploy/openchoreo)"/*) ;;
+              *) die "$WORKLOAD_PATH resolves outside deploy/openchoreo/" ;;
+            esac
+            [ "$(yq '.kind' "$WORKLOAD_PATH")" = Workload ] || die "$WORKLOAD_PATH is not an OpenChoreo Workload"
             export IMAGE COMMIT_SHA
             yq -i '.spec.container.image = strenv(IMAGE)' "$WORKLOAD_PATH"
             if [ "$(yq '.spec | has("source")' "$WORKLOAD_PATH")" = true ]; then
@@ -608,6 +664,8 @@ spec:
             exit 1
         env:
           - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
+          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
+          - *build-guards
           - { name: GITOPS_BRANCH, value: "{{workflow.parameters.gitops-branch}}" }
           - { name: WORKLOAD_PATH, value: "{{workflow.parameters.workload-path}}" }
           - { name: GIT_AUTHOR, value: "{{workflow.parameters.git-author}}" }

@@ -302,13 +302,13 @@ seed_harbor_secret() {
 # only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
 COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608"
 COSIGN_TMP=""
+# shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
 seed_cosign_secret() {
   if kubectl --context "$CTX" -n platform-secrets get secret cosign-platform >/dev/null 2>&1; then
     log "  cosign-platform exists (keeping the key pair)"
     return 0
   fi
   require_bins docker
-  # shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
   local cosign_pass
   COSIGN_TMP=$(mktemp -d)
   # The private key must not outlive this function, also when docker or the apply fails (set -e exits).
@@ -322,6 +322,28 @@ seed_cosign_secret() {
     cosign.pub=@"$COSIGN_TMP/cosign.pub" cosign.password=cosign_pass
   rm -rf "$COSIGN_TMP"; COSIGN_TMP=""
   trap - EXIT
+}
+
+# platform-github-build: git credentials of in-cluster builds (clone app repos + GitOps hand-off push), separate from
+# Argo CD's read-only platform-github. The build workflows only ever hand it to the installation's allowed repository
+# prefixes (addon openchoreo-platform buildWorkflows.git.allowedRepositories). Sources, least privilege first:
+#   PLATFORM_GITHUB_BUILD_TOKEN [+ PLATFORM_GITHUB_BUILD_USER]   fine-grained PAT, app repos only, Contents: Read and write
+#   gh CLI login (local backend only, broad OAuth token, warns; NO_GH=1 skips it)
+#   none: builds clone public repos only and the GitOps hand-off cannot push
+# shellcheck disable=SC2034  # build_user/build_token are read by apply_secret through their names
+seed_build_git_secret() {
+  local build_user build_token
+  if [[ -n "${PLATFORM_GITHUB_BUILD_TOKEN:-}" ]]; then
+    build_user="${PLATFORM_GITHUB_BUILD_USER:-git}"; build_token=$PLATFORM_GITHUB_BUILD_TOKEN
+    apply_secret platform-secrets platform-github-build username=build_user token=build_token
+    log "  platform-github-build: PLATFORM_GITHUB_BUILD_TOKEN (user $build_user)"
+  elif [[ "$GH_MODE" == gh ]]; then
+    build_user=$GH_LOGIN; build_token=$GH_SECRET
+    apply_secret platform-secrets platform-github-build username=build_user token=build_token
+    warn "  platform-github-build: gh CLI token of $GH_LOGIN (broad scopes). Least privilege: a fine-grained PLATFORM_GITHUB_BUILD_TOKEN (app repos, Contents: Read and write)"
+  else
+    warn "  platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN or gh login: skipped (builds clone public repos only; the GitOps hand-off cannot push)"
+  fi
 }
 
 cmd_secrets() {
@@ -392,6 +414,7 @@ cmd_secrets() {
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
   fi
 
+  seed_build_git_secret
   seed_openchoreo_secret
   seed_harbor_secret
   seed_cosign_secret
