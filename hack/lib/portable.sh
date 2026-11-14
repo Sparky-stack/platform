@@ -34,6 +34,7 @@ sed_inplace() {
 # on Windows, where Git Bash fakes the mode bits (NTFS ACLs decide), or when the file does not exist.
 file_group_other_perms() {
   if [[ "$(os_name)" != windows && -e "$1" ]]; then
+    # shellcheck disable=SC2012  # only the mode column of a single, quoted path is read
     ls -lLd -- "$1" 2>/dev/null | awk '{ print substr($1, 5, 6) }'
   fi
 }

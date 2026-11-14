@@ -17,6 +17,7 @@ cp -R "$ROOT/hack/lib" "$R/hack/"
 cp -R "$ROOT/installations" "$R/"
 # bootstrap.sh minus its dispatcher, plus a hook that runs $HARNESS_CALL after load_inst.
 sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
+# shellcheck disable=SC2016  # literal code for the generated script
 printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
 LOCAL_INST="$R/installations/local/installation.yaml"
 cp "$LOCAL_INST" "$TMP/local-installation.orig"
