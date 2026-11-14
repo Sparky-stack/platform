@@ -27,3 +27,7 @@ repoCreds:
   name: platform-repo-creds
   namespace: argocd
   remoteKey: platform-github
+  # token: properties username + token (fine-grained PAT, read-only Contents). githubApp: properties githubAppID,
+  # githubAppInstallationID, githubAppPrivateKey (preferred: Argo CD mints short-lived installation tokens).
+  # Per installation: installations/<inst>/addons/secret-stores/values.yaml. docs/forking.md "Credentials".
+  auth: token

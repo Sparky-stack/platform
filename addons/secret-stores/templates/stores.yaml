@@ -223,15 +223,22 @@ spec:
   secretStoreRef:
     kind: ClusterSecretStore
     name: platform
+  {{- $rcKey := .Values.repoCreds.remoteKey | default "platform-github" }}
+  {{- $rcAuth := .Values.repoCreds.auth | default "token" }}
+  {{- if not (has $rcAuth (list "token" "githubApp")) }}
+  {{- fail (printf "repoCreds.auth must be token or githubApp (got %s)" $rcAuth) }}
+  {{- end }}
+  {{- $rcProps := list "username" "token" }}
+  {{- if eq $rcAuth "githubApp" }}
+  {{- $rcProps = list "githubAppID" "githubAppInstallationID" "githubAppPrivateKey" }}
+  {{- end }}
   data:
-    - secretKey: username
+    {{- range $rcProps }}
+    - secretKey: {{ . }}
       remoteRef:
-        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
-        property: username
-    - secretKey: token
-      remoteRef:
-        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
-        property: token
+        key: {{ $rcKey | quote }}
+        property: {{ . }}
+    {{- end }}
   target:
     name: {{ .Values.repoCreds.name | default "platform-repo-creds" | quote }}
     creationPolicy: Owner
@@ -244,8 +251,15 @@ spec:
       data:
         type: git
         url: {{ .Values.installation.githubOrg | quote }}
+        {{- if eq $rcAuth "githubApp" }}
+        # Argo CD mints short-lived installation tokens from the App key itself (docs/forking.md).
+        githubAppID: '{{ "{{" }} .githubAppID {{ "}} " | trim }}'
+        githubAppInstallationID: '{{ "{{" }} .githubAppInstallationID {{ "}} " | trim }}'
+        githubAppPrivateKey: '{{ "{{" }} .githubAppPrivateKey {{ "}} " | trim }}'
+        {{- else }}
         username: '{{ "{{" }} .username {{ "}} " | trim }}'
         password: '{{ "{{" }} .token {{ "}} " | trim }}'
+        {{- end }}
 {{- else -}}
 {{- if eq $backend "kubernetes" -}}
 {{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}
