@@ -96,8 +96,17 @@ def ensure_registry(r):
         cur = find("/registries", r["name"])
         if cur is None:
             raise HarborError(f"registry {r['name']}: not found after create")
+    elif cur.get("type") != r["type"]:
+        # Harbor keeps the adapter type on PUT; a registry's type can only change by re-creating it. Projects that
+        # reference it make DELETE fail (HTTP 412), which is the safe outcome: fix the project first.
+        call("DELETE", f"/registries/{cur['id']}")
+        call("POST", "/registries", body)
+        print(f"registry {r['name']}: re-created as {r['type']}")
+        cur = find("/registries", r["name"])
+        if cur is None:
+            raise HarborError(f"registry {r['name']}: not found after re-create")
     else:
-        drift = cur.get("url") != r["url"] or cur.get("type") != r["type"] or cred is not None
+        drift = cur.get("url") != r["url"] or cred is not None
         if drift:
             call("PUT", f"/registries/{cur['id']}", body)  # credentials cannot be read back: always re-sent
             print(f"registry {r['name']}: updated")
