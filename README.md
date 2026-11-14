@@ -25,9 +25,8 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
 
 | State | What |
 |---|---|
-| **Running locally** | k3d mgmt + two CAPD clusters (`dev1`, `prod1`) from fleet files; Argo CD push mode with the addon catalog; ESO stores and the per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; OpenChoreo observability plane (OpenSearch, Prometheus, observer) with workload telemetry (OTel collector, Fluent Bit); Falco + falcosidekick + Talon |
+| **Running locally** | k3d mgmt + two CAPD clusters (`dev1`, `prod1`) from fleet files; Argo CD push mode with the addon catalog; ESO stores and the per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; OpenChoreo observability plane (OpenSearch, Prometheus, observer) with workload telemetry (OTel collector, Fluent Bit); Falco + falcosidekick + Talon; Cilium (`dev1`; CNI chosen at cluster birth) and flannel (`prod1`), Istio ambient with OpenChoreo app namespaces auto-enrolled by Kyverno, Kyverno Pod Security baseline (Audit) |
 | **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends |
-| **On `main`, first live boot pending** | Cilium (CNI chosen at cluster birth, flannel alternative), Istio ambient (namespaces auto-enrolled by Kyverno), Kyverno (Pod Security baseline in Audit) |
 | **In progress** | [koorikla/ci](https://github.com/koorikla/ci) reusable workflows (Go, Next.js, Elixir, Ruby, Helm, Crossplane), multi-arch and cosign-signed; external-dns (Route53, Cloudflare; opt-in per installation); OpenChoreo RCA (SRE) and FinOps agents + agent gateway, shipped switched off until LLM tokens exist; OS/CPU-agnostic tooling (mise + Task, devcontainer) |
 | **Next** | OpenChoreo workflow plane (in-cluster builds) + Harbor (registry, pull-through cache); Crossplane v2 with package promotion gated by Argo CD; SSO (Okta / Google via Thunder, Argo CD via Dex, apiserver OIDC) + Backstage scaffolder; Argo Events escalation for Falco; Datadog exporter |
 
