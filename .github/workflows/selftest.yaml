@@ -119,3 +119,16 @@ jobs:
     with:
       chart_path: fixtures/helm/ci-selftest-helm
       registry: ghcr.io/koorikla
+
+  crossplane-provider:
+    uses: ./.github/workflows/crossplane-provider.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: fixtures/crossplane-provider
+      package_name: ci-selftest-crossplane-provider

@@ -1,0 +1,362 @@
+name: crossplane-provider
+
+# Crossplane provider (native Go or upjet): generate-is-clean check, go vet /
+# test -race / govulncheck (+ optional golangci-lint, CodeQL), multi-arch
+# controller image via container.yaml (scan, SBOM, attestations, signature),
+# then one .xpkg per platform with the controller embedded
+# (--embed-runtime-image-tarball), pushed as a multi-arch package index,
+# cosign-signed (index + per-platform) with SLSA provenance.
+#
+# Required caller permissions:
+#   contents: read, actions: read, packages: write, id-token: write,
+#   attestations: write, security-events: write
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: 'Provider repository root (go.mod, Makefile)'
+        required: false
+        type: string
+        default: '.'
+      package_root:
+        description: 'Directory with crossplane.yaml + crds, relative to working_directory'
+        required: false
+        type: string
+        default: 'package'
+      generate_command:
+        description: "Code generation command checked for a clean git diff ('' skips)"
+        required: false
+        type: string
+        default: 'make generate'
+      run_lint:
+        description: 'Run golangci-lint'
+        required: false
+        type: boolean
+        default: true
+      run_vulncheck:
+        description: 'Run govulncheck'
+        required: false
+        type: boolean
+        default: true
+      run_codeql:
+        description: 'Run CodeQL (go); slow on large generated upjet providers'
+        required: false
+        type: boolean
+        default: false
+      go_test_flags:
+        description: 'go test flags'
+        required: false
+        type: string
+        default: '-race -coverprofile=coverage.out -covermode=atomic ./...'
+      crossplane_version:
+        description: 'Crossplane CLI version'
+        required: false
+        type: string
+        default: 'v2.5.0'
+      package_name:
+        description: 'Package (OCI repository) name (default: metadata.name in crossplane.yaml)'
+        required: false
+        type: string
+        default: ''
+      controller_image_name:
+        description: 'Controller image name (default <package_name>-controller)'
+        required: false
+        type: string
+        default: ''
+      registry:
+        description: 'Registry prefix (default ghcr.io/<owner>)'
+        required: false
+        type: string
+        default: ''
+      dockerfile:
+        description: 'Controller Dockerfile (default <working_directory>/Dockerfile)'
+        required: false
+        type: string
+        default: ''
+      platforms:
+        description: 'Comma-separated platforms (controller image and package)'
+        required: false
+        type: string
+        default: 'linux/amd64,linux/arm64'
+      multiarch_strategy:
+        description: 'native (per-arch runners) or qemu'
+        required: false
+        type: string
+        default: 'native'
+      push:
+        description: 'Push and sign on non-PR events'
+        required: false
+        type: boolean
+        default: true
+      trivy_severity:
+        description: 'Severities that fail the controller image scan'
+        required: false
+        type: string
+        default: 'CRITICAL'
+    secrets:
+      registry_username:
+        description: 'Registry username (non-GHCR registries)'
+        required: false
+      registry_password:
+        description: 'Registry password/token (non-GHCR registries)'
+        required: false
+    outputs:
+      package:
+        description: 'Package reference tagged with the short SHA'
+        value: ${{ jobs.package.outputs.package }}
+      digest:
+        description: 'Package index digest (empty on PRs)'
+        value: ${{ jobs.package.outputs.digest }}
+      package_digest_ref:
+        description: 'Immutable <repo>@sha256:... (empty on PRs)'
+        value: ${{ jobs.package.outputs.package_digest_ref }}
+      controller_image_digest_ref:
+        description: 'Controller image <repo>@sha256:... (empty on PRs)'
+        value: ${{ jobs.controller.outputs.image_digest_ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: generate check, vet, test, govulncheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: xp-provider-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    outputs:
+      package_name: ${{ steps.pkgname.outputs.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Package name
+        id: pkgname
+        env:
+          ROOT: ${{ inputs.working_directory }}/${{ inputs.package_root }}
+          NAME: ${{ inputs.package_name }}
+        run: echo "name=${NAME:-$(yq -r '.metadata.name' "$ROOT/crossplane.yaml")}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.working_directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+
+      - name: Generated code is up to date
+        if: inputs.generate_command != ''
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          GENERATE: ${{ inputs.generate_command }}
+        run: |
+          bash -euo pipefail -c "$GENERATE"
+          if [ -n "$(git status --porcelain -- .)" ]; then
+            git status --porcelain -- .
+            git --no-pager diff -- . | head -200
+            echo "::error::'$GENERATE' changed files; run it locally and commit the result"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        if: inputs.run_lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          working-directory: ${{ inputs.working_directory }}
+
+      - name: go vet, go test, govulncheck
+        env:
+          WORKDIR: ${{ inputs.working_directory }}
+          RUN_LINT: 'false'
+          RUN_VULNCHECK: ${{ inputs.run_vulncheck }}
+          GO_TEST_FLAGS: ${{ inputs.go_test_flags }}
+        run: bash "$CI_SCRIPTS/go/check.sh"
+
+  codeql:
+    name: CodeQL (go)
+    if: inputs.run_codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.working_directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+      - name: CodeQL init
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: autobuild
+          source-root: ${{ inputs.working_directory }}
+      - name: CodeQL analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:go/${{ inputs.working_directory }}
+
+  controller:
+    name: controller image
+    needs: [test, codeql]
+    if: >-
+      always() && needs.test.result == 'success' &&
+      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
+    uses: $/.github/workflows/container.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      image_name: ${{ inputs.controller_image_name != '' && inputs.controller_image_name || format('{0}-controller', needs.test.outputs.package_name) }}
+      registry: ${{ inputs.registry }}
+      context: ${{ inputs.working_directory }}
+      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.working_directory) }}
+      platforms: ${{ inputs.platforms }}
+      multiarch_strategy: ${{ inputs.multiarch_strategy }}
+      push: ${{ inputs.push }}
+      trivy_severity: ${{ inputs.trivy_severity }}
+    secrets:
+      registry_username: ${{ secrets.registry_username }}
+      registry_password: ${{ secrets.registry_password }}
+
+  package:
+    name: xpkg build, push, sign
+    needs: [test, controller]
+    if: always() && needs.test.result == 'success' && needs.controller.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: xp-provider-package-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      package: ${{ steps.vars.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+      package_digest_ref: ${{ steps.push.outputs.image_digest_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Install Crossplane CLI
+        env:
+          CROSSPLANE_VERSION: ${{ inputs.crossplane_version }}
+        run: bash "$CI_SCRIPTS/crossplane/install-cli.sh"
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.7
+
+      - name: Compute package coordinates
+        id: vars
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ needs.test.outputs.package_name }}
+          INPUT_PUSH: ${{ inputs.push }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: bash "$CI_SCRIPTS/common/image-meta.sh"
+
+      - name: Package tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.repo }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+            type=ref,event=branch
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
+
+      - name: Log in to registry
+        if: steps.vars.outputs.should_push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.vars.outputs.registry_host }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: xpkg build (one per platform, controller embedded)
+        id: build
+        env:
+          PACKAGE_ROOT: ${{ inputs.working_directory }}/${{ inputs.package_root }}
+          IMAGE_DIGEST_REF: ${{ needs.controller.outputs.image_digest_ref }}
+          PLATFORMS: ${{ inputs.platforms }}
+        run: bash "$CI_SCRIPTS/crossplane/provider-xpkg.sh"
+
+      - name: xpkg push (multi-arch index)
+        id: push
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          PACKAGE_FILES: ${{ steps.build.outputs.package_files }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: bash "$CI_SCRIPTS/crossplane/xpkg-push.sh"
+
+      - name: Attest SLSA build provenance
+        if: steps.vars.outputs.should_push == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Install cosign
+        if: steps.vars.outputs.should_push == 'true'
+        uses: sigstore/cosign-installer@v4.1.3
+
+      - name: Cosign keyless sign
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.push.outputs.image_digest_ref }}
+          RECURSIVE: 'true'
+        run: bash "$CI_SCRIPTS/common/sign-image.sh"
