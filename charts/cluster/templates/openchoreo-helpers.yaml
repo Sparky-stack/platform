@@ -1,0 +1,25 @@
+{{- /*
+Named templates for the openchoreo-*.yaml files (this file renders nothing). Prefix `openchoreo.` avoids collisions
+with the capi and argocd helpers.
+*/ -}}
+
+{{- /* Namespace on mgmt for per-cluster objects (CAPI namespace, docs/conventions.md). */ -}}
+{{- define "openchoreo.fleetNamespace" -}}fleet{{- end }}
+
+{{- /* Cluster name; required, == ClusterDataPlane name == planeID == agent cert CN. */ -}}
+{{- define "openchoreo.name" -}}
+{{- required "name is required (cluster file)" .Values.name -}}
+{{- end }}
+
+{{- define "openchoreo.labels" -}}
+platform.koorikla.io/name: {{ include "openchoreo.name" . }}
+app.kubernetes.io/part-of: openchoreo
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{- /* OpenChoreo CRs: applied after the CAPI/cert-manager objects (wave 10) and skipped in dry-run while the control
+plane's CRDs are still missing, so a fresh mgmt can create clusters before OpenChoreo is up (Argo retries the rest). */ -}}
+{{- define "openchoreo.crAnnotations" -}}
+argocd.argoproj.io/sync-wave: "10"
+argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+{{- end }}

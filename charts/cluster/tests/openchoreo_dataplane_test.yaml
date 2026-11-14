@@ -1,0 +1,90 @@
+suite: openchoreo ClusterDataPlane + Environments
+templates:
+  - templates/openchoreo-dataplane.yaml
+  - templates/openchoreo-helpers.yaml
+set:
+  name: dev1
+  provider: docker
+  region: local
+  openchoreo.orgNamespace: default
+  openchoreo.dataPlane.enabled: true
+  openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
+  openchoreo.dataPlane.gatewayPort: 19080
+  openchoreo.dataPlane.environments: [development, staging]
+tests:
+  - it: renders nothing when the data plane is disabled
+    template: templates/openchoreo-dataplane.yaml
+    set:
+      openchoreo.dataPlane.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: requires a gateway host
+    template: templates/openchoreo-dataplane.yaml
+    set:
+      openchoreo.dataPlane.gatewayHost: ""
+    asserts:
+      - failedTemplate: { errorMessage: "openchoreo.dataPlane.gatewayHost is required when the data plane is enabled" }
+
+  - it: ClusterDataPlane name == planeID == cluster name, trusts only the per-cluster CA
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ClusterDataPlane }
+      - equal: { path: metadata.name, value: dev1 }
+      - isNull: { path: metadata.namespace }
+      - equal: { path: spec.planeID, value: dev1 }
+      - equal:
+          path: spec.clusterAgent.clientCA
+          value: { secretKeyRef: { name: dev1-agent-ca, namespace: fleet, key: ca.crt } }
+      - equal: { path: spec.secretStoreRef.name, value: default }
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: SkipDryRunOnMissingResource=true
+
+  - it: points app ingress at the data plane Gateway
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.gateway.ingress.external
+          value:
+            name: gateway-default
+            namespace: openchoreo-data-plane
+            http: { host: dev1.apps.localhost, port: 19080, listenerName: http }
+
+  - it: one Environment per environment, in the org namespace, bound to this ClusterDataPlane
+    template: templates/openchoreo-dataplane.yaml
+    asserts:
+      - hasDocuments: { count: 3 }
+      - isKind: { of: Environment }
+        documentIndex: 1
+      - equal: { path: metadata.name, value: development }
+        documentIndex: 1
+      - equal: { path: metadata.name, value: staging }
+        documentIndex: 2
+      - equal: { path: metadata.namespace, value: default }
+        documentIndex: 2
+      - equal: { path: spec.dataPlaneRef, value: { kind: ClusterDataPlane, name: dev1 } }
+        documentIndex: 2
+      - equal: { path: spec.isProduction, value: false }
+        documentIndex: 1
+
+  - it: marks production environments
+    template: templates/openchoreo-dataplane.yaml
+    set:
+      name: prod1
+      openchoreo.dataPlane.environments: [production]
+    documentIndex: 1
+    asserts:
+      - equal: { path: metadata.name, value: production }
+      - equal: { path: spec.isProduction, value: true }
+      - equal: { path: spec.dataPlaneRef.name, value: prod1 }
+
+  - it: follows a non-default org namespace
+    template: templates/openchoreo-dataplane.yaml
+    set:
+      openchoreo.orgNamespace: acme
+    documentIndex: 1
+    asserts:
+      - equal: { path: metadata.namespace, value: acme }

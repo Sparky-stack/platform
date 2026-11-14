@@ -1,0 +1,61 @@
+suite: openchoreo agent PKI (per-cluster CA on mgmt)
+templates:
+  - templates/openchoreo-agent-pki.yaml
+  - templates/openchoreo-helpers.yaml
+set:
+  name: dev1
+  openchoreo.dataPlane.enabled: true
+  openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
+tests:
+  - it: renders nothing when the data plane is disabled
+    template: templates/openchoreo-agent-pki.yaml
+    set:
+      openchoreo.dataPlane.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails without a cluster name
+    template: templates/openchoreo-agent-pki.yaml
+    set:
+      name: ""
+    asserts:
+      - failedTemplate: { errorMessage: "name is required (cluster file)" }
+
+  - it: renders selfsigned issuer -> CA cert -> CA issuer -> client cert, all in fleet
+    template: templates/openchoreo-agent-pki.yaml
+    asserts:
+      - hasDocuments: { count: 4 }
+      - equal: { path: metadata.namespace, value: fleet }
+      - isKind: { of: Issuer }
+        documentIndex: 0
+      - equal: { path: metadata.name, value: dev1-agent-selfsigned }
+        documentIndex: 0
+      - isNotNull: { path: spec.selfSigned }
+        documentIndex: 0
+      - isKind: { of: Certificate }
+        documentIndex: 1
+      - equal: { path: metadata.name, value: dev1-agent-ca }
+        documentIndex: 1
+      - equal: { path: spec.isCA, value: true }
+        documentIndex: 1
+      - equal: { path: spec.secretName, value: dev1-agent-ca }
+        documentIndex: 1
+      - equal: { path: spec.issuerRef.name, value: dev1-agent-selfsigned }
+        documentIndex: 1
+      - equal: { path: spec.ca.secretName, value: dev1-agent-ca }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: dev1-agent-ca }
+        documentIndex: 2
+
+  - it: issues the client cert with CN == cluster name, client auth, signed by the per-cluster CA
+    template: templates/openchoreo-agent-pki.yaml
+    documentIndex: 3
+    asserts:
+      - isKind: { of: Certificate }
+      - equal: { path: metadata.name, value: dev1-agent-tls }
+      - equal: { path: spec.commonName, value: dev1 }
+      - equal: { path: spec.secretName, value: dev1-agent-tls }
+      - contains: { path: spec.usages, content: client auth }
+      - notContains: { path: spec.usages, content: server auth }
+      - isNull: { path: spec.isCA }
+      - equal: { path: spec.issuerRef, value: { kind: Issuer, name: dev1-agent-ca } }
