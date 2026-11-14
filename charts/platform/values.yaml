@@ -71,6 +71,8 @@ addons:
       istiod.env.AMBIENT_ENABLE_MULTI_NETWORK:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
       istiod.env.AMBIENT_ENABLE_BAGGAGE:          { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
       istiod.env.PILOT_DISABLE_SELF_SIGNED_CA:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
+      # Joining/leaving a group rolls ztunnel (after istiod: sync wave 1 in addons/istio-ambient/values.yaml).
+      'ztunnel.podAnnotations.mesh\.platform\.koorikla\.io/group': { label: mesh.platform.koorikla.io/group }
   # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). mesh-root-ca: the shared mesh root on mgmt (enable
   # via installation.yaml mgmt.addons). istio-eastwest: east-west gateway + remote-secret reader token on mesh members,
   # selected by the label charts/cluster derives from the fleet file's mesh.group.

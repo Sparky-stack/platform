@@ -46,6 +46,14 @@ cni:
 
 ztunnel:
   profile: ambient
+  # Roll ztunnel only after istiod is Healthy (Argo CD sync wave, on the DaemonSet's metadata). On a mesh member that
+  # means istiod already runs on the plugged-in cacerts, so the new ztunnel pods fetch workload certificates from the
+  # shared mesh root - no manual restart when a running cluster joins (docs/multicluster.md). Joining/leaving a group
+  # also changes the pod annotation mesh.platform.koorikla.io/group (catalog clusterLabelParameters), so that rollout
+  # always happens, even if nothing else in the pod template changed.
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  podAnnotations: {}
   resources:
     requests:
       cpu: 50m

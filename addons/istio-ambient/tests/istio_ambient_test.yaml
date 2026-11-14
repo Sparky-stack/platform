@@ -100,3 +100,87 @@ tests:
     asserts:
       - isKind:
           of: DaemonSet
+
+  # --- multicluster wiring (docs/multicluster.md): what the chart does with the catalog's label parameters ---------
+  - it: "ztunnel rolls after istiod: Argo CD sync wave 1 on the DaemonSet (no imperative restart when a cluster joins)"
+    template: charts/ztunnel/templates/daemonset.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+
+  - it: "istiod stays in the default wave (0), so Argo waits for it to be Healthy before ztunnel"
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+
+  - it: "non-member (catalog defaults: network/meshID empty, flags false) - no NETWORK on ztunnel, no meshId"
+    set:
+      global: { network: "", meshID: "", multiCluster: { clusterName: prod-euc1 } }
+      istiod:
+        env: { AMBIENT_ENABLE_MULTI_NETWORK: "false", AMBIENT_ENABLE_BAGGAGE: "false", PILOT_DISABLE_SELF_SIGNED_CA: "false" }
+      ztunnel:
+        podAnnotations: { mesh.platform.koorikla.io/group: "" }
+    asserts:
+      - notMatchRegex: { path: 'spec.template.spec.containers[0].env[*].name', pattern: '^NETWORK$' }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ISTIO_META_CLUSTER_ID, value: prod-euc1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - equal: { path: 'spec.template.metadata.annotations["mesh.platform.koorikla.io/group"]', value: "" }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_MULTI_NETWORK, value: "false" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_DISABLE_SELF_SIGNED_CA, value: "false" }
+        template: charts/istiod/templates/deployment.yaml
+      - notMatchRegex: { path: data.mesh, pattern: 'meshId' }
+        template: charts/istiod/templates/configmap.yaml
+        documentSelector: { path: metadata.name, value: istio }
+
+  - it: "member (labels from mesh.group) - NETWORK, cluster ID, group annotation, meshId, multi-network istiod, no self-signed CA"
+    set:
+      global: { network: dev1, meshID: local, multiCluster: { clusterName: dev1 } }
+      istiod:
+        env: { AMBIENT_ENABLE_MULTI_NETWORK: "true", AMBIENT_ENABLE_BAGGAGE: "true", PILOT_DISABLE_SELF_SIGNED_CA: "true" }
+      ztunnel:
+        podAnnotations: { mesh.platform.koorikla.io/group: local }
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: NETWORK, value: dev1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ISTIO_META_CLUSTER_ID, value: dev1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - equal: { path: 'spec.template.metadata.annotations["mesh.platform.koorikla.io/group"]', value: local }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_MULTI_NETWORK, value: "true" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_BAGGAGE, value: "true" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_DISABLE_SELF_SIGNED_CA, value: "true" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CLUSTER_ID, value: dev1 }
+        template: charts/istiod/templates/deployment.yaml
+      - matchRegex: { path: data.mesh, pattern: 'meshId: local' }
+        template: charts/istiod/templates/configmap.yaml
+        documentSelector: { path: metadata.name, value: istio }
+
+  - it: "istiod never starts Secret informers on peer clusters (peers' reader role has no Secret access)"
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER, value: "false" }

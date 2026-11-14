@@ -63,6 +63,7 @@ assert_match "$ia_params" 'global.network=\{\{ index .metadata.labels "mesh.plat
 assert_match "$ia_params" 'global.meshID=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "istio-ambient meshID comes from the mesh group label"
 assert_match "$ia_params" 'istiod.env.AMBIENT_ENABLE_MULTI_NETWORK=.*addons.platform.koorikla.io/istio-eastwest.*else \}\}false' "ambient multi-network only on istio-eastwest clusters"
 assert_match "$ia_params" 'istiod.env.PILOT_DISABLE_SELF_SIGNED_CA=.*addons.platform.koorikla.io/istio-eastwest' "mesh members never fall back to a self-signed root"
+assert_match "$ia_params" 'ztunnel.podAnnotations.mesh\\.platform\\.koorikla\\.io/group=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "a group change rolls ztunnel (pod annotation from the mesh group label)"
 assert_match "$ia_params" 'global.multiCluster.clusterName=\{\{ index .metadata.labels "platform.koorikla.io/name" \}\}' "istio clusterName == cluster name"
 ew_sel=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-eastwest") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == "addons.platform.koorikla.io/istio-eastwest") | .operator' "$TMP/platform.yaml")
 assert_eq "$ew_sel" "In" "addon-istio-eastwest is opt-in by label"

@@ -210,18 +210,22 @@ encryption.
 | example (echo + 2 callers, only where enabled) | 15m | 24Mi |
 
 ## Turning it on for running clusters (dev1, prod1)
-Adding `mesh.group` to live clusters is handled by Argo CD and CAPI. A few things happen once, with a short in-mesh
-disruption:
+Adding `mesh.group` to live clusters is handled entirely by Argo CD and CAPI; there is no manual step. Order of events:
 1. The Cluster labels change. ESO refreshes the Argo CD cluster secret (1m), and the istio-ambient Application
-   re-renders. istiod rolls out with the new env (multi-network, no self-signed CA) and ztunnel with the new
-   network/cluster ID.
+   re-renders: istiod gets the new env (multi-network, no self-signed CA), ztunnel the new network/cluster ID and the
+   pod annotation `mesh.platform.koorikla.io/group`.
 2. In parallel, mgmt issues the intermediate and the CRS delivers `cacerts`. The new istiod pod starts only once
    `cacerts` exists (`PILOT_DISABLE_SELF_SIGNED_CA`). Its log shows `Using kubernetes.io/tls secret type for signing
-   ca files`.
-3. Workload certificates held by ztunnel were signed by the old self-signed root. Restart ztunnel once istiod is on
-   the plugged-in CA, so in-mesh mTLS (the OpenChoreo app namespaces too) uses the shared root everywhere. Kubernetes
-   offers no declarative one-shot restart. Fresh clusters never need this, because `cacerts` arrives before istiod
-   first starts.
+   ca files`. The old istiod keeps serving until then.
+3. ztunnel's DaemonSet carries `argocd.argoproj.io/sync-wave: "1"` (addons/istio-ambient/values.yaml), so Argo CD
+   applies it only after the wave-0 resources, istiod included, are Healthy - i.e. after istiod runs on the plugged-in
+   CA. The ztunnel rollout (its pod template changed in step 1) is the restart: the new pods fetch workload
+   certificates chained to the group root, so in-mesh mTLS (OpenChoreo cell namespaces too) never mixes roots. Leaving
+   or changing a group changes the pod annotation, so that rollout happens as well.
+   Caveat: if `cacerts` takes longer than istiod's `progressDeadlineSeconds` (600s), the sync fails and Argo retries
+   (limit 10, backoff up to 5m); ztunnel stays on the old config until istiod is Healthy. Watch
+   `kubectl -n argocd get application istio-ambient-<cluster>`; nothing needs to be run by hand.
+Fresh clusters get `cacerts` before istiod first starts, so the same ordering simply delays ztunnel until istiod is up.
 
 ## VERIFY on the first live run
 `grep -rn VERIFY docs/multicluster.md addons/istio-eastwest addons/mesh-root-ca charts/cluster/templates/mesh-*`
