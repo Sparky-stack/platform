@@ -1,5 +1,5 @@
-{{- /* k3s on CAPD (local tests). Always rendered: CAPD is the tested path. */ -}}
-{{- $ns := .Values.namespace }}
+{{- /* k3s on CAPD (local tests). Rendered unless the installation sets capi.providers.docker=false: without CAPD the
+     Docker*Template CRDs do not exist and the sync would fail (aws-example, hetzner-example). */ -}}
 
 {{- define "k3s-docker.cluster" -}}
 template:
@@ -36,6 +36,8 @@ template:
       - mkdir -p /etc/systemd/system/k3s-agent.service.d && printf '[Service]\nType=exec\n' > /etc/systemd/system/k3s-agent.service.d/capd.conf
 {{- end }}
 
+{{- if ne (toString .Values.capi.providers.docker) "false" }}
+{{- $ns := .Values.namespace }}
 {{- $clusterName := include "clusterclasses.templateName" (list "k3s-docker" (include "k3s-docker.cluster" .)) }}
 {{- $cpMachineName := include "clusterclasses.templateName" (list "k3s-docker-control-plane" (include "k3s-docker.machine" .)) }}
 {{- $workerMachineName := include "clusterclasses.templateName" (list "k3s-docker-worker" (include "k3s-docker.machine" .)) }}
@@ -169,3 +171,4 @@ metadata:
     {{- include "clusterclasses.annotations" . | nindent 4 }}
 spec:
   {{- include "k3s-docker.machine" . | nindent 2 }}
+{{- end }}

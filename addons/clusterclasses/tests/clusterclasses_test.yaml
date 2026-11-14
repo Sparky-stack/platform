@@ -25,6 +25,12 @@ tests:
       - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-hetzner, namespace: fleet, any: true }
         template: templates/k3s-hetzner.yaml
 
+  - it: skips k3s-docker when the installation disables CAPD
+    template: templates/k3s-docker.yaml
+    set: { capi.providers: { docker: false, aws: true } }
+    asserts:
+      - hasDocuments: { count: 0 }
+
   # --- k3s-docker --------------------------------------------------------------------------------------------------
   - it: k3s-docker uses CAPD v1beta2 and cluster-api-k3s v1beta2 templates with hash-suffixed names
     template: templates/k3s-docker.yaml

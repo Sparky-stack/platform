@@ -1,0 +1,26 @@
+# Development + staging data plane on AWS (k3s on CAPA). Schema: charts/cluster/values.yaml, docs/providers.md.
+name: dev-euc1
+provider: aws
+region: eu-central-1
+environment: development
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 1
+  machineType: t3.large
+workers:
+  - name: md-0
+    replicas: 1
+    machineType: t3.large
+providerSpec:
+  # Ubuntu 24.04 LTS amd64 in eu-central-1 - VERIFY (aws ssm get-parameter --name
+  # /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id)
+  ami: ami-0123456789abcdef0
+  sshKeyName: ""                              # no SSH; use SSM Session Manager if needed
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev.apps.aws.example.com
+    gatewayPort: 443
+    environments: [development, staging]
+addonsRevision: HEAD
+addons: {}

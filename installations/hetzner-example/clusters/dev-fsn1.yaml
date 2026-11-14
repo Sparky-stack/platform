@@ -1,0 +1,23 @@
+# Development + staging data plane on Hetzner Cloud (k3s on CAPH). Schema: charts/cluster/values.yaml.
+name: dev-fsn1
+provider: hetzner
+region: fsn1                                  # fsn1 | nbg1 | hel1 (eu-central) | ash | hil | sin
+environment: development
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 1
+  machineType: cpx31
+workers:
+  - name: md-0
+    replicas: 1
+    machineType: cpx31
+providerSpec:
+  sshKey: platform                            # name of an SSH key in the Hetzner project (VERIFY)
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev.apps.hetzner.example.com
+    gatewayPort: 443
+    environments: [development, staging]
+addonsRevision: HEAD
+addons: {}

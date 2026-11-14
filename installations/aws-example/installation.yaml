@@ -1,0 +1,37 @@
+# Installation "aws-example": reference only - renders and schema-checks, never booted (no credentials).
+# mgmt is any conformant cluster in the AWS account (e.g. EKS), installed with `make up`-equivalent bootstrap;
+# workload clusters are CAPA k3s clusters (ClusterClass k3s-aws). Adding a cluster: docs/providers.md.
+installation:
+  name: aws-example
+  repoURL: https://github.com/koorikla/platform.git
+  revision: main
+  githubOrg: https://github.com/koorikla
+  domain: aws.example.com                     # VERIFY: a Route 53 zone you own
+
+mgmt:
+  name: mgmt
+  provider: aws
+  region: eu-central-1
+  environment: mgmt
+  addons: {}
+
+secrets:
+  backend: aws                                # ClusterSecretStore/platform -> AWS Secrets Manager
+  aws:
+    region: eu-central-1
+    # ESO authenticates with its pod identity (IRSA / EKS Pod Identity); no static keys. VERIFY shape vs secret-stores
+    role: arn:aws:iam::111111111111:role/platform-external-secrets
+  nodeRegistryAuth:
+    enabled: true                             # k3s registries.yaml for ghcr.io from key platform-ghcr
+
+capi:
+  providers:
+    docker: false
+    aws: true                                 # CAPA v2.13.1; credentials: key capi-aws (AWS_B64ENCODED_CREDENTIALS)
+    hetzner: false
+
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.aws.example.com
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.aws.example.com/ws   # VERIFY port/path with OC 1.3.3

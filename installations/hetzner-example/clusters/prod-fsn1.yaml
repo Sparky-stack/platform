@@ -1,0 +1,24 @@
+# Production data plane on Hetzner Cloud: HA control plane (3 servers, spread placement group).
+name: prod-fsn1
+provider: hetzner
+region: fsn1
+environment: production
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 3
+  machineType: cpx31
+workers:
+  - name: md-0
+    replicas: 3
+    machineType: cpx41
+providerSpec:
+  sshKey: platform
+  image: ubuntu-24.04
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: apps.hetzner.example.com
+    gatewayPort: 443
+    environments: [production]
+addonsRevision: HEAD
+addons: {}
