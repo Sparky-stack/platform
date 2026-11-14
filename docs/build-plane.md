@@ -203,7 +203,7 @@ on mgmt for a handful of objects).
 | Object | Desired state |
 |---|---|
 | projects | `apps` (builds; scan on push, severity critical, system CVE allowlist), `apps-ghcr` (replication target), proxy-cache projects `dockerhub`, `ghcr`, `quay`, `k8s`, `openchoreo`, `gcr`; all private |
-| registries | one endpoint per upstream; `ghcr.io` with `platform-ghcr` credentials |
+| registries | one endpoint per upstream; `ghcr.io` anonymous by default, or with the credentials in `secrets.ghcrKey` (e.g. `platform-ghcr`, needed for private packages and replication) |
 | replication | `ghcr-koorikla`: pull `koorikla/**` from GHCR into `apps-ghcr` every 6h |
 | robots | `robot$builder` (push/pull `apps`, pull the rest), `robot$nodes` (pull all); secrets set from the secret backend |
 | system | CVE allowlist empty |
