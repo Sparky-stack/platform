@@ -103,4 +103,24 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
 done
 
+# 8. Local Harbor: bootstrap/k3d-mgmt.yaml publishes the registry.host port on the load balancer (loopback), else
+#    host docker login and CAPD node pulls through the serverlb fail. Negative check: a k3d file without it is caught.
+k3d_publishes() {   # k3d_publishes <k3d file> <port> -> yes|no
+  local p
+  p=$(PORT=$2 yq '[.ports[] | select((.port | test(":" + strenv(PORT) + ":" + strenv(PORT) + "$")) and (.nodeFilters[] == "loadbalancer"))] | length' "$1")
+  [[ "$p" -ge 1 ]] && echo yes || echo no
+}
+for inst_file in "$ROOT"/installations/*/installation.yaml; do
+  [[ "$(yq '.registry.type // ""' "$inst_file")" == harbor ]] || continue
+  [[ "$(yq '.mgmt.provider // "docker"' "$inst_file")" == docker ]] || continue
+  host=$(yq '.registry.host' "$inst_file")
+  port=443; [[ "$host" == *:* ]] && port=${host##*:}
+  assert_eq "$(k3d_publishes "$ROOT/bootstrap/k3d-mgmt.yaml" "$port")" yes \
+    "bootstrap/k3d-mgmt.yaml publishes registry port $port on the load balancer ($(basename "$(dirname "$inst_file")"))"
+  assert_match "$(yq ".ports[] | select(.port | test(\":$port:$port\$\")) | .port" "$ROOT/bootstrap/k3d-mgmt.yaml")" '^127\.0\.0\.1:' \
+    "registry port $port bound to loopback only"
+done
+yq 'del(.ports[] | select(.port | test(":9443:9443$")))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noharbor.yaml"
+assert_eq "$(k3d_publishes "$TMP/k3d-noharbor.yaml" 9443)" no "contract catches a k3d config without the registry port"
+
 finish
