@@ -1,0 +1,92 @@
+suite: mesh (opt-in Istio ambient multicluster) - PKI, cacerts and remote-secret delivery
+templates:
+  - templates/mesh-pki.yaml
+  - templates/mesh-crs.yaml
+  - templates/mesh-remote-secret.yaml
+  - templates/mesh-helpers.yaml
+values: [values/capi-docker.yaml]
+set:
+  mesh: { group: local }
+  mgmt: { addons: { mesh-root-ca: true } }
+tests:
+  - it: renders nothing without mesh.group
+    set:
+      mesh: { group: "" }
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: templates/mesh-pki.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/mesh-crs.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/mesh-remote-secret.yaml
+
+  - it: issues a per-cluster intermediate CA from the shared mesh root (Issuer mesh-root-ca)
+    template: templates/mesh-pki.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: Certificate }
+      - equal: { path: metadata.name, value: dev1-mesh-ca }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.isCA, value: true }
+      - equal: { path: spec.secretName, value: dev1-mesh-ca }
+      - equal: { path: spec.issuerRef, value: { kind: Issuer, name: mesh-root-ca } }
+      - contains: { path: spec.usages, content: cert sign }
+
+  - it: delivers cacerts + the network label to exactly this cluster via an ESO-templated CRS payload
+    template: templates/mesh-crs.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - isKind: { of: ExternalSecret }
+        documentIndex: 0
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
+        documentIndex: 0
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+        documentIndex: 0
+      - matchRegex: { path: 'spec.target.template.data["mesh-cacerts.yaml"]', pattern: 'topology.istio.io/network: dev1' }
+        documentIndex: 0
+      - matchRegex: { path: 'spec.target.template.data["mesh-cacerts.yaml"]', pattern: 'name: cacerts\n\s+namespace: istio-system' }
+        documentIndex: 0
+      - equal: { path: 'spec.data[*].remoteRef.key', value: dev1-mesh-ca }
+        documentIndex: 0
+      - isKind: { of: ClusterResourceSet }
+        documentIndex: 1
+      - equal: { path: spec.strategy, value: Reconcile }
+        documentIndex: 1
+      - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
+        documentIndex: 1
+      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-cacerts }] }
+        documentIndex: 1
+
+  - it: reads the istio-reader token with a SecretStore scoped to this cluster's istio-system (CAPI kubeconfig)
+    template: templates/mesh-remote-secret.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: SecretStore }
+      - equal: { path: metadata.name, value: dev1-mesh-reader }
+      - equal: { path: spec.provider.kubernetes.remoteNamespace, value: istio-system }
+      - equal: { path: spec.provider.kubernetes.authRef, value: { name: dev1-kubeconfig, key: value } }
+
+  - it: templates an Istio remote secret (token user, not the admin cert) from both stores
+    template: templates/mesh-remote-secret.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+      - matchRegex: { path: 'spec.target.template.data["remote-secret.yaml"]', pattern: 'istio/multiCluster: "true"' }
+      - matchRegex: { path: 'spec.target.template.data["remote-secret.yaml"]', pattern: 'name: istio-remote-secret-dev1' }
+      - matchRegex: { path: 'spec.target.template.data["remote-secret.yaml"]', pattern: '"token" \.token' }
+      - notMatchRegex: { path: 'spec.target.template.data["remote-secret.yaml"]', pattern: 'client-key-data' }
+      - equal: { path: 'spec.data[0].remoteRef', value: { key: dev1-kubeconfig, property: value } }
+      - equal: { path: 'spec.data[1].remoteRef', value: { key: istio-reader-service-account-istio-remote-secret-token, property: token } }
+      - equal: { path: 'spec.data[1].sourceRef.storeRef', value: { kind: SecretStore, name: dev1-mesh-reader } }
+
+  - it: publishes the remote secret to every other member of the group, never to itself
+    template: templates/mesh-remote-secret.yaml
+    documentIndex: 2
+    asserts:
+      - isKind: { of: ClusterResourceSet }
+      - equal: { path: spec.clusterSelector.matchLabels, value: { mesh.platform.koorikla.io/group: local } }
+      - equal:
+          path: spec.clusterSelector.matchExpressions
+          value: [{ key: platform.koorikla.io/name, operator: NotIn, values: [dev1] }]
+      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-remote-secret }] }

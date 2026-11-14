@@ -53,5 +53,7 @@ spec:
       kind: Certificate
     - group: external-secrets.io
       kind: ExternalSecret
+    - group: external-secrets.io
+      kind: SecretStore              # <name>-mesh-reader (charts/cluster mesh-remote-secret.yaml, opt-in mesh)
     - group: openchoreo.dev
       kind: Environment
