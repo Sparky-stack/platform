@@ -48,7 +48,7 @@ tasks:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} up'
 
   secrets:
-    desc: Seed/refresh platform-secrets from the gh CLI (local backend only)
+    desc: Seed/refresh platform-secrets from GITHUB_APP_* / PLATFORM_GITHUB_TOKEN / GHCR_* env (gh CLI fallback; local backend only)
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} secrets'
 
@@ -81,11 +81,11 @@ tasks:
       - '"{{.BASH}}" hack/kubeconfig.sh {{shellQuote .CLUSTER}}'
 
   set-repo:
-    desc: "Rewrite repoURL across bootstrap/, charts/, installations/ (REPO=https://github.com/<you>/platform.git)"
+    desc: "Point a fork at itself: repoURL, githubOrg, tenant app repos (REPO=https://github.com/<you>/platform.git [ORG=] [APPS_ORG=] [DOCS=1 [CI_ORG=]])"
     requires:
       vars: [REPO]
     cmds:
-      - '"{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
+      - 'ORG={{shellQuote (.ORG | default "")}} APPS_ORG={{shellQuote (.APPS_ORG | default "")}} DOCS={{shellQuote (.DOCS | default "0")}} CI_ORG={{shellQuote (.CI_ORG | default "")}} "{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
 
   # ---- offline validation -----------------------------------------------------------------------------------------
   lint:
