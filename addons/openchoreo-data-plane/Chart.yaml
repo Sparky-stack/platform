@@ -1,0 +1,9 @@
+apiVersion: v2
+name: openchoreo-data-plane
+description: OpenChoreo data plane on a workload cluster (cluster-agent + app Gateway); identity delivered by CAPI ClusterResourceSet
+type: application
+version: 0.1.0
+dependencies:
+  - name: openchoreo-data-plane
+    version: 1.3.3
+    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
