@@ -198,3 +198,26 @@ tests:
     set: { workers: [{ replicas: 1 }] }
     asserts:
       - failedTemplate: { errorPattern: "workers\\[0\\].name is required" }
+
+  - it: harbor registry adds registryCA and, on docker, the node host alias to the k3d serverlb
+    template: templates/capi-cluster.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    asserts:
+      - contains: { path: spec.topology.variables, content: { name: registryAuth, value: true } }
+      - contains: { path: spec.topology.variables, content: { name: registryCA, value: true } }
+      - contains: { path: spec.topology.variables, content: { name: registryHostAlias, value: harbor.openchoreo.localhost } }
+      - contains: { path: spec.topology.variables, content: { name: registryHostAliasTarget, value: k3d-platform-mgmt-serverlb } }
+
+  - it: harbor turns registryAuth on even without GHCR auth (the registries Secret exists)
+    template: templates/capi-cluster.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set: { secrets.nodeRegistryAuth.enabled: false }
+    asserts:
+      - contains: { path: spec.topology.variables, content: { name: registryAuth, value: true } }
+
+  - it: no host alias outside the docker provider
+    template: templates/capi-cluster.yaml
+    values: [values/capi-hetzner.yaml, values/registry-harbor.yaml]
+    asserts:
+      - contains: { path: spec.topology.variables, content: { name: registryCA, value: true } }
+      - notContains: { path: spec.topology.variables, content: { name: registryHostAliasTarget, value: k3d-platform-mgmt-serverlb } }

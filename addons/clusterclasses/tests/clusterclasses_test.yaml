@@ -82,14 +82,14 @@ tests:
     template: templates/k3s-docker.yaml
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
-      - equal: { path: "spec.patches[1].name", value: registryAuth }
-      - equal: { path: "spec.patches[1].enabledIf", value: "{{ .registryAuth }}" }
-      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].name", value: registryAuth }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].enabledIf", value: "{{ .registryAuth }}" }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
       - matchRegex:
-          path: "spec.patches[1].definitions[0].jsonPatches[0].valueFrom.template"
+          path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].valueFrom.template"
           pattern: 'name: "\{\{ \.builtin\.cluster\.name \}\}-registries"'
       - matchRegex:
-          path: "spec.patches[1].definitions[1].jsonPatches[0].valueFrom.template"
+          path: "spec.patches[?(@.name == \"registryAuth\")].definitions[1].jsonPatches[0].valueFrom.template"
           pattern: "path: /etc/rancher/k3s/registries.yaml"
 
   - it: changes template names when a template spec changes (immutable templates are rotated)
@@ -152,7 +152,7 @@ tests:
           path: "spec.template.spec.kthreesConfigSpec.files[0].path"
           value: /etc/rancher/k3s/config.yaml.d/10-cni.yaml
         documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
-      - equal: { path: "spec.patches[3].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
         documentSelector: { path: kind, value: ClusterClass }
 
   - it: k3s-hetzner limits region to Hetzner locations
@@ -197,18 +197,18 @@ tests:
     template: templates/k3s-docker.yaml
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
-      - equal: { path: "spec.patches[2].name", value: cni-flannel }
-      - equal: { path: "spec.patches[2].enabledIf", value: '{{ if eq .cni "flannel" }}true{{ end }}' }
-      - equal: { path: "spec.patches[2].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
-      - matchRegex: { path: "spec.patches[2].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: vxlan$" }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].name", value: cni-flannel }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].enabledIf", value: '{{ if eq .cni "flannel" }}true{{ end }}' }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
+      - matchRegex: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: vxlan$" }
 
   - it: "cni: flannel on hetzner keeps flannel's wireguard-native backend"
     template: templates/k3s-hetzner.yaml
     set: { capi.providers.hetzner: true }
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
-      - equal: { path: "spec.patches[4].name", value: cni-flannel }
-      - matchRegex: { path: "spec.patches[4].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: wireguard-native$" }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].name", value: cni-flannel }
+      - matchRegex: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: wireguard-native$" }
 
   - it: k3s-aws opens Cilium's node-to-node ports by default and only flannel VXLAN for cni=flannel
     template: templates/k3s-aws.yaml
@@ -223,9 +223,49 @@ tests:
             - { description: cilium health icmp, protocol: icmp, fromPort: -1, toPort: -1 }
             - { description: hubble peer (relay to agents), protocol: tcp, fromPort: 4244, toPort: 4244 }
         documentSelector: { path: kind, value: AWSClusterTemplate }
-      - equal: { path: "spec.patches[4].name", value: cni-flannel-security-groups }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel-security-groups\")].name", value: cni-flannel-security-groups }
         documentSelector: { path: kind, value: ClusterClass }
       - equal:
-          path: "spec.patches[4].definitions[0].jsonPatches[0].value"
+          path: "spec.patches[?(@.name == \"cni-flannel-security-groups\")].definitions[0].jsonPatches[0].value"
           value: [{ description: flannel vxlan, protocol: udp, fromPort: 8472, toPort: 8472 }]
         documentSelector: { path: kind, value: ClusterClass }
+
+  # --- registry (docs/build-plane.md) -------------------------------------------------------------------------------
+  - it: k3s-docker orders patches so cni-flannel (replaces the files list) runs before every files append
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[1].name", value: cni-flannel }
+      - equal: { path: "spec.patches[2].name", value: registryAuth }
+      - equal: { path: "spec.patches[3].name", value: registryCA }
+      - equal: { path: "spec.patches[4].name", value: registryHostAlias }
+
+  - it: cloud classes also run cni-flannel before the registry files
+    template: templates/k3s-hetzner.yaml
+    set: { capi.providers: { docker: false, hetzner: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[3].name", value: cni-flannel }
+      - equal: { path: "spec.patches[4].name", value: registryAuth }
+      - equal: { path: "spec.patches[5].name", value: registryCA }
+
+  - it: registryCA appends the registry CA public cert from Secret <cluster>-registries on both node kinds
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].enabledIf', value: "{{ .registryCA }}" }
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[0].jsonPatches[0].path', value: /spec/template/spec/kthreesConfigSpec/files/- }
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[1].jsonPatches[0].path', value: /spec/template/spec/files/- }
+      - matchRegex:
+          path: 'spec.patches[?(@.name == "registryCA")].definitions[1].jsonPatches[0].valueFrom.template'
+          pattern: '(?s)path: /etc/rancher/k3s/registry-ca.crt.*key: registry-ca.crt'
+
+  - it: registryHostAlias resolves the alias target via Docker DNS into /etc/hosts before k3s starts
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: 'spec.patches[?(@.name == "registryHostAlias")].enabledIf', value: "{{ if .registryHostAliasTarget }}true{{ end }}" }
+      - equal: { path: 'spec.patches[?(@.name == "registryHostAlias")].definitions[0].jsonPatches[0].path', value: /spec/template/spec/kthreesConfigSpec/preK3sCommands/- }
+      - matchRegex:
+          path: 'spec.patches[?(@.name == "registryHostAlias")].definitions[1].jsonPatches[0].valueFrom.template'
+          pattern: 'getent hosts \{\{ \.registryHostAliasTarget \}\}.*>> /etc/hosts'

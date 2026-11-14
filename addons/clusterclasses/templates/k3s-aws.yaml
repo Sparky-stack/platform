@@ -222,6 +222,8 @@ spec:
               path: /spec/template/spec/instanceType
               valueFrom:
                 variable: workerMachineType
+    # cni-flannel replaces the whole control-plane files list: it must run before every patch that appends files.
+    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
     - name: registryAuth
       enabledIf: {{`"{{ .registryAuth }}"`}}
       definitions:
@@ -240,7 +242,7 @@ spec:
                 names: [default-worker]
           jsonPatches:
             {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
-    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
+    {{- include "clusterclasses.registryCAPatch" . | nindent 4 }}
     - name: cni-flannel-security-groups
       enabledIf: {{`'{{ if eq .cni "flannel" }}true{{ end }}'`}}
       definitions:

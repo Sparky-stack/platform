@@ -14,6 +14,7 @@ mgmt:
   region: eu-central-1
   environment: mgmt
   addons:
+    harbor: "false"                           # registry.type external
     openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
 
 secrets:
@@ -24,6 +25,14 @@ secrets:
     role: arn:aws:iam::111111111111:role/platform-external-secrets
   nodeRegistryAuth:
     enabled: true                             # k3s registries.yaml for ghcr.io from key platform-ghcr
+
+# Image registry (docs/build-plane.md): no Harbor in this reference installation; in-cluster builds push to GHCR.
+# Switch to `type: harbor` (+ host, appsProject, proxyCache, mirror) and drop mgmt.addons.harbor to run Harbor on mgmt.
+registry:
+  type: external
+  external:
+    repository: ghcr.io/koorikla
+    credentialsKey: platform-ghcr
 
 capi:
   providers:
