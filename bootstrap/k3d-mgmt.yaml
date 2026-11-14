@@ -23,10 +23,10 @@ volumes:
       - server:*
 ports:
   # OpenChoreo console, API, and Thunder (HTTP over kgateway)
-  - port: 8080:8080
+  - port: 127.0.0.1:8080:8080   # loopback only: tailscaled holds :8443 on the tailnet IP of this host
     nodeFilters:
       - loadbalancer
   # OpenChoreo cluster-gateway (TLS passthrough from workload cluster-agents)
-  - port: 8443:8443
+  - port: 127.0.0.1:8443:8443   # agents reach it over docker network kind, not the host port
     nodeFilters:
       - loadbalancer
