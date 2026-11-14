@@ -2,7 +2,7 @@
 {{- $instValues := omit .Values "addons" -}}
 {{- $defaultRev := $inst.revision | default "HEAD" -}}
 {{- /* clusterServerParameters: <helm param>: <part of the Argo cluster secret's `server`> - goTemplate expressions
-evaluated by the ApplicationSet controller per cluster (sprig urlParse). hack/test.sh mirrors them. */ -}}
+evaluated by the ApplicationSet controller per cluster (sprig urlParse; VERIFY live). hack/test.sh mirrors them. */ -}}
 {{- $serverExpr := dict
   "url"  "{{ .server }}"
   "host" "{{ (urlParse .server).hostname }}"

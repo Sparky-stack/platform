@@ -15,6 +15,7 @@ cilium:
   # cluster: the catalog's clusterServerParameters set both keys from the Argo CD cluster secret's `server`
   # (= the CAPI kubeconfig endpoint: CAPD load balancer container, AWS ELB, Hetzner LB), reachable from every node.
   # (k3s' local 127.0.0.1:6444 proxy is not an option: it only runs on agents, not on servers.)
+  # Also serves hostPort (klipper servicelb on CAPD: OpenChoreo's gateway hostPort) without the portmap plugin. VERIFY
   kubeProxyReplacement: true
   k8sServiceHost: ""        # required; templates/validate.yaml fails the render when empty
   k8sServicePort: 6443
