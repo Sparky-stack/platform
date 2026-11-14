@@ -60,7 +60,7 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
 | `harbor` | admin/robot/chart secrets (docs/build-plane.md) | addon harbor, build pushes (`builder-secret`), node pulls (`nodes-secret`) |
-| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane); `cosign.pub` also the Kyverno platform key (addon kyverno-policies, ExternalSecret `platform-cosign-pub`) |
+| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane); `cosign.pub` is what `kyverno-policies` `imageVerification.platformKey.publicKey` must hold (installation value) |
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) |
 | `promotion-gate` | `client-secret` | ClusterWorkflow promotion-gate (Thunder client `openchoreo-promotion-gate`) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app repos only); per-run token scoped to one repo (docs/promotion.md) |

@@ -124,9 +124,12 @@ imageVerification:
   # reported elsewhere) instead of skipping signature verification.
   platformKey:
     enabled: true
-    publicKey: ""                          # PEM (cosign.pub); installations/<inst>/addons/kyverno-policies/values.yaml
+    publicKey: ""                          # PEM: cosign.pub of store key cosign-platform (the key the workflow plane signs
+                                           # with); installations/<inst>/addons/kyverno-policies/values.yaml. Local: empty
+                                           # (fresh key per bootstrap), docs/supply-chain.md "Wiring the key"
     rekor: false                           # in-cluster signing without a transparency log (cosign --tlog-upload=false)
-    attestations: []                       # [sbom, provenance] once the workflow plane emits them
+    attestations: []                       # workflow plane attests vuln + spdxjson (predicate https://spdx.dev/Document,
+                                           # not attestationTypes.sbom): add [vuln] once verified online
   attestationTypes:                        # in-toto predicate types (as listed by `cosign verify` on koorikla images)
     sbom: https://spdx.dev/Document/v2.3
     provenance: https://slsa.dev/provenance/v1

@@ -6,7 +6,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 | Stage | Control | State |
 |---|---|---|
 | Image build (GitHub) | koorikla/ci reusable workflow `container.yaml`: multi-arch build, Trivy scan, Sigstore keyless signature, SPDX SBOM, SLSA provenance, vuln attestation (cosign v3 bundles) | on (app repos) |
-| Image build (in-cluster) | OpenChoreo workflow plane: cosign with the platform key | planned (build plane) |
+| Image build (in-cluster) | OpenChoreo workflow plane: cosign with the platform key (`cosign-platform`), Trivy vuln + SPDX SBOM attestations, no public tlog (docs/build-plane.md) | on (mgmt); admission trust per installation (below) |
 | Admission, data planes | Kyverno `ImageValidatingPolicy` + `ValidatingPolicy` per environment | on: Audit dev/staging, Deny production |
 | Git sources (Argo CD) | AppProject `sourceIntegrity` GnuPG policy | example, off (`sourceIntegrity.enabled`) |
 | Helm / OCI charts (Argo CD) | not supported by Argo CD 3.6 | gap, see below |
@@ -39,6 +39,21 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   (a public cluster issuer with workload identity); that is the follow-up. **Without a public key the registry is not
   a trusted source at all**: its images fail `openchoreo-trusted-registries-*` (denied in production, reported
   elsewhere) instead of skipping signature verification. A key without `registry.host` fails rendering.
+  **Wiring the key** (installation value, not ESO): `cosign.pub` of store key `cosign-platform` goes into
+  `installations/<inst>/addons/kyverno-policies/values.yaml` as `imageVerification.platformKey.publicKey` (print it with
+  `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`). That suits
+  long-lived installations with a stable key (or, better, a KMS key). `installations/local` leaves it empty on purpose:
+  `task secrets` generates a fresh pair per mgmt cluster, so no committed key can match, and Harbor `apps/` images stay
+  untrusted on local workload clusters (Audit reports them, production denies them). Delivering `cosign.pub` through
+  ESO was considered and deferred: the local seed path (`secrets.workloadSeed`) copies whole keys, so it would ship the
+  encrypted private key and its password to every workload cluster, and Kyverno 1.20 `ImageValidatingPolicy` takes a
+  key inline (`data`), from KMS or from a CEL `expression`, not from a Secret reference. Verification from a workload
+  cluster also needs what Kyverno does not have there yet: resolving the registry host (coredns-local rewrites it on
+  mgmt only), trusting the mgmt-only Harbor CA, and pull credentials for the private `apps` project
+  (`imageVerification` has no registry credentials configured). Those three plus the key are one follow-up.
+  Attestations: `platformKey.attestations` stays `[]`: the workflow plane's SBOM attestation is `cosign attest --type
+  spdxjson` (predicate `https://spdx.dev/Document`), not the `https://spdx.dev/Document/v2.3` that koorikla/ci's GitHub
+  path emits; requiring `vuln` is possible once checked online against a Harbor-built image.
   `registry.type: external` installations push builds to `registry.external.repository`: trust it through
   `extraTrustedPrefixes` only together with a matching signature source.
 - **Digest pinning**: `requireDigest.Deny: true`. Production rejects tag-only references, development and staging only
