@@ -100,5 +100,6 @@ jobs:
             eval "$(mise activate bash --shims)"
             task doctor
             for _ in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done   # dockerd (DinD) starts async
+            docker info >/dev/null 2>&1 || { sudo tail -n 60 /tmp/dockerd.log; exit 1; }
             docker version --format 'docker engine {{.Server.Version}} {{.Server.Arch}}'
             task lint
