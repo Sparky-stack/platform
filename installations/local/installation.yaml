@@ -13,7 +13,8 @@ mgmt:
   provider: docker
   region: local
   environment: mgmt
-  addons: {}                                  # addons.platform.koorikla.io/<addon> overrides for mgmt
+  addons:                                     # addons.platform.koorikla.io/<addon> overrides for mgmt
+    mesh-root-ca: true                        # shared Istio mesh root for the fleet files' mesh.group (docs/multicluster.md)
 
 secrets:
   backend: kubernetes                         # kubernetes | aws | vault
@@ -39,3 +40,8 @@ openchoreo:
     enabled: true                              # false: no observabilityPlaneRef; disable the two addons too
     httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
     tlsPort: 11085
+
+# Examples (examples/<name>, applied by Argo CD to matching clusters; docs/multicluster.md "Example").
+examples:
+  eastwest:
+    enabled: true                              # echo on prod1, callers on dev1 (installations/local/examples/eastwest/)

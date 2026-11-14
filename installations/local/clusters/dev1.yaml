@@ -15,5 +15,7 @@ openchoreo:
     enabled: true
     gatewayHost: dev1.apps.localhost
     environments: [development, staging]
+mesh:
+  group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD
 addons: {}
