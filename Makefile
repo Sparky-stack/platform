@@ -1,41 +1,22 @@
-INST ?= local
-REPO ?= https://github.com/koorikla/platform.git
-OLD  := $(shell grep -m1 -oE 'https://github.com/[^ ]+\.git' bootstrap/root-app.yaml)
+# Shim for muscle memory and older docs: Taskfile.yml is the entrypoint (Make is not on Windows by default).
+# `make <target> [INST=..] [REPO=..] [CLUSTER=..]` runs `task <target>` with the same variables.
+TASK ?= $(shell command -v task 2>/dev/null || echo mise exec -- task)
+VARS := $(if $(INST),INST=$(INST)) $(if $(REPO),REPO=$(REPO)) $(if $(CLUSTER),CLUSTER=$(CLUSTER))
 
-.PHONY: up secrets argocd status ui down lint test schemas clean set-repo
+.PHONY: setup doctor up secrets argocd status ui down kubeconfig set-repo lint test schemas images-audit clean
 
-up:
-	./bootstrap/bootstrap.sh --inst $(INST) up
-
-secrets:
-	./bootstrap/bootstrap.sh --inst $(INST) secrets
-
-argocd:
-	./bootstrap/bootstrap.sh --inst $(INST) argocd
-
-status:
-	./bootstrap/bootstrap.sh --inst $(INST) status
-
-ui:
-	./bootstrap/bootstrap.sh --inst $(INST) ui
-
-down:
-	./bootstrap/bootstrap.sh --inst $(INST) down
-
-lint:
-	./hack/lint.sh
-
-test:
-	./hack/test.sh
-
-schemas:
-	./hack/schemas.sh
-
-clean:
-	rm -rf charts/*/charts addons/*/charts charts/*/*.tgz addons/*/*.tgz
-
-# Rewrite repoURL across bootstrap, charts, and installations (e.g. make set-repo REPO=https://github.com/you/platform.git).
-set-repo:
-	test -n "$(REPO)"
-	@echo "Rewriting $(OLD) -> $(REPO)"
-	grep -rlF "$(OLD)" bootstrap/ charts/ installations/ | xargs -r sed -i "s|$(OLD)|$(REPO)|g"
+setup:        ; @$(TASK) setup $(VARS)
+doctor:       ; @$(TASK) doctor $(VARS)
+up:           ; @$(TASK) up $(VARS)
+secrets:      ; @$(TASK) secrets $(VARS)
+argocd:       ; @$(TASK) argocd $(VARS)
+status:       ; @$(TASK) status $(VARS)
+ui:           ; @$(TASK) ui $(VARS)
+down:         ; @$(TASK) down $(VARS)
+kubeconfig:   ; @$(TASK) kubeconfig $(VARS)
+set-repo:     ; @$(TASK) set-repo $(VARS)
+lint:         ; @$(TASK) lint $(VARS)
+test:         ; @$(TASK) test $(VARS)
+schemas:      ; @$(TASK) schemas $(VARS)
+images-audit: ; @$(TASK) images:audit $(VARS)
+clean:        ; @$(TASK) clean $(VARS)

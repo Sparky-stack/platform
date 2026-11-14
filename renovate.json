@@ -22,6 +22,31 @@
     },
     {
       "customType": "regex",
+      "description": "Update versions annotated with # renovate: in mise.toml (non-mise tools such as helm plugins)",
+      "managerFilePatterns": [
+        "/^mise\\.toml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)(?:\\s+extractVersion=(?<extractVersion>[^\\s]+))?\\s*\\n\\s*[A-Z0-9_]+\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned mise binary version in CI workflows and the devcontainer",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/",
+        "/^\\.devcontainer/devcontainer\\.json$/"
+      ],
+      "matchStrings": [
+        "jdx/mise-action@[0-9a-f]{40}[^\\n]*\\n(?:\\s+[a-z_]+:[^\\n]*\\n)*?\\s+version:\\s*(?<currentValue>[0-9.]+)",
+        "\"MISE_VERSION\":\\s*\"v(?<currentValue>[0-9.]+)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "jdx/mise",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
       "description": "Update k3s kubernetesVersion in installation cluster files",
       "managerFilePatterns": [
         "/^installations/[^/]+/clusters/[^/]+\\.ya?ml$/"

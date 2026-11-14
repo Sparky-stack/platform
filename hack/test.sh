@@ -3,12 +3,15 @@
 # kubeconform -strict with CRD schemas, helm unittest, and contract tests.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
 
-for bin in helm yq kubeconform python3; do
+for bin in helm yq kubeconform; do
   command -v "$bin" >/dev/null || { echo "missing required tool: $bin" >&2; exit 1; }
 done
+pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
 
-SCHEMAS_DIR="${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}"
+SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 export SCHEMAS_DIR
 
 # 1. Build deps (cached) before linting, templating, schemas, or helm unittest
@@ -34,7 +37,7 @@ server_param_args() {
   local addon="$1" server="$2" p part v
   while IFS=$'\t' read -r p part; do
     [[ -n "$p" ]] || continue
-    v=$(python3 -c 'import sys,urllib.parse as u;s=sys.argv[1];x=u.urlsplit(s);print({"url":s,"host":x.hostname,"port":x.port or 443}[sys.argv[2]])' "$server" "$part")
+    v=$(py -c 'import sys,urllib.parse as u;s=sys.argv[1];x=u.urlsplit(s);print({"url":s,"host":x.hostname,"port":x.port or 443}[sys.argv[2]])' "$server" "$part")
     if [[ "$part" == "port" ]]; then printf '%s\n' --set "${p}=${v}"; else printf '%s\n' --set-string "${p}=${v}"; fi
   done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
 }
@@ -60,8 +63,9 @@ for dir in charts/* addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   if [[ "$dir" != "charts/cluster" ]]; then
     echo "==> helm lint $dir"
-    mapfile -t lint_sets < <(server_param_args "$(basename "$dir")" "$SAMPLE_SERVER")
-    helm lint "$dir" "${lint_sets[@]}" >/dev/null
+    lint_sets=()
+    read_lines lint_sets server_param_args "$(basename "$dir")" "$SAMPLE_SERVER"
+    helm lint "$dir" ${lint_sets[@]+"${lint_sets[@]}"} >/dev/null
   fi
 done
 
@@ -103,15 +107,17 @@ for dir in addons/*; do
   addon=$(basename "$dir")
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" charts/platform/values.yaml)
 
-  mapfile -t cn_params < <(yq ".addons[\"$addon\"].clusterNameParameters[]?" charts/platform/values.yaml || true)
+  cn_params=()
+  read_lines cn_params yq ".addons[\"$addon\"].clusterNameParameters[]?" charts/platform/values.yaml
   standalone_sets=()
-  for p in "${cn_params[@]}"; do
+  for p in ${cn_params[@]+"${cn_params[@]}"}; do
     [[ -n "$p" ]] && standalone_sets+=(--set-string "${p}=sample" --set-string cluster.name=sample)
   done
-  mapfile -t sp_args < <(server_param_args "$addon" "$SAMPLE_SERVER")
-  standalone_sets+=("${sp_args[@]}")
+  sp_args=()
+  read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
+  standalone_sets+=(${sp_args[@]+"${sp_args[@]}"})
 
-  helm template "$addon" "$dir" --namespace "$ns" "${standalone_sets[@]}" > "$TMP/addon-$addon-standalone.yaml"
+  helm template "$addon" "$dir" --namespace "$ns" ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
   check_kubeconform "addons/$addon (standalone)" "$TMP/addon-$addon-standalone.yaml"
 
   roles_raw=$(yq ".addons[\"$addon\"].roles[]?" charts/platform/values.yaml || true)
@@ -145,16 +151,17 @@ for dir in addons/*; do
         done
         # Same precedence as the ApplicationSet: valueFiles < valuesObject (installation + cluster.*) < parameters
         vargs+=(--values "$inst_dir/installation.yaml" --set-string "cluster.name=$m_name,cluster.role=mgmt,cluster.provider=$m_prov,cluster.environment=$m_env,cluster.cni=$m_cni,cluster.region=$(yq '.mgmt.region // "local"' "$inst_dir/installation.yaml")")
-        for p in "${cn_params[@]}"; do
+        for p in ${cn_params[@]+"${cn_params[@]}"}; do
           [[ -n "$p" ]] && vargs+=(--set-string "${p}=$m_name")
         done
         while IFS=$'\t' read -r ip it; do
           [[ -n "$ip" ]] || continue
-          iv=$(yq -o=json "$inst_dir/installation.yaml" | python3 -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
+          iv=$(yq -o=json "$inst_dir/installation.yaml" | py -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
           vargs+=(--set "${ip}=${iv}")   # Argo helm parameters are --set (typed), not --set-string
         done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
-        mapfile -t sp_args < <(server_param_args "$addon" "$MGMT_SERVER")
-        vargs+=("${sp_args[@]}")
+        sp_args=()
+        read_lines sp_args server_param_args "$addon" "$MGMT_SERVER"
+        vargs+=(${sp_args[@]+"${sp_args[@]}"})
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-mgmt.yaml"
         check_kubeconform "addons/$addon ($inst/mgmt)" "$TMP/addon-$addon-$inst-mgmt.yaml"
       fi
@@ -189,16 +196,17 @@ for dir in addons/*; do
           [[ -f "$vf" ]] && vargs+=(--values "$vf")
         done
         vargs+=(--values "$inst_dir/installation.yaml" --set-string "cluster.name=$c_name,cluster.role=workload,cluster.provider=$c_prov,cluster.environment=$c_env,cluster.cni=$c_cni,cluster.region=$(yq '.region // "local"' "$cf")")
-        for p in "${cn_params[@]}"; do
+        for p in ${cn_params[@]+"${cn_params[@]}"}; do
           [[ -n "$p" ]] && vargs+=(--set-string "${p}=$c_name")
         done
         while IFS=$'\t' read -r ip it; do
           [[ -n "$ip" ]] || continue
-          iv=$(yq -o=json "$inst_dir/installation.yaml" | python3 -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
+          iv=$(yq -o=json "$inst_dir/installation.yaml" | py -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
           vargs+=(--set "${ip}=${iv}")   # Argo helm parameters are --set (typed), not --set-string
         done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
-        mapfile -t sp_args < <(server_param_args "$addon" "$SAMPLE_SERVER")
-        vargs+=("${sp_args[@]}")
+        sp_args=()
+        read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
+        vargs+=(${sp_args[@]+"${sp_args[@]}"})
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"
       done

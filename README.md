@@ -16,6 +16,7 @@ observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents 
 | [docs/conventions.md](docs/conventions.md) / [AGENTS.md](AGENTS.md) | invariants, labels, names - the contracts every change keeps |
 | [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
 | [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md) | per-area details |
+| [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
 
 Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app), [koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows).
 
@@ -32,33 +33,40 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
 
 ## Prerequisites
 
-- `kubectl`, `helm` (with `helm-unittest` plugin for tests), `yq`, `kubeconform`
-- Local installation (`INST=local`): `docker`, `k3d`, `gh` (authenticated; add `read:packages` only if your GHCR images are private)
+- [mise](https://mise.jdx.dev) and Docker (Docker Desktop, OrbStack or Colima on macOS/Windows; Docker Engine on Linux).
+  `mise install` installs every other tool at the version pinned in [`mise.toml`](mise.toml) (kubectl, helm +
+  helm-unittest, k3d, clusterctl, yq, kubeconform, gh, task, ...). Works on macOS, Linux and Windows (WSL2 or Git Bash),
+  amd64 and arm64; or open the repo in the devcontainer / Codespaces. Details: [docs/dev-environment.md](docs/dev-environment.md).
+- `gh auth login` for the local installation (add `read:packages` only if your GHCR images are private).
 
 ## Local quickstart
 
 ```bash
+mise install  # once: the pinned toolchain (`task doctor` checks it)
 # Point repoURL at your fork if needed:
-# make set-repo REPO=https://github.com/<you>/platform.git
+# task set-repo REPO=https://github.com/<you>/platform.git
 
-make up       # Create k3d platform-mgmt (network: kind, loopback ports 8080/8443/11080/11085), seed secrets, install Argo CD, apply root-app
-make status   # Check CAPI clusters, Argo CD apps, ClusterDataPlanes, UI port-forward + admin password
-make down     # Delete CAPD workload clusters gracefully, then delete k3d platform-mgmt
+task up       # Create k3d platform-mgmt (network: kind, loopback ports 8080/8443/11080/11085), seed secrets, install Argo CD, apply root-app
+task status   # Check CAPI clusters, Argo CD apps, ClusterDataPlanes, UI port-forward + admin password
+task down     # Delete CAPD workload clusters gracefully, then delete k3d platform-mgmt
 ```
+
+`task --list` shows every entrypoint; `make <target>` still works (the Makefile is a shim for `task <target>`).
 
 Individual bootstrap stages:
 
-- `make secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `openchoreo`) from `gh` CLI (preserves existing `openchoreo` secret keys)
-- `make argocd` — install/upgrade Argo CD (`addons/argo-cd`) and apply `bootstrap/root-app.yaml`
+- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `openchoreo`) from `gh` CLI (preserves existing `openchoreo` secret keys)
+- `task argocd` — install/upgrade Argo CD (`addons/argo-cd`) and apply `bootstrap/root-app.yaml`
+- `task ui` — Argo CD UI on http://localhost:8081; `task kubeconfig CLUSTER=dev1` — host-usable kubeconfig of a CAPD cluster
 
 ## Cloud installations (AWS / Hetzner)
 
 `installations/aws-example` and `installations/hetzner-example` target any existing management cluster in your current kubeconfig context:
 
 ```bash
-make up INST=aws-example
+task up INST=aws-example
 # or
-make up INST=hetzner-example
+task up INST=hetzner-example
 ```
 
 When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation and local `platform-secrets` seeding, installs Argo CD with `addons/argo-cd/values.yaml`, optionally seeds the bootstrap repo secret from `GITHUB_USER`/`GITHUB_TOKEN` if set, and applies `root-app.yaml` pointing at `installations/<inst>/installation.yaml`.
@@ -72,6 +80,7 @@ When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation an
 ## Offline validation
 
 ```bash
-make lint     # Build chart deps, helm lint all charts, validate YAML + shellcheck
-make test     # Full offline validation: helm template across all installations/clusters, kubeconform -strict, helm unittest, contract tests
+task lint          # Build chart deps, helm lint all charts, validate YAML, shellcheck, actionlint
+task test          # Full offline validation: helm template across all installations/clusters, kubeconform -strict, helm unittest, contract tests
+task images:audit  # Every image of the installation published for linux/amd64 + linux/arm64
 ```
