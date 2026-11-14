@@ -45,47 +45,47 @@ tasks:
   up:
     desc: "Bootstrap INST (default local: k3d mgmt, seed secrets, Argo CD, root app)"
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} up'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} up'
 
   secrets:
     desc: Seed/refresh platform-secrets from the gh CLI (local backend only)
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} secrets'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} secrets'
 
   argocd:
     desc: Install/upgrade Argo CD and apply the root Application
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} argocd'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} argocd'
 
   status:
     desc: Show CAPI clusters, Argo CD apps, ClusterDataPlanes and the Argo CD admin password
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} status'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} status'
 
   ui:
     desc: Port-forward the Argo CD UI to http://localhost:8081 and open it (NO_BROWSER=1 to skip)
     interactive: true
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} ui'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} ui'
 
   down:
     desc: Delete the CAPD workload clusters, then the k3d mgmt cluster (local only)
     cmds:
-      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{.INST}} down'
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} down'
 
   kubeconfig:
     desc: "Write <CLUSTER>.kubeconfig for a CAPD workload cluster, usable from this host (CLUSTER=dev1)"
     requires:
       vars: [CLUSTER]
     cmds:
-      - '"{{.BASH}}" hack/kubeconfig.sh {{.CLUSTER}}'
+      - '"{{.BASH}}" hack/kubeconfig.sh {{shellQuote .CLUSTER}}'
 
   set-repo:
     desc: "Rewrite repoURL across bootstrap/, charts/, installations/ (REPO=https://github.com/<you>/platform.git)"
     requires:
       vars: [REPO]
     cmds:
-      - '"{{.BASH}}" hack/set-repo.sh {{.REPO}}'
+      - '"{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
 
   # ---- offline validation -----------------------------------------------------------------------------------------
   lint:
