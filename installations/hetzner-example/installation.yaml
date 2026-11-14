@@ -14,6 +14,7 @@ mgmt:
   region: fsn1
   environment: mgmt
   addons:
+    harbor: "false"                           # registry.type external
     openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
     # external-dns: "true"                    # opt-in per cluster (mgmt + workload) once Cloudflare zone + token exist
 
@@ -30,6 +31,14 @@ secrets:
   nodeRegistryAuth:
     enabled: true
 
+# Image registry (docs/build-plane.md): no Harbor in this reference installation; in-cluster builds push to GHCR.
+# Switch to `type: harbor` (+ host, appsProject, proxyCache, mirror) and drop mgmt.addons.harbor to run Harbor on mgmt.
+registry:
+  type: external
+  external:
+    repository: ghcr.io/koorikla
+    credentialsKey: platform-ghcr
+
 capi:
   providers:
     docker: false
@@ -41,6 +50,8 @@ openchoreo:
   controlPlane:
     host: openchoreo.hetzner.example.com
     clusterGatewayURL: wss://cluster-gateway.openchoreo.hetzner.example.com/ws   # VERIFY port/path with OC 1.3.3
+  workflowPlane:
+    enabled: true         # addon openchoreo-workflow-plane on mgmt; builds push to registry.external.repository
   observability:
     enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
     httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation

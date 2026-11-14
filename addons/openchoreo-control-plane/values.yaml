@@ -58,7 +58,9 @@ openchoreo-control-plane:
         - openchoreo.localhost
     features:
       workflows:
-        enabled: false          # platform: no workflow plane in v1 (docs/openchoreo.md "Adding planes"). VERIFY console
+        # platform: Build tab, WorkflowRuns + logs (workflow plane on mgmt, docs/build-plane.md). Set per installation by
+        # the catalog from installation.yaml openchoreo.workflowPlane.enabled.
+        enabled: true
       observability:
         # platform: Metrics/Traces/Runtime Logs tabs + RuntimeHealthCard. Backstage asks openchoreo-api for the
         # environment's ClusterObservabilityPlane observerURL (addon openchoreo-observability-plane); no URL here.

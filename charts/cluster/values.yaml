@@ -43,3 +43,22 @@ secrets:
     enabled: true
     registry: ghcr.io
     key: platform-ghcr
+
+# Image registry of the installation (installation.yaml `registry`; docs/build-plane.md). type harbor + host: nodes
+# trust the registry CA, authenticate as Harbor robot `nodeRegistry.robot` and (mirror.enabled) pull docker.io, ghcr.io,
+# ... through Harbor proxy-cache projects with upstream fallback. type external: none of that (plain upstream pulls,
+# auth via secrets.nodeRegistryAuth only).
+registry:
+  type: external
+  host: ""                    # e.g. harbor.openchoreo.localhost:9443
+  proxyCache: []              # [{upstream: docker.io, project: dockerhub}, ...]
+  mirror:
+    enabled: false
+  nodeHostAlias: ""           # docker provider only: container whose IP the registry name resolves to on CAPD nodes
+nodeRegistry:                 # Harbor node pulls (platform-side names, rarely changed)
+  robot: robot$nodes          # == addons/harbor config.robots[name=nodes] with Harbor's robot$ prefix
+  secretKey: harbor           # ClusterSecretStore platform key ...
+  secretProperty: nodes-secret   # ... and property holding the robot secret
+  caStore: mgmt-harbor        # ClusterSecretStore with name-scoped read of the CA publication Secret (addons/harbor)
+  caSecret: harbor-ca-bundle  # ca.crt = registry CA public cert
+  caFile: /etc/rancher/k3s/registry-ca.crt   # == ClusterClass registryCA file path

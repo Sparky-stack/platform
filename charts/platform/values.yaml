@@ -33,6 +33,11 @@ openchoreo:
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
   observability:
     enabled: false
+  workflowPlane:
+    enabled: false
+registry:
+  type: external
+  host: ""
 dns:
   provider: none              # none | route53 | cloudflare (docs/dns.md)
   domainFilters: []
@@ -48,7 +53,7 @@ addons:
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
   kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
-  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}' } }
+  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}', openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}' } }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
   openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' } }
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
@@ -74,3 +79,8 @@ addons:
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
   kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }
+  # Build plane (docs/build-plane.md): OpenChoreo workflow plane (in-cluster builds, primary path) and the Harbor
+  # registry builds push to and nodes pull through. harbor is for installation.yaml registry.type harbor (examples set
+  # mgmt.addons.harbor "false"); externalURL follows registry.host.
+  openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true }
+  harbor:                   { namespace: harbor,                   roles: [mgmt],           default: true, installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }

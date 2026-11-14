@@ -1,0 +1,213 @@
+{{- /*
+Per-stack component ClusterWorkflows (values.yaml buildWorkflows.stacks). A Component selects one in spec.workflow
+(kind ClusterWorkflow, name <stack>) if its ClusterComponentType allows it; a WorkflowRun (Backstage "Build", occ, or
+an autoBuild webhook) renders runTemplate into an Argo Workflow on the ClusterWorkflowPlane, running ClusterWorkflowTemplate
+koorikla-build (addon openchoreo-workflow-plane). Parameters marked x-openchoreo-component-parameter-repository-* are
+what Backstage and the autoBuild webhook matcher read. Defaults carry the platform's choices; developers override per
+Component. CEL (${...}) is evaluated by OpenChoreo per run; ESO templates ({{ }}) by ESO.
+*/ -}}
+{{- if .Values.buildWorkflows.enabled }}
+{{- $b := .Values.buildWorkflows }}
+{{- $host := include "build.registryHost" . }}
+{{- $prefix := include "build.repoPrefix" . }}
+{{- $harbor := eq (toString .Values.registry.type) "harbor" }}
+{{- $urlPattern := include "build.repoUrlPattern" . }}
+{{- $relPath := include "build.relPathPattern" . }}
+{{- $refPattern := "^[A-Za-z0-9_][A-Za-z0-9._/-]*$" }}
+{{- range $st := $b.stacks }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterWorkflow
+metadata:
+  name: {{ $st.name }}
+  labels:
+    openchoreo.dev/workflow-type: component
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    openchoreo.dev/display-name: {{ $st.displayName | quote }}
+    openchoreo.dev/description: {{ $st.description | quote }}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  workflowPlaneRef:
+    kind: ClusterWorkflowPlane
+    name: {{ $b.workflowPlane }}
+  ttlAfterCompletion: {{ $b.ttlAfterCompletion | quote }}
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          type: object
+          description: Git repository of the component (allowed repositories authenticate with the platform's build credentials)
+          required: [url]
+          properties:
+            url:
+              type: string
+              description: {{ printf "Git repository URL, under %s" (include "build.gitPrefixes" $) | quote }}
+              pattern: {{ $urlPattern | toJson }}
+              x-openchoreo-component-parameter-repository-url: true
+            revision:
+              type: object
+              default: {}
+              properties:
+                branch:
+                  type: string
+                  default: main
+                  pattern: {{ $refPattern | toJson }}
+                  description: Branch to build (and to commit the new image ref to)
+                  x-openchoreo-component-parameter-repository-branch: true
+                commit:
+                  type: string
+                  default: ""
+                  pattern: "^([0-9a-f]{7,40})?$"
+                  description: "Commit to build (default: branch head)"
+                  x-openchoreo-component-parameter-repository-commit: true
+            appPath:
+              type: string
+              default: "."
+              pattern: {{ $relPath | toJson }}
+              description: Application directory within the repository
+              x-openchoreo-component-parameter-repository-app-path: true
+        docker:
+          type: object
+          default: {}
+          properties:
+            context:
+              type: string
+              default: "."
+              pattern: {{ $relPath | toJson }}
+              description: Build context, relative to the repository root
+            filePath:
+              type: string
+              default: Dockerfile
+              pattern: {{ $relPath | toJson }}
+              description: Dockerfile, relative to the repository root
+        buildArgs:
+          type: array
+          default: []
+          description: Dockerfile build arguments (VERSION=<short sha> is always set)
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name: { type: string }
+              value: { type: string }
+        platforms:
+          type: string
+          default: {{ $b.platforms | quote }}
+          description: Image platforms (comma-separated). Foreign-arch RUN steps need QEMU binfmt on the build node; cross-compiling Dockerfiles do not.
+        {{- if $st.checkImage }}
+        checks:
+          type: object
+          default: {}
+          description: koorikla/ci scripts/{{ $st.stack }}/check.sh in the toolchain image
+          properties:
+            enabled:
+              type: boolean
+              default: true
+            image:
+              type: string
+              default: {{ $st.checkImage | quote }}
+              description: Toolchain image (pin the version your project needs)
+            env:
+              type: object
+              default: {{ $st.checkEnv | toJson }}
+              additionalProperties: { type: string }
+              description: Script flags (see the header of scripts/{{ $st.stack }}/check.sh in koorikla/ci)
+            {{- if $st.postgres }}
+            postgres:
+              type: boolean
+              default: false
+              description: Run the tests against an ephemeral PostgreSQL (DATABASE_URL, PG* are set)
+            {{- end }}
+        {{- end }}
+        scan:
+          type: object
+          default: {}
+          properties:
+            failSeverities:
+              type: string
+              default: CRITICAL
+              description: Trivy severities that fail the build (lockfiles and image), before anything is signed
+            ignoreUnfixed:
+              type: boolean
+              default: true
+            ignoreFile:
+              type: string
+              default: ""
+              pattern: {{ printf "^(%s)?$" (trimSuffix "$" (trimPrefix "^" $relPath)) | toJson }}
+              description: Repository-relative .trivyignore.yaml with expiring, justified exceptions
+        gitops:
+          type: object
+          default: {}
+          properties:
+            enabled:
+              type: boolean
+              default: true
+              description: Commit the signed image ref into the Workload manifest (Argo CD deploys it)
+            workloadPath:
+              type: string
+              default: deploy/openchoreo/workload.yaml
+              pattern: "^deploy/openchoreo/[A-Za-z0-9][A-Za-z0-9._-]*\\.yaml$"
+              description: OpenChoreo Workload manifest the signed image ref is committed to (only deploy/openchoreo/<name>.yaml)
+  runTemplate:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Workflow
+    metadata:
+      name: ${metadata.workflowRunName}
+      namespace: ${metadata.namespace}
+    spec:
+      serviceAccountName: workflow-sa
+      automountServiceAccountToken: false     # token only in Argo's executor containers (koorikla-build header)
+      executor:
+        serviceAccountName: workflow-sa
+      workflowTemplateRef:
+        name: {{ $b.workflowTemplate }}
+        clusterScope: true
+      arguments:
+        parameters:
+          - { name: component-name, value: "${metadata.labels['openchoreo.dev/component']}" }
+          - { name: project-name, value: "${metadata.labels['openchoreo.dev/project']}" }
+          - { name: namespace-name, value: "${metadata.namespaceName}" }
+          - { name: workflowrun-name, value: "${metadata.workflowRunName}" }
+          - { name: git-repo, value: "${parameters.repository.url}" }
+          - { name: git-allowed-prefixes, value: {{ include "build.gitPrefixes" $ | quote }} }
+          - { name: branch, value: "${parameters.repository.revision.branch}" }
+          - { name: commit, value: "${parameters.repository.revision.commit}" }
+          - { name: app-path, value: "${parameters.repository.appPath}" }
+          - { name: stack, value: {{ $st.stack | quote }} }
+          {{- if $st.checkImage }}
+          - { name: check-image, value: "${parameters.checks.enabled ? parameters.checks.image : ''}" }
+          - { name: check-setup, value: {{ $st.checkSetup | quote }} }
+          - { name: check-env, value: "${parameters.checks.env}" }
+          {{- if $st.postgres }}
+          - { name: postgres, value: "${parameters.checks.postgres}" }
+          {{- end }}
+          {{- end }}
+          {{- if $harbor }}
+          - { name: image-repo, value: "{{ $prefix }}/${metadata.labels['openchoreo.dev/project']}/${metadata.labels['openchoreo.dev/component']}" }
+          {{- else }}
+          - { name: image-repo, value: "{{ $prefix }}/${metadata.labels['openchoreo.dev/component']}" }
+          {{- end }}
+          - { name: registry-host, value: {{ $host | quote }} }
+          - { name: docker-context, value: "${parameters.docker.context}" }
+          - { name: dockerfile-path, value: "${parameters.docker.filePath}" }
+          - { name: build-args, value: "${parameters.buildArgs}" }
+          - { name: platforms, value: "${parameters.platforms}" }
+          - { name: fail-severities, value: "${parameters.scan.failSeverities}" }
+          - { name: ignore-unfixed, value: "${parameters.scan.ignoreUnfixed}" }
+          - { name: trivy-ignore-file, value: "${parameters.scan.ignoreFile}" }
+          - { name: gitops-enabled, value: "${parameters.gitops.enabled}" }
+          - { name: gitops-branch, value: "${parameters.repository.revision.branch}" }
+          - { name: workload-path, value: "${parameters.gitops.workloadPath}" }
+          - { name: git-author, value: {{ $b.gitAuthor | quote }} }
+          - { name: git-secret, value: "${metadata.workflowRunName}-git" }
+          - { name: registry-secret, value: "${metadata.workflowRunName}-registry" }
+          - { name: registry-ca-secret, value: "${metadata.workflowRunName}-registry-ca" }
+          - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
+          - { name: tlog-upload, value: {{ $b.signing.transparencyLog | toString | quote }} }
+  resources:
+    {{- include "build.resources" $ | nindent 4 }}
+{{- end }}
+{{- end }}

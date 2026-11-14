@@ -13,13 +13,22 @@ if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
 fi
 cd "$ROOT"
 
-# consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`
+# consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`. Includes the
+# ExternalSecrets OpenChoreo renders per WorkflowRun from ClusterWorkflow/Workflow spec.resources: namespace
+# ${metadata.namespace} is workflows-<org ns> (ORG_NS), store ${workflowplane.secretStore} is the plane's (WP_STORE).
 consumers() {
   yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
     | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
                .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
                .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
     | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
+  # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
+  ORG_NS="${ORG_NS:-default}" WP_STORE="${WP_STORE:-platform}" yq -N '
+    select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
+    | .spec.resources[]?.template | select(.kind == "ExternalSecret")
+    | select((.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) == "platform")
+    | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " ExternalSecret/"
+      + $k + ":" + $wf + ":" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
 }
 # allowed <secret-stores render> -> namespaces of store platform's conditions, one per line
 allowed() {
@@ -59,7 +68,7 @@ for inst_dir in installations/*; do
   for f in "$RENDERED_DIR"/addon-*-"$inst"-mgmt.yaml "$RENDERED_DIR"/cluster-"$inst"-*.yaml; do
     [[ -f "$f" ]] && files+=("$f")
   done
-  check "$inst" "$store" "${files[@]}"
+  ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' "$inst_dir/installation.yaml") check "$inst" "$store" "${files[@]}"
 done
 
 files=()

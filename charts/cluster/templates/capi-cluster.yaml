@@ -61,13 +61,29 @@ addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}
 
+{{- /* "true" when nodes pull from the installation's Harbor (installation.yaml registry.type harbor + host). */ -}}
+{{- define "capi.registry.harbor" -}}
+{{- $r := .Values.registry | default dict -}}
+{{- and (eq (toString $r.type) "harbor") (ne (toString ($r.host | default "")) "") | toString -}}
+{{- end }}
+
 {{- define "capi.annotations" -}}
 platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
 {{- end }}
 
 {{- include "capi.validate" . }}
 {{- /* ClusterClass variables: generated facts first, providerSpec (fleet file) last so it can override them */ -}}
-{{- $vars := dict "registryAuth" (.Values.secrets.nodeRegistryAuth.enabled | default false) "cni" .Values.cni }}
+{{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
+{{- $vars := dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni }}
+{{- if $harbor }}
+{{- $_ := set $vars "registryCA" true }}
+{{- /* Harbor's token realm is its externalURL: nodes must resolve the registry name itself (no mirror hop). Local
+CAPD nodes get an /etc/hosts alias to the container that publishes it (k3d serverlb); real installations use DNS. */ -}}
+{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias }}
+{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") }}
+{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias }}
+{{- end }}
+{{- end }}
 {{- if ne .Values.provider "docker" }}
 {{- $_ := set $vars "region" .Values.region }}
 {{- with .Values.controlPlane.machineType }}

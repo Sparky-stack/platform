@@ -47,3 +47,57 @@ tests:
     set: { kubernetesVersion: "" }
     asserts:
       - failedTemplate: { errorPattern: "`kubernetesVersion` is required" }
+
+  # --- Harbor (installation.yaml registry.type harbor) ---------------------------------------------------------------
+  - it: harbor adds mirrors with upstream rewrite, robot auth and the CA file for the registry host
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    asserts:
+      - equal:
+          path: spec.target.template.data["registries.yaml"]
+          value: |
+            mirrors:
+              "docker.io":
+                endpoint: ["https://harbor.openchoreo.localhost:9443"]
+                rewrite:
+                  "^(.*)$": "dockerhub/$1"
+            configs:
+              "ghcr.io":
+                auth:
+                  username: {{ .username | toJson }}
+                  password: {{ .token | toJson }}
+              "harbor.openchoreo.localhost:9443":
+                auth:
+                  username: "robot$nodes"
+                  password: {{ .nodesSecret | toJson }}
+                tls:
+                  ca_file: /etc/rancher/k3s/registry-ca.crt
+      - equal: { path: 'spec.target.template.data["registry-ca.crt"]', value: "{{ .registryCA }}" }
+
+  - it: harbor reads the robot secret from platform and only ca.crt of the CA bundle from mgmt-harbor
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    asserts:
+      - contains: { path: spec.data, content: { secretKey: nodesSecret, remoteRef: { key: harbor, property: nodes-secret } } }
+      - contains:
+          path: spec.data
+          content:
+            secretKey: registryCA
+            remoteRef: { key: harbor-ca-bundle, property: ca.crt }
+            sourceRef: { storeRef: { kind: ClusterSecretStore, name: mgmt-harbor } }
+
+  - it: mirror.enabled false keeps registry trust and auth but no mirrors
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set: { registry.mirror.enabled: false }
+    asserts:
+      - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: "mirrors:" }
+      - matchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: "ca_file: /etc/rancher/k3s/registry-ca.crt" }
+
+  - it: harbor alone (no GHCR auth) still renders the Secret
+    template: templates/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set: { secrets.nodeRegistryAuth.enabled: false }
+    asserts:
+      - hasDocuments: { count: 1 }
+      - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: '"ghcr.io":\n\s+auth' }
