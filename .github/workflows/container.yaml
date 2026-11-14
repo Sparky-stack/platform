@@ -471,8 +471,9 @@ jobs:
           create-storage-record: false
 
       - name: Attest SBOM
-        uses: actions/attest-sbom@v4
+        uses: actions/attest@v4
         with:
+          create-storage-record: false
           subject-name: ${{ needs.prepare.outputs.repo }}
           subject-digest: ${{ steps.merge.outputs.digest }}
           sbom-path: ${{ steps.sbom.outputs.sbom }}

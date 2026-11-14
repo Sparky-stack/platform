@@ -154,7 +154,7 @@ Attached to every pushed image (index digest):
 |---|---|---|
 | Signature | cosign (keyless) | - |
 | SLSA build provenance | `actions/attest-build-provenance` (OCI referrer) | `https://slsa.dev/provenance/v1` |
-| SBOM | `actions/attest-sbom` (OCI referrer) | `https://spdx.dev/Document/v2.3` |
+| SBOM | `actions/attest` with `sbom-path` (OCI referrer) | `https://spdx.dev/Document/v2.3` |
 | Vulnerability scan | `cosign attest --type vuln` (Trivy cosign-vuln) | `https://cosign.sigstore.dev/attestation/vuln/v1` |
 
 In-cluster builds use the same scripts but sign with the platform key
