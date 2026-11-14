@@ -190,7 +190,11 @@ ApplicationSet `tenants` (charts/platform) -> Application `tenant-<project>` (Ap
 - OpenChoreo `Project <project>` (type `ClusterProjectType/default`, pipeline `default`) and one
   `ProjectReleaseBinding <project>-<env>` per pipeline environment (provisions the project's namespace on each data
   plane). Platform-owned: app repos cannot create or edit Projects.
-- One Application `<project>-<app>` per app (project `tenant-<project>`, automated sync, prune, self-heal).
+- One Application `<project>-<app>` per app (project `tenant-<project>`, automated sync, prune, self-heal, recursive
+  directory so `release-bindings/` is included), plus one Application `<project>-<app>-<env>` per gated environment
+  (`promotion.gatedEnvironments`, default production) that syncs only `release-bindings/<env>.yaml`; the main
+  Application excludes that file. The AppProject's freeze windows (`promotion.freezeWindows`) are Argo CD deny sync
+  windows on those Applications. Production promotion is a reviewed PR; details: [promotion.md](promotion.md).
 
 Removing an app from the file deletes its Application and its OpenChoreo resources (finalizer); removing the file
 offboards the whole project. Limitation: Argo cannot restrict field values, so a tenant repo could set
@@ -238,7 +242,8 @@ spec:
       visibility: [external]      # routed on the data plane Gateway (ClusterDataPlane gateway.ingress.external)
 ```
 
-`deploy/openchoreo/releasebinding-staging.yaml` and `releasebinding-production.yaml`
+`deploy/openchoreo/release-bindings/staging.yaml` and `release-bindings/production.yaml` (file name = environment;
+`promotion.bindingFile`)
 ```yaml
 apiVersion: openchoreo.dev/v1alpha1
 kind: ReleaseBinding
@@ -262,7 +267,7 @@ spec:
    and creates/updates `ReleaseBinding hello-world-development` (first environment of the pipeline) to it. The
    development binding is controller-owned: do not commit it (or commit it **without** `releaseName`, only for
    `componentTypeEnvironmentConfigs`).
-3. Promote by commit: set `releaseName` in `releasebinding-staging.yaml` to the release now running in development
+3. Promote by commit: set `releaseName` in `release-bindings/staging.yaml` to the release now running in development
    (`kubectl -n default get component hello-world -o jsonpath='{.status.latestRelease.name}'`, or the console), then the
    same for production after staging. Rollback = revert the commit. Git is the source of truth for staging/production:
    a promotion clicked in the console on a git-owned binding is reverted by Argo's self-heal.

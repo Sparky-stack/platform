@@ -54,6 +54,8 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
+| `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) |
+| `promotion-gate` | `client-secret` | ClusterWorkflow promotion-gate (Thunder client `openchoreo-promotion-gate`) |
 
 ## Layout and ownership
 ```

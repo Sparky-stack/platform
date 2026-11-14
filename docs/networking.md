@@ -169,6 +169,10 @@ No upgrade or experimental channel is needed. **VERIFY** that istiod logs no Gat
   `validationActions: [Audit]`, `failurePolicy: Ignore` and platform namespaces excluded. Violations show up in
   PolicyReports; nothing is denied. Moving a single policy to Enforce is a per-installation values change
   (`validationFailureActionByPolicy`).
+- **Supply-chain gate** (`templates/image-verification.yaml`): per environment an `ImageValidatingPolicy` (cosign
+  keyless signature + SBOM/SLSA/vuln attestations of `ghcr.io/koorikla/*`, platform key for workflow-plane images) and
+  a trusted-registry `ValidatingPolicy`, Audit in development/staging cell namespaces, Deny (fail closed, digest
+  required) in production. [supply-chain.md](supply-chain.md).
 - Server-side apply is required (and on for all generated Applications): the Kyverno CRDs exceed the client-side
   last-applied annotation limit.
 - **Coexistence with Falco**: the two don't overlap. Kyverno decides at admission (API requests). Falco watches

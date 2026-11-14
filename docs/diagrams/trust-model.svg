@@ -34,10 +34,10 @@
 <path d="M 416.0 676.0 L 240.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 416.0 738.0 L 240.0 738.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 936.0 676.0 L 744.0 676.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
-<path d="M 136.0 886.0 L 136.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 136.0 886.0 L 136.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
 <path d="M 580.0 886.0 L 580.0 918.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
 <path d="M 936.0 940.0 L 744.0 940.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
-<path d="M 1052.0 826.0 L 1052.0 787.0 L 248.0 787.0 L 248.0 950.0 L 240.0 950.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
+<path d="M 1052.0 826.0 L 1052.0 787.0 L 248.0 787.0 L 248.0 950.0 L 240.0 950.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
 <path d="M 416.0 1018.0 L 240.0 1018.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <rect x="416" y="162" width="328" height="52" rx="6" fill="#0f172a"/>
 <rect x="416" y="162" width="328" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
@@ -107,15 +107,15 @@
 <text x="1052.0" y="669.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kube-apiserver OIDC</text>
 <text x="1052.0" y="689.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s --oidc-issuer-url</text>
 <rect x="32" y="826" width="208" height="60" rx="6" fill="#0f172a"/>
-<rect x="32" y="826" width="208" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="32" y="826" width="208" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
 <text x="136.0" y="842.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
 <text x="136.0" y="861.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless: Fulcio + Rekor</text>
-<text x="136.0" y="877.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci @ main</text>
+<text x="136.0" y="877.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci container.yaml</text>
 <rect x="32" y="918" width="208" height="64" rx="6" fill="#0f172a"/>
 <rect x="32" y="918" width="208" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
 <text x="136.0" y="936.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
 <text x="136.0" y="955.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*</text>
-<text x="136.0" y="971.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">images (+ sigs, planned)</text>
+<text x="136.0" y="971.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">+ sig, SBOM, SLSA, vuln</text>
 <rect x="32" y="994" width="208" height="48" rx="6" fill="#0f172a"/>
 <rect x="32" y="994" width="208" height="48" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="136.0" y="1011.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub App</text>
@@ -134,14 +134,13 @@
 <text x="580.0" y="1011.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Backstage scaffolder</text>
 <text x="580.0" y="1031.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">new app repo + platform PR</text>
 <rect x="936" y="826" width="232" height="136" rx="6" fill="#0f172a"/>
-<rect x="936" y="826" width="232" height="136" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="1052.0" y="849.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno verifyImages</text>
-<text x="1052.0" y="868.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*:</text>
-<text x="1052.0" y="884.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless, issuer GitHub,</text>
-<text x="1052.0" y="899.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">subject …@refs/heads/main</text>
-<text x="1052.0" y="915.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">harbor apps/*:</text>
-<text x="1052.0" y="930.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">platform public key</text>
-<text x="1052.0" y="946.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Audit mode</text>
+<rect x="936" y="826" width="232" height="136" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="1052.0" y="856.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno ImageValidating</text>
+<text x="1052.0" y="876.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*: keyless,</text>
+<text x="1052.0" y="891.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">reusable workflow + repo/ref</text>
+<text x="1052.0" y="907.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SBOM · SLSA · vuln attested</text>
+<text x="1052.0" y="922.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">apps/*: platform key (planned)</text>
+<text x="1052.0" y="938.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Audit dev/stg · Deny prod</text>
 <text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">Trust model · what crosses which boundary</text>
 <text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">rows = concern, columns = trust zone · gutter labels name exactly what crosses · arrow = initiator → target</text>
 <text x="30.0" y="112.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">external</text>
