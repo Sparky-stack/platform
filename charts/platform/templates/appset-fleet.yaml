@@ -1,0 +1,47 @@
+# Deleting a cluster file in installations/<inst>/clusters/*.yaml prunes the Application and deletes the CAPI Cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: fleet
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: {{ .Values.installation.repoURL | quote }}
+        revision: {{ .Values.installation.revision | default "HEAD" | quote }}
+        files:
+          - path: {{ printf "installations/%s/clusters/*.yaml" .Values.installation.name | quote }}
+  template:
+    metadata:
+      name: 'cluster-{{ "{{" }} .name {{ "}} " | trim }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: fleet
+      source:
+        repoURL: {{ .Values.installation.repoURL | quote }}
+        targetRevision: {{ .Values.installation.revision | default "HEAD" | quote }}
+        path: charts/cluster
+        helm:
+          releaseName: 'cluster-{{ "{{" }} .name {{ "}} " | trim }}'
+          valueFiles:
+            - {{ printf "../../installations/%s/installation.yaml" .Values.installation.name | quote }}
+            - '../../{{ "{{" }} .path.path {{ "}} " | trim }}/{{ "{{" }} .path.filename {{ "}} " | trim }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: fleet
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - ServerSideDiff=true
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m

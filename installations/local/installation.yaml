@@ -32,3 +32,10 @@ openchoreo:
     host: openchoreo.localhost                 # console; api.<host>, thunder.<host> derive from it
     # URL workload-cluster agents dial. Locally resolved to mgmt by the coredns-local addon. VERIFY
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+  # Observability plane on mgmt (addon openchoreo-observability-plane) + data-plane telemetry (addon telemetry).
+  # Endpoints: observer.<host>:<httpPort>, {opentelemetry,prometheus}.observability.<host>:<httpPort> (HTTP),
+  # opensearch.observability.<host>:<tlsPort> (TLS passthrough). docs/observability.md.
+  observability:
+    enabled: true                              # false: no observabilityPlaneRef; disable the two addons too
+    httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
+    tlsPort: 11085

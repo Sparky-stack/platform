@@ -20,6 +20,9 @@ openchoreo:
   controlPlane:
     host: openchoreo.localhost
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+  observability:
+    enabled: true             # == backstage.features.observability.enabled below (validated)
+    httpPort: 11080
 
 # Secret backstage-secrets (templates/backstage-secrets.yaml) from ClusterSecretStore `platform`, key `openchoreo`
 # (properties backstage-client-secret == Thunder's Backstage client secret, backstage-backend-secret).
@@ -57,7 +60,10 @@ openchoreo-control-plane:
       workflows:
         enabled: false          # platform: no workflow plane in v1 (docs/openchoreo.md "Adding planes"). VERIFY console
       observability:
-        enabled: false          # platform: no observability plane in v1
+        # platform: Metrics/Traces/Runtime Logs tabs + RuntimeHealthCard. Backstage asks openchoreo-api for the
+        # environment's ClusterObservabilityPlane observerURL (addon openchoreo-observability-plane); no URL here.
+        # Must equal installation.yaml openchoreo.observability.enabled (templates/validate.yaml).
+        enabled: true
     resources:                  # platform: upstream requests 200m/256Mi, limits 2/2Gi
       requests: { cpu: 100m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }

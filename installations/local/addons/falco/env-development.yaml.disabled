@@ -1,0 +1,43 @@
+# Falco Talon in dry-run for one environment (Talon logs/notifies what it would do, takes no action). Enable: rename to
+# env-<environment>.yaml (e.g. env-development.yaml). Replaces addons/falco/values.yaml falco-talon.config.rulesOverride
+# as a whole (a string), so keep it in sync with that file apart from `dry_run`.
+falco-talon:
+  config:
+    rulesOverride: |
+      - action: Platform label suspicious
+        actionner: kubernetes:label
+        parameters:
+          labels:
+            platform.koorikla.io/falco: suspicious
+
+      - action: Platform terminate pod
+        actionner: kubernetes:terminate
+        parameters:
+          ignore_daemonsets: true
+          ignore_statefulsets: false
+          grace_period_seconds: 0
+
+      # - action: Platform isolate pod      # deny all ingress/egress except DNS for the labelled pod
+      #   actionner: kubernetes:networkpolicy
+      #   parameters:
+      #     allow_cidr: []                # VERIFY kubernetes:networkpolicy parameters
+
+      - rule: Crypto miner in app namespace
+        description: Label and kill the pod (its controller recreates it; repeated hits stay visible in OpenSearch).
+        match:
+          rules:
+            - Platform crypto miner indicators
+        dry_run: true
+        actions:
+          - action: Platform label suspicious
+          - action: Platform terminate pod
+
+      - rule: Shell in app container
+        description: Label only (an operator may be debugging); isolate by uncommenting the action below.
+        match:
+          rules:
+            - Platform shell in app container
+        dry_run: true
+        actions:
+          - action: Platform label suspicious
+          # - action: Platform isolate pod

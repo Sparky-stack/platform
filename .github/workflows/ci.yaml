@@ -1,0 +1,31 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Install helm-unittest
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+      - name: Install yq, kubeconform, shellcheck, actionlint
+        run: |
+          # renovate: datasource=github-releases depName=mikefarah/yq
+          YQ_VERSION=v4.53.2
+          # renovate: datasource=github-releases depName=yannh/kubeconform
+          KUBECONFORM_VERSION=v0.7.0
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | sudo tar -xzf - -C /usr/local/bin kubeconform
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.sh | sudo bash -s -- latest /usr/local/bin
+      - name: Lint GitHub Actions
+        run: actionlint
+      - name: Lint charts, YAML, and shell scripts
+        run: make lint
+      - name: Run full offline validation and tests
+        run: make test

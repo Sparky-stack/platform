@@ -88,3 +88,27 @@ tests:
     documentIndex: 1
     asserts:
       - equal: { path: metadata.namespace, value: acme }
+
+  - it: no observabilityPlaneRef unless the installation enables observability
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    asserts:
+      - notExists: { path: spec.observabilityPlaneRef }
+
+  - it: references ClusterObservabilityPlane default when observability is enabled
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    set:
+      openchoreo.observability.enabled: true
+    asserts:
+      - equal:
+          path: spec.observabilityPlaneRef
+          value: { kind: ClusterObservabilityPlane, name: default }
+
+  - it: observability disabled explicitly
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    set:
+      openchoreo.observability.enabled: false
+    asserts:
+      - notExists: { path: spec.observabilityPlaneRef }

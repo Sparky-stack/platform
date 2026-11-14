@@ -30,6 +30,10 @@ installation:
   name: local
 secrets:
   backend: kubernetes
+  workloadKubernetes:
+    namespace: openchoreo-secrets   # read by the workload ClusterSecretStore `default` (local backend)
+  workloadSeed:
+    keys: [openchoreo-observability]   # local backend only: copied from mgmt `platform` into each workload cluster
   # Node registry auth: k3s registries.yaml on every node, from platform store key `key` (username, token).
   # templates/capi-registries.yaml + ClusterClass variable registryAuth. Disable for public-images-only installations.
   nodeRegistryAuth:

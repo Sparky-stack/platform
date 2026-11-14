@@ -1,20 +1,50 @@
 # Root Application values: installations/<inst>/installation.yaml is layered on top of this file.
 
+# Defaults so standalone `helm template charts/platform` works; overridden by installation.yaml.
+installation:
+  name: local
+  repoURL: https://github.com/koorikla/platform.git
+  revision: HEAD
+  githubOrg: https://github.com/koorikla
+
+mgmt:
+  name: mgmt
+  provider: docker
+  region: local
+  environment: mgmt
+  addons: {}
+
 # Addon catalog. One ApplicationSet per entry, cluster generator selecting on:
 #   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
+# Standalone-render defaults; installation.yaml provides the real values.
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+  observability:
+    enabled: false
+
 addons:
-  argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true }
+  argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
   cert-manager:             { namespace: cert-manager,             roles: [mgmt, workload], default: true }
   external-secrets:         { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   secret-stores:            { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   capi-operator:            { namespace: capi-operator-system,     roles: [mgmt],           default: true }
   capi-providers:           { namespace: capi-system,              roles: [mgmt],           default: true }
-  clusterclasses:           { namespace: fleet,                    roles: [mgmt],           default: true }
+  clusterclasses:           { namespace: fleet,                    roles: [mgmt],           default: true, serverSideDiff: true }
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
-  kgateway:                 { namespace: openchoreo-system,        roles: [mgmt, workload], default: true }   # VERIFY ns per OC docs
-  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt],           default: true }
+  kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
+  thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
+  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}' } }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
-  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true }
-  coredns-local:            { namespace: kube-system,              roles: [workload],       default: true, providers: [docker] }
+  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' } }
+  aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
+  hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
+  coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
+  openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
+  telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
+  obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
+  falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }

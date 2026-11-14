@@ -67,3 +67,19 @@ tests:
       openchoreo.controlPlane.clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:443/ws
     asserts:
       - failedTemplate: {}
+
+  - it: fails when Backstage observability features drift from the installation
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.enabled: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "openchoreo-control-plane.backstage.features.observability.enabled (true) must equal openchoreo.observability.enabled (false)"
+
+  - it: observability off in both places renders
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.enabled: false
+      openchoreo-control-plane.backstage.features.observability.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }

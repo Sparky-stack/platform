@@ -1,0 +1,18 @@
+apiVersion: v2
+name: openchoreo-observability-plane
+description: OpenChoreo observability plane on mgmt (observer, cluster-agent, Gateway) + logs/traces (OpenSearch) and metrics (Prometheus) modules, receiving from every data plane
+type: application
+version: 0.1.0
+dependencies:
+  - name: openchoreo-observability-plane
+    version: 1.3.3
+    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
+  - name: observability-logs-opensearch
+    version: 0.7.0
+    repository: oci://ghcr.io/openchoreo/helm-charts
+  - name: observability-tracing-opensearch
+    version: 0.8.0
+    repository: oci://ghcr.io/openchoreo/helm-charts
+  - name: observability-metrics-prometheus
+    version: 0.8.0
+    repository: oci://ghcr.io/openchoreo/helm-charts

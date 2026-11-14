@@ -1,0 +1,23 @@
+{{- /* Fluent Bit's literal OpenSearch endpoint and the metrics module's remote-write URL must match installation.yaml
+(the collector's endpoints are derived in templates/env.yaml and cannot drift). */ -}}
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $o := .Values.openchoreo.observability }}
+{{- if not $o.enabled }}
+{{- fail "openchoreo.observability.enabled is false: disable addon telemetry (catalog / addons.platform.koorikla.io/telemetry: \"false\")" }}
+{{- end }}
+{{- $fb := index .Values "observability-logs-opensearch" "fluent-bit" }}
+{{- $os := printf "opensearch.observability.%s" $host }}
+{{- if or (ne $fb.openSearchHost $os) (ne $fb.openSearchVHost $os) (ne (toString $fb.openSearchPort) (toString $o.tlsPort)) }}
+{{- fail (printf "observability-logs-opensearch.fluent-bit.openSearch{Host,VHost,Port} must be %s / %s / %v (installation.yaml)" $os $os $o.tlsPort) }}
+{{- end }}
+{{- $rw := printf "http://prometheus.observability.%s:%v/api/v1/write" $host $o.httpPort }}
+{{- if ne (index .Values "observability-metrics-prometheus" "prometheusCustomizations" "http" "observabilityPlaneUrl") $rw }}
+{{- fail (printf "observability-metrics-prometheus.prometheusCustomizations.http.observabilityPlaneUrl must be %s" $rw) }}
+{{- end }}
+{{- $ev := index .Values "observability-events-otel-collector" }}
+{{- if $ev.enabled }}
+{{- $evURL := printf "https://%s:%v" $os $o.tlsPort }}
+{{- if ne $ev.exporters.opensearch.http.endpoint $evURL }}
+{{- fail (printf "observability-events-otel-collector.exporters.opensearch.http.endpoint must be %s" $evURL) }}
+{{- end }}
+{{- end }}

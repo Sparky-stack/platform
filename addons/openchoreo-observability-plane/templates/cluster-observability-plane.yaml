@@ -1,0 +1,30 @@
+{{- /*
+ClusterObservabilityPlane (cluster-scoped, control plane on mgmt). ClusterDataPlanes reference it via
+observabilityPlaneRef (charts/cluster, when installation.yaml openchoreo.observability.enabled). Trust: exactly the
+plane's self-signed agent cert (Secret cluster-agent-tls in this namespace; ca.crt of a self-signed cert is the cert
+itself), read live by the cluster-gateway. observerURL is what Backstage, openchoreo-api and MCP clients call.
+Applied after the OpenChoreo CRDs exist (control-plane addon); skipped in dry-run until then (Argo retries).
+*/ -}}
+{{- $obs := index .Values "openchoreo-observability-plane" }}
+{{- $o := .Values.openchoreo.observability }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterObservabilityPlane
+metadata:
+  name: {{ .Values.clusterObservabilityPlane.name }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    openchoreo.dev/display-name: {{ printf "Observability plane (%s)" .Values.cluster.name | quote }}
+    openchoreo.dev/description: "Logs, traces (OpenSearch) and metrics (Prometheus) on the management cluster"
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  planeID: {{ .Values.clusterObservabilityPlane.planeID }}
+  clusterAgent:
+    clientCA:
+      secretKeyRef:
+        name: {{ $obs.clusterAgent.tls.secretName }}
+        namespace: {{ .Release.Namespace }}
+        key: ca.crt
+  observerURL: {{ printf "http://observer.%s:%v" .Values.openchoreo.controlPlane.host $o.httpPort | quote }}

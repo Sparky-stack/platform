@@ -1,0 +1,10 @@
+{{- /* Long-lived token of the metrics module's agent ServiceAccount (openchoreo-prometheus-agent), used by the kubelet
+ServiceMonitor (kube-prometheus-stack.kubelet.serviceMonitor.authorization) to scrape /metrics and /metrics/cadvisor. */ -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openchoreo-prometheus-agent-token
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    kubernetes.io/service-account.name: openchoreo-prometheus-agent
+type: kubernetes.io/service-account-token

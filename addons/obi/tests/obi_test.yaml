@@ -1,0 +1,18 @@
+suite: obi config
+templates:
+  - charts/opentelemetry-ebpf-instrumentation/templates/configmap.yaml
+tests:
+  - it: instruments only OpenChoreo app namespaces and exports OTLP to the node-local collector
+    asserts:
+      - matchRegex:
+          path: data["ebpf-instrument-config.yml"]
+          pattern: 'namespace_glob:\n\s+- dp-\*'
+      - matchRegex:
+          path: data["ebpf-instrument-config.yml"]
+          pattern: 'otlp_grpc:\n\s+endpoint: http://\$\{HOST_IP\}:4317'
+      - matchRegex:
+          path: data["ebpf-instrument-config.yml"]
+          pattern: 'otlp_http:\n(\s+.*\n)*\s+endpoint: http://\$\{HOST_IP\}:4318'
+      - notMatchRegex:
+          path: data["ebpf-instrument-config.yml"]
+          pattern: 'prometheus/development'
