@@ -101,6 +101,7 @@ for dir in addons/*; do
   roles_raw=$(yq ".addons[\"$addon\"].roles[]?" charts/platform/values.yaml || true)
   [[ -n "$roles_raw" ]] || roles_raw=$'mgmt\nworkload'
   providers_filter=$(yq ".addons[\"$addon\"].providers[]?" charts/platform/values.yaml || true)
+  addon_default=$(yq ".addons[\"$addon\"].default // true" charts/platform/values.yaml)
 
   for inst_dir in installations/*; do
     [[ -f "$inst_dir/installation.yaml" ]] || continue
@@ -109,7 +110,10 @@ for dir in addons/*; do
       m_name=$(yq '.mgmt.name // "mgmt"' "$inst_dir/installation.yaml")
       m_prov=$(yq '.mgmt.provider // "docker"' "$inst_dir/installation.yaml")
       m_env=$(yq '.mgmt.environment // "mgmt"' "$inst_dir/installation.yaml")
-      if [[ -z "$providers_filter" ]] || echo "$providers_filter" | grep -qx "$m_prov"; then
+      m_toggle=$(yq ".mgmt.addons[\"$addon\"]" "$inst_dir/installation.yaml")   # no // : yq treats false as empty
+      if [[ "$m_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$m_toggle" != "true" ]]; }; then
+        echo "  SKIP addons/$addon ($inst/mgmt): disabled by label"
+      elif [[ -z "$providers_filter" ]] || echo "$providers_filter" | grep -qx "$m_prov"; then
         vargs=()
         for vf in \
           "$dir/values.yaml" \
@@ -128,7 +132,7 @@ for dir in addons/*; do
         while IFS=$'\t' read -r ip it; do
           [[ -n "$ip" ]] || continue
           iv=$(yq -o=json "$inst_dir/installation.yaml" | python3 -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
-          vargs+=(--set-string "${ip}=${iv}")
+          vargs+=(--set "${ip}=${iv}")   # Argo helm parameters are --set (typed), not --set-string
         done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-mgmt.yaml"
         check_kubeconform "addons/$addon ($inst/mgmt)" "$TMP/addon-$addon-$inst-mgmt.yaml"
@@ -142,6 +146,11 @@ for dir in addons/*; do
         c_prov=$(yq '.provider // "docker"' "$cf")
         c_env=$(yq '.environment // "development"' "$cf")
         if [[ -n "$providers_filter" ]] && ! echo "$providers_filter" | grep -qx "$c_prov"; then
+          continue
+        fi
+        c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
+        if [[ "$c_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$c_toggle" != "true" ]]; }; then
+          echo "  SKIP addons/$addon ($inst/$c_name): disabled by label"
           continue
         fi
         vargs=()
@@ -161,7 +170,7 @@ for dir in addons/*; do
         while IFS=$'\t' read -r ip it; do
           [[ -n "$ip" ]] || continue
           iv=$(yq -o=json "$inst_dir/installation.yaml" | python3 -c 'import json,sys,re;d=json.load(sys.stdin);t=sys.argv[1];print(re.sub(r"\{\{\s*\.Values\.([\w.]+)\s*\}\}",lambda m:str(__import__("functools").reduce(lambda a,k:a[k],m.group(1).split("."),d)),t))' "$it")
-          vargs+=(--set-string "${ip}=${iv}")
+          vargs+=(--set "${ip}=${iv}")   # Argo helm parameters are --set (typed), not --set-string
         done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"

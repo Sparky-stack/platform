@@ -107,21 +107,38 @@ rand_alnum() {
   openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24
 }
 
-seed_openchoreo_secret() {
-  local -a keys=(thunder-admin-password admin-user-password developer-user-password backstage-client-secret backstage-backend-secret)
+# seed_generated_secret <secret> <key>[=<fixed value>|=@strong] ...
+# Generates each missing property once (random alphanumeric; @strong adds upper/lower/digit/special for password
+# policies like OpenSearch 3), keeps existing values on re-runs.
+seed_generated_secret() {
+  local name=$1; shift
   local -a args=()
-  local k val
-  for k in "${keys[@]}"; do
-    val=$(kubectl --context "$CTX" -n platform-secrets get secret openchoreo -o "jsonpath={.data['${k}']}" 2>/dev/null | base64 -d 2>/dev/null || true)
+  local spec k fixed val
+  for spec in "$@"; do
+    k=${spec%%=*}; fixed=""; [[ "$spec" == *=* ]] && fixed=${spec#*=}
+    val=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o "jsonpath={.data['${k}']}" 2>/dev/null | base64 -d 2>/dev/null || true)
     if [[ -z "$val" ]]; then
-      val=$(rand_alnum)
+      case "$fixed" in
+        "")      val=$(rand_alnum) ;;
+        @strong) val="Px9!$(rand_alnum)" ;;
+        *)       val=$fixed ;;
+      esac
     fi
     args+=(--from-literal="${k}=${val}")
   done
-  kubectl --context "$CTX" create secret generic openchoreo \
+  kubectl --context "$CTX" create secret generic "$name" \
     --namespace platform-secrets \
     "${args[@]}" \
     --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+}
+
+seed_openchoreo_secret() {
+  seed_generated_secret openchoreo thunder-admin-password admin-user-password developer-user-password \
+    backstage-client-secret backstage-backend-secret
+  # Observability plane (addon openchoreo-observability-plane) and data-plane telemetry; observer-client-secret is
+  # shared with Thunder's observer OAuth client.
+  seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
+    observer-client-secret
 }
 
 cmd_secrets() {

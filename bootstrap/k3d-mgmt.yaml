@@ -30,3 +30,10 @@ ports:
   - port: 127.0.0.1:8443:8443   # agents reach it over docker network kind, not the host port
     nodeFilters:
       - loadbalancer
+  # OpenChoreo observability Gateway: HTTP (observer, OTLP, Prometheus remote write) and TLS passthrough (OpenSearch)
+  - port: 127.0.0.1:11080:11080
+    nodeFilters:
+      - loadbalancer
+  - port: 127.0.0.1:11085:11085
+    nodeFilters:
+      - loadbalancer

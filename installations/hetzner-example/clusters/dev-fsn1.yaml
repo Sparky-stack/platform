@@ -20,4 +20,5 @@ openchoreo:
     gatewayPort: 443
     environments: [development, staging]
 addonsRevision: HEAD
-addons: {}
+addons:
+  telemetry: false   # no observability plane in this installation

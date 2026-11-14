@@ -22,8 +22,8 @@ cluster-agent (never through Argo CD). Design background: [architecture.md](arch
 The workload clusters also need `cert-manager`, `external-secrets` and ClusterSecretStore `default` (secret-stores
 addon): the ClusterDataPlane's `secretStoreRef` and every app ExternalSecret OpenChoreo renders use it.
 
-Workflow plane (in-cluster builds) and observability plane (logs/metrics/traces, alerts) are **not part of v1**; see
-[Adding planes](#adding-the-workflow-and-observability-planes).
+The observability plane (logs/metrics/traces, alerts) runs on mgmt: see [observability.md](observability.md). The
+workflow plane (in-cluster builds) is planned; see [Adding planes](#adding-the-workflow-and-observability-planes).
 
 ### Ordering
 
@@ -289,11 +289,7 @@ a per-cluster CA delivered by CRS, and a `Cluster*Plane` registered on mgmt.
   `ClusterWorkflowPlane <name>` with the same `clientCA` (and a CRS payload into `openchoreo-workflow-plane`);
   `ClusterWorkflow`s + ClusterWorkflowTemplates from upstream `samples/getting-started` into `openchoreo-platform`;
   re-add `allowedWorkflows` to the component types (files/README.md); `backstage.features.workflows.enabled: true`.
-- **Observability plane** (`openchoreo-observability-plane` + logs/metrics/tracing modules): addon on a dedicated or
-  the mgmt cluster; `ClusterObservabilityPlane` with `observerURL`; set `observabilityPlaneRef` on each
-  ClusterDataPlane (charts/cluster); add the `observability-alert-rule` trait; Fluent Bit / OTel exporters on data
-  planes; `backstage.features.observability.enabled: true`. Thunder needs the observer/RCA clients (upstream
-  values-thunder.yaml 53, 59).
+- **Observability plane**: done, see [observability.md](observability.md).
 
 ## Known limitations and VERIFY
 

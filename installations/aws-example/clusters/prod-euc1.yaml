@@ -26,4 +26,5 @@ openchoreo:
     gatewayPort: 443
     environments: [production]
 addonsRevision: HEAD                          # pin to a tag for production rings
-addons: {}
+addons:
+  telemetry: false   # no observability plane in this installation

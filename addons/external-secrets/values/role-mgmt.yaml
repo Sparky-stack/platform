@@ -1,0 +1,5 @@
+# mgmt only: ExternalSecrets that render ConfigMaps (observability plane agent's gateway CA, addon
+# openchoreo-observability-plane). Adds --unsafe-allow-generic-targets and ConfigMap RBAC to the controller.
+external-secrets:
+  genericTargets:
+    enabled: true

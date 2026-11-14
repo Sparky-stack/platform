@@ -24,6 +24,8 @@ openchoreo:
   controlPlane:
     host: openchoreo.localhost
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+  observability:
+    enabled: false
 
 addons:
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
@@ -36,9 +38,13 @@ addons:
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
   kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
-  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt],           default: true }
+  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}' } }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
   openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' } }
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
+  openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
+  telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
+  obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
+  falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }

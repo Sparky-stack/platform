@@ -13,7 +13,8 @@ mgmt:
   provider: hetzner
   region: fsn1
   environment: mgmt
-  addons: {}
+  addons:
+    openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
 
 secrets:
   backend: vault                              # ClusterSecretStore/platform -> Vault / OpenBao (no native manager)
