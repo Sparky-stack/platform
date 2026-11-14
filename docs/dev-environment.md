@@ -10,9 +10,9 @@ every CLI at the version in [`mise.toml`](../mise.toml), [Task](https://taskfile
 | Linux amd64 / arm64 | supported | `portability` workflow (`ubuntu-latest`, `ubuntu-24.04-arm`): `mise install`, `task lint test` |
 | macOS arm64 (Apple Silicon) / amd64 | supported (offline validation proven; `task up` **VERIFY**) | `macos-latest`, scripts forced onto the stock `/bin/bash` 3.2 |
 | Windows 11 + WSL2 | **recommended on Windows**: it is Linux | as Linux |
-| Windows amd64, Git Bash | `lint`/`test`/`schemas`/`images:audit` proven; `task up` **VERIFY** | `windows-latest`, `shell: bash` |
+| Windows amd64, Git Bash | `doctor`/`lint`/`test` (incl. schemas) proven; `task up` **VERIFY** | `windows-latest`, `shell: bash` |
 | Windows on Arm | as above; helm/yq/argocd ship native arm64, jq/k3d/shellcheck run x64-emulated | lock entries only |
-| Dev container / Codespaces | zero-install option, amd64 + arm64 | `devcontainer` job builds and uses it on both arches |
+| Dev container / Codespaces | zero-install option, amd64 + arm64 | `devcontainer` job builds it, starts its Docker engine and runs `task doctor lint` on both arches |
 
 ## Install (three lines per OS)
 
@@ -42,7 +42,8 @@ task lint test                                          # `task up` here is VERI
 ```
 
 **Zero install**: open the repo in VS Code *Dev Containers*, GitHub Codespaces or DevPod. `.devcontainer/` brings
-Ubuntu 24.04 + its own Docker engine (docker-in-docker) and runs `mise install` on create. Codespaces needs the 8-core /
+Ubuntu 24.04 + its own Docker engine (docker-in-docker feature v4: it picks iptables-nft at start on kernels without
+legacy iptables, which GitHub's amd64 runners need) and runs `mise install` on create. Codespaces needs the 8-core /
 32 GB machine for the full local platform (**VERIFY**: sized from the k3d + two CAPD clusters footprint).
 
 Without mise activated in your shell, prefix commands with `mise exec --` (`mise exec -- task test`) or use
