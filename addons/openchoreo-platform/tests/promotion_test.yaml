@@ -1,0 +1,69 @@
+suite: openchoreo-platform - promotion gates (authz + promotion-gate ClusterWorkflow)
+templates:
+  - templates/promotion-authz.yaml
+  - templates/promotion-gate.yaml
+tests:
+  - it: denies restricted groups binding changes in gated environments (native ABAC on resource.environment)
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-deny-developers }
+    asserts:
+      - equal: { path: spec.effect, value: deny }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
+      - equal:
+          path: spec.roleMappings[0].conditions
+          value:
+            - actions: [releasebinding:create, releasebinding:update, releasebinding:delete]
+              expression: 'resource.environment in ["default/production"]'
+
+  - it: follows the org namespace and the gated environments
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-deny-developers }
+    set:
+      openchoreo.orgNamespace: acme
+      promotion.gatedEnvironments: [staging, production]
+    asserts:
+      - equal: { path: "spec.roleMappings[0].scope.namespace", value: acme }
+      - equal: { path: "spec.roleMappings[0].conditions[0].expression", value: 'resource.environment in ["acme/staging","acme/production"]' }
+
+  - it: no deny bindings without gated environments
+    template: templates/promotion-authz.yaml
+    set:
+      promotion.gatedEnvironments: []
+    asserts:
+      - hasDocuments: { count: 2 }   # only the gate client's role + binding
+
+  - it: the gate client is read-only plus observer queries
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-gate }
+    asserts:
+      - notContains: { path: spec.actions, content: releasebinding:update }
+      - contains: { path: spec.actions, content: alerts:view }
+
+  - it: promotion-gate is a generic ClusterWorkflow running in the enforced workflow namespace
+    template: templates/promotion-gate.yaml
+    asserts:
+      - isKind: { of: ClusterWorkflow }
+      - equal: { path: spec.runTemplate.metadata, value: { name: "${metadata.workflowRunName}", namespace: "${metadata.namespace}" } }
+      - equal: { path: "spec.resources[0].template.spec.secretStoreRef.name", value: "${workflowplane.secretStore}" }
+      - equal: { path: spec.parameters.openAPIV3Schema.required, value: [project, component] }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.image", pattern: '@sha256:[0-9a-f]{64}$' }
+      - equal: { path: "spec.runTemplate.spec.templates[0].script.securityContext.readOnlyRootFilesystem", value: true }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def promote\(' }
+
+  - it: endpoints derive from the installation and observe follows the observability switch
+    template: templates/promotion-gate.yaml
+    set:
+      openchoreo.controlPlane.host: openchoreo.example.com
+      openchoreo.observability.enabled: false
+    asserts:
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: API_URL, value: "http://api.openchoreo.example.com:8080" } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: OBSERVE, value: "false" } }
+
+  - it: passes the shared freeze windows to the gate
+    template: templates/promotion-gate.yaml
+    asserts:
+      - contains:
+          path: "spec.runTemplate.spec.templates[0].script.env"
+          content:
+            name: FREEZE_WINDOWS
+            value: '[{"end":"Mon 08:00","environments":["production"],"name":"weekend","start":"Fri 16:00","timeZone":"Europe/Tallinn"}]'

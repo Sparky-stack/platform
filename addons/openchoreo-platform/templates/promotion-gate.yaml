@@ -1,0 +1,137 @@
+{{- /*
+ClusterWorkflow promotion-gate (docs/promotion.md "Automated gate"): a generic OpenChoreo Workflow (WorkflowRun without
+a component). The run renders into the workflow plane (namespace workflows-<org namespace>, ServiceAccount workflow-sa
+injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Credentials come from
+the workflow plane's ClusterSecretStore through a per-run ExternalSecret (owned by the run, deleted with it).
+The gate never writes to a cluster: on success it opens/updates the promotion pull request in the app repo.
+*/ -}}
+{{- $g := .Values.promotionGate }}
+{{- if $g.enabled }}
+{{- $script := .Files.Get "files/promotion-gate/gate.py" }}
+{{- if or (contains "${" $script) (contains "{{" $script) }}{{ fail "files/promotion-gate/gate.py must not contain '${' or '{{' (CEL / Argo templating)" }}{{ end }}
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $apiURL := $g.apiURL | default (printf "http://api.%s:%v" $host $g.controlPlanePort) }}
+{{- $tokenURL := $g.tokenURL | default (printf "http://thunder.%s:%v/oauth2/token" $host $g.controlPlanePort) }}
+{{- $observerURL := $g.observerURL | default (printf "http://observer.%s:%v" $host .Values.openchoreo.observability.httpPort) }}
+{{- $observe := and $g.observe.enabled .Values.openchoreo.observability.enabled }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterWorkflow
+metadata:
+  name: promotion-gate
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    openchoreo.dev/display-name: Promotion gate
+    openchoreo.dev/description: >-
+      Verifies a release in its source environment (pipeline path, readiness, HTTP smoke test, observer alerts and
+      error rate, freeze windows) and opens the promotion pull request for the target environment's ReleaseBinding.
+spec:
+  ttlAfterCompletion: {{ $g.ttlAfterCompletion | quote }}
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required: [project, component]
+      properties:
+        project:
+          type: string
+          description: OpenChoreo project of the component
+        component:
+          type: string
+          description: Component to promote
+        sourceEnvironment:
+          type: string
+          default: staging
+          description: Environment the release was verified in
+        targetEnvironment:
+          type: string
+          default: ""
+          description: Environment to promote to (empty = the next one in the project's DeploymentPipeline)
+        release:
+          type: string
+          default: ""
+          description: ComponentRelease to promote (empty = the one running in the source environment)
+        repository:
+          type: string
+          default: ""
+          description: GitHub owner/repo holding the ReleaseBindings (empty = the Workload's spec.source.repository)
+        dryRun:
+          type: boolean
+          default: false
+          description: Run every check but do not open the pull request
+  resources:
+    - id: gate-credentials
+      template:
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
+        metadata:
+          name: ${metadata.workflowRunName}-gate
+          namespace: ${metadata.namespace}
+        spec:
+          refreshInterval: 1h
+          secretStoreRef:
+            kind: ClusterSecretStore
+            name: ${workflowplane.secretStore}
+          target:
+            name: ${metadata.workflowRunName}-gate
+            creationPolicy: Owner
+          data:
+            - secretKey: client-secret
+              remoteRef: { key: {{ $g.clientSecret.key }}, property: {{ $g.clientSecret.property }} }
+            - secretKey: github-token
+              remoteRef: { key: {{ $g.github.key }}, property: {{ $g.github.property }} }
+  runTemplate:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Workflow
+    metadata:
+      name: ${metadata.workflowRunName}
+      namespace: ${metadata.namespace}
+    spec:
+      entrypoint: gate
+      serviceAccountName: workflow-sa
+      activeDeadlineSeconds: 900
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      templates:
+        - name: gate
+          script:
+            image: {{ $g.image }}
+            command: [python3]
+            resources:
+              {{- toYaml $g.resources | nindent 14 }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: { drop: [ALL] }
+            env:
+              - { name: RUN_NAME, value: "${metadata.workflowRunName}" }
+              - { name: NAMESPACE, value: "${metadata.namespaceName}" }
+              - { name: PROJECT, value: "${parameters.project}" }
+              - { name: COMPONENT, value: "${parameters.component}" }
+              - { name: SOURCE_ENV, value: "${parameters.sourceEnvironment}" }
+              - { name: TARGET_ENV, value: "${parameters.targetEnvironment}" }
+              - { name: RELEASE, value: "${parameters.release}" }
+              - { name: REPOSITORY, value: "${parameters.repository}" }
+              - { name: DRY_RUN, value: '${parameters.dryRun ? "true" : "false"}' }
+              - { name: GATED_TARGETS, value: {{ .Values.promotion.gatedEnvironments | default list | toJson | quote }} }
+              - { name: FREEZE_WINDOWS, value: {{ .Values.promotion.freezeWindows | default list | toJson | quote }} }
+              - { name: API_URL, value: {{ $apiURL | quote }} }
+              - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
+              - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
+              - { name: CLIENT_ID, value: {{ $g.clientID | quote }} }
+              - { name: STATUS_CONTEXT, value: {{ $g.statusContext | quote }} }
+              - { name: BASE_BRANCH, value: {{ $g.baseBranch | quote }} }
+              - { name: BINDING_PATH, value: {{ $g.bindingPath | quote }} }
+              - { name: SMOKE_HTTP, value: {{ $g.smoke.http | toString | quote }} }
+              - { name: SMOKE_PATH, value: {{ $g.smoke.path | quote }} }
+              - { name: OBSERVE, value: {{ $observe | toString | quote }} }
+              - { name: OBSERVE_WINDOW_MINUTES, value: {{ $g.observe.windowMinutes | toString | quote }} }
+              - { name: MAX_ERROR_RATE, value: {{ $g.observe.maxErrorRate | toString | quote }} }
+              - name: CLIENT_SECRET
+                valueFrom: { secretKeyRef: { name: "${metadata.workflowRunName}-gate", key: client-secret } }
+              - name: GITHUB_TOKEN
+                valueFrom: { secretKeyRef: { name: "${metadata.workflowRunName}-gate", key: github-token } }
+            source: |
+              {{- $script | nindent 14 }}
+{{- end }}

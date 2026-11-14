@@ -12,6 +12,11 @@
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
 openchoreo:
   orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost
+  observability:
+    enabled: true
+    httpPort: 11080
 
 # DeploymentPipeline `default`: promotion order. Every Project created from a tenant file references it (charts/tenant),
 # and charts/tenant renders one ProjectReleaseBinding per environment listed here (keep both lists in sync).
@@ -22,3 +27,59 @@ deploymentPipeline:
 # Upstream defaults from files/ (see files/README.md); set false to manage them elsewhere.
 upstreamDefaults:
   enabled: true
+
+# --- Promotion gates (docs/promotion.md) ------------------------------------------------------------------------------
+# installation.yaml `promotion` is shared with charts/tenant (Argo CD sync windows, per-environment Applications) and
+# overrides these defaults.
+promotion:
+  # Environments whose ReleaseBinding changes only through a reviewed pull request: their binding file syncs through
+  # its own Argo CD Application (charts/tenant) and in OpenChoreo only `approverGroups` may write their bindings.
+  gatedEnvironments: [production]
+  # Groups (JWT claim `groups`) denied releasebinding create/update/delete in gated environments through console,
+  # openchoreo-api, occ and MCP (an explicit deny wins over the upstream developer role's allow). Argo CD applies git
+  # through the Kubernetes API and is not affected.
+  restrictedGroups: [developers]
+  # Weekly freeze windows (gate workflow refuses, Argo CD sync window denies syncs of the gated Applications).
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]
+
+# ClusterWorkflow `promotion-gate`: a generic OpenChoreo Workflow (WorkflowRun, no component) that verifies a release
+# in its source environment and opens the promotion pull request (files/promotion-gate/gate.py). Started by the
+# Sensor in addon argo-events after a successful rollout in an `autoTrigger` environment, or by hand
+# (occ / console Workflows / MCP / kubectl create of a WorkflowRun). Runs in the workflow plane (namespace
+# workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
+promotionGate:
+  enabled: true
+  autoTrigger:
+    sourceEnvironments: [staging]    # read by addon argo-events (Sensor filter); listed here for documentation
+  image: docker.io/library/python:3.14.9-alpine3.23@sha256:a3d4eff2e4a3de12d9709b3e80cee788109d7292955972a83f5fff81b06c2e95
+  resources:
+    requests: { cpu: 20m, memory: 48Mi }
+    limits: { memory: 128Mi }
+  ttlAfterCompletion: 7d
+  # Endpoints (empty = derived from installation openchoreo.controlPlane.host / openchoreo.observability.httpPort).
+  apiURL: ""                         # http://api.<host>:8080
+  tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
+  observerURL: ""                    # http://observer.<host>:<httpPort>
+  controlPlanePort: 8080             # control-plane Gateway HTTP listener (addon openchoreo-control-plane)
+  # Thunder client (client_credentials) the gate authenticates as; role binding below. Secret from the workflow
+  # plane's secret store, key `promotion-gate`, property `client-secret` (VERIFY Thunder app in addon thunder).
+  clientID: openchoreo-promotion-gate
+  clientSecret: { key: promotion-gate, property: client-secret }
+  # GitHub token that pushes the promotion branch, opens the PR and sets the commit status (store key, property).
+  # Prefer a GitHub App installation token so branch protection can pin the required status to that app.
+  github: { key: platform-github, property: token }
+  statusContext: openchoreo/promotion-gate   # required status check on the app repo's default branch
+  baseBranch: main
+  bindingPath: deploy/openchoreo/release-bindings/{environment}.yaml   # app repo contract (docs/openchoreo.md)
+  smoke:
+    http: true                       # GET every external endpoint of the source binding
+    path: /
+  observe:
+    enabled: true
+    windowMinutes: 15
+    maxErrorRate: 0.05

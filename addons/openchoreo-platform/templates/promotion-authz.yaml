@@ -1,0 +1,94 @@
+{{- /*
+Promotion authorization (docs/promotion.md "Manual approval"). OpenChoreo 1.3.3 has no approval field on
+DeploymentPipeline (removed in 1.0); its ABAC conditions on resource.environment are the native control over WHO may
+change a binding in an environment through console, openchoreo-api, occ and MCP:
+  ClusterAuthzRole promotion-release-binding-writer   releasebinding create/update/delete
+  ClusterAuthzRoleBinding promotion-deny-<group>      effect deny for each restricted group, condition: gated envs
+An explicit deny wins over the upstream `developer` role's allow (per entitlement value; a user who is also in an
+approver group is allowed through that group). Git stays the source of truth for gated environments: Argo CD applies the
+merged PR through the Kubernetes API (not subject to OpenChoreo authz) and self-heal reverts out-of-band edits.
+Also: the promotion gate's own client identity (read-only + observer queries).
+*/ -}}
+{{- $ns := .Values.openchoreo.orgNamespace }}
+{{- $gated := .Values.promotion.gatedEnvironments | default list }}
+{{- if $gated }}
+{{- $envIds := list }}
+{{- range $gated }}{{ $envIds = append $envIds (printf "%s/%s" $ns .) }}{{ end }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRole
+metadata:
+  name: promotion-release-binding-writer
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  description: Change ReleaseBindings (used with environment conditions to gate promotions)
+  actions:
+    - releasebinding:create
+    - releasebinding:update
+    - releasebinding:delete
+{{- range $group := .Values.promotion.restrictedGroups }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRoleBinding
+metadata:
+  name: promotion-deny-{{ $group | lower | replace "_" "-" }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    openchoreo.dev/description: {{ printf "%s may not change bindings in %s: promotion there is a reviewed pull request" $group (join ", " $gated) | quote }}
+spec:
+  effect: deny
+  entitlement:
+    claim: groups
+    value: {{ $group | quote }}
+  roleMappings:
+    - roleRef:
+        kind: ClusterAuthzRole
+        name: promotion-release-binding-writer
+      scope:
+        namespace: {{ $ns }}
+      conditions:
+        - actions: [releasebinding:create, releasebinding:update, releasebinding:delete]
+          expression: {{ printf "resource.environment in %s" ($envIds | toJson) | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.promotionGate.enabled }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRole
+metadata:
+  name: promotion-gate
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  description: Promotion gate workflow - read releases, bindings, pipeline and observability data
+  actions:
+    - namespace:view
+    - project:view
+    - component:view
+    - workload:view
+    - environment:view
+    - deploymentpipeline:view
+    - componentrelease:view
+    - releasebinding:view
+    - alerts:view
+    - metrics:view
+    - logs:view
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRoleBinding
+metadata:
+  name: promotion-gate-binding
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  effect: allow
+  entitlement:
+    claim: client_id
+    value: {{ .Values.promotionGate.clientID | quote }}
+  roleMappings:
+    - roleRef:
+        kind: ClusterAuthzRole
+        name: promotion-gate
+      scope:
+        namespace: {{ $ns }}
+{{- end }}
