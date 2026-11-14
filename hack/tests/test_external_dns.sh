@@ -23,7 +23,8 @@ render() {
   helm template external-dns addons/external-dns --namespace "$NS" "${args[@]}" > "$out" 2> "$out.err"
 }
 args_of() { yq -N 'select(.kind == "Deployment") | .spec.template.spec.containers[0].args[]' "$1" | tr -d '"'; }
-has_arg() { if args_of "$1" | grep -qx -- "$2"; then echo yes; else echo no; fi; }
+# Captured first: `args_of | grep -q` under pipefail fails at random when grep exits early and tr gets SIGPIPE.
+has_arg() { local a; a=$(args_of "$1"); if grep -qx -- "$2" <<<"$a"; then echo yes; else echo no; fi; }
 
 expect_running() {   # expect_running <inst> <dns provider> <helm provider> <expected store on mgmt>
   local inst=$1 dnsp=$2 hp=$3 inst_dir="installations/$1" prender="$TMP/platform-$1.yaml" cf name prov role out zone

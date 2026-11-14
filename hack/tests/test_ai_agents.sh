@@ -64,7 +64,7 @@ for v in RCA_LLM_BASE_URL FINOPS_AGENT_LLM_BASE_URL; do
   host=${url#http://}; host=${host%%/*}; [[ "$host" == *:* ]] || host="$host:80"
   assert_eq "$host" "$gw" "$v points at agentgateway's Gateway"
 done
-svc() { yq -N "select(.kind == \"Service\" and .metadata.name == \"$1\") | .spec.ports[].port" "$TMP/fo.yaml" | grep -qx "$2" && echo yes || echo no; }
+svc() { local p; p=$(yq -N "select(.kind == \"Service\" and .metadata.name == \"$1\") | .spec.ports[].port" "$TMP/fo.yaml"); grep -qx "$2" <<<"$p" && echo yes || echo no; }
 adapter=$(yq -N 'select(.kind == "ConfigMap") | .data.FINOPS_ADAPTER_URL | select(. != null)' "$TMP/obs-on.yaml")
 a=${adapter#http://}
 assert_eq "$(svc "${a%%:*}" "${a##*:}")" yes "observer FINOPS_ADAPTER_URL ($adapter) is a finops-opencost Service"
