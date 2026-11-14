@@ -60,7 +60,7 @@ tests:
     documentSelector: { path: kind, value: Service }
     asserts:
       - equal: { path: metadata.name, value: opensearch-passthrough }
-      - equal: { path: spec.selector["app.kubernetes.io/name"], value: opensearch }
+      - equal: { path: 'spec.selector["app.kubernetes.io/name"]', value: opensearch }
       - equal: { path: "spec.ports[0].port", value: 9200 }
 
   - it: fails when observability is disabled in the installation
