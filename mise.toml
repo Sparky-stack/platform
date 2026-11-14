@@ -1,0 +1,39 @@
+# Developer toolchain for koorikla/platform, pinned for macOS / Linux / Windows on amd64 and arm64.
+#   mise install          # installs everything below (+ the helm-unittest plugin via the postinstall hook)
+#   task --list           # entrypoints (Makefile targets are shims for these)
+# Every tool uses the aqua backend (prebuilt release binaries, checksum-verified) except python (mise core,
+# python-build-standalone). Assets for each platform are pinned in mise.lock (`task tools:lock` refreshes it).
+# Why mise + Task, platform caveats: docs/dev-environment.md. Renovate understands this file (mise manager).
+min_version = "2026.1.0"
+
+[tools]
+# Kubernetes / cluster lifecycle
+kubectl = "1.35.10"        # aqua:kubernetes/kubernetes/kubectl; = k3s v1.35 of mgmt and workload clusters (skew +-1)
+helm = "4.3.2"             # aqua:helm/helm
+k3d = "5.8.3"              # aqua:k3d-io/k3d; local mgmt cluster (bootstrap/k3d-mgmt.yaml, k3d.io/v1alpha5)
+clusterctl = "1.13.8"      # aqua:kubernetes-sigs/cluster-api; = CAPI core in addons/capi-providers
+argocd = "3.6.1"           # aqua:argoproj/argo-cd; = Argo CD server (addons/argo-cd)
+# YAML / validation
+yq = "4.54.3"              # aqua:mikefarah/yq
+jq = "1.8.2"               # aqua:jqlang/jq
+kubeconform = "0.8.0"      # aqua:yannh/kubeconform
+crane = "0.22.1"           # aqua:google/go-containerregistry; multi-arch image audit (task images:audit)
+shellcheck = "0.11.0"      # aqua:koalaman/shellcheck
+actionlint = "1.7.12"      # aqua:rhysd/actionlint
+python = "3.14.10"         # core:python (precompiled); hack/crd2schema.py and test.sh helpers, stdlib only
+# Workflow
+task = "3.54.0"            # aqua:go-task/task; cross-platform entrypoint (Taskfile.yml)
+gh = "2.104.0"             # aqua:cli/cli; `task secrets` seeds GitHub credentials from `gh auth token`
+
+[env]
+# helm-unittest plugin version installed by the postinstall hook / `task tools:plugins`.
+# renovate: datasource=github-releases depName=helm-unittest/helm-unittest extractVersion=^v(?<version>.+)$
+HELM_UNITTEST_VERSION = "1.2.1"
+
+[hooks]
+# Runs after `mise install`: helm plugins are not mise tools.
+postinstall = "bash hack/tools.sh plugins"
+
+[settings]
+# Lock download URLs + checksums for every supported developer platform, not just the one that ran `mise lock`.
+lockfile = true

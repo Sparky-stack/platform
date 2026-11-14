@@ -31,7 +31,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `platform.koorikla.io/region` | free text (`local`, `eu-central-1`, `fsn1`) |
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster |
+| `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 ## Names
@@ -59,17 +60,40 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 bootstrap/                      k3d config, bootstrap.sh (make up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
-addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml)
+addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture.md, conventions.md, runbooks
-hack/                           tests and helper scripts (make test)
+hack/                           tests and helper scripts (task test); hack/lib/portable.sh
+mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
 ```
+
+## Current practice only
+
+No legacy patterns in this repo. Every addition uses the current upstream-recommended way; anything legacy found in
+review gets replaced, not copied.
+
+- **APIs:** current stable versions only (no deprecated or beta when GA exists): Gateway API instead of Ingress, CAPI
+  v1beta2 with ClusterClass topology, ESO v1, Kyverno CEL policy types (ValidatingPolicy, MutatingPolicy,
+  ImageValidatingPolicy) instead of new ClusterPolicy, ValidatingAdmissionPolicy where native fits, ApplicationSets with
+  goTemplate, server-side apply.
+- **Security defaults:** Pod Security `restricted` is the target (`baseline` Audit only as a step), no privileged
+  containers without a justifying comment, workload identity / OIDC instead of static cloud keys, secrets only via ESO,
+  keyless Sigstore signing with SBOM and provenance verified at admission, images pinned by digest and multi-arch,
+  never `latest`.
+- **Runtime:** Cilium eBPF with kube-proxy replacement, Istio ambient (no sidecars), OpenTelemetry (no vendor agents),
+  external cloud controller managers, OCI Helm charts, rootless BuildKit (no Docker-in-Docker), Crossplane v2.
+- **Delivery:** everything declarative from git; no imperative `kubectl` steps or hand-run scripts on the path to
+  production; CI providers are thin wrappers over the in-cluster OpenChoreo workflow plane.
 
 ## Working rules
 - Local mgmt context is `k3d-platform-mgmt`. The homelab context `koorikla` runs other production workloads: never
   deploy there.
 - `make test` must pass before pushing: helm lint + template every chart with every installation, kubeconform with CRD
   schemas, helm-unittest where present.
+- Tooling is OS/arch-agnostic (docs/dev-environment.md): tools only via `mise.toml` (aqua backends, `task tools:lock`
+  after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step), scripts bash 3.2 + GNU/BSD/MSYS
+  portable (use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty arrays). New images must be
+  multi-arch: `task images:audit`.
 - Conventional commits (`feat(cluster): …`). `grep -rn VERIFY` lists values inferred but not yet confirmed live.
 
 ## Guardrails

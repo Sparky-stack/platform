@@ -3,7 +3,8 @@ CAPI topology Cluster for this fleet file, in namespace fleet, class k3s-<provid
 Helpers are prefixed capi.* and live here (charts/cluster templates are split by concern and owner):
   capi.validate  - fails rendering on an unusable fleet file
   capi.labels    - platform.koorikla.io/* + addons.platform.koorikla.io/* (docs/conventions.md); the Argo CD cluster
-                   secret must carry exactly these labels -> include "capi.labels" there too.
+                   secret must carry exactly these labels -> include "capi.labels" there too. The cilium addon label
+                   is derived from `cni` (the CNI is a birth fact, the addon follows it).
 */ -}}
 {{- define "capi.validate" -}}
 {{- $v := .Values -}}
@@ -29,6 +30,12 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- if and (ne $v.provider "docker") (not $v.region) -}}
 {{- fail (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider) -}}
 {{- end -}}
+{{- if not (has $v.cni (list "cilium" "flannel")) -}}
+{{- fail (printf "cluster %s: cni %q must be cilium or flannel" $v.name $v.cni) -}}
+{{- end -}}
+{{- if and (hasKey ($v.addons | default dict) "cilium") (ne $v.addons.cilium (eq $v.cni "cilium")) -}}
+{{- fail (printf "cluster %s: addons.cilium=%v contradicts cni=%s (the cilium addon follows `cni`; drop addons.cilium)" $v.name $v.addons.cilium $v.cni) -}}
+{{- end -}}
 {{- range $addon, $on := $v.addons -}}
 {{- if not (kindIs "bool" $on) -}}
 {{- fail (printf "cluster %s: addons.%s must be true or false" $v.name $addon) -}}
@@ -48,7 +55,8 @@ platform.koorikla.io/provider: {{ .Values.provider | quote }}
 platform.koorikla.io/region: {{ .Values.region | quote }}
 platform.koorikla.io/environment: {{ .Values.environment | quote }}
 platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
-{{- range $addon, $on := .Values.addons }}
+platform.koorikla.io/cni: {{ .Values.cni | quote }}
+{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium")) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}
@@ -59,7 +67,7 @@ platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD"
 
 {{- include "capi.validate" . }}
 {{- /* ClusterClass variables: generated facts first, providerSpec (fleet file) last so it can override them */ -}}
-{{- $vars := dict "registryAuth" (.Values.secrets.nodeRegistryAuth.enabled | default false) }}
+{{- $vars := dict "registryAuth" (.Values.secrets.nodeRegistryAuth.enabled | default false) "cni" .Values.cni }}
 {{- if ne .Values.provider "docker" }}
 {{- $_ := set $vars "region" .Values.region }}
 {{- with .Values.controlPlane.machineType }}

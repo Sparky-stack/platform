@@ -26,9 +26,25 @@ tests:
             platform.koorikla.io/region: local
             platform.koorikla.io/environment: development
             platform.koorikla.io/installation: local
+            platform.koorikla.io/cni: cilium
+            addons.platform.koorikla.io/cilium: "true"
       - equal:
           path: 'metadata.annotations["platform.koorikla.io/addons-revision"]'
           value: HEAD
+
+  - it: "cni: flannel turns the cilium addon off and passes the ClusterClass variable"
+    values: [values/capi-docker.yaml]
+    set: { cni: flannel }
+    asserts:
+      - equal: { path: 'metadata.labels["platform.koorikla.io/cni"]', value: flannel }
+      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/cilium"]', value: "false" }
+      - contains: { path: spec.topology.variables, content: { name: cni, value: flannel } }
+
+  - it: accepts an addons.cilium override that agrees with cni
+    values: [values/capi-docker.yaml]
+    set: { cni: flannel, addons: { cilium: false } }
+    asserts:
+      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/cilium"]', value: "false" }
 
   - it: turns addon overrides into addons.platform.koorikla.io/<addon> string labels
     values: [values/capi-aws.yaml]
@@ -65,11 +81,11 @@ tests:
           path: spec.topology.workers.machineDeployments[0].replicas
           value: 1
 
-  - it: docker passes only registryAuth (machine types are meaningless on CAPD)
+  - it: docker passes only cni and registryAuth (machine types are meaningless on CAPD)
     values: [values/capi-docker.yaml]
     set: { controlPlane.machineType: ignored, workers: [{ name: md-0, replicas: 1, machineType: ignored }] }
     asserts:
-      - equal: { path: spec.topology.variables, value: [{ name: registryAuth, value: true }] }
+      - equal: { path: spec.topology.variables, value: [{ name: cni, value: cilium }, { name: registryAuth, value: true }] }
       - notExists:
           path: spec.topology.workers.machineDeployments[0].variables
 
@@ -82,6 +98,7 @@ tests:
           path: spec.topology.variables
           value:
             - { name: ami, value: ami-0123456789abcdef0 }
+            - { name: cni, value: cilium }
             - { name: controlPlaneMachineType, value: m6i.large }
             - { name: region, value: eu-central-1 }
             - { name: registryAuth, value: true }
@@ -119,7 +136,7 @@ tests:
     values: [values/capi-docker.yaml]
     set: { secrets.nodeRegistryAuth.enabled: false }
     asserts:
-      - equal: { path: spec.topology.variables, value: [{ name: registryAuth, value: false }] }
+      - equal: { path: spec.topology.variables, value: [{ name: cni, value: cilium }, { name: registryAuth, value: false }] }
 
   # --- fail clearly on unusable fleet files ---------------------------------------------------------------------
   - it: fails without a name
@@ -163,6 +180,18 @@ tests:
     set: { addons: { kgateway: "no" } }
     asserts:
       - failedTemplate: { errorPattern: "addons.kgateway must be true or false" }
+
+  - it: fails on an unknown cni
+    values: [values/capi-docker.yaml]
+    set: { cni: calico }
+    asserts:
+      - failedTemplate: { errorPattern: "cni \"calico\" must be cilium or flannel" }
+
+  - it: fails when addons.cilium contradicts cni
+    values: [values/capi-docker.yaml]
+    set: { cni: flannel, addons: { cilium: true } }
+    asserts:
+      - failedTemplate: { errorPattern: "addons.cilium=true contradicts cni=flannel" }
 
   - it: fails on a worker without a name
     values: [values/capi-docker.yaml]

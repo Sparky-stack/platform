@@ -1,0 +1,4 @@
+# k3s with its bundled flannel points containerd at k3s' own CNI dirs; istio-cni must chain into those
+# (/var/lib/rancher/k3s/agent/etc/cni/net.d, /var/lib/rancher/k3s/data/cni - Istio profile platform-k3s).
+global:
+  platform: k3s

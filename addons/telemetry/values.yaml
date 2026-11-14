@@ -176,7 +176,10 @@ observability-logs-opensearch:
     envFrom:
       - configMapRef:
           name: telemetry-env
-    openSearchHost: opensearch.observability.openchoreo.localhost   # coredns-local -> mgmt k3d serverlb
+    # Connect address (VHost below is the SNI). Local: the mgmt k3d serverlb container itself, because curl (upstream
+    # wait-for-index-template init container) resolves every *.localhost name to loopback without asking DNS, so the
+    # coredns-local rewrite never applies. Real installations: opensearch.observability.<controlPlane.host>.
+    openSearchHost: k3d-platform-mgmt-serverlb
     openSearchPort: 11085                                            # == installation openchoreo.observability.tlsPort
     openSearchVHost: opensearch.observability.openchoreo.localhost   # SNI for the Gateway's TLS passthrough
     resources:                                   # platform: upstream requests 25m/125Mi

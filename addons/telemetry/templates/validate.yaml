@@ -7,8 +7,10 @@
 {{- end }}
 {{- $fb := index .Values "observability-logs-opensearch" "fluent-bit" }}
 {{- $os := printf "opensearch.observability.%s" $host }}
-{{- if or (ne $fb.openSearchHost $os) (ne $fb.openSearchVHost $os) (ne (toString $fb.openSearchPort) (toString $o.tlsPort)) }}
-{{- fail (printf "observability-logs-opensearch.fluent-bit.openSearch{Host,VHost,Port} must be %s / %s / %v (installation.yaml)" $os $os $o.tlsPort) }}
+{{- /* *.localhost (local installation): Host is a connect address that is not a .localhost name (see values.yaml). */ -}}
+{{- $hostOK := or (eq $fb.openSearchHost $os) (and (hasSuffix ".localhost" $host) (not (hasSuffix ".localhost" $fb.openSearchHost))) }}
+{{- if or (not $hostOK) (ne $fb.openSearchVHost $os) (ne (toString $fb.openSearchPort) (toString $o.tlsPort)) }}
+{{- fail (printf "observability-logs-opensearch.fluent-bit.openSearch{Host,VHost,Port} must be %s (or, for *.localhost, a non-.localhost connect address) / %s / %v (installation.yaml)" $os $os $o.tlsPort) }}
 {{- end }}
 {{- $rw := printf "http://prometheus.observability.%s:%v/api/v1/write" $host $o.httpPort }}
 {{- if ne (index .Values "observability-metrics-prometheus" "prometheusCustomizations" "http" "observabilityPlaneUrl") $rw }}

@@ -1,0 +1,22 @@
+suite: kyverno - engine with platform namespaces outside its webhooks, one replica per controller
+release:
+  name: kyverno
+  namespace: kyverno
+tests:
+  - it: keeps platform namespaces out of the webhooks and the engine's resource filters
+    template: charts/kyverno/templates/config/configmap.yaml
+    documentSelector: { path: metadata.name, value: kyverno }
+    asserts:
+      - matchRegex: { path: data.webhooks, pattern: '"operator":"NotIn","values":\["kube-system",.*"argocd",.*"fleet",.*"openchoreo-data-plane",.*"kgateway-system","istio-system",.*"falco","telemetry"' }
+      - matchRegex: { path: data.resourceFilters, pattern: '\[\*/\*,argocd,\*\]' }
+      - matchRegex: { path: data.resourceFilters, pattern: '\[\*/\*,istio-system,\*\]' }
+      - notMatchRegex: { path: data.webhooks, pattern: '"dp-' }
+
+  - it: runs every controller with a single replica
+    templates:
+      - charts/kyverno/templates/admission-controller/deployment.yaml
+      - charts/kyverno/templates/background-controller/deployment.yaml
+      - charts/kyverno/templates/cleanup-controller/deployment.yaml
+      - charts/kyverno/templates/reports-controller/deployment.yaml
+    asserts:
+      - equal: { path: spec.replicas, value: 1 }

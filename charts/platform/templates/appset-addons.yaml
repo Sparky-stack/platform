@@ -1,6 +1,13 @@
 {{- $inst := .Values.installation -}}
 {{- $instValues := omit .Values "addons" -}}
 {{- $defaultRev := $inst.revision | default "HEAD" -}}
+{{- /* clusterServerParameters: <helm param>: <part of the Argo cluster secret's `server`> - goTemplate expressions
+evaluated by the ApplicationSet controller per cluster (sprig urlParse; VERIFY live). hack/test.sh mirrors them. */ -}}
+{{- $serverExpr := dict
+  "url"  "{{ .server }}"
+  "host" "{{ (urlParse .server).hostname }}"
+  "port" "{{ $h := (urlParse .server).host }}{{ if regexMatch \":[0-9]+$\" $h }}{{ regexFind \"[0-9]+$\" $h }}{{ else }}443{{ end }}"
+-}}
 {{- range $addon, $cfg := .Values.addons }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -51,10 +58,11 @@ spec:
             - values.yaml
             - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}.yaml'
             - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}.yaml'
+            - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}.yaml'
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
-          {{- if or $cfg.clusterNameParameters $cfg.installationParameters }}
+          {{- if or $cfg.clusterNameParameters $cfg.installationParameters $cfg.clusterServerParameters }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
@@ -66,6 +74,16 @@ spec:
             - name: {{ $p | quote }}
               value: {{ tpl $t $ | quote }}
             {{- end }}
+            {{- range $p, $part := $cfg.clusterServerParameters }}
+            {{- if not (hasKey $serverExpr $part) }}
+            {{- fail (printf "addons.%s.clusterServerParameters.%s: %q is not one of url, host, port" $addon $p $part) }}
+            {{- end }}
+            - name: {{ $p | quote }}
+              value: {{ index $serverExpr $part | squote }}
+              {{- if ne $part "port" }}
+              forceString: true
+              {{- end }}
+            {{- end }}
           {{- end }}
           valuesObject:
             cluster:
@@ -74,6 +92,7 @@ spec:
               provider: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}'
               region: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/region" {{ "}} " | trim }}'
               environment: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}'
+              cni: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}'
             {{- toYaml $instValues | nindent 12 }}
       destination:
         server: '{{ "{{" }} .server {{ "}} " | trim }}'
@@ -89,6 +108,9 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          {{- if $cfg.ignoreDifferences }}
+          - RespectIgnoreDifferences=true   # sync must not revert fields a controller owns (e.g. istiod's webhook policy)
+          {{- end }}
           {{- if $cfg.serverSideDiff }}
           - ServerSideDiff=true
           {{- end }}

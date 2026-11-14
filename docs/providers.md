@@ -135,8 +135,9 @@ Prerequisites (once per account):
 Class `k3s-aws`: plain Ubuntu AMI (variable `ami`, no CAPA image lookup - those are kubeadm images), k3s installed at
 boot, `cloudInit.insecureSkipSecretsManager: true` (plain AMIs lack CAPA's secrets-manager boot helper, so user data
 incl. the k3s join token is readable via IMDS on the instance), classic ELB with a TCP health check (k3s' ECDSA cert
-breaks the ELB SSL check), CNI ingress rule for flannel VXLAN (udp/8472) instead of CAPA's Calico defaults, servicelb
-and traefik disabled.
+breaks the ELB SSL check), node-to-node CNI ingress rules instead of CAPA's Calico defaults (cni: cilium = VXLAN
+udp/8472, WireGuard udp/51871, health tcp/4240 + ICMP, Hubble tcp/4244; cni: flannel = udp/8472 only), servicelb and
+traefik disabled.
 
 Node identity / providerID: kubelet `--cloud-provider=external`, k3s CCM disabled, node name =
 `{{ ds.meta_data.local_hostname }}` (cloud-init jinja; k3s bootstrap user data carries `## template: jinja`), i.e. the
@@ -159,16 +160,17 @@ Prerequisites:
 
 Class `k3s-hetzner`: control plane behind a CAPH load balancer (`lb11`), private hcloud network (`networkZone`),
 spread placement groups for control plane and workers, Ubuntu 24.04 image, k3s installed at boot, servicelb and traefik
-disabled, flannel backend `wireguard-native` (k3s config drop-in `/etc/rancher/k3s/config.yaml.d/10-platform.yaml`):
-pod traffic between nodes is encrypted and does not depend on hcloud routes (needs udp/51820 between nodes if you add a
-Hetzner firewall). **VERIFY**
+disabled. Pod network per fleet file `cni` (k3s config drop-in `/etc/rancher/k3s/config.yaml.d/10-cni.yaml`,
+docs/networking.md): cilium (default) = Cilium VXLAN overlay with Cilium WireGuard; flannel = k3s flannel backend
+`wireguard-native`. Either way pod traffic between nodes is encrypted and does not depend on hcloud routes (a Hetzner
+firewall would need udp/8472 + udp/51871 + tcp/4240 + tcp/4244, resp. udp/51820, between nodes). **VERIFY**
 
 Node identity / providerID: kubelet `--cloud-provider=external`, k3s CCM disabled. CAPH names servers after the
 Machine, the node name is the hostname, and the hcloud CCM matches them by name and sets `providerID hcloud://<id>`
 (CAPH's upstream ClusterClass relies on the same; no kubelet `provider-id`). Credentials need no plumbing: CAPH writes
 `kube-system/hcloud` (keys `token`, `hcloud`, `network`, `apiserver-host/port`) into each workload cluster once its API
 answers (`reconcileWorkloadClusterSecrets`), and that is the hcloud CCM chart's default secret. `addons/hcloud-ccm`
-runs with `networking.enabled: false` (no route controller; flannel does pod networking).
+runs with `networking.enabled: false` (no route controller; the overlay CNI does pod networking).
 
 CSI (optional): hcloud-csi as another workload addon with `providers: [hetzner]`, reading the same `kube-system/hcloud`
 secret. Not included.
@@ -190,5 +192,5 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
 ## Untested / VERIFY
 `grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm charts/cluster installations/*-example docs/providers.md`.
 Highlights: k3s v1.35.10+k3s1 + kindest/node v1.35.8 on CAPD; registry-token rotation; everything AWS and Hetzner
-(ELB type, flannel backends, CCM wiring, empty CAPA credentials with pod identity, ESO vs CAPH on the `hetzner` secret
+(ELB type, CNI overlays, CCM wiring, empty CAPA credentials with pod identity, ESO vs CAPH on the `hetzner` secret
 labels, AMI IDs, example domains and secret-store shapes).

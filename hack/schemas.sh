@@ -2,8 +2,10 @@
 # Extract/fetch CRD manifests and generate kubeconform JSON schemas into SCHEMAS_DIR.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
 
-SCHEMAS_DIR="${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}"
+SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 CACHE_DIR="${SCHEMAS_DIR}/.crd-cache"
 mkdir -p "$SCHEMAS_DIR" "$CACHE_DIR"
 
@@ -27,7 +29,7 @@ for dir in charts/* addons/*; do
     if [[ "$(basename "$dir")" == "openchoreo-data-plane" ]]; then
       set_args+=(--set-string openchoreo-data-plane.clusterAgent.planeID=sample)
     fi
-    helm template schema-extract "$dir" "${set_args[@]}" 2>/dev/null | \
+    helm template schema-extract "$dir" ${set_args[@]+"${set_args[@]}"} 2>/dev/null | \
       yq 'select(.kind == "CustomResourceDefinition")' > "$TMP/crds-tpl-$idx.yaml" 2>/dev/null || true
     idx=$((idx + 1))
   fi
@@ -75,5 +77,6 @@ for f in "$TMP"/*.yaml "$CACHE_DIR"/*.yaml; do
 done
 
 if (( ${#crd_files[@]} > 0 )); then
-  python3 hack/crd2schema.py "$SCHEMAS_DIR" "${crd_files[@]}"
+  pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
+  "$PYTHON" hack/crd2schema.py "$SCHEMAS_DIR" "${crd_files[@]}"
 fi

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: istio-ambient
+description: Istio Ambient mesh (base + istiod + cni + ztunnel) for k3s workload clusters with Cilium CNI
+type: application
+version: 0.1.0
+# Charts moved to blob.istio.io with 1.31 (the GCS bucket stops at 1.30.x).
+appVersion: "1.32.0"
+dependencies:
+  - name: base
+    version: 1.32.0
+    repository: https://blob.istio.io/istio-release/charts
+  - name: istiod
+    version: 1.32.0
+    repository: https://blob.istio.io/istio-release/charts
+  - name: cni
+    version: 1.32.0
+    repository: https://blob.istio.io/istio-release/charts
+  - name: ztunnel
+    version: 1.32.0
+    repository: https://blob.istio.io/istio-release/charts

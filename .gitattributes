@@ -1,0 +1,19 @@
+# Same bytes on every OS: Windows checkouts (core.autocrlf=true by default in Git for Windows and on GitHub's
+# Windows runners) must not turn scripts and manifests into CRLF (bash chokes on `\r`, helm/yq values grow a `\r`).
+* text=auto eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.tpl text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.md text eol=lf
+Makefile text eol=lf
+*.txt text eol=lf
+
+*.png binary
+*.svg text eol=lf
+*.tgz binary

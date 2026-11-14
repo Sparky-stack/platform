@@ -1,0 +1,102 @@
+suite: istio-ambient - base CRDs + istiod + istio-cni + ztunnel (ambient), CNI dirs per cluster CNI
+release:
+  name: istio-ambient
+  namespace: istio-system
+tests:
+  - it: renders the Istio ambient security CRDs from base
+    template: charts/base/templates/crds.yaml
+    documentSelector:
+      path: metadata.name
+      value: authorizationpolicies.security.istio.io
+    asserts:
+      - isKind:
+          of: CustomResourceDefinition
+
+  - it: installs only istio.io CRDs (Gateway API CRDs come from addons/gateway-api-crds)
+    template: charts/base/templates/crds.yaml
+    asserts:
+      - matchRegex:
+          path: spec.group
+          pattern: \.istio\.io$
+
+  - it: runs istiod with ambient enabled and small requests
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: istiod
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PILOT_ENABLE_AMBIENT
+            value: "true"
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 128Mi
+
+  - it: runs ztunnel
+    template: charts/ztunnel/templates/daemonset.yaml
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: metadata.name
+          value: ztunnel
+
+  - it: enables ambient in istio-cni, enrolling by istio.io/dataplane-mode=ambient
+    template: charts/cni/templates/configmap-cni.yaml
+    asserts:
+      - equal:
+          path: data.AMBIENT_ENABLED
+          value: "true"
+      - matchRegex:
+          path: data.AMBIENT_ENABLEMENT_SELECTOR
+          pattern: "istio.io/dataplane-mode: ambient"
+
+  - it: "cni: cilium (default) - istio-cni uses the standard CNI dirs (k3s with flannel-backend=none)"
+    template: charts/cni/templates/daemonset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-bin-dir
+            hostPath:
+              path: /opt/cni/bin
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-net-dir
+            hostPath:
+              path: /etc/cni/net.d
+
+  - it: "cni: flannel (values/cni-flannel.yaml) - istio-cni uses k3s' own CNI dirs"
+    template: charts/cni/templates/daemonset.yaml
+    values:
+      - ../values/cni-flannel.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-bin-dir
+            hostPath:
+              path: /var/lib/rancher/k3s/data/cni
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-net-dir
+            hostPath:
+              path: /var/lib/rancher/k3s/agent/etc/cni/net.d
+
+  - it: tolerates extra top-level installation.yaml keys
+    template: charts/ztunnel/templates/daemonset.yaml
+    set:
+      installation:
+        name: aws-example
+      capi:
+        providers:
+          aws: true
+    asserts:
+      - isKind:
+          of: DaemonSet

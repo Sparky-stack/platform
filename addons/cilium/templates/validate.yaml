@@ -1,0 +1,4 @@
+{{- /* Without kube-proxy Cilium must be told where the API server is; the catalog sets it per cluster. */ -}}
+{{- if not .Values.cilium.k8sServiceHost -}}
+{{- fail "cilium.k8sServiceHost is empty: it is set per cluster by the addon catalog (clusterServerParameters) from the Argo CD cluster secret's server" -}}
+{{- end -}}

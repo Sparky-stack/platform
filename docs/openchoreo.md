@@ -297,3 +297,15 @@ a per-cluster CA delivered by CRS, and a `Cluster*Plane` registered on mgmt.
 inferred values. Main ones: Docker DNS resolution of `k3d-platform-mgmt-serverlb` from CAPD pods; Thunder resolving
 `{{ .VAR }}` placeholders from the setup Job's env; agent restart after cert renewal; Backstage with workflows and
 observability features off.
+
+## Known issue: re-created data plane clusters
+
+When a workload cluster is re-created under the same name (new CAPD/cloud cluster, new agent connection), OpenChoreo's
+RenderedRelease controller can stay on a failed apply (`proxy request failed with status 502`, from while the agent was
+not connected yet) for a long backoff, so app namespaces and workloads do not reappear for many minutes. Kick it:
+
+```bash
+kubectl -n <namespace> annotate renderedrelease --all platform.koorikla.io/kick="$(date +%s)" --overwrite
+```
+
+Seen with OpenChoreo 1.3.3; candidate upstream report (requeue on agent reconnect).

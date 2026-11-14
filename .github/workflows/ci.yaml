@@ -4,28 +4,24 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}   # GitHub API quota for mise downloads
+      MISE_YES: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      - name: Install helm-unittest
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
-      - name: Install yq, kubeconform, shellcheck, actionlint
-        run: |
-          # renovate: datasource=github-releases depName=mikefarah/yq
-          YQ_VERSION=v4.53.2
-          # renovate: datasource=github-releases depName=yannh/kubeconform
-          KUBECONFORM_VERSION=v0.7.0
-          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
-          sudo chmod +x /usr/local/bin/yq
-          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | sudo tar -xzf - -C /usr/local/bin kubeconform
-          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.sh | sudo bash -s -- latest /usr/local/bin
-      - name: Lint GitHub Actions
-        run: actionlint
-      - name: Lint charts, YAML, and shell scripts
-        run: make lint
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Same pinned toolchain as developers (mise.toml); the helm-unittest plugin comes from its postinstall hook.
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: 2026.11.8
+          install: true
+          cache: true
+      - name: Lint charts, YAML, shell scripts and GitHub Actions
+        run: task lint
       - name: Run full offline validation and tests
-        run: make test
+        run: task test

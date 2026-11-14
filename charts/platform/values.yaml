@@ -17,6 +17,10 @@ mgmt:
 # Addon catalog. One ApplicationSet per entry, cluster generator selecting on:
 #   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
+# Optional helm parameters computed per cluster:
+#   clusterNameParameters:   [<param>]                 -> the cluster name
+#   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
+#   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
@@ -48,3 +52,11 @@ addons:
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }
+  # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
+  # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
+  cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }
+  # istiod flips its validating webhooks to failurePolicy Fail and injects caBundle once ready (manager pilot-discovery).
+  istio-ambient:            { namespace: istio-system,             roles: [workload],       default: true, ignoreDifferences: [{ group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration, managedFieldsManagers: [pilot-discovery] }] }
+  # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
+  kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
+  kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }

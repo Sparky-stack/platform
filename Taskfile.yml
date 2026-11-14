@@ -1,0 +1,116 @@
+# Cross-platform entrypoint (macOS, Linux, Windows). `task --list` shows every target; `make <target>` is a shim.
+# Commands run in Task's built-in shell; repo scripts run under `bash` (Git Bash on Windows: docs/dev-environment.md).
+# Variables: task up INST=aws-example | task set-repo REPO=https://github.com/<you>/platform.git | task kubeconfig CLUSTER=dev1
+version: "3"
+
+vars:
+  INST: '{{.INST | default "local"}}'
+  # Override when `bash` on PATH is not the one you want (e.g. PowerShell finding WSL's C:\Windows\System32\bash.exe):
+  # BASH="C:\Program Files\Git\bin\bash.exe" task lint
+  BASH: '{{.BASH | default "bash"}}'
+
+env:
+  INST: "{{.INST}}"
+
+tasks:
+  default:
+    desc: List the tasks
+    silent: true
+    cmds:
+      - task --list
+
+  # ---- toolchain -------------------------------------------------------------------------------------------------
+  setup:
+    desc: Install the pinned toolchain (mise install) and the helm-unittest plugin
+    cmds:
+      - mise install
+      - task: tools:plugins
+
+  doctor:
+    desc: Check every tool from mise.toml is installed at the pinned version
+    cmds:
+      - '"{{.BASH}}" hack/tools.sh check'
+
+  tools:plugins:
+    desc: Install the pinned helm-unittest plugin (idempotent)
+    cmds:
+      - '"{{.BASH}}" hack/tools.sh plugins'
+
+  tools:lock:
+    desc: Refresh mise.lock (URLs + checksums) for all six developer platforms
+    cmds:
+      - mise lock --platform linux-x64,linux-arm64,macos-x64,macos-arm64,windows-x64,windows-arm64
+
+  # ---- local / cloud installation ---------------------------------------------------------------------------------
+  up:
+    desc: "Bootstrap INST (default local: k3d mgmt, seed secrets, Argo CD, root app)"
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} up'
+
+  secrets:
+    desc: Seed/refresh platform-secrets from the gh CLI (local backend only)
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} secrets'
+
+  argocd:
+    desc: Install/upgrade Argo CD and apply the root Application
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} argocd'
+
+  status:
+    desc: Show CAPI clusters, Argo CD apps, ClusterDataPlanes and the Argo CD admin password
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} status'
+
+  ui:
+    desc: Port-forward the Argo CD UI to http://localhost:8081 and open it (NO_BROWSER=1 to skip)
+    interactive: true
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} ui'
+
+  down:
+    desc: Delete the CAPD workload clusters, then the k3d mgmt cluster (local only)
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} down'
+
+  kubeconfig:
+    desc: "Write <CLUSTER>.kubeconfig for a CAPD workload cluster, usable from this host (CLUSTER=dev1)"
+    requires:
+      vars: [CLUSTER]
+    cmds:
+      - '"{{.BASH}}" hack/kubeconfig.sh {{shellQuote .CLUSTER}}'
+
+  set-repo:
+    desc: "Rewrite repoURL across bootstrap/, charts/, installations/ (REPO=https://github.com/<you>/platform.git)"
+    requires:
+      vars: [REPO]
+    cmds:
+      - '"{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
+
+  # ---- offline validation -----------------------------------------------------------------------------------------
+  lint:
+    desc: Build chart deps, helm lint all charts, check YAML, shellcheck scripts, actionlint workflows
+    cmds:
+      - '"{{.BASH}}" hack/lint.sh'
+      - actionlint
+
+  test:
+    desc: "Full offline validation: helm template x installations, kubeconform, helm unittest, contract tests"
+    cmds:
+      - task: tools:plugins
+      - '"{{.BASH}}" hack/test.sh'
+
+  schemas:
+    desc: Generate kubeconform JSON schemas from upstream CRDs (cached)
+    cmds:
+      - '"{{.BASH}}" hack/schemas.sh'
+
+  images:audit:
+    desc: List every image the local installation renders and check linux/amd64 + linux/arm64 manifests (crane)
+    cmds:
+      - '"{{.BASH}}" hack/image-audit.sh {{.CLI_ARGS}}'
+
+  clean:
+    desc: Remove downloaded chart dependencies and packaged charts
+    cmds:
+      - rm -rf charts/*/charts addons/*/charts charts/*/*.tgz addons/*/*.tgz

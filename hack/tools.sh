@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Toolchain helper. The versions live in mise.toml; this script only checks and finishes the install.
+#   hack/tools.sh check [tool...]   every tool from mise.toml (or the named ones) is on PATH at the pinned version
+#                                   (missing = error, other version = warning)
+#   hack/tools.sh plugins           install the pinned helm-unittest plugin (idempotent; mise postinstall hook)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
+
+# pinned <tool>: version from the [tools] table of mise.toml ("" if absent).
+pinned() {
+  awk -v t="$1" '
+    /^\[/ { in_tools = ($0 == "[tools]") ; next }
+    in_tools && $1 == t && $2 == "=" { gsub(/"/, "", $3); print $3; exit }
+  ' mise.toml
+}
+
+# version_cmd <tool>: command printing the tool's version.
+version_cmd() {
+  case "$1" in
+    kubectl)     echo "kubectl version --client" ;;
+    helm)        echo "helm version --short" ;;
+    k3d)         echo "k3d version" ;;
+    clusterctl)  echo "clusterctl version -o short" ;;
+    argocd)      echo "argocd version --client --short" ;;
+    kubeconform) echo "kubeconform -v" ;;
+    crane)       echo "crane version" ;;
+    *)           echo "$1 --version" ;;
+  esac
+}
+
+# version_of <tool>: first line of the tool's version output, or exit 1 when not installed. Output is captured whole
+# (no `| head` under pipefail: an early-closing reader kills the writer with SIGPIPE, which then looks like a failure).
+version_of() {
+  local out
+  if [[ "$1" == python ]]; then
+    pick_python || return 1
+    out=$("$PYTHON" --version 2>&1) || return 1
+  else
+    command -v "$1" >/dev/null 2>&1 || return 1
+    local -a cmd
+    read -r -a cmd <<< "$(version_cmd "$1")"
+    out=$("${cmd[@]}" 2>/dev/null) || return 1
+  fi
+  out=$(printf '%s\n' "$out" | tr -d '\r' | grep -m1 -E '[0-9]+\.[0-9]+' || true)
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+
+# unittest_version: version of a *working* helm-unittest plugin ("" if absent or its binary is missing).
+unittest_version() {
+  helm unittest --help >/dev/null 2>&1 || return 0
+  helm plugin list 2>/dev/null | awk '$1 == "unittest" { print $2 }'
+}
+
+cmd_check() {
+  local tools=("$@") t want have missing=0 drift=0
+  if (( ${#tools[@]} == 0 )); then
+    while IFS= read -r t; do tools+=("$t"); done < <(
+      awk '/^\[/ { in_tools = ($0 == "[tools]"); next } in_tools && $2 == "=" { print $1 }' mise.toml)
+  fi
+  for t in "${tools[@]}"; do
+    want=$(pinned "$t")
+    if ! have=$(version_of "$t"); then
+      printf '  MISSING %-12s want %s\n' "$t" "${want:-?}"
+      missing=$((missing + 1))
+    elif [[ -n "$want" && "$have" != *"$want"* ]]; then
+      printf '  DRIFT   %-12s want %-9s have: %s\n' "$t" "$want" "$have"
+      drift=$((drift + 1))
+    else
+      printf '  ok      %-12s %s\n' "$t" "${want:-$have}"
+    fi
+  done
+  if command -v helm >/dev/null 2>&1; then
+    have=$(unittest_version)
+    if [[ -z "$have" ]]; then
+      printf '  MISSING %-12s want %s (task tools:plugins)\n' helm-unittest "${HELM_UNITTEST_VERSION:-?}"
+      missing=$((missing + 1))
+    else
+      printf '  ok      %-12s %s\n' helm-unittest "$have"
+    fi
+  fi
+  (( drift == 0 )) || echo "WARN: $drift tool(s) differ from mise.toml (run 'mise install' and activate mise in your shell)" >&2
+  (( missing == 0 )) || { echo "ERROR: $missing tool(s) missing: run 'mise install' (docs/dev-environment.md)" >&2; return 1; }
+}
+
+# Installs the release archive directly instead of `helm plugin install <git url>`: the plugin's install hook needs
+# git, hardcodes /tmp and breaks on macOS 26 (its BSD `sha256sum` lacks --status). The archive holds plugin.yaml +
+# the platform binary; its checksum is verified against the release's checksum file.
+cmd_plugins() {
+  local want="${HELM_UNITTEST_VERSION:-1.2.1}" have os arch asset base plugins tmp sum
+  command -v helm >/dev/null 2>&1 || { echo "helm not on PATH yet; run 'mise install' first" >&2; return 1; }
+  have=$(unittest_version)
+  if [[ "$have" == "$want" ]]; then
+    echo "helm-unittest $want already installed"
+    return 0
+  fi
+  case "$(os_name)" in
+    darwin) os=macos ;;
+    windows) os=windows ;;
+    *) os=linux ;;
+  esac
+  case "$(uname -m)" in
+    arm64|aarch64) arch=arm64 ;;
+    *) arch=amd64 ;;
+  esac
+  [[ "$os" == windows ]] && arch=amd64   # no windows-arm64 build; x64 emulation on Windows on Arm
+  asset="helm-unittest-$os-$arch-$want.tgz"
+  base="https://github.com/helm-unittest/helm-unittest/releases/download/v$want"
+  echo "Installing helm-unittest $want ($asset)"
+  tmp=$(mktemp -d)
+  curl -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset"
+  curl -fsSL --retry 3 -o "$tmp/checksums" "$base/helm-unittest-checksum.sha"
+  sum=$(grep -F "$asset" "$tmp/checksums" | awk '{ print $1 }')
+  [[ -n "$sum" && "$(sha256_file "$tmp/$asset")" == "$sum" ]] || { echo "checksum mismatch for $asset" >&2; rm -rf "$tmp"; return 1; }
+  if helm plugin list 2>/dev/null | awk '$1 == "unittest" { f = 1 } END { exit !f }'; then
+    helm plugin uninstall unittest >/dev/null
+  fi
+  plugins=$(helm env HELM_PLUGINS | tr -d '\r')
+  if [[ "$(os_name)" == windows ]]; then plugins=$(cygpath -u "$plugins"); fi   # GNU tar reads C: as a remote host
+  rm -rf "$plugins/unittest"
+  mkdir -p "$plugins/unittest"
+  tar -xzf "$tmp/$asset" -C "$plugins/unittest"
+  rm -rf "$tmp"
+  helm unittest --help >/dev/null || { echo "helm-unittest installed but does not run" >&2; return 1; }
+  echo "helm-unittest $want installed into $plugins/unittest"
+}
+
+case "${1:-check}" in
+  check) shift || true; cmd_check "$@" ;;
+  plugins) cmd_plugins ;;
+  *) echo "usage: $0 [check [tool...]|plugins]" >&2; exit 2 ;;
+esac
