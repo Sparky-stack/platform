@@ -3,7 +3,7 @@ Node registry auth (private GHCR): Secret <name>-registries in ns fleet, key reg
 config. The ClusterClass (variable registryAuth, set from secrets.nodeRegistryAuth.enabled) writes it to
 /etc/rancher/k3s/registries.yaml on every node via KThreesConfig files[].contentFrom.secret.
 Bootstrap data is rendered once per Machine: a rotated token reaches nodes created afterwards only (roll the machines,
-e.g. `clusterctl alpha rollout restart`, or use a long-lived read-only token). VERIFY rotation story.
+CAPI topology `rollout.after`, or use a long-lived read-only token). VERIFY rotation story.
 */ -}}
 {{- include "capi.validate" . }}
 {{- $auth := .Values.secrets.nodeRegistryAuth }}
