@@ -1,0 +1,69 @@
+suite: openchoreo agent delivery (ExternalSecret -> ClusterResourceSet)
+templates:
+  - templates/openchoreo-agent-crs.yaml
+  - templates/openchoreo-helpers.yaml
+set:
+  name: dev1
+  openchoreo.dataPlane.enabled: true
+  openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
+tests:
+  - it: renders nothing when the data plane is disabled
+    template: templates/openchoreo-agent-crs.yaml
+    set:
+      openchoreo.dataPlane.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: templates the CRS payload Secret from the client cert via store mgmt-fleet
+    template: templates/openchoreo-agent-crs.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.name, value: dev1-openchoreo-agent }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
+      - equal: { path: spec.target.name, value: dev1-openchoreo-agent }
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+      - equal: { path: spec.target.template.engineVersion, value: v2 }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: tlscrt, remoteRef: { key: dev1-agent-tls, property: tls.crt } }
+            - { secretKey: tlskey, remoteRef: { key: dev1-agent-tls, property: tls.key } }
+            - { secretKey: cacrt, remoteRef: { key: dev1-agent-tls, property: ca.crt } }
+
+  - it: payload = Namespace openchoreo-data-plane then Secret cluster-agent-tls (ESO templates, not Helm-rendered)
+    template: templates/openchoreo-agent-crs.yaml
+    documentIndex: 0
+    asserts:
+      - matchRegex:
+          path: spec.target.template.data["openchoreo-agent.yaml"]
+          pattern: '(?s)^apiVersion: v1\nkind: Namespace\nmetadata:\n  name: openchoreo-data-plane\n---\n'
+      - matchRegex:
+          path: spec.target.template.data["openchoreo-agent.yaml"]
+          pattern: 'kind: Secret\nmetadata:\n  name: cluster-agent-tls\n  namespace: openchoreo-data-plane'
+      - matchRegex:
+          path: spec.target.template.data["openchoreo-agent.yaml"]
+          pattern: 'type: kubernetes.io/tls'
+      - matchRegex:
+          path: spec.target.template.data["openchoreo-agent.yaml"]
+          pattern: 'tls\.crt: \{\{ \.tlscrt \| b64enc \}\}\n  tls\.key: \{\{ \.tlskey \| b64enc \}\}\n  ca\.crt: \{\{ \.cacrt \| b64enc \}\}'
+      - notMatchRegex:
+          path: spec.target.template.data["openchoreo-agent.yaml"]
+          pattern: 'agent-ca'
+
+  - it: ClusterResourceSet targets only this cluster and ships its payload + the shared gateway CA
+    template: templates/openchoreo-agent-crs.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: ClusterResourceSet }
+      - isAPIVersion: { of: addons.cluster.x-k8s.io/v1beta2 }
+      - equal: { path: metadata.name, value: dev1-openchoreo-agent }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.strategy, value: Reconcile }
+      - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
+      - equal:
+          path: spec.resources
+          value:
+            - { kind: Secret, name: dev1-openchoreo-agent }
+            - { kind: Secret, name: openchoreo-gateway-ca }

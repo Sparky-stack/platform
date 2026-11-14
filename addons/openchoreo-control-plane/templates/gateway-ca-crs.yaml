@@ -1,0 +1,45 @@
+{{- /*
+Shared ClusterResourceSet payload: the cluster-gateway CA's PUBLIC certificate as ConfigMap
+openchoreo-data-plane/cluster-gateway-ca (the data plane chart mounts it as clusterAgent.tls.serverCAConfigMap to
+verify the gateway). Only key ca.crt of Secret cluster-gateway-ca is read; the CA's tls.key never leaves this namespace.
+Lives in `fleet` next to the per-cluster payloads; every `<name>-openchoreo-agent` ClusterResourceSet lists it
+(charts/cluster templates/openchoreo-crs.yaml). Rotation (CA renews 30d before its 10y expiry): ESO refreshes within
+refreshInterval, the CRS (strategy Reconcile) re-applies it; agents read the CA at start (restart them).
+*/ -}}
+{{- if .Values.gatewayCA.enabled }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.gatewayCA.name }}
+  namespace: {{ .Values.gatewayCA.namespace }}
+  labels:
+    app.kubernetes.io/name: openchoreo-gateway-ca
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.gatewayCA.store }}
+  target:
+    name: {{ .Values.gatewayCA.name }}
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: addons.cluster.x-k8s.io/resource-set
+      data:
+        cluster-gateway-ca.yaml: |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: cluster-gateway-ca
+            namespace: openchoreo-data-plane
+            labels:
+              app.kubernetes.io/part-of: openchoreo
+          data:
+            ca.crt: {{`{{ .cacrt | toJson }}`}}
+  data:
+    - secretKey: cacrt
+      remoteRef:
+        key: {{ .Values.gatewayCA.sourceSecret }}
+        property: ca.crt
+{{- end }}

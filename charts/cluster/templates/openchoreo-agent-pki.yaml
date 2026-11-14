@@ -1,0 +1,81 @@
+{{- /*
+Per-cluster agent PKI on mgmt (cert-manager, namespace fleet). The CA and its private key never leave mgmt:
+  Issuer      <name>-agent-selfsigned  roots exactly one CA
+  Certificate <name>-agent-ca          isCA; Secret <name>-agent-ca (ClusterDataPlane <name> trusts its ca.crt)
+  Issuer      <name>-agent-ca          signs exactly one client cert
+  Certificate <name>-agent-tls         CN=<name>, client auth; Secret <name>-agent-tls -> workload cluster via the CRS
+Deleting the cluster file deletes the CA, which revokes the cluster: no other plane trusts it.
+*/ -}}
+{{- if .Values.openchoreo.dataPlane.enabled }}
+{{- $name := include "openchoreo.name" . }}
+{{- $ns := include "openchoreo.fleetNamespace" . }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $name }}-agent-selfsigned
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-agent-ca
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ $name }}-agent-ca
+  subject:
+    organizations: [OpenChoreo]
+  secretName: {{ $name }}-agent-ca
+  duration: 87600h          # 10y
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Never   # stable trust anchor: a new key would orphan the issued client cert until re-issued
+  issuerRef:
+    kind: Issuer
+    name: {{ $name }}-agent-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $name }}-agent-ca
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ $name }}-agent-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-agent-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+spec:
+  commonName: {{ $name }}
+  subject:
+    organizations: [OpenChoreo]
+  secretName: {{ $name }}-agent-tls
+  duration: 8760h           # 1y; the agent reads it at start: restart it after renewal (docs/openchoreo.md)
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  usages:
+    - client auth
+    - digital signature
+    - key encipherment
+  issuerRef:
+    kind: Issuer
+    name: {{ $name }}-agent-ca
+{{- end }}

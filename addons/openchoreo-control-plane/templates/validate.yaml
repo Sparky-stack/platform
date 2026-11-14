@@ -1,0 +1,34 @@
+{{- /*
+Render-time consistency with installation.yaml: the subchart's literal hostnames must match
+openchoreo.controlPlane.host and openchoreo.controlPlane.clusterGatewayURL (which workload-cluster agents dial).
+*/ -}}
+{{- $cp := index .Values "openchoreo-control-plane" }}
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- if not (has $host $cp.backstage.http.hostnames) }}
+{{- fail (printf "openchoreo-control-plane.backstage.http.hostnames must contain %s (openchoreo.controlPlane.host)" $host) }}
+{{- end }}
+{{- if not (has (printf "api.%s" $host) $cp.openchoreoApi.http.hostnames) }}
+{{- fail (printf "openchoreo-control-plane.openchoreoApi.http.hostnames must contain api.%s" $host) }}
+{{- end }}
+{{- if not (contains (printf "//thunder.%s" $host) $cp.security.oidc.issuer) }}
+{{- fail (printf "openchoreo-control-plane.security.oidc.issuer must be served by thunder.%s" $host) }}
+{{- end }}
+{{- $u := urlParse (required "openchoreo.controlPlane.clusterGatewayURL is required" .Values.openchoreo.controlPlane.clusterGatewayURL) }}
+{{- $parts := splitList ":" $u.host }}
+{{- $gwHost := first $parts }}
+{{- $gwPort := ternary (last $parts) "443" (eq (len $parts) 2) }}
+{{- if ne $u.scheme "wss" }}
+{{- fail "openchoreo.controlPlane.clusterGatewayURL must use wss://" }}
+{{- end }}
+{{- if ne (toString $gwPort) (toString $cp.gateway.httpsPort) }}
+{{- fail (printf "clusterGatewayURL port %s must equal openchoreo-control-plane.gateway.httpsPort %v (TLS passthrough listener)" $gwPort $cp.gateway.httpsPort) }}
+{{- end }}
+{{- if not $cp.clusterGateway.tlsRoute.enabled }}
+{{- fail "openchoreo-control-plane.clusterGateway.tlsRoute.enabled must be true: remote agents connect through the Gateway" }}
+{{- end }}
+{{- if ne (index $cp.clusterGateway.tlsRoute.hosts 0).host $gwHost }}
+{{- fail (printf "openchoreo-control-plane.clusterGateway.tlsRoute.hosts[0].host must be %s (clusterGatewayURL)" $gwHost) }}
+{{- end }}
+{{- if not (has $gwHost $cp.clusterGateway.tls.dnsNames) }}
+{{- fail (printf "openchoreo-control-plane.clusterGateway.tls.dnsNames must contain %s (server cert SAN for agents)" $gwHost) }}
+{{- end }}

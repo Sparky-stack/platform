@@ -1,0 +1,45 @@
+{{- /*
+OpenChoreo Project <project> (platform-owned: app repos cannot create or change it) and one ProjectReleaseBinding per
+pipeline environment. The bindings make OpenChoreo provision the project's namespace on each environment's data
+plane; spec.projectRelease is left unset: the Project controller seeds it with the latest ProjectRelease.
+*/ -}}
+{{- $p := include "tenant.project" . }}
+{{- $ns := .Values.openchoreo.orgNamespace }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: Project
+metadata:
+  name: {{ $p }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tenant.labels" . | nindent 4 }}
+    openchoreo.dev/name: {{ $p }}
+  annotations:
+    openchoreo.dev/display-name: {{ $p | quote }}
+    {{- with .Values.description }}
+    openchoreo.dev/description: {{ . | quote }}
+    {{- end }}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  deploymentPipelineRef:
+    name: {{ .Values.deploymentPipeline.name }}
+  type:
+    kind: {{ .Values.projectType.kind }}
+    name: {{ .Values.projectType.name }}
+{{- range $env := .Values.deploymentPipeline.environments }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata:
+  name: {{ $p }}-{{ $env }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tenant.labels" $ | nindent 4 }}
+    openchoreo.dev/project: {{ $p }}
+    openchoreo.dev/environment: {{ $env }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  owner:
+    projectName: {{ $p }}
+  environment: {{ $env }}
+{{- end }}

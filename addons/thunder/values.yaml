@@ -1,0 +1,350 @@
+# ThunderID on mgmt = OpenChoreo 1.3.3 install/k3d/common/values-thunder.yaml nested under `thunderid:`, with the
+# deviations marked "platform:". Browsers and pods use the same issuer URL http://thunder.openchoreo.localhost:8080:
+# browsers via the k3d published port 8080, mgmt pods via the coredns-local rewrite to the control-plane Gateway.
+# The HTTPRoute attaches once Gateway openchoreo-control-plane/gateway-default exists (addon openchoreo-control-plane).
+#
+# Secrets (platform: no literal credentials in git, unlike upstream): ClusterSecretStore `platform`, key `openchoreo`
+# (templates/bootstrap-secret.yaml -> Secret thunder-bootstrap). Properties, all alphanumeric (they are spliced into
+# YAML by Thunder's bootstrap):
+#   thunder-admin-password    Thunder console admin (user `admin`)
+#   admin-user-password       OpenChoreo user admin@openchoreo.dev     (group admins     -> OpenChoreo role admin)
+#   developer-user-password   OpenChoreo user developer@openchoreo.dev (group developers -> OpenChoreo role developer)
+#   backstage-client-secret   OAuth client openchoreo-backstage-client (also read by addon openchoreo-control-plane)
+#   backstage-backend-secret  (read by addon openchoreo-control-plane only)
+# Thunder's bootstrap (`thunderid bootstrap`, run by the setup Job) resolves `{{ .VAR }}` placeholders in the bundle
+# from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there. VERIFY live.
+#
+# Argo CD runs every Helm hook of this chart as a PreSync hook, on EVERY sync (Helm: install only):
+#   - PVCs database/certs/secrets (weight -15): hook-delete-policy hook-failed below, so a successful sync never deletes
+#     them (Argo's default BeforeHookCreation would wipe the sqlite DB and the generated keys each sync). local-path is
+#     WaitForFirstConsumer, so they stay Pending until the setup Job mounts them: Argo CD needs a PVC health override
+#     (Pending = Healthy) or the PreSync phase never finishes (argo-cd addon, see docs/openchoreo.md).
+#   - ExternalSecret thunder-bootstrap (ours, weight -20) before the Job; ServiceAccount/ConfigMaps (-10);
+#     setup Job (-5): starts a throw-away Thunder on localhost:8090 against the same sqlite PVC and imports the bundle
+#     below (upserts by id: re-runs are safe). RISK: the setup pod carries the Deployment's selector labels (no knob),
+#     so thunder-service routes to it for ~1 min per sync.
+# Footprint: one pod 100m/50Mi requests (upstream), setup Job the same while it runs, 3 small PVCs on local-path.
+
+bootstrapSecret:
+  store: platform           # ClusterSecretStore
+  remoteKey: openchoreo     # flat key, see header
+  name: thunder-bootstrap   # Secret consumed by thunderid.setup (admin.passwordRef, secretEnv)
+
+# --- installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks the hostname -
+openchoreo:
+  controlPlane:
+    host: openchoreo.localhost
+
+thunderid:
+  fullnameOverride: thunder
+
+  deployment:
+    replicaCount: 1           # SQLite: single writer
+    image:
+      pullPolicy: IfNotPresent   # platform: chart default Always
+  hpa:
+    enabled: false
+  ingress:
+    enabled: false            # no ingress-nginx: the HTTPRoute below on the OpenChoreo control-plane Gateway
+  httproute:
+    enabled: true
+    parentRefs:
+      - name: gateway-default
+        namespace: openchoreo-control-plane
+    hostnames:
+      - thunder.openchoreo.localhost
+
+  # platform: keep the PVCs across successful syncs (see header)
+  persistence:
+    annotations:
+      helm.sh/hook-delete-policy: hook-failed
+  certs:
+    persistence:
+      annotations:
+        helm.sh/hook-delete-policy: hook-failed
+  secrets:
+    persistence:
+      annotations:
+        helm.sh/hook-delete-policy: hook-failed
+
+  configuration:
+    server:
+      httpOnly: true
+      publicUrl: "http://thunder.openchoreo.localhost:8080"
+    gateClient:
+      hostname: "thunder.openchoreo.localhost"
+      port: 8080
+      scheme: "http"
+    # platform: password "" - the chart default "dbpassword" (postgres) would render an unused hook Secret
+    database:
+      config:
+        type: sqlite
+        postgres: { password: "" }
+      runtime_transient:
+        type: sqlite
+        postgres: { password: "" }
+      entity:
+        type: sqlite
+        postgres: { password: "" }
+      runtime_persistent:
+        type: sqlite
+        postgres: { password: "" }
+    passkey:
+      allowedOrigins:
+        - "http://openchoreo.localhost:8080"
+
+  setup:
+    enabled: true
+    admin:
+      passwordRef: { name: thunder-bootstrap, key: thunder-admin-password }   # platform: no lookup()-generated Secret
+    secretEnv:
+      - { name: OPENCHOREO_ADMIN_PASSWORD, secretName: thunder-bootstrap, secretKey: admin-user-password }
+      - { name: OPENCHOREO_DEVELOPER_PASSWORD, secretName: thunder-bootstrap, secretKey: developer-user-password }
+      - { name: BACKSTAGE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: backstage-client-secret }
+
+  # Declarative documents imported by the setup Job on top of ThunderID's shipped defaults; upserted by fixed id
+  # (01900000-0000-7000-8001-* block, clear of ThunderID's own). Upstream 48, 49, 51, 54 verbatim except the client
+  # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/53/55-62 - service clients
+  # with well-known secrets for components not installed here (sample portal, RCA/FinOps agents, MCP, workload
+  # publisher, observer, e2e). Add a client back together with the feature that uses it.
+  bootstrap:
+    scripts:
+      # A path override replaces ThunderID's shipped entry: every directive except img-src mirrors the 1.0.1 defaults.
+      48-csp.yaml: |
+        resource_type: server_config
+        name: csp
+        value:
+          paths:
+            - location: "/gate/"
+              directives:
+                img-src:
+                  - "'self'"
+                  - "data:"
+                  - "https://cdn.statically.io"
+                  - "https://raw.githubusercontent.com"
+                font-src:
+                  - "'self'"
+                  - "data:"
+                style-src-attr:
+                  - "'self'"
+                  - "'unsafe-inline'"
+                style-src-elem:
+                  - "'self'"
+            - location: "/console/"
+              directives:
+                img-src:
+                  - "'self'"
+                  - "data:"
+                  - "https://cdn.statically.io"
+                  - "https://raw.githubusercontent.com"
+                font-src:
+                  - "'self'"
+                  - "data:"
+                connect-src:
+                  - "'self'"
+                  - "https://thunderid.dev"
+                style-src-attr:
+                  - "'self'"
+                  - "'unsafe-inline'"
+                style-src-elem:
+                  - "'self'"
+                  - "'unsafe-inline'"
+                worker-src:
+                  - "'self'"
+                  - "blob:"
+
+      49-cors.yaml: |
+        resource_type: server_config
+        name: cors
+        value:
+          allowedOrigins:
+            - "http://openchoreo.localhost:8080"
+
+      50-user-schema-and-users.yaml: |
+        resource_type: user_type
+        id: 01900000-0000-7000-8001-000000000010
+        category: user
+        name: openchoreo-user
+        ouHandle: default
+        allowSelfRegistration: false
+        systemAttributes:
+          display: username
+        schema:
+          username:
+            type: string
+            displayName: Username
+            required: true
+            unique: true
+          password:
+            type: string
+            displayName: Password
+            required: false
+            credential: true
+          given_name:
+            type: string
+            displayName: First Name
+            required: true
+          family_name:
+            type: string
+            displayName: Last Name
+            required: true
+          email:
+            type: string
+            displayName: Email
+            required: true
+            unique: true
+        ---
+        resource_type: user
+        id: 01900000-0000-7000-8001-000000000030
+        type: openchoreo-user
+        ouHandle: default
+        attributes:
+          username: admin@openchoreo.dev
+          email: admin@openchoreo.dev
+          given_name: Admin
+          family_name: User
+        credentials:
+          password: "{{ .OPENCHOREO_ADMIN_PASSWORD }}"
+        ---
+        resource_type: user
+        id: 01900000-0000-7000-8001-000000000031
+        type: openchoreo-user
+        ouHandle: default
+        attributes:
+          username: developer@openchoreo.dev
+          email: developer@openchoreo.dev
+          given_name: Developer
+          family_name: User
+        credentials:
+          password: "{{ .OPENCHOREO_DEVELOPER_PASSWORD }}"
+        ---
+        resource_type: group
+        id: 01900000-0000-7000-8001-000000000040
+        name: admins
+        description: Openchoreo Admins group
+        ouHandle: default
+        members:
+          - id: 01900000-0000-7000-8001-000000000030
+            type: user
+        ---
+        resource_type: group
+        id: 01900000-0000-7000-8001-000000000041
+        name: developers
+        description: Openchoreo Developers group
+        ouHandle: default
+        members:
+          - id: 01900000-0000-7000-8001-000000000031
+            type: user
+
+      51-backstage-app.yaml: |
+        resource_type: application
+        id: 01900000-0000-7000-8001-000000000060
+        ouId: 01900000-0000-7000-8000-000000000001
+        name: Backstage
+        type: fullstack
+        authFlowId: 01900000-0000-7000-8000-000000000061
+        description: OpenChoreo Backstage Portal
+        logoUrl: "https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png"
+        allowedUserTypes:
+          - openchoreo-user
+        assertion:
+          validityPeriod: 3600
+        inboundAuthConfig:
+          - type: oauth2
+            config:
+              clientId: openchoreo-backstage-client
+              clientSecret: "{{ .BACKSTAGE_CLIENT_SECRET }}"
+              redirectUris:
+                - "http://openchoreo.localhost:8080/api/auth/openchoreo-auth/handler/frame"
+              grantTypes:
+                - authorization_code
+                - client_credentials
+                - refresh_token
+              responseTypes:
+                - code
+              tokenEndpointAuthMethod: client_secret_post
+              pkceRequired: false
+              publicClient: false
+              token:
+                accessToken:
+                  userConfig:
+                    validityPeriod: 86400
+                    attributes:
+                      - given_name
+                      - family_name
+                      - username
+                      - groups
+                  clientConfig:
+                    validityPeriod: 86400
+                idToken:
+                  validityPeriod: 86400
+                  userAttributes:
+                    - given_name
+                    - family_name
+                    - username
+                    - groups
+              scopeClaims:
+                email:
+                  - email
+                groups:
+                  - groups
+                profile:
+                  - username
+                  - given_name
+                  - family_name
+                  - picture
+
+      54-cli-app.yaml: |
+        resource_type: application
+        id: 01900000-0000-7000-8001-000000000063
+        ouId: 01900000-0000-7000-8000-000000000001
+        name: OpenChoreo CLI
+        type: custom
+        authFlowId: 01900000-0000-7000-8000-000000000061
+        description: OpenChoreo CLI Default Application
+        logoUrl: "https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png"
+        allowedUserTypes:
+          - openchoreo-user
+        assertion:
+          validityPeriod: 3600
+        inboundAuthConfig:
+          - type: oauth2
+            config:
+              clientId: openchoreo-cli
+              redirectUris:
+                - "http://127.0.0.1:55152/auth-callback"
+              grantTypes:
+                - authorization_code
+                - refresh_token
+              responseTypes:
+                - code
+              tokenEndpointAuthMethod: none
+              pkceRequired: true
+              publicClient: true
+              token:
+                accessToken:
+                  userConfig:
+                    validityPeriod: 3600
+                    attributes:
+                      - given_name
+                      - family_name
+                      - username
+                      - groups
+                idToken:
+                  validityPeriod: 3600
+                  userAttributes:
+                    - given_name
+                    - family_name
+                    - username
+                    - groups
+              scopeClaims:
+                email:
+                  - email
+                groups:
+                  - groups
+                profile:
+                  - username
+                  - given_name
+                  - family_name
+                  - picture
+                  - groups

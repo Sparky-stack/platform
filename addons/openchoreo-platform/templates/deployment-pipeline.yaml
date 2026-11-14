@@ -1,0 +1,25 @@
+{{- $envs := .Values.deploymentPipeline.environments }}
+{{- if lt (len $envs) 1 }}{{ fail "deploymentPipeline.environments needs at least one environment" }}{{ end }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: DeploymentPipeline
+metadata:
+  name: {{ .Values.deploymentPipeline.name }}
+  namespace: {{ .Values.openchoreo.orgNamespace }}
+  annotations:
+    openchoreo.dev/display-name: Default Pipeline
+    openchoreo.dev/description: {{ join " -> " $envs | quote }}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  labels:
+    openchoreo.dev/name: {{ .Values.deploymentPipeline.name }}
+spec:
+  {{- if gt (len $envs) 1 }}
+  promotionPaths:
+    {{- range $i, $env := initial $envs }}
+    - sourceEnvironmentRef:
+        name: {{ $env }}
+      targetEnvironmentRefs:
+        - name: {{ index $envs (add1 $i) }}
+    {{- end }}
+  {{- else }}
+  promotionPaths: []
+  {{- end }}

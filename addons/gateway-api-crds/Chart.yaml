@@ -1,0 +1,9 @@
+apiVersion: v2
+name: gateway-api-crds
+description: Gateway API standard-channel CRDs (v1.5.1) - prerequisite of kgateway and OpenChoreo (mgmt + workload)
+type: application
+version: 0.1.0
+dependencies:
+  - name: gateway-crds-helm
+    version: 1.8.2          # bundles Gateway API v1.5.1 (= OpenChoreo 1.3.3 GATEWAY_API_VERSION); OCI tag has no "v"
+    repository: oci://docker.io/envoyproxy

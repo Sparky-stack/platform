@@ -1,0 +1,69 @@
+suite: openchoreo-control-plane glue and guards
+templates:
+  - templates/validate.yaml
+  - templates/gateway-ca-crs.yaml
+  - templates/backstage-secrets.yaml
+  - charts/openchoreo-control-plane/templates/cluster-gateway/certificate.yaml
+  - charts/openchoreo-control-plane/templates/cluster-gateway/tlsroute.yaml
+tests:
+  - it: gateway CA payload carries only the public cert, into fleet, typed for CRS
+    template: templates/gateway-ca-crs.yaml
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: metadata.name, value: openchoreo-gateway-ca }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-openchoreo } }
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+      - equal:
+          path: spec.data
+          value: [{ secretKey: cacrt, remoteRef: { key: cluster-gateway-ca, property: ca.crt } }]
+      - matchRegex:
+          path: spec.target.template.data["cluster-gateway-ca.yaml"]
+          pattern: 'kind: ConfigMap\nmetadata:\n  name: cluster-gateway-ca\n  namespace: openchoreo-data-plane'
+      - notMatchRegex:
+          path: spec.target.template.data["cluster-gateway-ca.yaml"]
+          pattern: 'tls\.key'
+
+  - it: backstage-secrets from the platform store with the mandatory keys
+    template: templates/backstage-secrets.yaml
+    asserts:
+      - equal: { path: metadata.name, value: backstage-secrets }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.target.template.data.jenkins-api-key, value: placeholder-not-in-use }
+      - contains:
+          path: spec.data
+          content: { secretKey: client-secret, remoteRef: { key: openchoreo, property: backstage-client-secret } }
+
+  - it: cluster-gateway server cert covers the name agents dial
+    template: charts/openchoreo-control-plane/templates/cluster-gateway/certificate.yaml
+    asserts:
+      - contains: { path: spec.dnsNames, content: cluster-gateway.openchoreo.localhost }
+
+  - it: TLS passthrough route for the agent host
+    template: charts/openchoreo-control-plane/templates/cluster-gateway/tlsroute.yaml
+    asserts:
+      - equal: { path: spec.hostnames, value: [cluster-gateway.openchoreo.localhost] }
+      - equal:
+          path: spec.parentRefs[0].sectionName
+          value: tls-passthrough
+
+  - it: fails when the console host drifts from the installation
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.host: example.com
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when the agent URL host is not the TLS route host / cert SAN
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.clusterGatewayURL: wss://gw.example.com:8443/ws
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when the agent URL port is not the passthrough listener port
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:443/ws
+    asserts:
+      - failedTemplate: {}

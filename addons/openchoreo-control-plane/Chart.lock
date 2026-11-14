@@ -1,0 +1,6 @@
+dependencies:
+- name: openchoreo-control-plane
+  repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
+  version: 1.3.3
+digest: sha256:6ae0f1b434bf479143a62fbc3c18caa34852c9c1ab7fa6ceca01ea2d3824259c
+generated: "2026-11-14T08:12:01.828936143+02:00"

@@ -1,0 +1,35 @@
+{{- /*
+AppProject tenant-<project>: the tenant's app repos may only sync OpenChoreo developer kinds into the org namespace of
+the control plane. Nothing cluster-scoped, no other namespace, no other repo. (Which OpenChoreo Project a Component
+claims via spec.owner is not enforced here; OpenChoreo's own authz governs that.)
+*/ -}}
+{{- $p := include "tenant.project" . }}
+{{- $apps := include "tenant.apps" . | fromYamlArray }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: tenant-{{ $p }}
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    {{- include "tenant.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"     # before the Applications that reference it
+spec:
+  description: {{ .Values.description | default (printf "OpenChoreo project %s" $p) | quote }}
+  sourceRepos:
+    {{- $repos := list }}
+    {{- range $apps }}{{ $repos = append $repos .repoURL }}{{ end }}
+    {{- range $repos | uniq | sortAlpha }}
+    - {{ . | quote }}
+    {{- else }}
+    []
+    {{- end }}
+  destinations:
+    - server: {{ .Values.argocd.server }}
+      namespace: {{ .Values.openchoreo.orgNamespace }}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    {{- range .Values.developerKinds }}
+    - group: openchoreo.dev
+      kind: {{ . }}
+    {{- end }}

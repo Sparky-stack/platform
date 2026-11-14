@@ -1,0 +1,24 @@
+# OpenChoreo platform-team resources in the control plane (mgmt). Everything here is an OpenChoreo CR except the org
+# namespace label, so the Application fails with "no matches for kind ..." until addon openchoreo-control-plane has
+# installed the CRDs; its retries cover that (CRDs come from the control-plane chart's crds/, installed with it).
+# CRs carry SkipDryRunOnMissingResource so the namespace label still applies on the first attempts.
+#
+# Not here, by design:
+#   Environments       charts/cluster (one per cluster file `openchoreo.dataPlane.environments`, bound to that
+#                      cluster's ClusterDataPlane; dataPlaneRef is immutable)
+#   Projects           charts/tenant (installations/<inst>/tenants/<project>.yaml)
+#   ClusterAuthzRoles  the control-plane chart's authz bootstrap Job (openchoreoApi.config.security.authorization)
+
+# --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
+openchoreo:
+  orgNamespace: default
+
+# DeploymentPipeline `default`: promotion order. Every Project created from a tenant file references it (charts/tenant),
+# and charts/tenant renders one ProjectReleaseBinding per environment listed here (keep both lists in sync).
+deploymentPipeline:
+  name: default
+  environments: [development, staging, production]
+
+# Upstream defaults from files/ (see files/README.md); set false to manage them elsewhere.
+upstreamDefaults:
+  enabled: true

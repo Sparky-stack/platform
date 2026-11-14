@@ -1,0 +1,10 @@
+{{- /* Upstream 1.3.3 ClusterComponentTypes, ClusterTraits, ClusterProjectType (files/README.md), verbatim. Cluster-scoped. */ -}}
+{{- if .Values.upstreamDefaults.enabled }}
+{{- range $path, $_ := .Files.Glob "files/*/*.yaml" }}
+---
+# Source: {{ $.Chart.Name }}/{{ $path }}
+{{- $obj := $.Files.Get $path | fromYaml }}
+{{- $_ := set $obj.metadata "annotations" (merge (default dict $obj.metadata.annotations) (dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true")) }}
+{{ toYaml $obj }}
+{{- end }}
+{{- end }}

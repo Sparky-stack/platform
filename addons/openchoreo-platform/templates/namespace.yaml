@@ -1,0 +1,13 @@
+{{- /*
+OpenChoreo's org namespace: openchoreo-api (and so the console) and the event-forwarder only see namespaces labelled
+openchoreo.dev/control-plane=true. Upstream labels `default` with kubectl; here Argo server-side-applies only the label.
+`default` belongs to Kubernetes: never delete or prune it with the Application.
+*/ -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ required "openchoreo.orgNamespace is required" .Values.openchoreo.orgNamespace }}
+  labels:
+    openchoreo.dev/control-plane: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false,Prune=false,ServerSideApply=true

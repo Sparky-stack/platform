@@ -1,0 +1,16 @@
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $target := required "rewrite.target is required" .Values.rewrite.target }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: coredns-local
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  openchoreo.override: |
+    rewrite stop {
+      name regex ^(.+\.)?{{ regexQuoteMeta $host }}\.$ {{ $target }}
+      answer auto
+    }

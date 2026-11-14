@@ -1,0 +1,63 @@
+{{- /*
+OpenChoreo registration of this cluster in the control plane (mgmt):
+  ClusterDataPlane <name>  planeID <name>; trusts only fleet/<name>-agent-ca; app ingress = Gateway gateway-default of
+                           the data plane (addon openchoreo-data-plane) at gatewayHost:gatewayPort; secrets via the
+                           workload cluster's ClusterSecretStore `default`.
+  Environment <env>        one per openchoreo.dataPlane.environments, in the org namespace, bound to this
+                           ClusterDataPlane. dataPlaneRef is immutable: moving an environment to another cluster =
+                           remove it here, sync, add it there. An environment must appear in exactly one cluster file.
+*/ -}}
+{{- if .Values.openchoreo.dataPlane.enabled }}
+{{- $name := include "openchoreo.name" . }}
+{{- $dp := .Values.openchoreo.dataPlane }}
+{{- $orgNs := (.Values.openchoreo.orgNamespace | default "default") }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterDataPlane
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+  annotations:
+    openchoreo.dev/display-name: {{ $name | quote }}
+    openchoreo.dev/description: {{ printf "%s cluster %s (%s)" (.Values.provider | default "docker") $name (.Values.region | default "local") | quote }}
+    {{- include "openchoreo.crAnnotations" . | nindent 4 }}
+spec:
+  planeID: {{ $name }}
+  clusterAgent:
+    clientCA:
+      secretKeyRef:
+        name: {{ $name }}-agent-ca
+        namespace: {{ include "openchoreo.fleetNamespace" . }}
+        key: ca.crt
+  secretStoreRef:
+    name: default
+  gateway:
+    ingress:
+      external:
+        name: gateway-default
+        namespace: openchoreo-data-plane
+        http:
+          host: {{ required "openchoreo.dataPlane.gatewayHost is required when the data plane is enabled" $dp.gatewayHost | quote }}
+          port: {{ required "openchoreo.dataPlane.gatewayPort is required" $dp.gatewayPort | int }}
+          listenerName: http
+{{- range $env := $dp.environments }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata:
+  name: {{ $env }}
+  namespace: {{ $orgNs }}
+  labels:
+    {{- include "openchoreo.labels" $ | nindent 4 }}
+    openchoreo.dev/name: {{ $env }}
+  annotations:
+    openchoreo.dev/display-name: {{ $env | title | quote }}
+    openchoreo.dev/description: {{ printf "%s on cluster %s" ($env | title) $name | quote }}
+    {{- include "openchoreo.crAnnotations" $ | nindent 4 }}
+spec:
+  dataPlaneRef:
+    kind: ClusterDataPlane
+    name: {{ $name }}
+  isProduction: {{ eq $env "production" }}
+{{- end }}
+{{- end }}

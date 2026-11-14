@@ -1,0 +1,56 @@
+suite: openchoreo-data-plane identity and guards
+templates:
+  - templates/validate.yaml
+  - charts/openchoreo-data-plane/templates/cluster-agent/deployment.yaml
+  - charts/openchoreo-data-plane/templates/cluster-agent/certificate.yaml
+  - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
+set:
+  cluster.name: dev1
+  openchoreo-data-plane.clusterAgent.planeID: dev1
+tests:
+  - it: agent dials the installation's gateway URL as plane dev1 with the CRS-delivered cert and CA
+    template: charts/openchoreo-data-plane/templates/cluster-agent/deployment.yaml
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: "--plane-id=dev1" }
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --server-url=wss://cluster-gateway.openchoreo.localhost:8443/ws
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: client-certs, secret: { secretName: cluster-agent-tls } }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: server-ca, configMap: { name: cluster-gateway-ca } }
+
+  - it: the chart's own self-signed cert never writes the delivered Secret
+    template: charts/openchoreo-data-plane/templates/cluster-agent/certificate.yaml
+    asserts:
+      - equal: { path: spec.secretName, value: cluster-agent-selfsigned-unused }
+
+  - it: app Gateway listens on HTTP 19080 only
+    template: charts/openchoreo-data-plane/templates/gateway/gateway.yaml
+    asserts:
+      - equal:
+          path: spec.listeners
+          value: [{ name: http, protocol: HTTP, port: 19080, allowedRoutes: { namespaces: { from: All } } }]
+
+  - it: fails when planeID differs from the cluster name
+    template: templates/validate.yaml
+    set:
+      openchoreo-data-plane.clusterAgent.planeID: default
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when serverUrl drifts from the installation
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.clusterGatewayURL: wss://elsewhere:443/ws
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when a control-plane CA Secret would be required
+    template: templates/validate.yaml
+    set:
+      openchoreo-data-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca
+    asserts:
+      - failedTemplate: {}
