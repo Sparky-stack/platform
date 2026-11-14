@@ -1,0 +1,39 @@
+{{- /*
+Mesh PKI for this cluster on mgmt (cert-manager, namespace fleet), only when the fleet file sets mesh.group:
+  Certificate <name>-mesh-ca   intermediate CA signed by Issuer mesh-root-ca (addon mesh-root-ca: the shared mesh root,
+                               whose private key never leaves mgmt). Secret <name>-mesh-ca -> this cluster's istiod as
+                               `cacerts` (mesh-crs.yaml). istiod signs this cluster's workload certificates with it.
+The intermediate's private key does reach the workload cluster: istiod-as-CA needs it (docs/multicluster.md "Trust" -
+the scoped exception to invariant 4, and the istio-csr alternative). Short-lived and rotated, so a leaked key expires.
+*/ -}}
+{{- if include "mesh.group" . }}
+{{- $name := .Values.name }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-mesh-ca
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ $name }}-mesh-ca
+  subject:
+    organizations: [{{ .Values.installation.name | quote }}]
+    organizationalUnits: [{{ printf "mesh %s" (include "mesh.group" .) | quote }}]
+  secretName: {{ $name }}-mesh-ca
+  duration: 2160h           # 90d; cert-manager renews, ESO + CRS re-deliver, istiod reloads cacerts on change. VERIFY
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Always
+  usages:
+    - cert sign
+    - crl sign
+    - digital signature
+    - key encipherment
+  issuerRef:
+    kind: Issuer
+    name: {{ include "mesh.rootIssuer" . }}
+{{- end }}

@@ -1,0 +1,30 @@
+suite: mesh root CA on mgmt
+templates:
+  - templates/root-ca.yaml
+tests:
+  - it: renders selfsigned issuer -> root CA -> CA issuer in fleet
+    asserts:
+      - hasDocuments: { count: 3 }
+      - equal: { path: metadata.namespace, value: fleet }
+      - isKind: { of: Issuer }
+        documentIndex: 0
+      - isNotNull: { path: spec.selfSigned }
+        documentIndex: 0
+      - isKind: { of: Certificate }
+        documentIndex: 1
+      - equal: { path: spec.isCA, value: true }
+        documentIndex: 1
+      - equal: { path: spec.secretName, value: mesh-root-ca }
+        documentIndex: 1
+      - equal: { path: spec.privateKey.rotationPolicy, value: Never }
+        documentIndex: 1
+      - equal: { path: metadata.name, value: mesh-root-ca }
+        documentIndex: 2
+      - equal: { path: spec.ca.secretName, value: mesh-root-ca }
+        documentIndex: 2
+  - it: names the root after the installation
+    set:
+      installation.name: hetzner-example
+    documentIndex: 1
+    asserts:
+      - equal: { path: spec.commonName, value: hetzner-example mesh root CA }

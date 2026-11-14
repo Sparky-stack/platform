@@ -1,0 +1,22 @@
+{{- /*
+Named templates for the mesh-*.yaml files (this file renders nothing): opt-in Istio ambient multicluster, fleet file
+key `mesh.group` (docs/multicluster.md). Prefix `mesh.` avoids collisions with the capi/argocd/openchoreo helpers.
+*/ -}}
+
+{{- /* Mesh group of this cluster ("" = not a mesh member). meshID = group, network = cluster name. */ -}}
+{{- define "mesh.group" -}}
+{{- ((.Values.mesh | default dict).group | default "") -}}
+{{- end }}
+
+{{- /* Issuer (namespace fleet) of the shared mesh root CA; addon mesh-root-ca renders it on mgmt. */ -}}
+{{- define "mesh.rootIssuer" -}}mesh-root-ca{{- end }}
+
+{{- /* istio-reader token Secret in istio-system on every member; addon istio-eastwest creates it there. */ -}}
+{{- define "mesh.readerTokenSecret" -}}istio-reader-service-account-istio-remote-secret-token{{- end }}
+
+{{- define "mesh.labels" -}}
+platform.koorikla.io/name: {{ required "name is required (cluster file)" .Values.name }}
+mesh.platform.koorikla.io/group: {{ include "mesh.group" . }}
+app.kubernetes.io/part-of: istio-mesh
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}

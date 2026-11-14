@@ -4,7 +4,8 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
   capi.validate  - fails rendering on an unusable fleet file
   capi.labels    - platform.koorikla.io/* + addons.platform.koorikla.io/* (docs/conventions.md); the Argo CD cluster
                    secret must carry exactly these labels -> include "capi.labels" there too. The cilium addon label
-                   is derived from `cni` (the CNI is a birth fact, the addon follows it).
+                   is derived from `cni` (the CNI is a birth fact, the addon follows it); istio-eastwest and the
+                   mesh.platform.koorikla.io/* labels from `mesh.group` (docs/multicluster.md).
 */ -}}
 {{- define "capi.validate" -}}
 {{- $v := .Values -}}
@@ -41,6 +42,21 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- fail (printf "cluster %s: addons.%s must be true or false" $v.name $addon) -}}
 {{- end -}}
 {{- end -}}
+{{- $mesh := ($v.mesh | default dict) -}}
+{{- if $mesh.group -}}
+{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" $mesh.group) -}}
+{{- fail (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mesh.group) -}}
+{{- end -}}
+{{- if eq (index ($v.addons | default dict) "istio-ambient" | toString) "false" -}}
+{{- fail (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name) -}}
+{{- end -}}
+{{- if not (index ((($v.mgmt | default dict).addons) | default dict) "mesh-root-ca") -}}
+{{- fail (printf "cluster %s: mesh.group needs the mesh root CA on mgmt: set mgmt.addons.mesh-root-ca: true in installation.yaml" $v.name) -}}
+{{- end -}}
+{{- end -}}
+{{- if and (hasKey ($v.addons | default dict) "istio-eastwest") (ne (index $v.addons "istio-eastwest") (not (empty $mesh.group))) -}}
+{{- fail (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $v.addons "istio-eastwest") ($mesh.group | default "")) -}}
+{{- end -}}
 {{- range $i, $w := $v.workers -}}
 {{- if not $w.name -}}
 {{- fail (printf "cluster %s: workers[%d].name is required" $v.name $i) -}}
@@ -56,7 +72,12 @@ platform.koorikla.io/region: {{ .Values.region | quote }}
 platform.koorikla.io/environment: {{ .Values.environment | quote }}
 platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
 platform.koorikla.io/cni: {{ .Values.cni | quote }}
-{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium")) (.Values.addons | default dict) }}
+{{- $meshGroup := ((.Values.mesh | default dict).group | default "") }}
+{{- with $meshGroup }}
+mesh.platform.koorikla.io/group: {{ . | quote }}
+mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
+{{- end }}
+{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium") "istio-eastwest" (not (empty $meshGroup))) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}

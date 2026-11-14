@@ -1,0 +1,52 @@
+{{- /*
+Shared mesh root. rotationPolicy Never: a new root key would orphan every member's intermediate until they are all
+re-issued and istiod restarted - root rotation is a deliberate procedure (trust bundle with both roots), not a renewal.
+*/ -}}
+{{- $r := .Values.root }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mesh-root-selfsigned
+  namespace: {{ $r.namespace }}
+  labels:
+    app.kubernetes.io/part-of: istio-mesh
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $r.issuerName }}
+  namespace: {{ $r.namespace }}
+  labels:
+    app.kubernetes.io/part-of: istio-mesh
+spec:
+  isCA: true
+  commonName: {{ printf "%s mesh root CA" .Values.installation.name | quote }}
+  subject:
+    organizations: [{{ .Values.installation.name | quote }}]
+  secretName: {{ $r.issuerName }}
+  duration: {{ $r.duration }}
+  renewBefore: {{ $r.renewBefore }}
+  privateKey:
+    algorithm: {{ $r.privateKey.algorithm }}
+    size: {{ $r.privateKey.size }}
+    rotationPolicy: Never
+  usages:
+    - cert sign
+    - crl sign
+    - digital signature
+  issuerRef:
+    kind: Issuer
+    name: mesh-root-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $r.issuerName }}
+  namespace: {{ $r.namespace }}
+  labels:
+    app.kubernetes.io/part-of: istio-mesh
+spec:
+  ca:
+    secretName: {{ $r.issuerName }}
