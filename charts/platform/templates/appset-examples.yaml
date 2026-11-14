@@ -23,7 +23,7 @@ spec:
     metadata:
       name: '{{ $ex }}-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
     spec:
-      project: platform
+      project: examples              # templates/projects.yaml: the example namespaces only
       source:
         repoURL: {{ $inst.repoURL | quote }}
         targetRevision: '{{ "{{" }} $r := index .metadata.annotations "platform.koorikla.io/addons-revision" {{ "}}" }}{{ "{{" }} if and $r (ne $r "HEAD") {{ "}}" }}{{ "{{" }} $r {{ "}}" }}{{ "{{" }} else {{ "}}" }}{{ $defaultRev }}{{ "{{" }} end {{ "}}" }}'

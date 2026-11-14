@@ -67,6 +67,7 @@ spec:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
               value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+              forceString: true
             {{- end }}
             {{- /* installationParameters: <helm param>: <template over installation values>, rendered here once per
             installation, so subchart values that must equal installation.yaml facts are never restated by hand. */}}
@@ -90,8 +91,11 @@ spec:
             {{- if not (and (kindIs "map" $l) $l.label) }}
             {{- fail (printf "addons.%s.clusterLabelParameters.%s: want {label: <key>, default: <value>}" $addon $p) }}
             {{- end }}
+            {{- if and (hasKey $l "default") (not (kindIs "string" $l.default)) }}
+            {{- fail (printf "addons.%s.clusterLabelParameters.%s: default must be a string (quote it: \"%v\")" $addon $p $l.default) }}
+            {{- end }}
             - name: {{ $p | quote }}
-              {{- if $l.default }}
+              {{- if ne (get $l "default" | default "") "" }}
               value: '{{ "{{" }} $v := index .metadata.labels {{ $l.label | quote }} {{ "}}" }}{{ "{{" }} if $v {{ "}}" }}{{ "{{" }} $v {{ "}}" }}{{ "{{" }} else {{ "}}" }}{{ $l.default }}{{ "{{" }} end {{ "}}" }}'
               {{- else }}
               value: '{{ "{{" }} index .metadata.labels {{ $l.label | quote }} {{ "}}" }}'

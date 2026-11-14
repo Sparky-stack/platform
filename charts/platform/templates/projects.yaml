@@ -55,3 +55,31 @@ spec:
       kind: ExternalSecret
     - group: openchoreo.dev
       kind: Environment
+{{- /* examples: the opt-in example charts (templates/appset-examples.yaml) on workload clusters. Only their own
+namespaces, only Namespace as a cluster-scoped kind, only the namespaced kinds listed in examplesProject. */}}
+{{- $exNs := list }}
+{{- range $ex, $cfg := (.Values.examples | default dict) }}
+{{- if $cfg.enabled }}{{ $exNs = append $exNs ($cfg.namespace | default $ex) }}{{ end }}
+{{- end }}
+{{- if $exNs }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: examples
+  namespace: argocd
+spec:
+  description: Opt-in example charts (examples/<name>) - their namespaces only
+  sourceRepos:
+    - {{ .Values.installation.repoURL | quote }}
+  destinations:
+    {{- range $ns := $exNs | uniq }}
+    - server: '*'
+      namespace: {{ $ns | quote }}
+    {{- end }}
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    {{- toYaml .Values.examplesProject.namespaceResources | nindent 4 }}
+{{- end }}

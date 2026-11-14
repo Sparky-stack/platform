@@ -4,6 +4,7 @@ templates:
   - cluster-mgmt.yaml
   - appset-fleet.yaml
   - appset-addons.yaml
+  - appset-examples.yaml
 values:
   - ../../../installations/local/installation.yaml
 tests:
@@ -11,7 +12,7 @@ tests:
     template: projects.yaml
     asserts:
       - hasDocuments:
-          count: 2
+          count: 3
       - containsDocument:
           kind: AppProject
           apiVersion: argoproj.io/v1alpha1
@@ -137,3 +138,89 @@ tests:
           apiVersion: argoproj.io/v1alpha1
           name: addon-clusterclasses
           any: true
+
+  # --- examples (templates/appset-examples.yaml, AppProject examples) ----------------------------------------------
+  - it: renders ApplicationSet example-eastwest only when the installation enables it, in AppProject examples
+    template: appset-examples.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: example-eastwest }
+      - equal: { path: spec.template.spec.project, value: examples }
+      - equal: { path: spec.template.spec.source.path, value: examples/eastwest }
+      - equal: { path: spec.template.spec.destination.namespace, value: eastwest-demo }
+      - equal:
+          path: spec.generators[0].clusters.selector
+          value: { matchLabels: { platform.koorikla.io/role: workload, addons.platform.koorikla.io/istio-eastwest: "true" } }
+      - equal:
+          path: spec.template.spec.source.helm.valueFiles
+          value:
+            - values.yaml
+            - ../../installations/local/examples/eastwest/values.yaml
+            - '../../installations/local/examples/eastwest/cluster-{{ index .metadata.labels "platform.koorikla.io/name" }}.yaml'
+      - equal:
+          path: spec.template.spec.source.targetRevision
+          value: '{{ $r := index .metadata.annotations "platform.koorikla.io/addons-revision" }}{{ if and $r (ne $r "HEAD") }}{{ $r }}{{ else }}main{{ end }}'
+
+  - it: renders no example ApplicationSet and no examples AppProject when disabled
+    set:
+      examples.eastwest.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: appset-examples.yaml
+      - hasDocuments: { count: 2 }
+        template: projects.yaml
+
+  - it: requires a label selector for an enabled example
+    template: appset-examples.yaml
+    set:
+      examples.eastwest.selector: null
+    asserts:
+      - failedTemplate: { errorMessage: "examples.eastwest.selector is required" }
+
+  - it: "AppProject examples: the example namespaces only, Namespace the only cluster-scoped kind"
+    template: projects.yaml
+    documentSelector: { path: metadata.name, value: examples }
+    asserts:
+      - equal: { path: spec.destinations, value: [{ server: "*", namespace: eastwest-demo }] }
+      - equal: { path: spec.clusterResourceWhitelist, value: [{ group: "", kind: Namespace }] }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: "*", kind: "*" } }
+      - notContains: { path: spec.destinations, content: { server: "*", namespace: "*" } }
+      - equal: { path: 'spec.sourceRepos', value: [https://github.com/koorikla/platform.git] }
+
+  # --- catalog clusterLabelParameters (templates/appset-addons.yaml) ----------------------------------------------
+  - it: "clusterLabelParameters: label value else default, always a string"
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-istio-ambient }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: istiod.env.AMBIENT_ENABLE_MULTI_NETWORK
+            value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/istio-eastwest" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
+            forceString: true
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: global.network
+            value: '{{ index .metadata.labels "mesh.platform.koorikla.io/network" }}'
+            forceString: true
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: global.multiCluster.clusterName
+            value: '{{ index .metadata.labels "platform.koorikla.io/name" }}'
+            forceString: true
+
+  - it: "negative: rejects a clusterLabelParameters entry that is not {label, default}"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: some-label } }
+    asserts:
+      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: want {label: <key>, default: <value>}" }
+
+  - it: "negative: rejects a non-string default (unquoted false would silently become empty)"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: { label: l, default: false } } }
+    asserts:
+      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: default must be a string (quote it: \"false\")" }
