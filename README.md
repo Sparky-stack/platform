@@ -5,7 +5,8 @@
 A cloud-agnostic Kubernetes platform: **Cluster API** creates and lifecycles k3s clusters on Docker, AWS or Hetzner,
 **Argo CD** installs the platform add-ons on all of them from one catalog, **External Secrets Operator** moves every
 credential, and **OpenChoreo** is the developer platform on top (projects, components, environments, promotion).
-Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco; telemetry to OpenChoreo's observability plane (Datadog-ready).
+Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco, external-dns (Route53 / Cloudflare); telemetry to OpenChoreo's
+observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents ready to switch on.
 
 <img src="docs/diagrams/overview.svg" alt="Architecture overview: repos, management cluster, workload clusters" width="100%">
 
@@ -18,9 +19,16 @@ Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco; telemetry to OpenChore
 
 Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app), [koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows).
 
-**Status:** the local installation boots end to end (k3d mgmt, two CAPD clusters, OpenChoreo agents connected through
-per-cluster certificates, hello-world released to `development` by OpenChoreo). AWS and Hetzner render and validate
-but have not been booted. Networking, policy, build plane, Crossplane and SSO are in progress.
+## Status and roadmap
+
+Solid boxes in the diagrams are built on `main`; dashed ones are planned.
+
+| State | What |
+|---|---|
+| **Running locally** | k3d mgmt + two CAPD clusters (`dev1`, `prod1`) from fleet files; Argo CD push mode with the addon catalog; ESO stores and the per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; OpenChoreo observability plane (OpenSearch, Prometheus, observer) with workload telemetry (OTel collector, Fluent Bit); Falco + falcosidekick + Talon |
+| **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends |
+| **In progress** | Cilium (CNI chosen at cluster birth), Istio ambient, Kyverno (PSS audit, ambient enrollment); [koorikla/ci](https://github.com/koorikla/ci) reusable workflows (Go, Next.js, Elixir, Ruby, Helm, Crossplane) with cosign signing; external-dns (Route53, Cloudflare; opt-in per installation); OpenChoreo RCA (SRE) and FinOps agents + agent gateway, shipped switched off until LLM tokens exist |
+| **Next** | OpenChoreo workflow plane (in-cluster builds) + Harbor (registry, pull-through cache); Crossplane v2 with package promotion gated by Argo CD; SSO (Okta / Google via Thunder, Argo CD via Dex, apiserver OIDC) + Backstage scaffolder; Argo Events escalation for Falco; Datadog exporter |
 
 ## Prerequisites
 

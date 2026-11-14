@@ -61,8 +61,8 @@ def overview() -> Diagram:
     d.box(L, R[2], WW, BH, "platform", "OpenChoreo control plane",
           ["Thunder · API · controllers · Backstage · gateway"])
     d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows"], planned=True)
-    d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces"], planned=True)
-    d.box(L, R[4], CW, BH, "security", "Kyverno · Falco", ["admission · detection"], planned=True)
+    d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps agents: off"])
+    d.box(L, R[4], CW, BH, "security", "Falco · Kyverno", ["detection: built", "admission: planned"])
     d.box(Rx, R[4], CW, BH, "data", "Harbor", ["pull-through cache"], planned=True)
 
     # providers strip (top of the cloud region) + workload chips
@@ -72,14 +72,14 @@ def overview() -> Diagram:
     A, B, KW = 784, 974, 174
     d.box(A, R[2], KW, BH, "platform", "OC data plane", ["cluster-agent"])
     d.box(B, R[2], KW, BH, "network", "kgateway", ["north-south ingress"])
-    d.box(A, R[3], KW, BH, "bus", "OTel collector", ["fan-out · Datadog"], planned=True)
+    d.box(A, R[3], KW, BH, "bus", "OTel collector", ["fan-out · Datadog-ready"])
     d.box(B, R[3], KW, BH, "network", "Cilium", ["CNI · no kube-proxy"], planned=True)
-    d.box(A, R[4], KW, BH, "security", "Falco + Talon", ["detect · respond"], planned=True)
+    d.box(A, R[4], KW, BH, "security", "Falco + Talon", ["detect · respond"])
     d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints"], planned=True)
     d.box(A, R[5], KW, BH, "security", "ESO", ["store: default"])
     d.box(B, R[5], KW, BH, "gitops", "Crossplane v2", ["providers · XRs"], planned=True)
-    d.box(A, R[6], B + KW - A, BH, "platform", "app workloads",
-          ["OpenChoreo cell namespaces per project / env"])
+    d.box(A, R[6], KW, BH, "platform", "app workloads", ["OpenChoreo cell ns"])
+    d.box(B, R[6], KW, BH, "network", "external-dns", ["Route53 · Cloudflare"], planned=True)
 
     # flows (arrow = initiator -> target)
     d.arrow([(L, yc(1)), (184, yc(1))], EM, badge=1, badge_pos=(222, yc(1)), aid="git")
@@ -87,7 +87,7 @@ def overview() -> Diagram:
     d.arrow([(L + WW, yc(1)), (768, yc(1))], EM, badge=2, badge_pos=(728, yc(1)), aid="push")
     d.arrow([(Rx + CW, yc(0)), (768, yc(0))], EM, badge=3, badge_pos=(728, yc(0)), aid="capi")
     d.arrow([(A, yc(2)), (L + WW, yc(2))], RO, badge=4, badge_pos=(728, yc(2)), aid="agent")
-    d.arrow([(A, yc(3)), (Rx + CW, yc(3))], OR, planned=True, badge=5, badge_pos=(728, yc(3)), aid="otel")
+    d.arrow([(A, yc(3)), (Rx + CW, yc(3))], OR, badge=5, badge_pos=(728, yc(3)), aid="otel")
     d.arrow([(A, yc(6)), (728, yc(6)), (728, yc(4)), (Rx + CW, yc(4))], VI, planned=True,
             badge=6, badge_pos=(728, 610), aid="pull")
     d.arrow([(100, 360), (100, 420)], VI, badge=7, badge_pos=(100, 390), aid="ci")
@@ -100,12 +100,12 @@ def overview() -> Diagram:
           (2, "Argo CD pushes addons via each cluster's CAPI kubeconfig"),
           (3, "CAPI creates/upgrades clusters on docker / aws / hetzner"),
           (4, "OpenChoreo cluster-agent dials out: wss + mTLS, per-cluster CA")]
-    e2 = [(5, "OTel collector ships logs/metrics/traces to obs plane (+ Datadog)"),
+    e2 = [(5, "OTel collector ships logs/metrics/traces to obs plane (Datadog: opt-in)"),
           (6, "workloads pull via Harbor, proxy cache of GHCR (today: direct)"),
           (7, "app CI pushes images to GHCR (koorikla/ci + signing: planned)"),
           (8, "Thunder federates console/API login to Okta / Google")]
     d.flowkey(28, 800, e1, [EM, EM, EM, RO], title="Flows · arrow = initiator → target, colour = concern")
-    d.flowkey(612, 800, e2, [OR, VI, VI, RO], title=None, planned=(5, 6, 8))
+    d.flowkey(612, 800, e2, [OR, VI, VI, RO], title=None, planned=(6, 8))
     return d
 
 
@@ -406,20 +406,17 @@ def runtime_security() -> Diagram:
     d.box(CA, R[3], CW, BH, "external", "kube-apiserver", ["pod create / update"])
     d.box(CB, R[3], CW, BH, "security", "Kyverno", ["admission webhook:", "PSS + verifyImages, Audit"],
           planned=True)
-    d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"], planned=True)
-    d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"], planned=True)
-    d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"],
-          planned=True)
-    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["workload telemetry +", "alerts → exporters"],
-          planned=True)
+    d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"])
+    d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"])
+    d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"])
+    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["workload telemetry +", "alerts → exporters"])
 
     # mgmt side
     d.box(856, 444, 312, BH, "platform", "workflow falco-response",
-          ["enrich pod / owner / ns →", "SRE agent → notify"], planned=True)
+          ["enrich pod / owner / ns →", "RCA agent → notify"], planned=True)
     d.box(856, 532, 312, BH, "bus", "Argo Events", ["webhook EventSource +", "Sensor: priority ≥ Critical"],
           planned=True)
-    d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"],
-          planned=True)
+    d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"])
     d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter (planned)"], planned=True)
     d.box(840, 148, 344, 248, "note", "division of labour",
           ["Cilium: packets, policy, Hubble", "Istio ambient: identity + mTLS", "kgateway: north-south only",
@@ -430,16 +427,16 @@ def runtime_security() -> Diagram:
     d.arrow([(CA + CW / 2, 132), (CA + CW / 2, R[0])], BL)
     d.arrow([(CA + CW, yc(0)), (CB, yc(0))], BL)
     d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO, planned=True)
-    d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO, planned=True)
+    d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO)
     d.text(CA, R[2] + BH + 18, "every pod-to-pod hop: ztunnel mTLS (HBONE) over the Cilium eBPF datapath", 11.5,
            "#93c5fd")
     d.arrow([(CB + 64, R[4] + BH), (CB + 64, R[4] + BH + 14), (CA + CW / 2, R[4] + BH + 14),
-             (CA + CW / 2, R[5])], RO, planned=True)
-    d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR, planned=True)
+             (CA + CW / 2, R[5])], RO)
+    d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR)
     d.arrow([(CB + CW, yc(4)), (856, yc(4))], OR, planned=True, label="webhook", label_pos=(790, yc(4) + 4),
             aid="esc")
     d.arrow([(856 + 156, R[4]), (856 + 156, R[3] + BH)], OR, planned=True)
-    d.arrow([(CB + CW, yc(5) - 10), (856, yc(5) - 10)], OR, planned=True, label="OTLP",
+    d.arrow([(CB + CW, yc(5) - 10), (856, yc(5) - 10)], OR, label="OTLP",
             label_pos=(790, yc(5) - 6), aid="otlp")
     d.arrow([(CB + CW, yc(5) + 14), (800, yc(5) + 14), (800, 750), (856, 750)], OR, planned=True,
             label="OTLP (opt-in)", label_pos=(800, 716), aid="dd")
