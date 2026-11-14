@@ -39,6 +39,14 @@ promotion:
   # openchoreo-api, occ and MCP (an explicit deny wins over the upstream developer role's allow). Argo CD applies git
   # through the Kubernetes API and is not affected.
   restrictedGroups: [developers]
+  # Native ValidatingAdmissionPolicy: bindings of gated environments are written only by Argo CD (git), whoever asks
+  # (openchoreo-api on behalf of console/occ/MCP users, kubectl). templates/promotion-git-only.yaml.
+  gitOnly:
+    enabled: true
+    writers: [system:serviceaccount:argocd:argocd-application-controller]
+    metadataWriters: [system:serviceaccount:openchoreo-control-plane:controller-manager]   # finalizers only
+    deleters: [system:serviceaccount:kube-system:generic-garbage-collector, system:serviceaccount:kube-system:namespace-controller]
+    breakGlassGroups: []             # e.g. [platform-break-glass]; empty = git only, no exceptions
   # Weekly freeze windows (gate workflow refuses, Argo CD sync window denies syncs of the gated Applications).
   freezeWindows:
     - name: weekend

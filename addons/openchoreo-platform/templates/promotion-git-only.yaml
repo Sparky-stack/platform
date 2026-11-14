@@ -1,0 +1,53 @@
+{{- /*
+Native admission gate (ValidatingAdmissionPolicy, Kubernetes GA): ReleaseBindings of gated environments are created,
+changed and deleted only by Argo CD applying git (docs/promotion.md "Git is the only path"). openchoreo-api (console,
+occ, MCP), kubectl and any other identity are denied, whatever their RBAC. The OpenChoreo controller may still update
+metadata (finalizers) without touching spec; status is a subresource and not matched.
+*/ -}}
+{{- $g := .Values.promotion }}
+{{- if and $g.gatedEnvironments $g.gitOnly.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openchoreo-gated-bindings-from-git
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [openchoreo.dev]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [releasebindings]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Values.openchoreo.orgNamespace }}
+  matchConditions:
+    - name: gated-environment
+      expression: >-
+        (request.operation == 'DELETE' ? oldObject.spec.environment : object.spec.environment)
+        in {{ $g.gatedEnvironments | toJson }}
+  variables:
+    - name: user
+      expression: request.userInfo.username
+    - name: breakGlass
+      expression: 'request.userInfo.groups.exists(g, g in {{ $g.gitOnly.breakGlassGroups | default list | toJson }})'
+  validations:
+    - expression: >-
+        variables.user in {{ $g.gitOnly.writers | toJson }}
+        || variables.breakGlass
+        || (request.operation == 'DELETE' && variables.user in {{ $g.gitOnly.deleters | toJson }})
+        || (request.operation == 'UPDATE' && variables.user in {{ $g.gitOnly.metadataWriters | toJson }}
+            && object.spec == oldObject.spec)
+      messageExpression: >-
+        'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' change only through a reviewed pull
+        request synced by Argo CD (docs/promotion.md); denied for ' + variables.user
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openchoreo-gated-bindings-from-git
+spec:
+  policyName: openchoreo-gated-bindings-from-git
+  validationActions: [Deny]
+{{- end }}

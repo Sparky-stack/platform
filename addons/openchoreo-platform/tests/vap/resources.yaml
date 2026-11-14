@@ -1,0 +1,15 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata: { name: hello-world-production, namespace: default }
+spec:
+  owner: { projectName: demo, componentName: hello-world }
+  environment: production
+  releaseName: hello-world-58cb494fc
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata: { name: hello-world-staging, namespace: default }
+spec:
+  owner: { projectName: demo, componentName: hello-world }
+  environment: staging
+  releaseName: hello-world-58cb494fc

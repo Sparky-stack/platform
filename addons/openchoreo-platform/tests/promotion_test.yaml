@@ -2,6 +2,7 @@ suite: openchoreo-platform - promotion gates (authz + promotion-gate ClusterWork
 templates:
   - templates/promotion-authz.yaml
   - templates/promotion-gate.yaml
+  - templates/promotion-git-only.yaml
 tests:
   - it: denies restricted groups binding changes in gated environments (native ABAC on resource.environment)
     template: templates/promotion-authz.yaml
@@ -67,3 +68,26 @@ tests:
           content:
             name: FREEZE_WINDOWS
             value: '[{"end":"Mon 08:00","environments":["production"],"name":"weekend","start":"Fri 16:00","timeZone":"Europe/Tallinn"}]'
+
+  - it: native VAP - gated bindings only from Argo CD, controller may only touch metadata
+    template: templates/promotion-git-only.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ValidatingAdmissionPolicy }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: 'in \["production"\]' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'system:serviceaccount:argocd:argocd-application-controller' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'object.spec == oldObject.spec' }
+
+  - it: binding denies (not audits)
+    template: templates/promotion-git-only.yaml
+    documentIndex: 1
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+
+  - it: no VAP when disabled
+    template: templates/promotion-git-only.yaml
+    set:
+      promotion.gitOnly.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Kyverno CLI tests of the rendered kyverno-policies addon (supply-chain gate per environment):
+# Kyverno CLI tests of rendered admission policies:
+#   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
+#                              bindings from Argo CD pass, from openchoreo-api are denied, staging is out of scope
+# and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, scoping)
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image;
 #                              runs only with KYVERNO_ONLINE=1
@@ -31,5 +34,18 @@ for s in "${suites[@]}"; do
   fi
 done
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] || echo "  SKIP signatures (needs network: KYVERNO_ONLINE=1)"
+
+# Native VAP: promotion to gated environments only through git (Argo CD)
+ocp="$ROOT/addons/openchoreo-platform"
+cp_chart="$ROOT/addons/openchoreo-control-plane"
+[[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
+helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
+helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
+for who in argocd:pass api:fail; do
+  out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/resources.yaml" --userinfo "$ocp/tests/vap/${who%%:*}.yaml" \
+    --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)
+  if [[ "${who##*:}" == pass ]]; then want='pass: 1, fail: 0'; else want='pass: 0, fail: 1'; fi
+  assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: ${who%%:*} -> ${who##*:} (staging skipped)"
+done
 
 finish
