@@ -67,9 +67,10 @@ server_part() {
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
 
-# render <addon> <role> <name> <provider> <environment> <region> <cni> <server>
+# render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels-file>]
 render() {
-  local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 dir="addons/$1" ns vf p ip it part
+  local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 labels=${9:-} dir="addons/$1" ns vf p ip it part
+  local key def v
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
   for vf in "$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" \
@@ -89,6 +90,13 @@ render() {
   while IFS=$'\t' read -r ip it; do
     if [[ -n "$ip" ]]; then vargs+=(--set "$ip=$(eval_param "$it")"); fi
   done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" "$CATALOG" | tr -d '\r')
+  # catalog clusterLabelParameters: the cluster's label value, else the default (as appset-addons.yaml)
+  while IFS=$'\t' read -r p key def; do
+    [[ -n "$p" ]] || continue
+    v=""
+    if [[ -n "$labels" && -s "$labels" ]]; then v=$(yq -r ".[\"$key\"] // \"\"" "$labels"); fi
+    vargs+=(--set-string "$p=${v:-$def}")
+  done < <(yq -r ".addons[\"$addon\"].clusterLabelParameters // {} | to_entries[] | [.key, .value.label, (.value.default // \"\")] | @tsv" "$CATALOG" | tr -d '\r')
   if ! helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/render.yaml" 2> "$TMP/render.err"; then
     echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
     return 0
@@ -132,12 +140,14 @@ for dir in addons/*; do
         helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
           > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
       fi
+      [[ -f "$TMP/labels-$c_name.yaml" ]] || yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$c_name.yaml" \
+        > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
       toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" \
         "$TMP/cluster-$c_name.yaml" 2>/dev/null || true)
       [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
       if enabled "$addon" "$toggle" && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
         render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
-          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER"
+          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER" "$TMP/labels-$c_name.yaml"
       fi
     done
   fi

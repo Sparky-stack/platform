@@ -62,7 +62,7 @@ spec:
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
-          {{- if or $cfg.clusterNameParameters $cfg.installationParameters $cfg.clusterServerParameters }}
+          {{- if or $cfg.clusterNameParameters $cfg.installationParameters $cfg.clusterServerParameters $cfg.clusterLabelParameters }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
@@ -83,6 +83,20 @@ spec:
               {{- if ne $part "port" }}
               forceString: true
               {{- end }}
+            {{- end }}
+            {{- /* clusterLabelParameters: <helm param>: {label: <cluster secret label>, default: <string>} - the label's
+            value on this cluster, else the default (empty if not given). Always a string (forceString). */}}
+            {{- range $p, $l := $cfg.clusterLabelParameters }}
+            {{- if not (and (kindIs "map" $l) $l.label) }}
+            {{- fail (printf "addons.%s.clusterLabelParameters.%s: want {label: <key>, default: <value>}" $addon $p) }}
+            {{- end }}
+            - name: {{ $p | quote }}
+              {{- if $l.default }}
+              value: '{{ "{{" }} $v := index .metadata.labels {{ $l.label | quote }} {{ "}}" }}{{ "{{" }} if $v {{ "}}" }}{{ "{{" }} $v {{ "}}" }}{{ "{{" }} else {{ "}}" }}{{ $l.default }}{{ "{{" }} end {{ "}}" }}'
+              {{- else }}
+              value: '{{ "{{" }} index .metadata.labels {{ $l.label | quote }} {{ "}}" }}'
+              {{- end }}
+              forceString: true
             {{- end }}
           {{- end }}
           valuesObject:

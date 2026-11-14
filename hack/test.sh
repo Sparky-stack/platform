@@ -41,6 +41,19 @@ server_param_args() {
     if [[ "$part" == "port" ]]; then printf '%s\n' --set "${p}=${v}"; else printf '%s\n' --set-string "${p}=${v}"; fi
   done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
 }
+# Catalog clusterLabelParameters (<helm param>: {label, default}), mirrored from appset-addons.yaml. Prints helm args
+# for the given addon from a file holding the cluster's labels as a YAML map (missing/empty file -> the defaults).
+label_param_args() {
+  local addon="$1" labels="$2" p key def v
+  while IFS=$'\t' read -r p key def; do
+    [[ -n "$p" ]] || continue
+    v=""
+    if [[ -s "$labels" ]]; then v=$(yq -r ".[\"$key\"] // \"\"" "$labels"); fi
+    [[ -n "$v" ]] || v="$def"
+    printf '%s\n' --set-string "${p}=${v}"
+  done < <(yq -r ".addons[\"$addon\"].clusterLabelParameters // {} | to_entries[] | [.key, .value.label, (.value.default // \"\")] | @tsv" charts/platform/values.yaml | tr -d '\r')
+}
+NO_LABELS=/dev/null                          # standalone renders: no cluster labels -> catalog defaults
 SAMPLE_SERVER=https://192.0.2.10:6443        # stands in for a workload cluster's CAPI API endpoint (TEST-NET-1)
 MGMT_SERVER=https://kubernetes.default.svc   # = charts/platform cluster-mgmt.yaml
 
@@ -65,6 +78,9 @@ for dir in charts/* addons/*; do
     echo "==> helm lint $dir"
     lint_sets=()
     read_lines lint_sets server_param_args "$(basename "$dir")" "$SAMPLE_SERVER"
+    lp_args=()
+    read_lines lp_args label_param_args "$(basename "$dir")" "$NO_LABELS"
+    lint_sets+=(${lp_args[@]+"${lp_args[@]}"})
     helm lint "$dir" ${lint_sets[@]+"${lint_sets[@]}"} >/dev/null
   fi
 done
@@ -116,6 +132,9 @@ for dir in addons/*; do
   sp_args=()
   read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
   standalone_sets+=(${sp_args[@]+"${sp_args[@]}"})
+  lp_args=()
+  read_lines lp_args label_param_args "$addon" "$NO_LABELS"
+  standalone_sets+=(${lp_args[@]+"${lp_args[@]}"})
 
   helm template "$addon" "$dir" --namespace "$ns" ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
   check_kubeconform "addons/$addon (standalone)" "$TMP/addon-$addon-standalone.yaml"
@@ -162,6 +181,10 @@ for dir in addons/*; do
         sp_args=()
         read_lines sp_args server_param_args "$addon" "$MGMT_SERVER"
         vargs+=(${sp_args[@]+"${sp_args[@]}"})
+        yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels' "$TMP/platform-$inst.yaml" > "$TMP/labels-$inst-mgmt.yaml"
+        lp_args=()
+        read_lines lp_args label_param_args "$addon" "$TMP/labels-$inst-mgmt.yaml"
+        vargs+=(${lp_args[@]+"${lp_args[@]}"})
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-mgmt.yaml"
         check_kubeconform "addons/$addon ($inst/mgmt)" "$TMP/addon-$addon-$inst-mgmt.yaml"
       fi
@@ -207,6 +230,10 @@ for dir in addons/*; do
         sp_args=()
         read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
         vargs+=(${sp_args[@]+"${sp_args[@]}"})
+        yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$inst-$c_name.yaml" > "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$inst-$c_name.yaml"
+        lp_args=()
+        read_lines lp_args label_param_args "$addon" "$TMP/labels-$inst-$c_name.yaml"
+        vargs+=(${lp_args[@]+"${lp_args[@]}"})
         helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"
       done
