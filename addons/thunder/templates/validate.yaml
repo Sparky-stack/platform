@@ -1,0 +1,9 @@
+{{- /* Thunder's public host must be thunder.<openchoreo.controlPlane.host> (installation.yaml): the control plane's OIDC
+issuer and Backstage's redirect URIs are derived from the same host (addon openchoreo-control-plane). */ -}}
+{{- $want := printf "thunder.%s" .Values.openchoreo.controlPlane.host }}
+{{- if not (has $want .Values.thunderid.httproute.hostnames) }}
+{{- fail (printf "thunderid.httproute.hostnames must contain %s (openchoreo.controlPlane.host); override it in installations/<inst>/addons/thunder/values.yaml" $want) }}
+{{- end }}
+{{- if not (contains $want .Values.thunderid.configuration.server.publicUrl) }}
+{{- fail (printf "thunderid.configuration.server.publicUrl must point at %s" $want) }}
+{{- end }}

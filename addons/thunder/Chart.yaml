@@ -1,0 +1,9 @@
+apiVersion: v2
+name: thunder
+description: ThunderID identity provider on mgmt - OpenChoreo's OIDC IdP (console, API, CLI)
+type: application
+version: 0.1.0
+dependencies:
+  - name: thunderid
+    version: 1.0.1          # = THUNDER_VERSION of OpenChoreo 1.3.3 (install/k3d/k3d-install.sh)
+    repository: oci://ghcr.io/thunder-id/helm-charts
