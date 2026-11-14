@@ -16,7 +16,7 @@ check_fleet_allows() {
     assert_eq "$match" "$kind" "fleet AppProject admits cluster-scoped $group/$kind"
   else
     local dest_ok
-    dest_ok=$(yq "select(.kind == \"AppProject\" and .metadata.name == \"fleet\") | .spec.destinations[] | select(.namespace == \"$ns\" or .namespace == \"*\") | .namespace" "$TMP/platform.yaml" | head -n1)
+    dest_ok=$(yq "select(.kind == \"AppProject\" and .metadata.name == \"fleet\") | .spec.destinations[] | select(.namespace == \"$ns\" or .namespace == \"*\") | .namespace" "$TMP/platform.yaml" | sed -n '1p')
     assert_nonempty "$dest_ok" "fleet AppProject allows destination namespace $ns"
     match=$(yq "select(.kind == \"AppProject\" and .metadata.name == \"fleet\") | .spec.namespaceResourceWhitelist[] | select(.group == \"$group\" and .kind == \"$kind\") | .kind" "$TMP/platform.yaml")
     assert_eq "$match" "$kind" "fleet AppProject admits namespaced $group/$kind in $ns"

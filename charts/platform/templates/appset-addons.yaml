@@ -1,0 +1,95 @@
+{{- $inst := .Values.installation -}}
+{{- $instValues := omit .Values "addons" -}}
+{{- $defaultRev := $inst.revision | default "HEAD" -}}
+{{- range $addon, $cfg := .Values.addons }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ printf "addon-%s" $addon | quote }}
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: platform.koorikla.io/role
+              operator: In
+              values: {{ $cfg.roles | toJson }}
+            {{- if $cfg.providers }}
+            - key: platform.koorikla.io/provider
+              operator: In
+              values: {{ $cfg.providers | toJson }}
+            {{- end }}
+            {{- if hasKey $cfg "default" | ternary $cfg.default true }}
+            - key: {{ printf "addons.platform.koorikla.io/%s" $addon | quote }}
+              operator: NotIn
+              values: ["false"]
+            {{- else }}
+            - key: {{ printf "addons.platform.koorikla.io/%s" $addon | quote }}
+              operator: In
+              values: ["true"]
+            {{- end }}
+  template:
+    metadata:
+      name: '{{ $addon }}-{{ "{{" }} .name {{ "}} " | trim }}'
+      {{- if hasKey $cfg "syncWave" }}
+      annotations:
+        argocd.argoproj.io/sync-wave: {{ $cfg.syncWave | quote }}
+      {{- end }}
+    spec:
+      project: platform
+      source:
+        repoURL: {{ $inst.repoURL | quote }}
+        targetRevision: '{{ "{{" }} $r := index .metadata.annotations "platform.koorikla.io/addons-revision" {{ "}} " | trim }}{{ "{{" }} if and $r (ne $r "HEAD") {{ "}} " | trim }}{{ "{{" }} $r {{ "}} " | trim }}{{ "{{" }} else {{ "}} " | trim }}{{ $defaultRev }}{{ "{{" }} end {{ "}} " | trim }}'
+        path: {{ printf "addons/%s" $addon | quote }}
+        helm:
+          releaseName: {{ $addon | quote }}
+          ignoreMissingValueFiles: true
+          valueFiles:
+            - values.yaml
+            - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}.yaml'
+            - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}.yaml'
+            - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
+          {{- if $cfg.clusterNameParameters }}
+          parameters:
+            {{- range $p := $cfg.clusterNameParameters }}
+            - name: {{ $p | quote }}
+              value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+            {{- end }}
+          {{- end }}
+          valuesObject:
+            cluster:
+              name: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+              role: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}'
+              provider: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}'
+              region: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/region" {{ "}} " | trim }}'
+              environment: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}'
+            {{- toYaml $instValues | nindent 12 }}
+      destination:
+        server: '{{ "{{" }} .server {{ "}} " | trim }}'
+        namespace: {{ $cfg.namespace | quote }}
+      {{- if $cfg.ignoreDifferences }}
+      ignoreDifferences:
+        {{- toYaml $cfg.ignoreDifferences | nindent 8 }}
+      {{- end }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          {{- if $cfg.serverSideDiff }}
+          - ServerSideDiff=true
+          {{- end }}
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
+{{- end }}

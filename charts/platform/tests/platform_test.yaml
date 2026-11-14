@@ -16,10 +16,12 @@ tests:
           kind: AppProject
           apiVersion: argoproj.io/v1alpha1
           name: platform
+          any: true
       - containsDocument:
           kind: AppProject
           apiVersion: argoproj.io/v1alpha1
           name: fleet
+          any: true
       - contains:
           path: spec.clusterResourceWhitelist
           content:
@@ -114,19 +116,24 @@ tests:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
           name: addon-thunder
+          any: true
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
           name: addon-aws-ccm
+          any: true
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
           name: addon-hcloud-ccm
+          any: true
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
           name: addon-openchoreo-data-plane
+          any: true
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
           name: addon-clusterclasses
+          any: true

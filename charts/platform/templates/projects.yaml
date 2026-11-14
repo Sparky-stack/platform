@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Platform addons and management cluster components
+  sourceRepos:
+    - '*'
+  destinations:
+    - server: '*'
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: fleet
+  namespace: argocd
+spec:
+  description: Workload cluster provisioning (CAPI, Argo registration, OpenChoreo identities)
+  sourceRepos:
+    - {{ .Values.installation.repoURL | quote }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: fleet
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: {{ ((.Values.openchoreo).orgNamespace) | default "default" | quote }}
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: openchoreo.dev
+      kind: ClusterDataPlane
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: ConfigMap
+    - group: cluster.x-k8s.io
+      kind: Cluster
+    - group: addons.cluster.x-k8s.io
+      kind: ClusterResourceSet
+    - group: cert-manager.io
+      kind: Issuer
+    - group: cert-manager.io
+      kind: Certificate
+    - group: external-secrets.io
+      kind: ExternalSecret
+    - group: openchoreo.dev
+      kind: Environment
