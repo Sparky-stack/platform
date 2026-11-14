@@ -70,7 +70,7 @@ MGMT_SERVER=https://kubernetes.default.svc
 # render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels-file>]
 render() {
   local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 labels=${9:-} dir="addons/$1" ns vf p ip it part
-  local key def v
+  local key def v img
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
   for vf in "$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" \
@@ -102,6 +102,15 @@ render() {
     return 0
   fi
   extract_images < "$TMP/render.yaml" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
+  # Proxy image istiod uses for the Deployments it generates (east-west gateway, waypoints): not in any manifest,
+  # resolved from the injector values (global.hub/proxy.image/tag/variant, e.g. docker.io/istio/proxyv2:1.32.0-distroless).
+  local inj
+  inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$TMP/render.yaml" 2>/dev/null || true)
+  if [[ -n "$inj" ]]; then
+    # shellcheck disable=SC2016  # $g/$v are yq variables
+    img=$(printf '%s' "$inj" | yq -p=json -r '.global as $g | ($g.variant // "") as $v | $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end)')
+    add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
+  fi
 }
 
 # enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do.
@@ -153,12 +162,32 @@ for dir in addons/*; do
   fi
 done
 
-echo "==> Rendering enabled examples (examples/*)" >&2
+echo "==> Rendering enabled examples (examples/*), layered per matching cluster like appset-examples.yaml" >&2
+# shellcheck disable=SC2016  # $i is a yq variable
+yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' "$CATALOG" "$INST_FILE" > "$TMP/examples.json"
 for dir in examples/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   ex=$(basename "$dir")
-  [[ "$(yq ".examples[\"$ex\"].enabled // false" "$INST_FILE")" == "true" ]] || continue
+  [[ "$(yq -p=json ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
   helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
+  for cf in "$INST_DIR"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    c_name=$(yq '.name' "$cf")
+    labels="$TMP/labels-$c_name.yaml"
+    [[ -s "$labels" ]] || continue
+    match=1   # selector matchLabels (matchExpressions are not evaluated here: render anyway)
+    while IFS=$'\t' read -r k v; do
+      [[ -n "$k" ]] || continue
+      [[ "$(yq -r ".[\"$k\"] // \"\"" "$labels")" == "$v" ]] || match=0
+    done < <(yq -p=json -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
+    (( match )) || continue
+    vargs=(--values "$dir/values.yaml")
+    for vf in "$INST_DIR/examples/$ex/values.yaml" "$INST_DIR/examples/$ex/cluster-$c_name.yaml"; do
+      if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
+    done
+    helm template "$ex" "$dir" "${vargs[@]}" --set-string "cluster.name=$c_name" 2>/dev/null | extract_images \
+      | while IFS= read -r img; do add "$img" "example $ex ($c_name)"; done
+  done
 done
 
 echo "==> Cluster runtime images (k3d, CAPD, CAPI providers, k3s)" >&2

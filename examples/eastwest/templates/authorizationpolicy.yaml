@@ -4,7 +4,9 @@ the east-west gateway: the inner HBONE mTLS runs end to end from the caller's zt
 principal is the caller's ServiceAccount, not the gateway's. ALLOW with one rule = everything else is denied
 (`stranger` gets its connection reset). Both clusters share the trust domain, so the principal is the same wherever the
 caller runs - the mesh root (mgmt) is what makes a dev1 identity verifiable in prod1.
+Rendered only where echo runs (no app=echo pods elsewhere: istioctl IST0127 noise on caller-only clusters).
 */ -}}
+{{- if .Values.echo.enabled }}
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -25,3 +27,4 @@ spec:
       to:
         - operation:
             ports: [{{ .Values.echo.port | quote }}]
+{{- end }}

@@ -47,3 +47,10 @@ tests:
       - isAPIVersion: { of: security.istio.io/v1 }
       - equal: { path: spec.action, value: ALLOW }
       - equal: { path: 'spec.rules[0].from[0].source.principals', value: [cluster.local/ns/eastwest-demo/sa/client] }
+
+  - it: renders the AuthorizationPolicy only where echo runs (caller-only clusters have no app=echo pods)
+    template: templates/authorizationpolicy.yaml
+    set:
+      echo.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
