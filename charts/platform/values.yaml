@@ -21,6 +21,9 @@ mgmt:
 #   clusterNameParameters:   [<param>]                 -> the cluster name
 #   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
 #   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
+# Optional extra value files, selected by installation facts rather than cluster labels:
+#   installationValueFiles:  [<tpl>]                   -> tpl over installation values, rendered once here; layered after
+#                                                         values/cni-*.yaml, before installations/<inst>/addons/<name>/*
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:

@@ -80,6 +80,7 @@ addons/<addon>/values.yaml                                   chart defaults (all
 addons/<addon>/values/role-<role>.yaml                       mgmt vs workload
 addons/<addon>/values/provider-<provider>.yaml               docker vs aws vs hetzner
 addons/<addon>/values/cni-<cni>.yaml                         cilium vs flannel (label platform.koorikla.io/cni)
+addons/<addon>/values/<catalog installationValueFiles>       by installation fact (e.g. external-dns dns-<dns.provider>)
 installations/<inst>/addons/<addon>/values.yaml              this installation
 installations/<inst>/addons/<addon>/env-<environment>.yaml   this environment
 installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (identity / exceptions only)
@@ -88,7 +89,11 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md).
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md). `installationValueFiles`
+(templates over installation values, paths under `addons/<addon>/values/`) select value files by an installation fact
+that is not a cluster label, e.g. external-dns' DNS provider (docs/dns.md). `hack/lib/addons.sh` reproduces this
+layering for every offline render (test.sh, image-audit, contract tests), reading the parameters and value files from
+the rendered ApplicationSet.
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (from the fleet
 file, default `HEAD`) is the `targetRevision` of that cluster's addon Applications. Prod can follow a tag while dev

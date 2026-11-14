@@ -59,6 +59,15 @@ spec:
             - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}.yaml'
             - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}.yaml'
             - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}.yaml'
+            {{- /* installationValueFiles: value files chosen by installation facts (e.g. external-dns'
+            values/dns-<dns.provider>.yaml), rendered here once per installation; paths stay inside the addon. */}}
+            {{- range $f := $cfg.installationValueFiles }}
+            {{- $path := tpl $f $ }}
+            {{- if or (hasPrefix "/" $path) (contains ".." $path) (contains "{{" $path) (not (hasPrefix "values/" $path)) }}
+            {{- fail (printf "addons.%s.installationValueFiles: %q must be a file under addons/%s/values/" $addon $path $addon) }}
+            {{- end }}
+            - {{ $path | quote }}
+            {{- end }}
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'

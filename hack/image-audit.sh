@@ -2,8 +2,9 @@
 # Multi-arch audit: list every container image the installation runs and check that each one publishes
 # linux/amd64 AND linux/arm64 (Apple Silicon, Graviton/Ampere hosts, Windows on Arm run arm64 Docker engines).
 #
-# Usage: hack/image-audit.sh [--list] [--live] [--report FILE]          (task images:audit -- --live)
+# Usage: hack/image-audit.sh [--list] [--opt-in] [--live] [--report FILE]   (task images:audit -- --live)
 #   --list    only print the image inventory (no registry calls)
+#   --opt-in  also render opt-in addons (catalog default false) not switched on in INST, e.g. before enabling one
 #   --live    also add images running in the k3d mgmt cluster (read-only `kubectl get pods`) and local containers
 #   --report  also write the result table as markdown to FILE
 # Sources: every addon rendered like hack/test.sh layers it (mgmt + each cluster file of INST, default local),
@@ -13,15 +14,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh
 source hack/lib/portable.sh
+# shellcheck source=lib/addons.sh
+source hack/lib/addons.sh
 
 INST="${INST:-local}"
-LIST_ONLY=0 LIVE=0 REPORT=""
+LIST_ONLY=0 LIVE=0 OPT_IN=0 REPORT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list) LIST_ONLY=1 ;;
     --live) LIVE=1 ;;
+    --opt-in) OPT_IN=1 ;;
     --report) REPORT="$2"; shift ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -47,48 +51,16 @@ extract_images() {
     | tr -d '\r' | grep -E '^[a-z0-9]' || true
 }
 
-# eval_param <template>: resolve "{{ .Values.a.b }}" against the installation file (catalog installationParameters).
-eval_param() {
-  local t=$1 path
-  path=$(printf '%s' "$t" | sed -nE 's/^\{\{ *\.Values\.([A-Za-z0-9_.]+) *\}\}$/\1/p')
-  if [[ -n "$path" ]]; then yq ".$path" "$INST_FILE"; else printf '%s\n' "$t"; fi
-}
-
-# server_part <url> <url|host|port>: piece of an Argo cluster secret's server URL (catalog clusterServerParameters).
-server_part() {
-  local url=$1 rest
-  rest=${url#*://}; rest=${rest%%/*}
-  case "$2" in
-    url) printf '%s\n' "$url" ;;
-    host) printf '%s\n' "${rest%:*}" ;;
-    port) if [[ "$rest" == *:* ]]; then printf '%s\n' "${rest##*:}"; else echo 443; fi ;;
-  esac
-}
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
 
-# render <addon> <role> <name> <provider> <environment> <region> <cni> <server>
+# render <addon> <role> <name> <provider> <environment> <region> <cni> <server>: layered like the ApplicationSet
+# (hack/lib/addons.sh), installation parameters / value files from the charts/platform render of this installation.
 render() {
-  local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 dir="addons/$1" ns vf p ip it part
+  local addon=$1 name=$3 dir="addons/$1" ns
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
-  for vf in "$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" \
-    "$dir/values/cni-$cni.yaml" "$INST_DIR/addons/$addon/values.yaml" "$INST_DIR/addons/$addon/env-$env.yaml" \
-    "$INST_DIR/addons/$addon/cluster-$name.yaml"; do
-    if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
-  done
-  vargs+=(--values "$INST_FILE" --set-string "cluster.name=$name,cluster.role=$role,cluster.provider=$prov,cluster.environment=$env,cluster.cni=$cni,cluster.region=$region")
-  while IFS=$'\t' read -r p part; do
-    [[ -n "$p" ]] || continue
-    if [[ "$part" == port ]]; then vargs+=(--set "$p=$(server_part "$server" port)")
-    else vargs+=(--set-string "$p=$(server_part "$server" "$part")"); fi
-  done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" "$CATALOG" | tr -d '\r')
-  while IFS= read -r p; do
-    if [[ -n "$p" ]]; then vargs+=(--set-string "$p=$name"); fi
-  done < <(yq ".addons[\"$addon\"].clusterNameParameters[]?" "$CATALOG" | tr -d '\r')
-  while IFS=$'\t' read -r ip it; do
-    if [[ -n "$ip" ]]; then vargs+=(--set "$ip=$(eval_param "$it")"); fi
-  done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | to_entries[] | [.key, .value] | @tsv" "$CATALOG" | tr -d '\r')
+  read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
   if ! helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/render.yaml" 2> "$TMP/render.err"; then
     echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
     return 0
@@ -99,14 +71,16 @@ render() {
 # enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do.
 enabled() {
   local def toggle=$2
-  def=$(yq ".addons[\"$1\"].default // true" "$CATALOG")
-  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]]; }
+  def=$(yq ".addons[\"$1\"].default" "$CATALOG")   # no // : yq treats false as empty (opt-in addons would count as on)
+  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]] || (( OPT_IN )); }
 }
 
 echo "==> Building chart dependencies" >&2
 ./hack/deps.sh >&2
 
 echo "==> Rendering addons for installation $INST" >&2
+PLATFORM_RENDER="$TMP/platform.yaml"   # the ApplicationSets: installation parameters and value files as Argo CD gets them
+helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$PLATFORM_RENDER"
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   addon=$(basename "$dir")
