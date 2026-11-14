@@ -208,6 +208,12 @@ observability-metrics-prometheus:
             name: openchoreo-prometheus-agent-token
             key: token
     prometheusOperator:
+      # platform: upstream limits 40m CPU / 60Mi. CFS throttling at 40m makes the informer cache sync miss its deadline
+      # on clusters with many CRDs (dev1/Cilium: CrashLoopBackOff "failed to sync cache"). A null CPU limit does not
+      # remove the subchart default here (it renders as 0, which the API rejects), so a startup-safe ceiling instead.
+      resources:
+        requests: { cpu: 20m, memory: 64Mi }
+        limits: { cpu: 500m, memory: 256Mi }
       admissionWebhooks:
         certManager:
           enabled: true                           # platform: no Helm hook Jobs under Argo (cert-manager on workloads)
