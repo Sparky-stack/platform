@@ -10,6 +10,13 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   openchoreo.override: |
+    {{- $reg := .Values.registry | default dict }}
+    {{- if and (eq (toString $reg.type) "harbor") $reg.host .Values.registryRewrite.target }}
+    rewrite stop {
+      name regex ^{{ regexReplaceAll ":[0-9]+$" $reg.host "" | regexQuoteMeta }}\.$ {{ .Values.registryRewrite.target }}
+      answer auto
+    }
+    {{- end }}
     {{- $obs := .Values.openchoreo.observability | default dict }}
     {{- if and $obs.enabled .Values.observabilityRewrite.target }}
     rewrite stop {
