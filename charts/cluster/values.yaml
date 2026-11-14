@@ -20,7 +20,7 @@ openchoreo:
   dataPlane:
     enabled: false
     gatewayHost: ""           # base host for app endpoints on this cluster
-    gatewayPort: 443          # VERIFY local: port the data plane gateway is reachable on
+    gatewayPort: 19080         # data-plane Gateway HTTP listener (klipper hostPort on the node)
     environments: []          # OpenChoreo Environments bound to this cluster's ClusterDataPlane
 addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
 addons: {}                    # <addon>: true|false -> label addons.platform.koorikla.io/<addon>

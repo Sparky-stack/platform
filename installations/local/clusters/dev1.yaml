@@ -4,7 +4,7 @@ name: dev1
 provider: docker            # docker | aws | hetzner  -> ClusterClass k3s-<provider>
 region: local
 environment: development
-kubernetesVersion: v1.35.4+k3s1   # VERIFY latest k3s patch supported by cluster-api-k3s v0.5.0
+kubernetesVersion: v1.35.10+k3s1
 controlPlane:
   replicas: 1
 workers:

@@ -2,7 +2,7 @@ name: prod1
 provider: docker
 region: local
 environment: production
-kubernetesVersion: v1.35.4+k3s1   # VERIFY
+kubernetesVersion: v1.35.10+k3s1
 controlPlane:
   replicas: 1
 workers:
