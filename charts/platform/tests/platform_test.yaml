@@ -109,6 +109,15 @@ tests:
           path: spec.template.spec.syncPolicy.syncOptions
           content: ServerSideApply=true
 
+  # charts/cluster gates the Cluster on its registries ExternalSecret (sync wave -1): a cluster app must keep retrying
+  # on the latest revision until that dependency exists, not give up after N attempts
+  - it: retries fleet syncs without a limit on the latest revision
+    template: appset-fleet.yaml
+    asserts:
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+      - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.backoff.maxDuration, value: 5m }
+
   - it: renders catalog ApplicationSets including clusterNameParameters and serverSideDiff
     template: appset-addons.yaml
     asserts:

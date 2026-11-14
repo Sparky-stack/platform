@@ -16,8 +16,11 @@ argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 {{/*
 k3s private registry auth: /etc/rancher/k3s/registries.yaml (k3s' default --private-registry path) from Secret
 <cluster>-registries (key registries.yaml, ns fleet), rendered by charts/cluster (capi-registries.yaml). The k3s
-bootstrap provider resolves files[].contentFrom.secret in the KThreesConfig's namespace at bootstrap time and retries
-until the Secret exists. The CAPI template (`{{ .builtin.cluster.name }}`) is evaluated by the topology controller.
+bootstrap provider resolves files[].contentFrom.secret in the KThreesConfig's namespace once, at bootstrap time. Its
+controller watches only KThreesConfigs, not these Secrets: a missing Secret fails the reconcile and is retried on
+controller backoff / the 10 min resync only, so charts/cluster syncs the Secret's ExternalSecret before the Cluster
+(sync wave -1; hack/tests/test_bootstrap_file_sources.sh). The CAPI template (`{{ .builtin.cluster.name }}`) is
+evaluated by the topology controller.
 */}}
 {{- define "clusterclasses.registriesFile" -}}
 path: /etc/rancher/k3s/registries.yaml

@@ -147,11 +147,21 @@ docs); the old server is normally gone already, and KCP finishes the scale-down.
 ### Node registry auth (private GHCR)
 `charts/cluster/templates/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) from the
 `platform` store key `platform-ghcr` (`username`, `token`) into a k3s `registries.yaml`:
-`configs."ghcr.io".auth.{username,password}`. Each class adds `files[].contentFrom.secret` (supported by
-cluster-api-k3s v0.5.0: resolved by the bootstrap controller in the KThreesConfig's namespace, retried until the Secret
-exists) on control plane and workers. Caveat: bootstrap data is rendered once per Machine, so a rotated token only
-reaches new nodes - roll the machines (CAPI `rollout.after` on the topology control plane / machine deployments) or
-use a long-lived read-only token. **VERIFY**
+`configs."ghcr.io".auth.{username,password}`. Each class adds `files[].contentFrom.secret` on control plane and workers
+(with Harbor also `registry-ca.crt` from the same Secret). cluster-api-k3s v0.5.0 resolves it once, when it renders the
+Machine's bootstrap data, and its controller watches only `KThreesConfig`s
+(`bootstrap/controllers/kthreesconfig_controller.go` `SetupWithManager`; the manager cache is unfiltered, so a
+`cluster.x-k8s.io/cluster-name` label on the Secret would change nothing): a KThreesConfig reconciled before the Secret
+exists fails with `failed to resolve file source: secret not found` and is retried only on controller-runtime backoff
+(up to ~16 min) or the 10 min resync. Seen live: the ExternalSecret waited 10 min for the Harbor CA, ESO's own backoff
+added 6, and the new server sat unbootstrapped until someone touched its KThreesConfig. The ExternalSecret is therefore
+sync wave -1 and the Cluster wave 0: Argo creates or changes the Cluster only once the Secret is Ready (Argo CD's
+built-in ExternalSecret health check); until then the cluster app's sync fails and is retried without limit on the
+latest revision (fleet ApplicationSet `retry.limit: -1`, `refresh: true`, every 5 min at most).
+`hack/tests/test_bootstrap_file_sources.sh` checks, for every installation and cluster, that each contentFrom Secret a
+class enables is rendered as such an ExternalSecret with the referenced key, in an earlier wave. Caveat: bootstrap data
+is rendered once per Machine, so a rotated token only reaches new nodes - roll the machines (CAPI `rollout.after` on the
+topology control plane / machine deployments) or use a long-lived read-only token. **VERIFY**
 
 ## Docker (CAPD) - local, tested path
 
