@@ -73,10 +73,11 @@ addons:
       istiod.env.PILOT_DISABLE_SELF_SIGNED_CA:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
       # Joining/leaving a group rolls ztunnel (after istiod: sync wave 1 in addons/istio-ambient/values.yaml).
       'ztunnel.podAnnotations.mesh\.platform\.koorikla\.io/group': { label: mesh.platform.koorikla.io/group }
-  # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). mesh-root-ca: the shared mesh root on mgmt (enable
-  # via installation.yaml mgmt.addons). istio-eastwest: east-west gateway + remote-secret reader token on mesh members,
+  # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). mesh-root-ca: one mesh root per installation.yaml
+  # mesh.groups entry on mgmt (ClusterIssuers; keys in cert-manager's namespace) + admission guards for the mesh PKI
+  # (enable via installation.yaml mgmt.addons). istio-eastwest: east-west gateway + reader RBAC on mesh members,
   # selected by the label charts/cluster derives from the fleet file's mesh.group.
-  mesh-root-ca:             { namespace: fleet,                    roles: [mgmt],           default: false }
+  mesh-root-ca:             { namespace: cert-manager,             roles: [mgmt],           default: false }
   istio-eastwest:           { namespace: istio-system,             roles: [workload],       default: false, clusterLabelParameters: { mesh.group: { label: mesh.platform.koorikla.io/group }, mesh.network: { label: mesh.platform.koorikla.io/network } } }
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }

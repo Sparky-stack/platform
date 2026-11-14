@@ -6,7 +6,7 @@ templates:
   - templates/mesh-helpers.yaml
 values: [values/capi-docker.yaml]
 set:
-  mesh: { group: local }
+  mesh: { group: local, groups: [local, prod] }
   mgmt: { addons: { mesh-root-ca: true } }
 tests:
   - it: renders nothing without mesh.group
@@ -20,7 +20,7 @@ tests:
       - hasDocuments: { count: 0 }
         template: templates/mesh-remote-secret.yaml
 
-  - it: issues a per-cluster intermediate CA from the shared mesh root (Issuer mesh-root-ca)
+  - it: issues a short-lived per-cluster intermediate CA from its group's root (ClusterIssuer mesh-root-<group>)
     template: templates/mesh-pki.yaml
     asserts:
       - hasDocuments: { count: 1 }
@@ -29,8 +29,18 @@ tests:
       - equal: { path: metadata.namespace, value: fleet }
       - equal: { path: spec.isCA, value: true }
       - equal: { path: spec.secretName, value: dev1-mesh-ca }
-      - equal: { path: spec.issuerRef, value: { kind: Issuer, name: mesh-root-ca } }
-      - contains: { path: spec.usages, content: cert sign }
+      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: ClusterIssuer, name: mesh-root-local } }
+      - equal: { path: spec.duration, value: 336h }
+      - equal: { path: spec.renewBefore, value: 168h }
+      - equal: { path: spec.usages, value: [cert sign, crl sign, digital signature] }
+      - notContains: { path: spec.usages, content: key encipherment }
+
+  - it: "a group is a cryptographic boundary: another group's member chains to another root"
+    template: templates/mesh-pki.yaml
+    set:
+      mesh: { group: prod }
+    asserts:
+      - equal: { path: spec.issuerRef.name, value: mesh-root-prod }
 
   - it: delivers cacerts + the network label to exactly this cluster via an ESO-templated CRS payload
     template: templates/mesh-crs.yaml

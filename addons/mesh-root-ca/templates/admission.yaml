@@ -1,0 +1,159 @@
+{{- /*
+Admission guards for the mesh PKI on mgmt (docs/multicluster.md "Admission guards"). cert-manager's internal approver
+approves every CertificateRequest, and a CA issuer signs whatever the request asks for. Two signers are sensitive:
+  <name>-client-ca (Issuer, fleet)     the CAPI k3s client CA of a workload cluster: its API server accepts anything it
+                                       signs for client auth (O=system:masters = cluster-admin, system:node:*, sub-CAs)
+  mesh-root-<group> (ClusterIssuer)    a mesh root: anything it signs is trusted by every member of the group, and a
+                                       ClusterIssuer can be referenced from any namespace
+These policies admit exactly what charts/cluster renders and nothing else:
+  platform-mesh-reader-certificates    Certificates for *-client-ca: CN=<readerUser>, no subject/SANs, not a CA,
+                                       client auth + digital signature only, duration <= readerMaxDuration, in fleet
+  platform-mesh-intermediate-certificates  Certificates for mesh-root-*: <x>-mesh-ca in fleet, applied by Argo CD only
+                                       (git = the mesh controller path), CA usages only, duration <= intermediateMaxDuration
+  platform-mesh-certificaterequests    CertificateRequests for either: created by cert-manager's controller only (so
+                                       they come from an admitted Certificate; CEL cannot parse the CSR itself), plus
+                                       the same isCA/usages/duration limits
+  platform-mesh-issuers                no other Issuer/ClusterIssuer may wrap a <name>-cca, <name>-mesh-ca or mesh root
+                                       Secret (else a self-made issuer would bypass the checks above)
+CertificateRequest.spec.duration / usages / isCA are copied from the Certificate by cert-manager.
+*/ -}}
+{{- $a := .Values.admission }}
+{{- if $a.enabled }}
+{{- $prefix := .Values.root.issuerPrefix }}
+{{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}
+{{- $clientIssuer := "has(object.spec.issuerRef) && object.spec.issuerRef.name.endsWith('-client-ca') && (!has(object.spec.issuerRef.kind) || object.spec.issuerRef.kind == 'Issuer')" }}
+{{- $rootIssuer := printf "has(object.spec.issuerRef) && object.spec.issuerRef.name.startsWith('%s') && has(object.spec.issuerRef.kind) && object.spec.issuerRef.kind == 'ClusterIssuer'" $prefix }}
+{{- $noSANs := "!has(object.spec.dnsNames) && !has(object.spec.ipAddresses) && !has(object.spec.uris) && !has(object.spec.emailAddresses) && !has(object.spec.otherNames)" }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-reader-certificates
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificates]
+  matchConditions:
+    - name: client-ca-issuer
+      expression: {{ $clientIssuer | quote }}
+  validations:
+    - expression: {{ printf "object.metadata.namespace == '%s'" $a.intermediateNamespace | quote }}
+      message: {{ printf "certificates from a *-client-ca issuer live in %s only" $a.intermediateNamespace | quote }}
+    - expression: {{ printf "has(object.spec.commonName) && object.spec.commonName == '%s'" $a.readerUser | quote }}
+      message: {{ printf "*-client-ca issuers sign only CN=%s (the mesh reader identity)" $a.readerUser | quote }}
+    - expression: "!has(object.spec.subject) && !has(object.spec.literalSubject)"
+      message: "no subject (O = Kubernetes groups, e.g. system:masters) on *-client-ca certificates"
+    - expression: {{ $noSANs | quote }}
+      message: "no SANs on *-client-ca certificates"
+    - expression: "!has(object.spec.isCA) || object.spec.isCA == false"
+      message: "*-client-ca issuers never sign a CA"
+    - expression: "has(object.spec.usages) && size(object.spec.usages) > 0 && object.spec.usages.all(u, u in ['client auth', 'digital signature'])"
+      message: "usages must be client auth / digital signature only"
+    - expression: {{ printf "has(object.spec.duration) && duration(object.spec.duration) <= duration('%s')" $a.readerMaxDuration | quote }}
+      message: {{ printf "duration must be set and <= %s (client certs cannot be revoked)" $a.readerMaxDuration | quote }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-intermediate-certificates
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificates]
+  matchConditions:
+    - name: mesh-root-issuer
+      expression: {{ $rootIssuer | quote }}
+  validations:
+    - expression: {{ printf "request.userInfo.username in %s" (toJson $a.certificateWriters) | quote }}
+      message: "mesh intermediates come only from git via Argo CD (charts/cluster templates/mesh-pki.yaml)"
+    - expression: {{ printf "object.metadata.namespace == '%s' && object.metadata.name.endsWith('-mesh-ca')" $a.intermediateNamespace | quote }}
+      message: {{ printf "mesh intermediates are %s/<cluster>-mesh-ca only" $a.intermediateNamespace | quote }}
+    - expression: "has(object.spec.isCA) && object.spec.isCA == true"
+      message: "mesh roots sign only istiod intermediates (isCA)"
+    - expression: "has(object.spec.usages) && object.spec.usages.all(u, u in ['cert sign', 'crl sign', 'digital signature'])"
+      message: "intermediate usages: cert sign, crl sign, digital signature"
+    - expression: {{ $noSANs | quote }}
+      message: "no SANs on mesh intermediates"
+    - expression: {{ printf "has(object.spec.duration) && duration(object.spec.duration) <= duration('%s')" $a.intermediateMaxDuration | quote }}
+      message: {{ printf "intermediate duration must be set and <= %s (Istio checks no revocation)" $a.intermediateMaxDuration | quote }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-certificaterequests
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificaterequests]
+  matchConditions:
+    - name: mesh-pki-issuer
+      expression: {{ printf "(%s) || (%s)" $clientIssuer $rootIssuer | quote }}
+  variables:
+    - name: root
+      expression: {{ printf "object.spec.issuerRef.name.startsWith('%s') && has(object.spec.issuerRef.kind) && object.spec.issuerRef.kind == 'ClusterIssuer'" $prefix | quote }}
+  validations:
+    - expression: {{ printf "request.operation != 'CREATE' || request.userInfo.username in %s" (toJson $a.requestCreators) | quote }}
+      message: "mesh PKI CertificateRequests are created only by cert-manager from an admitted Certificate"
+    - expression: {{ printf "object.metadata.namespace == '%s'" $a.intermediateNamespace | quote }}
+      message: {{ printf "mesh PKI CertificateRequests live in %s only" $a.intermediateNamespace | quote }}
+    - expression: "variables.root ? (has(object.spec.isCA) && object.spec.isCA == true) : (!has(object.spec.isCA) || object.spec.isCA == false)"
+      message: "isCA: true only for mesh intermediates, never for *-client-ca"
+    - expression: "has(object.spec.usages) && object.spec.usages.all(u, u in (variables.root ? ['cert sign', 'crl sign', 'digital signature'] : ['client auth', 'digital signature']))"
+      message: "usages outside the mesh PKI profile"
+    - expression: {{ printf "has(object.spec.duration) && duration(object.spec.duration) <= duration(variables.root ? '%s' : '%s')" $a.intermediateMaxDuration $a.readerMaxDuration | quote }}
+      message: "duration outside the mesh PKI profile"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-issuers
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [issuers, clusterissuers]
+  matchConditions:
+    - name: wraps-mesh-pki-secret
+      expression: {{ printf "has(object.spec.ca) && (object.spec.ca.secretName.endsWith('-cca') || object.spec.ca.secretName.endsWith('-mesh-ca') || object.spec.ca.secretName.startsWith('%s'))" $prefix | quote }}
+  validations:
+    - expression: {{ printf "!object.spec.ca.secretName.endsWith('-cca') || (request.kind.kind == 'Issuer' && object.metadata.namespace == '%s' && object.metadata.name == object.spec.ca.secretName.substring(0, size(object.spec.ca.secretName) - 4) + '-client-ca')" $a.intermediateNamespace | quote }}
+      message: {{ printf "a CAPI client CA Secret <x>-cca may only back Issuer %s/<x>-client-ca" $a.intermediateNamespace | quote }}
+    - expression: "!object.spec.ca.secretName.endsWith('-mesh-ca')"
+      message: "mesh intermediates sign only inside istiod, never through a cert-manager issuer"
+    - expression: {{ printf "!object.spec.ca.secretName.startsWith('%s') || (request.kind.kind == 'ClusterIssuer' && object.metadata.name == object.spec.ca.secretName)" $prefix | quote }}
+      message: "a mesh root Secret may only back its own ClusterIssuer (addon mesh-root-ca)"
+{{- range $p := list "platform-mesh-reader-certificates" "platform-mesh-intermediate-certificates" "platform-mesh-certificaterequests" "platform-mesh-issuers" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $p }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  policyName: {{ $p }}
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

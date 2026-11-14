@@ -6,13 +6,15 @@ appliance and no route between pod CIDRs: each cluster exposes one **east-west g
 cross-cluster traffic through it. Locally `dev1` (Cilium) and `prod1` (flannel) form the mesh group `local`, with the
 example service on `prod1` and its callers on `dev1`.
 
-Everything is declarative. Two switches turn it on, and adding a third cluster to the group needs nothing else:
+Everything is declarative. Three settings turn it on, and adding a third cluster to the group needs nothing else:
 
 ```yaml
 # installations/<inst>/installation.yaml
 mgmt:
   addons:
-    mesh-root-ca: true          # shared mesh root CA on mgmt
+    mesh-root-ca: true          # mesh root CAs + PKI admission guards on mgmt
+mesh:
+  groups: [local]               # one root CA per group
 examples:
   eastwest: { enabled: true }   # optional demo (examples/eastwest)
 
@@ -78,47 +80,77 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 
 | Where | What | Owner |
 |---|---|---|
-| mgmt, `fleet` | `Issuer mesh-root-selfsigned` → `Certificate mesh-root-ca` → `Issuer mesh-root-ca` | addon `mesh-root-ca` (mgmt, opt-in) |
+| mgmt, `cert-manager` | per group: `Issuer mesh-root-selfsigned` → `Certificate mesh-root-<group>` → `ClusterIssuer mesh-root-<group>`; ValidatingAdmissionPolicies `platform-mesh-*` | addon `mesh-root-ca` (mgmt, opt-in) |
 | mgmt, `fleet` | `Certificate <name>-mesh-ca` (intermediate); `ExternalSecret` + `ClusterResourceSet <name>-mesh` (cacerts, network label) | `charts/cluster` `templates/mesh-pki.yaml`, `mesh-crs.yaml` |
 | mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/mesh-remote-secret.yaml` |
-| member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRoleBinding platform-istio-reader` | addon `istio-eastwest` |
+| member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRole`/`ClusterRoleBinding`/`Role`/`RoleBinding platform-istio-reader` | addon `istio-eastwest` |
 | member, `istio-system` | istiod/ztunnel multicluster values | addon `istio-ambient` (catalog parameters) |
 | member, `istio-system` | `Secret cacerts`, label on the namespace, `Secret istio-remote-secret-<peer>` per peer | CAPI ClusterResourceSets (from mgmt) |
 | member, `eastwest-demo` | example | `examples/eastwest` via ApplicationSet `example-eastwest` |
 
-## Trust: one mesh root on mgmt, an intermediate per cluster
-Every member must chain to the same root so that a dev1 workload certificate verifies in prod1.
+## Trust: one root per mesh group on mgmt, a short-lived intermediate per cluster
+Every member of a group must chain to the same root so that a dev1 workload certificate verifies in prod1.
 
-- **Root**: addon `mesh-root-ca` on mgmt, a cert-manager self-signed CA (RSA 4096, 10y, `rotationPolicy: Never`).
-  **Its private key never leaves mgmt.** One root per installation. Separate groups keep separate meshIDs and remote
-  secrets, so they never discover each other. They do share the root and the trust domain `cluster.local`, though, so
-  a group is a discovery boundary, not a cryptographic one. Per-group roots are a straightforward extension (one
-  Issuer per group in `mesh-root-ca`).
-- **Intermediate**: `Certificate <name>-mesh-ca` in `fleet` (isCA, RSA 4096, 90 days, renewed 30 days before expiry),
-  issued by `Issuer mesh-root-ca`. ESO (store `mgmt-fleet`) templates it into a ClusterResourceSet payload:
-  `Secret istio-system/cacerts` of type `kubernetes.io/tls` (`tls.crt` = intermediate, `tls.key`, `ca.crt` = root;
-  istiod 1.32 reads this format as a plugged-in CA and builds the chain from `tls.crt` + `ca.crt`). The same payload
-  sets the namespace label `topology.istio.io/network=<name>`. This is the delivery path the OpenChoreo agent identity
-  uses: the CRS strategy is `Reconcile`, so a renewal is re-applied. istiod watches its `cacerts` files and reloads a
-  renewed intermediate without a restart (**VERIFY** on the first renewal; the root does not change, so trust is
-  never interrupted).
+- **Roots, one per group**: installation.yaml lists the groups (`mesh.groups: [local]`); addon `mesh-root-ca` on mgmt
+  renders, per group, a cert-manager self-signed CA `mesh-root-<group>` (RSA 4096, 10y, `rotationPolicy: Never`) and
+  a `ClusterIssuer mesh-root-<group>`. A fleet file's `mesh.group` must be listed (charts/cluster fails otherwise).
+  **Root keys never leave mgmt** and live in cert-manager's cluster resource namespace (`cert-manager`), which no
+  ClusterSecretStore reaches (`mgmt-fleet` reads only `fleet`; contract test). A group is therefore a cryptographic
+  boundary, not just a discovery boundary: a key stolen from a member of group A cannot mint an identity that group B
+  accepts. All groups still use the trust domain `cluster.local` (per-environment trust domains: "Next steps").
+- **Groups follow trust levels.** Clusters of different environments or trust levels never share a group. `local`
+  (dev1 + prod1 on one laptop) is the deliberate exception for the demo; real installations use e.g. `dev` and
+  `prod` groups, so a development cluster's intermediate is worthless in production.
+- **Intermediate**: `Certificate <name>-mesh-ca` in `fleet` (isCA, RSA 4096, **14 days, renewed after 7**; usages cert
+  sign, crl sign, digital signature), issued by `ClusterIssuer mesh-root-<group>`. 14 days still survives a week-long
+  mgmt outage. ESO (store `mgmt-fleet`) templates it into a ClusterResourceSet payload: `Secret istio-system/cacerts`
+  of type `kubernetes.io/tls` (`tls.crt` = intermediate, `tls.key`, `ca.crt` = group root; istiod 1.32 reads this
+  format as a plugged-in CA and builds the chain from `tls.crt` + `ca.crt`). The same payload sets the namespace label
+  `topology.istio.io/network=<name>`. CRS strategy `Reconcile` re-applies a renewal; istiod watches its `cacerts`
+  files and reloads a renewed intermediate without a restart (**VERIFY** on the first renewal; the root does not
+  change, so trust is never interrupted).
 - **No silent fallback**: on members istiod runs with `PILOT_DISABLE_SELF_SIGNED_CA=true`. Without `cacerts` it
   refuses to start and Kubernetes restarts it until the CRS has delivered the CA. It never mints a private root that
   would split the mesh.
+- **No revocation.** Istio checks no CRL or OCSP. A leaked intermediate stays valid until its `notAfter` (at most
+  14 days), whatever happens on mgmt: `rotationPolicy: Always` gives the *next* certificate a new key but does not
+  invalidate the old one, and deleting the fleet file only stops renewal. The only faster cut is rotating the group's
+  root (below). Same for the 7-day reader client certs: Kubernetes cannot revoke client certificates.
 
-**Trade-off (a scoped exception to invariant 4).** istiod is the workload CA, so it needs a CA *private key*: the
-intermediate's key sits in the workload cluster. That is inherent to istiod-as-CA. It is the cluster's own CA,
-short-lived and rotated, but a stolen intermediate can mint any identity in the trust domain, and every peer would
-accept it until the intermediate expires. Limits on the blast radius: the 90-day lifetime, deleting the fleet file
-(deletes the Certificate, so no renewal), and rotating the root if it ever leaks. The alternative that keeps every CA
-key on mgmt is **istio-csr + cert-manager**: istiod stops signing and forwards CSRs to a cert-manager issuer. It
-needs a signer that the workload clusters can reach (Vault/OpenBao, AWS Private CA, or a cert-manager instance
-exposed from mgmt) and one more component per cluster. This repo has no such network-reachable signer yet, so the
-intermediate is the current design. Moving to istio-csr changes only the delivery (`cacerts` → istio-csr issuer
-config); the rest of this document stays valid.
+### Admission guards on mgmt
+cert-manager's internal approver approves every CertificateRequest, and a CA issuer signs whatever it is asked. Two
+signers here are sensitive: the `<name>-client-ca` Issuers (the k3s client CA of a workload cluster, whose API server
+accepts anything they sign, `O=system:masters` included) and the mesh root ClusterIssuers (referencable from any
+namespace). Addon `mesh-root-ca` ships ValidatingAdmissionPolicies (`admissionregistration.k8s.io/v1`, Deny) that
+admit exactly what charts/cluster renders:
 
-Root rotation is a planned procedure, not a renewal: add the new root next to the old one in every `ca.crt` (a trust
-bundle), re-issue the intermediates from the new root, then drop the old one.
+| Policy | Admits |
+|---|---|
+| `platform-mesh-reader-certificates` | Certificates for a `*-client-ca` issuer: in `fleet`, `CN=platform:istio-reader`, no subject (no O/OU = no groups), no SANs, not a CA, usages client auth + digital signature, duration set and <= 168h |
+| `platform-mesh-intermediate-certificates` | Certificates for a `mesh-root-*` ClusterIssuer: `fleet/<x>-mesh-ca` only, applied by Argo CD's application controller (git is the only path), isCA, CA usages, no SANs, duration <= 336h |
+| `platform-mesh-certificaterequests` | CertificateRequests for either: created by cert-manager's controller only (so they come from an admitted Certificate; CEL cannot parse the CSR), in `fleet`, same isCA/usages/duration profile |
+| `platform-mesh-issuers` | a `<x>-cca` Secret may back only `Issuer fleet/<x>-client-ca`; a mesh root Secret only its own ClusterIssuer; no issuer may wrap a `<x>-mesh-ca` intermediate |
+
+`hack/tests/test_mesh_admission.sh` evaluates the CEL offline with the kyverno CLI (pinned in mise.toml): the rendered
+Certificates/Issuers of every mesh member pass, and the negative cases (system:masters, other CNs, sub-CAs, long
+durations, SANs, other namespaces, hand-made requests, rogue issuers, non-Argo intermediates) are denied.
+
+### The invariant-4 question (pending user approval)
+istiod is the workload CA, so it needs a CA *private key*: the member's intermediate key sits in its `istio-system/
+cacerts`. AGENTS.md invariant 4 says CA private keys never leave mgmt; the proposed exception is worded as narrowly as
+possible and is **pending the user's decision**:
+- only `istio-system/cacerts` on opt-in mesh members, holding that cluster's own intermediate (never a root key);
+- only while peers cannot read Secrets (`platform-istio-reader`, "Reader RBAC" below), each group has its own root,
+  intermediates live <= 14 days, and the admission guards above are in place.
+
+**Tracked replacement (removes the exception)**: istio-csr on each member, with istiod's CA turned off, forwarding CSRs
+to a signer on mgmt that the workload clusters can reach: OpenBao/Vault PKI with per-cluster Kubernetes auth, or AWS
+Private CA on AWS. Then no CA key sits on a workload cluster. Moving there changes only the delivery (`cacerts` ->
+istio-csr issuer config); the rest of this document stays valid. Backlog: README roadmap.
+
+Root rotation (also the emergency answer to a leaked intermediate) is a planned procedure, not a renewal: add the new
+root next to the old one in every member's `ca.crt` (a trust bundle), re-issue the group's intermediates from the new
+root, then drop the old one.
 
 ## Discovery: declarative remote secrets
 Each istiod watches the other members' API servers (Services, EndpointSlices, Pods, Namespaces) through a remote

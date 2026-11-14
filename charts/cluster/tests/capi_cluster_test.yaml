@@ -35,7 +35,7 @@ tests:
 
   - it: "mesh.group adds the mesh labels and turns istio-eastwest on (docs/multicluster.md)"
     values: [values/capi-docker.yaml]
-    set: { mesh: { group: local }, mgmt: { addons: { mesh-root-ca: true } } }
+    set: { mesh: { group: local, groups: [local] }, mgmt: { addons: { mesh-root-ca: true } } }
     asserts:
       - equal: { path: 'metadata.labels["mesh.platform.koorikla.io/group"]', value: local }
       - equal: { path: 'metadata.labels["mesh.platform.koorikla.io/network"]', value: dev1 }
@@ -55,9 +55,15 @@ tests:
 
   - it: rejects a mesh member without istio-ambient
     values: [values/capi-docker.yaml]
-    set: { mesh: { group: local }, mgmt: { addons: { mesh-root-ca: true } }, addons: { istio-ambient: false } }
+    set: { mesh: { group: local, groups: [local] }, mgmt: { addons: { mesh-root-ca: true } }, addons: { istio-ambient: false } }
     asserts:
       - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" }
+
+  - it: "negative: rejects a mesh group without its own root (not in installation.yaml mesh.groups)"
+    values: [values/capi-docker.yaml]
+    set: { mesh: { group: prod, groups: [local] }, mgmt: { addons: { mesh-root-ca: true } } }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group \"prod\" is not in installation.yaml mesh.groups (one root CA per group on mgmt)" }
 
   - it: rejects a mesh group that is not a DNS label
     values: [values/capi-docker.yaml]

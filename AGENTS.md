@@ -50,7 +50,7 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |
-| Mesh PKI / remote secrets (ns `fleet`, opt-in) | `mesh-root-ca` (shared root), `<name>-mesh-ca`, `<name>-mesh-reader`; CRS payloads `<name>-mesh-cacerts`, `<name>-mesh-remote-secret` |
+| Mesh PKI / remote secrets (opt-in) | ns `cert-manager`: root `mesh-root-<group>` (+ ClusterIssuer); ns `fleet`: `<name>-mesh-ca`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-cacerts`, `<name>-mesh-remote-secret` |
 | On mesh members, ns `istio-system` | Secret `cacerts`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
 | Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>` |

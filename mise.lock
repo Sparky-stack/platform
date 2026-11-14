@@ -207,6 +207,47 @@ url = "https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_windows_
 url_api = "https://api.github.com/repos/cli/cli/releases/assets/740719168"
 provenance = "github-attestations"
 
+[[tools."github:kyverno/kyverno"]]
+version = "1.20.0"
+backend = "github:kyverno/kyverno"
+specifiers = ["1.20.0"]
+
+[tools."github:kyverno/kyverno"."platforms.linux-arm64"]
+checksum = "sha256:7d002205369f8ebb8a5570efb6a1bfc4fa02e67ca74d6d8cf2f27783e0e54759"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736104692"
+
+[tools."github:kyverno/kyverno"."platforms.linux-x64"]
+checksum = "sha256:06b8f3ca7b5626473be8fb4d343ad54ab84e317142766f72420e7d44b80942e2"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736105729"
+
+[tools."github:kyverno/kyverno"."platforms.macos-arm64"]
+checksum = "sha256:9f7e537bdf39ff4f1819d978aec791a4dafa1cfd382f75f53baf422702452149"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736103885"
+
+[tools."github:kyverno/kyverno"."platforms.macos-x64"]
+checksum = "sha256:2e31ed3df7fda3252a74c897eb6b7b581e634e0759796b43ce0d2472d7376275"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_darwin_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736104287"
+
+[tools."github:kyverno/kyverno"."platforms.windows-arm64"]
+checksum = "sha256:16ded7c9e013778974451fcb966e5e16c52c4928fb45bc08e564fdd4cb4f68b9"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_windows_arm64.zip"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736106148"
+
+[tools."github:kyverno/kyverno"."platforms.windows-x64"]
+checksum = "sha256:8f90ecd540b87252eb6d43702bdf2543f7fd026043b4b28de4540338cf247725"
+checksum_source = "mise-versions"
+url = "https://github.com/kyverno/kyverno/releases/download/v1.20.0/kyverno-cli_v1.20.0_windows_x86_64.zip"
+url_api = "https://api.github.com/repos/kyverno/kyverno/releases/assets/736106668"
+
 [[tools.helm]]
 version = "4.3.2"
 backend = "aqua:helm/helm"

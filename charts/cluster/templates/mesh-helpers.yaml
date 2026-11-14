@@ -8,11 +8,12 @@ key `mesh.group` (docs/multicluster.md). Prefix `mesh.` avoids collisions with t
 {{- ((.Values.mesh | default dict).group | default "") -}}
 {{- end }}
 
-{{- /* Issuer (namespace fleet) of the shared mesh root CA; addon mesh-root-ca renders it on mgmt. */ -}}
-{{- define "mesh.rootIssuer" -}}mesh-root-ca{{- end }}
+{{- /* ClusterIssuer of this cluster's mesh group root (one root per group); addon mesh-root-ca renders it on mgmt
+from installation.yaml mesh.groups (prefix = mesh-root-ca root.issuerPrefix, contract test). */ -}}
+{{- define "mesh.rootIssuer" -}}mesh-root-{{ include "mesh.group" . }}{{- end }}
 
 {{- /* Kubernetes user peers' istiods authenticate as (client cert CN); addon istio-eastwest binds it on every member
-to the Istio chart's read-only ClusterRole istio-reader-clusterrole-istio-system. */ -}}
+to ClusterRole platform-istio-reader (discovery reads only, no Secrets). Also mesh-root-ca admission.readerUser. */ -}}
 {{- define "mesh.readerUser" -}}platform:istio-reader{{- end }}
 
 {{- define "mesh.labels" -}}

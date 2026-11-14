@@ -47,12 +47,33 @@ assert_eq "$mgmt_cni" "flannel" "in-cluster (k3d mgmt) carries platform.koorikla
 if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" --values "$ROOT/installations/local/clusters/dev1.yaml" \
-    --set mesh.group=contract --set mgmt.addons.mesh-root-ca=true > "$TMP/dev1-mesh.yaml"
-  root_issuer=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-ca") | .spec.issuerRef.name' "$TMP/dev1-mesh.yaml")
-  assert_eq "$root_issuer" "$(yq '.root.issuerName' "$ROOT/addons/mesh-root-ca/values.yaml")" "mesh intermediates are issued by the mesh-root-ca addon's Issuer"
-  assert_eq "$(yq '.root.namespace' "$ROOT/addons/mesh-root-ca/values.yaml")" "fleet" "mesh root lives next to the intermediates (fleet)"
+    --set mesh.group=contract --set 'mesh.groups={contract}' --set mgmt.addons.mesh-root-ca=true > "$TMP/dev1-mesh.yaml"
+  MRC="$ROOT/addons/mesh-root-ca/values.yaml"
+  root_issuer=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-ca") | .spec.issuerRef.kind + "/" + .spec.issuerRef.name' "$TMP/dev1-mesh.yaml")
+  assert_eq "$root_issuer" "ClusterIssuer/$(yq '.root.issuerPrefix' "$MRC")contract" "mesh intermediates are issued by their group's root ClusterIssuer (addon mesh-root-ca)"
+  assert_eq "$(yq '.root.namespace' "$MRC")" "$(yq '.addons["cert-manager"].namespace' "$ROOT/charts/platform/values.yaml")" "mesh root keys live in cert-manager's cluster resource namespace (ClusterIssuer)"
+  assert_eq "$(yq '.addons["mesh-root-ca"].namespace' "$ROOT/charts/platform/values.yaml")" "$(yq '.root.namespace' "$MRC")" "addon mesh-root-ca deploys to the root namespace"
+  stores=$(helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-secrets 2>/dev/null | yq -N 'select(.kind == "ClusterSecretStore") | .spec.provider.kubernetes.remoteNamespace // ""')
+  if printf '%s\n' "$stores" | grep -qx "$(yq '.root.namespace' "$MRC")"; then
+    assert_eq "reachable" "unreachable" "no ClusterSecretStore reads the mesh root namespace"
+  else
+    assert_eq ok ok "no ClusterSecretStore reads the mesh root namespace"
+  fi
+  assert_eq "$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-ca") | .spec.duration' "$TMP/dev1-mesh.yaml")" "$(yq '.admission.intermediateMaxDuration' "$MRC")" "intermediate lifetime == the admission limit (14d)"
+  assert_eq "$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-reader") | .spec.duration' "$TMP/dev1-mesh.yaml")" "$(yq '.admission.readerMaxDuration' "$MRC")" "reader cert lifetime == the admission limit (7d)"
+  assert_eq "$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-ca") | .metadata.namespace' "$TMP/dev1-mesh.yaml")" "$(yq '.admission.intermediateNamespace' "$MRC")" "intermediates live where the admission policy admits them"
   reader_cn=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-reader") | .spec.commonName' "$TMP/dev1-mesh.yaml")
   assert_eq "$reader_cn" "$(yq '.reader.user' "$ROOT/addons/istio-eastwest/values.yaml")" "remote-secret client cert CN == user istio-eastwest binds"
+  assert_eq "$reader_cn" "$(yq '.admission.readerUser' "$MRC")" "remote-secret client cert CN == the only CN the client-ca admission policy admits"
+  # every fleet file's mesh.group has a root (charts/cluster fails the render otherwise; this names the installation)
+  for inst_dir in "$ROOT"/installations/*; do
+    [[ -f "$inst_dir/installation.yaml" ]] || continue
+    for cf in "$inst_dir"/clusters/*.yaml; do
+      g=$(yq '.mesh.group // ""' "$cf")
+      [[ -n "$g" ]] || continue
+      assert_match "$(yq -o=json -I=0 '.mesh.groups // []' "$inst_dir/installation.yaml")" "\"$g\"" "$(basename "$inst_dir")/$(basename "$cf"): mesh.group $g listed in mesh.groups"
+    done
+  done
   mesh_net=$(yq 'select(.kind == "Cluster") | .metadata.labels["mesh.platform.koorikla.io/network"]' "$TMP/dev1-mesh.yaml")
   assert_eq "$mesh_net" "dev1" "mesh network label == cluster name"
   assert_match "$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-mesh-cacerts") | .spec.target.template.data["mesh-cacerts.yaml"]' "$TMP/dev1-mesh.yaml")" \

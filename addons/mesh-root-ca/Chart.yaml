@@ -1,6 +1,6 @@
 apiVersion: v2
 name: mesh-root-ca
-description: Shared Istio mesh root CA on mgmt (cert-manager); signs one intermediate per mesh member (charts/cluster)
+description: Istio mesh root CAs on mgmt, one per mesh group (cert-manager ClusterIssuers) + admission guards for the mesh PKI
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.0.0"

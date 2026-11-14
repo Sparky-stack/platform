@@ -53,6 +53,9 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- if not (index ((($v.mgmt | default dict).addons) | default dict) "mesh-root-ca") -}}
 {{- fail (printf "cluster %s: mesh.group needs the mesh root CA on mgmt: set mgmt.addons.mesh-root-ca: true in installation.yaml" $v.name) -}}
 {{- end -}}
+{{- if not (has $mesh.group ($mesh.groups | default list)) -}}
+{{- fail (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group on mgmt)" $v.name $mesh.group) -}}
+{{- end -}}
 {{- end -}}
 {{- if and (hasKey ($v.addons | default dict) "istio-eastwest") (ne (index $v.addons "istio-eastwest") (not (empty $mesh.group))) -}}
 {{- fail (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $v.addons "istio-eastwest") ($mesh.group | default "")) -}}
