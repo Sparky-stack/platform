@@ -20,6 +20,10 @@ secrets:
   backend: kubernetes                         # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+  # No k3s registries.yaml / platform-ghcr: every image this installation pulls from ghcr.io is public (koorikla/
+  # hello-world, koorikla/ci-toolbox: anonymous pull checked 2026-11). Private images: true + GHCR_* (docs/forking.md).
+  nodeRegistryAuth:
+    enabled: false
 
 capi:
   providers:

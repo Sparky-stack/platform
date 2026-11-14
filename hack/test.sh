@@ -310,7 +310,9 @@ for dir in charts/* addons/* examples/*; do
   fi
 done
 
-# 8. Contract & invariant tests in hack/tests/test_*.sh
+# 8. Contract & invariant tests in hack/tests/test_*.sh (RENDERED_DIR: the manifests rendered above, e.g. for
+#    test_secret_store_scope.sh)
+export RENDERED_DIR="$TMP"
 for t in hack/tests/test_*.sh; do
   [[ -f "$t" ]] || continue
   if bash "$t"; then

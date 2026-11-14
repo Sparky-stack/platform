@@ -17,6 +17,7 @@ observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents 
 | [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
 | [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/multicluster.md](docs/multicluster.md), [docs/observability.md](docs/observability.md) | per-area details |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
+| [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 
 Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app), [koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows).
 
@@ -37,25 +38,38 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
   `mise install` installs every other tool at the version pinned in [`mise.toml`](mise.toml) (kubectl, helm +
   helm-unittest, k3d, clusterctl, yq, kubeconform, gh, task, ...). Works on macOS, Linux and Windows (WSL2 or Git Bash),
   amd64 and arm64; or open the repo in the devcontainer / Codespaces. Details: [docs/dev-environment.md](docs/dev-environment.md).
-- `gh auth login` for the local installation (add `read:packages` only if your GHCR images are private).
+- GitHub credentials only if your fork or images are private: a GitHub App (preferred) or fine-grained PAT via env vars,
+  or your `gh auth login` as a local fallback ([docs/forking.md](docs/forking.md#3-credentials)).
 
 ## Local quickstart
 
 ```bash
 mise install  # once: the pinned toolchain (`task doctor` checks it)
-# Point repoURL at your fork if needed:
-# task set-repo REPO=https://github.com/<you>/platform.git
 
 task up       # Create k3d platform-mgmt (network: kind, loopback ports 8080/8443/11080/11085), seed secrets, install Argo CD, apply root-app
 task status   # Check CAPI clusters, Argo CD apps, ClusterDataPlanes, UI port-forward + admin password
 task down     # Delete CAPD workload clusters gracefully, then delete k3d platform-mgmt
 ```
 
+## Run it from your own fork
+
+Argo CD reads everything from one git repo, so a fork runs as soon as the GitOps root points at it:
+
+```bash
+gh repo fork koorikla/platform --clone && cd platform && mise install && task doctor
+task set-repo REPO=https://github.com/<you>/platform.git   # repoURL, githubOrg, tenant app repos; idempotent
+git commit -am "chore: point GitOps at my fork" && git push
+task up
+```
+
+A public fork needs no credentials. Private fork or images, the push credentials the platform will need, and the
+labels you should *not* rename: [docs/forking.md](docs/forking.md).
+
 `task --list` shows every entrypoint; `make <target>` still works (the Makefile is a shim for `task <target>`).
 
 Individual bootstrap stages:
 
-- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `openchoreo`) from `gh` CLI (preserves existing `openchoreo` secret keys)
+- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `platform-github-app`, `openchoreo`) from `GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` / `GHCR_*` env vars, falling back to the `gh` CLI (preserves existing `openchoreo` secret keys; [docs/forking.md](docs/forking.md#seeding-locally-task-secrets))
 - `task argocd` — install/upgrade Argo CD (`addons/argo-cd`) and apply `bootstrap/root-app.yaml`
 - `task ui` — Argo CD UI on http://localhost:8081; `task kubeconfig CLUSTER=dev1` — host-usable kubeconfig of a CAPD cluster
 
@@ -69,7 +83,7 @@ task up INST=aws-example
 task up INST=hetzner-example
 ```
 
-When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation and local `platform-secrets` seeding, installs Argo CD with `addons/argo-cd/values.yaml`, optionally seeds the bootstrap repo secret from `GITHUB_USER`/`GITHUB_TOKEN` if set, and applies `root-app.yaml` pointing at `installations/<inst>/installation.yaml`.
+When `secrets.backend` is not `kubernetes`, `bootstrap.sh` skips k3d creation and local `platform-secrets` seeding, installs Argo CD with `addons/argo-cd/values.yaml`, optionally seeds the bootstrap repo secret from `GITHUB_APP_*` or `PLATFORM_GITHUB_TOKEN` if set, and applies `root-app.yaml` pointing at `installations/<inst>/installation.yaml`.
 
 ## Adding clusters, addons, and tenants
 

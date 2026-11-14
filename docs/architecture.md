@@ -113,12 +113,17 @@ Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backe
 
 | Backend | Use |
 |---|---|
-| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `make secrets` |
+| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `task secrets` (docs/forking.md) |
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
 Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice.
 Key names are flat (`platform-github`, `platform-ghcr`, `capi-aws`, `capi-hetzner`) so they map onto every backend.
+`platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces that consume it
+(addon secret-stores `platformStore.namespaces`: argocd, fleet, capa-system, thunder, openchoreo-control-plane,
+openchoreo-observability-plane, falco); `hack/tests/test_secret_store_scope.sh` fails when a rendered consumer is
+missing from that list or a listed namespace has no consumer. When `platform-github-app` (write) gets its consumer, it
+moves to a dedicated store limited to that namespace.
 
 ### Installations
 `installations/<inst>/` is one mgmt cluster and its fleet: `installation.yaml` (domain, secret backend, enabled CAPI
