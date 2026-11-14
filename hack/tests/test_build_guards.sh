@@ -126,8 +126,18 @@ assert_eq "$out:$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" "
 GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
 CHECK=$(printf '%s\n' "$GITOPS" | awk '/Only an OpenChoreo Workload/{f=1} f{print} /is not an OpenChoreo Workload/{exit}')
 assert_match "$CHECK" 'realpath -e' "gitops workload check extracted"
+# The gitops step runs in the Linux toolbox (GNU coreutils); `realpath -e` does not exist on macOS/BSD. Off Linux,
+# put a GNU realpath first on PATH (brew coreutils: grealpath) or skip these runtime checks.
+WL_PATH=$PATH
+if ! realpath -e / >/dev/null 2>&1; then
+  if command -v grealpath >/dev/null 2>&1; then
+    mkdir -p "$TMP/gnu"; ln -sf "$(command -v grealpath)" "$TMP/gnu/realpath"; WL_PATH="$TMP/gnu:$PATH"
+  else
+    WL_SKIP=1
+  fi
+fi
 wl_check() {   # wl_check <repo dir> <path> -> RC
-  if (cd "$1" && env -i PATH="$PATH" WORKLOAD_PATH="$2" REPO=r GITOPS_BRANCH=b CHECK="$CHECK" GUARDS="$GUARDS" \
+  if (cd "$1" && env -i PATH="$WL_PATH" WORKLOAD_PATH="$2" REPO=r GITOPS_BRANCH=b CHECK="$CHECK" GUARDS="$GUARDS" \
       bash -c 'set -euo pipefail; eval "$GUARDS"; eval "$CHECK"' >/dev/null 2>&1); then RC=0; else RC=$?; fi
 }
 R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
@@ -135,10 +145,14 @@ printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/d
 printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
 printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
 ln -s ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml"
-wl_check "$R" deploy/openchoreo/workload.yaml; assert_eq "$RC" 0 "gitops: Workload accepted"
-wl_check "$R" deploy/openchoreo/deploy.yaml; assert_eq "$RC" 1 "gitops: another kind refused"
-wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
-wl_check "$R" deploy/openchoreo/missing.yaml; assert_eq "$RC" 1 "gitops: missing file refused"
+if [[ -n "${WL_SKIP:-}" ]]; then
+  echo "  SKIP gitops Workload runtime checks: no GNU realpath (brew install coreutils); production runs them on Linux"
+else
+  wl_check "$R" deploy/openchoreo/workload.yaml; assert_eq "$RC" 0 "gitops: Workload accepted"
+  wl_check "$R" deploy/openchoreo/deploy.yaml; assert_eq "$RC" 1 "gitops: another kind refused"
+  wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
+  wl_check "$R" deploy/openchoreo/missing.yaml; assert_eq "$RC" 1 "gitops: missing file refused"
+fi
 R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
 printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
 ln -s ../.github/workflows "$R2/deploy/openchoreo"
