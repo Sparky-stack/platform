@@ -97,3 +97,25 @@ jobs:
       working_directory: fixtures/ruby
       image_name: ci-selftest-ruby
       trivy_ignore_file: fixtures/ruby/.trivyignore.yaml
+
+  crossplane-configuration:
+    uses: ./.github/workflows/crossplane-configuration.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: fixtures/crossplane-configuration
+      package_name: ci-selftest-crossplane-configuration
+
+  helm-chart:
+    uses: ./.github/workflows/helm-chart.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      chart_path: fixtures/helm/ci-selftest-helm
+      registry: ghcr.io/koorikla

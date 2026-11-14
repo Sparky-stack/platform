@@ -1,0 +1,17 @@
+suite: deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: renders image and replicas from values
+    set:
+      replicas: 3
+      image.tag: abc1234
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/koorikla/hello-world:abc1234
