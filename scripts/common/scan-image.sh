@@ -14,6 +14,7 @@
 #   IGNORE_UNFIXED   true/false, default true
 #   FAIL_ON_FINDINGS true/false, default true (false = report only)
 #   TRIVY_CACHE_DIR  optional trivy cache dir
+#   IGNORE_FILE      optional .trivyignore / .trivyignore.yaml (accepted risks)
 #   CI_OUT_DIR       output dir, default ./.ci-out
 # Files out ($CI_OUT_DIR):
 #   trivy-<os>-<arch>.json   full report per platform
@@ -39,6 +40,10 @@ if is_true "${IGNORE_UNFIXED:-true}"; then
 fi
 if [[ -n "${TRIVY_CACHE_DIR:-}" ]]; then
   common_args="${common_args} --cache-dir ${TRIVY_CACHE_DIR}"
+fi
+if [[ -n "${IGNORE_FILE:-}" ]]; then
+  [[ -f "${IGNORE_FILE}" ]] || die "IGNORE_FILE ${IGNORE_FILE} not found"
+  common_args="${common_args} --ignorefile ${IGNORE_FILE}"
 fi
 
 if [[ "${IMAGE_SRC:-}" != "remote" ]]; then

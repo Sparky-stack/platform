@@ -108,6 +108,11 @@ on:
         required: false
         type: boolean
         default: true
+      trivy_ignore_file:
+        description: 'Repo-relative .trivyignore(.yaml) with accepted risks'
+        required: false
+        type: string
+        default: ''
       trivy_fail:
         description: 'Fail on Trivy findings at trivy_severity'
         required: false
@@ -228,6 +233,7 @@ jobs:
           FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
           SKIP_DIRS: "**/deps,**/_build"
         run: bash "$CI_SCRIPTS/common/scan-fs.sh"
 
@@ -264,6 +270,7 @@ jobs:
       trivy_severity: ${{ inputs.trivy_severity }}
       trivy_ignore_unfixed: ${{ inputs.trivy_ignore_unfixed }}
       trivy_fail: ${{ inputs.trivy_fail }}
+      trivy_ignore_file: ${{ inputs.trivy_ignore_file }}
     secrets:
       registry_username: ${{ secrets.registry_username }}
       registry_password: ${{ secrets.registry_password }}

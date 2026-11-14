@@ -64,6 +64,11 @@ on:
         required: false
         type: boolean
         default: true
+      trivy_ignore_file:
+        description: 'Repo-relative .trivyignore(.yaml) with accepted risks (empty = none)'
+        required: false
+        type: string
+        default: ''
       upload_sarif:
         description: 'Upload Trivy SARIF to GitHub code scanning'
         required: false
@@ -311,6 +316,7 @@ jobs:
           FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: bash "$CI_SCRIPTS/common/scan-image.sh"
 
@@ -341,6 +347,14 @@ jobs:
       digest: ${{ steps.merge.outputs.digest }}
       image_digest_ref: ${{ steps.merge.outputs.image_digest_ref }}
     steps:
+      - name: Checkout (trivy ignore file)
+        if: inputs.trivy_ignore_file != ''
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.trivy_ignore_file }}
+          sparse-checkout-cone-mode: false
+
       - name: Fetch koorikla/ci scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
@@ -425,6 +439,7 @@ jobs:
           FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: bash "$CI_SCRIPTS/common/scan-image.sh"
 

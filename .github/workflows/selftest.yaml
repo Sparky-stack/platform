@@ -96,3 +96,4 @@ jobs:
     with:
       working_directory: fixtures/ruby
       image_name: ci-selftest-ruby
+      trivy_ignore_file: fixtures/ruby/.trivyignore.yaml

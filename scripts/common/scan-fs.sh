@@ -10,6 +10,7 @@
 #   FAIL_ON_FINDINGS true/false, default true
 #   SKIP_DIRS        optional comma list passed to --skip-dirs
 #   TRIVY_CACHE_DIR  optional trivy cache dir
+#   IGNORE_FILE      optional .trivyignore / .trivyignore.yaml (accepted risks)
 #   CI_OUT_DIR       output dir, default ./.ci-out
 # Files out ($CI_OUT_DIR):
 #   trivy-fs.json, trivy-fs.sarif
@@ -32,6 +33,10 @@ if is_true "${IGNORE_UNFIXED:-true}"; then
 fi
 if [[ -n "${TRIVY_CACHE_DIR:-}" ]]; then
   set -- "$@" --cache-dir "${TRIVY_CACHE_DIR}"
+fi
+if [[ -n "${IGNORE_FILE:-}" ]]; then
+  [[ -f "${IGNORE_FILE}" ]] || die "IGNORE_FILE ${IGNORE_FILE} not found"
+  set -- "$@" --ignorefile "${IGNORE_FILE}"
 fi
 if [[ -n "${SKIP_DIRS:-}" ]]; then
   set -- "$@" --skip-dirs "${SKIP_DIRS}"

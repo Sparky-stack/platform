@@ -1,0 +1,9 @@
+apiVersion: ci.koorikla.dev/v1alpha1
+kind: WebApp
+metadata:
+  name: hello
+  namespace: default
+spec:
+  image: ghcr.io/koorikla/hello-world:main
+  replicas: 2
+  greeting: tere
