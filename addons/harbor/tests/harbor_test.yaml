@@ -10,20 +10,44 @@ release:
   name: harbor
   namespace: harbor
 tests:
-  - it: serving cert covers the registry host and the in-cluster Service, issued by the mgmt-only CA
+  - it: serving cert covers only the registry host (the Gateway listener hostname), issued by the namespaced CA
     template: templates/pki.yaml
     documentSelector: { path: metadata.name, value: harbor-tls }
     asserts:
-      - equal: { path: spec.dnsNames, value: [harbor.openchoreo.localhost, harbor.harbor.svc, harbor.harbor.svc.cluster.local] }
-      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: ClusterIssuer, name: harbor-ca } }
+      - equal: { path: spec.dnsNames, value: [harbor.openchoreo.localhost] }
+      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: Issuer, name: harbor-ca } }
 
-  - it: the CA key pair lives in ns cert-manager and is never rotated implicitly
+  - it: the CA key pair lives in ns harbor and is never rotated implicitly
     template: templates/pki.yaml
     documentSelector: { path: spec.isCA, value: true }
     asserts:
-      - equal: { path: metadata.namespace, value: cert-manager }
+      - equal: { path: metadata.namespace, value: harbor }
       - equal: { path: spec.secretName, value: harbor-ca }
       - equal: { path: spec.privateKey.rotationPolicy, value: Never }
+      - equal: { path: spec.issuerRef.kind, value: Issuer }
+
+  - it: no cluster-scoped issuer anywhere (nobody outside ns harbor can mint a registry cert)
+    template: templates/pki.yaml
+    asserts:
+      - notEqual: { path: kind, value: ClusterIssuer }
+
+  - it: harbor-ca-bundle carries only the CA certificate, copied from the CA Secret by a name-scoped store
+    template: templates/pki.yaml
+    asserts:
+      - equal:
+          path: spec.data
+          value: [{ secretKey: ca.crt, remoteRef: { key: harbor-ca, property: tls.crt } }]
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: spec.secretStoreRef, value: { kind: SecretStore, name: harbor-ca-source } }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - notExists: { path: spec.dataFrom }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal:
+          path: 'rules[0]'
+          value: { apiGroups: [""], resources: [secrets], resourceNames: [harbor-ca], verbs: [get] }
+        documentSelector: { path: kind, value: Role }
+      - lengthEqual: { path: rules, count: 2 }
+        documentSelector: { path: kind, value: Role }
 
   - it: store mgmt-harbor may GET only the public CA bundle Secret
     template: templates/ca-store.yaml

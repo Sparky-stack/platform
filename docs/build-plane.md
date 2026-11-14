@@ -177,10 +177,13 @@ client must resolve that name itself):
 | mgmt pods (builds) | coredns-local rewrites the name to `harbor.harbor.svc.cluster.local` (Service port 9443) |
 | CAPD nodes (containerd) | `/etc/hosts`: name → IP of `k3d-platform-mgmt-serverlb` on network `kind` (ClusterClass `registryHostAlias`, written before k3s starts) |
 
-TLS terminates at the Gateway with `harbor-tls`, issued by `ClusterIssuer harbor-ca`. The CA key stays in ns
-`cert-manager` on mgmt. Its **public** certificate is published through Secret `harbor/harbor-ca-bundle` (a throwaway
-leaf; only `ca.crt` is read) and `ClusterSecretStore mgmt-harbor`, whose ServiceAccount may `get` exactly that Secret
-(name-scoped RBAC) and which only namespaces `fleet` and `workflows-*` can use. Nodes get it as
+TLS terminates at the Gateway with `harbor-tls` (SAN: the registry host only, the listener's hostname), issued by the
+**namespaced** `Issuer harbor/harbor-ca`: no `ClusterIssuer`, so nobody allowed to create cert-manager `Certificate`s
+elsewhere on mgmt can mint a cert the nodes trust for the registry host. The CA key stays in ns `harbor`. Its **public**
+certificate alone is copied by ESO (namespaced `SecretStore harbor-ca-source`, may `get` only Secret `harbor-ca`,
+property `tls.crt`) into Secret `harbor/harbor-ca-bundle`, which holds nothing but `ca.crt`, and published through
+`ClusterSecretStore mgmt-harbor`, whose ServiceAccount may `get` exactly that Secret (name-scoped RBAC) and which only
+namespaces `fleet` and `workflows-*` can use. Nodes get it as
 `/etc/rancher/k3s/registry-ca.crt` (`registries.yaml` `tls.ca_file`), build pods as `<run>-registry-ca`.
 
 ### Declarative configuration
