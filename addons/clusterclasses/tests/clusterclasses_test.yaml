@@ -253,7 +253,7 @@ tests:
     template: templates/k3s-docker.yaml
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
-      - equal: { path: 'spec.patches[?(@.name == "registryCA")].enabledIf', value: "{{ .registryCA }}" }
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].enabledIf', value: "{{ if and .registryAuth .registryCA }}true{{ end }}" }
       - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[0].jsonPatches[0].path', value: /spec/template/spec/kthreesConfigSpec/files/- }
       - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[1].jsonPatches[0].path', value: /spec/template/spec/files/- }
       - matchRegex:

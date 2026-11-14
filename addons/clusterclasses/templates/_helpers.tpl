@@ -61,13 +61,14 @@ contentFrom:
 {{- end }}
 
 {{/*
-Patch appending the CA file. Ordered after registryAuth, so the files list exists on both template kinds; the
-`registryCA` variable is only ever set together with `registryAuth` (charts/cluster capi-cluster.yaml).
+Patch appending the CA file. Ordered after registryAuth, so the files list exists on both template kinds. The worker
+template has a files list only when registryAuth created it, so the patch is gated on both variables here too (not
+only by charts/cluster setting them together): registryCA alone renders nothing instead of a failing JSON patch.
 Arg: list of (path-to-files) per template kind is implied by the selector order: control plane, workers.
 */}}
 {{- define "clusterclasses.registryCAPatch" -}}
 - name: registryCA
-  enabledIf: {{`"{{ .registryCA }}"`}}
+  enabledIf: {{`'{{ if and .registryAuth .registryCA }}true{{ end }}'`}}
   definitions:
     - selector:
         apiVersion: controlplane.cluster.x-k8s.io/v1beta2
