@@ -1,0 +1,35 @@
+name: selftest
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/**'
+      - 'fixtures/**'
+      - 'scripts/**'
+      - 'toolbox/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/**'
+      - 'fixtures/**'
+      - 'scripts/**'
+      - 'toolbox/**'
+
+permissions:
+  contents: read
+
+jobs:
+  selftest-go:
+    uses: ./.github/workflows/go.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: fixtures/go
+      image_name: ci-selftest-go
+      context: fixtures/go
+      dockerfile: fixtures/go/Dockerfile
