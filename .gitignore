@@ -1,0 +1,6 @@
+.ci-out/
+coverage.out
+node_modules/
+.next/
+_build/
+deps/

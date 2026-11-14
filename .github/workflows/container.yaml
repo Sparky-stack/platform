@@ -1,93 +1,107 @@
 name: container
 
+# Shared building block: multi-arch buildx build -> push -> Trivy scan ->
+# SPDX SBOM -> GitHub attestations (SLSA provenance, SBOM) -> cosign keyless
+# sign (+ cosign vuln attestation). Called by every stack workflow; can also be
+# called directly for repos that only ship a Dockerfile.
+#
+# Required caller permissions (job that `uses:` this workflow):
+#   contents: read, packages: write, id-token: write, attestations: write,
+#   security-events: write
+
 on:
   workflow_call:
     inputs:
       image_name:
-        description: 'Container image name (defaults to repository name)'
+        description: 'Image name (default: repository name)'
         required: false
         type: string
         default: ''
       registry:
-        description: 'Target OCI registry prefix (defaults to ghcr.io/<owner>)'
+        description: 'Registry prefix, e.g. ghcr.io/koorikla or harbor.example.com/apps (default ghcr.io/<owner>)'
         required: false
         type: string
         default: ''
       context:
-        description: 'Docker build context directory'
+        description: 'Docker build context'
         required: false
         type: string
         default: '.'
       dockerfile:
-        description: 'Path to Dockerfile'
+        description: 'Path to the Dockerfile'
         required: false
         type: string
         default: 'Dockerfile'
       platforms:
-        description: 'Target platforms for docker buildx (e.g. linux/amd64 or linux/amd64,linux/arm64)'
+        description: 'Comma-separated target platforms (PR builds are linux/amd64 only)'
         required: false
         type: string
-        default: 'linux/amd64'
+        default: 'linux/amd64,linux/arm64'
       build_args:
-        description: 'Additional newline-separated Docker build-args'
+        description: 'Newline-separated extra build-args (VERSION=<short sha> is always set)'
         required: false
         type: string
         default: ''
       push:
-        description: 'Push image to registry on non-PR events'
+        description: 'Push, attest and sign on non-PR events'
         required: false
         type: boolean
         default: true
       trivy_severity:
-        description: 'Comma-separated Trivy severities that fail the build'
+        description: 'Comma-separated severities that fail the Trivy scan'
         required: false
         type: string
         default: 'CRITICAL'
       trivy_ignore_unfixed:
-        description: 'Ignore unfixed vulnerabilities in Trivy scan'
+        description: 'Ignore vulnerabilities without a fixed version'
         required: false
         type: boolean
         default: true
-      trivy_exit_code:
-        description: 'Exit code when Trivy finds vulnerabilities of trivy_severity'
+      trivy_fail:
+        description: 'Fail the job on findings at trivy_severity (false = report only)'
         required: false
-        type: string
-        default: '1'
+        type: boolean
+        default: true
       upload_sarif:
-        description: 'Upload Trivy SARIF report to GitHub Code Scanning'
+        description: 'Upload Trivy SARIF to GitHub code scanning'
         required: false
         type: boolean
         default: true
       sarif_category:
-        description: 'Optional SARIF category override'
+        description: 'Code-scanning category (default container-<image>)'
+        required: false
+        type: string
+        default: ''
+      artifact_name:
+        description: 'If set, download this workflow artifact into <context> before building (e.g. a prebuilt binary or xpkg inputs)'
         required: false
         type: string
         default: ''
     secrets:
       registry_username:
-        description: 'Optional registry username (defaults to github.actor)'
+        description: 'Registry username (default github.actor; needed for non-GHCR registries)'
         required: false
       registry_password:
-        description: 'Optional registry password/token (defaults to github.token)'
+        description: 'Registry password/token (default GITHUB_TOKEN)'
         required: false
     outputs:
-      image_ref:
-        description: 'Pushed image reference with short SHA tag (<registry>/<owner>/<name>:<short_sha>)'
-        value: ${{ jobs.container.outputs.image_ref }}
       image:
-        description: 'Alias for image_ref (<registry>/<owner>/<name>:<short_sha>)'
+        description: 'Image reference tagged with the short SHA (<repo>:<short_sha>)'
+        value: ${{ jobs.container.outputs.image }}
+      image_ref:
+        description: 'Alias of image'
         value: ${{ jobs.container.outputs.image }}
       image_repo:
-        description: 'Image repository without tag (<registry>/<owner>/<name>)'
+        description: 'Image repository without tag'
         value: ${{ jobs.container.outputs.image_repo }}
       digest:
-        description: 'Pushed OCI image manifest digest (sha256:...)'
+        description: 'Manifest-list (index) digest sha256:... (empty on PRs)'
         value: ${{ jobs.container.outputs.digest }}
       image_digest_ref:
-        description: 'Immutable digest reference (<registry>/<owner>/<name>@sha256:...)'
+        description: 'Immutable reference <repo>@sha256:... (empty on PRs)'
         value: ${{ jobs.container.outputs.image_digest_ref }}
       short_sha:
-        description: '7-character commit SHA used for image tag'
+        description: '7-character commit SHA used as tag'
         value: ${{ jobs.container.outputs.short_sha }}
 
 permissions:
@@ -96,10 +110,10 @@ permissions:
 jobs:
   container:
     name: Build, scan, SBOM, sign
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     concurrency:
-      group: container-${{ github.repository }}-${{ inputs.image_name || 'default' }}-${{ github.ref }}
+      group: container-${{ github.repository }}-${{ inputs.image_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
@@ -108,33 +122,37 @@ jobs:
       attestations: write
       security-events: write
     outputs:
-      image_ref: ${{ steps.vars.outputs.image }}
       image: ${{ steps.vars.outputs.image }}
       image_repo: ${{ steps.vars.outputs.repo }}
-      digest: ${{ steps.build.outputs.digest }}
-      image_digest_ref: ${{ steps.vars.outputs.repo }}@${{ steps.build.outputs.digest }}
+      digest: ${{ steps.vars.outputs.should_push == 'true' && steps.build.outputs.digest || '' }}
+      image_digest_ref: ${{ steps.vars.outputs.should_push == 'true' && format('{0}@{1}', steps.vars.outputs.repo, steps.build.outputs.digest) || '' }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Load koorikla/ci scripts
-        id: ci_scripts
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
         env:
-          REPO: ${{ github.repository }}
-          RUNNER_TEMP_DIR: ${{ runner.temp }}
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
         run: |
-          if [ "$REPO" = "koorikla/ci" ] && [ -d "$GITHUB_WORKSPACE/scripts" ]; then
-            echo "dir=$GITHUB_WORKSPACE/scripts" >> "$GITHUB_OUTPUT"
-          else
-            rm -rf "$RUNNER_TEMP_DIR/koorikla-ci"
-            git clone --depth 1 https://github.com/koorikla/ci.git "$RUNNER_TEMP_DIR/koorikla-ci"
-            echo "dir=$RUNNER_TEMP_DIR/koorikla-ci/scripts" >> "$GITHUB_OUTPUT"
-          fi
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
-      - name: Compute image metadata
+      - name: Download build artifact
+        if: inputs.artifact_name != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.context }}
+
+      - name: Compute image coordinates
         id: vars
         env:
           OWNER: ${{ github.repository_owner }}
@@ -145,29 +163,33 @@ jobs:
           INPUT_PUSH: ${{ inputs.push }}
           EVENT_NAME: ${{ github.event_name }}
           SARIF_CATEGORY: ${{ inputs.sarif_category }}
-          SCRIPTS_DIR: ${{ steps.ci_scripts.outputs.dir }}
-        run: bash "${SCRIPTS_DIR}/common/image-meta.sh"
+        run: bash "$CI_SCRIPTS/common/image-meta.sh"
+
+      - name: Set up QEMU (cross-platform RUN steps)
+        if: steps.vars.outputs.should_push == 'true' && inputs.platforms != 'linux/amd64'
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Extract Docker metadata
+      - name: Docker metadata (tags/labels)
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ steps.vars.outputs.repo }}
           flavor: |
             latest=false
           tags: |
             type=raw,value=${{ steps.vars.outputs.short_sha }}
-            type=raw,value=${{ github.sha }}
-            type=sha,prefix=sha-,format=short
+            type=sha,format=long,prefix=
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
-      - name: Log in to container registry
+      - name: Log in to registry
         if: steps.vars.outputs.should_push == 'true'
         uses: docker/login-action@v4
         with:
@@ -175,7 +197,7 @@ jobs:
           username: ${{ secrets.registry_username || github.actor }}
           password: ${{ secrets.registry_password || github.token }}
 
-      - name: Build and push container image
+      - name: Build (and push manifest list)
         id: build
         uses: docker/build-push-action@v7
         with:
@@ -184,62 +206,65 @@ jobs:
           platforms: ${{ steps.vars.outputs.should_push == 'true' && inputs.platforms || 'linux/amd64' }}
           push: ${{ steps.vars.outputs.should_push == 'true' }}
           load: ${{ steps.vars.outputs.should_push != 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.vars.outputs.should_push == 'true' && steps.meta.outputs.tags || steps.vars.outputs.image }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.vars.outputs.should_push == 'true' && steps.meta.outputs.annotations || '' }}
           provenance: false
           sbom: false
           build-args: |
             VERSION=${{ steps.vars.outputs.short_sha }}
             ${{ inputs.build_args }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ steps.vars.outputs.image_name }}
+          cache-to: type=gha,mode=max,scope=${{ steps.vars.outputs.image_name }}
 
-      - name: Pull image into local daemon for scanning
-        if: steps.vars.outputs.should_push == 'true'
-        env:
-          IMAGE_REF: ${{ steps.vars.outputs.image }}
-        run: docker pull --platform linux/amd64 "${IMAGE_REF}"
-
-      - name: Trivy image vulnerability scan (SARIF)
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
         with:
-          scan-type: image
-          image-ref: ${{ steps.vars.outputs.image }}
-          format: sarif
-          output: trivy-results.sarif
-          severity: ${{ inputs.trivy_severity }}
-          ignore-unfixed: ${{ inputs.trivy_ignore_unfixed }}
-          exit-code: ${{ inputs.trivy_exit_code }}
-          cache-dir: ${{ runner.temp }}/trivy-cache
+          cache: true
 
-      - name: Upload Trivy SARIF to GitHub Code Scanning
-        if: always() && inputs.upload_sarif
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0.24.3
+
+      - name: Trivy DB cache key
+        id: trivy_key
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ steps.trivy_key.outputs.date }}
+          restore-keys: trivy-db-
+
+      - name: Trivy scan (all platforms)
+        id: scan
+        env:
+          IMAGE_REF: ${{ steps.vars.outputs.should_push == 'true' && format('{0}@{1}', steps.vars.outputs.repo, steps.build.outputs.digest) || steps.vars.outputs.image }}
+          IMAGE_SRC: ${{ steps.vars.outputs.should_push == 'true' && 'remote' || 'docker' }}
+          PLATFORMS: ${{ inputs.platforms }}
+          FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
+          IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
+          FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: bash "$CI_SCRIPTS/common/scan-image.sh"
+
+      - name: Upload Trivy SARIF
+        if: always() && inputs.upload_sarif && steps.scan.outputs.sarif != ''
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: ${{ env.CI_OUT_DIR }}/trivy.sarif
           category: ${{ steps.vars.outputs.sarif_cat }}
 
-      - name: Trivy vulnerability report for Cosign attestation
-        if: steps.vars.outputs.should_push == 'true'
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: image
-          image-ref: ${{ steps.vars.outputs.image }}
-          format: cosign-vuln
-          output: trivy-vuln.json
-          severity: ${{ inputs.trivy_severity }}
-          ignore-unfixed: ${{ inputs.trivy_ignore_unfixed }}
-          exit-code: '0'
-          cache-dir: ${{ runner.temp }}/trivy-cache
-
-      - name: Generate SPDX JSON SBOM (Syft)
-        uses: anchore/sbom-action@v0.24.3
-        with:
-          image: ${{ steps.vars.outputs.image }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
+      - name: SBOM (SPDX JSON, syft)
+        env:
+          SYFT_CMD: ${{ steps.syft.outputs.cmd }}
+          IMAGE_REF: ${{ steps.vars.outputs.should_push == 'true' && format('{0}@{1}', steps.vars.outputs.repo, steps.build.outputs.digest) || steps.vars.outputs.image }}
+          SOURCE: ${{ steps.vars.outputs.should_push == 'true' && 'registry' || 'docker' }}
+          PLATFORM: linux/amd64
+        run: |
+          PATH="$(dirname "$SYFT_CMD"):$PATH" bash "$CI_SCRIPTS/common/sbom.sh"
 
       - name: Attest SLSA build provenance
         if: steps.vars.outputs.should_push == 'true'
@@ -248,24 +273,34 @@ jobs:
           subject-name: ${{ steps.vars.outputs.repo }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
 
-      - name: Attest SPDX SBOM
+      - name: Attest SBOM
         if: steps.vars.outputs.should_push == 'true'
         uses: actions/attest-sbom@v4
         with:
           subject-name: ${{ steps.vars.outputs.repo }}
           subject-digest: ${{ steps.build.outputs.digest }}
-          sbom-path: sbom.spdx.json
+          sbom-path: ${{ env.CI_OUT_DIR }}/sbom.spdx.json
           push-to-registry: true
 
-      - name: Install Cosign
+      - name: Install cosign
         if: steps.vars.outputs.should_push == 'true'
         uses: sigstore/cosign-installer@v4.1.3
 
-      - name: Cosign keyless sign and attest vulnerabilities
+      - name: Cosign keyless sign + vuln attestation
         if: steps.vars.outputs.should_push == 'true'
         env:
           IMAGE_DIGEST_REF: ${{ steps.vars.outputs.repo }}@${{ steps.build.outputs.digest }}
-          VULN_PREDICATE: trivy-vuln.json
-          SCRIPTS_DIR: ${{ steps.ci_scripts.outputs.dir }}
-        run: bash "${SCRIPTS_DIR}/common/sign-image.sh"
+          VULN_PREDICATE: ${{ env.CI_OUT_DIR }}/trivy-vuln.json
+        run: bash "$CI_SCRIPTS/common/sign-image.sh"
+
+      - name: Upload reports
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: container-reports-${{ steps.vars.outputs.image_name }}
+          path: ${{ env.CI_OUT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

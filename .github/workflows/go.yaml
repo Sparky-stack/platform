@@ -1,15 +1,22 @@
 name: go
 
+# Go service: go vet, golangci-lint, go test -race + coverage, govulncheck,
+# CodeQL (go), then container.yaml (multi-arch build, scan, SBOM, sign).
+#
+# Required caller permissions:
+#   contents: read, actions: read, packages: write, id-token: write,
+#   attestations: write, security-events: write
+
 on:
   workflow_call:
     inputs:
       working_directory:
-        description: 'Go module directory relative to repo root'
+        description: 'Go module directory'
         required: false
         type: string
         default: '.'
       go_version_file:
-        description: 'Path to go.mod or .go-version (defaults to <working_directory>/go.mod)'
+        description: 'go.mod / .go-version used by setup-go (default <working_directory>/go.mod)'
         required: false
         type: string
         default: ''
@@ -18,93 +25,103 @@ on:
         required: false
         type: boolean
         default: true
+      golangci_lint_version:
+        description: 'golangci-lint version'
+        required: false
+        type: string
+        default: 'latest'
       run_vulncheck:
         description: 'Run govulncheck'
         required: false
         type: boolean
         default: true
       run_codeql:
-        description: 'Run CodeQL analysis for Go'
+        description: 'Run CodeQL (go)'
         required: false
         type: boolean
         default: true
       extra_test_cmd:
-        description: 'Optional extra test/validation command to run after Go tests'
+        description: 'Extra shell command run in working_directory after tests'
         required: false
         type: string
         default: ''
       build_container:
-        description: 'Build, scan, and sign container image after checks'
+        description: 'Build/scan/sign the container image after checks'
         required: false
         type: boolean
         default: true
       image_name:
-        description: 'Container image name override'
+        description: 'Image name (default: repository name)'
         required: false
         type: string
         default: ''
       registry:
-        description: 'Target OCI registry prefix (defaults to ghcr.io/<owner>)'
+        description: 'Registry prefix (default ghcr.io/<owner>)'
         required: false
         type: string
         default: ''
       context:
-        description: 'Docker build context directory (defaults to working_directory)'
+        description: 'Docker build context (default working_directory)'
         required: false
         type: string
         default: ''
       dockerfile:
-        description: 'Path to Dockerfile (defaults to <working_directory>/Dockerfile)'
+        description: 'Dockerfile (default <working_directory>/Dockerfile)'
         required: false
         type: string
         default: ''
       platforms:
-        description: 'Target platforms for docker buildx'
+        description: 'Comma-separated image platforms'
         required: false
         type: string
-        default: 'linux/amd64'
+        default: 'linux/amd64,linux/arm64'
       build_args:
-        description: 'Additional newline-separated Docker build-args'
+        description: 'Newline-separated extra build-args'
         required: false
         type: string
         default: ''
       push:
-        description: 'Push image to registry on non-PR events'
+        description: 'Push, attest and sign on non-PR events'
         required: false
         type: boolean
         default: true
       trivy_severity:
-        description: 'Comma-separated Trivy severities that fail the build'
+        description: 'Severities that fail the image scan'
         required: false
         type: string
         default: 'CRITICAL'
       trivy_ignore_unfixed:
-        description: 'Ignore unfixed vulnerabilities in Trivy scan'
+        description: 'Ignore unfixed vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      trivy_fail:
+        description: 'Fail on findings at trivy_severity'
         required: false
         type: boolean
         default: true
     secrets:
       registry_username:
-        description: 'Optional registry username'
+        description: 'Registry username (non-GHCR registries)'
         required: false
       registry_password:
-        description: 'Optional registry password/token'
+        description: 'Registry password/token (non-GHCR registries)'
         required: false
     outputs:
-      image_ref:
-        description: 'Pushed image reference with short SHA tag'
-        value: ${{ jobs.container.outputs.image_ref }}
       image:
-        description: 'Alias for image_ref'
+        description: 'Image reference tagged with the short SHA'
         value: ${{ jobs.container.outputs.image }}
+      image_ref:
+        description: 'Alias of image'
+        value: ${{ jobs.container.outputs.image_ref }}
       image_repo:
         description: 'Image repository without tag'
         value: ${{ jobs.container.outputs.image_repo }}
       digest:
-        description: 'Pushed OCI image manifest digest'
+        description: 'Manifest-list digest'
         value: ${{ jobs.container.outputs.digest }}
       image_digest_ref:
-        description: 'Immutable digest reference'
+        description: 'Immutable <repo>@sha256:... reference'
         value: ${{ jobs.container.outputs.image_digest_ref }}
       short_sha:
         description: '7-character commit SHA'
@@ -115,8 +132,8 @@ permissions:
 
 jobs:
   test:
-    name: Go vet, lint, test, govulncheck
-    runs-on: ubuntu-latest
+    name: vet, lint, test, govulncheck
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
       group: go-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
@@ -124,47 +141,43 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Load koorikla/ci scripts
-        id: ci_scripts
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
         env:
-          REPO: ${{ github.repository }}
-          RUNNER_TEMP_DIR: ${{ runner.temp }}
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
         run: |
-          if [ "$REPO" = "koorikla/ci" ] && [ -d "$GITHUB_WORKSPACE/scripts" ]; then
-            echo "dir=$GITHUB_WORKSPACE/scripts" >> "$GITHUB_OUTPUT"
-          else
-            rm -rf "$RUNNER_TEMP_DIR/koorikla-ci"
-            git clone --depth 1 https://github.com/koorikla/ci.git "$RUNNER_TEMP_DIR/koorikla-ci"
-            echo "dir=$RUNNER_TEMP_DIR/koorikla-ci/scripts" >> "$GITHUB_OUTPUT"
-          fi
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
 
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || (inputs.working_directory == '.' && 'go.mod' || format('{0}/go.mod', inputs.working_directory)) }}
-          cache-dependency-path: ${{ inputs.go_version_file != '' && inputs.go_version_file || (inputs.working_directory == '.' && 'go.mod' || format('{0}/go.mod', inputs.working_directory)) }}
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
 
-      - name: Run golangci-lint
+      - name: golangci-lint
         if: inputs.run_lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: ${{ inputs.golangci_lint_version }}
           working-directory: ${{ inputs.working_directory }}
 
-      - name: Run Go vet, race tests with coverage, and govulncheck
+      - name: go vet, go test -race, govulncheck
         env:
           WORKDIR: ${{ inputs.working_directory }}
           RUN_LINT: 'false'
           RUN_VULNCHECK: ${{ inputs.run_vulncheck }}
-          SCRIPTS_DIR: ${{ steps.ci_scripts.outputs.dir }}
-        run: bash "${SCRIPTS_DIR}/go/check.sh"
+        run: bash "$CI_SCRIPTS/go/check.sh"
 
-      - name: Run extra validation command
+      - name: Extra test command
         if: inputs.extra_test_cmd != ''
         working-directory: ${{ inputs.working_directory }}
         env:
@@ -172,19 +185,19 @@ jobs:
         run: bash -euo pipefail -c "$EXTRA_CMD"
 
   codeql:
-    name: CodeQL (Go)
+    name: CodeQL (go)
     if: inputs.run_codeql
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     concurrency:
       group: go-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
-      security-events: write
       actions: read
+      security-events: write
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -192,29 +205,33 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || (inputs.working_directory == '.' && 'go.mod' || format('{0}/go.mod', inputs.working_directory)) }}
-          cache-dependency-path: ${{ inputs.go_version_file != '' && inputs.go_version_file || (inputs.working_directory == '.' && 'go.mod' || format('{0}/go.mod', inputs.working_directory)) }}
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
 
-      - name: Initialize CodeQL
+      - name: CodeQL init
         uses: github/codeql-action/init@v4
         with:
           languages: go
           build-mode: manual
+          source-root: ${{ inputs.working_directory }}
 
-      - name: Build Go module for CodeQL
+      - name: go build
         working-directory: ${{ inputs.working_directory }}
         run: go build ./...
 
-      - name: Perform CodeQL Analysis
+      - name: CodeQL analyze
         uses: github/codeql-action/analyze@v4
         with:
-          category: '/language:go/${{ inputs.working_directory }}'
+          category: /language:go/${{ inputs.working_directory }}
 
   container:
-    name: Container image
+    name: image
     needs: [test, codeql]
-    if: always() && inputs.build_container && needs.test.result == 'success' && (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
-    uses: koorikla/ci/.github/workflows/container.yaml@main
+    if: >-
+      always() && inputs.build_container &&
+      needs.test.result == 'success' &&
+      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
+    uses: $/.github/workflows/container.yaml
     permissions:
       contents: read
       packages: write
@@ -225,12 +242,13 @@ jobs:
       image_name: ${{ inputs.image_name }}
       registry: ${{ inputs.registry }}
       context: ${{ inputs.context != '' && inputs.context || inputs.working_directory }}
-      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || (inputs.working_directory == '.' && 'Dockerfile' || format('{0}/Dockerfile', inputs.working_directory)) }}
+      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.working_directory) }}
       platforms: ${{ inputs.platforms }}
       build_args: ${{ inputs.build_args }}
       push: ${{ inputs.push }}
       trivy_severity: ${{ inputs.trivy_severity }}
       trivy_ignore_unfixed: ${{ inputs.trivy_ignore_unfixed }}
+      trivy_fail: ${{ inputs.trivy_fail }}
     secrets:
       registry_username: ${{ secrets.registry_username }}
       registry_password: ${{ secrets.registry_password }}
