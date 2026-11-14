@@ -1,0 +1,120 @@
+{{- /*
+One namespace per provider (clusterctl layout). Sync waves: namespaces, then credentials (credentials.yaml), then
+providers. The operator orders the installs itself (core first) and retries until configSecrets exist.
+*/ -}}
+{{- define "capi-providers.namespace" -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+{{- end }}
+
+{{- define "capi-providers.annotations" -}}
+argocd.argoproj.io/sync-wave: "0"
+# operator CRDs come from the capi-operator addon
+argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+{{- end }}
+
+{{- define "capi-providers.manager" -}}
+{{- with .featureGates -}}
+manager:
+  featureGates:
+    {{- range $gate, $on := . }}
+    {{ $gate }}: {{ $on }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+{{- $p := .Values.capi.providers | default dict }}
+{{- if not (or $p.docker $p.aws $p.hetzner) }}
+{{- fail "capi.providers: enable at least one infrastructure provider (docker, aws, hetzner)" }}
+{{- end }}
+{{ include "capi-providers.namespace" "capi-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: CoreProvider
+metadata:
+  name: cluster-api
+  namespace: capi-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.core.version }}
+  {{- include "capi-providers.manager" .Values.core | nindent 2 }}
+---
+{{ include "capi-providers.namespace" "capi-k3s-bootstrap-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: BootstrapProvider
+metadata:
+  name: k3s
+  namespace: capi-k3s-bootstrap-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.k3s.version }}
+  fetchConfig:   # not in clusterctl's built-in provider list
+    url: {{ printf "%s/%s/bootstrap-components.yaml" .Values.k3s.releaseURL .Values.k3s.version }}
+---
+{{ include "capi-providers.namespace" "capi-k3s-control-plane-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: ControlPlaneProvider
+metadata:
+  name: k3s
+  namespace: capi-k3s-control-plane-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.k3s.version }}
+  fetchConfig:
+    url: {{ printf "%s/%s/control-plane-components.yaml" .Values.k3s.releaseURL .Values.k3s.version }}
+{{- if $p.docker }}
+---
+{{ include "capi-providers.namespace" "capd-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: docker
+  namespace: capd-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.infrastructure.docker.version }}
+  {{- include "capi-providers.manager" .Values.infrastructure.docker | nindent 2 }}
+{{- end }}
+{{- if $p.aws }}
+---
+{{ include "capi-providers.namespace" "capa-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: aws
+  namespace: capa-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.infrastructure.aws.version }}
+  configSecret:
+    name: {{ .Values.infrastructure.aws.configSecret }}
+    namespace: capa-system
+  {{- include "capi-providers.manager" .Values.infrastructure.aws | nindent 2 }}
+{{- end }}
+{{- if $p.hetzner }}
+---
+{{ include "capi-providers.namespace" "caph-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: hetzner
+  namespace: caph-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.infrastructure.hetzner.version }}
+{{- end }}
