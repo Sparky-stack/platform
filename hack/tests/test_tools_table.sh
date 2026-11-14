@@ -25,7 +25,9 @@ kubectl = "1.35.10"   # trailing comment
 [tasks.x]
 run = "echo"
 EOF
-table=$(cd "$tmp" && bash -c 'source <(sed -n "/^tools_table()/,/^}/p" hack/tools.sh); tools_table')
+# bash 3.2 (macOS) cannot `source <(...)`: extract the function into a file instead.
+sed -n '/^tools_table()/,/^}/p' "$ROOT/hack/tools.sh" > "$tmp/fn.sh"
+table=$(cd "$tmp" && bash -c '. ./fn.sh; tools_table')
 assert_eq "$(sed -n 1p <<<"$table")" "kubectl 1.35.10" "plain key"
 assert_eq "$(sed -n 2p <<<"$table")" "helm 4.3.2" "backend key"
 assert_eq "$(sed -n 3p <<<"$table")" "kyverno 1.20.0" "inline table bin"
@@ -34,7 +36,7 @@ assert_eq "$(sed -n 5p <<<"$table")" "tool2 2.0.0" "inline table any order"
 assert_eq "$(wc -l <<<"$table" | tr -d ' ')" "5" "only [tools] entries"
 
 # The real mise.toml: every entry parses to a bare binary name and a version.
-real=$(cd "$ROOT" && bash -c 'source <(sed -n "/^tools_table()/,/^}/p" hack/tools.sh); tools_table')
+real=$(cd "$ROOT" && FN="$tmp/fn.sh" bash -c '. "$FN"; tools_table')
 bad=$(awk 'NF != 2 || $1 ~ /["{}:\/=]/ || $2 !~ /^[0-9][0-9A-Za-z.+-]*$/' <<<"$real")
 assert_eq "$bad" "" "real mise.toml parses"
 
