@@ -25,7 +25,9 @@ Usage: bootstrap/bootstrap.sh [--inst <name>] [up|secrets|argocd|status|ui|down]
 
 Subcommands:
   up       Run full bootstrap (k3d mgmt for local, secrets, Argo CD, root-app) [default]
-  secrets  Seed/refresh local platform-secrets from gh CLI (no-op if backend != kubernetes)
+  secrets  Seed/refresh local platform-secrets (no-op if backend != kubernetes). GitHub creds from env, least
+           privilege first: GITHUB_APP_ID/GITHUB_APP_INSTALLATION_ID/GITHUB_APP_PRIVATE_KEY_FILE, GITHUB_TOKEN
+           [GITHUB_USER], else gh CLI (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_* (docs/forking.md)
   argocd   Install/upgrade Argo CD via Helm, seed repo secret if needed, apply root-app
   status   Show clusters, Argo CD apps, and UI/password info
   ui       Print Argo CD admin password and port-forward argocd-server on localhost:8081
@@ -97,13 +99,47 @@ ensure_k3d() {
   kubectl --context "$CTX" wait --for=condition=Ready node --all --timeout=3m >/dev/null
 }
 
-apply_kv_secret() {
-  local ns="$1" name="$2" user="$3" token="$4"
-  kubectl --context "$CTX" create secret generic "$name" \
-    --namespace "$ns" \
-    --from-literal=username="$user" \
-    --from-literal=token="$token" \
+# apply_secret <ns> <name> <kubectl create secret generic args...>: create or replace (properties not passed are
+# dropped, so switching platform-github from token to GitHub App leaves no stale token behind).
+apply_secret() {
+  local ns=$1 name=$2; shift 2
+  kubectl --context "$CTX" create secret generic "$name" --namespace "$ns" "$@" \
     --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+}
+
+# require_app_env <ID var> <INSTALLATION_ID var> <PRIVATE_KEY_FILE var>: all three set, key file readable.
+require_app_env() {
+  [[ -n "${!1:-}" && -n "${!2:-}" && -r "${!3:-}" ]] \
+    || die "GitHub App seeding needs $1, $2 and $3 (path to the App's .pem private key)"
+}
+
+# resolve_github_creds <allow gh: 1|0> -> GH_MODE (app|token|gh|none), GH_LOGIN, GH_SECRET.
+# Read access for Argo CD, least privilege first (docs/forking.md "Credentials"):
+#   GITHUB_APP_ID + GITHUB_APP_INSTALLATION_ID + GITHUB_APP_PRIVATE_KEY_FILE   GitHub App, Contents: read (preferred)
+#   GITHUB_TOKEN [+ GITHUB_USER]                                               fine-grained PAT, Contents: read
+#   gh CLI login (local only; broad OAuth token; NO_GH=1 skips it)
+#   none                                                                       public fork: Argo CD needs no creds
+resolve_github_creds() {
+  GH_MODE=none; GH_LOGIN=""; GH_SECRET=""
+  if [[ -n "${GITHUB_APP_ID:-}${GITHUB_APP_INSTALLATION_ID:-}${GITHUB_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY_FILE
+    GH_MODE=app
+  elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    GH_MODE=token; GH_LOGIN="${GITHUB_USER:-git}"; GH_SECRET="$GITHUB_TOKEN"
+  elif [[ "$1" == 1 && "${NO_GH:-0}" != 1 ]] && command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
+    GH_LOGIN=$(gh api user --jq .login) || die "failed to read GitHub user from gh CLI (run 'gh auth login')"
+    GH_SECRET=$(gh auth token) || die "failed to read GitHub token from gh CLI"
+    GH_MODE=gh
+  fi
+}
+
+# The repo-creds ExternalSecret (addon secret-stores) must read the properties that were seeded.
+check_repo_creds_mode() {
+  local f="installations/${INST}/addons/secret-stores/values.yaml" want=token have=token
+  [[ "$GH_MODE" == app ]] && want=githubApp
+  [[ -f "$f" ]] && have=$(yq '.repoCreds.auth // "token"' "$f")
+  [[ "$have" == "$want" ]] \
+    || warn "platform-github holds $want credentials but repoCreds.auth is $have: put 'repoCreds: {auth: $want}' in $f (docs/forking.md)"
 }
 
 rand_alnum() {
@@ -151,49 +187,93 @@ cmd_secrets() {
     log "secrets.backend=$BACKEND (not kubernetes); skipping local platform-secrets seeding"
     return 0
   fi
-  require_bins kubectl gh
-  local gh_user gh_token scopes
-  gh_user=$(gh api user --jq .login) || die "failed to read GitHub user from gh CLI (run 'gh auth login')"
-  gh_token=$(gh auth token) || die "failed to read GitHub token from gh CLI"
-  [[ -n "$gh_user" && -n "$gh_token" ]] || die "empty GitHub credentials from gh CLI"
+  require_bins kubectl yq
+  resolve_github_creds 1
 
-  scopes=$(gh api -i user 2>/dev/null | grep -i '^x-oauth-scopes:' | tr -d '\r' || true)
-  if [[ -n "$scopes" && ! "$scopes" =~ read:packages ]]; then
-    warn "GitHub token scopes ($scopes) may lack 'read:packages' needed for ghcr.io"
-  elif [[ -z "$scopes" ]]; then
-    warn "Could not inspect OAuth scopes; ensure token has 'read:packages' for ghcr.io"
+  log "Seeding ns platform-secrets"
+  kubectl --context "$CTX" create namespace platform-secrets --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+
+  # platform-github: Argo CD repo-creds for installation.githubOrg (read-only).
+  case "$GH_MODE" in
+    app)
+      apply_secret platform-secrets platform-github \
+        --from-literal=githubAppID="$GITHUB_APP_ID" \
+        --from-literal=githubAppInstallationID="$GITHUB_APP_INSTALLATION_ID" \
+        --from-file=githubAppPrivateKey="$GITHUB_APP_PRIVATE_KEY_FILE"
+      log "  platform-github: GitHub App $GITHUB_APP_ID, installation $GITHUB_APP_INSTALLATION_ID" ;;
+    token)
+      apply_secret platform-secrets platform-github --from-literal=username="$GH_LOGIN" --from-literal=token="$GH_SECRET"
+      log "  platform-github: GITHUB_TOKEN (user $GH_LOGIN)" ;;
+    gh)
+      apply_secret platform-secrets platform-github --from-literal=username="$GH_LOGIN" --from-literal=token="$GH_SECRET"
+      warn "  platform-github: gh CLI token of $GH_LOGIN (broad scopes). Least privilege: GITHUB_APP_* or a read-only fine-grained GITHUB_TOKEN" ;;
+    none)
+      warn "  platform-github: no GITHUB_APP_*, GITHUB_TOKEN or gh login: skipped (fine for a public fork)" ;;
+  esac
+  [[ "$GH_MODE" == none ]] || check_repo_creds_mode
+
+  # platform-ghcr: k3s node registry auth for ghcr.io (secrets.nodeRegistryAuth, on by default).
+  local ghcr_user="${GHCR_USER:-${GITHUB_USER:-}}" ghcr_token="${GHCR_TOKEN:-}" ghcr_src=GHCR_TOKEN scopes
+  if [[ -z "$ghcr_token" && "$GH_MODE" == gh ]]; then
+    ghcr_user="${GHCR_USER:-$GH_LOGIN}"; ghcr_token="$GH_SECRET"; ghcr_src="gh CLI token"
+    scopes=$(gh api -i user 2>/dev/null | grep -i '^x-oauth-scopes:' | tr -d '\r' || true)
+    if [[ -n "$scopes" && ! "$scopes" =~ read:packages ]]; then
+      warn "GitHub token scopes ($scopes) may lack 'read:packages' needed for private ghcr.io images"
+    fi
+  fi
+  if [[ -n "$ghcr_token" ]]; then
+    [[ -n "$ghcr_user" ]] || die "GHCR_TOKEN is set: also set GHCR_USER (the GitHub login that owns the token)"
+    apply_secret platform-secrets platform-ghcr --from-literal=username="$ghcr_user" --from-literal=token="$ghcr_token"
+    log "  platform-ghcr: $ghcr_src (user $ghcr_user)"
+  elif [[ "$(yq '.secrets.nodeRegistryAuth.enabled // true' "$INST_FILE")" == true ]]; then
+    warn "  platform-ghcr: no GHCR_TOKEN: skipped, but secrets.nodeRegistryAuth is on and new cluster nodes wait for it."
+    warn "  Public images only: set 'secrets: {nodeRegistryAuth: {enabled: false}}' in $INST_FILE (docs/forking.md)"
+  else
+    log "  platform-ghcr: not needed (secrets.nodeRegistryAuth.enabled=false)"
   fi
 
-  log "Seeding platform-secrets in ns platform-secrets (github, ghcr, openchoreo)"
-  kubectl --context "$CTX" create namespace platform-secrets --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
-  apply_kv_secret platform-secrets platform-github "$gh_user" "$gh_token"
-  apply_kv_secret platform-secrets platform-ghcr "$gh_user" "$gh_token"
+  # platform-github-app: write access (GitOps hand-off commits, promotion PRs, scaffolder). Optional.
+  if [[ -n "${GITHUB_PUSH_APP_ID:-}${GITHUB_PUSH_APP_INSTALLATION_ID:-}${GITHUB_PUSH_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_PUSH_APP_ID GITHUB_PUSH_APP_INSTALLATION_ID GITHUB_PUSH_APP_PRIVATE_KEY_FILE
+    apply_secret platform-secrets platform-github-app \
+      --from-literal=githubAppID="$GITHUB_PUSH_APP_ID" \
+      --from-literal=githubAppInstallationID="$GITHUB_PUSH_APP_INSTALLATION_ID" \
+      --from-file=githubAppPrivateKey="$GITHUB_PUSH_APP_PRIVATE_KEY_FILE"
+    log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
+  fi
+
   seed_openchoreo_secret
+  log "  openchoreo, openchoreo-observability: generated once, kept on re-runs"
 }
 
+# Bootstrap repo credentials so Argo CD can read a private fork before ESO exists (same sources as platform-github;
+# the gh fallback only for the local backend).
 seed_argocd_repo_secret() {
-  local repo_user="${GITHUB_USER:-}" repo_token="${GITHUB_TOKEN:-}"
-  if [[ -z "$repo_token" && "$BACKEND" == "kubernetes" ]] && command -v gh >/dev/null 2>&1; then
-    repo_user=$(gh api user --jq .login 2>/dev/null || true)
-    repo_token=$(gh auth token 2>/dev/null || true)
+  local allow_gh=0
+  [[ "$BACKEND" == "kubernetes" ]] && allow_gh=1
+  resolve_github_creds "$allow_gh"
+  if [[ "$GH_MODE" == none ]]; then
+    warn "No GITHUB_APP_*/GITHUB_TOKEN/gh auth token available; skipping bootstrap repo secret (fine if repo is public)"
+    return 0
   fi
-  if [[ -n "$repo_token" ]]; then
-    local cred_url="${GITHUB_ORG:-$REPO_URL}"
-    local cred_type="repository"
-    [[ -n "$GITHUB_ORG" ]] && cred_type="repo-creds"
-    log "Creating Argo CD bootstrap ${cred_type} secret 'platform-repo-bootstrap' for $cred_url"
-    kubectl --context "$CTX" create secret generic platform-repo-bootstrap \
-      --namespace argocd \
-      --from-literal=type=git \
-      --from-literal=url="$cred_url" \
-      --from-literal=username="${repo_user:-git}" \
-      --from-literal=password="$repo_token" \
-      --dry-run=client -o yaml | \
-      CRED_TYPE="$cred_type" yq '.metadata.labels["argocd.argoproj.io/secret-type"] = strenv(CRED_TYPE)' | \
-      kubectl --context "$CTX" apply -f - >/dev/null
+  local cred_url="${GITHUB_ORG:-$REPO_URL}" cred_type="repository"
+  [[ -n "$GITHUB_ORG" ]] && cred_type="repo-creds"
+  local -a auth
+  if [[ "$GH_MODE" == app ]]; then
+    auth=(--from-literal=githubAppID="$GITHUB_APP_ID" --from-literal=githubAppInstallationID="$GITHUB_APP_INSTALLATION_ID"
+      --from-file=githubAppPrivateKey="$GITHUB_APP_PRIVATE_KEY_FILE")
   else
-    warn "No GITHUB_TOKEN/gh auth token available; skipping bootstrap repo secret (fine if repo is public)"
+    auth=(--from-literal=username="${GH_LOGIN:-git}" --from-literal=password="$GH_SECRET")
   fi
+  log "Creating Argo CD bootstrap ${cred_type} secret 'platform-repo-bootstrap' for $cred_url ($GH_MODE)"
+  kubectl --context "$CTX" create secret generic platform-repo-bootstrap \
+    --namespace argocd \
+    --from-literal=type=git \
+    --from-literal=url="$cred_url" \
+    "${auth[@]}" \
+    --dry-run=client -o yaml | \
+    CRED_TYPE="$cred_type" yq '.metadata.labels["argocd.argoproj.io/secret-type"] = strenv(CRED_TYPE)' | \
+    kubectl --context "$CTX" apply -f - >/dev/null
 }
 
 cmd_argocd() {
