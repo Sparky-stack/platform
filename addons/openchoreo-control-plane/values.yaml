@@ -1,0 +1,100 @@
+# OpenChoreo 1.3.3 control plane on mgmt. Values = upstream install/k3d/multi-cluster/values-cp.yaml @ v1.3.3, except
+# lines marked "platform:". Needs (mgmt addons): cert-manager, external-secrets (+ ClusterSecretStores `platform` and
+# `mgmt-openchoreo`), gateway-api-crds, kgateway (GatewayClass `kgateway`), thunder (IdP), coredns-local (pods resolve
+# *.openchoreo.localhost to the Gateway below). Until those exist, the Application's retries cover the ordering.
+#
+# Endpoints (k3d publishes host 8080/8443 -> mgmt nodes -> klipper hostPorts of Service gateway-default):
+#   http://openchoreo.localhost:8080          console (Backstage)
+#   http://api.openchoreo.localhost:8080      openchoreo-api
+#   http://thunder.openchoreo.localhost:8080  ThunderID (route from addon thunder)
+#   cluster-gateway.openchoreo.localhost:8443 agent websocket, TLS passthrough (SNI) -> cluster-gateway; the server cert
+#                                             (Certificate cluster-gateway-tls) carries that SAN, signed by the
+#                                             chart's CA Secret cluster-gateway-ca (see templates/gateway-ca-crs.yaml).
+# Hostnames are literals here (subchart values cannot be templated); templates/validate.yaml fails the render when they
+# drift from installation.yaml openchoreo.controlPlane.{host,clusterGatewayURL}. Other installations override them in
+# installations/<inst>/addons/openchoreo-control-plane/values.yaml.
+
+# --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+
+# Secret backstage-secrets (templates/backstage-secrets.yaml) from ClusterSecretStore `platform`, key `openchoreo`
+# (properties backstage-client-secret == Thunder's Backstage client secret, backstage-backend-secret).
+backstageSecrets:
+  store: platform
+  remoteKey: openchoreo
+
+# Shared CAPI ClusterResourceSet payload `fleet/openchoreo-gateway-ca` (templates/gateway-ca-crs.yaml): ConfigMap
+# openchoreo-data-plane/cluster-gateway-ca with the gateway CA's PUBLIC certificate, read through ClusterSecretStore
+# `mgmt-openchoreo` (read-only on this namespace). Every workload cluster's CRS (charts/cluster) lists it.
+gatewayCA:
+  enabled: true
+  store: mgmt-openchoreo
+  namespace: fleet
+  name: openchoreo-gateway-ca
+  sourceSecret: cluster-gateway-ca    # cert-manager CA Secret of the chart (Certificate cluster-gateway-ca, 10y)
+
+openchoreo-control-plane:
+  openchoreoApi:
+    http:
+      hostnames:
+        - api.openchoreo.localhost
+    config:
+      server:
+        publicUrl: "http://api.openchoreo.localhost:8080"
+    # platform: no remoteConnect (`occ remote` tunnels): needs the data plane's SNI router published per cluster
+
+  backstage:
+    secretName: backstage-secrets
+    baseUrl: "http://openchoreo.localhost:8080"     # Thunder's Backstage redirect URI lives under it (addon thunder)
+    http:
+      hostnames:
+        - openchoreo.localhost
+    features:
+      workflows:
+        enabled: false          # platform: no workflow plane in v1 (docs/openchoreo.md "Adding planes")
+      observability:
+        enabled: false          # platform: no observability plane in v1
+    resources:                  # platform: upstream requests 200m/256Mi, limits 2/2Gi
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: "1", memory: 1Gi }
+
+  controllerManager:
+    resources:                  # platform: upstream requests 200m/256Mi
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: "1", memory: 1Gi }
+
+  security:
+    oidc:
+      issuer: "http://thunder.openchoreo.localhost:8080"     # = Thunder publicUrl (id_token iss)
+      jwksUrl: "http://thunder.openchoreo.localhost:8080/oauth2/jwks"
+      authorizationUrl: "http://thunder.openchoreo.localhost:8080/oauth2/authorize"
+      tokenUrl: "http://thunder.openchoreo.localhost:8080/oauth2/token"
+
+  # Agents of remote planes connect through the Gateway's TLS passthrough listener (port gateway.httpsPort, SNI host
+  # below) to Service cluster-gateway-external; mTLS end to end. Each plane's client CA comes from its ClusterDataPlane
+  # (charts/cluster: per-cluster CA fleet/<name>-agent-ca).
+  clusterGateway:
+    tlsRoute:
+      enabled: true
+      hosts:
+        - host: cluster-gateway.openchoreo.localhost
+          paths:
+            - path: /
+              pathType: Prefix
+    tls:
+      issuerRef:
+        name: cluster-gateway-server-issuer   # CA Issuer over Secret cluster-gateway-ca (rendered by the chart)
+      dnsNames:
+        - cluster-gateway.openchoreo-control-plane.svc
+        - cluster-gateway.openchoreo-control-plane.svc.cluster.local
+        - cluster-gateway.openchoreo.localhost   # the name agents dial (SNI + SAN)
+
+  gateway:
+    httpPort: 8080          # == k3d published port, so in-cluster and browser URLs are identical
+    httpsPort: 8443         # TLS passthrough listener for cluster-gateway (no https listener: tls off)
+    tls:
+      enabled: false

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: openchoreo-control-plane
+description: OpenChoreo control plane on mgmt (controller, API, console, cluster-gateway) + its platform glue
+type: application
+version: 0.1.0
+dependencies:
+  - name: openchoreo-control-plane
+    version: 1.3.3
+    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
