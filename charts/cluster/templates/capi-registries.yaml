@@ -1,0 +1,45 @@
+{{- /*
+Node registry auth (private GHCR): Secret <name>-registries in ns fleet, key registries.yaml = k3s' private registry
+config. The ClusterClass (variable registryAuth, set from secrets.nodeRegistryAuth.enabled) writes it to
+/etc/rancher/k3s/registries.yaml on every node via KThreesConfig files[].contentFrom.secret.
+Bootstrap data is rendered once per Machine: a rotated token reaches nodes created afterwards only (roll the machines,
+e.g. `clusterctl alpha rollout restart`, or use a long-lived read-only token). VERIFY rotation story.
+*/ -}}
+{{- include "capi.validate" . }}
+{{- $auth := .Values.secrets.nodeRegistryAuth }}
+{{- if $auth.enabled }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.name }}-registries
+  namespace: fleet
+  labels:
+    platform.koorikla.io/name: {{ .Values.name | quote }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: {{ .Values.name }}-registries
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: Opaque
+      data:
+        registries.yaml: |
+          configs:
+            {{ $auth.registry | quote }}:
+              auth:
+                username: {{`{{ .username | toJson }}`}}
+                password: {{`{{ .token | toJson }}`}}
+  data:
+    - secretKey: username
+      remoteRef:
+        key: {{ $auth.key }}
+        property: username
+    - secretKey: token
+      remoteRef:
+        key: {{ $auth.key }}
+        property: token
+{{- end }}

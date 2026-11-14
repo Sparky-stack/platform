@@ -13,7 +13,9 @@ controlPlane:
   replicas: 1
   machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
 workers: []                   # [{name, replicas, machineType, failureDomain}]
-providerSpec: {}              # provider-specific ClusterClass variables (aws: region/sshKeyName/ami, hetzner: region/sshKey/image)
+providerSpec: {}              # extra ClusterClass variables, passed as-is (docs/providers.md):
+                              #   docker: kindImage | aws: ami (required), sshKeyName | hetzner: sshKey, image, networkZone
+                              # `region` comes from the key above; machine types from controlPlane/workers[].machineType
 openchoreo:
   dataPlane:
     enabled: false
@@ -28,3 +30,9 @@ installation:
   name: local
 secrets:
   backend: kubernetes
+  # Node registry auth: k3s registries.yaml on every node, from platform store key `key` (username, token).
+  # templates/capi-registries.yaml + ClusterClass variable registryAuth. Disable for public-images-only installations.
+  nodeRegistryAuth:
+    enabled: true
+    registry: ghcr.io
+    key: platform-ghcr
