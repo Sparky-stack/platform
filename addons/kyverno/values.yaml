@@ -38,7 +38,6 @@ kyverno:
               - capa-system
               - caph-system
               - fleet
-              - harbor
               - openchoreo-control-plane
               - openchoreo-data-plane
               - openchoreo-workflow-plane

@@ -186,6 +186,13 @@ property `tls.crt`) into Secret `harbor/harbor-ca-bundle`, which holds nothing b
 namespaces `fleet` and `workflows-*` can use. Nodes get it as
 `/etc/rancher/k3s/registry-ca.crt` (`registries.yaml` `tls.ca_file`), build pods as `<run>-registry-ca`.
 
+### Pod Security
+
+Harbor is **not** a Kyverno-excluded platform namespace: its 2.15 workloads meet Pod Security baseline (no privileged
+container, host namespaces, hostPath, hostPort or added capabilities), so the Audit `ValidatingPolicies` report on
+`harbor` like on any workload and no `PolicyException` is needed (`hack/tests/test_gitops_contracts.sh` check 9 fails
+if a Harbor bump changes that).
+
 ### Declarative configuration
 
 Harbor has no CRDs, and no maintained operator covers 2.15. `files/harbor-config.py` (stdlib Python, Harbor API v2.0)
