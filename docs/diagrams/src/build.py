@@ -352,9 +352,9 @@ def delivery() -> Diagram:
           ["repository_dispatch", "package-released →", "PR to development;", "gate ✓ → next env;",
            "order = OpenChoreo", "DeploymentPipeline"], planned=True)
     PY = [600, 680, 760]
-    for (t, sub), y in zip([("env-development.yaml", "PR · opened on release"),
-                            ("env-staging.yaml", "PR · after gate ✓"),
-                            ("env-production.yaml", "PR · gate ✓ + review")], PY):
+    for (t, sub), y in zip([("env-development.yaml", "PR 1 · on release"),
+                            ("env-staging.yaml", "PR 2 · after gate ✓"),
+                            ("env-production.yaml", "PR 3 · gate ✓ + review")], PY):
         d.box(792, y, 200, 52, "gitops", t, [sub], planned=True)
     d.box(1032, 600, 144, 212, "gitops", "Argo CD",
           ["syncs crossplane-", "packages-<cluster>", "", "Notifications →", "commit status", "argocd/<app>"],
@@ -410,7 +410,7 @@ def runtime_security() -> Diagram:
     d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"], planned=True)
     d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"],
           planned=True)
-    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["logs · metrics · traces", "fan-out exporters"],
+    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["workload telemetry +", "alerts → exporters"],
           planned=True)
 
     # mgmt side
@@ -420,7 +420,7 @@ def runtime_security() -> Diagram:
           planned=True)
     d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"],
           planned=True)
-    d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter"], planned=True)
+    d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter (planned)"], planned=True)
     d.box(840, 148, 344, 248, "note", "division of labour",
           ["Cilium: packets, policy, Hubble", "Istio ambient: identity + mTLS", "kgateway: north-south only",
            "Kyverno: admission (Audit first)", "Falco detects · Talon responds", "OBI (opt-in): the one L7",
@@ -431,10 +431,8 @@ def runtime_security() -> Diagram:
     d.arrow([(CA + CW, yc(0)), (CB, yc(0))], BL)
     d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO, planned=True)
     d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO, planned=True)
-    d.arrow([(CB + 128, R[0] + BH), (CB + 128, R[1])], BL, planned=True, label="via ztunnel",
-            label_pos=(CB + 138, R[1] - 10), label_anchor="start", aid="zt")
-    d.arrow([(CB + 128, R[1] + BH), (CB + 128, R[2])], BL, planned=True, label="over eBPF",
-            label_pos=(CB + 138, R[2] - 10), label_anchor="start", aid="ebpf")
+    d.text(CA, R[2] + BH + 18, "every pod-to-pod hop: ztunnel mTLS (HBONE) over the Cilium eBPF datapath", 11.5,
+           "#93c5fd")
     d.arrow([(CB + 64, R[4] + BH), (CB + 64, R[4] + BH + 14), (CA + CW / 2, R[4] + BH + 14),
              (CA + CW / 2, R[5])], RO, planned=True)
     d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR, planned=True)

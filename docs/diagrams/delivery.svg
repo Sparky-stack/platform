@@ -124,15 +124,15 @@
 <rect x="792" y="600" width="200" height="52" rx="6" fill="#0f172a"/>
 <rect x="792" y="600" width="200" height="52" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="892.0" y="619.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">env-development.yaml</text>
-<text x="892.0" y="639.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR · opened on release</text>
+<text x="892.0" y="639.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR 1 · on release</text>
 <rect x="792" y="680" width="200" height="52" rx="6" fill="#0f172a"/>
 <rect x="792" y="680" width="200" height="52" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="892.0" y="699.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">env-staging.yaml</text>
-<text x="892.0" y="719.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR · after gate ✓</text>
+<text x="892.0" y="719.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR 2 · after gate ✓</text>
 <rect x="792" y="760" width="200" height="52" rx="6" fill="#0f172a"/>
 <rect x="792" y="760" width="200" height="52" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="892.0" y="779.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">env-production.yaml</text>
-<text x="892.0" y="799.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR · gate ✓ + review</text>
+<text x="892.0" y="799.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR 3 · gate ✓ + review</text>
 <rect x="1032" y="600" width="144" height="212" rx="6" fill="#0f172a"/>
 <rect x="1032" y="600" width="144" height="212" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="1104.0" y="661.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD</text>
