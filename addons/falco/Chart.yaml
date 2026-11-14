@@ -1,0 +1,13 @@
+apiVersion: v2
+name: falco
+description: Falco runtime threat detection (modern eBPF) + falcosidekick (fan-out into the telemetry pipeline, escalation webhook) + Falco Talon response engine for OpenChoreo app namespaces
+type: application
+version: 0.1.0
+dependencies:
+  - name: falco
+    version: 9.2.2
+    repository: https://falcosecurity.github.io/charts
+  - name: falco-talon
+    version: 0.5.0
+    repository: https://falcosecurity.github.io/charts
+    condition: falco-talon.enabled
