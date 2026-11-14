@@ -60,7 +60,7 @@ tools and version drift against `mise.toml`.
 | `doctor` | every tool from `mise.toml` present at the pinned version |
 | `up` / `secrets` / `argocd` / `status` / `ui` / `down` | bootstrap stages (`INST=local` default; `task up INST=aws-example`) |
 | `kubeconfig CLUSTER=dev1` | host-usable kubeconfig of a CAPD workload cluster (see Docker Desktop below) |
-| `set-repo REPO=https://github.com/<you>/platform.git` | rewrite `repoURL` for a fork |
+| `set-repo REPO=https://github.com/<you>/platform.git` | point a fork at itself: `repoURL`, `githubOrg`, tenant app repos (`ORG=`, `APPS_ORG=`, `DOCS=1`; docs/forking.md) |
 | `lint` / `test` / `schemas` | offline validation (helm lint/template, kubeconform, helm-unittest, contract tests, shellcheck, actionlint) |
 | `images:audit` | every image of the installation checked for linux/amd64 + linux/arm64 (`-- --live` adds running pods) |
 | `tools:lock` | refresh `mise.lock` for all six platforms after editing `mise.toml` |
@@ -92,7 +92,7 @@ tools and version drift against `mise.toml`.
 | shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint` |
 | python | 3.14.10 | core:python | `hack/crd2schema.py`, test helpers (stdlib only) |
 | task | 3.54.0 | aqua:go-task/task | entrypoint |
-| gh | 2.104.0 | aqua:cli/cli | `task secrets` reads `gh auth token` |
+| gh | 2.104.0 | aqua:cli/cli | `task secrets` falls back to `gh auth token` when no `GITHUB_APP_*` / `GITHUB_TOKEN` is set |
 
 Docker is the one prerequisite mise does not install (Docker Desktop, OrbStack, Colima, Rancher Desktop or Docker
 Engine). Git Bash comes with Git for Windows.

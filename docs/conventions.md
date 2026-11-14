@@ -49,7 +49,8 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 
 | Key | Properties | Used by |
 |---|---|---|
-| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey`) | Argo CD repo-creds for `https://github.com/koorikla` |
+| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) |
+| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, promotion PRs, scaffolder); reserved, no consumer yet (docs/forking.md) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |

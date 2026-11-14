@@ -112,7 +112,7 @@ Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backe
 
 | Backend | Use |
 |---|---|
-| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `make secrets` |
+| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `task secrets` (docs/forking.md) |
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
