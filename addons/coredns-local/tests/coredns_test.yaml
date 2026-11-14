@@ -1,0 +1,24 @@
+suite: coredns-local rewrite
+templates:
+  - templates/coredns-custom.yaml
+tests:
+  - it: workload default rewrites the control-plane hosts to the mgmt k3d load balancer
+    asserts:
+      - equal: { path: metadata.name, value: coredns-custom }
+      - equal: { path: metadata.namespace, value: kube-system }
+      - matchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'name regex \^\(\.\+\\\.\)\?openchoreo\\\.localhost\\\.\$ k3d-platform-mgmt-serverlb\n'
+  - it: mgmt rewrites to the control-plane Gateway Service
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - matchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'gateway-default\.openchoreo-control-plane\.svc\.cluster\.local'
+  - it: follows openchoreo.controlPlane.host
+    set:
+      openchoreo.controlPlane.host: oc.example.com
+    asserts:
+      - matchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'oc\\\.example\\\.com\\\.\$'
