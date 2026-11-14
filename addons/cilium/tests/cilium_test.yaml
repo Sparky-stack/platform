@@ -1,0 +1,127 @@
+suite: cilium - k3s CNI, kube-proxy replacement, WireGuard, Istio ambient coexistence, Hubble
+release:
+  name: cilium
+  namespace: kube-system
+set:
+  # what the catalog's clusterServerParameters pass for a CAPD cluster
+  cilium.k8sServiceHost: 172.18.0.5
+  cilium.k8sServicePort: 6443
+tests:
+  - it: configures cilium-config for kube-proxy replacement + Istio ambient coexistence
+    template: charts/cilium/templates/cilium-configmap.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: cilium-config
+      - equal:
+          path: data["kube-proxy-replacement"]
+          value: "true"
+      - equal:
+          path: data["cni-exclusive"]
+          value: "false"
+      - equal:
+          path: data["bpf-lb-sock-hostns-only"]
+          value: "true"
+      - equal:
+          path: data["enable-bpf-masquerade"]
+          value: "false"
+      - equal:
+          path: data["enable-wireguard"]
+          value: "true"
+      - equal:
+          path: data.ipam
+          value: cluster-pool
+      - equal:
+          path: data["cluster-pool-ipv4-cidr"]
+          value: 10.42.0.0/16
+      - equal:
+          path: data["routing-mode"]
+          value: tunnel
+      - equal:
+          path: data["tunnel-protocol"]
+          value: vxlan
+      - equal:
+          path: data["enable-hubble"]
+          value: "true"
+      - isNull:
+          path: data["enable-gateway-api"]
+
+  - it: points cilium-agent at the per-cluster API endpoint and the default CNI directories
+    template: charts/cilium/templates/cilium-agent/daemonset.yaml
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KUBERNETES_SERVICE_HOST
+            value: 172.18.0.5
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KUBERNETES_SERVICE_PORT
+            value: "6443"
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: etc-cni-netd
+            hostPath:
+              path: /etc/cni/net.d
+              type: DirectoryOrCreate
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-path
+            hostPath:
+              path: /opt/cni/bin
+              type: DirectoryOrCreate
+
+  - it: fails without the per-cluster API endpoint
+    template: templates/validate.yaml
+    set:
+      cilium.k8sServiceHost: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: cilium.k8sServiceHost is empty
+
+  - it: runs Hubble relay
+    template: charts/cilium/templates/hubble-relay/deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: hubble-relay
+
+  - it: generates Hubble TLS with the certgen CronJob (no random Helm-generated Secrets)
+    template: charts/cilium/templates/hubble/tls-cronjob/cronjob.yaml
+    asserts:
+      - isKind:
+          of: CronJob
+      - equal:
+          path: metadata.name
+          value: hubble-generate-certs
+
+  - it: renders no Hubble UI and no standalone Envoy DaemonSet
+    templates:
+      - charts/cilium/templates/hubble-ui/deployment.yaml
+      - charts/cilium/templates/cilium-envoy/daemonset.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: tolerates extra top-level installation.yaml keys
+    template: charts/cilium/templates/cilium-agent/daemonset.yaml
+    set:
+      installation:
+        name: local
+      openchoreo:
+        orgNamespace: acme
+      capi:
+        providers:
+          docker: true
+    asserts:
+      - isKind:
+          of: DaemonSet

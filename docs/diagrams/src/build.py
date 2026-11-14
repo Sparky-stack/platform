@@ -29,19 +29,19 @@ ALL_KINDS = ["gitops", "platform", "network", "security", "data", "bus", "extern
 
 # ---------------------------------------------------------------------------------------------- overview
 def overview() -> Diagram:
-    W, H = 1200, 920
+    W, H = 1200, 1008
     d = Diagram(W, H, "koorikla/platform · architecture overview",
                 "mgmt runs GitOps, cluster lifecycle, secrets/PKI and the OpenChoreo planes · "
                 "workload clusters run apps · dashed = planned")
-    R = [140, 228, 316, 404, 492, 580, 668]
+    R = [140, 228, 316, 404, 492, 580, 668, 756]
     BH = 60
     yc = lambda r: R[r] + BH / 2  # noqa: E731
 
     # boundaries
     d.group(16, 104, 168, 464, "git & external", "zone")
     d.group(240, 104, 464, 464, "mgmt cluster · k3d locally, any k8s", "zone")
-    d.group(752, 104, 432, 652, "cloud providers · CAPI infrastructure", "cloud")
-    d.group(768, 216, 392, 518, "workload clusters · dev1, prod1", "zone", stacked=1,
+    d.group(752, 104, 432, 740, "cloud providers · CAPI infrastructure", "cloud")
+    d.group(768, 216, 392, 606, "workload clusters · dev1, prod1", "zone", stacked=1,
             sub=["k3s via CAPI · one fleet file each", "dev1: development+staging · prod1: production"])
 
     # left column
@@ -62,7 +62,8 @@ def overview() -> Diagram:
           ["Thunder · API · controllers · Backstage · gateway"])
     d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows"], planned=True)
     d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps agents: off"])
-    d.box(L, R[4], CW, BH, "security", "Falco · Kyverno", ["detection: built", "admission: planned"])
+    d.box(L, R[4], 100, BH, "security", "Falco", ["detection"])
+    d.box(L + 108, R[4], 100, BH, "security", "Kyverno", ["admission"])
     d.box(Rx, R[4], CW, BH, "data", "Harbor", ["pull-through cache"], planned=True)
 
     # providers strip (top of the cloud region) + workload chips
@@ -73,13 +74,15 @@ def overview() -> Diagram:
     d.box(A, R[2], KW, BH, "platform", "OC data plane", ["cluster-agent"])
     d.box(B, R[2], KW, BH, "network", "kgateway", ["north-south ingress"])
     d.box(A, R[3], KW, BH, "bus", "OTel collector", ["fan-out · Datadog-ready"])
-    d.box(B, R[3], KW, BH, "network", "Cilium", ["CNI · no kube-proxy"], planned=True)
+    d.box(B, R[3], KW, BH, "network", "Cilium", ["CNI · no kube-proxy"])
     d.box(A, R[4], KW, BH, "security", "Falco + Talon", ["detect · respond"])
-    d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints"], planned=True)
+    d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints"])
     d.box(A, R[5], KW, BH, "security", "ESO", ["store: default"])
     d.box(B, R[5], KW, BH, "gitops", "Crossplane v2", ["providers · XRs"], planned=True)
-    d.box(A, R[6], KW, BH, "platform", "app workloads", ["OpenChoreo cell ns"])
+    d.box(A, R[6], KW, BH, "security", "Kyverno", ["PSS audit · ambient"])
     d.box(B, R[6], KW, BH, "network", "external-dns", ["Route53 · Cloudflare"], planned=True)
+    d.box(A, R[7], B + KW - A, BH, "platform", "app workloads",
+          ["OpenChoreo cell namespaces per project / env"])
 
     # flows (arrow = initiator -> target)
     d.arrow([(L, yc(1)), (184, yc(1))], EM, badge=1, badge_pos=(222, yc(1)), aid="git")
@@ -88,7 +91,7 @@ def overview() -> Diagram:
     d.arrow([(Rx + CW, yc(0)), (768, yc(0))], EM, badge=3, badge_pos=(728, yc(0)), aid="capi")
     d.arrow([(A, yc(2)), (L + WW, yc(2))], RO, badge=4, badge_pos=(728, yc(2)), aid="agent")
     d.arrow([(A, yc(3)), (Rx + CW, yc(3))], OR, badge=5, badge_pos=(728, yc(3)), aid="otel")
-    d.arrow([(A, yc(6)), (728, yc(6)), (728, yc(4)), (Rx + CW, yc(4))], VI, planned=True,
+    d.arrow([(A, yc(7)), (728, yc(7)), (728, yc(4)), (Rx + CW, yc(4))], VI, planned=True,
             badge=6, badge_pos=(728, 610), aid="pull")
     d.arrow([(100, 360), (100, 420)], VI, badge=7, badge_pos=(100, 390), aid="ci")
     d.arrow([(L, R[2] + 44), (212, R[2] + 44), (212, yc(4)), (176, yc(4))], RO, planned=True,
@@ -104,8 +107,8 @@ def overview() -> Diagram:
           (6, "workloads pull via Harbor, proxy cache of GHCR (today: direct)"),
           (7, "app CI pushes images to GHCR (koorikla/ci + signing: planned)"),
           (8, "Thunder federates console/API login to Okta / Google")]
-    d.flowkey(28, 800, e1, [EM, EM, EM, RO], title="Flows · arrow = initiator → target, colour = concern")
-    d.flowkey(612, 800, e2, [OR, VI, VI, RO], title=None, planned=(6, 8))
+    d.flowkey(28, 888, e1, [EM, EM, EM, RO], title="Flows · arrow = initiator → target, colour = concern")
+    d.flowkey(612, 888, e2, [OR, VI, VI, RO], title=None, planned=(6, 8))
     return d
 
 
@@ -400,12 +403,12 @@ def runtime_security() -> Diagram:
     d.box(CA, R[0], CW, BH, "network", "kgateway", ["Gateway API · OpenChoreo", "gateway :19080"])
     d.box(CB, R[0], CW, BH, "platform", "app pods", ["cell namespace", "ambient-enrolled"])
     d.box(CA, R[1], WIDE, BH, "network", "Istio ambient",
-          ["ztunnel per node: L4 mTLS, SPIFFE identity", "waypoint per namespace: L7 authz (optional)"], planned=True)
+          ["ztunnel per node: L4 mTLS, SPIFFE identity", "waypoint per namespace: L7 authz (optional)"])
     d.box(CA, R[2], WIDE, BH, "network", "Cilium",
-          ["eBPF CNI · kube-proxy replacement", "NetworkPolicy · Hubble flow visibility"], planned=True)
+          ["eBPF CNI · kube-proxy replacement", "NetworkPolicy · Hubble flow visibility"])
     d.box(CA, R[3], CW, BH, "external", "kube-apiserver", ["pod create / update"])
-    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["admission webhook:", "PSS + verifyImages, Audit"],
-          planned=True)
+    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["PSS baseline (Audit) · ambient",
+          "enrollment · verifyImages: next"])
     d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"])
     d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"])
     d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"])
@@ -426,7 +429,7 @@ def runtime_security() -> Diagram:
     # flows
     d.arrow([(CA + CW / 2, 132), (CA + CW / 2, R[0])], BL)
     d.arrow([(CA + CW, yc(0)), (CB, yc(0))], BL)
-    d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO, planned=True)
+    d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO)
     d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO)
     d.text(CA, R[2] + BH + 18, "every pod-to-pod hop: ztunnel mTLS (HBONE) over the Cilium eBPF datapath", 11.5,
            "#93c5fd")

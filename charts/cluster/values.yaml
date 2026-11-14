@@ -9,6 +9,9 @@ provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<prov
 region: local
 environment: development
 kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1
+cni: cilium                   # cilium | flannel - pod network, fixed at birth (switching = rebuild; docs/networking.md).
+                              # -> ClusterClass variable cni, label platform.koorikla.io/cni, and
+                              #    addons.platform.koorikla.io/cilium (do not set addons.cilium yourself)
 controlPlane:
   replicas: 1
   machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker

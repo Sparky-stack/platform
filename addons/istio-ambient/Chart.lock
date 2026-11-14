@@ -1,0 +1,15 @@
+dependencies:
+- name: base
+  repository: https://blob.istio.io/istio-release/charts
+  version: 1.32.0
+- name: istiod
+  repository: https://blob.istio.io/istio-release/charts
+  version: 1.32.0
+- name: cni
+  repository: https://blob.istio.io/istio-release/charts
+  version: 1.32.0
+- name: ztunnel
+  repository: https://blob.istio.io/istio-release/charts
+  version: 1.32.0
+digest: sha256:59260fd29a5889ef5f8682376d936b3b9b3fe8f2ddc9165bf64a5f989fd44591
+generated: "2026-11-14T11:50:20.64780952+02:00"

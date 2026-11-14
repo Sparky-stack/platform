@@ -1,0 +1,62 @@
+{{- /*
+Istio ambient enrollment of OpenChoreo cell namespaces (docs/networking.md "Ambient enrollment").
+- Admission: CREATE/UPDATE of a matching Namespace gets istio.io/dataplane-mode=ambient. Re-applied on every update,
+  so the controller re-rendering the namespace can't drop it (unenrolling would cut the pods out of the mesh).
+- mutateExisting: namespaces that existed before the policy are labelled by the background controller (it needs
+  update on namespaces: ClusterRole below, aggregated into Kyverno's background-controller role).
+- failurePolicy Ignore: a Kyverno outage delays enrollment, it never blocks OpenChoreo. Ambient enrolls running pods
+  without restarts, so a late label is harmless.
+- Platform namespaces are excluded twice: Kyverno's webhook namespaceSelector (addons/kyverno) and matchConditions.
+*/ -}}
+{{- if .Values.ambientEnrollment.enabled }}
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: openchoreo-ambient-enrollment
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Istio ambient for OpenChoreo cell namespaces
+    policies.kyverno.io/description: >-
+      Labels the namespaces OpenChoreo creates on data planes with istio.io/dataplane-mode=ambient, unless the label
+      is already set. Never touches platform namespaces.
+spec:
+  failurePolicy: Ignore
+  evaluation:
+    mutateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    objectSelector:
+      {{- with .Values.ambientEnrollment.cellNamespaceSelector.matchLabels }}
+      matchLabels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      matchExpressions:
+        {{- with .Values.ambientEnrollment.cellNamespaceSelector.matchExpressions }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        - { key: istio.io/dataplane-mode, operator: DoesNotExist }
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{metadata: Object.metadata{labels: {"istio.io/dataplane-mode": "ambient"}}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:background-controller:ambient-enrollment
+  labels:
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch, update, patch]
+{{- end }}
