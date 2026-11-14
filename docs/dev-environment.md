@@ -157,14 +157,15 @@ cluster file), adds the k3d node/helper images, the CAPD node and load-balancer 
 (release components) and the k3s system images (`k3s-images.txt`), and asks the registry (crane) whether each image
 publishes `linux/amd64` and `linux/arm64`.
 
-Result for `installations/local` (with `--live` against the running k3d mgmt): **62 images, all multi-arch, none
-single-arch**. Hygiene findings from the same inventory (for the addon owners, not arch problems):
+Result for `installations/local` (with `--live` against the running k3d mgmt; includes Cilium, Istio ambient,
+Kyverno): **76 images, all multi-arch (linux/amd64 + linux/arm64), none single-arch**. Hygiene findings from the same inventory (for the addon owners, not arch problems):
 
 | Image | Note |
 |---|---|
 | `curlimages/curl` (falco chart) | no tag: pin it (`curlimages/curl:8.22.0` is already used by telemetry) |
 | `busybox:latest` (openchoreo-observability-plane) | `latest` tag, not fully qualified |
-| `busybox:1.37.0`, `opensearchproject/opensearch:3.3.0`, `kindest/node:v1.35.8`, `kindest/haproxy:...`, `rancher/k3s:...` | not fully qualified (`docker.io/...`), invariant 9 |
+| `curlimages/curl:8.22.0` (telemetry), `opensearchproject/opensearch:3.3.0` (observability plane), `kindest/node:v1.35.8` (clusterclasses), `rancher/k3s:v1.35.10-k3s1` (bootstrap/k3d-mgmt.yaml) | not fully qualified (`docker.io/...`), invariant 9 |
+| `kindest/haproxy:...`, `rancher/*` k3s system images | set by CAPD / k3s upstream, not by this repo |
 | `gcr.io/k8s-staging-cluster-api/capd-manager:v1.13.8` | CAPD is only published to the staging registry (dev/test provider), expected |
 
 Apps built by koorikla/ci must publish multi-arch images too, or arm64 hosts will fail to run them on CAPD clusters.
