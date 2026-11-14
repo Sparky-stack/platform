@@ -56,6 +56,7 @@ tests:
     documentIndex: 1
     set:
       cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
     asserts:
       - equal: { path: 'spec.infrastructure.annotations["load-balancer.hetzner.cloud/location"]', value: fsn1 }
 
@@ -65,8 +66,24 @@ tests:
     values: [../values/provider-aws.yaml]
     set:
       cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
     asserts:
       - equal: { path: 'spec.infrastructure.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]', value: nlb }
+
+  - it: "negative: refuses an unrestricted LoadBalancer outside docker (15008/15021 open to 0.0.0.0/0)"
+    template: templates/gateway.yaml
+    values: [../values/provider-aws.yaml]
+    set:
+      cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
+    asserts:
+      - failedTemplate: { errorMessage: "istio-eastwest (dev-euc1, provider aws): gateway.loadBalancerSourceRanges is required outside docker - the peers' egress CIDRs (installations/<inst>/addons/istio-eastwest/values.yaml)" }
+
+  - it: "negative: same on Hetzner"
+    template: templates/gateway.yaml
+    set:
+      cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
+    asserts:
+      - failedTemplate: {}
 
   - it: binds the reader user (client cert from mgmt) to the platform's own read-only ClusterRole, never upstream's
     template: templates/reader-rbac.yaml

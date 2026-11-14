@@ -7,6 +7,11 @@ deploys it from the waypoint template; parametersRef customises that Deployment/
 {{- $network := .Values.mesh.network | default .Values.cluster.name }}
 {{- if not $network }}{{ fail "istio-eastwest: no network (mesh.network / cluster.name)" }}{{ end }}
 {{- $g := .Values.gateway }}
+{{- /* Outside docker (CAPD on one host) the LoadBalancer is reachable from the internet: HBONE is mTLS-gated, but
+15008/15021 must still not be open to 0.0.0.0/0. Restrict to the peers' egress CIDRs (docs/multicluster.md). */}}
+{{- if and (ne .Values.cluster.provider "docker") (empty $g.loadBalancerSourceRanges) }}
+{{- fail (printf "istio-eastwest (%s, provider %s): gateway.loadBalancerSourceRanges is required outside docker - the peers' egress CIDRs (installations/<inst>/addons/istio-eastwest/values.yaml)" .Values.cluster.name .Values.cluster.provider) }}
+{{- end }}
 {{- $annotations := deepCopy ($g.serviceAnnotations | default dict) }}
 {{- if eq .Values.cluster.provider "hetzner" }}
 {{- $_ := set $annotations "load-balancer.hetzner.cloud/location" .Values.cluster.region }}  {{- /* hcloud-ccm needs a location (or network zone) per LB. VERIFY */}}
