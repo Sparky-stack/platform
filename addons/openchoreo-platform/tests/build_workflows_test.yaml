@@ -119,6 +119,18 @@ tests:
       - exists: { path: spec.parameters.openAPIV3Schema.properties.docker.properties.filePath.pattern }
       - exists: { path: spec.parameters.openAPIV3Schema.properties.repository.properties.appPath.pattern }
 
+  - it: signatures stay out of the public Rekor log unless the installation opts in
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: tlog-upload, value: "false" } }
+
+  - it: transparencyLog true uploads to Rekor (both workflow kinds)
+    template: templates/helm-chart-workflow.yaml
+    set: { buildWorkflows.signing.transparencyLog: true }
+    asserts:
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: tlog-upload, value: "true" } }
+
   - it: dockerfile has no language checks, elixir offers the PostgreSQL sidecar
     template: templates/build-workflows.yaml
     asserts:

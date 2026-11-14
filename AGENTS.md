@@ -84,7 +84,9 @@ review gets replaced, not copied.
 - **Security defaults:** Pod Security `restricted` is the target (`baseline` Audit only as a step), no privileged
   containers without a justifying comment, workload identity / OIDC instead of static cloud keys, secrets only via ESO,
   keyless Sigstore signing with SBOM and provenance verified at admission, images pinned by digest and multi-arch,
-  never `latest`.
+  never `latest`. Deliberate deviation: in-cluster builds sign with a platform key (`cosign-platform`, no public Rekor
+  upload by default; KMS via workload identity on cloud) because public Fulcio does not trust a private cluster's
+  OIDC issuer (docs/build-plane.md "Signing").
 - **Runtime:** Cilium eBPF with kube-proxy replacement, Istio ambient (no sidecars), OpenTelemetry (no vendor agents),
   external cloud controller managers, OCI Helm charts, rootless BuildKit (no Docker-in-Docker), Crossplane v2.
 - **Delivery:** everything declarative from git; no imperative `kubectl` steps or hand-run scripts on the path to

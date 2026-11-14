@@ -46,6 +46,12 @@ buildWorkflows:
   ttlAfterCompletion: 1d
   platforms: linux/amd64,linux/arm64         # default per run; a run may narrow it (e.g. the node's arch only)
   gitAuthor: OpenChoreo build <build@openchoreo.invalid>
+  # Signing with the platform key (cosign-platform). transparencyLog false (default): no entry in the public Rekor log
+  # (it would publish private repo names and digests); verify with `cosign verify --key cosign.pub
+  # --insecure-ignore-tlog=true`. true: also upload to public Rekor (needs egress to Sigstore). Per installation in
+  # installations/<inst>/addons/openchoreo-platform/values.yaml. docs/build-plane.md "Signing".
+  signing:
+    transparencyLog: false
   # Repositories builds may clone and push to: https URL prefixes ending in "/" (one owner each). Empty = the
   # installation's githubOrg. Enforced three times: the ClusterWorkflow schema pattern on repository.url, the checkout
   # and gitops scripts (BUILD_GUARDS in koorikla-build), and git's credential helper, registered only for these

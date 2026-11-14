@@ -126,10 +126,27 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
 - Per-run Secrets are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` for each run (owned by the
   run, deleted with it): git credentials, registry push credentials, registry CA (public), cosign key.
-- Signing: platform key pair `cosign-platform` (private key encrypted, only in the secret backend and the signing pod).
-  The admission side (keyless for the GitHub path, platform public key for in-cluster builds) is the `gates` work. In
-  cloud installations use a KMS key reached with workload identity (`COSIGN_KEY=awskms://…`) instead of a key file.
-  cosign v3 records key-based signatures in the public Rekor log by default (digests become public). VERIFY
+- Signing: see "Signing" below.
+
+### Signing (deliberate deviation from keyless)
+
+AGENTS.md asks for keyless Sigstore signing. In-cluster builds use a **static platform key** instead: public Fulcio
+issues certificates only for OIDC issuers it trusts, and a local k3d (or private EKS/Hetzner) workload identity is not
+one of them. The GitHub Actions path stays keyless.
+
+- Key pair `cosign-platform` (private key encrypted with `cosign.password`; only in the secret backend and the signing
+  pod; `task secrets` generates it once). Cloud installations should use a KMS key reached through workload identity
+  instead of a key file (`COSIGN_KEY=awskms://…` with EKS Pod Identity / IRSA, GCP KMS with Workload Identity): no key
+  material in the secret backend at all. Tracked with the `gates` work.
+- **No public transparency log by default**: `buildWorkflows.signing.transparencyLog: false` makes the sign steps use a
+  cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest` until koorikla/ci
+  `sign-image.sh` grows a switch), so private repo names and digests never reach public Rekor and signing needs no
+  egress to Sigstore. Set it `true` per installation (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to
+  upload to public Rekor.
+- Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
+  vuln|spdxjson`). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
+- Not yet enforced at admission: a Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` trusting `cosign.pub`
+  (ignoring the tlog) is the `gates` work; until then "signed" is evidence, not a gate.
 
 ## Registry: Harbor
 
@@ -269,6 +286,6 @@ per run a 5Gi workspace PVC (deleted with the workflow).
 - Harbor GHCR replication with `koorikla/**`: GHCR has no catalog API; the adapter lists packages via the GitHub API.
 - kgateway TrafficPolicy timeouts on the Harbor route (large layers); Gateway Service name `harbor`.
 - Harbor internal PostgreSQL password via `extraEnvVars` override + `database.external.existingSecret` for core.
-- cosign v3 key-based signing uploads to public Rekor (koorikla/ci `sign-image.sh` has no tlog switch yet).
+- The tlog-free signing config is injected with a cosign shim (koorikla/ci `sign-image.sh` has no switch yet).
 - BuildKit pulls base images directly from upstream (no Harbor mirror for build pulls yet).
 - Builds on the dev host rely on its QEMU binfmt handlers for foreign-arch `RUN` steps.

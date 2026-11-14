@@ -4,6 +4,7 @@
 #   - BUILD_GUARDS (koorikla-build checkout/gitops) refuses foreign repositories and hands the git token only to the
 #     allowed prefixes (real `git credential fill`), https only
 #   - gitops rewrites only a real OpenChoreo Workload under deploy/openchoreo/ (no symlink out, no other kind)
+#   - signing skips the public Rekor log unless the installation opts in (cosign v3 signing config)
 #   - run pods get no ServiceAccount token (only Argo's executor containers do)
 # shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
 set -euo pipefail
@@ -146,6 +147,27 @@ wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked d
 # --- build: context and Dockerfile must stay inside the checkout ---------------------------------------------------
 BUILD=$(cwt koorikla-build '.spec.templates[] | select(.name == "build") | .container.args[0]')
 assert_match "$BUILD" 'resolves outside the repository' "build refuses a context outside /work/source"
+
+# --- signing: no public Rekor upload unless the installation opts in ----------------------------------------------
+FAKE="$TMP/fakebin"; mkdir -p "$FAKE"
+printf '#!/bin/sh\necho "cosign $*"\n' > "$FAKE/cosign"; chmod +x "$FAKE/cosign"
+for t in koorikla-build koorikla-helm-chart; do
+  SIGN=$(cwt "$t" '.spec.templates[] | select(.name == "sign") | .container.args[0]')
+  SHIM=$(printf '%s\n' "$SIGN" | awk '/if \[ "\$TLOG_UPLOAD" != true \]/{f=1} f{print} f && /^fi$/{exit}')
+  assert_match "$SHIM" 'signing-config' "$t: sign has the transparency-log switch"
+  assert_eq "$(cwt "$t" '.spec.arguments.parameters[] | select(.name == "tlog-upload") | .value')" false "$t: tlog-upload defaults to false"
+  rm -rf "$TMP/bin" "$TMP/signing-config.json"
+  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=false SHIM="${SHIM//\/tmp\//$TMP/}" \
+    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1; cosign attest --yes --type vuln r@sha256:1; cosign verify r' 2>&1)
+  assert_match "$out" "cosign sign --signing-config $TMP/signing-config.json --yes --key k" "$t: sign gets the tlog-free signing config"
+  assert_match "$out" "cosign attest --signing-config $TMP/signing-config.json --yes --type vuln" "$t: attest gets it too"
+  assert_match "$out" "cosign verify r" "$t: other subcommands untouched"
+  assert_eq "$(yq -p json -o json -I0 '.' "$TMP/signing-config.json")" \
+    '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","rekorTlogConfig":{},"tsaConfig":{}}' "$t: signing config has no Rekor/TSA/Fulcio service"
+  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=true SHIM="${SHIM//\/tmp\//$TMP/}" \
+    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1' 2>&1)
+  assert_eq "$out" "cosign sign --yes --key k r@sha256:1" "$t: transparencyLog true: plain cosign (public Rekor)"
+done
 
 # --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
 for t in koorikla-build koorikla-helm-chart; do

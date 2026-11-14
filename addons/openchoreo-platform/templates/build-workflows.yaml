@@ -206,6 +206,7 @@ spec:
           - { name: registry-secret, value: "${metadata.workflowRunName}-registry" }
           - { name: registry-ca-secret, value: "${metadata.workflowRunName}-registry-ca" }
           - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
+          - { name: tlog-upload, value: {{ $b.signing.transparencyLog | toString | quote }} }
   resources:
     {{- include "build.resources" $ | nindent 4 }}
 {{- end }}
