@@ -44,14 +44,16 @@ and still well inside k3s' maintained window - **VERIFY** on the first boot, the
 One file: `installations/<inst>/clusters/<name>.yaml` (schema and defaults: `charts/cluster/values.yaml`). The `fleet`
 ApplicationSet renders `charts/cluster` with `installation.yaml` + this file. The chart fails rendering (so Argo shows
 the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider`, a provider that the
-installation does not enable, a cloud provider without `region`, non-boolean `addons.*`, workers without `name`.
+installation does not enable, a cloud provider without `region`, non-boolean `addons.*`, workers without `name`, an
+even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
+aws/hetzner (see "Control plane size and rollouts").
 
 | Fleet file | Becomes |
 |---|---|
 | `name` | `Cluster/<name>` in `fleet` (DNS label, max 32 chars - it prefixes machine/LB names) |
 | `provider` | `topology.classRef.name: k3s-<provider>` |
 | `kubernetesVersion` | `topology.version` (k3s release, `vX.Y.Z+k3sN`) |
-| `controlPlane.replicas` | control plane replicas (1 or 3; k3s embedded etcd) |
+| `controlPlane.replicas` | k3s servers = embedded etcd voters: odd (1, 3, 5); >= 3 for production on aws/hetzner |
 | `controlPlane.machineType` | variable `controlPlaneMachineType` (aws, hetzner; ignored on docker) |
 | `workers[]` `{name, replicas, machineType, failureDomain}` | machineDeployments of class `default-worker`; `machineType` -> per-MD override of `workerMachineType` |
 | `region` | label; variable `region` (aws, hetzner) |
@@ -83,6 +85,64 @@ clusterclasses chart suffixes every template name with a hash of its spec, so a 
 the ClusterClass follows, the topology controller rolls every cluster of that class (control plane first), and Argo
 prunes the old template. Expect a rolling replacement of nodes after any edit to a template spec; a change to a
 ClusterClass variable value in a fleet file rolls only that cluster.
+
+### Control plane size and rollouts
+k3s servers are the cluster's etcd: cluster-api-k3s v0.5.0 always starts the first server with `cluster-init: true`
+(`pkg/k3s/config.go`), `IsEtcdEmbedded()` is hard-wired to `true` ("TODO ... other k3s database options",
+`bootstrap/api/v1beta2/kthreesconfig_types.go`) and the control plane controller requires an `EtcdMemberHealthy`
+machine condition before every scale step. A control plane rollout (any change to the control plane templates or
+variables, a k3s upgrade, `rollout.after`) replaces servers one at a time, scale-up first: there is no
+`rolloutStrategy`/`maxSurge` field on `KThreesControlPlane` v1beta2 and no in-place update support.
+
+What a rollout does to etcd (`controlplane/controllers/scale.go`, `machine_controller.go`,
+`pkg/k3s/workload_cluster_etcd.go`):
+1. A new server joins (k3s adds it as a learner and promotes it once caught up).
+2. KCP picks the outdated machine, forwards etcd leadership away from it, puts the `pre-terminate.delete.hook` on it
+   and deletes the Machine. Preflight excludes that machine, and `EtcdMemberHealthy` on the others does not look at
+   learner status.
+3. After drain, KCP's Machine controller annotates the node `etcd.k3s.cattle.io/remove=true` and waits; k3s' etcd member
+   controller (`pkg/etcd/member_controller.go`) calls `RemovePeer` and then sets `etcd.k3s.cattle.io/removed-node-name`.
+   As soon as that annotation is there (or the node is no longer listed as a control-plane node), KCP removes the hook
+   and CAPI deletes the infrastructure immediately. KCP does not check etcd's member list or that the remaining
+   members have a leader. `RemovePeer` also returns success when no member matches the node's name and address.
+
+With **1 server** step 3 is always a 2 -> 1 member removal. etcd: "It is unsafe to remove a member from a two member
+cluster" (runtime reconfiguration guide), and k3s has open reports of exactly this ending with the last member
+pre-voting forever for a member that is gone (k3s#12908, k3s#13498). Rancher works around it by delaying the removal in
+the 2-node case (rancher#51780). CAPI documents the same single-replica edge case for kubeadm KCP as won't-fix
+(cluster-api#11772). On dev1 the second rollout of a day ended like that: KCP reported "etcd remove etcd member
+succeeded", the old container was deleted, the new server kept pre-voting for a member that no longer existed, and
+the API was gone; the cluster had to be recreated.
+
+With **3 servers** a rollout goes 3 -> 4 -> 3 voters and never shrinks below 3, so a removal never starts from 2 voters
+and a slow or failed step leaves quorum intact (KCP's preflight ignores learner state, so the removal may start while
+the newest server is still a learner: 3 voters -> 2 + learner, still a removal from 3). KCP also remediates an
+unhealthy server only from 3 up (`remediation.go`: "the number of current replicas is less or equal to 1. Skipping
+remediation").
+
+| Option | Rollout safety | Cost / limits | Verdict |
+|---|---|---|---|
+| 3 (or 5) servers, embedded etcd | 3 -> 4 -> 3, quorum kept | 3 server machines | **production and anything that must survive rollouts** (enforced: `environment: production` on aws/hetzner needs >= 3) |
+| 1 server, embedded etcd | every rollout ends with a 2 -> 1 removal; can lose quorum | cheapest | disposable clusters only: local CAPD (`dev1`, `prod1`), cloud dev clusters |
+| 2 / 4 servers | as fragile as 1 / 3, no extra tolerance | | rejected by charts/cluster (odd only) |
+| 1 server, SQLite (kine) | none: cluster-api-k3s v0.5.0 cannot run it - `cluster-init` is forced and KCP waits for an etcd member that never exists, so no rollout ever starts; a joining server would need etcd anyway | | not possible |
+| external datastore (`datastore-endpoint`, kine on Postgres) | k3s side fine (it ignores `cluster-init` then), but KCP still generates the etcd CA and requires `EtcdMemberHealthy`, so the control plane never passes preflight | an extra HA database per cluster | not possible with v0.5.0 |
+| CAPI in-place updates (1.12+, `InPlaceUpdates` gate) | no new member at all | needs an update runtime extension and control plane provider support; cluster-api-k3s v0.5.0 has neither | not available |
+| KCP rollout/remediation knobs | - | v0.5.0 has only `rolloutAfter` and `remediationStrategy`; remediation never acts on 1 replica | no help for 1 server |
+
+charts/cluster enforces the table: `controlPlane.replicas` must be odd and >= 1, and a non-docker cluster with
+`environment: production` needs >= 3. Local clusters stay at 1 server for host RAM (each extra CAPD server costs
+roughly 0.6-1 GiB); set `controlPlane.replicas: 3` in the fleet file to test rollouts that must not break.
+
+**Single-server rollout lost quorum (break-glass, local/dev only).** The new server holds a full copy of the data (it
+was a promoted voter), so reset etcd membership to it instead of recreating the cluster:
+```bash
+kubectl --context k3d-platform-mgmt -n fleet get machines -l cluster.x-k8s.io/cluster-name=dev1  # survivor = newest
+docker exec <survivor> journalctl -u k3s --no-pager > dev1-k3s.log   # evidence first (CAPD container = Machine name)
+docker exec <survivor> sh -c 'systemctl stop k3s; k3s server --cluster-reset; systemctl start k3s'
+```
+`--cluster-reset` makes the local member the only one of a new etcd cluster with the existing data (k3s "Managing etcd"
+docs); the old server is normally gone already, and KCP finishes the scale-down. **VERIFY** on the next occurrence.
 
 ### Node registry auth (private GHCR)
 `charts/cluster/templates/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) from the
