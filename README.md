@@ -5,8 +5,8 @@
 A cloud-agnostic Kubernetes platform: **Cluster API** creates and lifecycles k3s clusters on Docker, AWS or Hetzner,
 **Argo CD** installs the platform add-ons on all of them from one catalog, **External Secrets Operator** moves every
 credential, and **OpenChoreo** is the developer platform on top (projects, components, environments, promotion).
-Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco, external-dns (Route53 / Cloudflare); telemetry to OpenChoreo's
-observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents ready to switch on.
+Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco, external-dns (Route 53 / Cloudflare, opt-in); telemetry to
+OpenChoreo's observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents ready to switch on.
 
 <img src="docs/diagrams/overview.svg" alt="Architecture overview: repos, management cluster, workload clusters" width="100%">
 
@@ -15,7 +15,7 @@ observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents 
 | [docs/architecture.md](docs/architecture.md) | design and decisions (why push GitOps, trust model, secrets, installations, tenants) |
 | [docs/conventions.md](docs/conventions.md) / [AGENTS.md](AGENTS.md) | invariants, labels, names - the contracts every change keeps |
 | [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
-| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md) | per-area details |
+| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md), [docs/dns.md](docs/dns.md), [docs/ai-agents.md](docs/ai-agents.md) | per-area details |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 
@@ -28,8 +28,8 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
 | State | What |
 |---|---|
 | **Running locally** | k3d mgmt + two CAPD clusters (`dev1`, `prod1`) from fleet files; Argo CD push mode with the addon catalog; ESO stores and the per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; OpenChoreo observability plane (OpenSearch, Prometheus, observer) with workload telemetry (OTel collector, Fluent Bit); Falco + falcosidekick + Talon; Cilium (`dev1`; CNI chosen at cluster birth) and flannel (`prod1`), Istio ambient with OpenChoreo app namespaces auto-enrolled by Kyverno, Kyverno Pod Security baseline (Audit) |
-| **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends |
-| **In progress** | [koorikla/ci](https://github.com/koorikla/ci) reusable workflows (Go, Next.js, Elixir, Ruby, Helm, Crossplane), multi-arch and cosign-signed; external-dns (Route53, Cloudflare; opt-in per installation); OpenChoreo RCA (SRE) and FinOps agents + agent gateway, shipped switched off until LLM tokens exist; OS/CPU-agnostic tooling (mise + Task, devcontainer) |
+| **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends; external-dns (Route 53 / Cloudflare chosen per installation, opt-in per cluster); OpenChoreo RCA (SRE) and FinOps agents + OpenCost FinOps module + agentgateway, built and switched off until LLM keys exist |
+| **In progress** | [koorikla/ci](https://github.com/koorikla/ci) reusable workflows (Go, Next.js, Elixir, Ruby, Helm, Crossplane), multi-arch and cosign-signed; OS/CPU-agnostic tooling (mise + Task, devcontainer) |
 | **Next** | OpenChoreo workflow plane (in-cluster builds) + Harbor (registry, pull-through cache); Crossplane v2 with package promotion gated by Argo CD; SSO (Okta / Google via Thunder, Argo CD via Dex, apiserver OIDC) + Backstage scaffolder; Argo Events escalation for Falco; Datadog exporter |
 
 ## Prerequisites
