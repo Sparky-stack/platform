@@ -10,12 +10,9 @@ done
 first_inst=$(find installations -mindepth 1 -maxdepth 1 -type d | sort | head -n1)
 first_cluster=$(find "$first_inst/clusters" -maxdepth 1 -name '*.yaml' | sort | head -n1)
 
+./hack/deps.sh
 for dir in charts/* addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
-  if grep -q '^dependencies:' "$dir/Chart.yaml" && [[ ! -d "$dir/charts" || -z "$(ls -A "$dir/charts" 2>/dev/null)" ]]; then
-    echo "==> helm dependency build $dir"
-    helm dependency build "$dir" >/dev/null
-  fi
   if [[ "$dir" == "charts/cluster" ]]; then
     if [[ ! -f "$dir/templates/capi-cluster.yaml" ]]; then
       echo "==> SKIP helm lint $dir (capi-cluster.yaml not present on this branch)"

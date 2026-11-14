@@ -1,0 +1,32 @@
+# aws-example: public hostnames for thunder. Subchart values cannot be templated, so the hostnames derived from
+# installation.yaml openchoreo.controlPlane.host are restated here; the addon's validate.yaml fails the render on drift.
+thunderid:
+  httproute:
+    hostnames:
+    - thunder.openchoreo.aws.example.com
+  configuration:
+    server:
+      publicUrl: https://thunder.openchoreo.aws.example.com
+    gateClient:
+      hostname: thunder.openchoreo.aws.example.com
+    passkey:
+      allowedOrigins:
+      - https://openchoreo.aws.example.com
+  bootstrap:
+    scripts:
+      49-cors.yaml: "resource_type: server_config\nname: cors\nvalue:\n  allowedOrigins:\n    - \"https://openchoreo.aws.example.com\"\
+        \n"
+      51-backstage-app.yaml: "resource_type: application\nid: 01900000-0000-7000-8001-000000000060\nouId: 01900000-0000-7000-8000-000000000001\n\
+        name: Backstage\ntype: fullstack\nauthFlowId: 01900000-0000-7000-8000-000000000061\ndescription: OpenChoreo Backstage\
+        \ Portal\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\
+        \nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n\
+        \    config:\n      clientId: openchoreo-backstage-client\n      clientSecret: \"{{ .BACKSTAGE_CLIENT_SECRET }}\"\n\
+        \      redirectUris:\n        - \"https://openchoreo.aws.example.com/api/auth/openchoreo-auth/handler/frame\"\n  \
+        \    grantTypes:\n        - authorization_code\n        - client_credentials\n        - refresh_token\n      responseTypes:\n\
+        \        - code\n      tokenEndpointAuthMethod: client_secret_post\n      pkceRequired: false\n      publicClient:\
+        \ false\n      token:\n        accessToken:\n          userConfig:\n            validityPeriod: 86400\n          \
+        \  attributes:\n              - given_name\n              - family_name\n              - username\n              -\
+        \ groups\n          clientConfig:\n            validityPeriod: 86400\n        idToken:\n          validityPeriod:\
+        \ 86400\n          userAttributes:\n            - given_name\n            - family_name\n            - username\n\
+        \            - groups\n      scopeClaims:\n        email:\n          - email\n        groups:\n          - groups\n\
+        \        profile:\n          - username\n          - given_name\n          - family_name\n          - picture\n"

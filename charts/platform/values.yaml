@@ -18,6 +18,13 @@ mgmt:
 #   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
+# Standalone-render defaults; installation.yaml provides the real values.
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
+
 addons:
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true }
   cert-manager:             { namespace: cert-manager,             roles: [mgmt, workload], default: true }
@@ -31,7 +38,7 @@ addons:
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
   openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt],           default: true }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
-  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID] }
+  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' } }
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }

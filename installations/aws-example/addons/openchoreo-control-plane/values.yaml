@@ -1,0 +1,36 @@
+# aws-example: public hostnames for openchoreo-control-plane. Subchart values cannot be templated, so the hostnames derived from
+# installation.yaml openchoreo.controlPlane.host are restated here; the addon's validate.yaml fails the render on drift.
+openchoreo-control-plane:
+  openchoreoApi:
+    http:
+      hostnames:
+      - api.openchoreo.aws.example.com
+    config:
+      server:
+        publicUrl: https://api.openchoreo.aws.example.com
+  backstage:
+    baseUrl: https://openchoreo.aws.example.com
+    http:
+      hostnames:
+      - openchoreo.aws.example.com
+  security:
+    oidc:
+      issuer: https://thunder.openchoreo.aws.example.com
+      jwksUrl: https://thunder.openchoreo.aws.example.com/oauth2/jwks
+      authorizationUrl: https://thunder.openchoreo.aws.example.com/oauth2/authorize
+      tokenUrl: https://thunder.openchoreo.aws.example.com/oauth2/token
+  clusterGateway:
+    tlsRoute:
+      hosts:
+      - host: cluster-gateway.openchoreo.aws.example.com
+        paths:
+        - path: /
+          pathType: Prefix
+    tls:
+      dnsNames:
+      - cluster-gateway.openchoreo-control-plane.svc
+      - cluster-gateway.openchoreo-control-plane.svc.cluster.local
+      - cluster-gateway.openchoreo.aws.example.com
+  gateway:
+    httpsPort: 443
+    httpPort: 80

@@ -54,11 +54,17 @@ spec:
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
-          {{- if $cfg.clusterNameParameters }}
+          {{- if or $cfg.clusterNameParameters $cfg.installationParameters }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
               value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+            {{- end }}
+            {{- /* installationParameters: <helm param>: <template over installation values>, rendered here once per
+            installation, so subchart values that must equal installation.yaml facts are never restated by hand. */}}
+            {{- range $p, $t := $cfg.installationParameters }}
+            - name: {{ $p | quote }}
+              value: {{ tpl $t $ | quote }}
             {{- end }}
           {{- end }}
           valuesObject:
