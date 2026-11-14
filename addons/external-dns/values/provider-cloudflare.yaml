@@ -1,0 +1,28 @@
+# Cloudflare DNS overlay.
+# NOTE: `charts/platform` ApplicationSet keys `values/provider-*.yaml` off the CAPI infra provider (`docker|aws|hetzner`),
+# not `installation.yaml` `dns.provider`. So this file is a reference overlay rather than auto-loaded by the catalog:
+# installations using `dns.provider: cloudflare` (e.g. `hetzner-example`) copy/mirror these settings into
+# `installations/<inst>/addons/external-dns/values.yaml` (which overrides `values/provider-<infra>.yaml`).
+#
+# Secret: ClusterSecretStore `default` (workload) or `platform` (mgmt), key `external-dns-cloudflare`, property `api-token`
+# (Cloudflare API Token with Zone:Zone:Read and Zone:DNS:Edit).
+secrets:
+  cloudflare:
+    enabled: true
+    remoteKey: external-dns-cloudflare
+    property: api-token
+
+external-dns:
+  provider:
+    name: cloudflare
+  env:
+    - name: CF_API_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-cloudflare
+          key: api-token
+  extraArgs:
+    # Clear `aws-zone-type` if overriding `values/provider-aws.yaml` on an AWS infra cluster (YAML null removes the key):
+    aws-zone-type: null
+    # Proxied=false by default (omit --cloudflare-proxied). Uncomment to proxy records through Cloudflare CDN/WAF:
+    # cloudflare-proxied: null

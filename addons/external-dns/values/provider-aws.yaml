@@ -1,0 +1,30 @@
+# AWS infra clusters (`platform.koorikla.io/provider: aws`): Route53 defaults.
+# Auth defaults to IRSA / EKS Pod Identity (or node IAM role) - no static AWS keys.
+# If an AWS-hosted installation uses Cloudflare DNS instead, override provider/env/extraArgs in
+# `installations/<inst>/addons/external-dns/values.yaml` (which layers after this file).
+external-dns:
+  provider:
+    name: aws
+  extraArgs:
+    aws-zone-type: public     # public | private
+    # aws-assume-role: arn:aws:iam::111111111111:role/external-dns   # optional cross-account Route53 role
+    # aws-prefer-cname: null                                          # uncomment to prefer CNAME over Route53 ALIAS
+  serviceAccount:
+    annotations: {}           # leave empty for EKS Pod Identity or node instance profile
+    # IRSA (EKS): set in installations/<inst>/addons/external-dns/values.yaml:
+    #   eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/external-dns
+
+# Commented static-credentials alternative (for non-EKS clusters without IRSA/Pod Identity):
+# Seed key `external-dns-aws` (properties: access-key-id, secret-access-key) in ClusterSecretStore `default`
+# (workload) / `platform` (mgmt), then uncomment in installations/<inst>/addons/external-dns/values.yaml:
+# secrets:
+#   aws:
+#     enabled: true
+# external-dns:
+#   env:
+#     - name: AWS_ACCESS_KEY_ID
+#       valueFrom:
+#         secretKeyRef: { name: external-dns-aws, key: access-key-id }
+#     - name: AWS_SECRET_ACCESS_KEY
+#       valueFrom:
+#         secretKeyRef: { name: external-dns-aws, key: secret-access-key }

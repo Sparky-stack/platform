@@ -1,0 +1,9 @@
+apiVersion: v2
+name: external-dns
+description: Opt-in ExternalDNS for Gateway API routes and Services (Route53 + Cloudflare)
+type: application
+version: 0.1.0
+dependencies:
+  - name: external-dns
+    version: 1.23.0
+    repository: https://kubernetes-sigs.github.io/external-dns/
