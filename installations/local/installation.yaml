@@ -1,0 +1,34 @@
+# Installation "local": k3d mgmt + CAPD workload clusters on this machine.
+# Consumed by charts/platform (root app values) and passed to every generated Application as `installation.*`.
+installation:
+  name: local
+  repoURL: https://github.com/koorikla/platform.git
+  revision: main
+  githubOrg: https://github.com/koorikla      # repo-creds prefix (covers app repos too)
+  domain: localhost                           # base domain for platform endpoints
+
+# The management cluster itself (not CAPI-managed in this installation: k3d).
+mgmt:
+  name: mgmt
+  provider: docker
+  region: local
+  environment: mgmt
+  addons: {}                                  # addons.platform.koorikla.io/<addon> overrides for mgmt
+
+secrets:
+  backend: kubernetes                         # kubernetes | aws | vault
+  kubernetes:
+    namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+
+capi:
+  providers:
+    docker: true
+    aws: false
+    hetzner: false
+
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost                 # console; api.<host>, thunder.<host> derive from it
+    # URL workload-cluster agents dial. Locally resolved to mgmt by the coredns-local addon. VERIFY
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws

@@ -1,0 +1,17 @@
+name: prod1
+provider: docker
+region: local
+environment: production
+kubernetesVersion: v1.35.4+k3s1   # VERIFY
+controlPlane:
+  replicas: 1
+workers:
+  - name: md-0
+    replicas: 0
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: prod1.apps.localhost
+    environments: [production]
+addonsRevision: HEAD
+addons: {}

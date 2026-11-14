@@ -1,0 +1,19 @@
+# One workload cluster. Adding a file here creates the cluster, registers it with Argo CD and OpenChoreo.
+# Schema: charts/cluster/values.yaml (the `cluster` key there is exactly this file's content).
+name: dev1
+provider: docker            # docker | aws | hetzner  -> ClusterClass k3s-<provider>
+region: local
+environment: development
+kubernetesVersion: v1.35.4+k3s1   # VERIFY latest k3s patch supported by cluster-api-k3s v0.5.0
+controlPlane:
+  replicas: 1
+workers:
+  - name: md-0
+    replicas: 0             # k3s servers schedule workloads; add workers when needed
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev1.apps.localhost
+    environments: [development, staging]
+addonsRevision: HEAD
+addons: {}

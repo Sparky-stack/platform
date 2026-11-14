@@ -1,0 +1,30 @@
+# Rendered by Application cluster-<name> with two value files, merged in this order:
+#   installations/<inst>/installation.yaml      -> installation, mgmt, secrets, capi, openchoreo.{orgNamespace,controlPlane}
+#   installations/<inst>/clusters/<name>.yaml   -> the keys below (+ openchoreo.dataPlane)
+# Template files are split by concern: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml.
+
+# --- from the fleet file -------------------------------------------------------------------------------------------
+name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
+provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
+region: local
+environment: development
+kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1
+controlPlane:
+  replicas: 1
+  machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
+workers: []                   # [{name, replicas, machineType, failureDomain}]
+providerSpec: {}              # provider-specific ClusterClass variables (aws: region/sshKeyName/ami, hetzner: region/sshKey/image)
+openchoreo:
+  dataPlane:
+    enabled: false
+    gatewayHost: ""           # base host for app endpoints on this cluster
+    gatewayPort: 443          # VERIFY local: port the data plane gateway is reachable on
+    environments: []          # OpenChoreo Environments bound to this cluster's ClusterDataPlane
+addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
+addons: {}                    # <addon>: true|false -> label addons.platform.koorikla.io/<addon>
+
+# --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
+installation:
+  name: local
+secrets:
+  backend: kubernetes
