@@ -39,3 +39,8 @@ openchoreo:
     enabled: true                              # false: no observabilityPlaneRef; disable the two addons too
     httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
     tlsPort: 11085
+
+# Opt-in external-dns configuration (docs/dns.md). Local stays off (coredns-local handles *.openchoreo.localhost).
+dns:
+  provider: none                               # none | route53 | cloudflare
+  domainFilters: []

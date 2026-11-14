@@ -1,0 +1,11 @@
+# aws-example: ExternalDNS Route53 settings (layers on top of addons/external-dns/values/provider-aws.yaml).
+# Enable per cluster by setting `external-dns: "true"` in installation.yaml `mgmt.addons` or `clusters/<name>.yaml`.
+# Auth uses EKS Pod Identity / IRSA by default (no static AWS keys).
+external-dns:
+  policy: upsert-only
+  # policy: sync              # uncomment to allow ExternalDNS to delete records when Routes/Services are removed
+  domainFilters:
+    - aws.example.com         # must match installation.yaml dns.domainFilters (VERIFY: your Route53 zone)
+  # serviceAccount:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/external-dns

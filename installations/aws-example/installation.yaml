@@ -15,6 +15,7 @@ mgmt:
   environment: mgmt
   addons:
     openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
+    # external-dns: "true"                    # opt-in per cluster (mgmt + workload) once Route 53 zone + IAM role exist
 
 secrets:
   backend: aws                                # ClusterSecretStore/platform -> AWS Secrets Manager
@@ -40,3 +41,11 @@ openchoreo:
     enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
     httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation
     tlsPort: 443
+
+# Opt-in external-dns configuration (docs/dns.md). Addon remains disabled unless opted in via addons.external-dns: "true".
+dns:
+  provider: route53                           # none | route53 | cloudflare
+  domainFilters:
+    - aws.example.com                         # VERIFY: Route 53 hosted zone(s) you own
+  route53:
+    zoneType: public                          # public | private

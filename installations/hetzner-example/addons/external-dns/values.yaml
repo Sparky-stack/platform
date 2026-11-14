@@ -1,0 +1,26 @@
+# hetzner-example: ExternalDNS Cloudflare settings.
+# Because `charts/platform` ApplicationSet keys `values/provider-*.yaml` off the CAPI infra provider (`hetzner`),
+# this installation overlay selects Cloudflare DNS directly (mirrors addons/external-dns/values/provider-cloudflare.yaml).
+# Enable per cluster by setting `external-dns: "true"` in installation.yaml `mgmt.addons` or `clusters/<name>.yaml`.
+# Prerequisite: key `external-dns-cloudflare` (property `api-token`) in ClusterSecretStore `platform` (mgmt) / `default` (workload).
+secrets:
+  cloudflare:
+    enabled: true
+    remoteKey: external-dns-cloudflare
+    property: api-token
+
+external-dns:
+  policy: upsert-only
+  # policy: sync              # uncomment to allow ExternalDNS to delete records when Routes/Services are removed
+  domainFilters:
+    - hetzner.example.com     # must match installation.yaml dns.domainFilters (VERIFY: your Cloudflare zone)
+  provider:
+    name: cloudflare
+  env:
+    - name: CF_API_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-cloudflare
+          key: api-token
+  # extraArgs:
+  #   cloudflare-proxied: null   # uncomment to proxy records through Cloudflare (default: false)
