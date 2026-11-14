@@ -3,10 +3,13 @@
 #   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
 #                              bindings from Argo CD pass, from openchoreo-api are denied, staging is out of scope
 # and of the kyverno-policies addon (supply-chain gate per environment):
-#   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, scoping)
+#   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
+#                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
+#   tests/kyverno/platform-key offline: with a platform key only <registry.host>/<appsProject>/ is trusted
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image;
 #                              runs only with KYVERNO_ONLINE=1
-# Skips when the kyverno CLI is not installed (optional tool: https://github.com/kyverno/kyverno/releases, = addons/kyverno appVersion).
+# A suite's helm-values.yaml (optional) is passed to helm template. The kyverno CLI comes from mise.toml; skips only
+# when it is missing (KYVERNO=/path/to/kyverno overrides).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -21,11 +24,13 @@ fi
 addon="$ROOT/addons/kyverno-policies"
 [[ -d "$addon/charts" ]] || helm dependency build "$addon" >/dev/null
 cp -R "$addon/tests/kyverno" "$TMP/kyverno"
-suites=(registries)
+suites=(registries platform-key)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures)
 for s in "${suites[@]}"; do
+  hv=()
+  [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
   helm template kyverno-policies "$addon" --namespace kyverno -s templates/image-verification.yaml \
-    > "$TMP/kyverno/$s/policies.yaml"
+    ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
   if out=$("$KYVERNO" test "$TMP/kyverno/$s" 2>&1) && [[ "$out" =~ "0 tests failed" ]]; then
     assert_eq ok ok "kyverno test $s"
   else
