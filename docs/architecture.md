@@ -88,7 +88,8 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md).
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md) and `clusterLabelParameters`
+(a cluster secret label's value with a default, e.g. Istio's meshID and network from the mesh labels; docs/multicluster.md).
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (from the fleet
 file, default `HEAD`) is the `targetRevision` of that cluster's addon Applications. Prod can follow a tag while dev

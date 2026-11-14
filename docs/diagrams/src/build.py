@@ -76,7 +76,7 @@ def overview() -> Diagram:
     d.box(A, R[3], KW, BH, "bus", "OTel collector", ["fan-out · Datadog-ready"])
     d.box(B, R[3], KW, BH, "network", "Cilium", ["CNI · no kube-proxy"])
     d.box(A, R[4], KW, BH, "security", "Falco + Talon", ["detect · respond"])
-    d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints"])
+    d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints", "east-west gw · opt-in"])
     d.box(A, R[5], KW, BH, "security", "ESO", ["store: default"])
     d.box(B, R[5], KW, BH, "gitops", "Crossplane v2", ["providers · XRs"], planned=True)
     d.box(A, R[6], KW, BH, "security", "Kyverno", ["PSS audit · ambient"])

@@ -11,6 +11,8 @@ Design and rationale: `docs/architecture.md`. Contracts below are mirrored from 
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
    `ClusterResourceSet` payloads templated by ESO.
+   Only exception: the opt-in Istio mesh intermediate CA (istiod-as-CA needs its key; the mesh root stays on mgmt,
+   docs/multicluster.md "Trust").
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform`; on workload clusters `ClusterSecretStore/default`.
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
@@ -32,7 +34,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
 | `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`) |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` from `mesh.group`) |
+| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 ## Names
@@ -43,6 +46,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |
+| Mesh PKI / remote secrets (ns `fleet`, opt-in) | `mesh-root-ca` (shared root), `<name>-mesh-ca`, `<name>-mesh-reader`; CRS payloads `<name>-mesh-cacerts`, `<name>-mesh-remote-secret` |
+| On mesh members, ns `istio-system` | Secret `cacerts`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
 | Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>` |
 
@@ -61,6 +66,7 @@ bootstrap/                      k3d config, bootstrap.sh (make up/down), seed se
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
 addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
+examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture.md, conventions.md, runbooks
 hack/                           tests and helper scripts (task test); hack/lib/portable.sh
