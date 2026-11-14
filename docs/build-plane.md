@@ -287,6 +287,28 @@ Live cluster: `k3d cluster edit platform-mgmt --port-add "127.0.0.1:9443:9443@lo
 Storage (local-path): Harbor registry 20Gi (not enforced by local-path), DB 2Gi, Trivy 2Gi, job logs 1Gi, Redis 1Gi;
 per run a 5Gi workspace PVC (deleted with the workflow).
 
+## Deferred hardening (tracked)
+
+Accepted for the local installation, required before builds run untrusted code on a shared cloud mgmt cluster:
+
+- **Dedicated build node or cluster.** `build` runs rootless BuildKit with seccomp/AppArmor `Unconfined` on the node
+  that also holds the CA keys, `platform-secrets` and Argo CD. Cloud installations should move the workflow plane to a
+  tainted build node pool or its own cluster (OpenChoreo supports a remote `ClusterWorkflowPlane`), and try a Localhost
+  seccomp profile allowing only what rootlesskit needs instead of `Unconfined`.
+- **Scoped cluster-agent RBAC.** The upstream workflow-plane agent ClusterRole is effectively cluster-admin (`*` on
+  secrets, pods, namespaces, ClusterSecretStores, roles/rolebindings incl. bind/escalate). Target:
+  `clusterAgent.rbac.create: false` + a platform role limited to `workflows-*`, argoproj.io and externalsecrets, no
+  ClusterSecretStores, no RBAC escalation. Needs the agent's exact API usage per OpenChoreo release first.
+- **Per-repository git credentials.** `platform-github-build` is one PAT for every allowed repository: a build may clone
+  or rebuild another tenant's repo under the same owner. Next step: `platform-github-app` installation tokens minted
+  per run by ESO's `GithubAccessToken` generator, scoped to the Component's repository.
+- **Per-project Harbor robots.** One robot `builder` pushes to all of `apps`; per-project robots (`apps/<project>/*`)
+  would contain a compromised build.
+- **Admission.** Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` (platform `cosign.pub`, ignore tlog) and a
+  rule restricting images in `workflows-*` to digest-pinned refs (`gates` work).
+- **GitOps push to the branch head.** The hand-off commits straight to the built branch (development autoDeploy); with
+  the GitHub App it should honour branch protection (PR or a ruleset bypass for the App only).
+
 ## Known limitations and VERIFY
 
 `grep -rn VERIFY addons/harbor addons/openchoreo-workflow-plane addons/openchoreo-platform/templates charts/cluster/templates/capi-registries.yaml`.
