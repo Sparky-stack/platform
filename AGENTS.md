@@ -12,7 +12,10 @@ Design and rationale: `docs/architecture.md`. Contracts below are mirrored from 
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
    `ClusterResourceSet` payloads templated by ESO.
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
-   `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`.
+   `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`. Only exception: read-only stores
+   that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
+   namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
+   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
