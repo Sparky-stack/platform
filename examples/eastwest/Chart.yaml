@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eastwest
+description: Example - a service in one cluster called from another over Istio ambient east-west gateways (mTLS + authz)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

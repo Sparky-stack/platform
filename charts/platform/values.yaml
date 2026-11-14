@@ -79,3 +79,13 @@ addons:
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
   kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }
+
+# Examples (examples/<name>; charts/platform templates/appset-examples.yaml): off unless an installation enables them.
+examples:
+  eastwest:                 # cross-cluster call over Istio ambient east-west gateways (docs/multicluster.md)
+    enabled: false
+    namespace: eastwest-demo
+    selector:               # every mesh member
+      matchLabels:
+        platform.koorikla.io/role: workload
+        addons.platform.koorikla.io/istio-eastwest: "true"

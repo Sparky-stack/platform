@@ -153,6 +153,14 @@ for dir in addons/*; do
   fi
 done
 
+echo "==> Rendering enabled examples (examples/*)" >&2
+for dir in examples/*; do
+  [[ -f "$dir/Chart.yaml" ]] || continue
+  ex=$(basename "$dir")
+  [[ "$(yq ".examples[\"$ex\"].enabled // false" "$INST_FILE")" == "true" ]] || continue
+  helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
+done
+
 echo "==> Cluster runtime images (k3d, CAPD, CAPI providers, k3s)" >&2
 k3s_versions=""
 if [[ "$INST" == local ]]; then

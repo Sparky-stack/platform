@@ -21,7 +21,7 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" \
     --values "$ROOT/installations/local/clusters/dev1.yaml" > "$TMP/dev1.yaml"
-  for key in platform.koorikla.io/name platform.koorikla.io/role platform.koorikla.io/provider platform.koorikla.io/region platform.koorikla.io/environment platform.koorikla.io/installation platform.koorikla.io/cni addons.platform.koorikla.io/cilium; do
+  for key in platform.koorikla.io/name platform.koorikla.io/role platform.koorikla.io/provider platform.koorikla.io/region platform.koorikla.io/environment platform.koorikla.io/installation platform.koorikla.io/cni addons.platform.koorikla.io/cilium mesh.platform.koorikla.io/group mesh.platform.koorikla.io/network addons.platform.koorikla.io/istio-eastwest; do
     capi_v=$(yq "select(.kind == \"Cluster\" and .metadata.name == \"dev1\") | .metadata.labels[\"$key\"]" "$TMP/dev1.yaml")
     wl_v=$(yq "select(.kind == \"ExternalSecret\" and .metadata.name == \"dev1-argocd-cluster\") | .spec.target.template.metadata.labels[\"$key\"]" "$TMP/dev1.yaml")
     assert_eq "$wl_v" "$capi_v" "dev1 argocd cluster label $key matches CAPI Cluster"
@@ -41,6 +41,31 @@ cil_sel=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-cili
 assert_eq "$cil_sel" "In" "addon-cilium is opt-in by label"
 mgmt_cni=$(yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels["platform.koorikla.io/cni"]' "$TMP/platform.yaml")
 assert_eq "$mgmt_cni" "flannel" "in-cluster (k3d mgmt) carries platform.koorikla.io/cni=flannel"
+
+# 2b2. multicluster mesh (docs/multicluster.md): names shared between charts/cluster, mesh-root-ca and istio-eastwest,
+# and istio-ambient's multi-network settings driven by the mesh labels
+if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+  helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
+    --values "$ROOT/installations/local/installation.yaml" --values "$ROOT/installations/local/clusters/dev1.yaml" \
+    --set mesh.group=contract --set mgmt.addons.mesh-root-ca=true > "$TMP/dev1-mesh.yaml"
+  root_issuer=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-ca") | .spec.issuerRef.name' "$TMP/dev1-mesh.yaml")
+  assert_eq "$root_issuer" "$(yq '.root.issuerName' "$ROOT/addons/mesh-root-ca/values.yaml")" "mesh intermediates are issued by the mesh-root-ca addon's Issuer"
+  assert_eq "$(yq '.root.namespace' "$ROOT/addons/mesh-root-ca/values.yaml")" "fleet" "mesh root lives next to the intermediates (fleet)"
+  reader_cn=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-reader") | .spec.commonName' "$TMP/dev1-mesh.yaml")
+  assert_eq "$reader_cn" "$(yq '.reader.user' "$ROOT/addons/istio-eastwest/values.yaml")" "remote-secret client cert CN == user istio-eastwest binds"
+  mesh_net=$(yq 'select(.kind == "Cluster") | .metadata.labels["mesh.platform.koorikla.io/network"]' "$TMP/dev1-mesh.yaml")
+  assert_eq "$mesh_net" "dev1" "mesh network label == cluster name"
+  assert_match "$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-mesh-cacerts") | .spec.target.template.data["mesh-cacerts.yaml"]' "$TMP/dev1-mesh.yaml")" \
+    'topology.istio.io/network: dev1' "istio-system network label == mesh network label"
+fi
+ia_params=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-ambient") | .spec.template.spec.source.helm.parameters[] | .name + "=" + .value' "$TMP/platform.yaml")
+assert_match "$ia_params" 'global.network=\{\{ index .metadata.labels "mesh.platform.koorikla.io/network" \}\}' "istio-ambient network comes from the mesh network label"
+assert_match "$ia_params" 'global.meshID=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "istio-ambient meshID comes from the mesh group label"
+assert_match "$ia_params" 'istiod.env.AMBIENT_ENABLE_MULTI_NETWORK=.*addons.platform.koorikla.io/istio-eastwest.*else \}\}false' "ambient multi-network only on istio-eastwest clusters"
+assert_match "$ia_params" 'istiod.env.PILOT_DISABLE_SELF_SIGNED_CA=.*addons.platform.koorikla.io/istio-eastwest' "mesh members never fall back to a self-signed root"
+assert_match "$ia_params" 'global.multiCluster.clusterName=\{\{ index .metadata.labels "platform.koorikla.io/name" \}\}' "istio clusterName == cluster name"
+ew_sel=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-eastwest") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == "addons.platform.koorikla.io/istio-eastwest") | .operator' "$TMP/platform.yaml")
+assert_eq "$ew_sel" "In" "addon-istio-eastwest is opt-in by label"
 
 # 2c. Kyverno: the platform namespaces outside Kyverno's webhooks are exactly the ones the policies exclude
 kyv_ns=$(yq -o=json -I=0 '.kyverno.config.webhooks.namespaceSelector.matchExpressions[0].values' "$ROOT/addons/kyverno/values.yaml")

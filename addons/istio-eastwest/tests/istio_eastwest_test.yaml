@@ -1,4 +1,4 @@
-suite: istio-eastwest - ambient east-west gateway + reader token
+suite: istio-eastwest - ambient east-west gateway + reader RBAC
 templates:
   - templates/gateway.yaml
   - templates/reader-binding.yaml
