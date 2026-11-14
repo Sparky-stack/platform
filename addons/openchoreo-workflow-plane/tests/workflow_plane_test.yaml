@@ -1,0 +1,89 @@
+suite: openchoreo-workflow-plane - plane registration, agent trust, build templates
+templates:
+  - templates/cluster-workflow-plane.yaml
+  - templates/agent-server-ca.yaml
+  - templates/cluster-workflow-templates.yaml
+  - templates/validate.yaml
+release:
+  name: openchoreo-workflow-plane
+  namespace: openchoreo-workflow-plane
+tests:
+  - it: registers ClusterWorkflowPlane default trusting only the agent's own cert, store platform
+    template: templates/cluster-workflow-plane.yaml
+    asserts:
+      - isKind: { of: ClusterWorkflowPlane }
+      - equal: { path: metadata.name, value: default }
+      - equal: { path: spec.planeID, value: default }
+      - equal:
+          path: spec.clusterAgent.clientCA.secretKeyRef
+          value: { name: cluster-agent-tls, namespace: openchoreo-workflow-plane, key: ca.crt }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.observabilityPlaneRef, value: { kind: ClusterObservabilityPlane, name: default } }
+
+  - it: no observabilityPlaneRef without the observability plane
+    template: templates/cluster-workflow-plane.yaml
+    set: { openchoreo.observability.enabled: false }
+    asserts:
+      - notExists: { path: spec.observabilityPlaneRef }
+
+  - it: agent gets only the gateway CA public cert through mgmt-openchoreo
+    template: templates/agent-server-ca.yaml
+    asserts:
+      - equal: { path: spec.secretStoreRef.name, value: mgmt-openchoreo }
+      - equal: { path: spec.data, value: [{ secretKey: ca.crt, remoteRef: { key: cluster-gateway-ca, property: ca.crt } }] }
+
+  - it: build templates use the digest-pinned toolbox and rootless BuildKit, no placeholder left
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - isKind: { of: ClusterWorkflowTemplate }
+      - equal:
+          path: 'spec.templates[?(@.name == "checkout")].container.image'
+          value: ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608
+      - matchRegex:
+          path: 'spec.templates[?(@.name == "build")].container.image'
+          pattern: '^docker\.io/moby/buildkit:v[0-9.]+-rootless@sha256:[0-9a-f]{64}$'
+
+  - it: rootless BuildKit is not privileged and runs as uid 1000 without privilege escalation
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - notExists: { path: 'spec.templates[?(@.name == "build")].container.securityContext.privileged' }
+      - equal: { path: 'spec.templates[?(@.name == "build")].container.securityContext.allowPrivilegeEscalation', value: false }
+      - equal: { path: 'spec.templates[?(@.name == "build")].securityContext.runAsUser', value: 1000 }
+      - equal: { path: 'spec.templates[?(@.name == "build")].container.securityContext.capabilities.drop', value: [ALL] }
+
+  - it: every other step meets Pod Security restricted at the workflow level
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - equal:
+          path: spec.securityContext
+          value: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+
+  - it: pipeline order - sign only after both scans, GitOps hand-off only after signing
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "sign")].depends', value: scan-image && sbom }
+      - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "gitops")].depends', value: sign }
+
+  - it: helm chart packaging reuses the build checkout
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-helm-chart }
+    asserts:
+      - equal:
+          path: 'spec.templates[0].dag.tasks[0].templateRef'
+          value: { name: koorikla-build, template: checkout, clusterScope: true }
+
+  - it: fails when the installation turns the workflow plane off
+    template: templates/validate.yaml
+    set: { openchoreo.workflowPlane.enabled: false }
+    asserts:
+      - failedTemplate: { errorPattern: "openchoreo.workflowPlane.enabled is false" }
+
+  - it: refuses to copy the control plane CA
+    template: templates/validate.yaml
+    set: { openchoreo-workflow-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca }
+    asserts:
+      - failedTemplate: { errorPattern: "no control-plane CA key is copied" }

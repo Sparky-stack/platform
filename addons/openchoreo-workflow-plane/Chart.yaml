@@ -1,0 +1,9 @@
+apiVersion: v2
+name: openchoreo-workflow-plane
+description: OpenChoreo workflow plane on mgmt (Argo Workflows + in-cluster cluster-agent), ClusterWorkflowPlane default, build ClusterWorkflowTemplates running koorikla/ci scripts with rootless BuildKit
+type: application
+version: 0.1.0
+dependencies:
+  - name: openchoreo-workflow-plane
+    version: 1.3.3
+    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
