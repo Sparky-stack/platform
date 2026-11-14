@@ -192,3 +192,22 @@ tests:
       - equal: { path: spec.destination.namespace, value: acme }
         template: templates/applications.yaml
         documentIndex: 0
+
+  - it: git commit signature policy (sourceIntegrity) only when enabled
+    template: templates/appproject.yaml
+    asserts:
+      - notExists: { path: spec.sourceIntegrity }
+
+  - it: sourceIntegrity gpg policy over the GitHub org (replaces deprecated signatureKeys)
+    template: templates/appproject.yaml
+    set:
+      sourceIntegrity.enabled: true
+    asserts:
+      - equal:
+          path: spec.sourceIntegrity
+          value:
+            git:
+              policies:
+                - repos: [{ url: "https://github.com/koorikla/*" }]
+                  gpg: { mode: head, keys: [B5690EEEBB952194] }
+      - notExists: { path: spec.signatureKeys }

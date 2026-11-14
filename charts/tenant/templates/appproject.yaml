@@ -16,6 +16,19 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"     # before the Applications that reference it
 spec:
   description: {{ .Values.description | default (printf "OpenChoreo project %s" $p) | quote }}
+{{- with .Values.sourceIntegrity }}{{ if .enabled }}
+  # Git commit signature policy (Argo CD 3.5+ sourceIntegrity; replaces deprecated signatureKeys). docs/supply-chain.md
+  sourceIntegrity:
+    git:
+      policies:
+        - repos:
+            {{- range .repos }}
+            - url: {{ tpl . $ | quote }}
+            {{- end }}
+          gpg:
+            mode: {{ .mode }}
+            keys: {{ required "sourceIntegrity.keys must list GnuPG key IDs" .keys | toJson }}
+{{- end }}{{ end }}
   sourceRepos:
     {{- $repos := list }}
     {{- range $apps }}{{ $repos = append $repos .repoURL }}{{ end }}
