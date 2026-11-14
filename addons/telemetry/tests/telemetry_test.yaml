@@ -1,0 +1,76 @@
+suite: telemetry glue and guards
+templates:
+  - templates/env.yaml
+  - templates/secrets.yaml
+  - templates/validate.yaml
+  - templates/prometheus-agent-token.yaml
+set:
+  cluster.name: dev1
+tests:
+  - it: derives the collector endpoints and the cluster name from cluster/installation values
+    template: templates/env.yaml
+    asserts:
+      - equal: { path: metadata.name, value: telemetry-env }
+      - equal: { path: data.CLUSTER_NAME, value: dev1 }
+      - equal: { path: data.OBS_OTLP_ENDPOINT, value: "http://opentelemetry.observability.openchoreo.localhost:11080" }
+      - equal: { path: data.OBS_REMOTE_WRITE_URL, value: "http://prometheus.observability.openchoreo.localhost:11080/api/v1/write" }
+
+  - it: follows the installation host and port
+    template: templates/env.yaml
+    set:
+      openchoreo.controlPlane.host: oc.example.com
+      openchoreo.observability.httpPort: 443
+    asserts:
+      - equal: { path: data.OBS_OTLP_ENDPOINT, value: "http://opentelemetry.observability.oc.example.com:443" }
+
+  - it: OpenSearch credentials from the workload store `default`; no Datadog secret by default
+    template: templates/secrets.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: default } }
+      - equal: { path: spec.target.name, value: opensearch-admin-credentials }
+
+  - it: Datadog API key from store key `datadog` when enabled
+    template: templates/secrets.yaml
+    set:
+      datadog.enabled: true
+    documentIndex: 1
+    asserts:
+      - equal: { path: metadata.name, value: telemetry-datadog }
+      - equal:
+          path: spec.data
+          value: [{ secretKey: DD_API_KEY, remoteRef: { key: datadog, property: api-key } }]
+
+  - it: agent token Secret is bound to the metrics module's agent ServiceAccount
+    template: templates/prometheus-agent-token.yaml
+    asserts:
+      - equal: { path: type, value: kubernetes.io/service-account-token }
+      - equal:
+          path: metadata.annotations["kubernetes.io/service-account.name"]
+          value: openchoreo-prometheus-agent
+
+  - it: defaults are consistent with the installation
+    template: templates/validate.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails when Fluent Bit's OpenSearch port drifts
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.tlsPort: 443
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when the remote-write URL drifts from the installation host
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.host: oc.example.com
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when observability is disabled
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.enabled: false
+    asserts:
+      - failedTemplate: {}

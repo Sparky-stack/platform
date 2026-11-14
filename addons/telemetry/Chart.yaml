@@ -1,0 +1,19 @@
+apiVersion: v2
+name: telemetry
+description: Data-plane telemetry on workload clusters - Fluent Bit logs, Prometheus agent metrics, k8s events and an OpenTelemetry Collector fan-out point, shipping to the OpenChoreo observability plane on mgmt (and optionally Datadog)
+type: application
+version: 0.1.0
+dependencies:
+  - name: opentelemetry-collector
+    version: 0.178.3
+    repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  - name: observability-logs-opensearch
+    version: 0.7.0
+    repository: oci://ghcr.io/openchoreo/helm-charts
+  - name: observability-metrics-prometheus
+    version: 0.8.0
+    repository: oci://ghcr.io/openchoreo/helm-charts
+  - name: observability-events-otel-collector
+    version: 0.1.2
+    repository: oci://ghcr.io/openchoreo/helm-charts
+    condition: observability-events-otel-collector.enabled
