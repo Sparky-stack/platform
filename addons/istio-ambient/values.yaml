@@ -1,0 +1,43 @@
+# Istio 1.30.6 Ambient mesh (catalog: namespace istio-system, roles [workload], wave "-3").
+# Deploys after Cilium (wave -15) and Gateway API CRDs (wave -6); sidecar-free mTLS via ztunnel + istio-cni.
+# Ingress Gateway API (GatewayClass kgateway) stays on kgateway; Istio handles ambient mesh & optional waypoints.
+
+global:
+  # Sets istio-cni paths to /var/lib/rancher/k3s/agent/etc/cni/net.d and /var/lib/rancher/k3s/data/cni.
+  platform: k3s
+  istioNamespace: istio-system
+  # base already renders istio-reader-service-account + istio-reader-clusterrole-istio-system;
+  # omit the duplicate ClusterRole/Binding in istiod so Argo CD tracks every resource uniquely.
+  omitDefaultServiceAccountImporter: true
+
+base: {}
+
+istiod:
+  profile: ambient
+  pilot:
+    autoscaleEnabled: false
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+
+cni:
+  profile: ambient
+  cni:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+
+ztunnel:
+  profile: ambient
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

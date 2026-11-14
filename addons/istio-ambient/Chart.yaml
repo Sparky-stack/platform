@@ -1,0 +1,20 @@
+apiVersion: v2
+name: istio-ambient
+description: Istio Ambient mesh (base + istiod + cni + ztunnel) for k3s workload clusters with Cilium CNI
+type: application
+version: 0.1.0
+# Pinned to 1.30.6 (supports Kubernetes 1.32-1.35; 1.31.4/1.32.0 ship duplicate inferencepools CRD in base).
+appVersion: "1.30.6"
+dependencies:
+  - name: base
+    version: 1.30.6
+    repository: https://istio-release.storage.googleapis.com/charts
+  - name: istiod
+    version: 1.30.6
+    repository: https://istio-release.storage.googleapis.com/charts
+  - name: cni
+    version: 1.30.6
+    repository: https://istio-release.storage.googleapis.com/charts
+  - name: ztunnel
+    version: 1.30.6
+    repository: https://istio-release.storage.googleapis.com/charts

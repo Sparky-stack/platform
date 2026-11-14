@@ -1,0 +1,93 @@
+suite: istio-ambient - base CRDs + istiod + k3s istio-cni + ztunnel
+release:
+  name: istio-ambient
+  namespace: istio-system
+tests:
+  - it: renders base CRDs, istiod, istio-cni-node, and ztunnel in istio-system
+    asserts:
+      - containsDocument:
+          kind: CustomResourceDefinition
+          apiVersion: apiextensions.k8s.io/v1
+          name: peerauthentications.security.istio.io
+      - containsDocument:
+          kind: CustomResourceDefinition
+          apiVersion: apiextensions.k8s.io/v1
+          name: authorizationpolicies.security.istio.io
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: istiod
+          namespace: istio-system
+      - containsDocument:
+          kind: DaemonSet
+          apiVersion: apps/v1
+          name: istio-cni-node
+          namespace: istio-system
+      - containsDocument:
+          kind: DaemonSet
+          apiVersion: apps/v1
+          name: ztunnel
+          namespace: istio-system
+
+  - it: enables ambient mode in istiod and istio-cni with k3s CNI paths and IPv4-only
+    template: charts/cni/templates/configmap-cni.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: data.AMBIENT_ENABLED
+          value: "true"
+      - equal:
+          path: data.AMBIENT_IPV6_ENABLED
+          value: "false"
+      - equal:
+          path: data.CNI_NET_DIR
+          value: /var/lib/rancher/k3s/agent/etc/cni/net.d
+
+  - it: mounts k3s CNI bin and conf dirs in istio-cni-node
+    template: charts/cni/templates/daemonset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-bin-dir
+            hostPath:
+              path: /var/lib/rancher/k3s/data/cni
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-net-dir
+            hostPath:
+              path: /var/lib/rancher/k3s/agent/etc/cni/net.d
+
+  - it: configures istiod with ambient env vars and lightweight requests
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PILOT_ENABLE_AMBIENT
+            value: "true"
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 128Mi
+
+  - it: omits duplicate istio-reader ClusterRole/Binding from istiod (kept in base)
+    template: charts/istiod/templates/reader-clusterrole.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: tolerates extra top-level installation.yaml keys
+    set:
+      installation:
+        name: aws-example
+      capi:
+        providers:
+          aws: true
+    asserts:
+      - containsDocument:
+          kind: DaemonSet
+          apiVersion: apps/v1
+          name: ztunnel
+          namespace: istio-system
