@@ -61,7 +61,8 @@ charts/cluster/                 one workload cluster: templates/capi-*.yaml, arg
 addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture.md, conventions.md, runbooks
-hack/                           tests and helper scripts (make test)
+hack/                           tests and helper scripts (task test); hack/lib/portable.sh
+mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
 ```
 
 ## Working rules
@@ -69,4 +70,8 @@ hack/                           tests and helper scripts (make test)
   deploy there.
 - `make test` must pass before pushing: helm lint + template every chart with every installation, kubeconform with CRD
   schemas, helm-unittest where present.
+- Tooling is OS/arch-agnostic (docs/dev-environment.md): tools only via `mise.toml` (aqua backends, `task tools:lock`
+  after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step), scripts bash 3.2 + GNU/BSD/MSYS
+  portable (use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty arrays). New images must be
+  multi-arch: `task images:audit`.
 - Conventional commits (`feat(cluster): …`). `grep -rn VERIFY` lists values inferred but not yet confirmed live.
