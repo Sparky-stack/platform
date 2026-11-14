@@ -60,13 +60,22 @@ agentServerCA:
 #     opensearch-username   must be `admin` (OpenSearch demo security config user)
 #     opensearch-password   >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
 #     observer-client-secret  == Thunder client openchoreo-observer-resource-reader-client's secret
+#   key `openchoreo-ai` (only read when rca.enabled or finOpsAgent.enabled is true; docs/ai-agents.md):
+#     rca-llm-api-key            LLM key (or placeholder when routed through agentgateway)
+#     rca-oauth-client-secret    == Thunder client openchoreo-rca-agent's secret
+#     finops-llm-api-key         LLM key (or placeholder when routed through agentgateway)
+#     finops-oauth-client-secret == Thunder client openchoreo-finops-agent's secret
 secrets:
   store: platform
   remoteKey: openchoreo-observability
+  aiRemoteKey: openchoreo-ai
 
 openchoreo-observability-plane:
   observer:
     secretName: observer-secret             # templates/secrets.yaml (UID_RESOLVER_OAUTH_CLIENT_SECRET)
+    # finOpsAdapter:                        # uncomment with finOpsAgent + observability-finops-opencost
+    #   url: "http://finops-adapter:9101"
+    #   timeout: "30s"
     controlPlaneApiUrl: "http://api.openchoreo.localhost:8080"
     cors:
       allowedOrigins:
@@ -124,10 +133,40 @@ openchoreo-observability-plane:
   tls:
     enabled: false
 
+  # --- AI agents (all disabled by default; see docs/ai-agents.md) --------------------------------------------------
+  # Enable only after seeding ClusterSecretStore `platform` key `openchoreo-ai`, enabling Thunder clients (53/60),
+  # enabling openchoreo-control-plane authz bindings (rca-agent-binding / finops-agent-binding), and deploying
+  # ai-gateway-agentgateway (or pointing apiBase/llmBaseUrl at an external OpenAI-compatible endpoint).
   rca:
-    enabled: false                           # platform: needs an LLM endpoint + Thunder client openchoreo-rca-agent
+    enabled: false                           # platform: needs LLM endpoint + Thunder client openchoreo-rca-agent
+    # name: rca-agent
+    # llm:
+    #   modelName: "openai/gpt-4o"           # e.g. openai/gpt-4o, anthropic/claude-3-5-sonnet, gemini/gemini-2.0-flash
+    #   apiBase: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
+    #   auth: "api_key"
+    # oauthClientId: "openchoreo-rca-agent"
+    # controlPlaneApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+    # mcp:
+    #   openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080/mcp"
+    #   observerUrl: "http://observer:8080/mcp"
+    # secret:
+    #   create: false                      # templates/secrets.yaml creates rca-agent-secret via ESO (key openchoreo-ai)
   finOpsAgent:
-    enabled: false                           # platform: needs OpenCost + LLM
+    enabled: false                           # platform: needs OpenCost + LLM + Thunder client openchoreo-finops-agent
+    # llmProvider: "openai"                # openai | anthropic | gemini
+    # llmModelName: "gpt-4o"
+    # llmBaseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
+    # llmAuth: "api_key"
+    # oauthClientId: "openchoreo-finops-agent"
+    # controlPlaneApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
+    # prometheus:
+    #   host: "prometheus-operated"
+    #   port: 9090
+    # opencost:
+    #   host: "openchoreo-observability-plane-observability-finops-opencost"
+    #   port: 9003
+    # secret:
+    #   create: false                      # templates/secrets.yaml creates finops-agent-secret via ESO (key openchoreo-ai)
 
 # --- logs: OpenSearch single node (shared with traces and k8s events) + logs-adapter --------------------------------
 observability-logs-opensearch:
@@ -237,3 +276,27 @@ observability-metrics-prometheus:
     resources:
       requests: { cpu: 10m, memory: 48Mi }
       limits: { cpu: 100m, memory: 128Mi }
+
+# --- finops: OpenCost + finops-adapter (disabled by default; uncomment dependency in Chart.yaml too) ---------------
+# observability-finops-opencost:
+#   enabled: true
+#   opencost:
+#     exporter:
+#       defaultClusterId: "cluster-default"
+#     prometheus:
+#       internal:
+#         enabled: true
+#         serviceName: "prometheus-operated"
+#         port: 9090
+#         namespaceName: "openchoreo-observability-plane"
+#     ui:
+#       enabled: false
+#   finopsAdapter:
+#     enabled: true
+#     name: finops-adapter
+#     service:
+#       type: ClusterIP
+#       port: 9101
+#     resources:
+#       requests: { cpu: 20m, memory: 50Mi }
+#       limits: { cpu: 50m, memory: 70Mi }
