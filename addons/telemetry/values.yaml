@@ -81,8 +81,8 @@ opentelemetry-collector:
     - secretRef:
         name: telemetry-datadog        # DD_API_KEY, only with datadog.enabled
         optional: true
-  resources:
-    requests: { cpu: 20m, memory: 96Mi }
+  resources:                           # memory_limiter keeps it under 80% of the limit
+    requests: { cpu: 20m, memory: 64Mi }
     limits: { cpu: 500m, memory: 256Mi }
   # Full collector config (alternateConfig: not merged with the chart defaults, which bring jaeger/zipkin/self-scrape
   # receivers that a parent chart cannot null out). Component names as of collector 0.163 (k8s_attributes, otlp_http).

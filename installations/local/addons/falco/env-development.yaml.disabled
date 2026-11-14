@@ -20,7 +20,7 @@ falco-talon:
       # - action: Platform isolate pod      # deny all ingress/egress except DNS for the labelled pod
       #   actionner: kubernetes:networkpolicy
       #   parameters:
-      #     allow_cidr: []
+      #     allow_cidr: []                # VERIFY kubernetes:networkpolicy parameters
 
       - rule: Crypto miner in app namespace
         description: Label and kill the pod (its controller recreates it; repeated hits stay visible in OpenSearch).

@@ -53,7 +53,7 @@ agentServerCA:
   enabled: true
   store: mgmt-openchoreo
   sourceSecret: cluster-gateway-ca
-  configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap
+  configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap. VERIFY ESO generic target
 
 # Secrets from ClusterSecretStore `platform` (never committed; seeded by `make secrets` locally):
 #   key `openchoreo-observability`, properties:
@@ -97,7 +97,7 @@ openchoreo-observability-plane:
       authServerBaseUrl: "http://thunder.openchoreo.localhost:8080"
 
   gateway:
-    httpPort: 11080
+    httpPort: 11080                          # VERIFY klipper binds 11080/11085 next to the control plane's 8080/8443
     httpsPort: 11085
     tls:
       enabled: false
@@ -108,7 +108,7 @@ openchoreo-observability-plane:
 
   # platform: co-located with the control plane -> in-cluster cluster-gateway URL (upstream default), no TLSRoute hop.
   clusterAgent:
-    serverUrl: wss://cluster-gateway.openchoreo-control-plane.svc.cluster.local:8443/ws
+    serverUrl: wss://cluster-gateway.openchoreo-control-plane.svc.cluster.local:8443/ws   # VERIFY Service port 8443
     planeID: default
     resources:                               # upstream requests 50m/128Mi
       requests: { cpu: 10m, memory: 64Mi }

@@ -54,7 +54,7 @@ falco:
         podman:
           enabled: false
     kubernetes:
-      enabled: false             # k8smeta collector off: the container plugin already adds k8s.ns.name / k8s.pod.name
+      enabled: false             # VERIFY container plugin fills k8s.* via the k3s CRI socket. k8smeta collector off: the container plugin already adds k8s.ns.name / k8s.pod.name
   falco:
     json_output: true
     json_include_output_property: true
@@ -191,7 +191,7 @@ falco-talon:
     leases: [get, create, update, patch, watch]
   config:
     defaultNotifiers: [k8sevents]
-    # Appended to the chart's rules.yaml. Per-environment dry run: override this whole value with `dry_run: true` on
+    # Appended to the chart's rules.yaml. VERIFY Talon 0.3 rule field `dry_run`. Per-environment dry run: override this whole value with `dry_run: true` on
     # the rules (installations/<inst>/addons/falco/env-<env>.yaml; example: installations/local/addons/falco/).
     rulesOverride: |
       - action: Platform label suspicious
@@ -210,7 +210,7 @@ falco-talon:
       # - action: Platform isolate pod      # deny all ingress/egress except DNS for the labelled pod
       #   actionner: kubernetes:networkpolicy
       #   parameters:
-      #     allow_cidr: []
+      #     allow_cidr: []                # VERIFY kubernetes:networkpolicy parameters
 
       - rule: Crypto miner in app namespace
         description: Label and kill the pod (its controller recreates it; repeated hits stay visible in OpenSearch).
