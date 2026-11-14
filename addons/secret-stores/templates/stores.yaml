@@ -1,3 +1,15 @@
+{{- /*
+ClusterSecretStore `platform` holds every platform credential (GitHub read + write Apps, GHCR, cloud, OpenChoreo):
+only the mgmt namespaces in platformStore.namespaces may reference it. hack/tests/test_secret_store_scope.sh checks
+that every rendered ExternalSecret using it is in that list.
+*/ -}}
+{{- define "secret-stores.platformConditions" -}}
+{{- $ns := .Values.platformStore.namespaces | default list -}}
+{{- if not $ns }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
+conditions:
+  - namespaces:
+      {{- toYaml $ns | nindent 6 }}
+{{- end -}}
 {{- $backend := .Values.secrets.backend | default "kubernetes" -}}
 {{- if eq .Values.role "mgmt" -}}
 {{- if eq $backend "kubernetes" -}}
@@ -37,6 +49,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     kubernetes:
       remoteNamespace: {{ $platformNs | quote }}
@@ -67,6 +80,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     aws:
       service: SecretsManager
@@ -91,6 +105,7 @@ kind: ClusterSecretStore
 metadata:
   name: platform
 spec:
+  {{- include "secret-stores.platformConditions" . | nindent 2 }}
   provider:
     vault:
       server: {{ .Values.secrets.vault.server | quote }}
