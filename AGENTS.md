@@ -31,7 +31,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `platform.koorikla.io/region` | free text (`local`, `eu-central-1`, `fsn1`) |
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster |
+| `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 ## Names
@@ -59,7 +60,7 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 bootstrap/                      k3d config, bootstrap.sh (make up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
-addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml)
+addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture.md, conventions.md, runbooks
 hack/                           tests and helper scripts (make test)

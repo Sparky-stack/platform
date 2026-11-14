@@ -79,12 +79,16 @@ Removing the file deletes the cluster (Argo prune → CAPI delete) and all its r
 addons/<addon>/values.yaml                                   chart defaults (all clusters)
 addons/<addon>/values/role-<role>.yaml                       mgmt vs workload
 addons/<addon>/values/provider-<provider>.yaml               docker vs aws vs hetzner
+addons/<addon>/values/cni-<cni>.yaml                         cilium vs flannel (label platform.koorikla.io/cni)
 installations/<inst>/addons/<addon>/values.yaml              this installation
 installations/<inst>/addons/<addon>/env-<environment>.yaml   this environment
 installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (identity / exceptions only)
 ```
 
-plus generated `cluster.*` values (name, role, provider, region, environment) and `installation.*` values.
+plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
+Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
+`installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md).
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (from the fleet
 file, default `HEAD`) is the `targetRevision` of that cluster's addon Applications. Prod can follow a tag while dev

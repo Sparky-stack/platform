@@ -16,11 +16,39 @@ template:
       healthCheckProtocol: TCP  # VERIFY ELB type (CAPA default classic) on the first AWS boot
     network:
       cni:
-        cniIngressRules:        # replaces CAPA's Calico defaults: k3s ships flannel (VXLAN)
-          - description: flannel vxlan
-            protocol: udp
-            fromPort: 8472
-            toPort: 8472
+        # Node-to-node rules replacing CAPA's Calico defaults. Base = cni: cilium; patch cni-flannel swaps them.
+        cniIngressRules:
+          {{- include "k3s-aws.cniIngressRules.cilium" . | nindent 10 }}
+{{- end }}
+
+{{- define "k3s-aws.cniIngressRules.cilium" -}}
+- description: cilium vxlan
+  protocol: udp
+  fromPort: 8472
+  toPort: 8472
+- description: cilium wireguard
+  protocol: udp
+  fromPort: 51871
+  toPort: 51871
+- description: cilium health
+  protocol: tcp
+  fromPort: 4240
+  toPort: 4240
+- description: cilium health icmp
+  protocol: icmp
+  fromPort: -1
+  toPort: -1
+- description: hubble peer (relay to agents)
+  protocol: tcp
+  fromPort: 4244
+  toPort: 4244
+{{- end }}
+
+{{- define "k3s-aws.cniIngressRules.flannel" -}}
+- description: flannel vxlan
+  protocol: udp
+  fromPort: 8472
+  toPort: 8472
 {{- end }}
 
 {{- define "k3s-aws.machine" -}}
@@ -41,6 +69,8 @@ template:
 template:
   spec:
     kthreesConfigSpec:
+      files:
+        {{- include "clusterclasses.cniFile" . | nindent 8 }}
       serverConfig:
         disableComponents: {{ toJson .Values.k3s.cloudDisableComponents }}
         cloudProviderName: external
@@ -201,7 +231,7 @@ spec:
             matchResources:
               controlPlane: true
           jsonPatches:
-            {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" false) | nindent 12 }}
+            {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" true) | nindent 12 }}
         - selector:
             apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
             kind: KThreesConfigTemplate
@@ -210,6 +240,20 @@ spec:
                 names: [default-worker]
           jsonPatches:
             {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
+    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
+    - name: cni-flannel-security-groups
+      enabledIf: {{`'{{ if eq .cni "flannel" }}true{{ end }}'`}}
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+            kind: AWSClusterTemplate
+            matchResources:
+              infrastructureCluster: true
+          jsonPatches:
+            - op: replace
+              path: /spec/template/spec/network/cni/cniIngressRules
+              value:
+                {{- include "k3s-aws.cniIngressRules.flannel" . | nindent 16 }}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSClusterTemplate

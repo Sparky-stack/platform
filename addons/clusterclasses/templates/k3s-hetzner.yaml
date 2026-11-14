@@ -5,8 +5,10 @@ Node identity: kubelet --cloud-provider=external, k3s' embedded CCM off. The hcl
 the Machine) and sets providerID hcloud://<server-id>, addresses, removes the uninitialized taint, provides LBs. It
 reads kube-system/hcloud, which CAPH itself writes into every workload cluster (reconcileWorkloadClusterSecrets:
 keys token, network, from hetznerSecretRef) - no extra secret plumbing.
-Pod network: k3s flannel with the wireguard-native backend (encrypted node-to-node over public IPs, UDP 51820), so
-the CCM route controller stays off (hcloud-ccm networking.enabled=false). VERIFY on the first Hetzner boot.
+Pod network (variable cni): cilium (default) = Cilium VXLAN overlay + Cilium WireGuard (UDP 8472/51871); flannel =
+k3s flannel with the wireguard-native backend (UDP 51820). Both encrypt node-to-node traffic themselves and need no
+hcloud network routes, so the CCM route controller stays off (hcloud-ccm networking.enabled=false). CAPH creates no
+firewall, so no port rules are needed. VERIFY on the first Hetzner boot.
 */ -}}
 
 {{- define "k3s-hetzner.cluster" -}}
@@ -49,16 +51,12 @@ template:
         cloudProviderName: external
         disableCloudController: true
       files:
-        - path: /etc/rancher/k3s/config.yaml.d/10-platform.yaml
-          owner: root:root
-          permissions: "0600"
-          content: |
-            flannel-backend: wireguard-native
+        {{- include "clusterclasses.cniFile" . | nindent 8 }}
 {{- end }}
 
 {{- define "k3s-hetzner.worker" -}}
 template:
-  spec: {}   # agents follow the servers' flannel backend; kubelet --cloud-provider=external is the provider default
+  spec: {}   # agents follow the servers' CNI settings; kubelet --cloud-provider=external is the provider default
 {{- end }}
 
 {{- if .Values.capi.providers.hetzner }}
@@ -236,6 +234,7 @@ spec:
                 names: [default-worker]
           jsonPatches:
             {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
+    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: wireguard-native" | nindent 4 }}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: HetznerClusterTemplate

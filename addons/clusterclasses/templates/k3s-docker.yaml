@@ -15,6 +15,8 @@ template:
 template:
   spec:
     kthreesConfigSpec:
+      files:
+        {{- include "clusterclasses.cniFile" . | nindent 8 }}
       preK3sCommands:
         # CAPD execs the bootstrap as soon as systemd is up, while kindest/node's entrypoint may still be fixing DNS.
         # The install is `curl get.k3s.io | sh` (exit status = sh's), so a failed download would "succeed" without k3s.
@@ -112,7 +114,7 @@ spec:
             matchResources:
               controlPlane: true
           jsonPatches:
-            {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" false) | nindent 12 }}
+            {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" true) | nindent 12 }}
         - selector:
             apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
             kind: KThreesConfigTemplate
@@ -121,6 +123,7 @@ spec:
                 names: [default-worker]
           jsonPatches:
             {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
+    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerClusterTemplate
