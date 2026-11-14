@@ -1,0 +1,9 @@
+apiVersion: v2
+name: obi
+description: OpenTelemetry eBPF Instrumentation (OBI) - zero-code L7 RED metrics and traces for OpenChoreo app namespaces, exporting OTLP to the node-local telemetry collector (opt-in)
+type: application
+version: 0.1.0
+dependencies:
+  - name: opentelemetry-ebpf-instrumentation
+    version: 0.16.1
+    repository: https://open-telemetry.github.io/opentelemetry-helm-charts

@@ -1,0 +1,38 @@
+# Datadog fan-out for every workload cluster of this installation (addon telemetry). Enable: rename this file to
+# values.yaml (or copy it to env-<environment>.yaml / cluster-<name>.yaml for a subset). docs/observability.md "Datadog".
+# Secret: key `datadog`, property `api-key` in the backend behind ClusterSecretStore `default` on the workload clusters
+# (locally: `platform-secrets` on mgmt, seeded by `make secrets` when DATADOG_API_KEY is set). Never commit the key.
+# The OpenChoreo observability plane keeps receiving everything; Datadog gets a copy.
+datadog:
+  enabled: true                     # renders ExternalSecret telemetry-datadog -> env DD_API_KEY in the collector
+
+opentelemetry-collector:
+  alternateConfig:                  # merged into the addon's alternateConfig; pipeline lists are replaced as a whole
+    connectors:
+      datadog/connector: {}         # APM stats (trace-derived RED metrics) for Datadog APM
+    exporters:
+      datadog:
+        api:
+          key: "${env:DD_API_KEY}"
+          site: datadoghq.eu        # your Datadog site
+        host_metadata:
+          hostname_source: first_resource   # k8s.node.name from k8s_attributes, not the collector pod
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8s_attributes, resource/cluster, batch]
+          exporters: [otlp_http/observability, datadog/connector, datadog]
+        metrics:
+          receivers: [otlp, datadog/connector]
+          processors: [memory_limiter, k8s_attributes, resource/cluster, batch]
+          exporters: [prometheusremotewrite/observability, datadog]
+        logs:                       # falcosidekick alerts + OTLP app logs
+          receivers: [otlp, webhookevent/falco]
+          processors: [memory_limiter, k8s_attributes, resource/cluster, batch]
+          exporters: [datadog]
+  # Container stdout logs and node/pod infra metrics to Datadog too (OpenSearch keeps getting logs from Fluent Bit):
+  # presets add the file_log / kubeletstats receivers to the logs / metrics pipelines and the host mounts.
+  # presets:
+  #   logsCollection: { enabled: true }
+  #   kubeletMetrics: { enabled: true }

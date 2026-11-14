@@ -2,3 +2,8 @@
 # control-plane Gateway Service; its port 8080 == the Gateway's http listener == the k3d published port.
 rewrite:
   target: gateway-default.openchoreo-control-plane.svc.cluster.local
+
+# Observability plane hosts (observer.<host>, *.observability.<host>) -> the obs-plane Gateway Service (ports 11080/11085
+# == listeners == published ports), so the observer URL and ingest URLs are identical for pods and browsers.
+observabilityRewrite:
+  target: gateway-default.openchoreo-observability-plane.svc.cluster.local

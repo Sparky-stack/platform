@@ -1,0 +1,89 @@
+suite: openchoreo-observability-plane glue and guards
+templates:
+  - templates/validate.yaml
+  - templates/cluster-observability-plane.yaml
+  - templates/agent-server-ca.yaml
+  - templates/secrets.yaml
+  - templates/opensearch-tlsroute.yaml
+tests:
+  - it: registers ClusterObservabilityPlane default trusting the in-namespace agent cert
+    template: templates/cluster-observability-plane.yaml
+    asserts:
+      - isKind: { of: ClusterObservabilityPlane }
+      - equal: { path: metadata.name, value: default }
+      - isNull: { path: metadata.namespace }
+      - equal: { path: spec.planeID, value: default }
+      - equal: { path: spec.observerURL, value: "http://observer.openchoreo.localhost:11080" }
+      - equal:
+          path: spec.clusterAgent.clientCA.secretKeyRef
+          value: { name: cluster-agent-tls, namespace: NAMESPACE, key: ca.crt }
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: SkipDryRunOnMissingResource=true
+
+  - it: agent server CA is a ConfigMap with the gateway CA public cert only
+    template: templates/agent-server-ca.yaml
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-openchoreo } }
+      - equal: { path: spec.target.manifest, value: { apiVersion: v1, kind: ConfigMap } }
+      - equal: { path: spec.target.name, value: cluster-gateway-ca }
+      - equal:
+          path: spec.data
+          value: [{ secretKey: ca.crt, remoteRef: { key: cluster-gateway-ca, property: ca.crt } }]
+
+  - it: secrets come from the platform store
+    template: templates/secrets.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: metadata.name, value: observer-secret }
+        documentIndex: 0
+      - equal: { path: metadata.name, value: opensearch-admin-credentials }
+        documentIndex: 1
+      - contains:
+          path: spec.data
+          content: { secretKey: password, remoteRef: { key: openchoreo-observability, property: opensearch-password } }
+        documentIndex: 1
+
+  - it: OpenSearch TLS passthrough route on the tls listener
+    template: templates/opensearch-tlsroute.yaml
+    asserts:
+      - isKind: { of: TLSRoute }
+      - equal: { path: spec.hostnames, value: [opensearch.observability.openchoreo.localhost] }
+      - equal: { path: "spec.parentRefs[0].sectionName", value: tls }
+      - equal: { path: "spec.rules[0].backendRefs[0].name", value: opensearch }
+
+  - it: fails when observability is disabled in the installation
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.enabled: false
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when the observer host drifts from the installation host
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.host: oc.example.com
+    asserts:
+      - failedTemplate:
+          errorMessage: "openchoreo-observability-plane.observer.http.hostnames must contain observer.oc.example.com"
+
+  - it: fails when the Gateway port drifts from the installation
+    template: templates/validate.yaml
+    set:
+      openchoreo.observability.httpPort: 80
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when a control-plane CA secret would be copied
+    template: templates/validate.yaml
+    set:
+      openchoreo-observability-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca
+    asserts:
+      - failedTemplate: {}
+
+  - it: defaults render cleanly
+    template: templates/validate.yaml
+    asserts:
+      - hasDocuments: { count: 0 }

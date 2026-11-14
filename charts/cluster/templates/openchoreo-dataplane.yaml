@@ -3,6 +3,8 @@ OpenChoreo registration of this cluster in the control plane (mgmt):
   ClusterDataPlane <name>  planeID <name>; trusts only fleet/<name>-agent-ca; app ingress = Gateway gateway-default of
                            the data plane (addon openchoreo-data-plane) at gatewayHost:gatewayPort; secrets via the
                            workload cluster's ClusterSecretStore `default`.
+                           With installation.yaml openchoreo.observability.enabled: observabilityPlaneRef ->
+                           ClusterObservabilityPlane `default` (addon openchoreo-observability-plane on mgmt).
   Environment <env>        one per openchoreo.dataPlane.environments, in the org namespace, bound to this
                            ClusterDataPlane. dataPlaneRef is immutable: moving an environment to another cluster =
                            remove it here, sync, add it there. An environment must appear in exactly one cluster file.
@@ -31,6 +33,11 @@ spec:
         key: ca.crt
   secretStoreRef:
     name: default
+  {{- if dig "observability" "enabled" false (.Values.openchoreo | default dict) }}
+  observabilityPlaneRef:
+    kind: ClusterObservabilityPlane
+    name: {{ dig "observability" "planeName" "default" .Values.openchoreo }}
+  {{- end }}
   gateway:
     ingress:
       external:

@@ -1,0 +1,56 @@
+# OBI (OpenTelemetry eBPF Instrumentation, v1.0.0) on workload clusters: opt-in (catalog default false; enable per
+# cluster with label addons.platform.koorikla.io/obi: "true", i.e. cluster file `addons: { obi: true }`).
+# Privileged DaemonSet (hostPID, hostNetwork, eBPF). Instruments processes in OpenChoreo app namespaces (dp-*: the
+# namespaces ProjectReleaseBindings create on data planes) and exports OTLP to the node-local OpenTelemetry Collector
+# of addon telemetry through its hostPorts (${HOST_IP}:4317 traces, :4318 metrics); the collector adds k8s/OpenChoreo
+# attributes and fans out (obs plane, Datadog overlay). Needs addon telemetry on the same cluster.
+#
+# Overlap policy (docs/observability.md "OBI"): when OBI is on, it is the single source of L7 RED metrics/traces —
+# keep Cilium Hubble L7 metrics off and use Istio for security/traffic management, not telemetry. Processes that
+# already export OTLP themselves (SDK-instrumented apps) are skipped (rule exclude-otlp-exporters), so no duplicates.
+
+opentelemetry-ebpf-instrumentation:
+  fullnameOverride: obi
+  image:
+    registry: ghcr.io               # fully qualified (chart default)
+  preset: application
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  config:
+    data:                           # Config v2 overrides, merged over the chart's v2 defaults
+      extensions:
+        obi:
+          version: "2.0"
+          capture:
+            rules:                  # replaces the preset's rules (policy stays: default exclude, first match wins)
+              - action: exclude
+                name: exclude-obi-and-collectors
+                match:
+                  process:
+                    exe_path_glob:
+                      - '{*/obi,obi,*ebpf-instrument*,*otelcol*,*otelcol-contrib*,*fluent-bit*}'
+              - action: exclude
+                name: exclude-otlp-exporters        # SDK-instrumented apps already send their own telemetry
+                match:
+                  process:
+                    exports_otlp:
+                      port: 4317
+                      protocol: protobuf
+              - action: include
+                name: include-openchoreo-app-namespaces
+                match:
+                  process:
+                    exe_path_glob: ['*']
+                  kubernetes:
+                    namespace_glob: ['dp-*']        # OpenChoreo data-plane namespaces dp-<org>-<project>-<env>-<hash>
+      # traces: chart default (OTLP gRPC -> ${HOST_IP}:4317, the telemetry collector's hostPort)
+      meter_provider:
+        readers:                    # platform: OTLP only (no Prometheus pull endpoint on :9090)
+          - periodic:
+              interval: 60000
+              exporter:
+                otlp_http:
+                  endpoint: "http://${HOST_IP}:4318"
+                  encoding: protobuf
+                  default_histogram_aggregation: explicit_bucket_histogram

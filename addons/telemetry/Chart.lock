@@ -1,0 +1,15 @@
+dependencies:
+- name: opentelemetry-collector
+  repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  version: 0.178.3
+- name: observability-logs-opensearch
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.7.0
+- name: observability-metrics-prometheus
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.8.0
+- name: observability-events-otel-collector
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.1.2
+digest: sha256:12f0425da465bd89bb0cb070900936d7108c680b6c285c41c4a7da470e061581
+generated: "2026-11-14T10:09:19.01993315+02:00"
