@@ -1,0 +1,103 @@
+# Cilium 1.20.4 for k3s workload clusters (catalog: namespace kube-system, roles [workload], wave "-15").
+# ClusterClasses boot k3s with flannelBackend=none, disableNetworkPolicy=true, disableKubeProxy=true.
+#
+# Tolerance: extra top-level keys from installations/<inst>/installation.yaml are ignored by the subchart.
+
+cilium:
+  # Replace kube-proxy with eBPF service load-balancing.
+  # 127.0.0.1:6444 is k3s's embedded local apiserver load balancer running on every server and agent node;
+  # host-networked cilium-agent/cilium-operator pods use it without hardcoding per-cluster VIPs.
+  kubeProxyReplacement: true
+  k8sServiceHost: "127.0.0.1"
+  k8sServicePort: 6444
+
+  cni:
+    # Allow Istio ambient CNI (istio-cni-node) to coexist without Cilium deleting non-Cilium CNI configs.
+    exclusive: false
+    # k3s embedded containerd CNI directories (must match istio-cni global.platform=k3s).
+    confPath: /var/lib/rancher/k3s/agent/etc/cni/net.d
+    binPath: /var/lib/rancher/k3s/data/cni
+
+  socketLB:
+    # CRITICAL for Istio ambient: limit Cilium socket-level LB to the host netns so pod traffic still
+    # traverses pod netns redirection into ztunnel instead of bypassing the mesh.
+    hostNamespaceOnly: true
+
+  # Matches CAPI Cluster.spec.clusterNetwork.pods.cidrBlocks across CAPD/CAPA/CAPH.
+  ipam:
+    mode: cluster-pool
+    operator:
+      clusterPoolIPv4PodCIDRList:
+        - 10.244.0.0/16
+
+  routingMode: tunnel
+  tunnelProtocol: vxlan
+
+  # Transparent pod-to-pod encryption across all namespaces (including non-mesh system traffic).
+  # Override to enabled: false in installation/addon values if a host kernel lacks WireGuard.
+  encryption:
+    enabled: true
+    type: wireguard
+
+  # Gateway API is owned by kgateway (+ Istio ambient waypoints), not Cilium.
+  gatewayAPI:
+    enabled: false
+  envoy:
+    enabled: false
+
+  # Single replica fits local CAPD; prod HA overrides to 2+ via installation/addon values.
+  operator:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+
+  hubble:
+    enabled: true
+    tls:
+      enabled: true
+      auto:
+        enabled: true
+        # cronJob avoids random Helm-generated cert diffs in Argo CD and runs before cert-manager.
+        method: cronJob
+    relay:
+      enabled: true
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+    ui:
+      enabled: false
+    metrics:
+      enableOpenMetrics: true
+      enabled:
+        - dns
+        - drop
+        - tcp
+        - flow
+        - port-distribution
+        - icmp
+        - httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction
+      serviceMonitor:
+        enabled: false

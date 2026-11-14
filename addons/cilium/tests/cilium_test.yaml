@@ -1,0 +1,110 @@
+suite: cilium - k3s CNI, kube-proxy replacement, WireGuard, Istio ambient coexistence, Hubble
+release:
+  name: cilium
+  namespace: kube-system
+tests:
+  - it: configures cilium-config for k3s + kube-proxy replacement + Istio ambient coexistence
+    template: charts/cilium/templates/cilium-configmap.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: cilium-config
+      - equal:
+          path: data["kube-proxy-replacement"]
+          value: "true"
+      - equal:
+          path: data["cni-exclusive"]
+          value: "false"
+      - equal:
+          path: data["bpf-lb-sock-hostns-only"]
+          value: "true"
+      - equal:
+          path: data["enable-wireguard"]
+          value: "true"
+      - equal:
+          path: data.ipam
+          value: cluster-pool
+      - equal:
+          path: data["cluster-pool-ipv4-cidr"]
+          value: 10.244.0.0/16
+      - equal:
+          path: data["tunnel-protocol"]
+          value: vxlan
+      - equal:
+          path: data["enable-hubble"]
+          value: "true"
+      - isNull:
+          path: data["enable-gateway-api"]
+
+  - it: points cilium-agent at k3s 127.0.0.1:6444 and k3s CNI directories
+    template: charts/cilium/templates/cilium-agent/daemonset.yaml
+    asserts:
+      - isKind:
+          of: DaemonSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KUBERNETES_SERVICE_HOST
+            value: "127.0.0.1"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KUBERNETES_SERVICE_PORT
+            value: "6444"
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: etc-cni-netd
+            hostPath:
+              path: /var/lib/rancher/k3s/agent/etc/cni/net.d
+              type: DirectoryOrCreate
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-path
+            hostPath:
+              path: /var/lib/rancher/k3s/data/cni
+              type: DirectoryOrCreate
+
+  - it: enables Hubble relay + cronJob certgen (no random Helm TLS Secrets) and disables standalone envoy/UI
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: hubble-relay
+          namespace: kube-system
+      - containsDocument:
+          kind: CronJob
+          apiVersion: batch/v1
+          name: hubble-generate-certs
+          namespace: kube-system
+      - notContainsDocument:
+          kind: Secret
+          apiVersion: v1
+          name: cilium-ca
+      - notContainsDocument:
+          kind: DaemonSet
+          apiVersion: apps/v1
+          name: cilium-envoy
+      - notContainsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: hubble-ui
+
+  - it: tolerates extra top-level installation.yaml keys
+    set:
+      installation:
+        name: local
+      openchoreo:
+        namespace: acme
+      capi:
+        providers:
+          docker: true
+    asserts:
+      - containsDocument:
+          kind: DaemonSet
+          apiVersion: apps/v1
+          name: cilium
+          namespace: kube-system
