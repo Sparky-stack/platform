@@ -149,4 +149,13 @@ pss=$(yq 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Jo
   | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
 assert_eq "$pss" "" "Harbor workloads meet Pod Security baseline (no privileged/host namespaces/hostPath/hostPort/added caps)"
 
+# 10. Platform-workflow egress: the promotion gate's pod labels are exactly the selector of the workflow plane's
+#     NetworkPolicy platform-workflows-openchoreo (else the gate cannot reach the OpenChoreo API / Thunder / observer).
+gate_labels=$(yq -o=json -I=0 '.promotionGate.podLabels' "$ROOT/addons/openchoreo-platform/values.yaml")
+wp_labels=$(yq -o=json -I=0 '.runNetworkPolicy.platformWorkflows.podLabels' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")
+assert_eq "$gate_labels" "$wp_labels" "promotionGate.podLabels == runNetworkPolicy.platformWorkflows.podLabels"
+assert_eq "$(yq '.runNetworkPolicy.platformWorkflows.controlPlane.port' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")" \
+  "$(yq '.promotionGate.controlPlanePort' "$ROOT/addons/openchoreo-platform/values.yaml")" \
+  "platform-workflow egress port == promotionGate.controlPlanePort"
+
 finish

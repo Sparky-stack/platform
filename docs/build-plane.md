@@ -120,7 +120,10 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
 - **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon
   also renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor
   Gateway proxy pods (port 9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check
-  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services.
+  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services. Platform
+  workflows that must call OpenChoreo (the `promotion-gate` ClusterWorkflow, docs/promotion.md) opt in through the pod
+  label `runNetworkPolicy.platformWorkflows.podLabels`: NetworkPolicy `platform-workflows-openchoreo` adds egress to the
+  control-plane Gateway (8080: API, Thunder) and the observability Gateway (`httpPort`). Build runs never carry it.
 - Supply-chain steps (`scan-fs`, `scan-image`, `sbom`, `sign`) run with `HOME=/tmp` and `TRIVY_CACHE_DIR=/tmp/trivy`
   (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code cannot plant tool config
   (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.

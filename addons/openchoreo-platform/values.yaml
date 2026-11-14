@@ -64,6 +64,10 @@ promotion:
 # workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
 promotionGate:
   enabled: true
+  workflowPlane: default             # ClusterWorkflowPlane (addon openchoreo-workflow-plane)
+  # Pod labels of the gate pod: opt-in to the run namespace's NetworkPolicy platform-workflows-openchoreo (egress to the
+  # control-plane Gateway (API, Thunder) and the observer). == openchoreo-workflow-plane runNetworkPolicy.platformWorkflows.podLabels
+  podLabels: { platform.koorikla.io/egress: openchoreo }
   autoTrigger:
     sourceEnvironments: [staging]    # read by addon argo-events (Sensor filter); listed here for documentation
   image: docker.io/library/python:3.14.9-alpine3.23@sha256:a3d4eff2e4a3de12d9709b3e80cee788109d7292955972a83f5fff81b06c2e95

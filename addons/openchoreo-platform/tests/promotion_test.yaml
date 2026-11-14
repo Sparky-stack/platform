@@ -51,6 +51,22 @@ tests:
       - equal: { path: "spec.runTemplate.spec.templates[0].script.securityContext.readOnlyRootFilesystem", value: true }
       - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def promote\(' }
 
+  - it: the gate step gets no ServiceAccount token (executor only) and opts into the OpenChoreo egress policy
+    template: templates/promotion-gate.yaml
+    asserts:
+      - equal: { path: spec.workflowPlaneRef, value: { kind: ClusterWorkflowPlane, name: default } }
+      - equal: { path: spec.runTemplate.spec.serviceAccountName, value: workflow-sa }
+      - equal: { path: spec.runTemplate.spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.runTemplate.spec.executor.serviceAccountName, value: workflow-sa }
+      - equal: { path: spec.runTemplate.spec.podMetadata.labels, value: { platform.koorikla.io/egress: openchoreo } }
+      - notExists: { path: 'spec.runTemplate.spec.templates[?(@.automountServiceAccountToken == true)]' }
+
+  - it: requires the egress pod labels
+    template: templates/promotion-gate.yaml
+    set: { promotionGate.podLabels: null }
+    asserts:
+      - failedTemplate: { errorPattern: "promotionGate.podLabels is required" }
+
   - it: GitHub credential is the gate's own App (not Argo CD's platform-github), fetched once, mounted as files
     template: templates/promotion-gate.yaml
     asserts:

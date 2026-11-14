@@ -1,7 +1,10 @@
 {{- /*
 ClusterWorkflow promotion-gate (docs/promotion.md "Automated gate"): a generic OpenChoreo Workflow (WorkflowRun without
 a component). The run renders into the workflow plane (namespace workflows-<org namespace>, ServiceAccount workflow-sa
-injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py.
+injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Like the build
+ClusterWorkflows the step gets no ServiceAccount token (only Argo's executor does). The run namespace is default-deny
+(addon openchoreo-workflow-plane, NetworkPolicy build-runs-default-deny: DNS, public 80/443 incl. GitHub); podLabels
+opt the gate pod into NetworkPolicy platform-workflows-openchoreo (OpenChoreo API, Thunder, observer).
 Credentials: a per-run ExternalSecret against the workflow plane's ClusterSecretStore (owned by the run, deleted with
 it after ttlAfterCompletion; fetched once, never refreshed), mounted read-only as files into the one gate pod (pod
 deleted on completion). GitHub: the gate's own App (store key promotionGate.github.key); the gate mints a token for
@@ -31,6 +34,9 @@ metadata:
       Verifies a release in its source environment (pipeline path, readiness, HTTP smoke test, observer alerts and
       error rate, freeze windows) and opens the promotion pull request for the target environment's ReleaseBinding.
 spec:
+  workflowPlaneRef:
+    kind: ClusterWorkflowPlane
+    name: {{ $g.workflowPlane }}
   ttlAfterCompletion: {{ $g.ttlAfterCompletion | quote }}
   parameters:
     openAPIV3Schema:
@@ -107,6 +113,11 @@ spec:
     spec:
       entrypoint: gate
       serviceAccountName: workflow-sa
+      automountServiceAccountToken: false     # the gate talks to the OpenChoreo API only; token just for Argo's executor
+      executor:
+        serviceAccountName: workflow-sa
+      podMetadata:
+        labels: {{ toJson (required "promotionGate.podLabels is required (egress to the OpenChoreo API, Thunder, observer)" $g.podLabels) }}
       activeDeadlineSeconds: 900
       podGC:
         strategy: OnPodCompletion       # the pod that mounted the credentials goes away with the step

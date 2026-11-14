@@ -81,8 +81,18 @@ Application excludes that file.
 
 `addons/openchoreo-platform/templates/promotion-gate.yaml` runs `files/promotion-gate/gate.py` (stdlib Python, image
 pinned by digest, read-only root, non-root). It runs in the workflow plane, namespace `workflows-default`, as
-ServiceAccount `workflow-sa`. Parameters (`project`, `component`, environments, `release`) are DNS-1123 constrained;
-there is no repository parameter.
+ServiceAccount `workflow-sa`, on `ClusterWorkflowPlane default` (`promotionGate.workflowPlane`). Parameters
+(`project`, `component`, environments, `release`) are DNS-1123 constrained; there is no repository parameter.
+
+**Same run conventions as the builds** (docs/build-plane.md "Isolation"): the gate step gets no ServiceAccount token
+(`automountServiceAccountToken: false`, only Argo's executor uses `workflow-sa`; the gate talks to the OpenChoreo API
+with its Thunder token, never to the Kubernetes API). The run namespace is default-deny (NetworkPolicy
+`build-runs-default-deny` of addon openchoreo-workflow-plane: DNS, API server for the executor, public 80/443, which
+covers `api.github.com`). The gate pod carries `promotionGate.podLabels` (`platform.koorikla.io/egress: openchoreo`),
+which opts it into NetworkPolicy `platform-workflows-openchoreo`: egress to the control-plane Gateway pods (port 8080:
+`api.<host>`, `thunder.<host>`, rewritten there by coredns-local) and the observability Gateway pods
+(`openchoreo.observability.httpPort`: `observer.<host>`). Build ClusterWorkflows never set the label and their
+parameters cannot (`hack/tests/test_gitops_contracts.sh` check 10 keeps both addons' labels equal).
 
 **Credentials.** A per-run ExternalSecret against `${workflowplane.secretStore}` (store `platform`, namespace
 `workflows-default` is in `addons/secret-stores` `platformStore.namespaces`) fetches, once (`refreshInterval: "0"`):
@@ -97,8 +107,8 @@ pod is deleted when the step completes (`podGC: OnPodCompletion`), and the Secre
   `contents`, `pull_requests`, `statuses` write (GitHub caps it at 1h), and revokes it when the PR step ends.
 
 Residual: the workflow namespace is shared with tenant build runs (OpenChoreo renders every run into
-`workflows-<org namespace>`), so for the run's lifetime the App key sits in a Secret there; build pods would need
-Secret read RBAC in that namespace to see it. The App's blast radius is the app repos it is installed on.
+`workflows-<org namespace>`), so for the run's lifetime the App key sits in a Secret there; build run containers carry
+no ServiceAccount token, so tenant code would need a credential with Secret read RBAC in that namespace to see it. The App's blast radius is the app repos it is installed on.
 For one component and one edge (default staging → next environment) the gate checks, in order:
 
 1. **pipeline**: the edge exists in the project's DeploymentPipeline (closes #4884 for the automated path).
@@ -253,9 +263,10 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 - Observer `searchScope.environment` takes the environment name (not UID). VERIFY.
 - Argo Events: a single EventSource with webhook + resource types, `sha256sum` in Sensor `dataTemplate`, and resource
   event `body` shape. VERIFY.
-- Workflow-plane prerequisites (addon `openchoreo-workflow-plane`, built separately): `ClusterWorkflowPlane default`
-  on mgmt, namespace `workflows-default` with `workflow-sa` allowed to create `workflowtaskresults`, the Argo
-  controller watching all namespaces (falco-response runs in `argo-events`). VERIFY.
+- Workflow plane (addon `openchoreo-workflow-plane`, on main): `ClusterWorkflowPlane default` on mgmt, namespace
+  `workflows-default` (OpenChoreo creates `workflow-sa` and its `workflowtaskresults` Role per run namespace), the Argo
+  controller watching all namespaces (`workflowNamespaces: []`; falco-response runs in `argo-events` with its own
+  ServiceAccount, outside the build NetworkPolicy). First live gate run: VERIFY.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
   no-op when production already runs the release, otherwise it updates the same PR.
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
