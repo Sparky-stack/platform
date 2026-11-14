@@ -1,7 +1,7 @@
 # Shim for muscle memory and older docs: Taskfile.yml is the entrypoint (Make is not on Windows by default).
-# `make <target> [INST=..] [REPO=..] [CLUSTER=..]` runs `task <target>` with the same variables.
+# `make <target> [INST=..] [REPO=..] [ORG=..] [APPS_ORG=..] [DOCS=1] [CLUSTER=..]` runs `task <target>` with the same variables.
 TASK ?= $(shell command -v task 2>/dev/null || echo mise exec -- task)
-VARS := $(if $(INST),INST=$(INST)) $(if $(REPO),REPO=$(REPO)) $(if $(CLUSTER),CLUSTER=$(CLUSTER))
+VARS := $(if $(INST),INST=$(INST)) $(if $(REPO),REPO=$(REPO)) $(if $(ORG),ORG=$(ORG)) $(if $(APPS_ORG),APPS_ORG=$(APPS_ORG)) $(if $(DOCS),DOCS=$(DOCS)) $(if $(CLUSTER),CLUSTER=$(CLUSTER))
 
 .PHONY: setup doctor up secrets argocd status ui down kubeconfig set-repo lint test schemas images-audit clean
 
