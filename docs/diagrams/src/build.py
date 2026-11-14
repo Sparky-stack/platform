@@ -307,13 +307,13 @@ def delivery() -> Diagram:
     d.box(522, 120, 230, 64, "data", "GHCR", ["ghcr.io/koorikla/<app>", "sign + attest: planned"])
     d.box(522, 204, 230, 64, "data", "Harbor · apps", ["cosign: platform key", "Trivy scan on push"], planned=True)
     d.box(792, 120, 200, 148, "external", "bot commit",
-          ["deploy/openchoreo/", "workload.yaml", "image: <new tag>", "[skip ci]"])
+          ["by CI or workflow:", "deploy/openchoreo/", "workload.yaml", "image: <new tag>", "[skip ci]"])
     d.arrow([(212, 152), (252, 152)], SL)
     d.arrow([(212, 172), (232, 172), (232, 236), (252, 236)], SL, planned=True)
     d.arrow([(482, 152), (522, 152)], VI)
     d.arrow([(482, 236), (522, 236)], VI, planned=True)
-    d.arrow([(752, 152), (792, 152)], VI)
-    d.arrow([(752, 236), (792, 236)], VI, planned=True)
+    d.arrow([(367, 120), (367, 106), (892, 106), (892, 120)], SL, label="commit new image tag",
+            label_pos=(630, 110), aid="tag")
     d.arrow([(892, 268), (892, 284), (122, 284), (122, 300)], EM,
             label="Argo CD syncs deploy/openchoreo/ (tenant AppProject)", label_pos=(507, 288), aid="sync")
 

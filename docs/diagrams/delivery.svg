@@ -9,8 +9,7 @@
 <path d="M 212.0 172.0 L 232.0 172.0 L 232.0 236.0 L 252.0 236.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ah94a3b8)"/>
 <path d="M 482.0 152.0 L 522.0 152.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
 <path d="M 482.0 236.0 L 522.0 236.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
-<path d="M 752.0 152.0 L 792.0 152.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 752.0 236.0 L 792.0 236.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 367.0 120.0 L 367.0 106.0 L 892.0 106.0 L 892.0 120.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
 <path d="M 892.0 268.0 L 892.0 284.0 L 122.0 284.0 L 122.0 300.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
 <path d="M 212.0 346.0 L 252.0 346.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
 <path d="M 482.0 346.0 L 522.0 346.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
@@ -56,11 +55,12 @@
 <text x="637.0" y="257.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Trivy scan on push</text>
 <rect x="792" y="120" width="200" height="148" rx="6" fill="#0f172a"/>
 <rect x="792" y="120" width="200" height="148" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="892.0" y="164.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">bot commit</text>
-<text x="892.0" y="184.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">deploy/openchoreo/</text>
-<text x="892.0" y="199.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">workload.yaml</text>
-<text x="892.0" y="215.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">image: &lt;new tag&gt;</text>
-<text x="892.0" y="230.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">[skip ci]</text>
+<text x="892.0" y="156.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">bot commit</text>
+<text x="892.0" y="176.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">by CI or workflow:</text>
+<text x="892.0" y="191.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">deploy/openchoreo/</text>
+<text x="892.0" y="207.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">workload.yaml</text>
+<text x="892.0" y="222.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">image: &lt;new tag&gt;</text>
+<text x="892.0" y="238.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">[skip ci]</text>
 <rect x="32" y="300" width="180" height="92" rx="6" fill="#0f172a"/>
 <rect x="32" y="300" width="180" height="92" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5"/>
 <text x="122.0" y="324.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD</text>
@@ -144,6 +144,8 @@
 <text x="1104.0" y="758.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">argocd/&lt;app&gt;</text>
 <text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">Delivery · from git push to data planes</text>
 <text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">apps: CI → signed image → tag commit → Argo CD → OpenChoreo releases per environment · platform packages: gated PRs per env ring</text>
+<rect x="554.7" y="97.5" width="150.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="630.0" y="110.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#94a3b8" text-anchor="middle">commit new image tag</text>
 <rect x="317.6" y="275.5" width="378.8" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
 <text x="507.0" y="288.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#34d399" text-anchor="middle">Argo CD syncs deploy/openchoreo/ (tenant AppProject)</text>
 <rect x="898.0" y="358.5" width="93.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
