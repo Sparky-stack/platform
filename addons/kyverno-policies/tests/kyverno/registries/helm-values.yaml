@@ -1,0 +1,4 @@
+# Installation registry as in installations/local (addon openchoreo-workflow-plane / harbor), no platform key.
+registry:
+  host: harbor.openchoreo.localhost:9443
+  appsProject: apps

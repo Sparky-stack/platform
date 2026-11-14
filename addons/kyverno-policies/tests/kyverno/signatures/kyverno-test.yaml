@@ -13,7 +13,7 @@ results:
     result: pass
   - policy: openchoreo-verify-images-enforce
     kind: Pod
-    resources: [dp-default-demo-production-1/prod-tag-only]
+    resources: [dp-default-demo-production-1/prod-tag-only, dp-default-demo-production-1/prod-unsigned-init]
     result: fail
   - policy: openchoreo-verify-images-audit
     kind: Pod

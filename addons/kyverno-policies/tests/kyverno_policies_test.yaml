@@ -43,7 +43,7 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: verifies images per environment - Audit in development/staging, Deny (fail closed, digest) in production
+  - it: verifies images per environment - Audit everywhere but production (defaultAction), Deny (fail closed, digest) in production
     template: templates/image-verification.yaml
     asserts:
       - hasDocuments: { count: 4 }
@@ -59,8 +59,14 @@ tests:
           path: spec.matchConstraints.namespaceSelector
           value:
             matchLabels: { openchoreo.dev/managed-by: renderedrelease-controller }
-            matchExpressions: [{ key: openchoreo.dev/environment, operator: In, values: [development, staging] }]
+            matchExpressions: [{ key: openchoreo.dev/environment, operator: NotIn, values: [production] }]
         documentIndex: 0
+      - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [pods, pods/ephemeralcontainers] }
+        documentIndex: 2
+      - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [pods, pods/ephemeralcontainers] }
+        documentIndex: 3
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: "^!\\(request\\.namespace in " }
+        documentIndex: 3
       - equal: { path: metadata.name, value: openchoreo-verify-images-enforce }
         documentIndex: 2
       - equal: { path: spec.validationActions, value: [Deny] }
@@ -89,14 +95,18 @@ tests:
             additionalExtensions:
               githubWorkflowRepository: koorikla/hello-world
               githubWorkflowRef: refs/heads/main
+              githubWorkflowTrigger: push
       - contains: { path: spec.attestations, content: { name: sbom, intoto: { type: "https://spdx.dev/Document/v2.3" } } }
       - contains: { path: spec.attestations, content: { name: provenance, intoto: { type: "https://slsa.dev/provenance/v1" } } }
       - matchRegex: { path: "spec.validations[1].expression", pattern: 'verifyAttestationSignatures\(image, attestations\["sbom"\]' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: '^variables\.images\.filter\(' }
+      - matchRegex: { path: "spec.variables[0].expression", pattern: 'images\.initContainers.*images\.ephemeralContainers' }
 
   - it: one attestor per allowed (repository, ref); the platform key only when a public key is set
     template: templates/image-verification.yaml
     documentIndex: 2
     set:
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
       imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
       imageVerification.github.refs: [refs/heads/main, refs/tags/v1]
       imageVerification.platformKey.publicKey: |
@@ -108,15 +118,61 @@ tests:
       - equal: { path: "spec.attestors[3].name", value: gh-koorikla-other-tags-v1 }
       - equal: { path: "spec.attestors[4].name", value: platform-key }
       - equal: { path: "spec.attestors[4].cosign.ctlog", value: { insecureIgnoreTlog: true, insecureIgnoreSCT: true } }
-      - contains: { path: spec.matchImageReferences, content: { glob: "registry.openchoreo.localhost/apps/*" } }
+      - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
+      - lengthEqual: { path: spec.matchImageReferences, count: 2 }
 
-  - it: trusted prefixes come from the enabled sources
+  - it: one attestor per trigger when several triggers are allowed
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    set:
+      imageVerification.github.triggers: [push, workflow_dispatch]
+    asserts:
+      - lengthEqual: { path: spec.attestors, count: 2 }
+      - equal: { path: "spec.attestors[1].name", value: gh-koorikla-hello-world-heads-main-workflow-dispatch }
+      - equal: { path: "spec.attestors[1].cosign.keyless.additionalExtensions.githubWorkflowTrigger", value: workflow_dispatch }
+
+  - it: the platform registry is NOT trusted without a public key (unsigned in-cluster images are denied in production)
     template: templates/image-verification.yaml
     documentIndex: 3
+    set:
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
     asserts:
-      - equal:
-          path: "spec.variables[0].expression"
-          value: '["ghcr.io/koorikla/","registry.openchoreo.localhost/apps/","registry.openchoreo.localhost:"]'
+      - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/"]' }
+
+  - it: with a public key exactly <registry.host>/<appsProject>/ is trusted (host, port and project pinned)
+    template: templates/image-verification.yaml
+    documentIndex: 3
+    set:
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+    asserts:
+      - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/","harbor.openchoreo.localhost:9443/apps/"]' }
+
+  - it: a public key without installation registry.host fails rendering
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+    asserts:
+      - failedTemplate: { errorMessage: "imageVerification.platformKey.publicKey is set: installation registry.host is required (image prefix <host>/<appsProject>/)" }
+
+  - it: defaultAction "" checks only the listed environments
+    template: templates/image-verification.yaml
+    documentIndex: 0
+    set:
+      imageVerification.defaultAction: ""
+    asserts:
+      - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions", value: [{ key: openchoreo.dev/environment, operator: In, values: [development, staging] }] }
+
+  - it: defaultAction Deny with only Audit environments listed denies every other environment
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.environments: { development: Audit, staging: Audit, production: Audit }
+      imageVerification.defaultAction: Deny
+    asserts:
+      - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions", value: [{ key: openchoreo.dev/environment, operator: NotIn, values: [development, production, staging] }] }
+        documentIndex: 2
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 2
 
   - it: rejects unknown actions
     template: templates/image-verification.yaml

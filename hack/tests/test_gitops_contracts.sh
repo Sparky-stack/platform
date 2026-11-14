@@ -47,7 +47,10 @@ kyv_ns=$(yq -o=json -I=0 '.kyverno.config.webhooks.namespaceSelector.matchExpres
 kp_ns=$(yq -o=json -I=0 '.platformNamespaces' "$ROOT/addons/kyverno-policies/values.yaml")
 assert_eq "$kp_ns" "$kyv_ns" "kyverno webhook exclusions == kyverno-policies platformNamespaces"
 for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort -u); do
-  [[ "$ns" == default ]] && continue   # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
+  case "$ns" in
+    default) continue ;;       # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
+    argo-events) continue ;;   # externally reachable webhook receiver: deliberately in scope (PSS, Kyverno reports)
+  esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
 

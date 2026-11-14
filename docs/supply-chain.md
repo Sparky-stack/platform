@@ -16,26 +16,34 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 
 `addons/kyverno-policies/templates/image-verification.yaml` (Kyverno 1.20 CEL policy types only, no ClusterPolicy):
 
-- **Scope**: pods (and through Kyverno autogen, their controllers) in OpenChoreo cell namespaces, chosen by the label
-  `openchoreo.dev/environment`. `imageVerification.environments` maps environment → `Audit` | `Deny`. Platform
-  namespaces are excluded twice: Kyverno's webhook namespaceSelector and `matchConditions`.
+- **Scope**: pods (all container kinds; `pods/ephemeralcontainers`, so `kubectl debug` is checked too) and through
+  Kyverno autogen their controllers, in OpenChoreo cell namespaces chosen by the label `openchoreo.dev/environment`.
+  `imageVerification.environments` maps environment → `Audit` | `Deny`; `defaultAction` (default `Audit`) covers the
+  cell namespaces of every environment not listed, so a new environment is reported, not unchecked. Platform
+  namespaces are excluded twice: Kyverno's webhook namespaceSelector and `matchConditions` (`request.namespace`).
 - **GitHub-built images** (`github.prefixes`, default `ghcr.io/koorikla/`):
   - issuer `https://token.actions.githubusercontent.com`;
   - subject = the reusable workflow `https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1`;
-  - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`) and
-    `githubWorkflowRef` (from `github.refs`). The subject alone would accept any repository on GitHub calling the
-    public reusable workflow. Kyverno matches extensions exactly, so every allowed (repository, ref) pair renders its
-    own attestor, and the validation accepts any of them.
+  - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
+    `githubWorkflowRef` (from `github.refs`) and `githubWorkflowTrigger` (from `github.triggers`, default `push`).
+    The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
+    keeps out `pull_request_target` / `workflow_run` runs, which carry the main ref but may build untrusted PR code.
+    Kyverno matches extensions exactly, so every allowed (repository, ref, trigger) renders its own attestor, and the
+    validation accepts any of them.
   - Required signed attestations from the same identity: `https://spdx.dev/Document/v2.3` (SBOM),
     `https://slsa.dev/provenance/v1` (provenance), `https://cosign.sigstore.dev/attestation/vuln/v1` (scan).
   - Transparency log: Rekor (`github.rekorURL`).
-- **Workflow-plane images** (`platformKey.prefixes`, the registry `apps` project): cosign public key
+- **Workflow-plane images**: prefix `<registry.host>/<registry.appsProject>/` from installation.yaml (locally
+  `harbor.openchoreo.localhost:9443/apps/`; host, port and project pinned), cosign public key
   (`platformKey.publicKey`, not a secret), no tlog by default. Keyless would need an OIDC issuer that Fulcio trusts
-  (a public cluster issuer with workload identity); that is the follow-up. Until a key is configured these images
-  cannot be verified, which fails closed in production.
+  (a public cluster issuer with workload identity); that is the follow-up. **Without a public key the registry is not
+  a trusted source at all**: its images fail `openchoreo-trusted-registries-*` (denied in production, reported
+  elsewhere) instead of skipping signature verification. A key without `registry.host` fails rendering.
+  `registry.type: external` installations push builds to `registry.external.repository`: trust it through
+  `extraTrustedPrefixes` only together with a matching signature source.
 - **Digest pinning**: `requireDigest.Deny: true`. Production rejects tag-only references, development and staging only
   report them. `mutateDigest` is off on purpose: OpenChoreo's agent re-applies the rendered Deployment, and a mutated
-  digest would flap.
+  digest would flap. See "Digest references" below for what app repos must do.
 - **Trusted sources**: `openchoreo-trusted-registries-*` requires every container, init and ephemeral image to match a
   trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`).
 - **Failure policy**: production `Fail` (a Kyverno outage pauses production rollouts, never platform namespaces).
@@ -46,6 +54,12 @@ Evidence (Kyverno CLI v1.20.0 against the real image
 - `hack/tests/test_kyverno_policies.sh` with `KYVERNO_ONLINE=1`:
   - signature + SBOM + provenance + vuln attestations pass in production;
   - the tag-only reference fails in production and passes in staging.
+  - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
+    koorikla/ci's own pipeline) fails in production.
+- Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
+  and ephemeral containers are denied in production; the in-cluster registry without a platform key is denied in
+  production (`registries` suite, `prod-platform-unsigned`); with a key only `<host>:<port>/<appsProject>/` is trusted
+  (`platform-key` suite); an unlisted environment is audited (`defaultAction`).
 - Negative checks during development:
   - a wrong `githubWorkflowRepository` or `githubWorkflowRef` is rejected ("expected GithubWorkflowRepository to be
     …");
@@ -54,6 +68,19 @@ Evidence (Kyverno CLI v1.20.0 against the real image
 
 Add an app repo: append its `owner/repo` to `imageVerification.github.repositories` in
 `installations/<inst>/addons/kyverno-policies/values.yaml` (a tenant file alone does not trust its images).
+
+### Digest references (live impact of `requireDigest`)
+
+Production admits only `image@sha256:…` references. Every ComponentRelease carries the Workload's image as it was
+when the release was cut, so a tag-only Workload makes the first production promotion fail at admission (the
+RenderedRelease shows the Kyverno denial; nothing already running is touched). App repos must bump the Workload with
+the digest reference:
+
+- koorikla/ci already outputs it: `go.yaml` / `container.yaml` / `elixir.yaml` output `image_digest_ref`
+  (`<image>:<tag>@sha256:<digest>`).
+- hello-world's `bump` job still writes `needs.go.outputs.image` (tag only, `ghcr.io/koorikla/hello-world:d04ca59`).
+  Change it to `needs.go.outputs.image_digest_ref` before the first production promotion (cross-repo follow-up,
+  koorikla/hello-world `.github/workflows/ci.yaml`). Development and staging keep working meanwhile (Audit).
 
 ## Git commit signatures
 
@@ -105,6 +132,9 @@ sourceIntegrity:
 ## VERIFY
 
 - GitHub web-flow key ID `B5690EEEBB952194` (rotated January 2024; `4AEE18F83AFDEB23` before).
-- The registry host and project for workflow-plane images (`platformKey.prefixes`, build agent).
+- Workflow-plane images land under `<registry.host>/<registry.appsProject>/` with exactly that host:port in the image
+  reference the agent renders (PR #2 build templates).
+- koorikla/ci is referenced by the mutable tag `refs/tags/v1` in the certificate subject; pinning it by commit SHA
+  needs the app repos to call the reusable workflow by SHA (follow-up).
 - Kyverno admission controller egress to `ghcr.io`, `rekor.sigstore.dev`, `tuf-repo-cdn.sigstore.dev` from data
   planes. Registry credentials for private images: `credentials.secrets` (Secrets in the kyverno namespace).

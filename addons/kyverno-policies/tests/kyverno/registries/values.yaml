@@ -9,3 +9,7 @@ namespaceSelector:
     labels:
       openchoreo.dev/managed-by: renderedrelease-controller
       openchoreo.dev/environment: staging
+  - name: dp-default-demo-qa-1
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/environment: qa
