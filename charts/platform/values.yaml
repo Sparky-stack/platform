@@ -11,10 +11,13 @@ addons:
   secret-stores:            { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   capi-operator:            { namespace: capi-operator-system,     roles: [mgmt],           default: true }
   capi-providers:           { namespace: capi-system,              roles: [mgmt],           default: true }
-  clusterclasses:           { namespace: fleet,                    roles: [mgmt],           default: true }
+  clusterclasses:           { namespace: fleet,                    roles: [mgmt],           default: true, serverSideDiff: true }
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
-  kgateway:                 { namespace: openchoreo-system,        roles: [mgmt, workload], default: true }   # VERIFY ns per OC docs
+  kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
+  thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
   openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt],           default: true }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
-  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true }
-  coredns-local:            { namespace: kube-system,              roles: [workload],       default: true, providers: [docker] }
+  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID] }
+  aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
+  hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
+  coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
