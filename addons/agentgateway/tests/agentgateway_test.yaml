@@ -1,0 +1,55 @@
+suite: agentgateway platform glue (Gateway, LLM backend, provider key via ESO)
+templates:
+  - templates/gateway.yaml
+  - templates/llm.yaml
+tests:
+  - it: Gateway agentgateway-proxy on class agentgateway, routes from this namespace only
+    template: templates/gateway.yaml
+    release: { namespace: agentgateway-system }
+    asserts:
+      - equal: { path: spec.gatewayClassName, value: agentgateway }
+      - equal: { path: metadata.namespace, value: agentgateway-system }
+      - equal: { path: "spec.listeners[0].name", value: llm }
+      - equal: { path: "spec.listeners[0].port", value: 80 }
+      - equal: { path: "spec.listeners[0].allowedRoutes.namespaces.from", value: Same }
+
+  - it: provider key comes from store platform key openchoreo-ai and becomes a Bearer Authorization header
+    template: templates/llm.yaml
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: "spec.data[0].remoteRef", value: { key: openchoreo-ai, property: openai-api-key } }
+      - equal: { path: spec.target.template.data.Authorization, value: "Bearer {{ .apikey | toString }}" }
+
+  - it: backend uses the provider and the ESO secret; the route sends the llm listener to it
+    template: templates/llm.yaml
+    asserts:
+      - equal: { path: spec.ai.provider.openai, value: {} }
+        documentSelector: { path: kind, value: AgentgatewayBackend }
+      - equal: { path: spec.policies.auth.secretRef.name, value: openai-llm-auth }
+        documentSelector: { path: kind, value: AgentgatewayBackend }
+      - equal: { path: "spec.parentRefs[0]", value: { name: agentgateway-proxy, sectionName: llm } }
+        documentSelector: { path: kind, value: HTTPRoute }
+      - equal: { path: "spec.rules[0].backendRefs[0]", value: { name: platform-agents-llm, group: agentgateway.dev, kind: AgentgatewayBackend } }
+        documentSelector: { path: kind, value: HTTPRoute }
+
+  - it: anthropic with a pinned model reads anthropic-api-key
+    template: templates/llm.yaml
+    set: { llm.provider: anthropic, llm.model: claude-sonnet-4-5 }
+    asserts:
+      - equal: { path: spec.ai.provider.anthropic.model, value: claude-sonnet-4-5 }
+        documentSelector: { path: kind, value: AgentgatewayBackend }
+      - equal: { path: "spec.data[0].remoteRef.property", value: anthropic-api-key }
+        documentSelector: { path: kind, value: ExternalSecret }
+
+  - it: rejects an unknown provider
+    template: templates/llm.yaml
+    set: { llm.provider: cohere }
+    asserts:
+      - failedTemplate: { errorMessage: 'llm.provider must be openai, anthropic or gemini, got "cohere"' }
+
+  - it: llm.enabled false leaves only the Gateway
+    template: templates/llm.yaml
+    set: { llm.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }

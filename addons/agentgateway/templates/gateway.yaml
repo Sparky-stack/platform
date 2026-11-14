@@ -1,0 +1,24 @@
+{{- /*
+Gateway agentgateway-proxy (class `agentgateway`, created by the controller). One HTTP listener for OpenAI-compatible
+LLM traffic; only routes in this namespace may attach. The controller deploys the proxy (Deployment + Service of the
+same name) from it. Applied after the agentgateway CRDs/controller sync (Argo retries until the GatewayClass exists).
+*/ -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: agentgateway-proxy
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: llm
+      protocol: HTTP
+      port: {{ .Values.gateway.port }}
+      allowedRoutes:
+        namespaces:
+          from: Same

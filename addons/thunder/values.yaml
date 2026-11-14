@@ -29,6 +29,11 @@ bootstrapSecret:
   store: platform           # ClusterSecretStore
   remoteKey: openchoreo     # flat key, see header
   name: thunder-bootstrap   # Secret consumed by thunderid.setup (admin.passwordRef, secretEnv)
+  # OAuth clients of OpenChoreo's AI agents (docs/ai-agents.md): rca | finops. Each adds <agent>-agent-client-secret,
+  # read from key `openchoreo-ai` property <agent>-oauth-client-secret: the same property the agent's own Secret uses
+  # (addon openchoreo-observability-plane), so both sides always agree. Also uncomment its secretEnv entry and script.
+  aiAgentClients: []
+  aiRemoteKey: openchoreo-ai
 
 # --- installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks the hostname -
 openchoreo:
@@ -102,7 +107,7 @@ thunderid:
       - { name: OPENCHOREO_DEVELOPER_PASSWORD, secretName: thunder-bootstrap, secretKey: developer-user-password }
       - { name: BACKSTAGE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: backstage-client-secret }
       - { name: OBSERVER_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: observer-client-secret }
-      # Uncomment when enabling RCA / FinOps AI agents (also add properties to templates/bootstrap-secret.yaml; docs/ai-agents.md):
+      # AI agents (docs/ai-agents.md): uncomment with bootstrapSecret.aiAgentClients and scripts 53 / 60 below.
       # - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret }
       # - { name: FINOPS_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: finops-agent-client-secret }
 
@@ -321,13 +326,13 @@ thunderid:
                   clientConfig:
                     validityPeriod: 3600
 
-      # Upstream 53 (RCA agent -> OpenChoreo API & Observer MCP servers, client_credentials); secret from the store.
-      # Uncomment together with RCA_AGENT_CLIENT_SECRET in setup.secretEnv above (docs/ai-agents.md).
-      # 53-openchoreo-rca-agent-app.yaml: |
+      # Upstream 53 (RCA agent -> openchoreo-api / observer, client_credentials); secret from the store like 59.
+      # Uncomment with RCA_AGENT_CLIENT_SECRET in setup.secretEnv and `rca` in bootstrapSecret.aiAgentClients.
+      # 53-rca-agent-client.yaml: |
       #   resource_type: application
       #   id: 01900000-0000-7000-8001-000000000062
       #   ouId: 01900000-0000-7000-8000-000000000001
-      #   name: OpenChoreo RCA Agent
+      #   name: RCA Agent
       #   type: m2m
       #   description: OpenChoreo RCA Agent Client
       #   inboundAuthConfig:
@@ -345,13 +350,13 @@ thunderid:
       #             clientConfig:
       #               validityPeriod: 3600
 
-      # Upstream 60 (FinOps agent -> OpenChoreo API authz, client_credentials); secret from the store.
-      # Uncomment together with FINOPS_AGENT_CLIENT_SECRET in setup.secretEnv above (docs/ai-agents.md).
-      # 60-openchoreo-finops-agent-app.yaml: |
+      # Upstream 60 (FinOps agent -> openchoreo-api / observer, client_credentials); secret from the store like 59.
+      # Uncomment with FINOPS_AGENT_CLIENT_SECRET in setup.secretEnv and `finops` in bootstrapSecret.aiAgentClients.
+      # 60-finops-agent-client.yaml: |
       #   resource_type: application
       #   id: 01900000-0000-7000-8001-000000000069
       #   ouId: 01900000-0000-7000-8000-000000000001
-      #   name: OpenChoreo FinOps Agent
+      #   name: FinOps Agent
       #   type: m2m
       #   description: OpenChoreo FinOps Agent Client
       #   inboundAuthConfig:

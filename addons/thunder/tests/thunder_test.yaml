@@ -44,3 +44,25 @@ tests:
       openchoreo.controlPlane.host: example.com
     asserts:
       - failedTemplate: {}
+  - it: AI agent OAuth clients are off by default
+    template: templates/bootstrap-secret.yaml
+    asserts:
+      - notContains: { path: spec.data, content: { secretKey: rca-agent-client-secret }, any: true }
+      - notContains: { path: spec.data, content: { secretKey: finops-agent-client-secret }, any: true }
+  - it: AI agent client secrets come from openchoreo-ai, the same properties the agents read
+    template: templates/bootstrap-secret.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [rca, finops]
+    asserts:
+      - contains:
+          path: spec.data
+          content: { secretKey: rca-agent-client-secret, remoteRef: { key: openchoreo-ai, property: rca-oauth-client-secret } }
+      - contains:
+          path: spec.data
+          content: { secretKey: finops-agent-client-secret, remoteRef: { key: openchoreo-ai, property: finops-oauth-client-secret } }
+  - it: rejects an unknown AI agent client
+    template: templates/bootstrap-secret.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [portal-assistant]
+    asserts:
+      - failedTemplate: { errorMessage: 'bootstrapSecret.aiAgentClients: "portal-assistant" is not one of rca, finops' }

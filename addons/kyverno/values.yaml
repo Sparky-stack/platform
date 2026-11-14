@@ -51,6 +51,7 @@ kyverno:
               - telemetry
               - obi
               - external-dns
+              - agentgateway-system
     # ...and the engine skips them too (background scans, reports).
     resourceFiltersIncludeNamespaces: *platformNamespaces
 

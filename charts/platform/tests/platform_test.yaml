@@ -176,3 +176,18 @@ tests:
       - failedTemplate:
           errorMessage: 'addons.evil.installationValueFiles: "../../installations/local/installation.yaml" must be a file under addons/evil/values/'
 
+  - it: AI agent addons are catalog entries switched off by default on mgmt
+    template: appset-addons.yaml
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/agentgateway, operator: In, values: ["true"] }
+        documentSelector: { path: metadata.name, value: addon-agentgateway }
+      - equal: { path: spec.template.spec.destination.namespace, value: agentgateway-system }
+        documentSelector: { path: metadata.name, value: addon-agentgateway }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/finops-opencost, operator: In, values: ["true"] }
+        documentSelector: { path: metadata.name, value: addon-finops-opencost }
+      - equal: { path: spec.template.spec.destination.namespace, value: openchoreo-observability-plane }
+        documentSelector: { path: metadata.name, value: addon-finops-opencost }

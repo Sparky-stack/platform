@@ -59,6 +59,10 @@ addons:
   # (TXT owner) become helm parameters.
   external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterNameParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
   openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
+  # AI agents (docs/ai-agents.md), opt-in: the OpenCost FinOps module next to the observability plane, and agentgateway
+  # (LLM gateway the RCA / FinOps agents call instead of holding provider keys).
+  finops-opencost:          { namespace: openchoreo-observability-plane, roles: [mgmt], default: false }
+  agentgateway:             { namespace: agentgateway-system,      roles: [mgmt],           default: false }
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }

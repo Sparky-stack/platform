@@ -42,6 +42,7 @@ platformNamespaces: &platformNamespaces
   - telemetry
   - obi
   - external-dns
+  - agentgateway-system
 
 kyverno-policies:
   podSecurityStandard: baseline

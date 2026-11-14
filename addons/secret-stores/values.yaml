@@ -35,6 +35,7 @@ platformStore:
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)
     - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
     - external-dns                     # external-dns-cloudflare / -aws when opted in on mgmt (addon external-dns)
+    - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
 
 repoCreds:
   name: platform-repo-creds

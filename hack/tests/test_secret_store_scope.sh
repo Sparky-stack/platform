@@ -72,13 +72,21 @@ helm template falco addons/falco --namespace "$falco_ns" -f addons/falco/values.
   --set escalation.enabled=true --set slack.enabled=true > "$TMP/falco-mgmt-outputs.yaml"
 check "falco outputs (mgmt)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "$TMP/falco-mgmt-outputs.yaml"
 
-# Opt-in consumers on mgmt (catalog default false): external-dns with Cloudflare.
+# Opt-in consumers on mgmt (catalog default false): external-dns with Cloudflare, agentgateway's provider key, and the
+# observability plane's AI agents.
 ns_of() { yq ".addons[\"$1\"].namespace" charts/platform/values.yaml; }
 helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" -f addons/external-dns/values.yaml \
   -f addons/external-dns/values/role-mgmt.yaml -f addons/external-dns/values/dns-cloudflare.yaml \
   --set dns.provider=cloudflare --set 'dns.domainFilters={example.com}' --set 'external-dns.domainFilters={example.com}' \
   --set-string external-dns.txtOwnerId=sample --show-only templates/secrets.yaml > "$TMP/external-dns-mgmt.yaml"
-check "opt-in mgmt consumers (external-dns)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "$TMP/external-dns-mgmt.yaml"
+helm template agentgateway addons/agentgateway --namespace "$(ns_of agentgateway)" > "$TMP/agentgateway-mgmt.yaml"
+helm template openchoreo-observability-plane addons/openchoreo-observability-plane \
+  --namespace "$(ns_of openchoreo-observability-plane)" --show-only templates/secrets.yaml \
+  --set openchoreo-observability-plane.rca.enabled=true --set openchoreo-observability-plane.rca.llm.modelName=m \
+  --set openchoreo-observability-plane.finOpsAgent.enabled=true --set openchoreo-observability-plane.finOpsAgent.llmName=m \
+  > "$TMP/obs-ai-agents.yaml"
+check "opt-in mgmt consumers (external-dns, agentgateway, AI agents)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" \
+  "$TMP/external-dns-mgmt.yaml" "$TMP/agentgateway-mgmt.yaml" "$TMP/obs-ai-agents.yaml"
 
 # No stale grants: every allowed namespace has a consumer somewhere.
 while read -r ns; do

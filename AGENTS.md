@@ -58,6 +58,7 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
 | `external-dns-cloudflare` | `api-token` | addon external-dns, `dns.provider: cloudflare` (also in `default` on workload clusters; docs/dns.md) |
 | `external-dns-aws` | `access-key-id`, `secret-access-key` | addon external-dns, last resort only (Route 53 uses workload identity) |
+| `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on (docs/ai-agents.md) |
 
 ## Layout and ownership
 ```

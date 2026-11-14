@@ -1,68 +1,100 @@
-# OpenChoreo AI Agents and Agentgateway (Disabled by Default)
+# OpenChoreo AI agents (switched off)
 
-OpenChoreo 1.3.3 ships two AI agents inside the observability plane (`addons/openchoreo-observability-plane`), plus an optional AI gateway module (`ai-gateway-agentgateway`). All three are **disabled/commented by default** here because they require LLM provider API tokens and extra cluster resources.
+OpenChoreo 1.3.3 ships two AI agents in its observability plane chart. Both are configured here and **switched off**
+until LLM credentials exist; so are the two addons they lean on. Nothing below runs, renders a workload, or reads a
+secret until you flip the switches in [Turning them on](#turning-them-on).
 
-## Components
+| Component | Where | What it does | Default |
+|---|---|---|---|
+| RCA (SRE) agent | addon `openchoreo-observability-plane`, `rca.*` (image `ghcr.io/openchoreo/sre-agent`) | Root-cause analysis of alerts/incidents: reads logs, metrics, traces and events through the observer and component/release state through openchoreo-api, writes RCA reports (SQLite PVC) shown in the portal. | `rca.enabled: false` |
+| FinOps agent | addon `openchoreo-observability-plane`, `finOpsAgent.*` (image `ghcr.io/openchoreo/finops-agent`) | Cost analysis and rightsizing recommendations from OpenCost data (MCP) and observed usage; enriches budget alerts. OpenAI models only in 1.3.3. | `finOpsAgent.enabled: false` |
+| FinOps module | addon `finops-opencost` (OpenChoreo community module `finops-opencost` 0.2.1 = the 0.2.x line for OpenChoreo 1.3.x) | OpenCost over the plane's Prometheus (`opencost`: 9003 API, 8081 MCP) + Cost Insights adapter (`finops-adapter`: 9101). Needed by the FinOps agent and the portal's Cost Insights. | catalog `default: false` |
+| agentgateway | addon `agentgateway` (agentgateway v1.1.0, the version OpenChoreo's `ai-gateway-agentgateway` module installs) | OpenAI-compatible LLM gateway: Gateway `agentgateway-proxy` → one `AgentgatewayBackend` that injects the provider key. Agents call it instead of holding provider keys. | catalog `default: false` |
 
-| Component | Chart / Source | What it does |
-|---|---|---|
-| **RCA (SRE) Agent** | `openchoreo-observability-plane` (`rca.*`, image `ghcr.io/openchoreo/sre-agent`) | Investigates incidents by querying `observer` (`/mcp` / API) and `openchoreo-api`, generating RCA reports when `rca.enabled: true` (`AI_RCA_ENABLED`). |
-| **FinOps Agent** | `openchoreo-observability-plane` (`finOpsAgent.*`, image `ghcr.io/openchoreo/finops-agent`) | Analyzes workload resource usage vs cost using `observer` MCP (`/mcp`) and OpenCost MCP (`:8081`), storing reports in SQLite (`finops-agent` PVC). |
-| **FinOps OpenCost Module** | `oci://cr.openchoreo.dev/openchoreo/helm-charts/observability-finops-opencost` (`0.2.0`) | Subchart of `openchoreo-observability-plane`: deploys OpenCost (`:9003` API, `:8081` MCP) + `finops-adapter` (`:9101`), reading from `prometheus-operated:9090`. |
-| **Agentgateway AI Gateway** | `oci://cr.agentgateway.dev/charts/agentgateway-crds` + `agentgateway` (`v1.1.0`) | Kubernetes Gateway API AI proxy (`GatewayClass/agentgateway`, `AgentgatewayBackend`, `HTTPRoute`) providing unified `/openai`, `/anthropic`, `/gemini` routing, credential injection, and metering. |
+All four run on **mgmt** (the observability plane is co-located with the control plane, docs/observability.md). The
+upstream module puts `agentgateway-proxy` in `openchoreo-data-plane` for component traits; here it serves the
+platform's own agents, so it lives on mgmt in `agentgateway-system` and accepts routes from its own namespace only.
+Component-facing LLM routing (the module's ClusterTraits on data planes) is not part of this change.
 
-## Topology Note (mgmt vs workload)
+Images are pinned by digest and multi-arch (amd64 + arm64): `sre-agent` / `finops-agent` v1.3.3, agentgateway
+`controller` / `agentgateway` v1.1.0, `finops-opencost-adapter` 0.2.1, `opencost` 1.121.1 (pinned by the opencost chart).
 
-In this platform, `openchoreo-observability-plane` runs on **mgmt** (`docs/observability.md`), so `sre-agent` and `finops-agent` run in namespace `openchoreo-observability-plane` on mgmt. Running `ai-gateway-agentgateway` on **mgmt** (either inside `openchoreo-observability-plane` via `aiGateway.enabled: true` or as a dedicated `addons/agentgateway` addon on role `mgmt`) lets both agents dial the gateway in-cluster:
+## How the pieces connect
 
-```text
-http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1
+```
+sre-agent, finops-agent (openchoreo-observability-plane)
+  ├─ LLM ──────────> http://agentgateway-proxy.agentgateway-system.svc.cluster.local ──> provider (key from ESO)
+  ├─ OAuth2 client_credentials ──> Thunder clients openchoreo-rca-agent / openchoreo-finops-agent (scripts 53 / 60)
+  ├─ openchoreo-api (authz roles rca-agent / finops-agent, bound to those client_ids upstream)
+  ├─ observer (+ /mcp)
+  └─ finops-agent ──> opencost:8081 (MCP); observer ──> finops-adapter:9101   (addon finops-opencost)
+portal ──> ClusterObservabilityPlane rcaAgentURL / finOpsAgentURL ──> http://{rca,finops}-agent.<host>:<obs http port>
 ```
 
-(Upstream's single-cluster guide deploys `agentgateway-proxy` in `openchoreo-data-plane`; in our multi-cluster layout workload clusters are separate CAPI clusters, so mgmt agents would not reach workload `.svc.cluster.local` addresses directly.)
+The control plane's `rca-agent` / `finops-agent` authz roles and their `client_id` bindings ship enabled in the upstream
+`openchoreo-control-plane` defaults (the wrapper does not override `bootstrap.roles`), so nothing changes there.
 
-## Prerequisites to Enable
+## Secrets
 
-1. **Secrets in `ClusterSecretStore/platform`** (never commit values):
-   - Key `openchoreo-ai`:
-     - `rca-llm-api-key` — maps to `RCA_LLM_API_KEY` in Secret `rca-agent-secret` (or a placeholder when `agentgateway` injects the real upstream key)
-     - `rca-oauth-client-secret` — maps to `OAUTH_CLIENT_SECRET` in `rca-agent-secret`; must match Thunder client `openchoreo-rca-agent`
-     - `finops-llm-api-key` — maps to `LLM_API_KEY` in Secret `finops-agent` (or placeholder when routed via `agentgateway`)
-     - `finops-oauth-client-secret` — maps to `OAUTH_CLIENT_SECRET` in `finops-agent`; must match Thunder client `openchoreo-finops-agent`
-     - `openai-authorization` (or `anthropic-authorization` / `gemini-authorization`) — `"Bearer <provider-api-key>"` when using `agentgateway`
-   - Key `openchoreo` (read by `addons/thunder/templates/bootstrap-secret.yaml`):
-     - Add properties `rca-agent-client-secret` and `finops-agent-client-secret` (matching `rca-oauth-client-secret` and `finops-oauth-client-secret`), and map them in `addons/thunder/templates/bootstrap-secret.yaml`.
-2. **Thunder OAuth2 clients (`addons/thunder/values.yaml`):**
-   - Uncomment `RCA_AGENT_CLIENT_SECRET` / `FINOPS_AGENT_CLIENT_SECRET` under `thunderid.setup.secretEnv`.
-   - Uncomment `53-openchoreo-rca-agent-app.yaml` (`openchoreo-rca-agent`) and `60-openchoreo-finops-agent-app.yaml` (`openchoreo-finops-agent`) under `thunderid.bootstrap.scripts`.
-3. **Control Plane Authz Roles & RoleMappings (`addons/openchoreo-control-plane/values.yaml`):**
-   - Add the upstream `rca-agent` and `finops-agent` roles under `openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.roles` and `rca-agent-mapping` (`client_id: openchoreo-rca-agent`) / `finops-agent-mapping` (`client_id: openchoreo-finops-agent`) under `bootstrap.roleMappings`. (Note: our wrapper chart overrides `bootstrap.roles` and `bootstrap.roleMappings`, so they must be listed explicitly there.)
+One key in the `platform` store, `openchoreo-ai` (never committed). Each property is read only by what is switched on:
 
-## Exact Switches to Flip
+| Property | Read by | Notes |
+|---|---|---|
+| `rca-llm-api-key` | Secret `rca-agent-secret` → `RCA_LLM_API_KEY` | any placeholder when `rca.llm.baseUrl` is the agentgateway |
+| `rca-oauth-client-secret` | `rca-agent-secret` → `OAUTH_CLIENT_SECRET`, and Thunder (`bootstrapSecret.aiAgentClients: [rca]`) | one property, both sides: they cannot drift |
+| `finops-llm-api-key` | Secret `finops-agent` → `LLM_API_KEY` | placeholder when `finOpsAgent.llmBaseUrl` is the agentgateway |
+| `finops-oauth-client-secret` | `finops-agent` → `OAUTH_CLIENT_SECRET`, and Thunder (`aiAgentClients: [finops]`) | |
+| `openai-api-key` (or `anthropic-api-key`, `gemini-api-key`) | addon agentgateway, Secret `<provider>-llm-auth` (`Authorization: Bearer …` via ESO template) | the only real provider key |
 
-### Option A: Enable Agentgateway (`ai-gateway-agentgateway`) on mgmt
-1. Add `"oci://cr.agentgateway.dev/*"` to `AppProject/platform` (`charts/platform/templates/projects.yaml`).
-2. Either:
-   - **Inline in `openchoreo-observability-plane`:** uncomment `agentgateway-crds` and `agentgateway` (`v1.1.0`) in `addons/openchoreo-observability-plane/Chart.yaml` (run `helm dependency build`), and copy `addons/openchoreo-observability-plane/values/ai-gateway-agentgateway.yaml.disabled` (which sets `aiGateway.enabled: true` and activates `templates/ai-gateway-agentgateway.yaml`) into `addons/openchoreo-observability-plane/values.yaml` or `installations/<inst>/addons/openchoreo-observability-plane/values.yaml`.
-   - **Or promote to a standalone addon:** create `addons/agentgateway/` (`roles: [mgmt]`) and add it to `charts/platform/values.yaml`.
+Namespaces `openchoreo-observability-plane`, `thunder` and `agentgateway-system` are in secret-stores
+`platformStore.namespaces` (hack/tests/test_secret_store_scope.sh renders these opt-in consumers).
 
-### Option B: Enable RCA (SRE) Agent
-1. Complete Prerequisites 1-3 above (`openchoreo-ai`, Thunder script 53, `rca-agent` + `rca-agent-mapping`).
-2. In `addons/openchoreo-observability-plane/values.yaml` (or `installations/<inst>/addons/openchoreo-observability-plane/values.yaml`):
-   - Set `openchoreo-observability-plane.rca.enabled: true`.
-   - Uncomment `name` (`sre-agent`), `observerApiUrl`, `openchoreoApiUrl`, `secretName` (`rca-agent-secret`), `llm.modelName`, `llm.baseUrl` (pointing at `agentgateway-proxy` or your LLM endpoint), `llm.auth`, and `oauth.clientId`.
-   - `templates/secrets.yaml` will automatically create `ExternalSecret/rca-agent-secret` (mounted via `envFrom` by the `sre-agent` Deployment).
+## Turning them on
 
-### Option C: Enable FinOps Agent + OpenCost
-1. Complete Prerequisites 1-3 above (`openchoreo-ai`, Thunder script 60, `finops-agent` + `finops-agent-mapping`).
-2. In `addons/openchoreo-observability-plane/Chart.yaml`, uncomment `observability-finops-opencost` (`0.2.0`) and run `helm dependency build`.
-3. In `addons/openchoreo-observability-plane/values.yaml` (or installation overlay):
-   - Uncomment `observability-finops-opencost:` (`enabled: true`, `opencost.*`, `adapter.*`, `mcpServer.*`).
-   - Uncomment `openchoreo-observability-plane.observer.finOpsAdapter` (`url: "http://openchoreo-observability-plane-finops-adapter:9101"`).
-   - Set `openchoreo-observability-plane.finOpsAgent.enabled: true` and uncomment `observabilityMcpServerUrl`, `opencostMcpServerUrl` (`http://openchoreo-observability-plane-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081`), `openchoreoApiUrl`, `secretName` (`finops-agent`), `llmName`, `llmBaseUrl`, `llmAuth`, and `oauth.clientId`.
-   - `templates/secrets.yaml` will automatically create `ExternalSecret/finops-agent` (mounted via `envFrom` by the `finops-agent` Deployment).
+Host RAM: the RCA agent requests 512Mi (upstream 1Gi, limit 1.5Gi); budget for it on a laptop.
 
-## Untested / VERIFY
-- Live RCA report generation and FinOps cost analysis against OpenChoreo 1.3.3 `observer`, `openchoreo-api`, and `agentgateway` v1.1.0.
-- OpenCost metrics ingestion on mgmt from workload-cluster remote-write Prometheus (`prometheus-operated:9090`).
-- `finops-agent` PVC binding under Argo CD's `Pending = Healthy` PVC rule.
+### 1. Gateway (recommended first)
+
+1. Seed `openchoreo-ai` property `openai-api-key`.
+2. `installation.yaml`: `mgmt.addons.agentgateway: "true"`.
+   Provider/model: `llm.provider` (`openai` | `anthropic` | `gemini`) and `llm.model` in
+   `installations/<inst>/addons/agentgateway/values.yaml`.
+
+Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` and put the real provider key in
+`rca-llm-api-key` / `finops-llm-api-key`.
+
+### 2. RCA (SRE) agent
+
+1. Seed `openchoreo-ai` properties `rca-llm-api-key` (placeholder with the gateway) and `rca-oauth-client-secret`.
+2. `addons/thunder/values.yaml`: `bootstrapSecret.aiAgentClients: [rca]`, uncomment the
+   `RCA_AGENT_CLIENT_SECRET` line in `thunderid.setup.secretEnv` and script `53-rca-agent-client.yaml`.
+3. `addons/openchoreo-observability-plane/values.yaml` (or the installation overlay):
+   `openchoreo-observability-plane.rca.enabled: true` and `rca.llm.modelName` (e.g. `gpt-5.2`).
+
+### 3. FinOps agent
+
+1. `installation.yaml`: `mgmt.addons.finops-opencost: "true"`.
+2. Seed `openchoreo-ai` properties `finops-llm-api-key` and `finops-oauth-client-secret`.
+3. Thunder: `aiAgentClients: [rca, finops]` (or `[finops]`), uncomment `FINOPS_AGENT_CLIENT_SECRET` and script
+   `60-finops-agent-client.yaml`.
+4. `openchoreo-observability-plane.finOpsAgent.enabled: true` and `finOpsAgent.llmName` (an OpenAI model).
+
+With an agent enabled, `templates/secrets.yaml` creates its ExternalSecret and `templates/cluster-observability-plane.yaml`
+publishes `rcaAgentURL` / `finOpsAgentURL` (`http://rca-agent.<host>:<port>`, `http://finops-agent.<host>:<port>`,
+the plane Gateway's HTTPRoutes). `templates/validate.yaml` refuses an enabled agent without a model or with a hostname
+outside the installation's control-plane host.
+
+## Tests
+
+- `hack/tests/test_ai_agents.sh`: everything off by default; one store key across agents, Thunder and agentgateway;
+  Thunder scripts 53/60 match upstream ids and the agents' client IDs; switched on, the agents' base URLs hit the
+  agentgateway Gateway, the observer/FinOps URLs hit `finops-opencost` Services, all images are digest-pinned.
+- helm-unittest: `addons/agentgateway`, `addons/openchoreo-observability-plane` (agent Secrets, plane URLs, guards),
+  `addons/thunder` (agent client secrets).
+
+## VERIFY
+
+- Live RCA / FinOps runs against OpenChoreo 1.3.3 (no LLM key has been used yet).
+- agentgateway controller accepting `tag@digest` for the proxy image (`AGW_PROXY_IMAGE_TAG`).
+- OpenCost attribution of remote-written workload metrics on mgmt (`defaultClusterId: mgmt`).
+- Agent SQLite PVCs under Argo CD health (Pending until first consumer on local-path).

@@ -1,0 +1,21 @@
+# OpenChoreo FinOps module on mgmt (catalog default: false; switch: installation.yaml mgmt.addons.finops-opencost: "true").
+# Same namespace as the observability plane (openchoreo-observability-plane), whose names it is wired to by default:
+#   opencost        cost model over Prometheus openchoreo-observability-prometheus:9091 (remote-written by data planes);
+#                   Service opencost: 9003 API, 8081 MCP (= finOpsAgent.opencostMcpServerUrl default)
+#   finops-adapter  Cost Insights adapter API on 9101 (= observer.finOpsAdapter.url default http://finops-adapter:9101)
+# Needed by the FinOps agent (finOpsAgent in addon openchoreo-observability-plane) and the portal's Cost Insights.
+# No secrets. docs/ai-agents.md.
+finops-opencost:
+  opencost:
+    opencost:
+      # exporter image: the opencost chart already pins ghcr.io/opencost/opencost:1.121.1@sha256 (amd64, arm64)
+      exporter:
+        defaultClusterId: mgmt   # VERIFY: per-cluster attribution of remote-written workload metrics
+        securityContext:         # platform: Pod Security restricted (chart default {}); image runs as uid 1001
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities: { drop: [ALL] }
+          seccompProfile: { type: RuntimeDefault }
+  adapter:
+    image:
+      tag: 0.2.1@sha256:c9f4175c1ef74e981022a61ee4e9eb084baea286c989fb097bda195d21f3d155   # index: amd64, arm64

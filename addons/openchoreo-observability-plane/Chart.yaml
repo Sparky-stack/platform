@@ -15,16 +15,4 @@ dependencies:
     repository: oci://ghcr.io/openchoreo/helm-charts
   - name: observability-metrics-prometheus
     version: 0.8.0
-    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
-  # Disabled until FinOps agent + OpenCost are enabled (docs/ai-agents.md):
-  # - name: observability-finops-opencost
-  #   version: 0.2.0
-  #   repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
-  #   condition: observability-finops-opencost.enabled
-  # Optional AI gateway on mgmt (needs oci://cr.agentgateway.dev/* in AppProject platform, or deploy as addons/agentgateway):
-  # - name: agentgateway-crds
-  #   version: v1.1.0
-  #   repository: oci://cr.agentgateway.dev/charts
-  # - name: agentgateway
-  #   version: v1.1.0
-  #   repository: oci://cr.agentgateway.dev/charts
+    repository: oci://ghcr.io/openchoreo/helm-charts

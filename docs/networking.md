@@ -162,8 +162,8 @@ No upgrade or experimental channel is needed. **VERIFY** that istiod logs no Gat
 - **Kyverno can't block bootstrap.** Its webhook `namespaceSelector` excludes every platform namespace, and the
   engine's resource filters skip them too. The excluded namespaces: `kube-system`, `kyverno`, `argocd`,
   `cert-manager`, `external-secrets`, the CAPI provider namespaces, `fleet`, `openchoreo-*`, `thunder`,
-  `kgateway-system`, `istio-system`, `cilium`, `falco`, `telemetry`, `obi`, `external-dns`, and the secret
-  namespaces.
+  `kgateway-system`, `istio-system`, `cilium`, `falco`, `telemetry`, `obi`, `external-dns`, `agentgateway-system`,
+  and the secret namespaces.
   `hack/tests/test_gitops_contracts.sh` checks that `kyverno-policies` uses the same list and that every catalog
   namespace is on it.
 - **Baseline**: upstream `kyverno-policies` Pod Security Standards **baseline**, as CEL `ValidatingPolicy`s with
