@@ -162,8 +162,8 @@ secret: `istio-system/istio-remote-secret-<peer>`, labelled `istio/multiCluster=
    authentication (the CAPI admin kubeconfig is signed by it). cert-manager only reads that Secret.
 2. `Certificate <name>-mesh-reader`: client cert `CN=platform:istio-reader`, no organisation (so no groups), ECDSA,
    **7 days**, renewed after 4.
-3. On the member, addon `istio-eastwest` binds user `platform:istio-reader` to the istiod chart's read-only
-   `ClusterRole istio-reader-clusterrole-istio-system`.
+3. On the member, addon `istio-eastwest` binds user `platform:istio-reader` to `ClusterRole platform-istio-reader`
+   (read-only discovery, no Secrets; "Reader RBAC" below).
 4. `ExternalSecret <name>-mesh-remote-secret` (store `mgmt-fleet`, refreshed every 5m) builds the kubeconfig. It
    takes the API endpoint and CA from the CAPI kubeconfig and the user from the reader cert, and writes it as JSON
    so no YAML indentation is templated. The result is a ClusterResourceSet payload.
@@ -179,18 +179,46 @@ Why not the alternatives:
 
 Kubernetes can't revoke client certificates, hence the 7-day lifetime.
 
-Scope of the upstream reader ClusterRole: get/list/watch on core discovery objects, Istio config, Gateway API
-`gateways`, and also `secrets` and `configmaps` cluster-wide, plus create/delete on MCS `serviceexports`. That is
-upstream's minimum for a peer istiod. A tighter custom role is possible later; it would have to follow Istio's
-remote-discovery needs on every upgrade.
+### Reader RBAC: what a peer may read
+Upstream's `istio-reader-clusterrole-istio-system` (istiod chart) grants cluster-wide get/list/watch on `secrets` and
+`configmaps`, create/delete on MCS `serviceexports` and create on `tokenreviews`/`subjectaccessreviews`. Bound to the
+reader user, every peer could read this cluster's `istio-system/cacerts` (intermediate CA key), the OpenChoreo agent
+identity and every tenant Secret. So the reader is bound to the platform's own roles instead (addon `istio-eastwest`
+`templates/reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
+
+| istiod 1.32.0 source | Remote reads | Granted |
+|---|---|---|
+| `pkg/kube/multicluster/cluster.go` (ambient KRT collections) | namespaces, pods, services, nodes, endpointslices, Gateway API gateways | `ClusterRole platform-istio-reader` get/list/watch |
+| `serviceregistry/kube/controller` | the same + endpoints, MCS serviceimports, CRDs (delayed informers) | same |
+| `PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY` (default on) | networking.istio.io workloadentries | Istio config groups, read-only |
+| remote mesh watcher (`controller/multicluster.go`) | ConfigMap `istio-system/istio` (trust domain), by field selector | `Role platform-istio-reader`, `resourceNames: [istio]` |
+| remote credentials controller | Secrets (gateway TLS) - only needed when a gateway's istiod is in another cluster (primary-remote) | **none**: istio-ambient sets `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` |
+| leader election / namespace controller on remotes | only with `EXTERNAL_ISTIOD` | none |
+| `serviceexports` writes, tokenreviews, SARs | `ENABLE_MCS_AUTO_EXPORT` (off), primary-remote proxy auth | none |
+
+Unittests pin the rules and assert the negatives. **VERIFY** on the first live run: `istioctl remote-clusters` shows
+each peer `synced` (not `timeout`: a forbidden informer would never sync and istiod gives up after
+`PILOT_REMOTE_CLUSTER_TIMEOUT`, 30s), istiod logs show no `forbidden` for the reader user, and `kubectl auth can-i
+--as platform:istio-reader get secrets -A` is `no` on each member. Re-check this table on every Istio upgrade.
+
+Peers can still read Pods, Services and Istio config of each other, so members of one group must sit at the same
+trust level (see "Trust").
 
 Peers must reach each member's API endpoint: locally the CAPD load balancer container on docker network `kind`, on AWS
 the CAPA API ELB, on Hetzner the API load balancer.
 
-**Removing a member**: CRS never deletes what it applied. Deleting the fleet file stops renewal, so the peers'
-`istio-remote-secret-<gone>` stops authenticating within 7 days, but it stays behind (istiod logs a failing remote
-cluster). Delete it from the remaining members as part of decommissioning. **VERIFY** whether istiod drops the gone
-cluster's endpoints at once (it should: the remote watch fails).
+### Removing a member (decommissioning)
+CRS never deletes what it applied, and Istio checks no revocation, so decommissioning is explicit:
+1. Remove `mesh.group` from the fleet file (or delete the fleet file). The Certificates `<name>-mesh-ca` /
+   `<name>-mesh-reader`, Issuer `<name>-client-ca`, ExternalSecrets and ClusterResourceSets go with the cluster
+   chart, so nothing is renewed any more.
+2. On every remaining member delete `istio-system/istio-remote-secret-<gone>` (CRS leaves it behind; istiod logs a
+   failing remote cluster until then). Its reader cert stops authenticating within 7 days in any case.
+3. On mgmt delete the leftover Secrets `fleet/<gone>-mesh-ca` and `fleet/<gone>-mesh-reader` (cert-manager does not
+   delete a Certificate's Secret with it).
+4. A leaked intermediate stays valid until its `notAfter` (<= 14 days). If the gone cluster may have been compromised,
+   rotate the group's root (above) instead of waiting.
+**VERIFY** whether istiod drops the gone cluster's endpoints at once (it should: the remote watch fails).
 
 ## Example (`examples/eastwest`)
 The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
@@ -259,11 +287,32 @@ Adding `mesh.group` to live clusters is handled entirely by Argo CD and CAPI; th
    `kubectl -n argocd get application istio-ambient-<cluster>`; nothing needs to be run by hand.
 Fresh clusters get `cacerts` before istiod first starts, so the same ordering simply delays ztunnel until istiod is up.
 
+## Next steps (deferred)
+- **Per-environment trust domains + name constraints.** All groups use `cluster.local`, so
+  `cluster.local/ns/eastwest-demo/sa/client` from dev1 and from prod1 look the same to an AuthorizationPolicy.
+  Next: a trust domain per environment/group (`meshConfig.trustDomain`, peers via `trustDomainAliases`) and URI name
+  constraints on each intermediate (cert-manager `nameConstraints`, behind the `NameConstraints` feature gate).
+  Deferred because it changes every principal in existing policies, and whether ztunnel enforces URI name
+  constraints is unverified (**VERIFY** before relying on it). Per-group roots already stop cross-group forgery.
+- **Baggage at the north-south edge.** `AMBIENT_ENABLE_BAGGAGE` carries peer metadata (cluster, namespace, workload)
+  across networks. kgateway (north-south) should strip `baggage` on egress and on requests from outside, so internal
+  topology never leaks and outside callers cannot inject metadata. Deferred to the kgateway policy work (needs a
+  route/listener policy on the data-plane Gateway; not part of the mesh addons).
+- **Peer API 6443 on CAPA/CAPH.** Restrict the control-plane load balancers to the peers' egress IPs
+  (`AWSCluster.spec.controlPlaneLoadBalancer.ingressRules`, CAPH firewall) - ClusterClass variables, separate change.
+- **Image signatures.** The example images are digest-pinned but unsigned and the repo has no ImageValidatingPolicy
+  yet: repo-wide supply-chain gap (README roadmap).
+- **istio-csr + external signer** to retire the invariant-4 exception ("Trust").
+
 ## VERIFY on the first live run
-`grep -rn VERIFY docs/multicluster.md addons/istio-eastwest addons/mesh-root-ca charts/cluster/templates/mesh-*`
+`grep -rn VERIFY docs/multicluster.md addons/istio-eastwest addons/mesh-root-ca addons/istio-ambient charts/cluster/templates/mesh-*`
 - `istio-east-west` GatewayClass appears with `AMBIENT_ENABLE_MULTI_NETWORK`, and `parametersRef` sizing applies to
   the generated Deployment.
 - cert-manager CA issuer accepts the CAPI secret `<name>-cca` (type `cluster.x-k8s.io/secret`, keys `tls.crt`/`tls.key`).
+- Peers sync with `platform-istio-reader` only (`istioctl remote-clusters`: synced; no `forbidden` in istiod logs).
+- The `platform-mesh-*` admission policies admit Argo CD's Certificates and cert-manager's CertificateRequests
+  (`kubectl get validatingadmissionpolicy`; Certificates Ready), and deny a hand-made reader cert with a subject.
+- ztunnel rolls only after istiod is Healthy (Argo sync wave 1) when a running cluster joins.
 - ESO v2 template output: the JSON kubeconfig (checked offline with ESO's function map) is accepted by istiod.
 - CRS `Reconcile` adds the network label to an existing `istio-system` Namespace.
 - istiod reloads a renewed `cacerts` without a restart.
