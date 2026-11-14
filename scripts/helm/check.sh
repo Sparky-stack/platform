@@ -36,7 +36,9 @@ if is_true "${unittest}"; then
     log "installing helm-unittest"
     plugin="${UNITTEST_PLUGIN:-https://github.com/helm-unittest/helm-unittest}"
     # Helm 4 verifies plugin signatures by default; git installs carry none.
-    if helm plugin install --help 2>/dev/null | grep -q -- '--verify'; then
+    # (capture first: `grep -q` closing the pipe early + pipefail = false negative)
+    help="$(helm plugin install --help 2>&1 || true)"
+    if printf '%s' "${help}" | grep -q -- '--verify'; then
       helm plugin install "${plugin}" --verify=false
     else
       helm plugin install "${plugin}"
