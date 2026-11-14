@@ -196,7 +196,8 @@ metadata:
 spec:
   conditions:
     - namespaces:
-        - fleet
+        - fleet                            # CRS payload openchoreo-gateway-ca (addon openchoreo-control-plane)
+        - openchoreo-observability-plane   # in-cluster agent's gateway CA ConfigMap (addon openchoreo-observability-plane)
   provider:
     kubernetes:
       remoteNamespace: openchoreo-control-plane
