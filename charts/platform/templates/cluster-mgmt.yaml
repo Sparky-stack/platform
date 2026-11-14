@@ -12,6 +12,7 @@ metadata:
     platform.koorikla.io/region: {{ $mgmt.region | default "local" | quote }}
     platform.koorikla.io/environment: {{ $mgmt.environment | default "mgmt" | quote }}
     platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
+    platform.koorikla.io/cni: {{ $mgmt.cni | default "flannel" | quote }}   # k3d's bundled flannel
     {{- range $k, $v := ($mgmt.addons | default dict) }}
     addons.platform.koorikla.io/{{ $k }}: {{ $v | quote }}
     {{- end }}
