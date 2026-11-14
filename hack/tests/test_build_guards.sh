@@ -9,6 +9,8 @@
 # shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
 
 echo "== test_build_guards =="
 cd "$ROOT"
@@ -140,23 +142,41 @@ wl_check() {   # wl_check <repo dir> <path> -> RC
   if (cd "$1" && env -i PATH="$WL_PATH" WORKLOAD_PATH="$2" REPO=r GITOPS_BRANCH=b CHECK="$CHECK" GUARDS="$GUARDS" \
       bash -c 'set -euo pipefail; eval "$GUARDS"; eval "$CHECK"' >/dev/null 2>&1); then RC=0; else RC=$?; fi
 }
+# symlink <target> <link>: a real symlink or nothing (rc 1). Git Bash's `ln -s` silently copies unless MSYS allows
+# native links (developer mode or admin): try that, and never let a copy stand in for a link in the refusal checks.
+symlink() {
+  ln -s "$1" "$2" 2>/dev/null && [[ -L "$2" ]] && return 0
+  rm -rf "$2"
+  MSYS=winsymlinks:nativestrict ln -s "$1" "$2" 2>/dev/null && [[ -L "$2" ]] && return 0
+  rm -rf "$2"; return 1
+}
 R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
 printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
 printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
 printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
-ln -s ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml"
+symlink ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml" && LINKS=1 || LINKS=""
 if [[ -n "${WL_SKIP:-}" ]]; then
   echo "  SKIP gitops Workload runtime checks: no GNU realpath (brew install coreutils); production runs them on Linux"
 else
   wl_check "$R" deploy/openchoreo/workload.yaml; assert_eq "$RC" 0 "gitops: Workload accepted"
   wl_check "$R" deploy/openchoreo/deploy.yaml; assert_eq "$RC" 1 "gitops: another kind refused"
-  wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
   wl_check "$R" deploy/openchoreo/missing.yaml; assert_eq "$RC" 1 "gitops: missing file refused"
+  if [[ -n "$LINKS" ]]; then
+    wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
+  fi
 fi
 R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
 printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
-ln -s ../.github/workflows "$R2/deploy/openchoreo"
-wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked deploy/openchoreo directory refused"
+if symlink ../.github/workflows "$R2/deploy/openchoreo"; then
+  wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked deploy/openchoreo directory refused"
+else
+  LINKS=""
+fi
+if [[ -z "$LINKS" ]]; then
+  [[ "$(os_name)" == windows ]] \
+    || { FAIL=$((FAIL + 1)); echo "  FAIL: cannot create symlinks on $(uname -s): the symlink refusals must run here" >&2; }
+  echo "  SKIP gitops symlink refusals: this Git Bash cannot create symlinks (enable Windows developer mode); Linux/macOS CI runs them"
+fi
 
 # --- build: context and Dockerfile must stay inside the checkout ---------------------------------------------------
 BUILD=$(cwt koorikla-build '.spec.templates[] | select(.name == "build") | .container.args[0]')
