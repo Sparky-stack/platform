@@ -226,16 +226,23 @@ node_registry_auth() {
   echo "$v"
 }
 
-# drop_stale_ghcr: no GHCR credential this run. A platform-ghcr that holds a gh CLI token (annotation seeded-from=gh,
-# or a gho_ token from before the annotation existed) is deleted; any other is kept and reported.
+# drop_stale_ghcr <nodeRegistryAuth true|false>: no GHCR credential this run, but an earlier run may have left
+# platform-ghcr. A gh CLI copy (annotation seeded-from=gh, or a gho_ token from before the annotation existed) is
+# deleted when no node needs it; while nodeRegistryAuth is on, new nodes do need it, so it is kept and reported, as is
+# any secret the user seeded.
 drop_stale_ghcr() {
   local doc from tok
   doc=$(kubectl --context "$CTX" -n platform-secrets get secret platform-ghcr -o yaml 2>/dev/null) || return 0
   from=$(printf '%s\n' "$doc" | yq '.metadata.annotations["platform.koorikla.io/seeded-from"] // ""')
   tok=$(printf '%s\n' "$doc" | yq '.data.token // ""' | b64dec 2>/dev/null || true)
   if [[ "$from" == gh || "$tok" == gho_* ]]; then
-    kubectl --context "$CTX" -n platform-secrets delete secret platform-ghcr >/dev/null
-    log "  platform-ghcr: deleted the gh CLI token an earlier run copied there"
+    if [[ "$1" == true ]]; then
+      warn "  platform-ghcr: still holds the gh CLI token from an earlier run (kept: nodeRegistryAuth is on and new nodes"
+      warn "  need it). Replace it with GHCR_USER/GHCR_TOKEN, or turn nodeRegistryAuth off to have it deleted"
+    else
+      kubectl --context "$CTX" -n platform-secrets delete secret platform-ghcr >/dev/null
+      log "  platform-ghcr: deleted the gh CLI token an earlier run copied there"
+    fi
   else
     warn "  platform-ghcr: kept from an earlier run although no GHCR_TOKEN was given now; if unwanted:"
     warn "  kubectl --context $CTX -n platform-secrets delete secret platform-ghcr"
@@ -332,7 +339,7 @@ cmd_secrets() {
       annotation:platform.koorikla.io/seeded-from=ghcr_from
     log "  platform-ghcr: $ghcr_src (user $ghcr_user)"
   else
-    drop_stale_ghcr
+    drop_stale_ghcr "$nra"
     if [[ "$nra" == true ]]; then
       warn "  platform-ghcr: no GHCR_TOKEN: skipped, but secrets.nodeRegistryAuth is on and new cluster nodes wait for it."
       warn "  Public images only: set 'secrets: {nodeRegistryAuth: {enabled: false}}' in $INST_FILE (docs/forking.md)"

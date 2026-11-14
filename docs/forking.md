@@ -154,7 +154,8 @@ With none of these set it falls back to your `gh auth login` token (local conven
 broad scopes; `NO_GH=1` disables the fallback) and, if there is no `gh` login either, skips `platform-github`, which
 is fine for a public fork (the `platform-repo-creds` ExternalSecret then reports a missing key; harmless). The gh token
 goes into `platform-ghcr` (and so onto every node) only when `nodeRegistryAuth` is on and the token has
-`read:packages`; a copy an earlier run left there is deleted once it is no longer wanted.
+`read:packages`. A gh copy an earlier run left there is deleted once `nodeRegistryAuth` is off (while it is on, new
+nodes need it: it is kept and reported until you replace it with `GHCR_USER`/`GHCR_TOKEN`).
 
 The same sources feed the bootstrap Argo CD secret `platform-repo-bootstrap` that lets Argo CD read a private fork
 before ESO runs. Once ESO's `platform-repo-creds` is Ready for `installation.githubOrg`, the bootstrap secret is

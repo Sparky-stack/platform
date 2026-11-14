@@ -198,6 +198,10 @@ assert_eq "$(applied platform-ghcr)" "" "gh api failure: scopes unknown, platfor
 printf 'metadata:\n  annotations:\n    platform.koorikla.io/seeded-from: gh\ndata:\n  token: %s\n' "$(printf x | base64)" > "$TMP/ghcr-gh.yaml"
 printf 'data:\n  token: %s\n' "$(printf gho_X | base64)" > "$TMP/ghcr-old.yaml"
 printf 'metadata:\n  annotations:\n    platform.koorikla.io/seeded-from: env\ndata:\n  token: %s\n' "$(printf x | base64)" > "$TMP/ghcr-env.yaml"
+run stale_gh_nra "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE FAKE_GHCR_YAML="$TMP/ghcr-gh.yaml"
+assert_eq "$(grep -c 'delete secret platform-ghcr' "$HLOG/calls" || true)" 0 "stale gh copy kept while nodeRegistryAuth needs it"
+assert_eq "$(has "$OUT" 'still holds the gh CLI token')" yes "stale gh copy reported"
+nra false
 run stale_gh "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE FAKE_GHCR_YAML="$TMP/ghcr-gh.yaml"
 assert_eq "$(grep -c 'delete secret platform-ghcr' "$HLOG/calls" || true)" 1 "stale gh-seeded platform-ghcr deleted"
 run stale_old "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE FAKE_GHCR_YAML="$TMP/ghcr-old.yaml"
@@ -205,6 +209,7 @@ assert_eq "$(grep -c 'delete secret platform-ghcr' "$HLOG/calls" || true)" 1 "st
 run stale_env "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE FAKE_GHCR_YAML="$TMP/ghcr-env.yaml"
 assert_eq "$(grep -c 'delete secret platform-ghcr' "$HLOG/calls" || true)" 0 "user-seeded platform-ghcr kept"
 assert_eq "$(has "$OUT" 'platform-ghcr: kept from an earlier run')" yes "user-seeded platform-ghcr reported"
+nra true
 
 nra false
 run nra_off "$S" FAKE_GH_SCOPES="repo, read:packages"
