@@ -4,3 +4,5 @@ addons/*/charts/
 *.kubeconfig
 .env
 /tmp/
+__pycache__/
+*.py[cod]
