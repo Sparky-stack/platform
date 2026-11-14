@@ -48,11 +48,20 @@ tests:
 
   - it: OpenSearch TLS passthrough route on the tls listener
     template: templates/opensearch-tlsroute.yaml
+    documentSelector: { path: kind, value: TLSRoute }
     asserts:
-      - isKind: { of: TLSRoute }
       - equal: { path: spec.hostnames, value: [opensearch.observability.openchoreo.localhost] }
       - equal: { path: "spec.parentRefs[0].sectionName", value: tls }
-      - equal: { path: "spec.rules[0].backendRefs[0].name", value: opensearch }
+      # not Service opensearch: the logs module's BackendConfigPolicy there originates TLS and breaks passthrough
+      - equal: { path: "spec.rules[0].backendRefs[0].name", value: opensearch-passthrough }
+
+  - it: passthrough Service selects the OpenSearch pods
+    template: templates/opensearch-tlsroute.yaml
+    documentSelector: { path: kind, value: Service }
+    asserts:
+      - equal: { path: metadata.name, value: opensearch-passthrough }
+      - equal: { path: spec.selector["app.kubernetes.io/name"], value: opensearch }
+      - equal: { path: "spec.ports[0].port", value: 9200 }
 
   - it: fails when observability is disabled in the installation
     template: templates/validate.yaml
