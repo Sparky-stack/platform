@@ -412,8 +412,8 @@ spec:
           - { name: FAIL_SEVERITIES, value: "{{workflow.parameters.fail-severities}}" }
           - { name: IGNORE_UNFIXED, value: "{{workflow.parameters.ignore-unfixed}}" }
           - { name: CI_OUT_DIR, value: /work/out }
-          - { name: TRIVY_CACHE_DIR, value: /work/.cache/trivy }
-          - { name: HOME, value: /work/home }
+          - { name: TRIVY_CACHE_DIR, value: /tmp/trivy }
+          - { name: HOME, value: /tmp }
         resources:
           requests: { cpu: 100m, memory: 256Mi }
           limits: { cpu: "1", memory: 2Gi }
@@ -524,6 +524,8 @@ spec:
     # --- supply chain: koorikla/ci common scripts in the toolbox -----------------------------------------------------
     # Registry trust: Go tools (trivy, syft, cosign, crane) read SSL_CERT_FILE; the registry CA is appended to the
     # system bundle so public registries (Trivy DB, Sigstore) keep working. Registry auth: DOCKER_CONFIG.
+    # HOME and TRIVY_CACHE_DIR live in the pod's own /tmp emptyDir, never on the run volume the tenant check step
+    # writes (no planted tool config, no poisoned Trivy DB); scan-fs does the same.
     - name: scan-image
       inputs:
         parameters:
@@ -545,8 +547,8 @@ spec:
           - { name: FAIL_SEVERITIES, value: "{{workflow.parameters.fail-severities}}" }
           - { name: IGNORE_UNFIXED, value: "{{workflow.parameters.ignore-unfixed}}" }
           - { name: CI_OUT_DIR, value: /work/out }
-          - { name: TRIVY_CACHE_DIR, value: /work/.cache/trivy }
-          - { name: HOME, value: /work/home }
+          - { name: TRIVY_CACHE_DIR, value: /tmp/trivy }
+          - { name: HOME, value: /tmp }
         resources:
           requests: { cpu: 100m, memory: 384Mi }
           limits: { cpu: "2", memory: 3Gi }
@@ -576,7 +578,7 @@ spec:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
           - { name: CI_OUT_DIR, value: /work/out }
-          - { name: HOME, value: /work/home }
+          - { name: HOME, value: /tmp }
         resources:
           requests: { cpu: 100m, memory: 256Mi }
           limits: { cpu: "2", memory: 2Gi }
@@ -609,7 +611,7 @@ spec:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: COSIGN_KEY, value: /cosign/cosign.key }
           - { name: CI_OUT_DIR, value: /work/out }
-          - { name: HOME, value: /work/home }
+          - { name: HOME, value: /tmp }
         resources:
           requests: { cpu: 50m, memory: 128Mi }
           limits: { cpu: "1", memory: 512Mi }

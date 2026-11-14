@@ -27,7 +27,7 @@ the OpenChoreo API; here the Workload changes only by commit).
 | mgmt | `openchoreo-workflow-plane` | openchoreo-workflow-plane | Argo Workflows v4.0.8 controller (no UI), cluster-agent (in-cluster to the cluster-gateway), `ClusterWorkflowPlane default`, Argo `ClusterWorkflowTemplate`s `koorikla-build`, `koorikla-helm-chart` |
 | mgmt | `openchoreo-platform` | default | `ClusterWorkflow`s `go`, `nextjs`, `elixir`, `ruby`, `dockerfile` (component) and `helm-chart` (generic); every ClusterComponentType's `allowedWorkflows` |
 | mgmt | `harbor` | harbor | Harbor 2.15.4 behind Gateway `harbor` (kgateway, HTTPS 9443), Trivy, desired-state Job; `ClusterSecretStore mgmt-harbor` |
-| mgmt | (OpenChoreo) | workflows-default | one Argo Workflow + pods per WorkflowRun, per-run ExternalSecrets; namespace, ServiceAccount `workflow-sa` and Role created by the WorkflowRun controller |
+| mgmt | (OpenChoreo) | workflows-default | one Argo Workflow + pods per WorkflowRun, per-run ExternalSecrets; ServiceAccount `workflow-sa` and Role created by the WorkflowRun controller; namespace + default-deny NetworkPolicy from addon openchoreo-workflow-plane |
 | workload | `charts/cluster` + ClusterClass | node OS | k3s `registries.yaml`: Harbor proxy-cache mirrors, robot auth, registry CA; CAPD `/etc/hosts` alias |
 
 ## Build ClusterWorkflows
@@ -117,6 +117,13 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
   init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
   digest that `sign` signs).
+- **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon
+  also renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor
+  Gateway proxy pods (port 9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check
+  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services.
+- Supply-chain steps (`scan-fs`, `scan-image`, `sbom`, `sign`) run with `HOME=/tmp` and `TRIVY_CACHE_DIR=/tmp/trivy`
+  (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code cannot plant tool config
+  (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
 - Per-run Secrets are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` for each run (owned by the
   run, deleted with it): git credentials, registry push credentials, registry CA (public), cosign key.
 - Signing: platform key pair `cosign-platform` (private key encrypted, only in the secret backend and the signing pod).

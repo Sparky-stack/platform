@@ -82,6 +82,18 @@ tests:
       - notExists: { path: 'spec.templates[?(@.automountServiceAccountToken == true)]' }
       - notExists: { path: 'spec.templates[?(@.serviceAccountName)]' }
 
+  - it: supply-chain steps keep HOME and the Trivy cache off the shared run volume
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - contains: { path: 'spec.templates[?(@.name == "scan-fs")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-fs")].container.env', content: { name: TRIVY_CACHE_DIR, value: /tmp/trivy } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-image")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "scan-image")].container.env', content: { name: TRIVY_CACHE_DIR, value: /tmp/trivy } }
+      - contains: { path: 'spec.templates[?(@.name == "sbom")].container.env', content: { name: HOME, value: /tmp } }
+      - contains: { path: 'spec.templates[?(@.name == "sign")].container.env', content: { name: HOME, value: /tmp } }
+      - notContains: { path: 'spec.templates[?(@.name == "sign")].container.env', content: { name: HOME, value: /work/home } }
+
   - it: helm chart packaging reuses the build checkout
     template: templates/cluster-workflow-templates.yaml
     documentSelector: { path: metadata.name, value: koorikla-helm-chart }

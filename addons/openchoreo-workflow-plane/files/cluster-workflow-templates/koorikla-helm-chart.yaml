@@ -149,7 +149,7 @@ spec:
         env:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: COSIGN_KEY, value: /cosign/cosign.key }
-          - { name: HOME, value: /work/home }
+          - { name: HOME, value: /tmp }
         resources:
           requests: { cpu: 50m, memory: 128Mi }
           limits: { cpu: "1", memory: 512Mi }
