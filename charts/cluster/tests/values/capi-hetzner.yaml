@@ -1,0 +1,20 @@
+# Fleet file + installation facts for a Hetzner cluster (charts/cluster capi_* suites).
+installation: { name: hetzner-example }
+capi:
+  providers: { docker: false, aws: false, hetzner: true }
+secrets:
+  backend: vault
+name: dev-fsn1
+provider: hetzner
+region: fsn1
+environment: development
+kubernetesVersion: v1.35.10+k3s1
+controlPlane:
+  replicas: 1
+  machineType: cpx31
+workers:
+  - name: md-0
+    replicas: 1
+    machineType: cpx41
+providerSpec:
+  sshKey: platform
