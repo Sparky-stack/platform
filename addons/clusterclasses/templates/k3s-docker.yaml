@@ -38,6 +38,16 @@ template:
       - mkdir -p /etc/systemd/system/k3s-agent.service.d && printf '[Service]\nType=exec\n' > /etc/systemd/system/k3s-agent.service.d/capd.conf
 {{- end }}
 
+{{- /*
+Local registry name resolution for containerd on CAPD nodes: Harbor's token realm is its externalURL, so the node
+must resolve the registry hostname itself. Docker's embedded DNS knows the k3d serverlb container (which publishes the
+registry port on network kind) but not *.localhost names: append "<serverlb IP> <registry host>" to /etc/hosts before
+k3s starts. CAPI evaluates the {{ .registryHostAlias* }} template per cluster.
+*/ -}}
+{{- define "k3s-docker.hostAliasCommand" -}}
+{{`for i in $(seq 1 60); do ip=$(getent hosts {{ .registryHostAliasTarget }} | cut -d' ' -f1); [ -n "$ip" ] && break; sleep 2; done; if [ -n "$ip" ] && ! grep -q ' {{ .registryHostAlias }}$' /etc/hosts; then echo "$ip {{ .registryHostAlias }}" >> /etc/hosts; fi`}}
+{{- end }}
+
 {{- if ne (toString .Values.capi.providers.docker) "false" }}
 {{- $ns := .Values.namespace }}
 {{- $clusterName := include "clusterclasses.templateName" (list "k3s-docker" (include "k3s-docker.cluster" .)) }}
@@ -89,6 +99,20 @@ spec:
           type: string
           default: {{ .Values.docker.kindImage }}
           description: Node container image (OS only; k3s is installed at boot with version = topology.version).
+    - name: registryHostAlias
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: ""
+          description: Registry hostname (no port) that nodes resolve to registryHostAliasTarget via /etc/hosts.
+    - name: registryHostAliasTarget
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: ""
+          description: Docker container name (network kind) whose IP the registry hostname resolves to (k3d serverlb).
     {{- include "clusterclasses.commonVariables" . | nindent 4 }}
   patches:
     - name: kindImage
@@ -105,6 +129,8 @@ spec:
               path: /spec/template/spec/customImage
               valueFrom:
                 variable: kindImage
+    # cni-flannel replaces the whole control-plane files list: it must run before every patch that appends files.
+    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
     - name: registryAuth
       enabledIf: {{`"{{ .registryAuth }}"`}}
       definitions:
@@ -123,7 +149,31 @@ spec:
                 names: [default-worker]
           jsonPatches:
             {{- include "clusterclasses.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
-    {{- include "clusterclasses.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
+    {{- include "clusterclasses.registryCAPatch" . | nindent 4 }}
+    - name: registryHostAlias
+      enabledIf: {{`'{{ if .registryHostAliasTarget }}true{{ end }}'`}}
+      definitions:
+        - selector:
+            apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+            kind: KThreesControlPlaneTemplate
+            matchResources:
+              controlPlane: true
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/kthreesConfigSpec/preK3sCommands/-
+              valueFrom:
+                template: {{ include "k3s-docker.hostAliasCommand" . | quote }}
+        - selector:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+            kind: KThreesConfigTemplate
+            matchResources:
+              machineDeploymentClass:
+                names: [default-worker]
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/preK3sCommands/-
+              valueFrom:
+                template: {{ include "k3s-docker.hostAliasCommand" . | quote }}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerClusterTemplate

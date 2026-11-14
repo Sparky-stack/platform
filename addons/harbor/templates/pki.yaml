@@ -1,0 +1,166 @@
+{{- /*
+Harbor TLS from a registry CA scoped to ns harbor (cert-manager, namespaced Issuers only: nobody outside this
+namespace can mint a cert every node trusts for the registry host):
+  Issuer harbor-selfsigned -> Certificate harbor/harbor-ca (isCA) -> Issuer harbor/harbor-ca
+    -> Certificate harbor/harbor-tls          Gateway serving cert: the registry host only (the Gateway listener's
+                                              hostname; nothing reaches Harbor under another name)
+  Issuer harbor/harbor-token-selfsigned -> Certificate harbor/harbor-token   core's token-signing key pair (RSA)
+  SecretStore harbor-ca-source + ExternalSecret harbor-ca-bundle -> Secret harbor/harbor-ca-bundle with ONLY ca.crt
+    (the CA certificate). The store's ServiceAccount may GET only Secret harbor-ca; the CA key and every other Secret
+    here stay unreadable for consumers.
+Nodes and build pods receive ca.crt only, through ClusterSecretStore mgmt-harbor (templates/ca-store.yaml), which may
+GET only harbor-ca-bundle.
+*/ -}}
+{{- $host := include "harbor-addon.hostname" . }}
+{{- $ns := .Release.Namespace }}
+{{- $p := .Values.pki }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: harbor-selfsigned
+  namespace: {{ $ns }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $p.caIssuer }}
+  namespace: {{ $ns }}
+spec:
+  isCA: true
+  commonName: {{ printf "%s registry CA" .Values.cluster.name | quote }}
+  secretName: {{ $p.caIssuer }}
+  duration: {{ $p.caDuration }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never     # node bootstrap data embeds the CA: rotating it means rolling every machine
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: harbor-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $p.caIssuer }}
+  namespace: {{ $ns }}
+spec:
+  ca:
+    secretName: {{ $p.caIssuer }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $p.tlsSecret }}
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $p.tlsSecret }}
+  commonName: {{ $host | quote }}
+  dnsNames:
+    - {{ $host | quote }}
+    {{- range $p.extraDNSNames }}
+    - {{ . | quote }}
+    {{- end }}
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth, digital signature, key encipherment]
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: {{ $p.caIssuer }}
+---
+# Publication of the CA's public certificate only (no throwaway leaf, no private key in harbor-ca-bundle).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-harbor-ca-source
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-harbor-ca-source
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ $p.caIssuer }}]
+    verbs: [get]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-harbor-ca-source
+  namespace: {{ $ns }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-harbor-ca-source }
+subjects:
+  - { kind: ServiceAccount, name: eso-harbor-ca-source, namespace: {{ $ns }} }
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: harbor-ca-source
+  namespace: {{ $ns }}
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $ns }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+      auth:
+        serviceAccount:
+          name: eso-harbor-ca-source
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.caPublic.secretName }}
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef: { kind: SecretStore, name: harbor-ca-source }
+  target:
+    name: {{ .Values.caPublic.secretName }}
+    creationPolicy: Owner
+  data:
+    - secretKey: ca.crt
+      remoteRef: { key: {{ $p.caIssuer }}, property: tls.crt }    # the CA certificate itself (self-signed root)
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: harbor-token-selfsigned
+  namespace: {{ $ns }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $p.tokenSecret }}
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $p.tokenSecret }}
+  commonName: harbor-token-service
+  duration: 87600h
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Never     # rotating invalidates every issued registry token; do it deliberately
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: harbor-token-selfsigned

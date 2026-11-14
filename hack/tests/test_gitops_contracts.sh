@@ -50,6 +50,7 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
   case "$ns" in
     default) continue ;;       # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
     argo-events) continue ;;   # externally reachable webhook receiver: deliberately in scope (PSS, Kyverno reports)
+    harbor) continue ;;        # Harbor meets PSS baseline: policed like a workload (check 9)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
@@ -117,5 +118,35 @@ for tdir in "$ROOT"/installations/*/tenants; do
   done; done
   assert_eq "$clash" "" "tenant projects are not '<other project>-' prefixed ($(basename "$(dirname "$tdir")"))"
 done
+# 8. Local Harbor: bootstrap/k3d-mgmt.yaml publishes the registry.host port on the load balancer (loopback), else
+#    host docker login and CAPD node pulls through the serverlb fail. Negative check: a k3d file without it is caught.
+k3d_publishes() {   # k3d_publishes <k3d file> <port> -> yes|no
+  local p
+  p=$(PORT=$2 yq '[.ports[] | select((.port | test(":" + strenv(PORT) + ":" + strenv(PORT) + "$")) and (.nodeFilters[] == "loadbalancer"))] | length' "$1")
+  [[ "$p" -ge 1 ]] && echo yes || echo no
+}
+for inst_file in "$ROOT"/installations/*/installation.yaml; do
+  [[ "$(yq '.registry.type // ""' "$inst_file")" == harbor ]] || continue
+  [[ "$(yq '.mgmt.provider // "docker"' "$inst_file")" == docker ]] || continue
+  host=$(yq '.registry.host' "$inst_file")
+  port=443; [[ "$host" == *:* ]] && port=${host##*:}
+  assert_eq "$(k3d_publishes "$ROOT/bootstrap/k3d-mgmt.yaml" "$port")" yes \
+    "bootstrap/k3d-mgmt.yaml publishes registry port $port on the load balancer ($(basename "$(dirname "$inst_file")"))"
+  assert_match "$(yq ".ports[] | select(.port | test(\":$port:$port\$\")) | .port" "$ROOT/bootstrap/k3d-mgmt.yaml")" '^127\.0\.0\.1:' \
+    "registry port $port bound to loopback only"
+done
+yq 'del(.ports[] | select(.port | test(":9443:9443$")))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noharbor.yaml"
+assert_eq "$(k3d_publishes "$TMP/k3d-noharbor.yaml" 9443)" no "contract catches a k3d config without the registry port"
+
+# 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
+#    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.
+for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+  assert_eq "$(grep -cE '^ *- harbor$' "$ROOT/$f" || true)" 0 "harbor not excluded from Kyverno ($f)"
+done
+helm template harbor "$ROOT/addons/harbor" --namespace harbor --values "$ROOT/installations/local/installation.yaml" \
+  --set harbor.externalURL=https://harbor.openchoreo.localhost:9443 > "$TMP/harbor.yaml"
+pss=$(yq 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob")' "$TMP/harbor.yaml" \
+  | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
+assert_eq "$pss" "" "Harbor workloads meet Pod Security baseline (no privileged/host namespaces/hostPath/hostPort/added caps)"
 
 finish

@@ -60,11 +60,11 @@ def overview() -> Diagram:
           ["push mode · AppSets: fleet, addon catalog, tenants"])
     d.box(L, R[2], WW, BH, "platform", "OpenChoreo control plane",
           ["Thunder · API · controllers · Backstage · gateway"])
-    d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows"], planned=True)
+    d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows · BuildKit", "koorikla/ci builds"])
     d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps agents: off"])
     d.box(L, R[4], 100, BH, "security", "Falco", ["detection"])
     d.box(L + 108, R[4], 100, BH, "security", "Kyverno", ["admission"])
-    d.box(Rx, R[4], CW, BH, "data", "Harbor", ["pull-through cache"], planned=True)
+    d.box(Rx, R[4], CW, BH, "data", "Harbor", ["apps · proxy caches", "Trivy scan on push"])
 
     # providers strip (top of the cloud region) + workload chips
     for i, (t, s) in enumerate([("docker · CAPD", ("tested", "#6ee7b7")), ("aws · CAPA", "rendered only"),
@@ -91,7 +91,7 @@ def overview() -> Diagram:
     d.arrow([(Rx + CW, yc(0)), (768, yc(0))], EM, badge=3, badge_pos=(728, yc(0)), aid="capi")
     d.arrow([(A, yc(2)), (L + WW, yc(2))], RO, badge=4, badge_pos=(728, yc(2)), aid="agent")
     d.arrow([(A, yc(3)), (Rx + CW, yc(3))], OR, badge=5, badge_pos=(728, yc(3)), aid="otel")
-    d.arrow([(A, yc(7)), (728, yc(7)), (728, yc(4)), (Rx + CW, yc(4))], VI, planned=True,
+    d.arrow([(A, yc(7)), (728, yc(7)), (728, yc(4)), (Rx + CW, yc(4))], VI,
             badge=6, badge_pos=(728, 610), aid="pull")
     d.arrow([(100, 360), (100, 420)], VI, badge=7, badge_pos=(100, 390), aid="ci")
     d.arrow([(L, R[2] + 44), (212, R[2] + 44), (212, yc(4)), (176, yc(4))], RO, planned=True,
@@ -104,11 +104,11 @@ def overview() -> Diagram:
           (3, "CAPI creates/upgrades clusters on docker / aws / hetzner"),
           (4, "OpenChoreo cluster-agent dials out: wss + mTLS, per-cluster CA")]
     e2 = [(5, "OTel collector ships logs/metrics/traces to obs plane (Datadog: opt-in)"),
-          (6, "workloads pull via Harbor, proxy cache of GHCR (today: direct)"),
-          (7, "app CI pushes images to GHCR (koorikla/ci + signing: planned)"),
+          (6, "nodes pull via Harbor proxy caches (upstream fallback)"),
+          (7, "optional GitHub Actions path: koorikla/ci → GHCR, keyless"),
           (8, "Thunder federates console/API login to Okta / Google")]
     d.flowkey(28, 888, e1, [EM, EM, EM, RO], title="Flows · arrow = initiator → target, colour = concern")
-    d.flowkey(612, 888, e2, [OR, VI, VI, RO], title=None, planned=(6, 8))
+    d.flowkey(612, 888, e2, [OR, VI, VI, RO], title=None, planned=(8,))
     return d
 
 
@@ -270,15 +270,15 @@ def trust_model() -> Diagram:
     d.box(EX, 918, EW, 64, "data", "GHCR", ["ghcr.io/koorikla/*", "+ sig, SBOM, SLSA, vuln"])
     d.box(EX, 994, EW, 48, "external", "GitHub App", ["Backstage scaffolder"], planned=True)
     d.box(MX, 826, MW, 60, "platform", "OC workflow plane",
-          ["cosign sign with platform key", "(cosign-platform via ESO)"], planned=True)
-    d.box(MX, 918, MW, 44, "data", "Harbor · apps", ["cosign content trust"], planned=True)
+          ["cosign sign with platform key", "(cosign-platform via ESO)"])
+    d.box(MX, 918, MW, 44, "data", "Harbor · apps", ["signed + scanned; CA on mgmt"])
     d.box(MX, 994, MW, 48, "platform", "Backstage scaffolder", ["new app repo + platform PR"], planned=True)
     d.box(WX, 826, WW, 136, "security", "Kyverno ImageValidating",
           ["ghcr.io/koorikla/*: keyless,", "reusable workflow + repo/ref", "SBOM · SLSA · vuln attested",
-           "apps/*: platform key (planned)", "Audit dev/stg · Deny prod"])
+           "harbor apps/*: platform key", "Audit dev/stg · Deny prod"])
     d.arrow([(136, 886), (136, 918)], VI, label="sign + attest", label_pos=(146, 907),
             label_anchor="start", aid="sign")
-    d.arrow([(580, 886), (580, 918)], VI, planned=True, label="push", label_pos=(590, 907), label_anchor="start",
+    d.arrow([(580, 886), (580, 918)], VI, label="push", label_pos=(590, 907), label_anchor="start",
             aid="push")
     d.arrow([(WX, 940), (MX + MW, 940)], RO, planned=True, label="verify platform key", label_pos=(GR, 944),
             aid="vk")
@@ -303,17 +303,16 @@ def delivery() -> Diagram:
 
     # row 1: build
     d.box(32, 120, 180, 64, "external", "git push", ["app repo, e.g.", "koorikla/hello-world"])
-    d.box(252, 120, 230, 64, "external", "GitHub Actions", ["test · build · push", "(koorikla/ci: planned)"])
-    d.box(252, 204, 230, 64, "platform", "OC workflow plane", ["same koorikla/ci scripts", "buildkit · Argo Workflows"],
-          planned=True)
-    d.box(522, 120, 230, 64, "data", "GHCR", ["ghcr.io/koorikla/<app>", "signed · SBOM · SLSA"])
-    d.box(522, 204, 230, 64, "data", "Harbor · apps", ["cosign: platform key", "Trivy scan on push"], planned=True)
+    d.box(252, 120, 230, 64, "external", "GitHub Actions", ["optional path", "koorikla/ci go.yaml@v1"])
+    d.box(252, 204, 230, 64, "platform", "OC workflow plane", ["default: WorkflowRun, same", "koorikla/ci scripts · BuildKit"])
+    d.box(522, 120, 230, 64, "data", "GHCR", ["ghcr.io/koorikla/<app>", "keyless sign + attest"])
+    d.box(522, 204, 230, 64, "data", "Harbor · apps", ["cosign: platform key", "Trivy scan on push"])
     d.box(792, 120, 200, 148, "external", "bot commit",
           ["by CI or workflow:", "deploy/openchoreo/", "workload.yaml", "image: <new tag>", "[skip ci]"])
     d.arrow([(212, 152), (252, 152)], SL)
-    d.arrow([(212, 172), (232, 172), (232, 236), (252, 236)], SL, planned=True)
+    d.arrow([(212, 172), (232, 172), (232, 236), (252, 236)], SL)
     d.arrow([(482, 152), (522, 152)], VI)
-    d.arrow([(482, 236), (522, 236)], VI, planned=True)
+    d.arrow([(482, 236), (522, 236)], VI)
     d.arrow([(367, 120), (367, 106), (892, 106), (892, 120)], SL, label="commit new image tag",
             label_pos=(630, 110), aid="tag")
     d.arrow([(892, 268), (892, 284), (122, 284), (122, 300)], EM,

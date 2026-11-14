@@ -1,0 +1,129 @@
+suite: harbor - registry glue (PKI, CA publication store, secrets, desired-state Job)
+templates:
+  - templates/pki.yaml
+  - templates/ca-store.yaml
+  - templates/secrets.yaml
+  - templates/config.yaml
+  - templates/validate.yaml
+  - templates/gateway.yaml
+release:
+  name: harbor
+  namespace: harbor
+tests:
+  - it: serving cert covers only the registry host (the Gateway listener hostname), issued by the namespaced CA
+    template: templates/pki.yaml
+    documentSelector: { path: metadata.name, value: harbor-tls }
+    asserts:
+      - equal: { path: spec.dnsNames, value: [harbor.openchoreo.localhost] }
+      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: Issuer, name: harbor-ca } }
+
+  - it: the CA key pair lives in ns harbor and is never rotated implicitly
+    template: templates/pki.yaml
+    documentSelector: { path: spec.isCA, value: true }
+    asserts:
+      - equal: { path: metadata.namespace, value: harbor }
+      - equal: { path: spec.secretName, value: harbor-ca }
+      - equal: { path: spec.privateKey.rotationPolicy, value: Never }
+      - equal: { path: spec.issuerRef.kind, value: Issuer }
+
+  - it: no cluster-scoped issuer anywhere (nobody outside ns harbor can mint a registry cert)
+    template: templates/pki.yaml
+    asserts:
+      - notEqual: { path: kind, value: ClusterIssuer }
+
+  - it: harbor-ca-bundle carries only the CA certificate, copied from the CA Secret by a name-scoped store
+    template: templates/pki.yaml
+    asserts:
+      - equal:
+          path: spec.data
+          value: [{ secretKey: ca.crt, remoteRef: { key: harbor-ca, property: tls.crt } }]
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: spec.secretStoreRef, value: { kind: SecretStore, name: harbor-ca-source } }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - notExists: { path: spec.dataFrom }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal:
+          path: 'rules[0]'
+          value: { apiGroups: [""], resources: [secrets], resourceNames: [harbor-ca], verbs: [get] }
+        documentSelector: { path: kind, value: Role }
+      - lengthEqual: { path: rules, count: 2 }
+        documentSelector: { path: kind, value: Role }
+
+  - it: store mgmt-harbor may GET only the public CA bundle Secret
+    template: templates/ca-store.yaml
+    documentSelector: { path: kind, value: Role }
+    asserts:
+      - equal:
+          path: 'rules[0]'
+          value: { apiGroups: [""], resources: [secrets], resourceNames: [harbor-ca-bundle], verbs: [get] }
+      - lengthEqual: { path: rules, count: 2 }
+
+  - it: store mgmt-harbor is usable from fleet and workflow run namespaces only
+    template: templates/ca-store.yaml
+    documentSelector: { path: kind, value: ClusterSecretStore }
+    asserts:
+      - equal: { path: metadata.name, value: mgmt-harbor }
+      - equal: { path: spec.conditions, value: [{ namespaces: [fleet] }, { namespaceRegexes: ["^workflows-.+$"] }] }
+      - equal: { path: spec.provider.kubernetes.remoteNamespace, value: harbor }
+
+  - it: every chart-generated secret comes from ClusterSecretStore platform key harbor
+    template: templates/secrets.yaml
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.name, value: harbor-platform }
+      # ESO 2.x sprig htpasswd takes (user, password, algorithm); two args fails at reconcile time, not render time
+      - equal: { path: 'spec.target.template.data.REGISTRY_HTPASSWD', value: '{{ htpasswd "harbor_registry_user" .registryPassword "bcrypt" }}' }
+      - equal: { path: 'spec.target.template.data["robot-builder"]', value: '{{ index . "builder-secret" }}' }
+      - notContains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
+      - notExists: { path: 'spec.target.template.data["ghcr-token"]' }
+
+  - it: GHCR credentials only when secrets.ghcrKey is set (private packages)
+    template: templates/secrets.yaml
+    set:
+      secrets.ghcrKey: platform-ghcr
+    asserts:
+      - contains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
+      - exists: { path: 'spec.target.template.data["ghcr-token"]' }
+
+  - it: desired state renders projects, proxy caches and robots
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: ConfigMap }
+    asserts:
+      - matchRegex: { path: 'data["state.json"]', pattern: '"name": "apps"' }
+      - matchRegex: { path: 'data["state.json"]', pattern: '"registry": "cr.openchoreo.dev"' }
+      - matchRegex: { path: 'data["state.json"]', pattern: '"secretEnv": "ROBOT_NODES"' }
+      - matchRegex: { path: 'data["harbor-config.py"]', pattern: 'def ensure_robot' }
+
+  - it: the PostSync Job and the CronJob run the same reconciler
+    template: templates/config.yaml
+    asserts:
+      - equal: { path: "metadata.annotations['argocd.argoproj.io/hook']", value: PostSync }
+        documentSelector: { path: kind, value: Job }
+      - equal: { path: 'spec.jobTemplate.spec.template.spec.containers[0].command', value: [python3, /config/harbor-config.py, /config/state.json] }
+        documentSelector: { path: kind, value: CronJob }
+
+  - it: fails when externalURL drifts from registry.host
+    template: templates/validate.yaml
+    set: { registry.host: "registry.example.com" }
+    asserts:
+      - failedTemplate: { errorPattern: "harbor.externalURL .* must be https://registry.example.com" }
+
+  - it: fails when the route hosts drift from registry.host
+    template: templates/validate.yaml
+    set: { registry.host: "registry.example.com:9443", harbor.externalURL: "https://registry.example.com:9443" }
+    asserts:
+      - failedTemplate: { errorPattern: "expose.route.hosts must contain registry.example.com" }
+
+  - it: Gateway listener follows registry.host and terminates TLS with harbor-tls
+    template: templates/gateway.yaml
+    documentSelector: { path: kind, value: Gateway }
+    asserts:
+      - equal: { path: 'spec.listeners[0].port', value: 9443 }
+      - equal: { path: 'spec.listeners[0].hostname', value: harbor.openchoreo.localhost }
+      - equal: { path: 'spec.listeners[0].tls.certificateRefs[0].name', value: harbor-tls }
+
+  - it: refuses to render for an external registry
+    template: templates/validate.yaml
+    set: { registry.type: external }
+    asserts:
+      - failedTemplate: { errorPattern: "disable addon harbor" }

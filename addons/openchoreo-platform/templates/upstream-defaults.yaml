@@ -1,10 +1,17 @@
-{{- /* Upstream 1.3.3 ClusterComponentTypes, ClusterTraits, ClusterProjectType (files/README.md), verbatim. Cluster-scoped. */ -}}
+{{- /* Upstream 1.3.3 ClusterComponentTypes, ClusterTraits, ClusterProjectType (files/README.md), verbatim except
+allowedWorkflows (the platform's build ClusterWorkflows). Cluster-scoped. */ -}}
 {{- if .Values.upstreamDefaults.enabled }}
 {{- range $path, $_ := .Files.Glob "files/*/*.yaml" }}
 ---
 # Source: {{ $.Chart.Name }}/{{ $path }}
 {{- $obj := $.Files.Get $path | fromYaml }}
 {{- $_ := set $obj.metadata "annotations" (merge (default dict $obj.metadata.annotations) (dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true")) }}
+{{- /* Component types allow the platform's build ClusterWorkflows (templates/build-workflows.yaml). */ -}}
+{{- if and (eq $obj.kind "ClusterComponentType") $.Values.buildWorkflows.enabled }}
+{{- $wf := list }}
+{{- range $.Values.buildWorkflows.stacks }}{{ $wf = append $wf (dict "kind" "ClusterWorkflow" "name" .name) }}{{ end }}
+{{- $_ := set $obj.spec "allowedWorkflows" $wf }}
+{{- end }}
 {{ toYaml $obj }}
 {{- end }}
 {{- end }}

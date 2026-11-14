@@ -7,3 +7,8 @@ rewrite:
 # == listeners == published ports), so the observer URL and ingest URLs are identical for pods and browsers.
 observabilityRewrite:
   target: gateway-default.openchoreo-observability-plane.svc.cluster.local
+
+# Registry host (installation.yaml registry.host, type harbor) -> Gateway Service `harbor` in ns harbor (addons/harbor),
+# so in-cluster builds push to the same name nodes and browsers use.
+registryRewrite:
+  target: harbor.harbor.svc.cluster.local

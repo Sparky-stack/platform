@@ -1,0 +1,9 @@
+# installation.yaml `registry` with Harbor (one proxy cache to keep assertions short)
+registry:
+  type: harbor
+  host: harbor.openchoreo.localhost:9443
+  proxyCache:
+    - { upstream: docker.io, project: dockerhub }
+  mirror:
+    enabled: true
+  nodeHostAlias: k3d-platform-mgmt-serverlb

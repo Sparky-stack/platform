@@ -1,13 +1,23 @@
 {{- /*
-Node registry auth (private GHCR): Secret <name>-registries in ns fleet, key registries.yaml = k3s' private registry
-config. The ClusterClass (variable registryAuth, set from secrets.nodeRegistryAuth.enabled) writes it to
-/etc/rancher/k3s/registries.yaml on every node via KThreesConfig files[].contentFrom.secret.
-Bootstrap data is rendered once per Machine: a rotated token reaches nodes created afterwards only (roll the machines,
-CAPI topology `rollout.after`, or use a long-lived read-only token). VERIFY rotation story.
+k3s node registry config: Secret <name>-registries in ns fleet, written to every node by the ClusterClass
+(KThreesConfig files[].contentFrom.secret, variables registryAuth / registryCA):
+  registries.yaml   k3s' private registry config (/etc/rancher/k3s/registries.yaml):
+                    - configs.<nodeRegistryAuth.registry>.auth        private GHCR (key platform-ghcr)
+                    - configs.<registry.host>.{auth,tls.ca_file}      Harbor (robot `nodes`, CA below)
+                    - mirrors.<upstream> -> https://<registry.host> with rewrite "^(.*)$" -> "<project>/$1"
+                      (Harbor proxy-cache projects, registry.proxyCache); containerd falls back to the upstream
+                      endpoint when Harbor fails, so a Harbor outage slows pulls instead of breaking them
+  registry-ca.crt   the registry CA's PUBLIC cert (ca.crt of harbor/harbor-ca-bundle via ClusterSecretStore
+                    mgmt-harbor, name-scoped read); the CA key never leaves mgmt (ns cert-manager)
+Bootstrap data is rendered once per Machine: rotated tokens, robot secrets or mirror changes reach machines created
+afterwards only (roll them: CAPI topology `rollout.after`). VERIFY rotation story.
 */ -}}
 {{- include "capi.validate" . }}
 {{- $auth := .Values.secrets.nodeRegistryAuth }}
-{{- if $auth.enabled }}
+{{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
+{{- $reg := .Values.registry }}
+{{- $nr := .Values.nodeRegistry }}
+{{- if or $auth.enabled $harbor }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -28,12 +38,35 @@ spec:
       type: Opaque
       data:
         registries.yaml: |
+          {{- if and $harbor $reg.mirror.enabled }}
+          mirrors:
+            {{- range $reg.proxyCache }}
+            {{ .upstream | quote }}:
+              endpoint: [{{ printf "https://%s" $reg.host | quote }}]
+              rewrite:
+                "^(.*)$": {{ printf "%s/$1" .project | quote }}
+            {{- end }}
+          {{- end }}
           configs:
+            {{- if $auth.enabled }}
             {{ $auth.registry | quote }}:
               auth:
                 username: {{`{{ .username | toJson }}`}}
                 password: {{`{{ .token | toJson }}`}}
+            {{- end }}
+            {{- if $harbor }}
+            {{ $reg.host | quote }}:
+              auth:
+                username: {{ $nr.robot | quote }}
+                password: {{`{{ .nodesSecret | toJson }}`}}
+              tls:
+                ca_file: {{ $nr.caFile }}
+            {{- end }}
+        {{- if $harbor }}
+        registry-ca.crt: {{`'{{ .registryCA }}'`}}
+        {{- end }}
   data:
+    {{- if $auth.enabled }}
     - secretKey: username
       remoteRef:
         key: {{ $auth.key }}
@@ -42,4 +75,19 @@ spec:
       remoteRef:
         key: {{ $auth.key }}
         property: token
+    {{- end }}
+    {{- if $harbor }}
+    - secretKey: nodesSecret
+      remoteRef:
+        key: {{ $nr.secretKey }}
+        property: {{ $nr.secretProperty }}
+    - secretKey: registryCA
+      remoteRef:
+        key: {{ $nr.caSecret }}
+        property: ca.crt
+      sourceRef:
+        storeRef:
+          kind: ClusterSecretStore
+          name: {{ $nr.caStore }}
+    {{- end }}
 {{- end }}
