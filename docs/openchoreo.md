@@ -1,0 +1,284 @@
+# OpenChoreo on this platform
+
+OpenChoreo 1.3.3 is the developer platform: Projects, Components, Environments, promotion. Its **control plane** runs on
+mgmt; every workload cluster with `openchoreo.dataPlane.enabled: true` is a **data plane**. Argo CD installs both and
+syncs OpenChoreo resources into the control plane; app workloads reach data planes only through OpenChoreo's
+cluster-agent (never through Argo CD). Design background: [architecture.md](architecture.md).
+
+## What runs where
+
+| Where | Addon / chart | Namespace | What |
+|---|---|---|---|
+| mgmt | `gateway-api-crds` | kube-system | Gateway API v1.5.1 standard CRDs (incl. TLSRoute v1) |
+| mgmt + workload | `kgateway` | catalog ns | kgateway v2.3.1 controller + `gateway.kgateway.dev` CRDs, GatewayClass `kgateway` |
+| mgmt | `thunder` | thunder | ThunderID 1.0.1: OIDC IdP for console, API, CLI |
+| mgmt | `openchoreo-control-plane` | openchoreo-control-plane | controller-manager, openchoreo-api, Backstage console, cluster-gateway, event-forwarder, Gateway `gateway-default`; Secret `backstage-secrets`; CRS payload `fleet/openchoreo-gateway-ca` |
+| mgmt | `openchoreo-platform` | default | org namespace label, `DeploymentPipeline default`, upstream ClusterComponentTypes / ClusterTraits / ClusterProjectType |
+| mgmt | `charts/cluster` (per cluster) | fleet (+ cluster-scoped, org ns) | agent CA + client cert, CRS, `ClusterDataPlane <name>`, `Environment`s |
+| mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
+| workload | `openchoreo-data-plane` | openchoreo-data-plane | cluster-agent + Gateway `gateway-default` (app ingress) |
+| mgmt + workload (docker) | `coredns-local` | kube-system | resolves `*.openchoreo.localhost` (mgmt: to the control-plane Gateway; workload: to mgmt) |
+
+The workload clusters also need `cert-manager`, `external-secrets` and ClusterSecretStore `default` (secret-stores
+addon): the ClusterDataPlane's `secretStoreRef` and every app ExternalSecret OpenChoreo renders use it.
+
+Workflow plane (in-cluster builds) and observability plane (logs/metrics/traces, alerts) are **not part of v1**; see
+[Adding planes](#adding-the-workflow-and-observability-planes).
+
+### Ordering
+
+There is no hard ordering between Applications; Argo CD retries cover it:
+
+1. `gateway-api-crds`, `cert-manager`, `external-secrets` + stores, `kgateway`, `thunder` converge independently.
+   Thunder's setup Job waits for Secret `thunder-bootstrap` (`platform` store), its HTTPRoute for the Gateway.
+2. `openchoreo-control-plane` installs the OpenChoreo CRDs (chart `crds/`) with the controllers. Its Gateway needs the
+   GatewayClass, its Certificates cert-manager.
+3. `openchoreo-platform`, `tenant-*`, and the OpenChoreo objects of `cluster-*` fail with `no matches for kind ...`
+   until step 2 is done; they carry `SkipDryRunOnMissingResource=true` (and sync wave 10 in `charts/cluster`), so the
+   rest of each Application (namespace label, CAPI cluster, PKI) still applies and the Application retries.
+4. On a new workload cluster: the CRS applies the agent Secret/ConfigMap as soon as CAPI sees the cluster; the
+   data-plane agent waits in ContainerCreating until they exist, then connects.
+
+References between OpenChoreo objects (Project -> DeploymentPipeline, Environment -> ClusterDataPlane, Component ->
+ComponentType) are not validated by the API server; the controllers reconcile once the target exists.
+
+## Trust model
+
+Upstream's multi-cluster recipe copies the agent's self-signed CA back to the control plane by hand, or copies the
+control plane's CA **private key** into every plane. Neither happens here.
+
+```
+mgmt, ns fleet (charts/cluster)                             workload cluster <name>, ns openchoreo-data-plane
+  Issuer <name>-agent-selfsigned
+   └ Certificate <name>-agent-ca (isCA, 10y) ── trusted by ClusterDataPlane <name> (clientCA secretKeyRef)
+      └ Issuer <name>-agent-ca
+         └ Certificate <name>-agent-tls (CN=<name>, client auth, 1y)
+              └ ExternalSecret (store mgmt-fleet) ─► Secret <name>-openchoreo-agent ─┐
+mgmt, ns openchoreo-control-plane (chart)                                             │ ClusterResourceSet
+  Secret cluster-gateway-ca (gateway CA, 10y)                                         │ <name>-openchoreo-agent
+   └ ca.crt only ─► ExternalSecret (store mgmt-openchoreo) ─► Secret fleet/openchoreo-gateway-ca ─┤ (Reconcile)
+                                                                                      ▼
+                                              Secret cluster-agent-tls (tls.crt, tls.key, ca.crt)
+                                              ConfigMap cluster-gateway-ca (ca.crt)
+```
+
+- **Per-cluster CA.** Each cluster's agent cert is signed by its own CA on mgmt; `ClusterDataPlane <name>` trusts only
+  that CA, so a compromised cluster cannot impersonate another plane. Deleting the cluster file deletes the CA:
+  revocation. CA private keys never leave mgmt.
+- **Server trust.** Agents verify the cluster-gateway against the control plane's gateway CA (public cert only). The
+  gateway's server cert (`cluster-gateway-tls`) carries the SAN agents dial (`cluster-gateway.openchoreo.localhost`).
+- **Delivery.** CAPI's ClusterResourceSet is the only mgmt -> workload write path (it already exists for CAPI). ESO
+  templates the payloads from cert-manager's Secrets via read-only in-cluster stores; no scripts.
+- The data-plane chart still renders its own self-signed Certificate (no knob): it goes to the unused Secret
+  `cluster-agent-selfsigned-unused`. `caSecretName` is empty: no CA Secret is ever needed on a data plane.
+- **Rotation.** cert-manager renews the client cert 30 days before expiry; ESO (≤1h) and the CRS (Reconcile) update
+  `cluster-agent-tls`. The 1.3.3 agent reads its cert once at start, so restart it after a renewal:
+  `kubectl -n openchoreo-data-plane rollout restart deploy/cluster-agent-dataplane`. (A Reloader-style restart can be
+  added later.) The same applies to the gateway CA (10y).
+- The upstream cluster-gateway has cluster-wide `get/list secrets` (to read every plane's client CA): it can read
+  `fleet/<name>-agent-ca` including the CA key. It runs on mgmt, so this does not widen the workload-cluster boundary.
+
+## Local networking
+
+mgmt is k3d `platform-mgmt` (traefik disabled, klipper servicelb on, docker network `kind`). The control-plane Gateway
+`gateway-default` gets a LoadBalancer Service with ports **8080** (HTTP: console, API, Thunder) and **8443** (TLS
+passthrough: cluster-gateway); klipper binds them as hostPorts on the mgmt nodes; k3d publishes them on the host:
+
+```
+k3d cluster create platform-mgmt ... -p "8080:8080@loadbalancer" -p "8443:8443@loadbalancer"
+```
+
+Nothing else on mgmt may bind hostPort 8080/8443 (e.g. Argo CD server must stay ClusterIP or use other ports).
+
+| URL | Served by |
+|---|---|
+| http://openchoreo.localhost:8080 | console (Backstage) |
+| http://api.openchoreo.localhost:8080 | openchoreo-api |
+| http://thunder.openchoreo.localhost:8080 | ThunderID (console at /console) |
+| wss://cluster-gateway.openchoreo.localhost:8443/ws | cluster-gateway (agents only, mTLS) |
+
+`*.localhost` resolves to loopback in browsers. Pods use the same URLs through `coredns-local`:
+
+- mgmt pods (Backstage -> Thunder token endpoint, openchoreo-api -> JWKS): rewrite to
+  `gateway-default.openchoreo-control-plane.svc.cluster.local` (Service port 8080 == listener == published port).
+- workload pods (the agent): rewrite to `k3d-platform-mgmt-serverlb`, the k3d load balancer container on network
+  `kind`, resolved by Docker's embedded DNS (kindest/node's CoreDNS forwards to it). Its 8443 forwards to the mgmt
+  nodes -> Gateway TLS passthrough (SNI `cluster-gateway.openchoreo.localhost`) -> TLSRoute -> `cluster-gateway-external`.
+
+The installation key `openchoreo.controlPlane.clusterGatewayURL` is the source of truth; the control-plane and
+data-plane addons fail to render if their literal values drift from it or from `openchoreo.controlPlane.host`.
+
+**App traffic.** Each data plane's Gateway listens on HTTP **19080** (LoadBalancer -> klipper hostPort on every CAPD
+node container). `ClusterDataPlane <name>` advertises `gatewayHost:19080` (cluster file `openchoreo.dataPlane`), and
+the component types route `http://<env>-<org namespace>.<gatewayHost>:19080/<component>-<endpoint>/...`. CAPD nodes
+publish no host ports, but the Linux host reaches container IPs directly:
+
+```bash
+NODE_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' $(docker ps -qf name=dev1-) | head -1)
+curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
+  http://development-default.dev1.apps.localhost:19080/hello-world-http/
+```
+
+## Secrets
+
+| Store (ClusterSecretStore) | Used for |
+|---|---|
+| `platform`, key `openchoreo` | properties `thunder-admin-password`, `admin-user-password`, `developer-user-password`, `backstage-client-secret`, `backstage-backend-secret` (alphanumeric; seeded by `make secrets` locally, created by the operator in aws/vault) |
+| `mgmt-fleet` (ns fleet, read-only) | `<name>-agent-tls` -> CRS payload `<name>-openchoreo-agent` (ExternalSecret in ns fleet) |
+| `mgmt-openchoreo` (ns openchoreo-control-plane, read-only) | `cluster-gateway-ca` (`ca.crt` only) -> CRS payload `openchoreo-gateway-ca` (ExternalSecret in ns **fleet**) |
+| `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; app secrets (OpenChoreo `SecretReference`s) |
+
+Thunder users: `admin@openchoreo.dev` (group `admins` -> OpenChoreo role admin) and `developer@openchoreo.dev`
+(group `developers` -> role developer), passwords from the `openchoreo` key. Thunder console: user `admin`,
+`thunder-admin-password`.
+
+## Adding a data plane
+
+In `installations/<inst>/clusters/<name>.yaml`:
+
+```yaml
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev1.apps.localhost   # base host of app URLs on this cluster
+    gatewayPort: 19080                 # the data plane Gateway's HTTP listener
+    environments: [development, staging]
+```
+
+Every environment must be listed in exactly one cluster file (two clusters claiming one Environment = Argo conflict),
+and every environment of `DeploymentPipeline default` (addon `openchoreo-platform`) needs a cluster. An Environment's
+`dataPlaneRef` is immutable: to move it, remove it from one file, sync, then add it to the other.
+
+## Tenants
+
+`installations/<inst>/tenants/<project>.yaml`:
+
+```yaml
+project: demo                       # OpenChoreo Project (DNS-1123)
+description: Demo project
+apps:
+  - name: hello-world               # unique in the tenant -> Application demo-hello-world
+    repoURL: https://github.com/koorikla/hello-world.git
+    path: deploy/openchoreo         # default
+    revision: main                  # default
+```
+
+ApplicationSet `tenants` (charts/platform) -> Application `tenant-<project>` (AppProject `platform`) -> charts/tenant:
+
+- AppProject `tenant-<project>`: `sourceRepos` = exactly the tenant's app repos; destination = mgmt
+  (`https://kubernetes.default.svc`), org namespace only; no cluster-scoped kinds; namespaced kinds limited to
+  `openchoreo.dev` `Component`, `Workload`, `ReleaseBinding`, `ComponentRelease`, `SecretReference`.
+- OpenChoreo `Project <project>` (type `ClusterProjectType/default`, pipeline `default`) and one
+  `ProjectReleaseBinding <project>-<env>` per pipeline environment (provisions the project's namespace on each data
+  plane). Platform-owned: app repos cannot create or edit Projects.
+- One Application `<project>-<app>` per app (project `tenant-<project>`, automated sync, prune, self-heal).
+
+Removing an app from the file deletes its Application and its OpenChoreo resources (finalizer); removing the file
+offboards the whole project. Limitation: Argo cannot restrict field values, so a tenant repo could set
+`spec.owner.projectName` of a Component to another project; OpenChoreo's authz is the guard there.
+
+## App repo contract
+
+An app repo owns its OpenChoreo manifests as plain YAML in `deploy/openchoreo/` (no Helm/Kustomize needed; Argo CD
+applies the directory). All objects go to the org namespace (`default`) and name the tenant's project in
+`spec.owner.projectName`. For `hello-world` (project `demo`, image `ghcr.io/koorikla/hello-world:<tag>`, HTTP 8080):
+
+`deploy/openchoreo/component.yaml`
+```yaml
+apiVersion: openchoreo.dev/v1alpha1
+kind: Component
+metadata:
+  name: hello-world
+  namespace: default
+spec:
+  owner:
+    projectName: demo
+  componentType:
+    kind: ClusterComponentType
+    name: deployment/service      # <workloadType>/<ClusterComponentType>: service | web-application | worker | scheduled-task (cronjob/)
+  autoDeploy: true                # each Workload change -> new ComponentRelease, bound to the first environment
+```
+
+`deploy/openchoreo/workload.yaml` (CI bumps only `image`)
+```yaml
+apiVersion: openchoreo.dev/v1alpha1
+kind: Workload
+metadata:
+  name: hello-world-workload
+  namespace: default
+spec:
+  owner:
+    projectName: demo
+    componentName: hello-world
+  container:
+    image: ghcr.io/koorikla/hello-world:sha-0123abc
+  endpoints:
+    http:                         # endpoint name -> URL path /hello-world-http
+      type: HTTP
+      port: 8080
+      visibility: [external]      # routed on the data plane Gateway (ClusterDataPlane gateway.ingress.external)
+```
+
+`deploy/openchoreo/releasebinding-staging.yaml` and `releasebinding-production.yaml`
+```yaml
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: hello-world-staging       # <component>-<environment>
+  namespace: default
+spec:
+  owner:
+    projectName: demo
+    componentName: hello-world
+  environment: staging
+  releaseName: hello-world-5d8f9c7b6   # a ComponentRelease name; promotion = changing this line
+  # componentTypeEnvironmentConfigs: { replicas: 2 }   # per-environment parameters of the component type
+```
+
+### How GitOps promotion works
+
+1. CI builds `ghcr.io/koorikla/hello-world:<tag>`, pushes it, and commits the new tag into `workload.yaml`.
+2. Argo CD syncs the Workload. With `autoDeploy: true` the Component controller creates an immutable
+   `ComponentRelease hello-world-<hash>` (snapshot of Component + ComponentType + Workload; the hash is deterministic)
+   and creates/updates `ReleaseBinding hello-world-development` (first environment of the pipeline) to it. The
+   development binding is controller-owned: do not commit it (or commit it **without** `releaseName`, only for
+   `componentTypeEnvironmentConfigs`).
+3. Promote by commit: set `releaseName` in `releasebinding-staging.yaml` to the release now running in development
+   (`kubectl -n default get component hello-world -o jsonpath='{.status.latestRelease.name}'`, or the console), then the
+   same for production after staging. Rollback = revert the commit. Git is the source of truth for staging/production:
+   a promotion clicked in the console on a git-owned binding is reverted by Argo's self-heal.
+4. OpenChoreo renders each binding against its Environment's ClusterDataPlane and the cluster-agent applies the
+   Deployment/Service/HTTPRoute in the project namespace on that data plane.
+
+Fully declarative alternative (`autoDeploy: false`): commit the `ComponentRelease` objects too and bind them by name,
+as [openchoreo/sample-gitops](https://github.com/openchoreo/sample-gitops) does (its workflows generate Workload,
+ComponentRelease and ReleaseBinding manifests and open a PR). A ComponentRelease embeds the full component type spec,
+so it is meant to be generated (workflow plane or `occ`), not hand-written. `ComponentRelease` is in the tenant
+whitelist for that reason.
+
+Secrets: declare an OpenChoreo `SecretReference` (remote key in the data plane's `default` store) and reference it
+from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
+
+## Adding the workflow and observability planes
+
+Same pattern as the data plane: a plane chart as a wrapper addon on the clusters that host it, its agent identity from
+a per-cluster CA delivered by CRS, and a `Cluster*Plane` registered on mgmt.
+
+- **Workflow plane** (`oci://cr.openchoreo.dev/openchoreo/helm-charts/openchoreo-workflow-plane`, Argo Workflows +
+  a registry): addon `openchoreo-workflow-plane` (agent `planeType: workflowplane`, namespace
+  `openchoreo-workflow-plane`, same `tls.*` settings as the data plane); in charts/cluster a
+  `ClusterWorkflowPlane <name>` with the same `clientCA` (and a CRS payload into `openchoreo-workflow-plane`);
+  `ClusterWorkflow`s + ClusterWorkflowTemplates from upstream `samples/getting-started` into `openchoreo-platform`;
+  re-add `allowedWorkflows` to the component types (files/README.md); `backstage.features.workflows.enabled: true`.
+- **Observability plane** (`openchoreo-observability-plane` + logs/metrics/tracing modules): addon on a dedicated or
+  the mgmt cluster; `ClusterObservabilityPlane` with `observerURL`; set `observabilityPlaneRef` on each
+  ClusterDataPlane (charts/cluster); add the `observability-alert-rule` trait; Fluent Bit / OTel exporters on data
+  planes; `backstage.features.observability.enabled: true`. Thunder needs the observer/RCA clients (upstream
+  values-thunder.yaml 53, 59).
+
+## Known limitations and VERIFY
+
+`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*` lists
+inferred values. Main ones: Docker DNS resolution of `k3d-platform-mgmt-serverlb` from CAPD pods; Thunder resolving
+`{{ .VAR }}` placeholders from the setup Job's env; agent restart after cert renewal; Backstage with workflows and
+observability features off.
