@@ -1,0 +1,21 @@
+# Online (registry + Sigstore): hack/tests/test_kyverno_policies.sh runs it with KYVERNO_ONLINE=1.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: openchoreo-verify-images
+policies: [policies.yaml]
+resources: [resources.yaml]
+variables: values.yaml
+results:
+  - policy: openchoreo-verify-images-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed]
+    result: pass
+  - policy: openchoreo-verify-images-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-tag-only]
+    result: fail
+  - policy: openchoreo-verify-images-audit
+    kind: Pod
+    resources: [dp-default-demo-staging-1/staging-tag]
+    result: pass

@@ -1,0 +1,181 @@
+{{- /*
+Supply-chain policy gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md).
+For every distinct action in imageVerification.environments (Audit | Deny) one pair of policies, scoped to the
+OpenChoreo cell namespaces of exactly those environments (namespace label openchoreo.dev/environment):
+  ImageValidatingPolicy openchoreo-verify-images-<audit|enforce>      per trusted source: cosign signature + required
+                                                                      signed attestations (SBOM, SLSA provenance, vuln)
+  ValidatingPolicy      openchoreo-trusted-registries-<audit|enforce> every image matches a trusted source prefix
+Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyverno) and by matchConditions here.
+*/ -}}
+{{- $iv := .Values.imageVerification }}
+{{- if $iv.enabled }}
+{{- $byAction := dict }}
+{{- range $env, $action := $iv.environments }}
+{{- if not (has $action (list "Audit" "Deny")) }}{{ fail (printf "imageVerification.environments.%s: %q is not Audit or Deny" $env $action) }}{{ end }}
+{{- $_ := set $byAction $action (append (get $byAction $action | default list) $env) }}
+{{- end }}
+{{- $platform := .Values.platformNamespaces | toJson }}
+{{- /* sources: [{prefixes, attestors: [name], attestations: [name]}] */ -}}
+{{- $sources := list }}
+{{- $keyless := list }}
+{{- if $iv.github.enabled }}
+{{- range $repo := $iv.github.repositories }}
+{{- range $ref := $iv.github.refs }}
+{{- $n := printf "gh-%s-%s" ($repo | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) ($ref | trimPrefix "refs/" | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) | trunc 60 | trimSuffix "-" }}
+{{- $keyless = append $keyless (dict "name" $n "repo" $repo "ref" $ref) }}
+{{- end }}
+{{- end }}
+{{- if not $keyless }}{{ fail "imageVerification.github: repositories and refs must not be empty" }}{{ end }}
+{{- $names := list }}{{ range $keyless }}{{ $names = append $names .name }}{{ end }}
+{{- $sources = append $sources (dict "prefixes" $iv.github.prefixes "attestors" $names "attestations" $iv.github.attestations) }}
+{{- end }}
+{{- $platformKey := and $iv.platformKey.enabled $iv.platformKey.publicKey }}
+{{- if $platformKey }}
+{{- $sources = append $sources (dict "prefixes" $iv.platformKey.prefixes "attestors" (list "platform-key") "attestations" $iv.platformKey.attestations) }}
+{{- end }}
+{{- $trusted := $iv.extraTrustedPrefixes | default list }}
+{{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
+{{- if $iv.platformKey.enabled }}{{ $trusted = concat $trusted $iv.platformKey.prefixes }}{{ end }}
+{{- $usedAttestations := list }}
+{{- range $sources }}{{ range .attestations }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
+{{- range $action := keys $byAction | sortAlpha }}
+{{- $envs := get $byAction $action | sortAlpha }}
+{{- $suffix := ternary "enforce" "audit" (eq $action "Deny") }}
+{{- $nsSelector := deepCopy $iv.cellNamespaceSelector }}
+{{- $_ := set $nsSelector "matchExpressions" (append ($nsSelector.matchExpressions | default list) (dict "key" "openchoreo.dev/environment" "operator" "In" "values" $envs)) }}
+{{- if $sources }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: openchoreo-verify-images-{{ $suffix }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Signed images with SBOM and provenance in OpenChoreo {{ join ", " $envs }}
+    policies.kyverno.io/description: >-
+      Images from a trusted source carry that source's cosign signature and signed attestations: keyless from the
+      koorikla/ci reusable workflow for an allowed repository and ref (SBOM, SLSA provenance, vulnerability scan), or
+      the platform key for images the workflow plane built. Action {{ $action }} in {{ join ", " $envs }}.
+spec:
+  validationActions: [{{ $action }}]
+  failurePolicy: {{ get $iv.failurePolicy $action | default "Ignore" }}
+  webhookConfiguration:
+    timeoutSeconds: {{ $iv.timeoutSeconds }}
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      {{- toYaml $nsSelector | nindent 6 }}
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.namespace in {{ $platform }})'
+  matchImageReferences:
+    {{- range $s := $sources }}
+    {{- range $s.prefixes }}
+    - glob: {{ printf "%s*" . | quote }}
+    {{- end }}
+    {{- end }}
+  validationConfigurations:
+    mutateDigest: false      # OpenChoreo's agent re-applies the rendered Deployment: a digest patch would flap
+    verifyDigest: {{ get $iv.requireDigest $action | default false }}
+    required: true
+  attestors:
+    {{- range $keyless }}
+    - name: {{ .name }}
+      cosign:
+        keyless:
+          identities:
+            - issuer: {{ $iv.github.issuer }}
+              subject: {{ $iv.github.subject }}
+          additionalExtensions:
+            githubWorkflowRepository: {{ .repo }}
+            githubWorkflowRef: {{ .ref }}
+        ctlog:
+          url: {{ $iv.github.rekorURL }}
+    {{- end }}
+    {{- if $platformKey }}
+    - name: platform-key
+      cosign:
+        key:
+          data: |
+            {{- $iv.platformKey.publicKey | trim | nindent 12 }}
+        {{- if not $iv.platformKey.rekor }}
+        ctlog:
+          insecureIgnoreTlog: true
+          insecureIgnoreSCT: true
+        {{- end }}
+    {{- end }}
+  {{- with $usedAttestations | uniq | sortAlpha }}
+  attestations:
+    {{- range . }}
+    - name: {{ . }}
+      intoto:
+        type: {{ get $iv.attestationTypes . }}
+    {{- end }}
+  {{- end }}
+  validations:
+    {{- range $s := $sources }}
+    {{- $match := printf "[%s].exists(p, image.startsWith(p))" (include "kp.quoteList" $s.prefixes) }}
+    {{- $att := list }}{{ range $s.attestors }}{{ $att = append $att (printf "attestors[\"%s\"]" .) }}{{ end }}
+    {{- $attList := printf "[%s]" (join ", " $att) }}
+    - expression: >-
+        images.containers.filter(image, {{ $match }}).all(image, verifyImageSignatures(image, {{ $attList }}) > 0)
+      message: >-
+        image ({{ join ", " $s.prefixes }}) is not signed by {{ join ", " $s.attestors }}
+    {{- range $a := $s.attestations }}
+    - expression: >-
+        images.containers.filter(image, {{ $match }}).all(image, verifyAttestationSignatures(image, attestations["{{ $a }}"], {{ $attList }}) > 0)
+      message: >-
+        image ({{ join ", " $s.prefixes }}) has no {{ $a }} attestation ({{ get $iv.attestationTypes $a }}) signed by {{ join ", " $s.attestors }}
+    {{- end }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: openchoreo-trusted-registries-{{ $suffix }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Trusted image sources in OpenChoreo {{ join ", " $envs }}
+    policies.kyverno.io/description: >-
+      Every container image in the cell namespaces of {{ join ", " $envs }} matches a trusted source prefix, so no image
+      bypasses openchoreo-verify-images-{{ $suffix }} by not matching it. Action {{ $action }}.
+spec:
+  validationActions: [{{ $action }}]
+  failurePolicy: {{ get $iv.failurePolicy $action | default "Ignore" }}
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      {{- toYaml $nsSelector | nindent 6 }}
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.namespace in {{ $platform }})'
+  variables:
+    - name: trusted
+      expression: '{{ $trusted | toJson }}'
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image)
+        + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
+        + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : [])
+  validations:
+    - expression: 'variables.images.all(i, variables.trusted.exists(t, i.startsWith(t)))'
+      messageExpression: >-
+        'images must come from ' + variables.trusted.join(', ') + '; untrusted: ' +
+        variables.images.filter(i, !variables.trusted.exists(t, i.startsWith(t))).join(', ')
+{{- end }}
+{{- end }}

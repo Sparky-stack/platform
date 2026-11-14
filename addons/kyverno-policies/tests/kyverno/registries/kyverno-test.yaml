@@ -1,0 +1,26 @@
+# Offline: trusted-registry gate per environment. Run by hack/tests/test_kyverno_policies.sh against the rendered
+# addon (policies.yaml is written there). Signature checks need the network: ../signatures/kyverno-test.yaml.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: openchoreo-trusted-registries
+policies: [policies.yaml]
+resources: [resources.yaml]
+variables: values.yaml
+results:
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-trusted, dp-default-demo-production-1/prod-registry-port]
+    result: pass
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-untrusted, dp-default-demo-production-1/prod-lookalike]
+    result: fail
+  - policy: openchoreo-trusted-registries-audit
+    kind: Pod
+    resources: [dp-default-demo-staging-1/staging-untrusted]
+    result: fail
+  - policy: openchoreo-trusted-registries-enforce
+    kind: Pod
+    resources: [dp-default-demo-staging-1/staging-untrusted]
+    result: skip

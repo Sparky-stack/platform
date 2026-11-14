@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata: { name: prod-signed, namespace: dp-default-demo-production-1 }
+spec:
+  containers:
+    # Built by koorikla/hello-world main through koorikla/ci container.yaml (keyless, cosign v3 bundle) with signed
+    # SPDX SBOM, SLSA provenance and vuln attestations.
+    - { name: app, image: "ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: prod-tag-only, namespace: dp-default-demo-production-1 }
+spec:
+  containers:
+    - { name: app, image: "ghcr.io/koorikla/hello-world:d04ca59" }   # production requires a digest
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: staging-tag, namespace: dp-default-demo-staging-1 }
+spec:
+  containers:
+    - { name: app, image: "ghcr.io/koorikla/hello-world:d04ca59" }   # tags only reported outside production

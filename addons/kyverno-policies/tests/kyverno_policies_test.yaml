@@ -42,3 +42,91 @@ tests:
     values: [../values/role-mgmt.yaml]
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: verifies images per environment - Audit in development/staging, Deny (fail closed, digest) in production
+    template: templates/image-verification.yaml
+    asserts:
+      - hasDocuments: { count: 4 }
+      - equal: { path: metadata.name, value: openchoreo-verify-images-audit }
+        documentIndex: 0
+      - equal: { path: spec.validationActions, value: [Audit] }
+        documentIndex: 0
+      - equal: { path: spec.failurePolicy, value: Ignore }
+        documentIndex: 0
+      - equal: { path: spec.validationConfigurations.verifyDigest, value: false }
+        documentIndex: 0
+      - equal:
+          path: spec.matchConstraints.namespaceSelector
+          value:
+            matchLabels: { openchoreo.dev/managed-by: renderedrelease-controller }
+            matchExpressions: [{ key: openchoreo.dev/environment, operator: In, values: [development, staging] }]
+        documentIndex: 0
+      - equal: { path: metadata.name, value: openchoreo-verify-images-enforce }
+        documentIndex: 2
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 2
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentIndex: 2
+      - equal: { path: spec.validationConfigurations.verifyDigest, value: true }
+        documentIndex: 2
+      - equal: { path: spec.validationConfigurations.mutateDigest, value: false }
+        documentIndex: 2
+      - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions[0].values", value: [production] }
+        documentIndex: 2
+      - isKind: { of: ValidatingPolicy }
+        documentIndex: 3
+
+  - it: pins the reusable workflow identity AND the calling repository/ref (koorikla/ci is public)
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    asserts:
+      - equal:
+          path: spec.attestors[0].cosign.keyless
+          value:
+            identities:
+              - issuer: https://token.actions.githubusercontent.com
+                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1
+            additionalExtensions:
+              githubWorkflowRepository: koorikla/hello-world
+              githubWorkflowRef: refs/heads/main
+      - contains: { path: spec.attestations, content: { name: sbom, intoto: { type: "https://spdx.dev/Document/v2.3" } } }
+      - contains: { path: spec.attestations, content: { name: provenance, intoto: { type: "https://slsa.dev/provenance/v1" } } }
+      - matchRegex: { path: "spec.validations[1].expression", pattern: 'verifyAttestationSignatures\(image, attestations\["sbom"\]' }
+
+  - it: one attestor per allowed (repository, ref); the platform key only when a public key is set
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    set:
+      imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
+      imageVerification.github.refs: [refs/heads/main, refs/tags/v1]
+      imageVerification.platformKey.publicKey: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEexample
+        -----END PUBLIC KEY-----
+    asserts:
+      - lengthEqual: { path: spec.attestors, count: 5 }
+      - equal: { path: "spec.attestors[3].name", value: gh-koorikla-other-tags-v1 }
+      - equal: { path: "spec.attestors[4].name", value: platform-key }
+      - equal: { path: "spec.attestors[4].cosign.ctlog", value: { insecureIgnoreTlog: true, insecureIgnoreSCT: true } }
+      - contains: { path: spec.matchImageReferences, content: { glob: "registry.openchoreo.localhost/apps/*" } }
+
+  - it: trusted prefixes come from the enabled sources
+    template: templates/image-verification.yaml
+    documentIndex: 3
+    asserts:
+      - equal:
+          path: "spec.variables[0].expression"
+          value: '["ghcr.io/koorikla/","registry.openchoreo.localhost/apps/","registry.openchoreo.localhost:"]'
+
+  - it: rejects unknown actions
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.environments: { production: Enforce }
+    asserts:
+      - failedTemplate: { errorMessage: 'imageVerification.environments.production: "Enforce" is not Audit or Deny' }
+
+  - it: renders no image verification on mgmt
+    template: templates/image-verification.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }
