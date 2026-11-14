@@ -53,6 +53,8 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
+| `harbor` | admin/robot/chart secrets (docs/build-plane.md) | addon harbor, build pushes (`builder-secret`), node pulls (`nodes-secret`) |
+| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane) |
 
 ## Layout and ownership
 ```

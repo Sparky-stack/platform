@@ -13,7 +13,8 @@ cluster-agent (never through Argo CD). Design background: [architecture.md](arch
 | mgmt + workload | `kgateway` | catalog ns | kgateway v2.3.1 controller + `gateway.kgateway.dev` CRDs, GatewayClass `kgateway` |
 | mgmt | `thunder` | thunder | ThunderID 1.0.1: OIDC IdP for console, API, CLI |
 | mgmt | `openchoreo-control-plane` | openchoreo-control-plane | controller-manager, openchoreo-api, Backstage console, cluster-gateway, event-forwarder, Gateway `gateway-default`; Secret `backstage-secrets`; CRS payload `fleet/openchoreo-gateway-ca` |
-| mgmt | `openchoreo-platform` | default | org namespace label, `DeploymentPipeline default`, upstream ClusterComponentTypes / ClusterTraits / ClusterProjectType |
+| mgmt | `openchoreo-platform` | default | org namespace label, `DeploymentPipeline default`, upstream ClusterComponentTypes / ClusterTraits / ClusterProjectType, build ClusterWorkflows |
+| mgmt | `openchoreo-workflow-plane` | openchoreo-workflow-plane | Argo Workflows + cluster-agent, `ClusterWorkflowPlane default`, build ClusterWorkflowTemplates ([build-plane.md](build-plane.md)) |
 | mgmt | `charts/cluster` (per cluster) | fleet (+ cluster-scoped, org ns) | agent CA + client cert, CRS, `ClusterDataPlane <name>`, `Environment`s |
 | mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
 | workload | `openchoreo-data-plane` | openchoreo-data-plane | cluster-agent + Gateway `gateway-default` (app ingress) |
@@ -23,7 +24,7 @@ The workload clusters also need `cert-manager`, `external-secrets` and ClusterSe
 addon): the ClusterDataPlane's `secretStoreRef` and every app ExternalSecret OpenChoreo renders use it.
 
 The observability plane (logs/metrics/traces, alerts) runs on mgmt: see [observability.md](observability.md). The
-workflow plane (in-cluster builds) is planned; see [Adding planes](#adding-the-workflow-and-observability-planes).
+workflow plane (in-cluster builds, the primary build path) and Harbor run on mgmt too: see [build-plane.md](build-plane.md).
 
 ### Ordering
 
@@ -256,7 +257,8 @@ spec:
 
 ### How GitOps promotion works
 
-1. CI builds `ghcr.io/koorikla/hello-world:<tag>`, pushes it, and commits the new tag into `workload.yaml`.
+1. A build - the Component's OpenChoreo ClusterWorkflow (default, [build-plane.md](build-plane.md)) or the optional
+   GitHub Actions path - pushes a signed image and commits the new image ref into `workload.yaml`.
 2. Argo CD syncs the Workload. With `autoDeploy: true` the Component controller creates an immutable
    `ComponentRelease hello-world-<hash>` (snapshot of Component + ComponentType + Workload; the hash is deterministic)
    and creates/updates `ReleaseBinding hello-world-development` (first environment of the pipeline) to it. The
@@ -283,12 +285,8 @@ from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
 Same pattern as the data plane: a plane chart as a wrapper addon on the clusters that host it, its agent identity from
 a per-cluster CA delivered by CRS, and a `Cluster*Plane` registered on mgmt.
 
-- **Workflow plane** (`oci://cr.openchoreo.dev/openchoreo/helm-charts/openchoreo-workflow-plane`, Argo Workflows +
-  a registry): addon `openchoreo-workflow-plane` (agent `planeType: workflowplane`, namespace
-  `openchoreo-workflow-plane`, same `tls.*` settings as the data plane); in charts/cluster a
-  `ClusterWorkflowPlane <name>` with the same `clientCA` (and a CRS payload into `openchoreo-workflow-plane`);
-  `ClusterWorkflow`s + ClusterWorkflowTemplates from upstream `samples/getting-started` into `openchoreo-platform`;
-  re-add `allowedWorkflows` to the component types (files/README.md); `backstage.features.workflows.enabled: true`.
+- **Workflow plane**: done, see [build-plane.md](build-plane.md) (co-located with the control plane like the
+  observability plane: in-cluster agent with its self-signed cert, `ClusterWorkflowPlane default`).
 - **Observability plane**: done, see [observability.md](observability.md).
 
 ## Known limitations and VERIFY
