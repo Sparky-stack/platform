@@ -1,0 +1,148 @@
+suite: openchoreo-platform - promotion gates (authz + promotion-gate ClusterWorkflow)
+templates:
+  - templates/promotion-authz.yaml
+  - templates/promotion-gate.yaml
+  - templates/promotion-git-only.yaml
+tests:
+  - it: denies restricted groups binding changes in gated environments (native ABAC on resource.environment)
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-deny-developers }
+    asserts:
+      - equal: { path: spec.effect, value: deny }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
+      - equal:
+          path: spec.roleMappings[0].conditions
+          value:
+            - actions: [releasebinding:create, releasebinding:update, releasebinding:delete]
+              expression: 'resource.environment in ["default/production"]'
+
+  - it: follows the org namespace and the gated environments
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-deny-developers }
+    set:
+      openchoreo.orgNamespace: acme
+      promotion.gatedEnvironments: [staging, production]
+    asserts:
+      - equal: { path: "spec.roleMappings[0].scope.namespace", value: acme }
+      - equal: { path: "spec.roleMappings[0].conditions[0].expression", value: 'resource.environment in ["acme/staging","acme/production"]' }
+
+  - it: no deny bindings without gated environments
+    template: templates/promotion-authz.yaml
+    set:
+      promotion.gatedEnvironments: []
+    asserts:
+      - hasDocuments: { count: 2 }   # only the gate client's role + binding
+
+  - it: the gate client is read-only plus observer queries
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-gate }
+    asserts:
+      - notContains: { path: spec.actions, content: releasebinding:update }
+      - contains: { path: spec.actions, content: alerts:view }
+
+  - it: promotion-gate is a generic ClusterWorkflow running in the enforced workflow namespace
+    template: templates/promotion-gate.yaml
+    asserts:
+      - isKind: { of: ClusterWorkflow }
+      - equal: { path: spec.runTemplate.metadata, value: { name: "${metadata.workflowRunName}", namespace: "${metadata.namespace}" } }
+      - equal: { path: "spec.resources[0].template.spec.secretStoreRef.name", value: "${workflowplane.secretStore}" }
+      - equal: { path: spec.parameters.openAPIV3Schema.required, value: [project, component] }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.image", pattern: '@sha256:[0-9a-f]{64}$' }
+      - equal: { path: "spec.runTemplate.spec.templates[0].script.securityContext.readOnlyRootFilesystem", value: true }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def promote\(' }
+
+  - it: the gate step gets no ServiceAccount token (executor only) and opts into the OpenChoreo egress policy
+    template: templates/promotion-gate.yaml
+    asserts:
+      - equal: { path: spec.workflowPlaneRef, value: { kind: ClusterWorkflowPlane, name: default } }
+      - equal: { path: spec.runTemplate.spec.serviceAccountName, value: workflow-sa }
+      - equal: { path: spec.runTemplate.spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.runTemplate.spec.executor.serviceAccountName, value: workflow-sa }
+      - equal: { path: spec.runTemplate.spec.podMetadata.labels, value: { platform.koorikla.io/egress: openchoreo } }
+      - notExists: { path: 'spec.runTemplate.spec.templates[?(@.automountServiceAccountToken == true)]' }
+
+  - it: requires the egress pod labels
+    template: templates/promotion-gate.yaml
+    set: { promotionGate.podLabels: null }
+    asserts:
+      - failedTemplate: { errorPattern: "promotionGate.podLabels is required" }
+
+  - it: GitHub credential is the gate's own App (not Argo CD's platform-github), fetched once, mounted as files
+    template: templates/promotion-gate.yaml
+    asserts:
+      - equal: { path: "spec.resources[0].template.spec.refreshInterval", value: "0" }
+      - equal: { path: "spec.resources[0].template.spec.target.deletionPolicy", value: Delete }
+      - contains: { path: "spec.resources[0].template.spec.data", content: { secretKey: github-app-private-key, remoteRef: { key: promotion-gate-github, property: githubAppPrivateKey } } }
+      - contains: { path: "spec.resources[0].template.spec.data", content: { secretKey: github-app-id, remoteRef: { key: promotion-gate-github, property: githubAppID } } }
+      - notMatchRegex: { path: "spec.resources[0].template.spec.data[1].remoteRef.key", pattern: "platform-github" }
+      - equal: { path: spec.ttlAfterCompletion, value: 1h }
+      - equal: { path: spec.runTemplate.spec.podGC, value: { strategy: OnPodCompletion } }
+      - equal: { path: "spec.runTemplate.spec.volumes[0].secret", value: { secretName: "${metadata.workflowRunName}-gate", defaultMode: 288 } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.volumeMounts", content: { name: credentials, mountPath: /var/run/secrets/promotion-gate, readOnly: true } }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_TOKEN }, any: true }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: CLIENT_SECRET }, any: true }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_OWNER_URL, value: "https://github.com/koorikla" } }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def installation_token\(repo\)' }
+
+  - it: the target repository is not a parameter; parameters are DNS-1123 constrained
+    template: templates/promotion-gate.yaml
+    asserts:
+      - notExists: { path: spec.parameters.openAPIV3Schema.properties.repository }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.project.pattern, value: "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.project.minLength, value: 1 }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.component.maxLength, value: 63 }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.targetEnvironment.pattern, value: "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.release.pattern, value: "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$" }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: REPOSITORY }, any: true }
+
+  - it: requires the installation's GitHub owner
+    template: templates/promotion-gate.yaml
+    set:
+      installation.githubOrg: ""
+    asserts:
+      - failedTemplate: { errorMessage: "installation.githubOrg is required (GitHub owner the gate may open PRs in)" }
+
+  - it: endpoints derive from the installation and observe follows the observability switch
+    template: templates/promotion-gate.yaml
+    set:
+      openchoreo.controlPlane.host: openchoreo.example.com
+      openchoreo.observability.enabled: false
+    asserts:
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: API_URL, value: "http://api.openchoreo.example.com:8080" } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: OBSERVE, value: "false" } }
+
+  - it: passes the shared freeze windows to the gate
+    template: templates/promotion-gate.yaml
+    asserts:
+      - contains:
+          path: "spec.runTemplate.spec.templates[0].script.env"
+          content:
+            name: FREEZE_WINDOWS
+            value: '[{"end":"Mon 08:00","environments":["production"],"name":"weekend","start":"Fri 16:00","timeZone":"Europe/Tallinn"}]'
+
+  - it: native VAP - gated bindings only from Argo CD, controller may only touch metadata
+    template: templates/promotion-git-only.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ValidatingAdmissionPolicy }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: 'in \["production"\]' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'system:serviceaccount:argocd:argocd-application-controller' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'object.spec == oldObject.spec' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'argocd-application-controller"\] && variables.gatedApp\)' }
+      - equal: { path: "spec.variables[1].expression", value: "request.operation == 'DELETE' ? oldObject : object" }
+      - matchRegex: { path: "spec.variables[2].expression", pattern: "argocd.argoproj.io/tracking-id" }
+      - matchRegex: { path: "spec.variables[3].expression", pattern: "startsWith\\(variables.binding.spec.owner.projectName \\+ '-'\\).*endsWith\\('-' \\+ variables.binding.spec.environment\\)" }
+
+  - it: binding denies (not audits)
+    template: templates/promotion-git-only.yaml
+    documentIndex: 1
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+
+  - it: no VAP when disabled
+    template: templates/promotion-git-only.yaml
+    set:
+      promotion.gitOnly.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }

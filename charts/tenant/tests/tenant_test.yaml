@@ -37,6 +37,14 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: 'apps: duplicate name "a"' }
 
+  - it: rejects app names ending in -<gated environment> (they would pass as the gated Application in the VAP)
+    template: templates/appproject.yaml
+    set:
+      apps:
+        - { name: hotfix-production, repoURL: https://x/a.git }
+    asserts:
+      - failedTemplate: { errorMessage: 'apps[0].name "hotfix-production" must not end in -production (gated environment: reserved for the gated Application)' }
+
   - it: AppProject allows only the tenant's repos, the org namespace on mgmt and developer kinds
     template: templates/appproject.yaml
     asserts:
@@ -84,26 +92,99 @@ tests:
       - equal: { path: spec, value: { owner: { projectName: demo }, environment: production } }
         documentIndex: 3
 
-  - it: one Application per app with defaults applied, in the tenant AppProject
+  - it: one Application per app (+ one per gated environment) with defaults applied, in the tenant AppProject
     template: templates/applications.yaml
     asserts:
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 4 }
       - equal: { path: metadata.name, value: demo-hello-world }
         documentIndex: 0
       - equal: { path: spec.project, value: tenant-demo }
         documentIndex: 0
       - equal:
           path: spec.source
-          value: { repoURL: "https://github.com/koorikla/hello-world.git", targetRevision: main, path: deploy/openchoreo }
+          value:
+            repoURL: "https://github.com/koorikla/hello-world.git"
+            targetRevision: main
+            path: deploy/openchoreo
+            directory: { recurse: true, exclude: release-bindings/production.yaml }
         documentIndex: 0
+      - equal: { path: metadata.name, value: demo-other }
+        documentIndex: 2
       - equal:
           path: spec.source
-          value: { repoURL: "https://github.com/koorikla/other.git", targetRevision: v1.2.3, path: ops/oc }
-        documentIndex: 1
+          value:
+            repoURL: "https://github.com/koorikla/other.git"
+            targetRevision: v1.2.3
+            path: ops/oc
+            directory: { recurse: true, exclude: release-bindings/production.yaml }
+        documentIndex: 2
       - equal:
           path: spec.destination
           value: { server: "https://kubernetes.default.svc", namespace: default }
-        documentIndex: 1
+        documentIndex: 2
+
+  - it: the production binding file syncs through its own Application (gated environment)
+    template: templates/applications.yaml
+    documentIndex: 1
+    asserts:
+      - equal: { path: metadata.name, value: demo-hello-world-production }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/environment"]', value: production }
+      - equal: { path: spec.source.directory, value: { recurse: true, include: release-bindings/production.yaml } }
+      - equal: { path: spec.project, value: tenant-demo }
+
+  - it: several gated environments are excluded with one brace glob
+    template: templates/applications.yaml
+    set:
+      promotion.gatedEnvironments: [staging, production]
+    documentIndex: 0
+    asserts:
+      - equal: { path: spec.source.directory.exclude, value: "{release-bindings/staging.yaml,release-bindings/production.yaml}" }
+
+  - it: an app can opt out of promotion gates
+    template: templates/applications.yaml
+    set:
+      apps:
+        - { name: hello-world, repoURL: "https://github.com/koorikla/hello-world.git", promotionGates: false }
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: spec.source.directory, value: { recurse: true } }
+
+  - it: freeze windows become Argo CD deny sync windows on the gated Applications only
+    template: templates/appproject.yaml
+    asserts:
+      - equal:
+          path: spec.syncWindows
+          value:
+            - kind: deny
+              schedule: "0 16 * * 5"
+              duration: 64h
+              timeZone: Europe/Tallinn
+              applications: [demo-hello-world-production, demo-other-production]
+              manualSync: false
+              description: "freeze weekend: no promotions to production (Fri 16:00 - Mon 08:00 Europe/Tallinn)"
+
+  - it: windows that do not wrap and partial hours
+    template: templates/appproject.yaml
+    set:
+      promotion.freezeWindows:
+        - { name: release-night, start: "Wed 18:30", end: "Thu 06:00", timeZone: UTC, environments: [production] }
+    asserts:
+      - equal: { path: "spec.syncWindows[0].schedule", value: "30 18 * * 3" }
+      - equal: { path: "spec.syncWindows[0].duration", value: 11h30m }
+
+  - it: no sync windows without gated Applications
+    template: templates/appproject.yaml
+    set:
+      promotion.gatedEnvironments: []
+    asserts:
+      - notExists: { path: spec.syncWindows }
+
+  - it: rejects malformed window bounds
+    template: templates/appproject.yaml
+    set:
+      promotion.freezeWindows: [{ start: "Friday 16", end: "Mon 08:00" }]
+    asserts:
+      - failedTemplate: { errorMessage: 'promotion.freezeWindows: bad bound "Friday 16" (want e.g. "Fri 16:00")' }
 
   - it: follows the installation's org namespace everywhere
     set:
@@ -119,3 +200,22 @@ tests:
       - equal: { path: spec.destination.namespace, value: acme }
         template: templates/applications.yaml
         documentIndex: 0
+
+  - it: git commit signature policy (sourceIntegrity) only when enabled
+    template: templates/appproject.yaml
+    asserts:
+      - notExists: { path: spec.sourceIntegrity }
+
+  - it: sourceIntegrity gpg policy over the GitHub org (replaces deprecated signatureKeys)
+    template: templates/appproject.yaml
+    set:
+      sourceIntegrity.enabled: true
+    asserts:
+      - equal:
+          path: spec.sourceIntegrity
+          value:
+            git:
+              policies:
+                - repos: [{ url: "https://github.com/koorikla/*" }]
+                  gpg: { mode: head, keys: [B5690EEEBB952194] }
+      - notExists: { path: spec.signatureKeys }

@@ -266,23 +266,23 @@ def trust_model() -> Diagram:
 
     # --- supply chain
     d.text(32, 816, "supply chain · signing", 12.5, RO, weight=700)
-    d.box(EX, 826, EW, 60, "external", "GitHub Actions", ["keyless: Fulcio + Rekor", "koorikla/ci @ v1 (optional)"])
-    d.box(EX, 918, EW, 64, "data", "GHCR", ["ghcr.io/koorikla/*", "images + keyless sigs"])
+    d.box(EX, 826, EW, 60, "external", "GitHub Actions", ["keyless: Fulcio + Rekor", "koorikla/ci container.yaml"])
+    d.box(EX, 918, EW, 64, "data", "GHCR", ["ghcr.io/koorikla/*", "+ sig, SBOM, SLSA, vuln"])
     d.box(EX, 994, EW, 48, "external", "GitHub App", ["Backstage scaffolder"], planned=True)
     d.box(MX, 826, MW, 60, "platform", "OC workflow plane",
           ["cosign sign with platform key", "(cosign-platform via ESO)"])
     d.box(MX, 918, MW, 44, "data", "Harbor · apps", ["signed + scanned; CA on mgmt"])
     d.box(MX, 994, MW, 48, "platform", "Backstage scaffolder", ["new app repo + platform PR"], planned=True)
-    d.box(WX, 826, WW, 136, "security", "Kyverno verifyImages",
-          ["ghcr.io/koorikla/*:", "keyless, issuer GitHub,", "subject …@refs/heads/main", "harbor apps/*:",
-           "platform public key", "Audit mode"], planned=True)
+    d.box(WX, 826, WW, 136, "security", "Kyverno ImageValidating",
+          ["ghcr.io/koorikla/*: keyless,", "reusable workflow + repo/ref", "SBOM · SLSA · vuln attested",
+           "harbor apps/*: platform key", "Audit dev/stg · Deny prod"])
     d.arrow([(136, 886), (136, 918)], VI, label="sign + attest", label_pos=(146, 907),
             label_anchor="start", aid="sign")
     d.arrow([(580, 886), (580, 918)], VI, label="push", label_pos=(590, 907), label_anchor="start",
             aid="push")
     d.arrow([(WX, 940), (MX + MW, 940)], RO, planned=True, label="verify platform key", label_pos=(GR, 944),
             aid="vk")
-    d.arrow([(WX + WW / 2, 826), (WX + WW / 2, 787), (248, 787), (248, 950), (EX + EW, 950)], RO, planned=True,
+    d.arrow([(WX + WW / 2, 826), (WX + WW / 2, 787), (248, 787), (248, 950), (EX + EW, 950)], RO,
             label="verify keyless sig directly (not via mgmt)", label_pos=(580, 791), aid="vg")
     d.arrow([(MX, 1018), (EX + EW, 1018)], RO, planned=True, label="App token (ESO)", label_pos=(GL, 1022),
             aid="app")
@@ -324,7 +324,7 @@ def delivery() -> Diagram:
                                                                  "project demo"])
     d.box(522, 300, 230, 92, "platform", "ComponentRelease", ["immutable snapshot:", "Workload + type +", "traits"])
     envs = [("development", "ReleaseBinding · auto"), ("staging", "ReleaseBinding · PR"),
-            ("production", "ReleaseBinding · PR")]
+            ("production", "own App · freeze window")]
     EY = [300, 380, 460]
     for (t, sub), y in zip(envs, EY):
         d.box(792, y, 200, 52, "platform", t, [sub])
@@ -335,7 +335,7 @@ def delivery() -> Diagram:
     d.arrow([(752, 326), (792, 326)], CY)
     d.arrow([(892, 352), (892, 380)], CY, label="promote = PR", label_pos=(902, 371), label_anchor="start",
             aid="p1")
-    d.arrow([(892, 432), (892, 460)], CY, label="PR + review", label_pos=(902, 451), label_anchor="start",
+    d.arrow([(892, 432), (892, 460)], CY, label="gate PR + review", label_pos=(902, 451), label_anchor="start",
             aid="p2")
     d.arrow([(992, 326), (1032, 326)], CY)
     d.arrow([(992, 406), (1032, 406)], CY)
@@ -344,6 +344,10 @@ def delivery() -> Diagram:
            11.5, "#cbd5e1")
     d.text(32, 442, "environment · releases reach data planes only through the OpenChoreo cluster-agent "
            "(never Argo CD)", 11.5, "#cbd5e1")
+    d.text(32, 466, "production: promotion-gate workflow (smoke · observer · freeze) opens the PR; CODEOWNERS approve;",
+           11.5, "#cbd5e1")
+    d.text(32, 484, "VAP: only Argo CD writes the binding · Kyverno denies unsigned images · docs/promotion.md",
+           11.5, "#cbd5e1")
 
     # lane 2: crossplane packages
     d.box(32, 600, 180, 64, "external", "package repos", ["configurations,", "providers (xpkg)"])
@@ -405,8 +409,8 @@ def runtime_security() -> Diagram:
     d.box(CA, R[2], WIDE, BH, "network", "Cilium",
           ["eBPF CNI · kube-proxy replacement", "NetworkPolicy · Hubble flow visibility"])
     d.box(CA, R[3], CW, BH, "external", "kube-apiserver", ["pod create / update"])
-    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["PSS baseline (Audit) · ambient",
-          "enrollment · verifyImages: next"])
+    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["PSS audit · ambient · signed",
+          "images: Audit dev/stg, Deny prod"])
     d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"])
     d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"])
     d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"])
@@ -414,9 +418,8 @@ def runtime_security() -> Diagram:
 
     # mgmt side
     d.box(856, 444, 312, BH, "platform", "workflow falco-response",
-          ["enrich pod / owner / ns →", "RCA agent → notify"], planned=True)
-    d.box(856, 532, 312, BH, "bus", "Argo Events", ["webhook EventSource +", "Sensor: priority ≥ Critical"],
-          planned=True)
+          ["enrich pod / owner / ns →", "Event · RCA agent · notify"])
+    d.box(856, 532, 312, BH, "bus", "Argo Events", ["webhook EventSource +", "Sensor: priority ≥ Critical"])
     d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"])
     d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter (planned)"], planned=True)
     d.box(840, 148, 344, 248, "note", "division of labour",
@@ -434,9 +437,9 @@ def runtime_security() -> Diagram:
     d.arrow([(CB + 64, R[4] + BH), (CB + 64, R[4] + BH + 14), (CA + CW / 2, R[4] + BH + 14),
              (CA + CW / 2, R[5])], RO)
     d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR)
-    d.arrow([(CB + CW, yc(4)), (856, yc(4))], OR, planned=True, label="webhook", label_pos=(790, yc(4) + 4),
+    d.arrow([(CB + CW, yc(4)), (856, yc(4))], OR, label="webhook", label_pos=(790, yc(4) + 4),
             aid="esc")
-    d.arrow([(856 + 156, R[4]), (856 + 156, R[3] + BH)], OR, planned=True)
+    d.arrow([(856 + 156, R[4]), (856 + 156, R[3] + BH)], OR)
     d.arrow([(CB + CW, yc(5) - 10), (856, yc(5) - 10)], OR, label="OTLP",
             label_pos=(790, yc(5) - 6), aid="otlp")
     d.arrow([(CB + CW, yc(5) + 14), (800, yc(5) + 14), (800, 750), (856, 750)], OR, planned=True,

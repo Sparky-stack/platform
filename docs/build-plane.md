@@ -120,7 +120,10 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
 - **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon
   also renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor
   Gateway proxy pods (port 9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check
-  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services.
+  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services. Platform
+  workflows that must call OpenChoreo (the `promotion-gate` ClusterWorkflow, docs/promotion.md) opt in through the pod
+  label `runNetworkPolicy.platformWorkflows.podLabels`: NetworkPolicy `platform-workflows-openchoreo` adds egress to the
+  control-plane Gateway (8080: API, Thunder) and the observability Gateway (`httpPort`). Build runs never carry it.
 - Supply-chain steps (`scan-fs`, `scan-image`, `sbom`, `sign`) run with `HOME=/tmp` and `TRIVY_CACHE_DIR=/tmp/trivy`
   (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code cannot plant tool config
   (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
@@ -145,8 +148,10 @@ one of them. The GitHub Actions path stays keyless.
   upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
   vuln|spdxjson`). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
-- Not yet enforced at admission: a Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` trusting `cosign.pub`
-  (ignoring the tlog) is the `gates` work; until then "signed" is evidence, not a gate.
+- Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
+  only with `imageVerification.platformKey.publicKey` = this `cosign.pub` (tlog ignored, `rekor: false`); without it
+  the registry is not a trusted source (production denies its images). Set per installation; local leaves it empty
+  (fresh key per bootstrap, and workload clusters cannot reach Harbor's signatures yet): docs/supply-chain.md.
 
 ## Registry: Harbor
 
@@ -304,8 +309,10 @@ Accepted for the local installation, required before builds run untrusted code o
   per run by ESO's `GithubAccessToken` generator, scoped to the Component's repository.
 - **Per-project Harbor robots.** One robot `builder` pushes to all of `apps`; per-project robots (`apps/<project>/*`)
   would contain a compromised build.
-- **Admission.** Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` (platform `cosign.pub`, ignore tlog) and a
-  rule restricting images in `workflows-*` to digest-pinned refs (`gates` work).
+- **Admission.** The Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` exists (platform `cosign.pub` as an
+  installation value, docs/supply-chain.md); still open: delivering `cosign.pub` without copying the private key,
+  registry DNS + Harbor CA + pull credentials for Kyverno on workload clusters, and a rule restricting images in
+  `workflows-*` to digest-pinned refs.
 - **GitOps push to the branch head.** The hand-off commits straight to the built branch (development autoDeploy); with
   the GitHub App it should honour branch protection (PR or a ruleset bypass for the App only).
 

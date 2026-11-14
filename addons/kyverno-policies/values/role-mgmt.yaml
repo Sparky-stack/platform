@@ -1,3 +1,7 @@
 # mgmt runs no Istio (catalog istio-ambient: roles [workload]) and no OpenChoreo data plane.
 ambientEnrollment:
   enabled: false
+
+# mgmt has no OpenChoreo cell namespaces.
+imageVerification:
+  enabled: false

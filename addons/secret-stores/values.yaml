@@ -57,9 +57,11 @@ platformStore:
     - openchoreo-control-plane         # backstage-secrets (addon openchoreo-control-plane)
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)
     - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
+    - argo-events                      # falco-webhook (+ falco-notify when on) (addon argo-events)
     - harbor                           # harbor-platform: admin, robot and component secrets (addon harbor)
-    - workflows-default                # per-run build secrets (git, registry, cosign): ClusterWorkflow resources of addon
-                                       # openchoreo-platform, rendered by OpenChoreo into workflows-<openchoreo.orgNamespace>
+    - workflows-default                # per-run ExternalSecrets of ClusterWorkflows (addon openchoreo-platform), rendered by
+                                       # OpenChoreo into workflows-<openchoreo.orgNamespace>: builds (git, registry, cosign),
+                                       # promotion-gate (promotion-gate, promotion-gate-github)
     - external-dns                     # external-dns-cloudflare when opted in on mgmt with Cloudflare (addon external-dns)
     - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
 

@@ -288,6 +288,10 @@ seed_openchoreo_secret() {
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
     observer-client-secret
+  # Falco escalation webhook (addon argo-events on mgmt; falcosidekick on every cluster) and the promotion gate's
+  # Thunder client secret (ClusterWorkflow promotion-gate). docs/observability.md, docs/promotion.md.
+  seed_generated_secret falco-webhook url=http://events.openchoreo.localhost:8080/falco token
+  seed_generated_secret promotion-gate client-secret
 }
 
 # Harbor (addon harbor): every key the chart would otherwise generate per render, the admin password and the robot
@@ -410,12 +414,21 @@ cmd_secrets() {
     fi
   fi
 
-  # platform-github-app: write access (GitOps hand-off commits, promotion PRs, scaffolder). Optional.
+  # platform-github-app: write access (GitOps hand-off commits, scaffolder). Optional.
   if [[ -n "${GITHUB_PUSH_APP_ID:-}${GITHUB_PUSH_APP_INSTALLATION_ID:-}${GITHUB_PUSH_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_PUSH_APP_ID GITHUB_PUSH_APP_INSTALLATION_ID GITHUB_PUSH_APP_PRIVATE_KEY_FILE
     apply_secret platform-secrets platform-github-app githubAppID=GITHUB_PUSH_APP_ID \
       githubAppInstallationID=GITHUB_PUSH_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_PUSH_APP_PRIVATE_KEY_FILE"
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
+  fi
+
+  # promotion-gate-github: the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app
+  # repos only). The gate mints a token scoped to one repository per run. Optional: without it the gate fails closed.
+  if [[ -n "${GITHUB_GATE_APP_ID:-}${GITHUB_GATE_APP_INSTALLATION_ID:-}${GITHUB_GATE_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_GATE_APP_ID GITHUB_GATE_APP_INSTALLATION_ID GITHUB_GATE_APP_PRIVATE_KEY_FILE
+    apply_secret platform-secrets promotion-gate-github githubAppID=GITHUB_GATE_APP_ID \
+      githubAppInstallationID=GITHUB_GATE_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_GATE_APP_PRIVATE_KEY_FILE"
+    log "  promotion-gate-github: GitHub App $GITHUB_GATE_APP_ID, installation $GITHUB_GATE_APP_INSTALLATION_ID"
   fi
 
   seed_build_git_secret

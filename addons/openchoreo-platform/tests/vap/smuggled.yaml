@@ -1,0 +1,35 @@
+# Production bindings Argo CD would apply from outside the gated Application: all denied, even for Argo CD.
+# 1. From another file of the app repo (e.g. deploy/openchoreo/hotfix.yaml) through the main Application.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: hello-world-production
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: demo-hello-world:openchoreo.dev/ReleaseBinding:default/hello-world-production
+spec:
+  owner: { projectName: demo, componentName: hello-world }
+  environment: production
+  releaseName: hello-world-58cb494fc
+---
+# 2. From another tenant's gated Application.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: hello-world-production-2
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: evil-app-production:openchoreo.dev/ReleaseBinding:default/hello-world-production-2
+spec:
+  owner: { projectName: demo, componentName: hello-world }
+  environment: production
+  releaseName: hello-world-58cb494fc
+---
+# 3. Without a tracking annotation (not applied by an Argo CD Application).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata: { name: hello-world-production-3, namespace: default }
+spec:
+  owner: { projectName: demo, componentName: hello-world }
+  environment: production
+  releaseName: hello-world-58cb494fc

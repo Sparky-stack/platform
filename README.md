@@ -15,7 +15,7 @@ OpenChoreo's observability plane (Datadog-ready), with OpenChoreo's RCA and FinO
 | [docs/architecture.md](docs/architecture.md) | design and decisions (why push GitOps, trust model, secrets, installations, tenants) |
 | [docs/conventions.md](docs/conventions.md) / [AGENTS.md](AGENTS.md) | invariants, labels, names - the contracts every change keeps |
 | [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
-| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md), [docs/dns.md](docs/dns.md), [docs/ai-agents.md](docs/ai-agents.md) | per-area details |
+| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md), [docs/dns.md](docs/dns.md), [docs/ai-agents.md](docs/ai-agents.md), [docs/promotion.md](docs/promotion.md), [docs/supply-chain.md](docs/supply-chain.md) | per-area details |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 

@@ -1,0 +1,179 @@
+suite: argo-events - Falco escalation receiver + promotion gate trigger
+release:
+  name: argo-events
+  namespace: argo-events
+templates:
+  - templates/eventsource.yaml
+  - templates/sensors.yaml
+  - templates/falco-response.yaml
+set:
+  workflowPlane: "true"            # most tests: as on mgmt with the workflow plane; detection is tested below
+tests:
+  - it: without the Argo Workflows CRDs (auto) no WorkflowTemplate and no Sensors render
+    templates: [templates/sensors.yaml, templates/falco-response.yaml]
+    set:
+      workflowPlane: auto
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: with the Argo Workflows CRDs (auto) WorkflowTemplate and Sensors render
+    template: templates/falco-response.yaml
+    set:
+      workflowPlane: auto
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - isKind: { of: WorkflowTemplate }
+        documentSelector: { path: kind, value: WorkflowTemplate }
+
+  - it: with the Argo Workflows CRDs (auto) both Sensors render
+    template: templates/sensors.yaml
+    set:
+      workflowPlane: auto
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - isKind: { of: Sensor }
+        documentSelector: { path: metadata.name, value: falco-escalation }
+      - isKind: { of: Sensor }
+        documentSelector: { path: metadata.name, value: promotion-gate }
+
+  - it: auto follows the installation switch (workflow plane off = no workflow objects, even with Argo CRDs present)
+    templates: [templates/sensors.yaml, templates/falco-response.yaml]
+    set:
+      workflowPlane: auto
+      openchoreo.workflowPlane.enabled: false
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: the EventSource renders without the workflow plane
+    template: templates/eventsource.yaml
+    set:
+      workflowPlane: auto
+    asserts:
+      - isKind: { of: EventSource }
+        documentSelector: { path: metadata.name, value: platform }
+
+  - it: rejects an unknown workflowPlane mode
+    template: templates/sensors.yaml
+    set:
+      workflowPlane: maybe
+    asserts:
+      - failedTemplate: { errorMessage: 'workflowPlane: "maybe" is not auto, true or false' }
+
+  - it: EventBus JetStream pods run Pod Security restricted
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: EventBus }
+    asserts:
+      - equal: { path: spec.jetstream.securityContext, value: { fsGroup: 65532, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } } }
+      - equal: { path: spec.jetstream.containerTemplate.securityContext, value: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } } }
+      - equal: { path: spec.jetstream.reloaderContainerTemplate.securityContext.allowPrivilegeEscalation, value: false }
+      - equal: { path: spec.jetstream.metricsContainerTemplate.securityContext.capabilities, value: { drop: [ALL] } }
+
+  - it: the webhook listener is configurable (HTTPS outside local)
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: HTTPRoute }
+    set:
+      falco.route.sectionName: https
+    asserts:
+      - equal: { path: "spec.parentRefs[0].sectionName", value: https }
+
+  - it: one-node JetStream EventBus with small requests
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: EventBus }
+    asserts:
+      - equal: { path: spec.jetstream.replicas, value: 1 }
+      - equal: { path: spec.jetstream.containerTemplate.resources.requests.memory, value: 48Mi }
+
+  - it: Falco webhook requires the bearer token from the platform store
+    template: templates/eventsource.yaml
+    asserts:
+      - equal:
+          path: spec.webhook.falco
+          value: { port: "12000", endpoint: /falco, method: POST, authSecret: { name: falco-webhook, key: token } }
+        documentSelector: { path: kind, value: EventSource }
+      - equal:
+          path: spec.data[0].remoteRef
+          value: { key: falco-webhook, property: token }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: metadata.namespace, value: argo-events }
+        documentSelector: { path: kind, value: ExternalSecret }
+
+  - it: exposes POST /falco on the control-plane Gateway as events.<host>
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: HTTPRoute }
+    set:
+      openchoreo.controlPlane.host: openchoreo.example.com
+    asserts:
+      - equal: { path: spec.hostnames, value: [events.openchoreo.example.com] }
+      - equal: { path: "spec.parentRefs[0]", value: { name: gateway-default, namespace: openchoreo-control-plane, sectionName: http } }
+      - equal: { path: "spec.rules[0].backendRefs[0]", value: { name: platform-eventsource-svc, port: 12000 } }
+
+  - it: watches ReleaseBindings in the org namespace read-only
+    template: templates/eventsource.yaml
+    asserts:
+      - equal:
+          path: spec.resource.releasebinding-rollout
+          value: { namespace: default, group: openchoreo.dev, version: v1alpha1, resource: releasebindings, eventTypes: [ADD, UPDATE] }
+        documentSelector: { path: kind, value: EventSource }
+      - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, list, watch] }] }
+        documentSelector: { path: kind, value: Role }
+
+  - it: escalates Critical and above, one Workflow per event uuid
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: falco-escalation }
+    asserts:
+      - isKind: { of: Sensor }
+        documentIndex: 0
+      - equal: { path: "spec.dependencies[0].filters.data[0].value", value: ["^Emergency$", "^Alert$", "^Critical$"] }
+        documentIndex: 0
+      - equal: { path: "spec.triggers[0].template.k8s.source.resource.spec.workflowTemplateRef.name", value: falco-response }
+        documentIndex: 0
+      - equal: { path: "spec.triggers[0].template.k8s.parameters[0].dest", value: metadata.name }
+        documentIndex: 0
+
+  - it: starts the promotion gate after a successful rollout in staging, one WorkflowRun per rollout
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: promotion-gate }
+    asserts:
+      - equal: { path: "spec.dependencies[0].filters.data[0]", value: { path: body.spec.environment, type: string, value: [staging] } }
+      - equal: { path: "spec.triggers[0].template.k8s.source.resource.kind", value: WorkflowRun }
+      - equal: { path: "spec.triggers[0].template.k8s.source.resource.spec.workflow", value: { kind: ClusterWorkflow, name: promotion-gate, parameters: { project: "", component: "", sourceEnvironment: "", release: "" } } }
+      - matchRegex: { path: "spec.triggers[0].template.k8s.parameters[0].src.dataTemplate", pattern: 'rolloutId \| sha256sum' }
+
+  - it: rejects an unknown minimum priority
+    template: templates/sensors.yaml
+    set:
+      falco.minimumPriority: severe
+    asserts:
+      - failedTemplate: { errorMessage: 'falco.minimumPriority "severe" is not a Falco priority' }
+
+  - it: falco-response enriches and records; RCA and notify only when enabled
+    template: templates/falco-response.yaml
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - lengthEqual: { path: "spec.templates[0].steps[1]", count: 1 }
+      - matchRegex: { path: "spec.templates[1].script.image", pattern: '@sha256:[0-9a-f]{64}$' }
+
+  - it: RCA step when the agent is enabled
+    template: templates/falco-response.yaml
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    set:
+      falco.response.rca.enabled: true
+    asserts:
+      - equal: { path: "spec.templates[0].steps[1][1].name", value: rca }
+
+  - it: the response identity only reads OpenChoreo objects and writes Events in the org namespace
+    template: templates/falco-response.yaml
+    documentIndex: 4
+    asserts:
+      - equal: { path: metadata.name, value: argo-events-falco-response }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [openchoreo.dev], resources: [renderedreleases, environments], verbs: [get, list] }
+            - { apiGroups: [events.k8s.io], resources: [events], verbs: [create] }

@@ -251,6 +251,13 @@ assert_eq "$(keys platform-github-app)" "githubAppID,githubAppInstallationID,git
 assert_eq "$(val platform-github-app githubAppInstallationID)" 8 "push App: installation"
 run push_partial "$S" NO_GH=1 GITHUB_PUSH_APP_ID=9
 assert_eq "$RC" 1 "push App partial: fails closed"
+run gate_app "$S" NO_GH=1 GITHUB_GATE_APP_ID=7 GITHUB_GATE_APP_INSTALLATION_ID=6 GITHUB_GATE_APP_PRIVATE_KEY_FILE="$PEM"
+assert_eq "$(keys promotion-gate-github)" "githubAppID,githubAppInstallationID,githubAppPrivateKey" "gate App: keys"
+assert_eq "$(val promotion-gate-github githubAppID)" 7 "gate App: app id"
+assert_eq "$(val promotion-gate-github githubAppPrivateKey | grep -c FAKEPEMBODY)" 1 "gate App: private key from the file"
+assert_eq "$(applied platform-github-app)" "" "gate App: does not seed the push App"
+run gate_partial "$S" NO_GH=1 GITHUB_GATE_APP_INSTALLATION_ID=6
+assert_eq "$RC" 1 "gate App partial: fails closed"
 
 # --- platform-github-build (in-cluster build git credentials) -----------------------------------------------------
 run build_token "$S" NO_GH=1 PLATFORM_GITHUB_BUILD_TOKEN=github_pat_FAKE PLATFORM_GITHUB_BUILD_USER=builder

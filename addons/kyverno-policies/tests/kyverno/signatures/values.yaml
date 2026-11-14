@@ -1,0 +1,11 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: dp-default-demo-production-1
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/environment: production
+  - name: dp-default-demo-staging-1
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/environment: staging
