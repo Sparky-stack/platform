@@ -134,7 +134,7 @@ for inst_dir in installations/*; do
     helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" "${args[@]}" > "$TMP/edns-$inst-$c.yaml"
     files=("$TMP/edns-$inst-$c.yaml")
     for f in "$RENDERED_DIR"/addon-*-"$inst"-"$c".yaml; do [[ -f "$f" ]] && files+=("$f"); done
-    while read -r ns name keys; do
+    while read -r ns name _keys; do
       [[ -n "$ns" ]] || continue
       dns_checked=$((dns_checked + 1))
       assert_eq "$ns" external-dns "$inst/$c: ExternalSecret $name reads store dns from namespace external-dns"
