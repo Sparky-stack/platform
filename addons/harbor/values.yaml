@@ -92,7 +92,7 @@ config:
   endpoints:
     docker.io: { type: docker-hub, url: "https://hub.docker.com" }
     ghcr.io: { type: github-ghcr, url: "https://ghcr.io", credentials: ghcr }   # private koorikla packages
-    quay.io: { type: quay, url: "https://quay.io" }
+    quay.io: { type: docker-registry, url: "https://quay.io" }   # Harbor 2.15 refuses the quay adapter for proxy cache
     registry.k8s.io: { type: docker-registry, url: "https://registry.k8s.io" }
     cr.openchoreo.dev: { type: docker-registry, url: "https://cr.openchoreo.dev" }
     gcr.io: { type: docker-registry, url: "https://gcr.io" }
