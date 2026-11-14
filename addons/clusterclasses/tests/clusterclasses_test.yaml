@@ -1,0 +1,158 @@
+suite: clusterclasses - namespace fleet, k3s-docker always, cloud classes per installation
+templates:
+  - templates/namespace.yaml
+  - templates/k3s-docker.yaml
+  - templates/k3s-aws.yaml
+  - templates/k3s-hetzner.yaml
+tests:
+  - it: creates namespace fleet
+    template: templates/namespace.yaml
+    asserts:
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: fleet, any: true }
+
+  - it: renders only k3s-docker by default
+    asserts:
+      - hasDocuments: { count: 1, filterAware: true }
+        documentSelector: { path: kind, value: ClusterClass, matchMany: true }
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-docker, namespace: fleet, any: true }
+        template: templates/k3s-docker.yaml
+
+  - it: renders k3s-aws and k3s-hetzner when the installation enables them
+    set: { capi.providers: { docker: true, aws: true, hetzner: true } }
+    asserts:
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-aws, namespace: fleet, any: true }
+        template: templates/k3s-aws.yaml
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-hetzner, namespace: fleet, any: true }
+        template: templates/k3s-hetzner.yaml
+
+  # --- k3s-docker --------------------------------------------------------------------------------------------------
+  - it: k3s-docker uses CAPD v1beta2 and cluster-api-k3s v1beta2 templates with hash-suffixed names
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: spec.infrastructure.templateRef.kind, value: DockerClusterTemplate }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta2 }
+      - equal: { path: spec.controlPlane.templateRef.kind, value: KThreesControlPlaneTemplate }
+      - equal: { path: spec.controlPlane.templateRef.apiVersion, value: controlplane.cluster.x-k8s.io/v1beta2 }
+      - matchRegex: { path: spec.controlPlane.templateRef.name, pattern: "^k3s-docker-control-plane-[0-9a-f]{8}$" }
+      - equal: { path: "spec.workers.machineDeployments[0].class", value: default-worker }
+      - equal: { path: "spec.workers.machineDeployments[0].bootstrap.templateRef.kind", value: KThreesConfigTemplate }
+
+  - it: k3s-docker defaults the node image and patches it into both machine templates
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - contains:
+          path: spec.variables
+          content:
+            name: kindImage
+            required: false
+            schema:
+              openAPIV3Schema:
+                type: string
+                default: kindest/node:v1.35.8
+                description: Node container image (OS only; k3s is installed at boot with version = topology.version).
+      - equal:
+          path: "spec.patches[0].definitions[0].selector.matchResources"
+          value: { controlPlane: true, machineDeploymentClass: { names: [default-worker] } }
+
+  - it: k3s-docker control plane waits for get.k3s.io and disables traefik
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal: { path: spec.template.spec.kthreesConfigSpec.serverConfig.disableComponents, value: [traefik] }
+      - matchRegex:
+          path: "spec.template.spec.kthreesConfigSpec.preK3sCommands[0]"
+          pattern: "until curl .*https://get.k3s.io"
+
+  - it: k3s-docker workers run k3s-agent as Type=exec (CAPD bootstrap deadlock)
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: KThreesConfigTemplate }
+    asserts:
+      - matchRegex: { path: "spec.template.spec.preK3sCommands[0]", pattern: "until curl .*https://get.k3s.io" }
+      - matchRegex: { path: "spec.template.spec.preK3sCommands[1]", pattern: "k3s-agent.service.d.*Type=exec" }
+
+  - it: registry auth writes /etc/rancher/k3s/registries.yaml from Secret <cluster>-registries
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[1].name", value: registryAuth }
+      - equal: { path: "spec.patches[1].enabledIf", value: "{{ .registryAuth }}" }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
+      - matchRegex:
+          path: "spec.patches[1].definitions[0].jsonPatches[0].valueFrom.template"
+          pattern: 'name: "\{\{ \.builtin\.cluster\.name \}\}-registries"'
+      - matchRegex:
+          path: "spec.patches[1].definitions[1].jsonPatches[0].valueFrom.template"
+          pattern: "path: /etc/rancher/k3s/registries.yaml"
+
+  - it: changes template names when a template spec changes (immutable templates are rotated)
+    template: templates/k3s-docker.yaml
+    set: { k3s.disableComponents: [traefik, metrics-server] }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - notEqual: { path: spec.controlPlane.templateRef.name, value: k3s-docker-control-plane-b3b4afc7 }
+
+  # --- k3s-aws -----------------------------------------------------------------------------------------------------
+  - it: k3s-aws requires region and ami
+    template: templates/k3s-aws.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: spec.infrastructure.templateRef.kind, value: AWSClusterTemplate }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta2 }
+      - equal: { path: "spec.variables[0].name", value: region }
+      - equal: { path: "spec.variables[0].required", value: true }
+      - equal: { path: "spec.variables[1].name", value: ami }
+      - equal: { path: "spec.variables[1].required", value: true }
+
+  - it: k3s-aws nodes use the EC2 private DNS name and no embedded CCM / servicelb / traefik
+    template: templates/k3s-aws.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig
+          value: { disableComponents: [traefik, servicelb], cloudProviderName: external, disableCloudController: true }
+      - equal: { path: spec.template.spec.kthreesConfigSpec.agentConfig.nodeName, value: "{{ ds.meta_data.local_hostname }}" }
+
+  - it: k3s-aws machines skip the secrets-manager helper (plain distro AMI) and default to no SSH key
+    template: templates/k3s-aws.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: AWSMachineTemplate, matchMany: true }
+    asserts:
+      - equal: { path: spec.template.spec.cloudInit.insecureSkipSecretsManager, value: true }
+      - equal: { path: spec.template.spec.sshKeyName, value: "" }
+
+  # --- k3s-hetzner -------------------------------------------------------------------------------------------------
+  - it: k3s-hetzner reads the CAPH token from Secret hetzner (ExternalSecret from capi-hetzner)
+    template: templates/k3s-hetzner.yaml
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - equal:
+          path: spec.template.spec.hetznerSecretRef
+          value: { name: hetzner, key: { hcloudToken: hcloud } }
+        documentSelector: { path: kind, value: HetznerClusterTemplate }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: spec.data, value: [{ secretKey: hcloud, remoteRef: { key: capi-hetzner, property: hcloud } }] }
+        documentSelector: { path: kind, value: ExternalSecret }
+
+  - it: k3s-hetzner appends the registry file after its own k3s config drop-in
+    template: templates/k3s-hetzner.yaml
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - equal:
+          path: "spec.template.spec.kthreesConfigSpec.files[0].path"
+          value: /etc/rancher/k3s/config.yaml.d/10-platform.yaml
+        documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+      - equal: { path: "spec.patches[3].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
+        documentSelector: { path: kind, value: ClusterClass }
+
+  - it: k3s-hetzner limits region to Hetzner locations
+    template: templates/k3s-hetzner.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.variables[0].name", value: region }
+      - equal: { path: "spec.variables[0].schema.openAPIV3Schema.enum", value: [fsn1, hel1, nbg1, ash, hil, sin] }
