@@ -49,6 +49,8 @@ openchoreo:
   controlPlane:
     host: openchoreo.hetzner.example.com
     clusterGatewayURL: wss://cluster-gateway.openchoreo.hetzner.example.com/ws   # VERIFY port/path with OC 1.3.3
+  workflowPlane:
+    enabled: true         # addon openchoreo-workflow-plane on mgmt; builds push to registry.external.repository
   observability:
     enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
     httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation

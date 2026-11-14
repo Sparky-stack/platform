@@ -108,12 +108,13 @@ apply_kv_secret() {
 
 rand_alnum() {
   # openssl, not `tr </dev/urandom | head`: under pipefail the reader closing early kills tr with SIGPIPE (exit 141).
-  openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24
+  # $1 = length (default 24, max ~80).
+  openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-"${1:-24}"
 }
 
-# seed_generated_secret <secret> <key>[=<fixed value>|=@strong] ...
+# seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>] ...
 # Generates each missing property once (random alphanumeric; @strong adds upper/lower/digit/special for password
-# policies like OpenSearch 3), keeps existing values on re-runs.
+# policies like OpenSearch 3 and Harbor; @<length> exact length), keeps existing values on re-runs.
 seed_generated_secret() {
   local name=$1; shift
   local -a args=()
@@ -125,6 +126,7 @@ seed_generated_secret() {
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
         @strong) val="Px9!$(rand_alnum)" ;;
+        @[0-9]*) val=$(rand_alnum "${fixed#@}") ;;   # exact length (Harbor secretKey 16, CSRF key 32)
         *)       val=$fixed ;;
       esac
     fi
@@ -143,6 +145,35 @@ seed_openchoreo_secret() {
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
     observer-client-secret
+}
+
+# Harbor (addon harbor): every key the chart would otherwise generate per render, the admin password and the robot
+# secrets (builder: in-cluster builds, nodes: k3s node pulls). Harbor's policy: >= 8 chars, upper + lower + digit.
+seed_harbor_secret() {
+  seed_generated_secret harbor admin-password=@strong secret-key=@16 core-secret csrf-key=@32 jobservice-secret \
+    registry-http-secret registry-password database-password builder-secret=@strong nodes-secret=@strong
+}
+
+# Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
+# cosign.password). Generated once with cosign from the koorikla/ci toolbox image (no host install); the private key
+# only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
+COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608"
+seed_cosign_secret() {
+  if kubectl --context "$CTX" -n platform-secrets get secret cosign-platform >/dev/null 2>&1; then
+    log "cosign-platform exists (keeping the key pair)"
+    return 0
+  fi
+  require_bins docker
+  local dir pass
+  dir=$(mktemp -d)
+  pass=$(rand_alnum 32)
+  log "Generating the platform cosign key pair (cosign-platform)"
+  COSIGN_PASSWORD="$pass" docker run --rm -u "$(id -u):$(id -g)" -e COSIGN_PASSWORD -v "$(native_path "$dir"):/keys" -w /keys \
+    --entrypoint cosign "$COSIGN_IMAGE" generate-key-pair >/dev/null
+  kubectl --context "$CTX" create secret generic cosign-platform --namespace platform-secrets \
+    --from-file=cosign.key="$dir/cosign.key" --from-file=cosign.pub="$dir/cosign.pub" \
+    --from-literal=cosign.password="$pass" --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
+  rm -rf "$dir"
 }
 
 cmd_secrets() {
@@ -164,11 +195,13 @@ cmd_secrets() {
     warn "Could not inspect OAuth scopes; ensure token has 'read:packages' for ghcr.io"
   fi
 
-  log "Seeding platform-secrets in ns platform-secrets (github, ghcr, openchoreo)"
+  log "Seeding platform-secrets in ns platform-secrets (github, ghcr, openchoreo, harbor, cosign)"
   kubectl --context "$CTX" create namespace platform-secrets --dry-run=client -o yaml | kubectl --context "$CTX" apply -f - >/dev/null
   apply_kv_secret platform-secrets platform-github "$gh_user" "$gh_token"
   apply_kv_secret platform-secrets platform-ghcr "$gh_user" "$gh_token"
   seed_openchoreo_secret
+  seed_harbor_secret
+  seed_cosign_secret
 }
 
 seed_argocd_repo_secret() {
