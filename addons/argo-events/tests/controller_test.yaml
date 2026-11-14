@@ -1,0 +1,17 @@
+suite: argo-events - controller security context
+release:
+  name: argo-events
+  namespace: argo-events
+templates:
+  - charts/argo-events/templates/argo-events-controller/deployment.yaml
+  - charts/argo-events/templates/argo-events-controller/config.yaml     # included by the deployment (checksum)
+tests:
+  - it: "runs with a numeric non-root uid (image has no USER, runAsNonRoot alone fails at start)"
+    template: charts/argo-events/templates/argo-events-controller/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 65532
