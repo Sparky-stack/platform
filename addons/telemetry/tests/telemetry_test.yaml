@@ -20,6 +20,12 @@ tests:
     set:
       openchoreo.controlPlane.host: oc.example.com
       openchoreo.observability.httpPort: 443
+      openchoreo.observability.tlsPort: 443
+      observability-logs-opensearch.fluent-bit.openSearchHost: opensearch.observability.oc.example.com
+      observability-logs-opensearch.fluent-bit.openSearchVHost: opensearch.observability.oc.example.com
+      observability-logs-opensearch.fluent-bit.openSearchPort: 443
+      observability-metrics-prometheus.prometheusCustomizations.http.observabilityPlaneUrl: http://prometheus.observability.oc.example.com:443/api/v1/write
+      observability-events-otel-collector.exporters.opensearch.http.endpoint: https://opensearch.observability.oc.example.com:443
     asserts:
       - equal: { path: data.OBS_OTLP_ENDPOINT, value: "http://opentelemetry.observability.oc.example.com:443" }
 
