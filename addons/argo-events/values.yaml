@@ -62,6 +62,11 @@ eventBus:
   maxMemoryStore: 64MB
   maxFileStore: 128MB                # emptyDir
 
+# Argo Workflows (the OpenChoreo workflow plane, addon openchoreo-workflow-plane) runs falco-response and the
+# promotion gate: auto = render WorkflowTemplate falco-response and both Sensors only once its CRDs exist on the
+# cluster (Argo CD re-renders when they appear), true / false force it. The EventSource and EventBus always render.
+workflowPlane: auto
+
 # Pods of the EventSource / Sensors (one pod each).
 podResources:
   requests: { cpu: 10m, memory: 24Mi }
@@ -81,6 +86,10 @@ falco:
     enabled: true
     hostPrefix: events                 # events.<openchoreo.controlPlane.host>
     gateway: { name: gateway-default, namespace: openchoreo-control-plane }
+    # Gateway listener. Locally `http` (plain HTTP on the docker network, bearer token in cleartext there). Every
+    # non-local installation must use an HTTPS listener (e.g. `https`) and an https:// url in the falco-webhook key:
+    # the token authenticates every escalation (docs/observability.md "Falco response").
+    sectionName: http
   minimumPriority: critical            # defence in depth: sidekick already sends only >= critical
   response:
     image: docker.io/library/python:3.14.9-alpine3.23@sha256:a3d4eff2e4a3de12d9709b3e80cee788109d7292955972a83f5fff81b06c2e95

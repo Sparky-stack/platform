@@ -6,7 +6,70 @@ templates:
   - templates/eventsource.yaml
   - templates/sensors.yaml
   - templates/falco-response.yaml
+set:
+  workflowPlane: "true"            # most tests: as on mgmt with the workflow plane; detection is tested below
 tests:
+  - it: without the Argo Workflows CRDs (auto) no WorkflowTemplate and no Sensors render
+    templates: [templates/sensors.yaml, templates/falco-response.yaml]
+    set:
+      workflowPlane: auto
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: with the Argo Workflows CRDs (auto) WorkflowTemplate and Sensors render
+    template: templates/falco-response.yaml
+    set:
+      workflowPlane: auto
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - isKind: { of: WorkflowTemplate }
+        documentSelector: { path: kind, value: WorkflowTemplate }
+
+  - it: with the Argo Workflows CRDs (auto) both Sensors render
+    template: templates/sensors.yaml
+    set:
+      workflowPlane: auto
+    capabilities:
+      apiVersions: [argoproj.io/v1alpha1/WorkflowTemplate]
+    asserts:
+      - isKind: { of: Sensor }
+        documentSelector: { path: metadata.name, value: falco-escalation }
+      - isKind: { of: Sensor }
+        documentSelector: { path: metadata.name, value: promotion-gate }
+
+  - it: the EventSource renders without the workflow plane
+    template: templates/eventsource.yaml
+    set:
+      workflowPlane: auto
+    asserts:
+      - isKind: { of: EventSource }
+        documentSelector: { path: metadata.name, value: platform }
+
+  - it: rejects an unknown workflowPlane mode
+    template: templates/sensors.yaml
+    set:
+      workflowPlane: maybe
+    asserts:
+      - failedTemplate: { errorMessage: 'workflowPlane: "maybe" is not auto, true or false' }
+
+  - it: EventBus JetStream pods run Pod Security restricted
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: EventBus }
+    asserts:
+      - equal: { path: spec.jetstream.securityContext, value: { fsGroup: 65532, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } } }
+      - equal: { path: spec.jetstream.containerTemplate.securityContext, value: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } } }
+      - equal: { path: spec.jetstream.reloaderContainerTemplate.securityContext.allowPrivilegeEscalation, value: false }
+      - equal: { path: spec.jetstream.metricsContainerTemplate.securityContext.capabilities, value: { drop: [ALL] } }
+
+  - it: the webhook listener is configurable (HTTPS outside local)
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: HTTPRoute }
+    set:
+      falco.route.sectionName: https
+    asserts:
+      - equal: { path: "spec.parentRefs[0].sectionName", value: https }
+
   - it: one-node JetStream EventBus with small requests
     template: templates/eventsource.yaml
     documentSelector: { path: kind, value: EventBus }
@@ -26,6 +89,8 @@ tests:
           value: { key: falco-webhook, property: token }
         documentSelector: { path: kind, value: ExternalSecret }
       - equal: { path: spec.secretStoreRef.name, value: platform }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: metadata.namespace, value: argo-events }
         documentSelector: { path: kind, value: ExternalSecret }
 
   - it: exposes POST /falco on the control-plane Gateway as events.<host>

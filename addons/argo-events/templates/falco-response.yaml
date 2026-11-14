@@ -3,7 +3,7 @@ WorkflowTemplate falco-response (docs/observability.md "Falco response"), run by
 Workflows controller on mgmt. files/falco_response.py (ConfigMap) does the work; the ServiceAccount can only read
 OpenChoreo RenderedReleases/Environments and write Events in the org namespace (no data-plane access).
 */ -}}
-{{- if .Values.falco.enabled }}
+{{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
 {{- $r := .Values.falco.response }}
 {{- $ns := .Values.openchoreo.orgNamespace }}
 {{- $run := printf "import runpy, sys; sys.argv = ['falco_response.py', '%s']; runpy.run_path('/scripts/falco_response.py', run_name='__main__')" }}
@@ -74,6 +74,7 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: falco-notify
+  namespace: {{ .Release.Namespace }}
 spec:
   refreshInterval: 1h
   secretStoreRef:

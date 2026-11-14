@@ -48,3 +48,17 @@ tests:
       slack.enabled: true
     asserts:
       - equal: { path: spec.secretStoreRef.name, value: platform }
+  - it: mgmt escalation (default on, no slack) - store platform, webhook url + token from falco-webhook
+    template: templates/outputs-secret.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.target.template.data.WEBHOOK_MINIMUMPRIORITY, value: critical }
+      - contains:
+          path: spec.data
+          content: { secretKey: webhookUrl, remoteRef: { key: falco-webhook, property: url } }
+      - contains:
+          path: spec.data
+          content: { secretKey: webhookToken, remoteRef: { key: falco-webhook, property: token } }
+      - notContains: { path: spec.data, content: { secretKey: slackUrl }, any: true }

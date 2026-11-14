@@ -14,12 +14,18 @@ spec:
   jetstream:
     version: {{ .Values.eventBus.natsVersion | quote }}
     replicas: 1
+    # Pod Security restricted (the namespace is externally reachable and stays in Kyverno/PSS scope); fsGroup lets the
+    # non-root NATS server write its JetStream store (emptyDir). VERIFY on first sync (nats + reloader + exporter).
+    securityContext: {{- toYaml (merge (dict "fsGroup" 65532) $podSc) | nindent 6 }}
     containerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.nats | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
     reloaderContainerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.reloader | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
     metricsContainerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.metrics | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
     settings: |
       max_memory_store: {{ .Values.eventBus.maxMemoryStore }}
       max_file_store: {{ .Values.eventBus.maxFileStore }}
@@ -99,6 +105,7 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: falco-webhook
+  namespace: {{ .Release.Namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
@@ -121,7 +128,7 @@ spec:
   parentRefs:
     - name: {{ .Values.falco.route.gateway.name }}
       namespace: {{ .Values.falco.route.gateway.namespace }}
-      sectionName: http
+      sectionName: {{ .Values.falco.route.sectionName }}
   hostnames:
     - {{ printf "%s.%s" .Values.falco.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
   rules:

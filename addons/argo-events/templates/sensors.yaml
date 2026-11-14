@@ -2,10 +2,12 @@
 Sensors: falco-escalation (-> Workflow from WorkflowTemplate falco-response) and promotion-gate (-> OpenChoreo
 WorkflowRun of ClusterWorkflow promotion-gate). Triggers create objects with deterministic names (event uuid / rollout
 id), so a re-delivered event fails with AlreadyExists instead of running twice.
+Both need the workflow plane (Argo Workflows CRDs + controller, see _helpers.tpl): not rendered without it.
 */ -}}
+{{- $wf := eq (include "ae.workflowPlane" .) "true" }}
 {{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
 {{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
-{{- if .Values.falco.enabled }}
+{{- if and .Values.falco.enabled $wf }}
 {{- $order := list "Emergency" "Alert" "Critical" "Error" "Warning" "Notice" "Informational" "Debug" }}
 {{- $min := .Values.falco.minimumPriority | title }}
 {{- if not (has $min $order) }}{{ fail (printf "falco.minimumPriority %q is not a Falco priority" .Values.falco.minimumPriority) }}{{ end }}
@@ -101,7 +103,7 @@ spec:
         steps: 3
         duration: 2s
 {{- end }}
-{{- if .Values.promotionGate.enabled }}
+{{- if and .Values.promotionGate.enabled $wf }}
 {{- $ns := .Values.openchoreo.orgNamespace }}
 ---
 apiVersion: v1

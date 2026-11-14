@@ -213,6 +213,16 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
 - `POST <url>` (e.g. `https://events.openchoreo.<domain>/falco`), `Content-Type: application/json`,
   header `Authorization: Bearer <token>` (the EventSource validates it; rotate by changing the store key).
 - Sent only for `priority >= Critical` (`WEBHOOK_MINIMUMPRIORITY=critical`): Critical, Alert, Emergency.
+- Transport: locally the route sits on the Gateway's plain-HTTP listener (`falco.route.sectionName: http`, docker
+  network on one machine), so the bearer token travels in cleartext there. Every other installation must use an HTTPS
+  listener (`falco.route.sectionName`) and an `https://` `url` in `falco-webhook`.
+- One `falco-webhook` token is shared by all clusters: whoever holds it (any node of any cluster) can post events that
+  name another cluster. The response only records Events and asks the RCA agent; containment stays local with Talon.
+  Per-cluster tokens need one webhook endpoint per cluster in the EventSource (its `authSecret` takes one token) and
+  a per-cluster store key: follow-up.
+- argo-events renders WorkflowTemplate `falco-response` and Sensor `falco-escalation` only once the Argo Workflows
+  CRDs exist (`workflowPlane: auto`, addon openchoreo-workflow-plane); until then escalations reach the EventBus and
+  expire there (24h).
 - Body = the falcosidekick/Falco event, fields consumers may rely on:
 
   | Field | Example |
