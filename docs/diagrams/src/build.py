@@ -127,8 +127,8 @@ def cluster_lifecycle() -> Diagram:
     d.arrow([(888, y0 + h0 + 4), (888, 184)], EM, label="into ns fleet", label_pos=(898, 178),
             label_anchor="start", aid="render")
 
-    d.group(16, 184, 912, 470, "mgmt cluster", "zone")
-    d.group(948, 184, 236, 470, "workload cluster <name>", "zone", sub="k3s · no Argo component")
+    d.group(16, 184, 912, 476, "mgmt cluster", "zone")
+    d.group(948, 184, 236, 476, "workload cluster <name>", "zone", sub="k3s · no Argo component")
 
     C = [32, 262, 492, 722]
     BW, BH = 190, 64
@@ -151,27 +151,27 @@ def cluster_lifecycle() -> Diagram:
     # lane 2
     d.box(C[0], Y2, BW, BH, "security", "<name>-kubeconfig", ["Secret · written by CAPI"])
     d.box(C[1], Y2, BW, BH, "security", "ExternalSecret", ["store mgmt-fleet", "templates the secret"])
-    d.box(C[2], Y2, BW, BH, "gitops", "cluster secret <name>", ["ns argocd · labels:", "role, provider, env, …"])
+    d.box(C[2], Y2, BW, BH, "security", "cluster secret <name>", ["ns argocd · labels:", "role, provider, env, …"])
     d.box(C[3], Y2, BW, BH, "gitops", "addon ApplicationSets", ["select on labels →", "Apps <addon>-<name>"])
     d.box(WX, Y2, WW, BH, "gitops", "addon resources", ["cilium, istio, ESO, …", "applied by Argo (push)"])
     d.arrow([(C[1] + 40, Y1 + BH), (C[1] + 40, Y2 - 22), (200, Y2 - 22), (200, Y2)], EM, label="CAPI writes",
-            label_pos=(C[1] + 50, Y2 - 26), label_anchor="start", aid="kcfg")
+            label_pos=(C[1] + 50, Y2 - 24), label_anchor="start", aid="kcfg")
     for i in range(3):
         d.arrow([(C[i] + BW, mid(Y2)), (C[i + 1], mid(Y2))], EM)
     d.arrow([(C[3] + BW, mid(Y2)), (WX, mid(Y2))], EM, aid="push")
 
     # lane 3
-    d.box(C[0], Y3, BW, BH, "security", "per-cluster agent CA", ["cert-manager · key stays", "signs CN=<name> cert"])
+    d.box(C[0], Y3, BW, BH, "security", "agent CA → client cert", ["CA key stays on mgmt;", "leaf cert CN=<name>"])
     d.box(C[1], Y3, BW, BH, "security", "ExternalSecret", ["store mgmt-fleet →", "CRS payload Secret"])
     d.box(C[2], Y3, BW, BH, "gitops", "ClusterResourceSet", ["Reconcile · + shared", "openchoreo-gateway-ca"])
-    d.box(WX, Y3, WW, BH, "security", "openchoreo-data-plane", ["Secret cluster-agent-tls", "CM cluster-gateway-ca"])
+    d.box(WX, Y3, WW, BH, "security", "ns openchoreo-data-plane", ["Secret cluster-agent-tls", "CM cluster-gateway-ca"])
     d.box(C[0], Y4, BW, BH, "platform", "ClusterDataPlane", ["<name> · clientCA =", "<name>-agent-ca only"])
     d.box(C[1], Y4, BW, BH, "platform", "Environments", ["development, staging", "dataPlaneRef → <name>"])
     d.box(C[2], Y4, BW, BH, "platform", "cluster-gateway", ["checks client cert vs", "ClusterDataPlane CA"])
     d.box(WX, Y4, WW, BH, "platform", "cluster-agent", ["dials out · mTLS", "applies app releases"])
     d.arrow([(C[0] + BW, mid(Y3)), (C[1], mid(Y3))], RO)
     d.arrow([(C[1] + BW, mid(Y3)), (C[2], mid(Y3))], RO)
-    d.arrow([(C[2] + BW, mid(Y3)), (WX, mid(Y3))], RO, label="CAPI applies payload",
+    d.arrow([(C[2] + BW, mid(Y3)), (WX, mid(Y3))], EM, label="CAPI applies payload",
             label_pos=(805, mid(Y3) + 4), aid="crs")
     d.arrow([(214, Y4), (214, Y3 + BH)], RO, label="trusts", label_pos=(222, Y4 - 14), label_anchor="start",
             aid="trust")
@@ -239,7 +239,7 @@ def trust_model() -> Diagram:
     # --- secrets
     d.text(32, 390, "secrets", 12.5, RO, weight=700)
     d.group(24, 400, 224, 190, "secret backend", "zone", label_size=11.5)
-    d.box(36, 432, 200, 44, "external", "kubernetes", ["local stand-in"], title_size=12.5, sub_size=11)
+    d.box(36, 432, 200, 44, "external", "kubernetes (mgmt ns)", ["local stand-in"], title_size=12.5, sub_size=11)
     d.box(36, 482, 200, 44, "cloud", "AWS Secrets Manager", ["rendered only"], title_size=12.5, sub_size=11)
     d.box(36, 532, 200, 44, "cloud", "Vault / OpenBao", ["rendered only"], title_size=12.5, sub_size=11)
     d.box(MX, 400, MW, 64, "security", "ClusterSecretStore platform",
@@ -280,13 +280,175 @@ def trust_model() -> Diagram:
             aid="push")
     d.arrow([(WX, 940), (MX + MW, 940)], RO, planned=True, label="verify platform key", label_pos=(GR, 944),
             aid="vk")
-    d.arrow([(WX + WW / 2, 962), (WX + WW / 2, 1064), (248, 1064), (248, 950), (EX + EW, 950)], RO, planned=True,
-            label="verify keyless sig directly (not via mgmt)", label_pos=(580, 1068), aid="vg")
+    d.arrow([(WX + WW / 2, 826), (WX + WW / 2, 787), (248, 787), (248, 950), (EX + EW, 950)], RO, planned=True,
+            label="verify keyless sig directly (not via mgmt)", label_pos=(580, 791), aid="vg")
     d.arrow([(MX, 1018), (EX + EW, 1018)], RO, planned=True, label="App token (ESO)", label_pos=(GL, 1022),
             aid="app")
 
     d.legend(28, 1102, ["external", "gitops", "security", "platform", "data", "cloud"], cols=6, col_w=190,
-             flows=[("trust / secret material", RO, False), ("artifact", VI, False)])
+             flows=[("certs, secrets, mTLS", RO, False), ("artifact", VI, False)])
+    return d
+
+
+# ---------------------------------------------------------------------------------------------- delivery
+def delivery() -> Diagram:
+    W, H = 1200, 1000
+    d = Diagram(W, H, "Delivery · from git push to data planes",
+                "apps: CI → signed image → tag commit → Argo CD → OpenChoreo releases per environment · "
+                "platform packages: gated PRs per env ring")
+    d.group(16, 84, 1168, 452, "1 · app delivery (GitOps + OpenChoreo)", "zone")
+    d.group(16, 560, 1168, 302, "2 · Crossplane package promotion", "zone")
+
+    # row 1: build
+    d.box(32, 120, 180, 64, "external", "git push", ["app repo, e.g.", "koorikla/hello-world"])
+    d.box(252, 120, 230, 64, "external", "GitHub Actions", ["test · build · push", "(koorikla/ci: planned)"])
+    d.box(252, 204, 230, 64, "platform", "OC workflow plane", ["same koorikla/ci scripts", "buildkit · Argo Workflows"],
+          planned=True)
+    d.box(522, 120, 230, 64, "data", "GHCR", ["ghcr.io/koorikla/<app>", "sign + attest: planned"])
+    d.box(522, 204, 230, 64, "data", "Harbor · apps", ["cosign: platform key", "Trivy scan on push"], planned=True)
+    d.box(792, 120, 200, 148, "external", "bot commit",
+          ["deploy/openchoreo/", "workload.yaml", "image: <new tag>", "[skip ci]"])
+    d.arrow([(212, 152), (252, 152)], SL)
+    d.arrow([(212, 172), (232, 172), (232, 236), (252, 236)], SL, planned=True)
+    d.arrow([(482, 152), (522, 152)], VI)
+    d.arrow([(482, 236), (522, 236)], VI, planned=True)
+    d.arrow([(752, 152), (792, 152)], VI)
+    d.arrow([(752, 236), (792, 236)], VI, planned=True)
+    d.arrow([(892, 268), (892, 284), (122, 284), (122, 300)], EM,
+            label="Argo CD syncs deploy/openchoreo/ (tenant AppProject)", label_pos=(507, 288), aid="sync")
+
+    # row 2: deploy
+    d.box(32, 300, 180, 92, "gitops", "Argo CD", ["App <project>-<app>", "AppProject", "tenant-<project>"])
+    d.box(252, 300, 230, 92, "platform", "Component + Workload", ["org ns default (mgmt)", "autoDeploy: true",
+                                                                 "project demo"])
+    d.box(522, 300, 230, 92, "platform", "ComponentRelease", ["immutable snapshot:", "Workload + type +", "traits"])
+    envs = [("development", "ReleaseBinding · auto"), ("staging", "ReleaseBinding · PR"),
+            ("production", "ReleaseBinding · PR")]
+    EY = [300, 380, 460]
+    for (t, sub), y in zip(envs, EY):
+        d.box(792, y, 200, 52, "platform", t, [sub])
+    d.box(1032, 300, 144, 132, "cloud", "dev1", ["cluster-agent", "applies:", "development,", "staging"])
+    d.box(1032, 460, 144, 52, "cloud", "prod1", ["agent: production"])
+    d.arrow([(212, 346), (252, 346)], EM)
+    d.arrow([(482, 346), (522, 346)], CY)
+    d.arrow([(752, 326), (792, 326)], CY)
+    d.arrow([(892, 352), (892, 380)], CY, label="promote = PR", label_pos=(902, 371), label_anchor="start",
+            aid="p1")
+    d.arrow([(892, 432), (892, 460)], CY, label="PR + review", label_pos=(902, 451), label_anchor="start",
+            aid="p2")
+    d.arrow([(992, 326), (1032, 326)], CY)
+    d.arrow([(992, 406), (1032, 406)], CY)
+    d.arrow([(992, 486), (1032, 486)], CY)
+    d.text(32, 424, "a ReleaseBinding PR sets spec.releaseName to the ComponentRelease running in the previous",
+           11.5, "#cbd5e1")
+    d.text(32, 442, "environment · releases reach data planes only through the OpenChoreo cluster-agent "
+           "(never Argo CD)", 11.5, "#cbd5e1")
+
+    # lane 2: crossplane packages
+    d.box(32, 600, 180, 64, "external", "package repos", ["configurations,", "providers (xpkg)"])
+    d.box(252, 600, 230, 64, "external", "koorikla/ci", ["crossplane-*.yaml: xpkg", "build · push · cosign"],
+          planned=True)
+    d.box(522, 600, 230, 212, "gitops", "promote.yaml",
+          ["repository_dispatch", "package-released →", "PR to development;", "gate ✓ → next env;",
+           "order = OpenChoreo", "DeploymentPipeline"], planned=True)
+    PY = [600, 680, 760]
+    for (t, sub), y in zip([("env-development.yaml", "PR · opened on release"),
+                            ("env-staging.yaml", "PR · after gate ✓"),
+                            ("env-production.yaml", "PR · gate ✓ + review")], PY):
+        d.box(792, y, 200, 52, "gitops", t, [sub], planned=True)
+    d.box(1032, 600, 144, 212, "gitops", "Argo CD",
+          ["syncs crossplane-", "packages-<cluster>", "", "Notifications →", "commit status", "argocd/<app>"],
+          planned=True)
+    d.arrow([(212, 632), (252, 632)], EM, planned=True)
+    d.arrow([(482, 632), (522, 632)], EM, planned=True)
+    for y in PY:
+        d.arrow([(752, y + 26), (792, y + 26)], EM, planned=True)
+        d.arrow([(992, y + 26), (1032, y + 26)], EM, planned=True)
+    d.arrow([(1104, 812), (1104, 838), (637, 838), (637, 812)], EM, planned=True,
+            label="gate: same version healthy on every env-N cluster", label_pos=(870, 842), aid="gate")
+    for i, t in enumerate(["Cluster-scoped packages (Provider,", "Function, Configuration) promote",
+                           "here, per env ring. App-level XRs", "(OpenChoreo resource types) promote",
+                           "with the app release in lane 1."]):
+        d.text(40, 704 + i * 19, t, 11.5, "#cbd5e1")
+
+    d.legend(28, 902, ["external", "gitops", "platform", "data", "cloud"], cols=5, col_w=228, zone=False,
+             flows=[("git trigger", SL, False), ("artifact", VI, False), ("GitOps", EM, False),
+                    ("OpenChoreo", CY, False)])
+    return d
+
+
+# -------------------------------------------------------------------------------------- runtime security
+def runtime_security() -> Diagram:
+    W, H = 1200, 890
+    d = Diagram(W, H, "Runtime security · layers on every workload cluster",
+                "datapath (kgateway, Istio ambient, Cilium) · admission (Kyverno) · detection and response "
+                "(Falco, Talon) · escalation to mgmt")
+    CA, CW, CB, WIDE = 176, 256, 468, 548
+    R = [180, 268, 356, 444, 532, 620]
+    BH = 60
+    yc = lambda r: R[r] + BH / 2  # noqa: E731
+
+    d.box(CA, 84, CW, 48, "external", "client", ["HTTP to the app URL"])
+    d.group(16, 148, 724, 552, "workload cluster · dev1, prod1", "zone")
+    d.group(840, 408, 344, 292, "mgmt cluster", "zone")
+
+    tags = [("north-south", BL), ("mesh · L4/L7", BL), ("CNI · L3/L4", BL), ("admission", RO), ("detection", RO),
+            ("response", RO)]
+    for (t, c), y in zip(tags, R):
+        d.text(32, y + 35, t, 12, c, weight=700)
+
+    d.box(CA, R[0], CW, BH, "network", "kgateway", ["Gateway API · OpenChoreo", "gateway :19080"])
+    d.box(CB, R[0], CW, BH, "platform", "app pods", ["cell namespace", "ambient-enrolled"])
+    d.box(CA, R[1], WIDE, BH, "network", "Istio ambient",
+          ["ztunnel per node: L4 mTLS, SPIFFE identity", "waypoint per namespace: L7 authz (optional)"], planned=True)
+    d.box(CA, R[2], WIDE, BH, "network", "Cilium",
+          ["eBPF CNI · kube-proxy replacement", "NetworkPolicy · Hubble flow visibility"], planned=True)
+    d.box(CA, R[3], CW, BH, "external", "kube-apiserver", ["pod create / update"])
+    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["admission webhook:", "PSS + verifyImages, Audit"],
+          planned=True)
+    d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"], planned=True)
+    d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"], planned=True)
+    d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"],
+          planned=True)
+    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["logs · metrics · traces", "fan-out exporters"],
+          planned=True)
+
+    # mgmt side
+    d.box(856, 444, 312, BH, "platform", "workflow falco-response",
+          ["enrich pod / owner / ns →", "SRE agent → notify"], planned=True)
+    d.box(856, 532, 312, BH, "bus", "Argo Events", ["webhook EventSource +", "Sensor: priority ≥ Critical"],
+          planned=True)
+    d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"],
+          planned=True)
+    d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter"], planned=True)
+    d.box(840, 148, 344, 248, "note", "division of labour",
+          ["Cilium: packets, policy, Hubble", "Istio ambient: identity + mTLS", "kgateway: north-south only",
+           "Kyverno: admission (Audit first)", "Falco detects · Talon responds", "OBI (opt-in): the one L7",
+           "RED source; Hubble L7 off"], align="start")
+
+    # flows
+    d.arrow([(CA + CW / 2, 132), (CA + CW / 2, R[0])], BL)
+    d.arrow([(CA + CW, yc(0)), (CB, yc(0))], BL)
+    d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO, planned=True)
+    d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO, planned=True)
+    d.arrow([(CB + 128, R[0] + BH), (CB + 128, R[1])], BL, planned=True, label="via ztunnel",
+            label_pos=(CB + 138, R[1] - 10), label_anchor="start", aid="zt")
+    d.arrow([(CB + 128, R[1] + BH), (CB + 128, R[2])], BL, planned=True, label="over eBPF",
+            label_pos=(CB + 138, R[2] - 10), label_anchor="start", aid="ebpf")
+    d.arrow([(CB + 64, R[4] + BH), (CB + 64, R[4] + BH + 14), (CA + CW / 2, R[4] + BH + 14),
+             (CA + CW / 2, R[5])], RO, planned=True)
+    d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR, planned=True)
+    d.arrow([(CB + CW, yc(4)), (856, yc(4))], OR, planned=True, label="webhook", label_pos=(790, yc(4) + 4),
+            aid="esc")
+    d.arrow([(856 + 156, R[4]), (856 + 156, R[3] + BH)], OR, planned=True)
+    d.arrow([(CB + CW, yc(5) - 10), (856, yc(5) - 10)], OR, planned=True, label="OTLP",
+            label_pos=(790, yc(5) - 6), aid="otlp")
+    d.arrow([(CB + CW, yc(5) + 14), (800, yc(5) + 14), (800, 750), (856, 750)], OR, planned=True,
+            label="OTLP (opt-in)", label_pos=(800, 716), aid="dd")
+
+    d.legend(28, 808, ["external", "network", "platform", "security", "bus", "data"], cols=6, col_w=190,
+             labels={"external": "client / k8s core", "data": "telemetry store"},
+             flows=[("traffic", BL, False), ("admission / response", RO, False), ("telemetry, events", OR, False)])
     return d
 
 
@@ -294,6 +456,8 @@ DIAGRAMS = {
     "overview": overview,
     "cluster-lifecycle": cluster_lifecycle,
     "trust-model": trust_model,
+    "delivery": delivery,
+    "runtime-security": runtime_security,
 }
 
 

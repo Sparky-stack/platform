@@ -25,104 +25,104 @@
 <path d="M 256.0 360.0 L 212.0 360.0 L 212.0 522.0 L 176.0 522.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <rect x="24" y="140" width="152" height="60" rx="6" fill="#0f172a"/>
 <rect x="24" y="140" width="152" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="100.0" y="167.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">koorikla/platform</text>
-<text x="100.0" y="186.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">fleet/addons/tenants</text>
+<text x="100.0" y="164.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">koorikla/platform</text>
+<text x="100.0" y="183.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">fleet/addons/tenants</text>
 <rect x="24" y="228" width="152" height="60" rx="6" fill="#0f172a"/>
 <rect x="24" y="228" width="152" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="100.0" y="254.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">app repos</text>
-<text x="100.0" y="274.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">e.g. hello-world</text>
+<text x="100.0" y="251.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">app repos</text>
+<text x="100.0" y="271.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">e.g. hello-world</text>
 <rect x="24" y="308" width="152" height="52" rx="6" fill="#0f172a"/>
 <rect x="24" y="308" width="152" height="52" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="100.0" y="331.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
-<text x="100.0" y="350.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">app CI → koorikla/ci</text>
+<text x="100.0" y="328.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
+<text x="100.0" y="347.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">app CI → koorikla/ci</text>
 <rect x="24" y="420" width="152" height="52" rx="6" fill="#0f172a"/>
 <rect x="24" y="420" width="152" height="52" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="100.0" y="443.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
-<text x="100.0" y="462.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*</text>
+<text x="100.0" y="440.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
+<text x="100.0" y="459.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*</text>
 <rect x="24" y="492" width="152" height="60" rx="6" fill="#0f172a"/>
 <rect x="24" y="492" width="152" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="100.0" y="518.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Okta / Google</text>
-<text x="100.0" y="538.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SSO identity</text>
+<text x="100.0" y="515.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Okta / Google</text>
+<text x="100.0" y="535.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SSO identity</text>
 <rect x="256" y="140" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="256" y="140" width="208" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="360.0" y="166.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO · cert-manager</text>
-<text x="360.0" y="186.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">secret stores · CAs</text>
+<text x="360.0" y="163.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO · cert-manager</text>
+<text x="360.0" y="183.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">secret stores · CAs</text>
 <rect x="480" y="140" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="480" y="140" width="208" height="60" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5"/>
-<text x="584.0" y="166.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Cluster API</text>
-<text x="584.0" y="186.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s · CAPD · CAPA · CAPH</text>
+<text x="584.0" y="163.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Cluster API</text>
+<text x="584.0" y="183.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s · CAPD · CAPA · CAPH</text>
 <rect x="256" y="228" width="432" height="60" rx="6" fill="#0f172a"/>
 <rect x="256" y="228" width="432" height="60" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5"/>
-<text x="472.0" y="254.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD + ApplicationSets</text>
-<text x="472.0" y="274.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">push mode · AppSets: fleet, addon catalog, tenants</text>
+<text x="472.0" y="251.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD + ApplicationSets</text>
+<text x="472.0" y="271.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">push mode · AppSets: fleet, addon catalog, tenants</text>
 <rect x="256" y="316" width="432" height="60" rx="6" fill="#0f172a"/>
 <rect x="256" y="316" width="432" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="472.0" y="342.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenChoreo control plane</text>
-<text x="472.0" y="362.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Thunder · API · controllers · Backstage · gateway</text>
+<text x="472.0" y="339.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenChoreo control plane</text>
+<text x="472.0" y="359.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Thunder · API · controllers · Backstage · gateway</text>
 <rect x="256" y="404" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="256" y="404" width="208" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="360.0" y="430.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
-<text x="360.0" y="450.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Argo Workflows</text>
+<text x="360.0" y="427.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
+<text x="360.0" y="447.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Argo Workflows</text>
 <rect x="480" y="404" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="480" y="404" width="208" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="584.0" y="430.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC observability</text>
-<text x="584.0" y="450.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">logs · metrics · traces</text>
+<text x="584.0" y="427.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC observability</text>
+<text x="584.0" y="447.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">logs · metrics · traces</text>
 <rect x="256" y="492" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="256" y="492" width="208" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="360.0" y="518.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno · Falco</text>
-<text x="360.0" y="538.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">admission · detection</text>
+<text x="360.0" y="515.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno · Falco</text>
+<text x="360.0" y="535.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">admission · detection</text>
 <rect x="480" y="492" width="208" height="60" rx="6" fill="#0f172a"/>
 <rect x="480" y="492" width="208" height="60" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="584.0" y="518.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor</text>
-<text x="584.0" y="538.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">pull-through cache</text>
+<text x="584.0" y="515.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor</text>
+<text x="584.0" y="535.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">pull-through cache</text>
 <rect x="768" y="140" width="120" height="60" rx="6" fill="#0f172a"/>
 <rect x="768" y="140" width="120" height="60" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
-<text x="828.0" y="166.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">docker · CAPD</text>
-<text x="828.0" y="186.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#6ee7b7" text-anchor="middle">tested</text>
+<text x="828.0" y="163.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">docker · CAPD</text>
+<text x="828.0" y="183.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#6ee7b7" text-anchor="middle">tested</text>
 <rect x="904" y="140" width="120" height="60" rx="6" fill="#0f172a"/>
 <rect x="904" y="140" width="120" height="60" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
-<text x="964.0" y="166.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">aws · CAPA</text>
-<text x="964.0" y="186.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
+<text x="964.0" y="163.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">aws · CAPA</text>
+<text x="964.0" y="183.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
 <rect x="1040" y="140" width="120" height="60" rx="6" fill="#0f172a"/>
 <rect x="1040" y="140" width="120" height="60" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
-<text x="1100.0" y="166.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">hetzner · CAPH</text>
-<text x="1100.0" y="186.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
+<text x="1100.0" y="163.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">hetzner · CAPH</text>
+<text x="1100.0" y="183.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
 <rect x="784" y="316" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="784" y="316" width="174" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="871.0" y="342.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC data plane</text>
-<text x="871.0" y="362.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cluster-agent</text>
+<text x="871.0" y="339.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC data plane</text>
+<text x="871.0" y="359.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cluster-agent</text>
 <rect x="974" y="316" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="974" y="316" width="174" height="60" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
-<text x="1061.0" y="342.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kgateway</text>
-<text x="1061.0" y="362.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">north-south ingress</text>
+<text x="1061.0" y="339.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kgateway</text>
+<text x="1061.0" y="359.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">north-south ingress</text>
 <rect x="784" y="404" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="784" y="404" width="174" height="60" rx="6" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="871.0" y="430.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OTel collector</text>
-<text x="871.0" y="450.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">fan-out · Datadog</text>
+<text x="871.0" y="427.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OTel collector</text>
+<text x="871.0" y="447.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">fan-out · Datadog</text>
 <rect x="974" y="404" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="974" y="404" width="174" height="60" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="1061.0" y="430.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Cilium</text>
-<text x="1061.0" y="450.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">CNI · no kube-proxy</text>
+<text x="1061.0" y="427.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Cilium</text>
+<text x="1061.0" y="447.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">CNI · no kube-proxy</text>
 <rect x="784" y="492" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="784" y="492" width="174" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="871.0" y="518.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Falco + Talon</text>
-<text x="871.0" y="538.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">detect · respond</text>
+<text x="871.0" y="515.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Falco + Talon</text>
+<text x="871.0" y="535.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">detect · respond</text>
 <rect x="974" y="492" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="974" y="492" width="174" height="60" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="1061.0" y="518.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Istio ambient</text>
-<text x="1061.0" y="538.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ztunnel · waypoints</text>
+<text x="1061.0" y="515.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Istio ambient</text>
+<text x="1061.0" y="535.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ztunnel · waypoints</text>
 <rect x="784" y="580" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="784" y="580" width="174" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="871.0" y="606.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO</text>
-<text x="871.0" y="626.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">store: default</text>
+<text x="871.0" y="603.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO</text>
+<text x="871.0" y="623.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">store: default</text>
 <rect x="974" y="580" width="174" height="60" rx="6" fill="#0f172a"/>
 <rect x="974" y="580" width="174" height="60" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="1061.0" y="606.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Crossplane v2</text>
-<text x="1061.0" y="626.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">providers · XRs</text>
+<text x="1061.0" y="603.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Crossplane v2</text>
+<text x="1061.0" y="623.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">providers · XRs</text>
 <rect x="784" y="668" width="364" height="60" rx="6" fill="#0f172a"/>
 <rect x="784" y="668" width="364" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="966.0" y="694.8" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">app workloads</text>
-<text x="966.0" y="714.3" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo cell namespaces per project / env</text>
+<text x="966.0" y="691.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">app workloads</text>
+<text x="966.0" y="711.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo cell namespaces per project / env</text>
 <text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">koorikla/platform · architecture overview</text>
 <text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">mgmt runs GitOps, cluster lifecycle, secrets/PKI and the OpenChoreo planes · workload clusters run apps · dashed = planned</text>
 <circle cx="222" cy="258.0" r="9" fill="#020617" stroke="#34d399" stroke-width="1.5"/>
@@ -174,7 +174,7 @@
 <text x="402.0" y="683.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">flow</text>
 <line x1="540" y1="679" x2="566" y2="679" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#ahe2e8f0)"/>
 <text x="574.0" y="683.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned flow</text>
-<rect x="26" y="690" width="26" height="20" rx="5" fill="#0f172a" fill-opacity="0.1" stroke="#7b8cab" stroke-width="1.2"/><line x1="30" y1="696" x2="40" y2="696" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="26" y="691" width="26" height="19" rx="6" fill="none" stroke="#7b8cab" stroke-width="1.4"/>
 <text x="58.0" y="705.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster / zone</text>
 <text x="28.0" y="800.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Flows · arrow = initiator → target, colour = concern</text>
 <circle cx="37" cy="818" r="9" fill="#020617" stroke="#34d399" stroke-width="1.5"/>

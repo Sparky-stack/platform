@@ -99,9 +99,11 @@ class Diagram:
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="6" fill="{fill}" fill-opacity="{op}" '
             f'stroke="{stroke}" stroke-width="1.5"{dash}/>'
         )
-        n = 1 + len(lines)
-        block = title_size + (len(lines)) * (sub_size + 4)
-        ty = y + (h - block) / 2 + title_size * 0.85
+        # centre the visual extent (cap height of the title .. descender of the last line)
+        span = 0.75 * title_size + (4 + len(lines) * (sub_size + 4) + 0.22 * sub_size if lines else 0)
+        ty = y + h / 2 + 0.75 * title_size - span / 2
+        if align != "middle":  # reference panels: top-aligned
+            ty = y + 24
         rect = (x, y, w, h)
         tx = x + w / 2 if align == "middle" else x + 12
         self._text(tx, ty, title, title_size, TEXT, weight=600, container=rect, anchor=align)
@@ -185,7 +187,8 @@ class Diagram:
         if owner:
             self.arrow_labels.setdefault(owner, []).append(self.r_text[-1][1])
 
-    def legend(self, x, y, kinds=(), planned=True, flows=(), cols=4, col_w=210, title="Legend", zone=True):
+    def legend(self, x, y, kinds=(), planned=True, flows=(), cols=4, col_w=210, title="Legend", zone=True,
+               labels=None):
         """Colour swatches, then (own row) built/planned box + line styles. Returns bottom y."""
         y0 = y
         self._text(x, y, title, 12, TEXT, weight=700, anchor="start", layer=self.top)
@@ -210,13 +213,11 @@ class Diagram:
                         f'<rect x="{cx}" y="{cy + 4}" width="22" height="13" rx="3" fill="{fill}" '
                         f'fill-opacity="{op}" stroke="{stroke}" stroke-width="1.2"/>'
                     )
-                    lab = LEGEND_LABELS[v]
+                    lab = (labels or {}).get(v, LEGEND_LABELS[v])
                 elif t == "zone":
                     self.top.append(
-                        f'<rect x="{cx - 2}" y="{cy}" width="26" height="20" rx="5" fill="{KINDS["zone"][0]}" '
-                        f'fill-opacity="0.1" stroke="{KINDS["zone"][2]}" stroke-width="1.2"/>'
-                        f'<line x1="{cx + 2}" y1="{cy + 6}" x2="{cx + 12}" y2="{cy + 6}" stroke="#e2e8f0" '
-                        f'stroke-width="1.5"/>'
+                        f'<rect x="{cx - 2}" y="{cy + 1}" width="26" height="19" rx="6" fill="none" '
+                        f'stroke="{KINDS["zone"][2]}" stroke-width="1.4"/>'
                     )
                     lab = v
                 elif t in ("solid", "dashed"):
