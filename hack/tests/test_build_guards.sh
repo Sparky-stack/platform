@@ -156,7 +156,7 @@ for t in koorikla-build koorikla-helm-chart; do
   SHIM=$(printf '%s\n' "$SIGN" | awk '/if \[ "\$TLOG_UPLOAD" != true \]/{f=1} f{print} f && /^fi$/{exit}')
   assert_match "$SHIM" 'signing-config' "$t: sign has the transparency-log switch"
   assert_eq "$(cwt "$t" '.spec.arguments.parameters[] | select(.name == "tlog-upload") | .value')" false "$t: tlog-upload defaults to false"
-  rm -rf "$TMP/bin" "$TMP/signing-config.json"
+  rm -rf "${TMP:?}/bin" "${TMP:?}/signing-config.json"
   out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=false SHIM="${SHIM//\/tmp\//$TMP/}" \
     bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1; cosign attest --yes --type vuln r@sha256:1; cosign verify r' 2>&1)
   assert_match "$out" "cosign sign --signing-config $TMP/signing-config.json --yes --key k" "$t: sign gets the tlog-free signing config"
@@ -168,6 +168,18 @@ for t in koorikla-build koorikla-helm-chart; do
     bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1' 2>&1)
   assert_eq "$out" "cosign sign --yes --key k r@sha256:1" "$t: transparencyLog true: plain cosign (public Rekor)"
 done
+
+# --- every rendered step script parses (bash -n; build runs sh in the BuildKit image) ------------------------------
+for t in koorikla-build koorikla-helm-chart; do
+  for step in $(cwt "$t" '.spec.templates[] | select(.container.args) | .name'); do
+    cwt "$t" ".spec.templates[] | select(.name == \"$step\") | .container.args[0]" > "$TMP/step.sh"
+    sh_bin="bash"; [[ "$step" == build ]] && sh_bin="sh"
+    assert_eq "$("$sh_bin" -n "$TMP/step.sh" 2>&1 && echo ok)" ok "$t/$step script parses ($sh_bin -n)"
+  done
+done
+bash -n <(printf '%s\n' "$GUARDS") && assert_eq ok ok "BUILD_GUARDS parses"
+GITOPS_SCRIPT=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
+assert_match "$GITOPS_SCRIPT" 'export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME' "gitops: identity also covers rebase retries"
 
 # --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
 for t in koorikla-build koorikla-helm-chart; do
