@@ -167,10 +167,12 @@ def ensure_robot(r):
     body = {"name": r["name"], "description": r.get("description", ""), "level": "system", "duration": -1,
             "disable": False, "permissions": robot_permissions(r["permissions"])}
     full = "robot$" + r["name"]  # default robot_name_prefix
-    cur = find("/robots", full) or find("/robots", r["name"])
+    # Harbor's q=name= filter does not match robot names reliably ("$" prefix, level); scan the system robots instead.
+    cur = next((x for x in (call("GET", "/robots?page_size=100") or []) if x.get("name") in (full, r["name"])), None)
     if cur is None:
         created = call("POST", "/robots", body) or {}
-        rid = created.get("id") or (find("/robots", full) or {}).get("id")
+        rid = created.get("id") or next((x["id"] for x in (call("GET", "/robots?page_size=100") or [])
+                                         if x.get("name") in (full, r["name"])), None)
         if rid is None:
             raise HarborError(f"robot {full}: not found after create")
         print(f"robot {full}: created")
