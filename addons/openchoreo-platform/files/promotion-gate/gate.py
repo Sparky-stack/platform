@@ -12,11 +12,17 @@
 #                 environment's ReleaseBinding, and sets the commit status the branch protection requires.
 # Nothing is applied to any cluster: Argo CD syncs the merged PR (declarative path to production).
 #
-# Configuration: environment variables (see the ClusterWorkflow). Exit code != 0 = gate failed (the WorkflowRun fails).
-# Stdlib only. Template note: the ClusterWorkflow embeds this file in a CEL-templated runTemplate and Argo templates
+# The repository is the component's Workload spec.source.repository (never a run parameter) and must belong to the
+# installation's GitHub owner. GitHub access: the gate's own GitHub App (store key promotion-gate-github). The gate
+# signs an App JWT, mints an installation token scoped to exactly that repository with contents, pull_requests and
+# statuses write, and revokes it when done (token lifetime <= 1h either way).
+#
+# Configuration: environment variables (see the ClusterWorkflow); secrets as files in SECRETS_DIR. Exit code != 0 =
+# gate failed (the WorkflowRun fails). Stdlib only. Template note: the ClusterWorkflow embeds this file in a CEL-templated runTemplate and Argo templates
 # it again, so the source must not contain a dollar sign followed by an opening brace, nor two opening braces.
 import base64
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -30,6 +36,15 @@ import zoneinfo
 
 def env(name, default=""):
     return os.environ.get(name, default).strip()
+
+
+def secret(name):
+    """Secret value from SECRETS_DIR/<name> (mounted Secret volume); env var fallback for local runs and tests."""
+    path = os.path.join(env("SECRETS_DIR", "/var/run/secrets/promotion-gate"), name)
+    if os.path.isfile(path):
+        with open(path) as f:
+            return f.read().strip()
+    return env(name.upper().replace("-", "_"))
 
 
 def log(msg):
@@ -98,7 +113,7 @@ def token():
     resp = http("POST", env("TOKEN_URL"), form={
         "grant_type": "client_credentials",
         "client_id": env("CLIENT_ID"),
-        "client_secret": env("CLIENT_SECRET"),
+        "client_secret": secret("client-secret"),
     })
     return resp["access_token"]
 
@@ -182,10 +197,111 @@ def observe(tok, scope, window_minutes, max_error_rate):
     return "error rate %.4f" % rate
 
 
+# --- GitHub App token -------------------------------------------------------------------------------------------------
+# RS256 (RSASSA-PKCS1-v1_5 + SHA-256, RFC 8017 8.2) for the App JWT, stdlib only: the signature is deterministic, so
+# the only concern of a hand-written signer is timing; it signs one JWT per run in a short-lived pod with no oracle.
+# hack/tests checks it against openssl. Keys: PKCS#1 (GitHub's "BEGIN RSA PRIVATE KEY") or PKCS#8.
+SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
+GATE_PERMISSIONS = {"contents": "write", "pull_requests": "write", "statuses": "write"}
+
+
+def _der(buf, i):
+    """One DER TLV at buf[i:] -> (tag, value, next index)."""
+    tag, length = buf[i], buf[i + 1]
+    i += 2
+    if length & 0x80:
+        n = length & 0x7F
+        length = int.from_bytes(buf[i:i + n], "big")
+        i += n
+    return tag, buf[i:i + length], i + length
+
+
+def _seq(body):
+    out, i = [], 0
+    while i < len(body):
+        tag, value, i = _der(body, i)
+        out.append((tag, value))
+    return out
+
+
+def rsa_private_key(pem):
+    """PEM RSA private key -> (n, e, d)."""
+    m = re.search(r"-----BEGIN (RSA )?PRIVATE KEY-----(.+?)-----END", pem, re.S)
+    if not m:
+        raise GateFailed("GitHub App private key is not a PEM RSA private key")
+    _, body, _ = _der(base64.b64decode("".join(m.group(2).split())), 0)
+    items = _seq(body)
+    if not m.group(1):  # PKCS#8 PrivateKeyInfo: version, algorithm, OCTET STRING(RSAPrivateKey)
+        _, body, _ = _der(items[2][1], 0)
+        items = _seq(body)
+    n, e, d = (int.from_bytes(items[k][1], "big") for k in (1, 2, 3))
+    return n, e, d
+
+
+def rs256(message, key):
+    n, _, d = key
+    k = (n.bit_length() + 7) // 8
+    t = SHA256_DIGEST_INFO + hashlib.sha256(message).digest()
+    if k < len(t) + 11:
+        raise GateFailed("RSA key too short")
+    em = b"\x00\x01" + b"\xff" * (k - len(t) - 3) + b"\x00" + t
+    return pow(int.from_bytes(em, "big"), d, n).to_bytes(k, "big")
+
+
+def b64url(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def app_jwt(app_id, key, now=None):
+    now = int(now if now is not None else time.time())
+    head = b64url(json.dumps({"alg": "RS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    claims = b64url(json.dumps({"iat": now - 60, "exp": now + 540, "iss": str(app_id)}, separators=(",", ":")).encode())
+    signing_input = (head + "." + claims).encode()
+    return head + "." + claims + "." + b64url(rs256(signing_input, key))
+
+
+GH_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+_GH_TOKEN = {"value": ""}
+
+
+def installation_token(repo):
+    """Installation token of the gate's App, limited to `repo` (owner/name) and GATE_PERMISSIONS."""
+    key = rsa_private_key(secret("github-app-private-key"))
+    jwt = app_jwt(secret("github-app-id"), key)
+    resp = http("POST", "https://api.github.com/app/installations/%s/access_tokens" % secret("github-app-installation-id"),
+                token=jwt, headers=GH_HEADERS, body={"repositories": [repo.split("/", 1)[1]], "permissions": GATE_PERMISSIONS})
+    return resp["token"]
+
+
+def revoke_token():
+    if _GH_TOKEN["value"]:
+        try:
+            http("DELETE", "https://api.github.com/installation/token", token=_GH_TOKEN["value"], headers=GH_HEADERS,
+                 ok=(204,))
+        except Exception as e:  # noqa: BLE001 - expires within the hour anyway
+            log("  warning: could not revoke the GitHub token: %s" % e)
+        _GH_TOKEN["value"] = ""
+
+
 # --- GitHub ---------------------------------------------------------------------------------------------------------
 def gh(method, path, body=None, ok=(200, 201)):
-    return http(method, "https://api.github.com" + path, token=env("GITHUB_TOKEN"), body=body,
-                headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}, ok=ok)
+    return http(method, "https://api.github.com" + path, token=_GH_TOKEN["value"], body=body, headers=GH_HEADERS, ok=ok)
+
+
+def workload_repository(workloads, project, component, owner):
+    """owner/repo from the component's Workload spec.source.repository; must be a GitHub repo of `owner`."""
+    mine = [w for w in workloads
+            if ((w.get("spec") or {}).get("owner") or {}).get("componentName") == component
+            and ((w.get("spec") or {}).get("owner") or {}).get("projectName") == project]
+    if len(mine) != 1:
+        raise GateFailed("expected one Workload for %s/%s, found %d" % (project, component, len(mine)))
+    url = ((mine[0].get("spec") or {}).get("source") or {}).get("repository", "")
+    m = re.fullmatch(r"https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(\.git)?/?", url)
+    if not m or m.group(2) in (".", ".."):
+        raise GateFailed("Workload spec.source.repository %r is not a https://github.com/<owner>/<repo> URL" % url)
+    if owner and m.group(1).lower() != owner.lower():
+        raise GateFailed("repository %s/%s is outside the installation's GitHub owner %s" % (m.group(1), m.group(2), owner))
+    return "%s/%s" % (m.group(1), m.group(2))
 
 
 def set_release(text, release):
@@ -310,19 +426,19 @@ def main():
                                                                       frozen.get("timeZone", "UTC")))
     evidence.append("no freeze window active for `%s`" % target)
 
-    # 6. promote by pull request
-    repo = env("REPOSITORY")
-    if not repo:
-        wl = api("/api/v1/namespaces/%s/workloads?component=%s" % (ns, component), tok).get("items") or []
-        repo = ((wl[0].get("spec") or {}).get("source") or {}).get("repository", "") if wl else ""
-    repo = re.sub(r"^https://github\.com/|\.git$", "", repo)
-    if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
-        raise GateFailed("no GitHub repository for %s (Workload spec.source.repository or parameter repository)" % component)
+    # 6. promote by pull request, in the repository the component's Workload comes from
+    wl = api("/api/v1/namespaces/%s/workloads?component=%s" % (ns, component), tok).get("items") or []
+    owner = re.sub(r"^https://github\.com/", "", env("GITHUB_OWNER_URL")).strip("/")
+    repo = workload_repository(wl, project, component, owner)
     path = env("BINDING_PATH").replace("{environment}", target)
     if env("DRY_RUN", "false") == "true":
         log("  dry run: would open a PR in %s setting %s releaseName=%s" % (repo, path, release))
         return
-    promote(repo, path, target, release, evidence)
+    _GH_TOKEN["value"] = installation_token(repo)
+    try:
+        promote(repo, path, target, release, evidence)
+    finally:
+        revoke_token()
 
 
 if __name__ == "__main__":

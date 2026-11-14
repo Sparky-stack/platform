@@ -352,12 +352,21 @@ cmd_secrets() {
     fi
   fi
 
-  # platform-github-app: write access (GitOps hand-off commits, promotion PRs, scaffolder). Optional.
+  # platform-github-app: write access (GitOps hand-off commits, scaffolder). Optional.
   if [[ -n "${GITHUB_PUSH_APP_ID:-}${GITHUB_PUSH_APP_INSTALLATION_ID:-}${GITHUB_PUSH_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_PUSH_APP_ID GITHUB_PUSH_APP_INSTALLATION_ID GITHUB_PUSH_APP_PRIVATE_KEY_FILE
     apply_secret platform-secrets platform-github-app githubAppID=GITHUB_PUSH_APP_ID \
       githubAppInstallationID=GITHUB_PUSH_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_PUSH_APP_PRIVATE_KEY_FILE"
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
+  fi
+
+  # promotion-gate-github: the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app
+  # repos only). The gate mints a token scoped to one repository per run. Optional: without it the gate fails closed.
+  if [[ -n "${GITHUB_GATE_APP_ID:-}${GITHUB_GATE_APP_INSTALLATION_ID:-}${GITHUB_GATE_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_GATE_APP_ID GITHUB_GATE_APP_INSTALLATION_ID GITHUB_GATE_APP_PRIVATE_KEY_FILE
+    apply_secret platform-secrets promotion-gate-github githubAppID=GITHUB_GATE_APP_ID \
+      githubAppInstallationID=GITHUB_GATE_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_GATE_APP_PRIVATE_KEY_FILE"
+    log "  promotion-gate-github: GitHub App $GITHUB_GATE_APP_ID, installation $GITHUB_GATE_APP_INSTALLATION_ID"
   fi
 
   seed_openchoreo_secret

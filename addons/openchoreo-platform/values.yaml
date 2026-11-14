@@ -10,6 +10,8 @@
 #   ClusterAuthzRoles  the control-plane chart's authz bootstrap Job (openchoreoApi.config.security.authorization)
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
+installation:
+  githubOrg: https://github.com/koorikla      # the promotion gate opens PRs only in repositories of this owner
 openchoreo:
   orgNamespace: default
   controlPlane:
@@ -68,8 +70,11 @@ promotionGate:
   resources:
     requests: { cpu: 20m, memory: 48Mi }
     limits: { memory: 128Mi }
-  ttlAfterCompletion: 7d
+  # The WorkflowRun and its per-run resources (the credentials Secret) are deleted this long after completion.
+  ttlAfterCompletion: 1h
   # Endpoints (empty = derived from installation openchoreo.controlPlane.host / openchoreo.observability.httpPort).
+  # Derived = plain HTTP (local docker network only): every other installation sets https:// URLs here, the gate
+  # sends the Thunder client secret to tokenURL.
   apiURL: ""                         # http://api.<host>:8080
   tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
   observerURL: ""                    # http://observer.<host>:<httpPort>
@@ -78,9 +83,13 @@ promotionGate:
   # plane's secret store, key `promotion-gate`, property `client-secret` (VERIFY Thunder app in addon thunder).
   clientID: openchoreo-promotion-gate
   clientSecret: { key: promotion-gate, property: client-secret }
-  # GitHub token that pushes the promotion branch, opens the PR and sets the commit status (store key, property).
-  # Prefer a GitHub App installation token so branch protection can pin the required status to that app.
-  github: { key: platform-github, property: token }
+  # The gate's own GitHub App (store key; properties githubAppID, githubAppInstallationID, githubAppPrivateKey), NOT
+  # Argo CD's read-only platform-github. App permissions: Contents, Pull requests, Commit statuses: Read and write
+  # (Metadata: Read); installed on the app repos only. Per run the gate mints an installation token restricted to the
+  # one repository of the component's Workload (spec.source.repository, owner = installation.githubOrg) and revokes
+  # it at the end. Branch protection pins the required status to this App. Seeded by `task secrets` from
+  # GITHUB_GATE_APP_* (docs/forking.md).
+  github: { key: promotion-gate-github }
   statusContext: openchoreo/promotion-gate   # required status check on the app repo's default branch
   baseBranch: main
   bindingPath: deploy/openchoreo/release-bindings/{environment}.yaml   # app repo contract (docs/openchoreo.md)

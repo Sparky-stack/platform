@@ -45,8 +45,8 @@ In the app repo, configure:
 - `CODEOWNERS`: `/deploy/openchoreo/release-bindings/production.yaml @koorikla/release-managers`
 - Branch protection / ruleset on `main`:
   - require a PR, one approval from code owners, dismiss stale approvals;
-  - required status check `openchoreo/promotion-gate`. Pin it to the GitHub App that the gate's token belongs to, so
-    nobody can set the status by hand;
+  - required status check `openchoreo/promotion-gate`. Pin it to the gate's GitHub App (store key
+    `promotion-gate-github`, docs/forking.md (c2)), so nobody else can set the status;
   - no bypass for admins, except a documented break-glass role.
 
 Argo CD then syncs the merged binding: `charts/tenant` gives every gated environment its own Application
@@ -81,7 +81,24 @@ Application excludes that file.
 
 `addons/openchoreo-platform/templates/promotion-gate.yaml` runs `files/promotion-gate/gate.py` (stdlib Python, image
 pinned by digest, read-only root, non-root). It runs in the workflow plane, namespace `workflows-default`, as
-ServiceAccount `workflow-sa`. Credentials come from a per-run ExternalSecret against `${workflowplane.secretStore}`.
+ServiceAccount `workflow-sa`. Parameters (`project`, `component`, environments, `release`) are DNS-1123 constrained;
+there is no repository parameter.
+
+**Credentials.** A per-run ExternalSecret against `${workflowplane.secretStore}` (store `platform`, namespace
+`workflows-default` is in `addons/secret-stores` `platformStore.namespaces`) fetches, once (`refreshInterval: "0"`):
+the Thunder client secret (`promotion-gate`) and the gate's own GitHub App (`promotion-gate-github`, never Argo CD's
+read-only `platform-github`). The Secret is mounted read-only as files into the single gate pod (no env vars), the
+pod is deleted when the step completes (`podGC: OnPodCompletion`), and the Secret goes with the WorkflowRun after
+`promotionGate.ttlAfterCompletion` (1h; `deletionPolicy: Delete`). GitHub access per run:
+
+- the repository is the component's Workload `spec.source.repository`, and its owner must be the installation's
+  `installation.githubOrg`; anything else fails the gate;
+- the gate signs an App JWT and mints an installation token restricted to exactly that repository and
+  `contents`, `pull_requests`, `statuses` write (GitHub caps it at 1h), and revokes it when the PR step ends.
+
+Residual: the workflow namespace is shared with tenant build runs (OpenChoreo renders every run into
+`workflows-<org namespace>`), so for the run's lifetime the App key sits in a Secret there; build pods would need
+Secret read RBAC in that namespace to see it. The App's blast radius is the app repos it is installed on.
 For one component and one edge (default staging → next environment) the gate checks, in order:
 
 1. **pipeline**: the edge exists in the project's DeploymentPipeline (closes #4884 for the automated path).
@@ -223,7 +240,7 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 | Key | Properties | Used by |
 |---|---|---|
 | `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials) |
-| `platform-github` | `token` | gate workflow: branch, PR, commit status in the app repo (prefer a GitHub App token) |
+| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | gate workflow: its own GitHub App; per-run token for the component's repo only (branch, PR, commit status). Seeded from `GITHUB_GATE_APP_*` (docs/forking.md) |
 
 ## Limits and VERIFY
 
@@ -239,5 +256,10 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 - Workflow-plane prerequisites (addon `openchoreo-workflow-plane`, built separately): `ClusterWorkflowPlane default`
   on mgmt, namespace `workflows-default` with `workflow-sa` allowed to create `workflowtaskresults`, the Argo
   controller watching all namespaces (falco-response runs in `argo-events`). VERIFY.
-- After a WorkflowRun's TTL (7 days) any status update of an old staging rollout re-runs the gate. It is idempotent: a
+- After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
   no-op when production already runs the release, otherwise it updates the same PR.
+- Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
+  over the control-plane Gateway; locally these are plain HTTP on the docker network. Every other installation must
+  set `promotionGate.tokenURL` / `apiURL` / `observerURL` to `https://` endpoints (HTTPS listener on the Gateway).
+- argo-events renders the promotion-gate Sensor only once the Argo Workflows CRDs exist (`workflowPlane: auto`,
+  addon openchoreo-workflow-plane).

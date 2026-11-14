@@ -52,12 +52,13 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | Key | Properties | Used by |
 |---|---|---|
 | `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) |
-| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, promotion PRs, scaffolder); reserved, no consumer yet (docs/forking.md) |
+| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, scaffolder; promotion PRs use `promotion-gate-github`); reserved, no consumer yet (docs/forking.md) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) |
 | `promotion-gate` | `client-secret` | ClusterWorkflow promotion-gate (Thunder client `openchoreo-promotion-gate`) |
+| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app repos only); per-run token scoped to one repo (docs/promotion.md) |
 
 ## Layout and ownership
 ```

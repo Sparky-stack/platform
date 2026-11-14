@@ -51,6 +51,41 @@ tests:
       - equal: { path: "spec.runTemplate.spec.templates[0].script.securityContext.readOnlyRootFilesystem", value: true }
       - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def promote\(' }
 
+  - it: GitHub credential is the gate's own App (not Argo CD's platform-github), fetched once, mounted as files
+    template: templates/promotion-gate.yaml
+    asserts:
+      - equal: { path: "spec.resources[0].template.spec.refreshInterval", value: "0" }
+      - equal: { path: "spec.resources[0].template.spec.target.deletionPolicy", value: Delete }
+      - contains: { path: "spec.resources[0].template.spec.data", content: { secretKey: github-app-private-key, remoteRef: { key: promotion-gate-github, property: githubAppPrivateKey } } }
+      - contains: { path: "spec.resources[0].template.spec.data", content: { secretKey: github-app-id, remoteRef: { key: promotion-gate-github, property: githubAppID } } }
+      - notMatchRegex: { path: "spec.resources[0].template.spec.data[1].remoteRef.key", pattern: "platform-github" }
+      - equal: { path: spec.ttlAfterCompletion, value: 1h }
+      - equal: { path: spec.runTemplate.spec.podGC, value: { strategy: OnPodCompletion } }
+      - equal: { path: "spec.runTemplate.spec.volumes[0].secret", value: { secretName: "${metadata.workflowRunName}-gate", defaultMode: 288 } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.volumeMounts", content: { name: credentials, mountPath: /var/run/secrets/promotion-gate, readOnly: true } }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_TOKEN }, any: true }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: CLIENT_SECRET }, any: true }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_OWNER_URL, value: "https://github.com/koorikla" } }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def installation_token\(repo\)' }
+
+  - it: the target repository is not a parameter; parameters are DNS-1123 constrained
+    template: templates/promotion-gate.yaml
+    asserts:
+      - notExists: { path: spec.parameters.openAPIV3Schema.properties.repository }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.project.pattern, value: "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.project.minLength, value: 1 }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.component.maxLength, value: 63 }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.targetEnvironment.pattern, value: "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.release.pattern, value: "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$" }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: REPOSITORY }, any: true }
+
+  - it: requires the installation's GitHub owner
+    template: templates/promotion-gate.yaml
+    set:
+      installation.githubOrg: ""
+    asserts:
+      - failedTemplate: { errorMessage: "installation.githubOrg is required (GitHub owner the gate may open PRs in)" }
+
   - it: endpoints derive from the installation and observe follows the observability switch
     template: templates/promotion-gate.yaml
     set:

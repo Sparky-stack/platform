@@ -1,8 +1,12 @@
 {{- /*
 ClusterWorkflow promotion-gate (docs/promotion.md "Automated gate"): a generic OpenChoreo Workflow (WorkflowRun without
 a component). The run renders into the workflow plane (namespace workflows-<org namespace>, ServiceAccount workflow-sa
-injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Credentials come from
-the workflow plane's ClusterSecretStore through a per-run ExternalSecret (owned by the run, deleted with it).
+injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py.
+Credentials: a per-run ExternalSecret against the workflow plane's ClusterSecretStore (owned by the run, deleted with
+it after ttlAfterCompletion; fetched once, never refreshed), mounted read-only as files into the one gate pod (pod
+deleted on completion). GitHub: the gate's own App (store key promotionGate.github.key); the gate mints a token for
+the single repository of the component's Workload and revokes it when done. Parameters are DNS-1123 constrained; the
+target repository is not a parameter.
 The gate never writes to a cluster: on success it opens/updates the promotion pull request in the app repo.
 */ -}}
 {{- $g := .Values.promotionGate }}
@@ -14,6 +18,8 @@ The gate never writes to a cluster: on success it opens/updates the promotion pu
 {{- $tokenURL := $g.tokenURL | default (printf "http://thunder.%s:%v/oauth2/token" $host $g.controlPlanePort) }}
 {{- $observerURL := $g.observerURL | default (printf "http://observer.%s:%v" $host .Values.openchoreo.observability.httpPort) }}
 {{- $observe := and $g.observe.enabled .Values.openchoreo.observability.enabled }}
+{{- $githubOwner := required "installation.githubOrg is required (GitHub owner the gate may open PRs in)" (dig "githubOrg" "" (.Values.installation | default dict)) }}
+{{- $label := "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }}
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow
 metadata:
@@ -33,26 +39,35 @@ spec:
       properties:
         project:
           type: string
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
           description: OpenChoreo project of the component
         component:
           type: string
-          description: Component to promote
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
+          description: Component to promote (its Workload's spec.source.repository is the repo the PR goes to)
         sourceEnvironment:
           type: string
           default: staging
+          minLength: 1
+          maxLength: 63
+          pattern: {{ $label | quote }}
           description: Environment the release was verified in
         targetEnvironment:
           type: string
           default: ""
+          maxLength: 63
+          pattern: {{ $label | quote }}
           description: Environment to promote to (empty = the next one in the project's DeploymentPipeline)
         release:
           type: string
           default: ""
+          maxLength: 253
+          pattern: "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
           description: ComponentRelease to promote (empty = the one running in the source environment)
-        repository:
-          type: string
-          default: ""
-          description: GitHub owner/repo holding the ReleaseBindings (empty = the Workload's spec.source.repository)
         dryRun:
           type: boolean
           default: false
@@ -66,18 +81,23 @@ spec:
           name: ${metadata.workflowRunName}-gate
           namespace: ${metadata.namespace}
         spec:
-          refreshInterval: 1h
+          refreshInterval: "0"            # fetch once for this run, never refreshed
           secretStoreRef:
             kind: ClusterSecretStore
             name: ${workflowplane.secretStore}
           target:
             name: ${metadata.workflowRunName}-gate
             creationPolicy: Owner
+            deletionPolicy: Delete
           data:
             - secretKey: client-secret
               remoteRef: { key: {{ $g.clientSecret.key }}, property: {{ $g.clientSecret.property }} }
-            - secretKey: github-token
-              remoteRef: { key: {{ $g.github.key }}, property: {{ $g.github.property }} }
+            - secretKey: github-app-id
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppID }
+            - secretKey: github-app-installation-id
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppInstallationID }
+            - secretKey: github-app-private-key
+              remoteRef: { key: {{ $g.github.key }}, property: githubAppPrivateKey }
   runTemplate:
     apiVersion: argoproj.io/v1alpha1
     kind: Workflow
@@ -88,11 +108,19 @@ spec:
       entrypoint: gate
       serviceAccountName: workflow-sa
       activeDeadlineSeconds: 900
+      podGC:
+        strategy: OnPodCompletion       # the pod that mounted the credentials goes away with the step
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
         runAsGroup: 65532
+        fsGroup: 65532
         seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: credentials
+          secret:
+            secretName: ${metadata.workflowRunName}-gate
+            defaultMode: 288            # 0440: owner root, group 65532 (fsGroup)
       templates:
         - name: gate
           script:
@@ -104,6 +132,8 @@ spec:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
               capabilities: { drop: [ALL] }
+            volumeMounts:
+              - { name: credentials, mountPath: /var/run/secrets/promotion-gate, readOnly: true }
             env:
               - { name: RUN_NAME, value: "${metadata.workflowRunName}" }
               - { name: NAMESPACE, value: "${metadata.namespaceName}" }
@@ -112,7 +142,6 @@ spec:
               - { name: SOURCE_ENV, value: "${parameters.sourceEnvironment}" }
               - { name: TARGET_ENV, value: "${parameters.targetEnvironment}" }
               - { name: RELEASE, value: "${parameters.release}" }
-              - { name: REPOSITORY, value: "${parameters.repository}" }
               - { name: DRY_RUN, value: '${parameters.dryRun ? "true" : "false"}' }
               - { name: GATED_TARGETS, value: {{ .Values.promotion.gatedEnvironments | default list | toJson | quote }} }
               - { name: FREEZE_WINDOWS, value: {{ .Values.promotion.freezeWindows | default list | toJson | quote }} }
@@ -120,6 +149,8 @@ spec:
               - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
               - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
               - { name: CLIENT_ID, value: {{ $g.clientID | quote }} }
+              - { name: SECRETS_DIR, value: /var/run/secrets/promotion-gate }
+              - { name: GITHUB_OWNER_URL, value: {{ $githubOwner | quote }} }
               - { name: STATUS_CONTEXT, value: {{ $g.statusContext | quote }} }
               - { name: BASE_BRANCH, value: {{ $g.baseBranch | quote }} }
               - { name: BINDING_PATH, value: {{ $g.bindingPath | quote }} }
@@ -128,10 +159,6 @@ spec:
               - { name: OBSERVE, value: {{ $observe | toString | quote }} }
               - { name: OBSERVE_WINDOW_MINUTES, value: {{ $g.observe.windowMinutes | toString | quote }} }
               - { name: MAX_ERROR_RATE, value: {{ $g.observe.maxErrorRate | toString | quote }} }
-              - name: CLIENT_SECRET
-                valueFrom: { secretKeyRef: { name: "${metadata.workflowRunName}-gate", key: client-secret } }
-              - name: GITHUB_TOKEN
-                valueFrom: { secretKeyRef: { name: "${metadata.workflowRunName}-gate", key: github-token } }
             source: |
               {{- $script | nindent 14 }}
 {{- end }}
