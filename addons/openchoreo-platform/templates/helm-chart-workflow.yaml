@@ -1,0 +1,74 @@
+{{- /*
+Generic ClusterWorkflow `helm-chart` (no component: run it with a WorkflowRun, e.g. from Backstage's workflows page):
+koorikla/ci helm/check.sh + helm/package-push.sh, push to <registry>/charts/<chart> (OCI), cosign-sign with the platform
+key. Argo template koorikla-helm-chart (addon openchoreo-workflow-plane).
+*/ -}}
+{{- if .Values.helmChartWorkflow.enabled }}
+{{- $b := .Values.buildWorkflows }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterWorkflow
+metadata:
+  name: {{ .Values.helmChartWorkflow.name }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    openchoreo.dev/display-name: Helm chart (OCI)
+    openchoreo.dev/description: Lint, unit-test, package, push and sign a Helm chart as an OCI artifact
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  workflowPlaneRef:
+    kind: ClusterWorkflowPlane
+    name: {{ $b.workflowPlane }}
+  ttlAfterCompletion: {{ $b.ttlAfterCompletion | quote }}
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          type: object
+          required: [url]
+          properties:
+            url: { type: string, description: Git repository URL (https) }
+            revision:
+              type: object
+              default: {}
+              properties:
+                branch: { type: string, default: main }
+                commit: { type: string, default: "" }
+        chart:
+          type: object
+          default: {}
+          properties:
+            path: { type: string, default: ".", description: Chart directory relative to the repository root }
+            version: { type: string, default: "", description: Version override (default Chart.yaml) }
+            push: { type: boolean, default: true }
+  runTemplate:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Workflow
+    metadata:
+      name: ${metadata.workflowRunName}
+      namespace: ${metadata.namespace}
+    spec:
+      serviceAccountName: workflow-sa
+      workflowTemplateRef:
+        name: {{ .Values.helmChartWorkflow.workflowTemplate }}
+        clusterScope: true
+      arguments:
+        parameters:
+          - { name: workflowrun-name, value: "${metadata.workflowRunName}" }
+          - { name: git-repo, value: "${parameters.repository.url}" }
+          - { name: branch, value: "${parameters.repository.revision.branch}" }
+          - { name: commit, value: "${parameters.repository.revision.commit}" }
+          - { name: chart-path, value: "${parameters.chart.path}" }
+          - { name: chart-version, value: "${parameters.chart.version}" }
+          - { name: push, value: "${parameters.chart.push}" }
+          - { name: oci-registry, value: {{ printf "%s/charts" (include "build.repoPrefix" .) | quote }} }
+          - { name: registry-host, value: {{ include "build.registryHost" . | quote }} }
+          - { name: git-secret, value: "${metadata.workflowRunName}-git" }
+          - { name: registry-secret, value: "${metadata.workflowRunName}-registry" }
+          - { name: registry-ca-secret, value: "${metadata.workflowRunName}-registry-ca" }
+          - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
+  resources:
+    {{- include "build.resources" . | nindent 4 }}
+{{- end }}

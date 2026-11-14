@@ -1,0 +1,86 @@
+suite: openchoreo-platform - build ClusterWorkflows (workflow plane, koorikla/ci parity)
+templates:
+  - templates/build-workflows.yaml
+  - templates/helm-chart-workflow.yaml
+  - templates/upstream-defaults.yaml
+tests:
+  - it: one component ClusterWorkflow per stack on ClusterWorkflowPlane default
+    template: templates/build-workflows.yaml
+    asserts:
+      - hasDocuments: { count: 5 }
+      - isKind: { of: ClusterWorkflow }
+      - equal: { path: 'metadata.labels["openchoreo.dev/workflow-type"]', value: component }
+      - equal: { path: spec.workflowPlaneRef, value: { kind: ClusterWorkflowPlane, name: default } }
+      - equal: { path: spec.runTemplate.spec.workflowTemplateRef, value: { name: koorikla-build, clusterScope: true } }
+      - equal: { path: spec.runTemplate.spec.serviceAccountName, value: workflow-sa }
+
+  - it: Backstage and the autoBuild matcher find the repository fields
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - equal: { path: 'spec.parameters.openAPIV3Schema.properties.repository.properties.url["x-openchoreo-component-parameter-repository-url"]', value: true }
+      - equal: { path: 'spec.parameters.openAPIV3Schema.properties.repository.properties.appPath["x-openchoreo-component-parameter-repository-app-path"]', value: true }
+
+  - it: harbor pushes to <host>/apps/<project>/<component> as robot builder, trusting the registry CA
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - contains:
+          path: spec.runTemplate.spec.arguments.parameters
+          content: { name: image-repo, value: "harbor.openchoreo.localhost:9443/apps/${metadata.labels['openchoreo.dev/project']}/${metadata.labels['openchoreo.dev/component']}" }
+      - matchRegex:
+          path: 'spec.resources[?(@.id == "registry-secret")].template.spec.target.template.data[".dockerconfigjson"]'
+          pattern: '"harbor.openchoreo.localhost:9443":\{"username":"robot\$builder"'
+      - equal:
+          path: 'spec.resources[?(@.id == "registry-ca")].template.spec.secretStoreRef'
+          value: { kind: ClusterSecretStore, name: mgmt-harbor }
+
+  - it: external registry pushes to <repository>/<component> with its credentials and no CA resource
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    set: { registry.type: external }
+    asserts:
+      - contains:
+          path: spec.runTemplate.spec.arguments.parameters
+          content: { name: image-repo, value: "ghcr.io/koorikla/${metadata.labels['openchoreo.dev/component']}" }
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: registry-host, value: ghcr.io } }
+      - notExists: { path: 'spec.resources[?(@.id == "registry-ca")]' }
+
+  - it: the signing key and git credentials come from the platform store, never from values
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: dockerfile }
+    asserts:
+      - equal: { path: 'spec.resources[?(@.id == "cosign-secret")].template.spec.secretStoreRef.name', value: "${workflowplane.secretStore}" }
+      - equal:
+          path: 'spec.resources[?(@.id == "cosign-secret")].template.spec.data'
+          value:
+            - { secretKey: cosign.key, remoteRef: { key: cosign-platform, property: cosign.key } }
+            - { secretKey: cosign.password, remoteRef: { key: cosign-platform, property: cosign.password } }
+      - equal: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.target.template.type', value: kubernetes.io/basic-auth }
+
+  - it: dockerfile has no language checks, elixir offers the PostgreSQL sidecar
+    template: templates/build-workflows.yaml
+    asserts:
+      - notExists: { path: spec.parameters.openAPIV3Schema.properties.checks }
+        documentSelector: { path: metadata.name, value: dockerfile }
+      - equal: { path: spec.parameters.openAPIV3Schema.properties.checks.properties.postgres.default, value: false }
+        documentSelector: { path: metadata.name, value: elixir }
+
+  - it: component types allow exactly the build workflows
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: metadata.name, value: service }
+    asserts:
+      - equal:
+          path: spec.allowedWorkflows
+          value:
+            - { kind: ClusterWorkflow, name: go }
+            - { kind: ClusterWorkflow, name: nextjs }
+            - { kind: ClusterWorkflow, name: elixir }
+            - { kind: ClusterWorkflow, name: ruby }
+            - { kind: ClusterWorkflow, name: dockerfile }
+
+  - it: helm-chart is a generic workflow pushing to <registry>/charts
+    template: templates/helm-chart-workflow.yaml
+    asserts:
+      - notExists: { path: 'metadata.labels["openchoreo.dev/workflow-type"]' }
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: oci-registry, value: harbor.openchoreo.localhost:9443/apps/charts } }
