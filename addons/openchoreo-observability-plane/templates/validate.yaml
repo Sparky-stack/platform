@@ -1,0 +1,47 @@
+{{- /*
+Render-time consistency with installation.yaml (openchoreo.controlPlane.host, openchoreo.observability.*): the
+subcharts' literal hostnames/ports must match, and the plane CR's planeID must equal the agent's.
+*/ -}}
+{{- $o := .Values.openchoreo.observability }}
+{{- if not $o.enabled }}
+{{- fail "openchoreo.observability.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-observability-plane: \"false\")" }}
+{{- end }}
+{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $obs := index .Values "openchoreo-observability-plane" }}
+{{- $observer := printf "observer.%s" $host }}
+{{- if not (has $observer $obs.observer.http.hostnames) }}
+{{- fail (printf "openchoreo-observability-plane.observer.http.hostnames must contain %s" $observer) }}
+{{- end }}
+{{- if ne (toString $obs.gateway.httpPort) (toString $o.httpPort) }}
+{{- fail (printf "openchoreo-observability-plane.gateway.httpPort (%v) must equal openchoreo.observability.httpPort (%v)" $obs.gateway.httpPort $o.httpPort) }}
+{{- end }}
+{{- if ne (toString $obs.gateway.tlsPassthrough.port) (toString $o.tlsPort) }}
+{{- fail (printf "openchoreo-observability-plane.gateway.tlsPassthrough.port (%v) must equal openchoreo.observability.tlsPort (%v)" $obs.gateway.tlsPassthrough.port $o.tlsPort) }}
+{{- end }}
+{{- $baseURL := printf "http://%s:%v" $observer $o.httpPort }}
+{{- $found := false }}
+{{- range $obs.observer.extraEnvs }}
+{{- if and (eq .name "OBSERVER_BASE_URL") (eq .value $baseURL) }}{{ $found = true }}{{ end }}
+{{- end }}
+{{- if not $found }}
+{{- fail (printf "openchoreo-observability-plane.observer.extraEnvs OBSERVER_BASE_URL must be %s" $baseURL) }}
+{{- end }}
+{{- $obsHost := printf "observability.%s" $host }}
+{{- if ne $obs.gateway.tlsPassthrough.hostname (printf "opensearch.%s" $obsHost) }}
+{{- fail (printf "openchoreo-observability-plane.gateway.tlsPassthrough.hostname must be opensearch.%s" $obsHost) }}
+{{- end }}
+{{- if not (has (printf "opentelemetry.%s" $obsHost) (index .Values "observability-tracing-opensearch" "opentelemetryCollectorCustomizations" "http" "hostnames")) }}
+{{- fail (printf "observability-tracing-opensearch.opentelemetryCollectorCustomizations.http.hostnames must contain opentelemetry.%s" $obsHost) }}
+{{- end }}
+{{- if not (has (printf "prometheus.%s" $obsHost) (index .Values "observability-metrics-prometheus" "prometheusCustomizations" "http" "hostnames")) }}
+{{- fail (printf "observability-metrics-prometheus.prometheusCustomizations.http.hostnames must contain prometheus.%s" $obsHost) }}
+{{- end }}
+{{- if ne $obs.clusterAgent.planeID .Values.clusterObservabilityPlane.planeID }}
+{{- fail "clusterObservabilityPlane.planeID must equal openchoreo-observability-plane.clusterAgent.planeID" }}
+{{- end }}
+{{- if or (not $obs.clusterAgent.tls.enabled) (not $obs.clusterAgent.tls.generateCerts) $obs.clusterAgent.tls.caSecretName }}
+{{- fail "openchoreo-observability-plane.clusterAgent.tls: enabled, generateCerts, caSecretName empty (no control-plane CA key is copied)" }}
+{{- end }}
+{{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $obs.clusterAgent.tls.serverCAConfigMap) }}
+{{- fail "agentServerCA.configMapName must equal openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap" }}
+{{- end }}

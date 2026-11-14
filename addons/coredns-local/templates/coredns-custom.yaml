@@ -10,6 +10,13 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   openchoreo.override: |
+    {{- $obs := .Values.openchoreo.observability | default dict }}
+    {{- if and $obs.enabled .Values.observabilityRewrite.target }}
+    rewrite stop {
+      name regex ^(observer\.|.+\.observability\.){{ regexQuoteMeta $host }}\.$ {{ .Values.observabilityRewrite.target }}
+      answer auto
+    }
+    {{- end }}
     rewrite stop {
       name regex ^(.+\.)?{{ regexQuoteMeta $host }}\.$ {{ $target }}
       answer auto

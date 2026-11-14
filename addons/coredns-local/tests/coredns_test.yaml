@@ -22,3 +22,25 @@ tests:
       - matchRegex:
           path: data["openchoreo.override"]
           pattern: 'oc\\\.example\\\.com\\\.\$'
+
+  - it: mgmt with observability sends observer/*.observability names to the obs-plane Gateway first
+    values: [../values/role-mgmt.yaml]
+    set:
+      openchoreo.observability.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["openchoreo.override"]
+          pattern: '(?s)name regex \^\(observer\\\.\|\.\+\\\.observability\\\.\)openchoreo\\\.localhost\\\.\$ gateway-default\.openchoreo-observability-plane\.svc\.cluster\.local\n.*gateway-default\.openchoreo-control-plane'
+  - it: no observability rule without observability
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - notMatchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'observability'
+  - it: workload with observability keeps the single generic rule (serverlb publishes the obs ports)
+    set:
+      openchoreo.observability.enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["openchoreo.override"]
+          pattern: 'openchoreo-observability-plane'

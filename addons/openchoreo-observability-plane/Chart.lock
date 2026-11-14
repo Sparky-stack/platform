@@ -1,0 +1,15 @@
+dependencies:
+- name: openchoreo-observability-plane
+  repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
+  version: 1.3.3
+- name: observability-logs-opensearch
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.7.0
+- name: observability-tracing-opensearch
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.8.0
+- name: observability-metrics-prometheus
+  repository: oci://ghcr.io/openchoreo/helm-charts
+  version: 0.8.0
+digest: sha256:1407cca83a425e80fae4de5c4ff54bb035c30b72f791d37118d474166c20480b
+generated: "2026-11-14T10:04:11.066713857+02:00"
