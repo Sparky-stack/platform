@@ -1,0 +1,360 @@
+{{- $backend := .Values.secrets.backend | default "kubernetes" -}}
+{{- if eq .Values.role "mgmt" -}}
+{{- if eq $backend "kubernetes" -}}
+{{- $platformNs := .Values.secrets.kubernetes.namespace | default "platform-secrets" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-platform
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-platform
+  namespace: {{ $platformNs | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-platform
+  namespace: {{ $platformNs | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: eso-platform
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-platform
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: platform
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $platformNs | quote }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-platform
+          namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "aws" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-aws
+  namespace: {{ .Release.Namespace }}
+  {{- if .Values.secrets.aws.role }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.secrets.aws.role | quote }}
+  {{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: platform
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.secrets.aws.region | quote }}
+      {{- if .Values.secrets.aws.prefix }}
+      prefix: {{ .Values.secrets.aws.prefix | quote }}
+      {{- end }}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: eso-aws
+            namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "vault" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-vault
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: platform
+spec:
+  provider:
+    vault:
+      server: {{ .Values.secrets.vault.server | quote }}
+      path: {{ .Values.secrets.vault.path | default "platform" | quote }}
+      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
+      auth:
+        kubernetes:
+          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
+          role: {{ .Values.secrets.vault.auth.kubernetes.role | quote }}
+          serviceAccountRef:
+            name: eso-vault
+            namespace: {{ .Release.Namespace }}
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-mgmt-fleet
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-mgmt-fleet
+  namespace: fleet
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-mgmt-fleet
+  namespace: fleet
+subjects:
+  - kind: ServiceAccount
+    name: eso-mgmt-fleet
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-mgmt-fleet
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: mgmt-fleet
+spec:
+  conditions:
+    - namespaces:
+        - fleet
+        - argocd
+  provider:
+    kubernetes:
+      remoteNamespace: fleet
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-mgmt-fleet
+          namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-mgmt-openchoreo
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-mgmt-openchoreo
+  namespace: openchoreo-control-plane
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-mgmt-openchoreo
+  namespace: openchoreo-control-plane
+subjects:
+  - kind: ServiceAccount
+    name: eso-mgmt-openchoreo
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-mgmt-openchoreo
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: mgmt-openchoreo
+spec:
+  conditions:
+    - namespaces:
+        - fleet
+  provider:
+    kubernetes:
+      remoteNamespace: openchoreo-control-plane
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-mgmt-openchoreo
+          namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.repoCreds.name | default "platform-repo-creds" | quote }}
+  namespace: {{ .Values.repoCreds.namespace | default "argocd" | quote }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  data:
+    - secretKey: username
+      remoteRef:
+        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
+        property: username
+    - secretKey: token
+      remoteRef:
+        key: {{ .Values.repoCreds.remoteKey | default "platform-github" | quote }}
+        property: token
+  target:
+    name: {{ .Values.repoCreds.name | default "platform-repo-creds" | quote }}
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      engineVersion: v2
+      metadata:
+        labels:
+          argocd.argoproj.io/secret-type: repo-creds
+      data:
+        type: git
+        url: {{ .Values.installation.githubOrg | quote }}
+        username: '{{ "{{" }} .username {{ "}} " | trim }}'
+        password: '{{ "{{" }} .token {{ "}} " | trim }}'
+{{- else -}}
+{{- if eq $backend "kubernetes" -}}
+{{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $wlNs | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-workload-default
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-workload-default
+  namespace: {{ $wlNs | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-workload-default
+  namespace: {{ $wlNs | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: eso-workload-default
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-workload-default
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: default
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $wlNs | quote }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-workload-default
+          namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "aws" -}}
+# VERIFY: workload IRSA / Pod Identity auth for AWS Secrets Manager
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-aws
+  namespace: {{ .Release.Namespace }}
+  {{- if .Values.secrets.aws.role }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.secrets.aws.role | quote }}
+  {{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: default
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.secrets.aws.region | quote }}
+      {{- if .Values.secrets.aws.prefix }}
+      prefix: {{ .Values.secrets.aws.prefix | quote }}
+      {{- end }}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: eso-aws
+            namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "vault" -}}
+# VERIFY: workload Vault auth
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-vault
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: default
+spec:
+  provider:
+    vault:
+      server: {{ .Values.secrets.vault.server | quote }}
+      path: {{ .Values.secrets.vault.path | default "platform" | quote }}
+      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
+      auth:
+        kubernetes:
+          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
+          role: {{ .Values.secrets.vault.auth.kubernetes.role | quote }}
+          serviceAccountRef:
+            name: eso-vault
+            namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end -}}

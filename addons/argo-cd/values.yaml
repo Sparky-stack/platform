@@ -1,0 +1,72 @@
+# Wrapper defaults for argo-cd (mgmt only).
+# Used identically by bootstrap/bootstrap.sh and the GitOps argo-cd-mgmt Application so adoption is clean.
+argo-cd:
+  fullnameOverride: argocd
+  global:
+    domain: localhost
+    networkPolicy:
+      create: false
+  configs:
+    params:
+      server.insecure: true
+      controller.diff.server.side: true   # prevent permanent diff on CAPI/ESO/cert-manager/OpenChoreo CRD defaults
+      controller.status.processors: 10
+      controller.operation.processors: 5
+    cm:
+      helm.dependencies.enabled: "true"   # repo-server runs helm dependency build for wrapper charts (https + OCI)
+      timeout.reconciliation: 300s
+      timeout.reconciliation.jitter: 60s
+      # Thunder's PreSync setup Job mounts a PVC; k3s local-path binds on first consumer (WaitForFirstConsumer).
+      # Treat Pending PVCs as Healthy so the hook Job can start and bind the volume.
+      resource.customizations.health.PersistentVolumeClaim: |
+        hs = {}
+        if obj.status ~= nil and obj.status.phase ~= nil then
+          if obj.status.phase == "Bound" then
+            hs.status = "Healthy"
+            hs.message = obj.status.phase
+            return hs
+          end
+          if obj.status.phase == "Pending" then
+            hs.status = "Healthy"
+            hs.message = "Waiting for first consumer (WaitForFirstConsumer)"
+            return hs
+          end
+        end
+        hs.status = "Progressing"
+        return hs
+  controller:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+  server:
+    service:
+      type: ClusterIP
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+  repoServer:
+    env:
+      - name: ARGOCD_EXEC_TIMEOUT
+        value: "180s"   # allow initial OCI/https helm dependency builds (e.g. openchoreo-control-plane)
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+  applicationSet:
+    enabled: true
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+  redis:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+  dex:
+    enabled: false
+  notifications:
+    enabled: false
+

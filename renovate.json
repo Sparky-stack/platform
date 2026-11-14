@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Keep Helm chart dependencies, Kubernetes/k3s versions, and CI tools pinned and updated.",
+  "extends": [
+    "config:recommended"
+  ],
+  "helmv3": {
+    "managerFilePatterns": [
+      "/(^|/)(?:charts|addons)/[^/]+/Chart\\.yaml$/"
+    ]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update tools annotated with # renovate: datasource=... depName=... in CI workflows",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\n\\s*[A-Z0-9_]+=(?<currentValue>[^\\s']+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update k3s kubernetesVersion in installation cluster files",
+      "managerFilePatterns": [
+        "/^installations/[^/]+/clusters/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "kubernetesVersion:\\s*(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+\\+k3s[0-9]+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "k3s-io/k3s"
+    }
+  ]
+}

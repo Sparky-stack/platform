@@ -1,0 +1,29 @@
+# Default role is mgmt; appset-addons layers values/role-<role>.yaml on top.
+role: mgmt
+
+installation:
+  githubOrg: https://github.com/koorikla
+
+secrets:
+  backend: kubernetes          # kubernetes | aws | vault
+  kubernetes:
+    namespace: platform-secrets
+  workloadKubernetes:
+    namespace: openchoreo-secrets
+  aws:
+    region: eu-central-1
+    prefix: ""
+    role: ""
+  vault:
+    server: https://vault.example.com
+    path: platform
+    version: v2
+    auth:
+      kubernetes:
+        mountPath: kubernetes
+        role: external-secrets
+
+repoCreds:
+  name: platform-repo-creds
+  namespace: argocd
+  remoteKey: platform-github
