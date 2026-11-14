@@ -33,6 +33,9 @@ openchoreo:
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
   observability:
     enabled: false
+dns:
+  provider: none              # none | route53 | cloudflare (docs/dns.md)
+  domainFilters: []
 
 addons:
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
@@ -51,6 +54,10 @@ addons:
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
+  # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. The DNS provider is installation.yaml
+  # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and the cluster name
+  # (TXT owner) become helm parameters.
+  external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterNameParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
   openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on

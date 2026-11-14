@@ -50,6 +50,7 @@ kyverno:
               - falco
               - telemetry
               - obi
+              - external-dns
     # ...and the engine skips them too (background scans, reports).
     resourceFiltersIncludeNamespaces: *platformNamespaces
 

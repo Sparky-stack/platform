@@ -72,6 +72,14 @@ helm template falco addons/falco --namespace "$falco_ns" -f addons/falco/values.
   --set escalation.enabled=true --set slack.enabled=true > "$TMP/falco-mgmt-outputs.yaml"
 check "falco outputs (mgmt)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "$TMP/falco-mgmt-outputs.yaml"
 
+# Opt-in consumers on mgmt (catalog default false): external-dns with Cloudflare.
+ns_of() { yq ".addons[\"$1\"].namespace" charts/platform/values.yaml; }
+helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" -f addons/external-dns/values.yaml \
+  -f addons/external-dns/values/role-mgmt.yaml -f addons/external-dns/values/dns-cloudflare.yaml \
+  --set dns.provider=cloudflare --set 'dns.domainFilters={example.com}' --set 'external-dns.domainFilters={example.com}' \
+  --set-string external-dns.txtOwnerId=sample --show-only templates/secrets.yaml > "$TMP/external-dns-mgmt.yaml"
+check "opt-in mgmt consumers (external-dns)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "$TMP/external-dns-mgmt.yaml"
+
 # No stale grants: every allowed namespace has a consumer somewhere.
 while read -r ns; do
   [[ -n "$ns" ]] || continue

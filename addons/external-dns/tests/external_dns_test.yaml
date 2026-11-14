@@ -1,108 +1,147 @@
-suite: external-dns glue, provider overlays, and validation
+suite: external-dns provider selection, credentials and installation guards
 templates:
-  - templates/secrets.yaml
   - templates/validate.yaml
+  - templates/secrets.yaml
+  - charts/external-dns/templates/deployment.yaml
 tests:
-  - it: default values render cleanly with no ExternalSecrets
+  - it: dns.provider none (standalone default) renders no glue (the subchart is off; hack/tests/test_external_dns.sh)
+    template: templates/secrets.yaml
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: validates route53 provider and aws chart config
-    template: templates/validate.yaml
-    values:
-      - ../values/provider-aws.yaml
-    set:
-      dns.provider: route53
-      dns.domainFilters: [aws.example.com]
-      external-dns.domainFilters: [aws.example.com]
+  - it: route53 overlay runs the aws provider, Gateway API sources only, upsert-only, TXT owner = cluster
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: dev1, dns.provider: route53, dns.domainFilters: [aws.example.com], external-dns.domainFilters: [aws.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --provider=aws }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --policy=upsert-only }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --txt-owner-id=dev1 }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --domain-filter=aws.example.com }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-httproute }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-grpcroute }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-tlsroute }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --source=ingress }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --source=service }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --aws-zone-type=public }
+      - notExists: { path: "spec.template.spec.containers[0].env" }
+      - matchRegex: { path: "spec.template.spec.containers[0].image", pattern: '^registry\.k8s\.io/external-dns/external-dns:v[0-9.]+@sha256:[0-9a-f]{64}$' }
+      - equal: { path: "spec.template.spec.containers[0].securityContext.runAsNonRoot", value: true }
+
+  - it: route53 uses workload identity, no ExternalSecret
+    template: templates/secrets.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: fails when dns.provider is invalid
-    template: templates/validate.yaml
-    set:
-      dns.provider: gcp
-    asserts:
-      - failedTemplate: {}
-
-  - it: fails when dns.provider=route53 mismatches external-dns.provider.name
-    template: templates/validate.yaml
-    set:
-      dns.provider: route53
-      external-dns.provider.name: cloudflare
-    asserts:
-      - failedTemplate: {}
-
-  - it: fails when dns.domainFilters is missing from external-dns.domainFilters
-    template: templates/validate.yaml
-    set:
-      dns.provider: route53
-      dns.domainFilters: [aws.example.com]
-      external-dns.domainFilters: []
-    asserts:
-      - failedTemplate: {}
-
-  - it: renders Cloudflare ExternalSecret on workload using default store
+  - it: static AWS keys are a last resort behind secrets.aws.enabled (store of the role)
     template: templates/secrets.yaml
-    values:
-      - ../values/role-workload.yaml
-      - ../values/provider-cloudflare.yaml
-    set:
-      dns.provider: cloudflare
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { secrets.aws.enabled: true, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
     asserts:
-      - hasDocuments: { count: 1 }
-      - isKind: { of: ExternalSecret }
-      - equal: { path: metadata.name, value: external-dns-cloudflare }
-      - equal: { path: spec.secretStoreRef.name, value: default }
-      - contains:
-          path: spec.data
-          content: { secretKey: api-token, remoteRef: { key: external-dns-cloudflare, property: api-token } }
-
-  - it: renders Cloudflare ExternalSecret on mgmt using platform store
-    template: templates/secrets.yaml
-    values:
-      - ../values/role-mgmt.yaml
-      - ../values/provider-cloudflare.yaml
-    set:
-      dns.provider: cloudflare
-    asserts:
-      - hasDocuments: { count: 1 }
-      - equal: { path: spec.secretStoreRef.name, value: platform }
-
-  - it: fails when cloudflare is active without CF_API_TOKEN env
-    template: templates/validate.yaml
-    set:
-      dns.provider: cloudflare
-      external-dns.provider.name: cloudflare
-    asserts:
-      - failedTemplate: {}
-
-  - it: passes validation with provider-cloudflare.yaml overlay
-    template: templates/validate.yaml
-    values:
-      - ../values/provider-cloudflare.yaml
-    set:
-      dns.provider: cloudflare
-      dns.domainFilters: [hetzner.example.com]
-      external-dns.domainFilters: [hetzner.example.com]
-    asserts:
-      - hasDocuments: { count: 0 }
-
-  - it: renders static AWS ExternalSecret when secrets.aws.enabled=true
-    template: templates/secrets.yaml
-    values:
-      - ../values/role-workload.yaml
-    set:
-      dns.provider: route53
-      secrets.aws.enabled: true
-    asserts:
-      - hasDocuments: { count: 1 }
-      - isKind: { of: ExternalSecret }
       - equal: { path: metadata.name, value: external-dns-aws }
       - equal: { path: spec.secretStoreRef.name, value: default }
-      - contains:
-          path: spec.data
-          content: { secretKey: access-key-id, remoteRef: { key: external-dns-aws, property: access-key-id } }
-      - contains:
-          path: spec.data
-          content: { secretKey: secret-access-key, remoteRef: { key: external-dns-aws, property: secret-access-key } }
+      - equal: { path: "spec.data[0].remoteRef", value: { key: external-dns-aws, property: access-key-id } }
+      - equal: { path: "spec.data[1].remoteRef", value: { key: external-dns-aws, property: secret-access-key } }
+
+  - it: cloudflare overlay injects CF_API_TOKEN from the ESO Secret, proxied off
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { cluster.name: dev1, dns.provider: cloudflare, dns.domainFilters: [hetzner.example.com], external-dns.domainFilters: [hetzner.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --provider=cloudflare }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --cloudflare-proxied }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --aws-zone-type=public }
+      - equal: { path: "spec.template.spec.containers[0].env[0]", value: { name: CF_API_TOKEN, valueFrom: { secretKeyRef: { name: external-dns-cloudflare, key: api-token } } } }
+
+  - it: cloudflare token from store default on workload clusters
+    template: templates/secrets.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: external-dns-cloudflare }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: default } }
+      - equal: { path: "spec.data[0]", value: { secretKey: api-token, remoteRef: { key: external-dns-cloudflare, property: api-token } } }
+
+  - it: cloudflare token from store platform on mgmt
+    template: templates/secrets.yaml
+    values: [../values/role-mgmt.yaml, ../values/dns-cloudflare.yaml]
+    set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+
+  - it: matching installation and overlays pass validation (sync allowed, filter order irrelevant)
+    template: templates/validate.yaml
+    values: [../values/dns-cloudflare.yaml]
+    set: { installation.name: x, dns.provider: cloudflare, dns.domainFilters: [a.example.com, b.example.com], external-dns.domainFilters: [b.example.com, a.example.com], external-dns.txtOwnerId: sample, external-dns.policy: sync }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  # --- guards (negative) ---------------------------------------------------------------------------------------------
+  - it: rejects an unknown dns.provider
+    template: templates/validate.yaml
+    set: { dns.provider: gcp }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider must be one of none, route53, cloudflare (installation.yaml), got "gcp"' }
+
+  - it: rejects enabling the addon in an installation without a DNS provider
+    template: templates/validate.yaml
+    set: { installation.name: local, cluster.name: dev1 }
+    asserts:
+      - failedTemplate: { errorMessage: 'external-dns is enabled on cluster dev1 but installation.yaml dns.provider is none: set dns.provider and dns.domainFilters, or drop the addon toggle' }
+
+  - it: rejects running ExternalDNS while dns.provider is none
+    template: templates/validate.yaml
+    set: { external-dns.enabled: true }
+    asserts:
+      - failedTemplate: { errorMessage: external-dns.enabled must stay false while dns.provider is none }
+
+  - it: rejects a provider set without its value file
+    template: templates/validate.yaml
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com] }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider=route53 but external-dns.enabled is false (values/dns-route53.yaml not layered?)' }
+
+  - it: rejects an overlay that switches the provider away from installation.yaml
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.provider.name: cloudflare }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider=route53 requires external-dns.provider.name=aws, got "cloudflare" (an installation overlay must not switch providers)' }
+
+  - it: rejects empty dns.domainFilters (would manage every reachable zone)
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53 }
+    asserts:
+      - failedTemplate: { errorMessage: dns.domainFilters must list the zones ExternalDNS may manage (installation.yaml) }
+
+  - it: rejects domainFilters that differ from installation.yaml
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com, evil.example.org] }
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects a TXT owner other than the cluster name
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { cluster.name: dev1, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: prod1 }
+    asserts:
+      - failedTemplate: { errorMessage: external-dns.txtOwnerId (prod1) must equal the cluster name dev1 (catalog clusterNameParameters) }
+
+  - it: rejects policy create-only
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.policy: create-only }
+    asserts:
+      - failedTemplate: { errorMessage: 'external-dns.policy must be upsert-only (default) or sync, got "create-only"' }
+
+  - it: rejects cloudflare without the token Secret wiring
+    template: templates/validate.yaml
+    values: [../values/dns-cloudflare.yaml]
+    set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.env: [] }
+    asserts:
+      - failedTemplate: { errorMessage: dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml) }

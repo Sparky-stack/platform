@@ -56,6 +56,8 @@ Secret keys in the `platform` store (flat, backend-agnostic):
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
 | `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
+| `external-dns-cloudflare` | `api-token` | addon external-dns, `dns.provider: cloudflare` (also in `default` on workload clusters; docs/dns.md) |
+| `external-dns-aws` | `access-key-id`, `secret-access-key` | addon external-dns, last resort only (Route 53 uses workload identity) |
 
 ## Layout and ownership
 ```

@@ -1,54 +1,120 @@
-# ExternalDNS (Route53 and Cloudflare)
+# DNS: external-dns (Route 53, Cloudflare)
 
-Opt-in addon (`addons/external-dns`, upstream `kubernetes-sigs/external-dns` chart `1.23.0` / app `v0.23.0`) for managing public/private DNS records from Kubernetes Gateway API routes and Services. Disabled by default (`catalog default: false`) so local k3d/CAPD clusters continue using `coredns-local` without external DNS dependencies.
+Addon `external-dns` (upstream [kubernetes-sigs/external-dns](https://github.com/kubernetes-sigs/external-dns) chart
+1.23.0, app v0.23.0) publishes the hostnames of Gateway API routes into a public DNS zone. It is **opt-in per cluster**
+(catalog `default: false`) and runs on mgmt and workload clusters. Local installations do not use it: `coredns-local`
+resolves `*.openchoreo.localhost` inside the clusters.
 
-## What it watches and how it owns records
+## What it does
 
-- **Sources:** `gateway-httproute`, `gateway-tlsroute`, `gateway-grpcroute`, `service` (matching `kgateway` and OpenChoreo's Gateway API routing).
-- **Policy:** `upsert-only` by default (creates and updates records, never deletes them). Set `external-dns.policy: sync` in `installations/<inst>/addons/external-dns/values.yaml` only when you want ExternalDNS to delete records on resource removal.
-- **Ownership:** `registry: txt` with `txtOwnerId` set to `<cluster.name>` via catalog `clusterNameParameters: [external-dns.txtOwnerId]`, so multiple clusters sharing one DNS zone never overwrite each other's records.
-- **Domain scope:** `domainFilters` comes from `installation.yaml` (`dns.domainFilters`) via catalog `installationParameters` and/or `installations/<inst>/addons/external-dns/values.yaml` (checked at render time by `templates/validate.yaml`).
+| Setting | Value | Why |
+|---|---|---|
+| Sources | `gateway-httproute`, `gateway-grpcroute`, `gateway-tlsroute` | kgateway and OpenChoreo publish through Gateways. No Ingress, no Service source. Gateway API v1.5.1 standard serves all three as `gateway.networking.k8s.io/v1`, the version external-dns v0.23 watches. |
+| Policy | `upsert-only` | Creates and updates records, never deletes. `sync` (also deletes records of removed routes) only per installation, on a zone dedicated to the platform. `create-only` is rejected. |
+| Registry | TXT, owner = cluster name | `txtOwnerId` is the catalog `clusterNameParameters`, so clusters sharing a zone never touch each other's records. |
+| Zones | `installation.yaml` `dns.domainFilters` | Delivered as a catalog `installationParameters` entry; never empty while running (ExternalDNS would otherwise manage every zone its credentials reach). |
+| Image | `registry.k8s.io/external-dns/external-dns:v0.23.0@sha256:…` | Pinned by digest, multi-arch (amd64, arm64, arm). Pod Security restricted (chart defaults). |
 
-## `installation.yaml` `dns:` schema
+## Installation facts: `dns:`
 
 ```yaml
+# installations/<inst>/installation.yaml
 dns:
-  provider: none            # none | route53 | cloudflare
-  domainFilters:
-    - example.com           # zones ExternalDNS is permitted to touch
-  route53:                  # optional provider metadata (when provider: route53)
-    zoneType: public        # public | private
-  cloudflare:               # optional provider metadata (when provider: cloudflare)
-    proxied: false
+  provider: cloudflare        # none | route53 | cloudflare
+  domainFilters:              # the only zones ExternalDNS may touch
+    - example.com
 ```
 
-## Catalog entry (`charts/platform/values.yaml`)
+`installation.yaml` holds the facts other parts of the platform may need too (which provider, which zones). Provider
+tuning (`aws-zone-type`, `cloudflare-proxied`, an IRSA role ARN, `policy: sync`) is ordinary Helm values in
+`installations/<inst>/addons/external-dns/values.yaml`.
+
+## Choosing the DNS provider (independent of the infra provider)
+
+The addon ApplicationSet layers `values/provider-<provider>.yaml` from the cluster label
+`platform.koorikla.io/provider`, the **CAPI infrastructure provider** (`docker | aws | hetzner`). Where DNS lives is a
+different fact: a Hetzner installation can use Route 53, an AWS one Cloudflare. Keying DNS off the infra provider would
+force every such combination into per-installation copies of provider settings.
+
+So the catalog gained a generic field, `installationValueFiles`: value files chosen by a template over installation
+values, rendered once per installation by `charts/platform` and layered after the role/provider/cni overlays, before the
+installation overlays. external-dns uses it to pick its DNS provider file:
 
 ```yaml
-external-dns: { namespace: external-dns, roles: [mgmt, workload], default: false, clusterNameParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{ {{- join "," .Values.dns.domainFilters -}} }' } }
+# charts/platform/values.yaml
+external-dns: { namespace: external-dns, roles: [mgmt, workload], default: false,
+  clusterNameParameters: [external-dns.txtOwnerId],
+  installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' },
+  installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
 ```
 
-Enable per cluster via `mgmt.addons.external-dns: "true"` or `addons.external-dns: "true"` in `installations/<inst>/clusters/<name>.yaml` (which sets label `addons.platform.koorikla.io/external-dns: "true"`).
+| File | Layered when | Sets |
+|---|---|---|
+| `addons/external-dns/values.yaml` | always | sources, policy, registry; `external-dns.enabled: false` (Chart.yaml condition) |
+| `values/role-mgmt.yaml` / `role-workload.yaml` | by role | ESO store `platform` / `default` |
+| `values/dns-route53.yaml` | `dns.provider: route53` | `enabled: true`, `provider.name: aws`, `aws-zone-type: public` |
+| `values/dns-cloudflare.yaml` | `dns.provider: cloudflare` | `enabled: true`, `provider.name: cloudflare`, `CF_API_TOKEN` from the ESO Secret |
+| `installations/<inst>/addons/external-dns/values.yaml` | always | tuning only |
 
-## DNS-provider selection vs infra-provider overlays
+`dns.provider: none` layers nothing (missing value files are ignored), so the subchart stays off. Guards in
+`templates/validate.yaml` turn every inconsistency into a failed render (the Argo CD Application shows it) instead of a
+running controller doing the wrong thing:
 
-The addon ApplicationSet (`charts/platform/templates/appset-addons.yaml`) loads `values/provider-<infra>.yaml` from `platform.koorikla.io/provider` (`docker | aws | hetzner`), which is the **CAPI infrastructure provider**, not `dns.provider`.
+- the addon is opted in on a cluster but the installation's `dns.provider` is `none`;
+- an overlay switches `provider.name` away from `dns.provider`, or the provider file was not layered;
+- `external-dns.domainFilters` differs from `dns.domainFilters`, or the list is empty;
+- `txtOwnerId` is not the cluster name; `policy` is not `upsert-only` or `sync`;
+- Cloudflare without `CF_API_TOKEN` from Secret `external-dns-cloudflare`.
 
-- **AWS infra + Route53 (`aws-example`):** `values/provider-aws.yaml` is loaded automatically and configures Route53 (`provider.name: aws`, `aws-zone-type: public`, IRSA/Pod Identity).
-- **Any infra + Cloudflare (`hetzner-example`, or AWS infra using Cloudflare DNS):** `values/provider-cloudflare.yaml` is a reference overlay; set the Cloudflare configuration in `installations/<inst>/addons/external-dns/values.yaml` (which layers *after* `values/provider-<infra>.yaml` in `valueFiles` precedence). If overriding `values/provider-aws.yaml`, include `extraArgs: { aws-zone-type: null }` so Helm drops the AWS-only flag.
+Helm parameters beat value files, so an overlay cannot widen the zones either.
 
-## Provider authentication
+## Credentials
 
-### AWS Route53
-- **Default (IRSA / EKS Pod Identity / node IAM role):** No static AWS keys and no `ExternalSecret`. On EKS with IRSA, set `external-dns.serviceAccount.annotations["eks.amazonaws.com/role-arn"]` in `installations/<inst>/addons/external-dns/values.yaml`. On EKS Pod Identity or EC2 instance profiles, leave `annotations: {}`.
-- **Static-credentials alternative (non-EKS without Pod Identity):** Seed key `external-dns-aws` (properties `access-key-id`, `secret-access-key`) in ClusterSecretStore `default` (workload) / `platform` (mgmt), set `secrets.aws.enabled: true`, and wire `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from Secret `external-dns-aws` (commented template in `addons/external-dns/values/provider-aws.yaml`).
+### Route 53: workload identity
 
-### Cloudflare
-- Create a scoped Cloudflare API Token (`Zone:Zone:Read`, `Zone:DNS:Edit`).
-- Seed key `external-dns-cloudflare` with property `api-token` in ClusterSecretStore `platform` (mgmt) and/or `default` (workload).
-- `templates/secrets.yaml` renders `ExternalSecret/external-dns-cloudflare` when `secrets.cloudflare.enabled: true` or `dns.provider: cloudflare`, and `external-dns.env` injects `CF_API_TOKEN`.
-- `proxied` defaults to `false`; uncomment `cloudflare-proxied: null` in `extraArgs` to proxy DNS records through Cloudflare.
+No static keys and no ExternalSecret by default. The AWS SDK default chain picks up whichever identity is present:
 
-## Untested / VERIFY
-- Live Route53 and Cloudflare reconciliation against real zones and IAM/token credentials.
-- `hack/test.sh` `installationParameters` evaluation: `hack/test.sh` currently only expands simple `{{ .Values.a.b }}` expressions (not sprig `join` pipelines like `{{- join "," .Values.dns.domainFilters -}}`), so either extend `hack/test.sh` when adding `installationParameters` for `external-dns.domainFilters` or keep `external-dns.domainFilters` in `installations/<inst>/addons/external-dns/values.yaml` (checked by `templates/validate.yaml`).
+- **IRSA**: set `external-dns.serviceAccount.annotations."eks.amazonaws.com/role-arn"` in the installation overlay. On
+  CAPA k3s clusters this needs the cluster's service-account issuer registered as an IAM OIDC provider plus the pod
+  identity webhook.
+- **EKS Pod Identity**: a PodIdentityAssociation for `external-dns/external-dns`; no annotation.
+- **EC2 instance profile** of the nodes (CAPA `iamInstanceProfile`): no annotation; IMDSv2 hop limit >= 2 for pods. Every
+  pod on the node gets the role, so prefer the two above.
+
+IAM policy: `route53:ChangeResourceRecordSets` on the hosted zones of `dns.domainFilters` only, plus
+`route53:ListHostedZones`, `route53:ListResourceRecordSets`, `route53:ListTagsForResources`.
+
+Last resort for clusters with none of these (commented in `values/dns-route53.yaml`): key `external-dns-aws`
+(`access-key-id`, `secret-access-key`), `secrets.aws.enabled: true`, and the two `env` entries.
+
+### Cloudflare: scoped API token from ESO
+
+Create an API token (not the global API key) with `Zone:Zone:Read` and `Zone:DNS:Edit` on the zones of
+`dns.domainFilters` only. Store it as key `external-dns-cloudflare`, property `api-token`, in the store of every
+opted-in cluster: `platform` on mgmt (namespace `external-dns` is in secret-stores `platformStore.namespaces`), `default`
+on workload clusters. `templates/secrets.yaml` syncs it to Secret `external-dns-cloudflare`. Records are DNS-only
+(`cloudflare-proxied` off) unless the installation overlay sets `cloudflare-proxied: true`.
+
+## Turning it on
+
+1. `installation.yaml`: `dns.provider` and `dns.domainFilters` (the examples ship `aws.example.com` /
+   `hetzner.example.com` placeholders).
+2. Credentials as above.
+3. Opt in per cluster: `mgmt.addons.external-dns: "true"` in `installation.yaml` for mgmt, `addons: { external-dns: true }`
+   in `installations/<inst>/clusters/<name>.yaml` for a workload cluster (label
+   `addons.platform.koorikla.io/external-dns: "true"`).
+
+Examples: `installations/aws-example` (Route 53) and `installations/hetzner-example` (Cloudflare) carry `dns:` and an
+overlay; no cluster is opted in.
+
+## Tests
+
+- `addons/external-dns/tests/` (helm-unittest): both providers, stores per role, every guard (negative tests).
+- `hack/tests/test_external_dns.sh`: renders the addon through the real catalog for every cluster of `aws-example` and
+  `hetzner-example` with the toggle forced on, plus the failure cases (no provider, provider switch, zone override).
+- `charts/platform/tests/`: `installationValueFiles` order and the path guard.
+
+## VERIFY
+
+- Live reconciliation against real Route 53 / Cloudflare zones (no installation has run it yet).
+- IRSA on CAPA k3s (self-hosted issuer + pod identity webhook) is not wired by this repo yet.

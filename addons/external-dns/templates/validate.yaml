@@ -1,33 +1,57 @@
-{{- /* Render-time guards keeping installation.yaml `dns:` aligned with `external-dns.*` chart values. */ -}}
+{{- /*
+Render-time guards: what runs must equal installation.yaml `dns:` (delivered by the catalog's installationValueFiles /
+installationParameters; an installation overlay must not contradict it).
+  - dns.provider is none | route53 | cloudflare. Enabling the addon on a cluster whose installation has provider none
+    is a mistake, not a silent no-op (`installation` values exist only in platform renders, not standalone).
+  - external-dns.enabled and provider.name follow dns.provider (route53 -> aws).
+  - domainFilters is never empty while running (ExternalDNS would manage every zone the credentials reach) and equals
+    dns.domainFilters.
+  - txtOwnerId is the cluster name; policy is upsert-only or sync; Cloudflare reads its token from the ESO Secret.
+*/ -}}
 {{- $dns := .Values.dns | default dict }}
 {{- $provider := $dns.provider | default "none" }}
 {{- $ext := index .Values "external-dns" }}
-{{- $chartProvider := ($ext.provider).name | default "" }}
-{{- $validProviders := list "none" "route53" "cloudflare" }}
-{{- if not (has $provider $validProviders) }}
-{{- fail (printf "dns.provider must be one of %s, got %q" (join ", " $validProviders) $provider) }}
+{{- $map := dict "none" "" "route53" "aws" "cloudflare" "cloudflare" }}
+{{- if not (hasKey $map $provider) }}
+{{- fail (printf "dns.provider must be one of none, route53, cloudflare (installation.yaml), got %q" $provider) }}
 {{- end }}
-{{- if eq $provider "route53" }}
-{{- if ne $chartProvider "aws" }}
-{{- fail (printf "dns.provider=route53 requires external-dns.provider.name=aws (got %q)" $chartProvider) }}
+{{- if eq $provider "none" }}
+{{- if .Values.installation }}
+{{- fail (printf "external-dns is enabled on cluster %s but installation.yaml dns.provider is none: set dns.provider and dns.domainFilters, or drop the addon toggle" .Values.cluster.name) }}
 {{- end }}
-{{- else if eq $provider "cloudflare" }}
-{{- if ne $chartProvider "cloudflare" }}
-{{- fail (printf "dns.provider=cloudflare requires external-dns.provider.name=cloudflare (got %q)" $chartProvider) }}
+{{- if $ext.enabled }}
+{{- fail "external-dns.enabled must stay false while dns.provider is none" }}
 {{- end }}
-{{- $hasCFToken := false }}
+{{- else }}
+{{- if not $ext.enabled }}
+{{- fail (printf "dns.provider=%s but external-dns.enabled is false (values/dns-%s.yaml not layered?)" $provider $provider) }}
+{{- end }}
+{{- $want := index $map $provider }}
+{{- $got := "" }}
+{{- if kindIs "map" $ext.provider }}{{ $got = $ext.provider.name | default "" }}{{ else }}{{ $got = $ext.provider | toString }}{{ end }}
+{{- if ne $got $want }}
+{{- fail (printf "dns.provider=%s requires external-dns.provider.name=%s, got %q (an installation overlay must not switch providers)" $provider $want $got) }}
+{{- end }}
+{{- $filters := $dns.domainFilters | default list }}
+{{- if not $filters }}
+{{- fail "dns.domainFilters must list the zones ExternalDNS may manage (installation.yaml)" }}
+{{- end }}
+{{- if ne (sortAlpha $filters | toJson) (sortAlpha ($ext.domainFilters | default list) | toJson) }}
+{{- fail (printf "external-dns.domainFilters %v must equal installation.yaml dns.domainFilters %v (catalog installationParameters; never set it in overlays)" $ext.domainFilters $filters) }}
+{{- end }}
+{{- if ne (toString $ext.txtOwnerId) (toString .Values.cluster.name) }}
+{{- fail (printf "external-dns.txtOwnerId (%v) must equal the cluster name %s (catalog clusterNameParameters)" $ext.txtOwnerId .Values.cluster.name) }}
+{{- end }}
+{{- if not (has $ext.policy (list "upsert-only" "sync")) }}
+{{- fail (printf "external-dns.policy must be upsert-only (default) or sync, got %q" $ext.policy) }}
+{{- end }}
+{{- if eq $provider "cloudflare" }}
+{{- $token := false }}
 {{- range ($ext.env | default list) }}
-{{- if eq .name "CF_API_TOKEN" }}{{ $hasCFToken = true }}{{ end }}
+{{- if and (eq .name "CF_API_TOKEN") (eq (((.valueFrom).secretKeyRef).name | default "") "external-dns-cloudflare") }}{{ $token = true }}{{ end }}
 {{- end }}
-{{- if not $hasCFToken }}
-{{- fail "dns.provider=cloudflare requires CF_API_TOKEN in external-dns.env (see values/provider-cloudflare.yaml)" }}
-{{- end }}
-{{- end }}
-{{- if ne $provider "none" }}
-{{- $chartFilters := $ext.domainFilters | default list }}
-{{- range ($dns.domainFilters | default list) }}
-{{- if not (has . $chartFilters) }}
-{{- fail (printf "external-dns.domainFilters must contain %q from installation.yaml dns.domainFilters" .) }}
+{{- if not (and $token .Values.secrets.cloudflare.enabled) }}
+{{- fail "dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml)" }}
 {{- end }}
 {{- end }}
 {{- end }}

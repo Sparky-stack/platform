@@ -44,7 +44,7 @@ openchoreo:
     httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
     tlsPort: 11085
 
-# Opt-in external-dns configuration (docs/dns.md). Local stays off (coredns-local handles *.openchoreo.localhost).
+# Public DNS (addon external-dns, docs/dns.md): none locally, coredns-local resolves *.openchoreo.localhost.
 dns:
   provider: none                               # none | route53 | cloudflare
   domainFilters: []

@@ -41,6 +41,7 @@ platformNamespaces: &platformNamespaces
   - falco
   - telemetry
   - obi
+  - external-dns
 
 kyverno-policies:
   podSecurityStandard: baseline
