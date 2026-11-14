@@ -35,6 +35,8 @@ platformStore:
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)
     - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
     - harbor                           # harbor-platform: admin, robot and component secrets (addon harbor)
+    - workflows-default                # per-run build secrets (git, registry, cosign): ClusterWorkflow resources of addon
+                                       # openchoreo-platform, rendered by OpenChoreo into workflows-<openchoreo.orgNamespace>
 
 repoCreds:
   name: platform-repo-creds
