@@ -75,6 +75,11 @@ on:
         required: false
         type: string
         default: 'linux/amd64,linux/arm64'
+      multiarch_strategy:
+        description: 'native (per-arch runners) or qemu'
+        required: false
+        type: string
+        default: 'native'
       build_args:
         description: 'Newline-separated extra build-args'
         required: false
@@ -244,6 +249,7 @@ jobs:
       context: ${{ inputs.context != '' && inputs.context || inputs.working_directory }}
       dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.working_directory) }}
       platforms: ${{ inputs.platforms }}
+      multiarch_strategy: ${{ inputs.multiarch_strategy }}
       build_args: ${{ inputs.build_args }}
       push: ${{ inputs.push }}
       trivy_severity: ${{ inputs.trivy_severity }}

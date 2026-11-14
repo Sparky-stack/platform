@@ -56,3 +56,16 @@ jobs:
     with:
       working_directory: fixtures/go
       image_name: ci-selftest-go
+
+  nextjs:
+    uses: ./.github/workflows/nextjs.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: fixtures/nextjs
+      image_name: ci-selftest-nextjs
