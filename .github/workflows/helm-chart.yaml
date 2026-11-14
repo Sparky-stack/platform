@@ -115,14 +115,7 @@ jobs:
           REGISTRY: ${{ inputs.registry }}
           INPUT_PUSH: ${{ inputs.push }}
           EVENT_NAME: ${{ github.event_name }}
-        run: |
-          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
-          reg="${REGISTRY:-ghcr.io/${owner}/charts}"
-          echo "registry=${reg%/}" >> "$GITHUB_OUTPUT"
-          echo "registry_host=${reg%%/*}" >> "$GITHUB_OUTPUT"
-          push=false
-          if [ "$INPUT_PUSH" = "true" ] && [ "$EVENT_NAME" != "pull_request" ]; then push=true; fi
-          echo "should_push=$push" >> "$GITHUB_OUTPUT"
+        run: bash "$CI_SCRIPTS/helm/registry-meta.sh"
 
       - name: helm lint + unittest
         env:

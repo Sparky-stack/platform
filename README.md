@@ -1,12 +1,36 @@
 # koorikla/ci
 
-Reusable GitHub Actions workflows that **build, test, scan, sign and attest** everything
-koorikla ships: Go, Next.js, Elixir/Phoenix, Ruby/Rails, Helm charts, Crossplane
-configuration packages and Crossplane providers. Every image is **multi-arch**
-(`linux/amd64` + `linux/arm64`), Trivy-scanned per platform, gets an SPDX SBOM, GitHub
-SLSA build provenance + SBOM attestations, a **cosign keyless signature** and a cosign
-vulnerability attestation. The per-stack logic lives in portable shell scripts
-(`scripts/`) that also run in-cluster via the `ghcr.io/koorikla/ci-toolbox` image.
+Portable build, test, scan, sign and attest **scripts** plus a multi-arch **toolbox image**
+for everything koorikla ships: Go, Next.js, Elixir/Phoenix, Ruby/Rails, Helm charts,
+Crossplane configuration packages and Crossplane providers.
+
+- **Primary path: in-cluster.** OpenChoreo workflow-plane ClusterWorkflows run
+  `scripts/<stack>/*.sh` and `scripts/common/*.sh` inside
+  `ghcr.io/koorikla/ci-toolbox` (see [Running in-cluster](#running-in-cluster-openchoreo-workflow-plane)).
+- **Optional path: GitHub Actions.** Thin reusable workflows that only wire inputs to the
+  same scripts (plus GitHub-only extras: CodeQL, SARIF upload, GitHub attestations,
+  keyless signing). Nothing stack-specific is inlined in YAML.
+
+Both paths produce the same thing: a **multi-arch** (`linux/amd64` + `linux/arm64`) artifact,
+Trivy-scanned per platform, with an SPDX SBOM, provenance, a cosign signature and a cosign
+vulnerability attestation.
+
+## Toolbox image
+
+`ghcr.io/koorikla/ci-toolbox` — stable tag **`v1`** (moves with the `v1` git tag), plus
+`main`, `<short sha>` and `<full sha>`. Multi-arch, itself scanned, SBOM'd, attested and
+cosign-signed by [`toolbox.yaml`](.github/workflows/toolbox.yaml). Pin by digest in cluster
+manifests (`ghcr.io/koorikla/ci-toolbox:v1@sha256:…`).
+
+Contents ([`toolbox/Dockerfile`](toolbox/Dockerfile), versions pinned, release checksums verified
+where upstream publishes them): trivy, syft, cosign, crane, helm, yq, jq, git, crossplane CLI,
+bash, curl, make. Scripts live in `/opt/koorikla-ci/scripts` (`$CI_SCRIPTS`), `common/` is on
+`PATH`, user is uid 65532, workdir `/workspace`. `toolbox-smoke` checks every tool.
+
+It deliberately has **no image builder**: in-cluster image builds use BuildKit (or kaniko) in
+their own step, then hand the pushed digest to the toolbox steps.
+
+## GitHub Actions wrappers (optional)
 
 | Workflow | What it does | Pushes |
 |---|---|---|
@@ -200,7 +224,63 @@ and pass a robot account as `registry_username` / `registry_password`.
 GHCR packages are private when first created: make them public (package settings) or give the
 pulling clusters credentials.
 
-## Script contract (parity with in-cluster builds)
+## Running in-cluster (OpenChoreo workflow plane)
+
+Each step is "run a script in the toolbox with these env vars, read files from
+`$CI_OUT_DIR`". Typical pipeline for a service image:
+
+| Step | Image | Command | Key env in | Files out (`$CI_OUT_DIR`) |
+|---|---|---|---|---|
+| checks | toolbox (+ language toolchain image, see below) | `$CI_SCRIPTS/<stack>/check.sh` | `WORKDIR`, stack flags | coverage etc. |
+| deps scan | toolbox | `scan-fs.sh` | `SCAN_PATH`, `FAIL_SEVERITIES`, `IGNORE_FILE` | `trivy-fs.json`, `trivy-fs.sarif` |
+| coordinates | toolbox | `image-meta.sh` | `OWNER`, `REPO_NAME`, `SHA`, `REGISTRY`, `IMAGE_NAME` | `repo`, `image`, `short_sha`, … |
+| build + push | BuildKit | `buildctl build … --opt platform=linux/amd64,linux/arm64 --output type=image,name=<repo>:<tag>,push=true` | | image index digest |
+| scan | toolbox | `scan-image.sh` | `IMAGE_REF=<repo>@sha256:…`, `IMAGE_SRC=remote`, `PLATFORMS` | `trivy-*.json`, `trivy.sarif`, `trivy-vuln.json` |
+| SBOM | toolbox | `sbom.sh` | `IMAGE_REF`, `SOURCE=registry` | `sbom.spdx.json` |
+| sign + attest | toolbox | `sign-image.sh` | `IMAGE_DIGEST_REF`, `VULN_PREDICATE`, `COSIGN_KEY=k8s://<ns>/<secret>` | `signed_ref` |
+
+Add `cosign attest --key "$COSIGN_KEY" --type spdxjson --predicate sbom.spdx.json` (and a
+SLSA predicate from the workflow engine, if it emits one) for SBOM/provenance attestations;
+GitHub's `attest-*` actions have no in-cluster equivalent.
+
+Stack checks need a language toolchain the toolbox does not carry: run `check.sh` in the
+official toolchain image (`golang`, `node`, `elixir`, `ruby`, `alpine/helm`) with the scripts
+mounted or copied from the toolbox (`/opt/koorikla-ci/scripts`), exactly like a developer runs
+them on a laptop. Crossplane steps (`crossplane/*.sh`) run in the toolbox itself;
+`validate-render.sh` needs a Docker-compatible runtime for `crossplane composition render`
+(functions run as containers) — provide a DinD sidecar or run render tests only on GitHub.
+
+Illustrative Argo Workflows template (OpenChoreo's workflow plane is Argo-based; the real
+ClusterWorkflow lives in koorikla/platform):
+
+```yaml
+# apiVersion: argoproj.io/v1alpha1
+# kind: ClusterWorkflowTemplate
+# metadata:
+#   name: koorikla-scan-sign
+# spec:
+#   templates:
+#     - name: scan-sign
+#       inputs:
+#         parameters:
+#           - name: image-digest-ref        # ghcr.io/koorikla/app@sha256:...
+#       container:
+#         image: ghcr.io/koorikla/ci-toolbox:v1@sha256:<digest>
+#         command: [bash, -euo, pipefail, -c]
+#         args:
+#           - |
+#             IMAGE_REF="{{inputs.parameters.image-digest-ref}}" IMAGE_SRC=remote scan-image.sh
+#             IMAGE_REF="{{inputs.parameters.image-digest-ref}}" SOURCE=registry sbom.sh
+#             IMAGE_DIGEST_REF="{{inputs.parameters.image-digest-ref}}" \
+#               VULN_PREDICATE="$CI_OUT_DIR/trivy-vuln.json" sign-image.sh
+#         env:
+#           - {name: CI_OUT_DIR, value: /workspace/out}
+#           - {name: PLATFORMS, value: "linux/amd64,linux/arm64"}
+#           - {name: COSIGN_KEY, value: "k8s://ci/platform-cosign"}
+#           - {name: DOCKER_CONFIG, value: /docker}  # registry creds (Secret mounted at /docker/config.json)
+```
+
+## Script contract (both runners)
 
 Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.sh`, fetched from
 `koorikla/ci` at **the same commit as the running reusable workflow** (`job.workflow_sha`).
@@ -222,26 +302,15 @@ Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.
 | `common/scan-fs.sh` | Trivy fs on lockfiles → JSON, SARIF, gate |
 | `common/sbom.sh` | syft SPDX JSON |
 | `common/sign-image.sh` | cosign sign (+ vuln attest), keyless or `COSIGN_KEY` |
-| `go/check.sh`, `nextjs/{detect,check}.sh`, `elixir/check.sh`, `ruby/check.sh`, `helm/{check,package-push}.sh` | stack checks |
-| `crossplane/{install-cli,validate-render,xpkg-build,xpkg-push,provider-xpkg}.sh` | Crossplane CLI, validation/render tests, packaging |
-
-### Toolbox image
-
-`ghcr.io/koorikla/ci-toolbox` ([`toolbox/Dockerfile`](toolbox/Dockerfile), built by
-[`toolbox.yaml`](.github/workflows/toolbox.yaml) through `container.yaml`, so it is itself
-multi-arch, scanned, attested and signed): trivy, syft, cosign, crane, helm, yq, jq, git,
-crossplane CLI, bash, make. Scripts are in `/opt/koorikla-ci/scripts` (`common/` on `PATH`,
-`$CI_SCRIPTS` set). Tags: `<short sha>`, `<full sha>`, `main`; pin by digest in-cluster.
-
-```sh
-docker run --rm -v "$PWD:/workspace" -e IMAGE_REF=ghcr.io/koorikla/hello-world:main \
-  -e IMAGE_SRC=remote ghcr.io/koorikla/ci-toolbox:main scan-image.sh
-```
+| `common/generate-check.sh` | code generation must leave a clean tree |
+| `go/check.sh`, `nextjs/{detect,check}.sh`, `elixir/check.sh`, `ruby/check.sh`, `helm/{check,package-push,registry-meta}.sh` | stack checks |
+| `crossplane/{install-cli,package-name,validate-render,xpkg-build,xpkg-push,provider-xpkg}.sh` | Crossplane CLI, validation/render tests, packaging |
 
 ## Versioning
 
-Callers pin `@v1`. `v1` is a **moving, lightweight** tag on `main`, moved only after the
-selftest is green:
+Callers pin `@v1` (workflows) and `ci-toolbox:v1` (image). `v1` is a **moving, lightweight**
+tag on `main`, moved only after the selftest is green; pushing it rebuilds
+`ghcr.io/koorikla/ci-toolbox:v1` from the same commit:
 
 ```sh
 git tag -f v1 <sha> && git push -f origin v1

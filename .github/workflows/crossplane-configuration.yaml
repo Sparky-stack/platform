@@ -172,11 +172,12 @@ jobs:
           CROSSPLANE_VERSION: ${{ inputs.crossplane_version }}
         run: bash "$CI_SCRIPTS/crossplane/install-cli.sh"
 
-      - name: Package name from crossplane.yaml
+      - name: Package name
         id: pkgname
         env:
-          ROOT: ${{ inputs.package_root }}
-        run: echo "name=$(yq -r '.metadata.name' "$ROOT/crossplane.yaml")" >> "$GITHUB_OUTPUT"
+          PACKAGE_ROOT: ${{ inputs.package_root }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: bash "$CI_SCRIPTS/crossplane/package-name.sh"
 
       - name: Compute package coordinates
         id: vars
@@ -185,7 +186,7 @@ jobs:
           REPO_NAME: ${{ github.repository }}
           SHA: ${{ github.sha }}
           REGISTRY: ${{ inputs.registry }}
-          IMAGE_NAME: ${{ inputs.package_name != '' && inputs.package_name || steps.pkgname.outputs.name }}
+          IMAGE_NAME: ${{ steps.pkgname.outputs.name }}
           INPUT_PUSH: ${{ inputs.push }}
           EVENT_NAME: ${{ github.event_name }}
         run: bash "$CI_SCRIPTS/common/image-meta.sh"

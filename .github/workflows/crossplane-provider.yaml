@@ -151,9 +151,9 @@ jobs:
       - name: Package name
         id: pkgname
         env:
-          ROOT: ${{ inputs.working_directory }}/${{ inputs.package_root }}
-          NAME: ${{ inputs.package_name }}
-        run: echo "name=${NAME:-$(yq -r '.metadata.name' "$ROOT/crossplane.yaml")}" >> "$GITHUB_OUTPUT"
+          PACKAGE_ROOT: ${{ inputs.working_directory }}/${{ inputs.package_root }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: bash "$CI_SCRIPTS/crossplane/package-name.sh"
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -163,17 +163,10 @@ jobs:
 
       - name: Generated code is up to date
         if: inputs.generate_command != ''
-        working-directory: ${{ inputs.working_directory }}
         env:
-          GENERATE: ${{ inputs.generate_command }}
-        run: |
-          bash -euo pipefail -c "$GENERATE"
-          if [ -n "$(git status --porcelain -- .)" ]; then
-            git status --porcelain -- .
-            git --no-pager diff -- . | head -200
-            echo "::error::'$GENERATE' changed files; run it locally and commit the result"
-            exit 1
-          fi
+          GENERATE_COMMAND: ${{ inputs.generate_command }}
+          WORKDIR: ${{ inputs.working_directory }}
+        run: bash "$CI_SCRIPTS/common/generate-check.sh"
 
       - name: golangci-lint
         if: inputs.run_lint

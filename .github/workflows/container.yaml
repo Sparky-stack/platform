@@ -241,6 +241,7 @@ jobs:
             type=raw,value=${{ needs.prepare.outputs.short_sha }}
             type=sha,format=long,prefix=
             type=ref,event=branch
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -390,6 +391,7 @@ jobs:
             type=raw,value=${{ needs.prepare.outputs.short_sha }}
             type=sha,format=long,prefix=
             type=ref,event=branch
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}

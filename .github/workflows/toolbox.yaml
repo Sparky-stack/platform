@@ -13,6 +13,9 @@ on:
       - '.github/workflows/toolbox.yaml'
       - '.github/workflows/container.yaml'
   push:
+    # Moving the v1 tag (re)publishes ghcr.io/koorikla/ci-toolbox:v1 (paths are not
+    # evaluated for tag pushes).
+    tags: ['v*']
     branches: [main]
     paths:
       - 'toolbox/**'
