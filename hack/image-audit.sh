@@ -214,6 +214,7 @@ while IFS=$'\t' read -r img src; do
   esac
   [[ "$result" == ok ]] || bad=$((bad + 1))
   printf '%-12s %-75s %s\n' "$result" "$img" "$plats"
+  # shellcheck disable=SC2016  # literal markdown backticks
   printf '| `%s` | %s | %s | %s |\n' "$img" "$plats" "$result" "$src" >> "$TMP/report.md"
 done < "$TMP/images.tsv"
 if [[ -n "$REPORT" ]]; then cp "$TMP/report.md" "$REPORT"; fi
