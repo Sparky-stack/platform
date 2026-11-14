@@ -1,0 +1,40 @@
+{{- /*
+Gateway API front door for Harbor (no nginx, no Ingress): Gateway `harbor` with one HTTPS listener on the port of
+registry.host, TLS terminated with harbor-tls (templates/pki.yaml). The chart's HTTPRoute (expose.type route) attaches
+to it. kgateway provisions the proxy Deployment + Service `harbor` (type LoadBalancer; klipper binds the listener
+port as a hostPort on mgmt, k3d publishes it; Service port == listener port == published port, like the control
+plane's gateway). TrafficPolicy: Envoy's default 15s route timeout would cut large layer transfers.
+*/ -}}
+{{- $g := .Values.gateway }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $g.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  gatewayClassName: {{ $g.className }}
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: {{ include "harbor-addon.port" . }}
+      hostname: {{ include "harbor-addon.hostname" . | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - { group: "", kind: Secret, name: {{ .Values.pki.tlsSecret }} }
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: TrafficPolicy
+metadata:
+  name: {{ $g.routeName }}-timeouts
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  targetRefs:
+    - { group: gateway.networking.k8s.io, kind: HTTPRoute, name: {{ $g.routeName }} }
+  timeouts:
+    request: {{ $g.requestTimeout }}
+    streamIdle: {{ $g.streamIdleTimeout }}

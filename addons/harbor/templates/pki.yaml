@@ -1,0 +1,113 @@
+{{- /*
+Harbor TLS from a mgmt-only CA (cert-manager):
+  ClusterIssuer harbor-selfsigned -> Certificate cert-manager/harbor-ca (isCA) -> ClusterIssuer harbor-ca
+    -> Certificate harbor/harbor-tls          nginx serving cert: registry host + in-cluster Service names
+    -> Certificate harbor/harbor-ca-bundle    publication point for the CA's PUBLIC cert (ca.crt); its own key is
+                                              unused (digital signature only, CN under .invalid)
+  Issuer harbor/harbor-token-selfsigned -> Certificate harbor/harbor-token   core's token-signing key pair (RSA)
+The CA key stays in ns cert-manager (no ExternalSecret store reads that namespace). Nodes and build pods receive
+ca.crt only, through ClusterSecretStore mgmt-harbor (templates/ca-store.yaml).
+*/ -}}
+{{- $host := include "harbor-addon.hostname" . }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: harbor-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.pki.caIssuer }}
+  namespace: {{ .Values.pki.caNamespace }}
+spec:
+  isCA: true
+  commonName: {{ printf "%s registry CA" .Values.cluster.name | quote }}
+  secretName: {{ .Values.pki.caIssuer }}
+  duration: {{ .Values.pki.caDuration }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never     # node bootstrap data embeds the CA: rotating it means rolling every machine
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: harbor-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.pki.caIssuer }}
+spec:
+  ca:
+    secretName: {{ .Values.pki.caIssuer }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.pki.tlsSecret }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ .Values.pki.tlsSecret }}
+  commonName: {{ $host | quote }}
+  dnsNames:
+    - {{ $host | quote }}
+    {{- range .Values.pki.extraDNSNames }}
+    - {{ . | quote }}
+    {{- end }}
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth, digital signature, key encipherment]
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ .Values.pki.caIssuer }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.caPublic.secretName }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ .Values.caPublic.secretName }}
+  commonName: harbor-ca-bundle.invalid     # trusted for nothing; only ca.crt of this Secret is consumed
+  duration: 8760h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages: [digital signature]
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ .Values.pki.caIssuer }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: harbor-token-selfsigned
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.pki.tokenSecret }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ .Values.pki.tokenSecret }}
+  commonName: harbor-token-service
+  duration: 87600h
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    rotationPolicy: Never     # rotating invalidates every issued registry token; do it deliberately
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: harbor-token-selfsigned
