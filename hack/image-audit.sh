@@ -47,11 +47,17 @@ extract_images() {
     | tr -d '\r' | grep -E '^[a-z0-9]' || true
 }
 
-# eval_param <template>: resolve "{{ .Values.a.b }}" against the installation file (catalog installationParameters).
+# eval_param <template>: resolve every "{{ .Values.a.b }}" in the template against the installation file (catalog
+# installationParameters, e.g. 'https://{{ .Values.registry.host }}'), like hack/test.sh.
 eval_param() {
-  local t=$1 path
-  path=$(printf '%s' "$t" | sed -nE 's/^\{\{ *\.Values\.([A-Za-z0-9_.]+) *\}\}$/\1/p')
-  if [[ -n "$path" ]]; then yq ".$path" "$INST_FILE"; else printf '%s\n' "$t"; fi
+  local t=$1 path val
+  while :; do
+    path=$(printf '%s' "$t" | sed -nE 's/.*\{\{ *\.Values\.([A-Za-z0-9_.]+) *\}\}.*/\1/p')
+    [[ -n "$path" ]] || break
+    val=$(yq ".$path" "$INST_FILE")
+    t=$(printf '%s' "$t" | sed -E "s|\\{\\{ *\\.Values\\.${path} *\\}\\}|${val}|")   # a dot in path matches itself
+  done
+  printf '%s\n' "$t"
 }
 
 # server_part <url> <url|host|port>: piece of an Argo cluster secret's server URL (catalog clusterServerParameters).
