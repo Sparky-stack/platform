@@ -82,6 +82,12 @@ spec:
       - name: registry-secret
       - name: registry-ca-secret
       - name: cosign-secret
+  # No ServiceAccount token in the run's containers: check steps run tenant code in a tenant-chosen image, and
+  # workflow-sa may patch workflowtaskresults (another run's outputs, e.g. the digest that gets signed). Only Argo's
+  # executor (init/wait containers) gets the token, through executor.serviceAccountName.
+  automountServiceAccountToken: false
+  executor:
+    serviceAccountName: workflow-sa
   securityContext:
     runAsNonRoot: true
     runAsUser: 65532

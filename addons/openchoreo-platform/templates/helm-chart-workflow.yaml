@@ -54,6 +54,9 @@ spec:
       namespace: ${metadata.namespace}
     spec:
       serviceAccountName: workflow-sa
+      automountServiceAccountToken: false     # token only in Argo's executor containers (koorikla-build header)
+      executor:
+        serviceAccountName: workflow-sa
       workflowTemplateRef:
         name: {{ .Values.helmChartWorkflow.workflowTemplate }}
         clusterScope: true

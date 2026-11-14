@@ -13,6 +13,8 @@ tests:
       - equal: { path: spec.workflowPlaneRef, value: { kind: ClusterWorkflowPlane, name: default } }
       - equal: { path: spec.runTemplate.spec.workflowTemplateRef, value: { name: koorikla-build, clusterScope: true } }
       - equal: { path: spec.runTemplate.spec.serviceAccountName, value: workflow-sa }
+      - equal: { path: spec.runTemplate.spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.runTemplate.spec.executor.serviceAccountName, value: workflow-sa }
 
   - it: Backstage and the autoBuild matcher find the repository fields
     template: templates/build-workflows.yaml

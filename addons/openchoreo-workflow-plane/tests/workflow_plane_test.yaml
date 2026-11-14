@@ -68,6 +68,19 @@ tests:
       - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "sign")].depends', value: scan-image && sbom }
       - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "gitops")].depends', value: sign }
 
+  - it: run pods get no ServiceAccount token, only the executor does (both templates)
+    template: templates/cluster-workflow-templates.yaml
+    asserts:
+      - equal: { path: spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.executor.serviceAccountName, value: workflow-sa }
+
+  - it: no step mounts a token explicitly or overrides the workflow default
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - notExists: { path: 'spec.templates[?(@.automountServiceAccountToken == true)]' }
+      - notExists: { path: 'spec.templates[?(@.serviceAccountName)]' }
+
   - it: helm chart packaging reuses the build checkout
     template: templates/cluster-workflow-templates.yaml
     documentSelector: { path: metadata.name, value: koorikla-helm-chart }

@@ -113,6 +113,10 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   no privilege escalation, no added capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user
   namespaces (rootlesskit). No privileged container, no Docker daemon, no DinD. Kyverno's Pod Security policies (Audit)
   report that pod.
+- **No ServiceAccount token in run containers**: both ClusterWorkflowTemplates (and the ClusterWorkflows' run
+  templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
+  init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
+  digest that `sign` signs).
 - Per-run Secrets are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` for each run (owned by the
   run, deleted with it): git credentials, registry push credentials, registry CA (public), cosign key.
 - Signing: platform key pair `cosign-platform` (private key encrypted, only in the secret backend and the signing pod).

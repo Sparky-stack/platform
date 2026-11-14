@@ -4,6 +4,7 @@
 #   - BUILD_GUARDS (koorikla-build checkout/gitops) refuses foreign repositories and hands the git token only to the
 #     allowed prefixes (real `git credential fill`), https only
 #   - gitops rewrites only a real OpenChoreo Workload under deploy/openchoreo/ (no symlink out, no other kind)
+#   - run pods get no ServiceAccount token (only Argo's executor containers do)
 # shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -145,5 +146,15 @@ wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked d
 # --- build: context and Dockerfile must stay inside the checkout ---------------------------------------------------
 BUILD=$(cwt koorikla-build '.spec.templates[] | select(.name == "build") | .container.args[0]')
 assert_match "$BUILD" 'resolves outside the repository' "build refuses a context outside /work/source"
+
+# --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
+for t in koorikla-build koorikla-helm-chart; do
+  assert_eq "$(cwt "$t" '.spec.automountServiceAccountToken')" false "$t: no SA token in run pods"
+  assert_eq "$(cwt "$t" '.spec.executor.serviceAccountName')" workflow-sa "$t: executor (init/wait) uses workflow-sa"
+done
+for wf in go helm-chart; do
+  assert_eq "$(cw "$wf" '.spec.runTemplate.spec.automountServiceAccountToken')" false "$wf runTemplate: no SA token in run pods"
+  assert_eq "$(cw "$wf" '.spec.runTemplate.spec.executor.serviceAccountName')" workflow-sa "$wf runTemplate: executor SA"
+done
 
 finish
