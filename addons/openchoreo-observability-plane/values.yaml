@@ -78,7 +78,7 @@ openchoreo-observability-plane:
   observer:
     secretName: observer-secret             # templates/secrets.yaml (UID_RESOLVER_OAUTH_CLIENT_SECRET)
     # finOpsAdapter:                        # uncomment with finOpsAgent + observability-finops-opencost
-    #   url: "http://openchoreo-observability-plane-observability-finops-opencost-adapter:9101"
+    #   url: "http://openchoreo-observability-plane-finops-adapter:9101"
     #   timeout: "30s"
     controlPlaneApiUrl: "http://api.openchoreo.localhost:8080"
     cors:
@@ -146,9 +146,7 @@ openchoreo-observability-plane:
     # name: sre-agent
     # observerApiUrl: "http://observer:8080"
     # openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
-    # secretName: "rca-agent-secret"       # templates/secrets.yaml creates it via ESO (RCA_LLM_API_KEY, OAUTH_CLIENT_SECRET)
-    # externalSecrets:
-    #   enabled: true                        # skip upstream sre-agent/secret.yaml so templates/secrets.yaml owns rca-agent-secret
+    # secretName: "rca-agent-secret"       # templates/secrets.yaml creates it via ESO; mounted via envFrom
     # llm:
     #   modelName: "gpt-4o"                  # e.g. gpt-4o, claude-3-5-sonnet, gemini-2.0-flash
     #   baseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
@@ -158,9 +156,9 @@ openchoreo-observability-plane:
   finOpsAgent:
     enabled: false                           # platform: needs OpenCost + LLM + Thunder client openchoreo-finops-agent
     # observabilityMcpServerUrl: "http://observer:8080/mcp"
-    # opencostMcpServerUrl: "http://openchoreo-observability-plane-observability-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081"
+    # opencostMcpServerUrl: "http://openchoreo-observability-plane-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081"
     # openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
-    # secretName: "finops-agent"           # templates/secrets.yaml creates it via ESO (LLM_API_KEY, OAUTH_CLIENT_SECRET)
+    # secretName: "finops-agent"           # templates/secrets.yaml creates it via ESO; mounted via envFrom
     # llmName: "gpt-4o"
     # llmBaseUrl: "http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/openai/v1"
     # llmAuth: "api_key"
@@ -276,7 +274,7 @@ observability-metrics-prometheus:
       requests: { cpu: 10m, memory: 48Mi }
       limits: { cpu: 100m, memory: 128Mi }
 
-# --- finops: OpenCost + finops-adapter (disabled by default; uncomment dependency in Chart.yaml too) ---------------
+# --- finops: OpenCost + finops-adapter + mcpServer (disabled by default; uncomment dependency in Chart.yaml too) ---
 # observability-finops-opencost:
 #   enabled: true
 #   opencost:
@@ -291,12 +289,17 @@ observability-metrics-prometheus:
 #           namespaceName: "openchoreo-observability-plane"
 #       ui:
 #         enabled: false
-#   finopsAdapter:
+#   adapter:
 #     enabled: true
 #     name: finops-adapter
-#     service:
-#       type: ClusterIP
-#       port: 9101
+#     port: 9101
+#     resources:
+#       requests: { cpu: 20m, memory: 50Mi }
+#       limits: { cpu: 50m, memory: 70Mi }
+#   mcpServer:
+#     enabled: true
+#     name: finops-opencost-mcp
+#     port: 8081
 #     resources:
 #       requests: { cpu: 20m, memory: 50Mi }
 #       limits: { cpu: 50m, memory: 70Mi }

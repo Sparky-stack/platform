@@ -129,7 +129,6 @@ tests:
     set:
       openchoreo-observability-plane.rca.enabled: true
       openchoreo-observability-plane.rca.openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
-      openchoreo-observability-plane.rca.externalSecrets.enabled: true
       openchoreo-observability-plane.finOpsAgent.enabled: true
       openchoreo-observability-plane.finOpsAgent.openchoreoApiUrl: "http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
     asserts:

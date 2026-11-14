@@ -50,17 +50,17 @@ http://agentgateway-proxy.openchoreo-observability-plane.svc.cluster.local/opena
 1. Complete Prerequisites 1-3 above (`openchoreo-ai`, Thunder script 53, `rca-agent` + `rca-agent-mapping`).
 2. In `addons/openchoreo-observability-plane/values.yaml` (or `installations/<inst>/addons/openchoreo-observability-plane/values.yaml`):
    - Set `openchoreo-observability-plane.rca.enabled: true`.
-   - Uncomment `name` (`sre-agent`), `observerApiUrl`, `openchoreoApiUrl`, `secretName` (`rca-agent-secret`), `externalSecrets.enabled: true`, `llm.modelName`, `llm.baseUrl` (pointing at `agentgateway-proxy` or your LLM endpoint), `llm.auth`, and `oauth.clientId`.
-   - `templates/secrets.yaml` will automatically create `ExternalSecret/rca-agent-secret`.
+   - Uncomment `name` (`sre-agent`), `observerApiUrl`, `openchoreoApiUrl`, `secretName` (`rca-agent-secret`), `llm.modelName`, `llm.baseUrl` (pointing at `agentgateway-proxy` or your LLM endpoint), `llm.auth`, and `oauth.clientId`.
+   - `templates/secrets.yaml` will automatically create `ExternalSecret/rca-agent-secret` (mounted via `envFrom` by the `sre-agent` Deployment).
 
 ### Option C: Enable FinOps Agent + OpenCost
 1. Complete Prerequisites 1-3 above (`openchoreo-ai`, Thunder script 60, `finops-agent` + `finops-agent-mapping`).
 2. In `addons/openchoreo-observability-plane/Chart.yaml`, uncomment `observability-finops-opencost` (`0.2.0`) and run `helm dependency build`.
 3. In `addons/openchoreo-observability-plane/values.yaml` (or installation overlay):
    - Uncomment `observability-finops-opencost:` (`enabled: true`, `opencost.*`, `adapter.*`, `mcpServer.*`).
-   - Uncomment `openchoreo-observability-plane.observer.finOpsAdapter` (`url: "http://openchoreo-observability-plane-observability-finops-opencost-adapter:9101"`).
-   - Set `openchoreo-observability-plane.finOpsAgent.enabled: true` and uncomment `observabilityMcpServerUrl`, `opencostMcpServerUrl` (`http://openchoreo-observability-plane-observability-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081`), `openchoreoApiUrl`, `secretName` (`finops-agent`), `llmName`, `llmBaseUrl`, `llmAuth`, and `oauth.clientId`.
-   - `templates/secrets.yaml` will automatically create `ExternalSecret/finops-agent`.
+   - Uncomment `openchoreo-observability-plane.observer.finOpsAdapter` (`url: "http://openchoreo-observability-plane-finops-adapter:9101"`).
+   - Set `openchoreo-observability-plane.finOpsAgent.enabled: true` and uncomment `observabilityMcpServerUrl`, `opencostMcpServerUrl` (`http://openchoreo-observability-plane-finops-opencost-mcp.openchoreo-observability-plane.svc.cluster.local:8081`), `openchoreoApiUrl`, `secretName` (`finops-agent`), `llmName`, `llmBaseUrl`, `llmAuth`, and `oauth.clientId`.
+   - `templates/secrets.yaml` will automatically create `ExternalSecret/finops-agent` (mounted via `envFrom` by the `finops-agent` Deployment).
 
 ## Untested / VERIFY
 - Live RCA report generation and FinOps cost analysis against OpenChoreo 1.3.3 `observer`, `openchoreo-api`, and `agentgateway` v1.1.0.
