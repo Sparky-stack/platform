@@ -69,3 +69,17 @@ jobs:
     with:
       working_directory: fixtures/nextjs
       image_name: ci-selftest-nextjs
+
+  elixir:
+    uses: ./.github/workflows/elixir.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: fixtures/elixir
+      image_name: ci-selftest-elixir
+      build_args: |
+        APP_NAME=ci_selftest

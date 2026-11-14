@@ -226,7 +226,7 @@ jobs:
           FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
-          SKIP_DIRS: node_modules/.cache
+          SKIP_DIRS: "**/.next,**/node_modules/.cache"
         run: bash "$CI_SCRIPTS/common/scan-fs.sh"
 
       - name: Upload Trivy fs SARIF
