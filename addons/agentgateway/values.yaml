@@ -6,7 +6,9 @@
 #
 #   agentgateway-crds   AgentgatewayBackend / AgentgatewayPolicy / AgentgatewayParameters (agentgateway.dev/v1alpha1)
 #   agentgateway        controller; creates GatewayClass `agentgateway` and one proxy Deployment per Gateway
-#   templates/          Gateway agentgateway-proxy, the LLM backend + route, its ExternalSecret
+#   templates/          Gateway agentgateway-proxy + its AgentgatewayParameters (ClusterIP Service, seccomp
+#                       RuntimeDefault) and NetworkPolicy (callers: gateway.allowedNamespaces), the LLM backend + route,
+#                       its ExternalSecret
 #
 # Agents' base URL: http://agentgateway-proxy.agentgateway-system.svc.cluster.local (llm listener, port 80).
 
@@ -14,6 +16,9 @@
 gateway:
   name: agentgateway-proxy
   port: 80                    # listener `llm`; routes only from this namespace (no ClusterTraits on mgmt)
+  # NetworkPolicy: the only namespaces that may call the proxy (RCA / FinOps agents). Service is ClusterIP.
+  allowedNamespaces:
+    - openchoreo-observability-plane
 
 llm:
   enabled: true

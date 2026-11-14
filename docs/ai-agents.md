@@ -49,6 +49,24 @@ One key in the `platform` store, `openchoreo-ai` (never committed). Each propert
 Namespaces `openchoreo-observability-plane`, `thunder` and `agentgateway-system` are in secret-stores
 `platformStore.namespaces` (hack/tests/test_secret_store_scope.sh renders these opt-in consumers).
 
+## Threat notes
+
+- **Proxy exposure.** The agentgateway controller renders every Gateway's proxy Service as `type: LoadBalancer`
+  (hard-coded in v1.1.0); on k3d servicelb would publish it on the docker network every CAPD node shares, on a cloud
+  mgmt as a public LB: an open relay that spends the provider key. `templates/gateway.yaml` therefore points the
+  Gateway at an `AgentgatewayParameters` (`infrastructure.parametersRef`) that forces `ClusterIP`, and a NetworkPolicy
+  admits only `gateway.allowedNamespaces` (`openchoreo-observability-plane`) on the llm and metrics ports. Callers
+  are authorized by namespace, not by identity: any pod in the observability plane namespace can use the key.
+- **Pod Security.** The controller's proxy Deployment template sets no `seccompProfile`; the same parameters overlay
+  adds `RuntimeDefault` (pod) so the proxy meets `restricted` (its only sysctl, `ip_unprivileged_port_start`, is in the
+  safe set). The controller pod gets it from the wrapper values.
+- **Controller RBAC.** The upstream chart's ClusterRole lets the controller get/list/watch (and create/patch/delete)
+  Secrets in **every** namespace (it reads backend auth secrets and mints proxy credentials). Treat the controller as
+  able to read any Secret on mgmt: it is upstream-maintained, digest-pinned, and only runs while the addon is opted in.
+- **Agent URLs over HTTP.** `rcaAgentURL` / `finOpsAgentURL` are `http://` on the plane Gateway's HTTP listener. Fine
+  for local (`*.openchoreo.localhost`); on a cloud installation the portal-to-agent hop carries user tokens, so serve
+  them over the TLS listener (`https://`) before switching an agent on there. VERIFY with the first cloud boot.
+
 ## Turning them on
 
 Host RAM: the RCA agent requests 512Mi (upstream 1Gi, limit 1.5Gi); budget for it on a laptop.
