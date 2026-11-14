@@ -1,0 +1,108 @@
+suite: external-dns glue, provider overlays, and validation
+templates:
+  - templates/secrets.yaml
+  - templates/validate.yaml
+tests:
+  - it: default values render cleanly with no ExternalSecrets
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: validates route53 provider and aws chart config
+    template: templates/validate.yaml
+    values:
+      - ../values/provider-aws.yaml
+    set:
+      dns.provider: route53
+      dns.domainFilters: [aws.example.com]
+      external-dns.domainFilters: [aws.example.com]
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails when dns.provider is invalid
+    template: templates/validate.yaml
+    set:
+      dns.provider: gcp
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when dns.provider=route53 mismatches external-dns.provider.name
+    template: templates/validate.yaml
+    set:
+      dns.provider: route53
+      external-dns.provider.name: cloudflare
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when dns.domainFilters is missing from external-dns.domainFilters
+    template: templates/validate.yaml
+    set:
+      dns.provider: route53
+      dns.domainFilters: [aws.example.com]
+      external-dns.domainFilters: []
+    asserts:
+      - failedTemplate: {}
+
+  - it: renders Cloudflare ExternalSecret on workload using default store
+    template: templates/secrets.yaml
+    values:
+      - ../values/role-workload.yaml
+      - ../values/provider-cloudflare.yaml
+    set:
+      dns.provider: cloudflare
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.name, value: external-dns-cloudflare }
+      - equal: { path: spec.secretStoreRef.name, value: default }
+      - contains:
+          path: spec.data
+          content: { secretKey: api-token, remoteRef: { key: external-dns-cloudflare, property: api-token } }
+
+  - it: renders Cloudflare ExternalSecret on mgmt using platform store
+    template: templates/secrets.yaml
+    values:
+      - ../values/role-mgmt.yaml
+      - ../values/provider-cloudflare.yaml
+    set:
+      dns.provider: cloudflare
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+
+  - it: fails when cloudflare is active without CF_API_TOKEN env
+    template: templates/validate.yaml
+    set:
+      dns.provider: cloudflare
+      external-dns.provider.name: cloudflare
+    asserts:
+      - failedTemplate: {}
+
+  - it: passes validation with provider-cloudflare.yaml overlay
+    template: templates/validate.yaml
+    values:
+      - ../values/provider-cloudflare.yaml
+    set:
+      dns.provider: cloudflare
+      dns.domainFilters: [hetzner.example.com]
+      external-dns.domainFilters: [hetzner.example.com]
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: renders static AWS ExternalSecret when secrets.aws.enabled=true
+    template: templates/secrets.yaml
+    values:
+      - ../values/role-workload.yaml
+    set:
+      dns.provider: route53
+      secrets.aws.enabled: true
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.name, value: external-dns-aws }
+      - equal: { path: spec.secretStoreRef.name, value: default }
+      - contains:
+          path: spec.data
+          content: { secretKey: access-key-id, remoteRef: { key: external-dns-aws, property: access-key-id } }
+      - contains:
+          path: spec.data
+          content: { secretKey: secret-access-key, remoteRef: { key: external-dns-aws, property: secret-access-key } }

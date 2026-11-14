@@ -1,0 +1,33 @@
+{{- /* Render-time guards keeping installation.yaml `dns:` aligned with `external-dns.*` chart values. */ -}}
+{{- $dns := .Values.dns | default dict }}
+{{- $provider := $dns.provider | default "none" }}
+{{- $ext := index .Values "external-dns" }}
+{{- $chartProvider := ($ext.provider).name | default "" }}
+{{- $validProviders := list "none" "route53" "cloudflare" }}
+{{- if not (has $provider $validProviders) }}
+{{- fail (printf "dns.provider must be one of %s, got %q" (join ", " $validProviders) $provider) }}
+{{- end }}
+{{- if eq $provider "route53" }}
+{{- if ne $chartProvider "aws" }}
+{{- fail (printf "dns.provider=route53 requires external-dns.provider.name=aws (got %q)" $chartProvider) }}
+{{- end }}
+{{- else if eq $provider "cloudflare" }}
+{{- if ne $chartProvider "cloudflare" }}
+{{- fail (printf "dns.provider=cloudflare requires external-dns.provider.name=cloudflare (got %q)" $chartProvider) }}
+{{- end }}
+{{- $hasCFToken := false }}
+{{- range ($ext.env | default list) }}
+{{- if eq .name "CF_API_TOKEN" }}{{ $hasCFToken = true }}{{ end }}
+{{- end }}
+{{- if not $hasCFToken }}
+{{- fail "dns.provider=cloudflare requires CF_API_TOKEN in external-dns.env (see values/provider-cloudflare.yaml)" }}
+{{- end }}
+{{- end }}
+{{- if ne $provider "none" }}
+{{- $chartFilters := $ext.domainFilters | default list }}
+{{- range ($dns.domainFilters | default list) }}
+{{- if not (has . $chartFilters) }}
+{{- fail (printf "external-dns.domainFilters must contain %q from installation.yaml dns.domainFilters" .) }}
+{{- end }}
+{{- end }}
+{{- end }}

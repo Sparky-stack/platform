@@ -1,0 +1,92 @@
+{{- /*
+Gated manifest template for OpenChoreo `ai-gateway-agentgateway` (agentgateway v1.1.0).
+Disabled by default (`aiGateway.enabled: false`). Enable after installing `agentgateway-crds` and
+`agentgateway` v1.1.0 (see docs/ai-agents.md and values/ai-gateway-agentgateway.yaml.disabled).
+Requires ClusterSecretStore `platform` key `openchoreo-ai` with property `openai-authorization` (format:
+`Bearer <token>`; add `anthropic-authorization` / `gemini-authorization` for those backends).
+*/ -}}
+{{- if .Values.aiGateway.enabled }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openai-secret
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ai-gateway-agentgateway
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ required "secrets.store is required" .Values.secrets.store }}
+  target:
+    name: openai-secret
+  data:
+    - secretKey: Authorization
+      remoteRef:
+        key: {{ .Values.secrets.aiRemoteKey | default "openchoreo-ai" }}
+        property: openai-authorization
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agentgateway-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ai-gateway-agentgateway
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ai-gateway-agentgateway
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openai
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ai-gateway-agentgateway
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  parentRefs:
+    - name: agentgateway-proxy
+      namespace: {{ .Release.Namespace }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /openai
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: openai
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+{{- end }}
