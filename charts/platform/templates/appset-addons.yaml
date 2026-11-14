@@ -108,6 +108,9 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          {{- if $cfg.ignoreDifferences }}
+          - RespectIgnoreDifferences=true   # sync must not revert fields a controller owns (e.g. istiod's webhook policy)
+          {{- end }}
           {{- if $cfg.serverSideDiff }}
           - ServerSideDiff=true
           {{- end }}
