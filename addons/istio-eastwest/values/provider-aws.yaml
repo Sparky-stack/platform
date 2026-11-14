@@ -1,0 +1,6 @@
+# cloud-provider-aws (addon aws-ccm): NLB instead of the classic ELB default; internet-facing so peers in other VPCs or
+# regions reach 15008. Node SG: CAPA's default NodePort rule (30000-32767) admits the NLB health checks and traffic.
+# VERIFY on the first AWS boot (NLB with aws-ccm, CAPA not reverting CCM-managed SG rules).
+gateway:
+  serviceAnnotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb

@@ -32,7 +32,6 @@ check_fleet_allows "cert-manager.io" "Issuer" "fleet"
 check_fleet_allows "cert-manager.io" "Certificate" "fleet"
 check_fleet_allows "external-secrets.io" "ExternalSecret" "fleet"
 check_fleet_allows "external-secrets.io" "ExternalSecret" "argocd"
-check_fleet_allows "external-secrets.io" "SecretStore" "fleet"
 check_fleet_allows "openchoreo.dev" "Environment" "default"
 
 # Platform AppProject admits all namespaces and cluster-scoped kinds

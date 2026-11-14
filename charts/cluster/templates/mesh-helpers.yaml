@@ -11,8 +11,9 @@ key `mesh.group` (docs/multicluster.md). Prefix `mesh.` avoids collisions with t
 {{- /* Issuer (namespace fleet) of the shared mesh root CA; addon mesh-root-ca renders it on mgmt. */ -}}
 {{- define "mesh.rootIssuer" -}}mesh-root-ca{{- end }}
 
-{{- /* istio-reader token Secret in istio-system on every member; addon istio-eastwest creates it there. */ -}}
-{{- define "mesh.readerTokenSecret" -}}istio-reader-service-account-istio-remote-secret-token{{- end }}
+{{- /* Kubernetes user peers' istiods authenticate as (client cert CN); addon istio-eastwest binds it on every member
+to the Istio chart's read-only ClusterRole istio-reader-clusterrole-istio-system. */ -}}
+{{- define "mesh.readerUser" -}}platform:istio-reader{{- end }}
 
 {{- define "mesh.labels" -}}
 platform.koorikla.io/name: {{ required "name is required (cluster file)" .Values.name }}

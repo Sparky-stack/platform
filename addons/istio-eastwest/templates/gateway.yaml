@@ -1,0 +1,64 @@
+{{- /*
+Ambient east-west gateway: peers' ztunnels open double-HBONE (outer mTLS to this gateway, inner mTLS end-to-end to the
+destination ztunnel) to <service>.<namespace> on this network; the gateway forwards the inner stream to a local
+endpoint. Pods are addressed by service name, so pod CIDRs may overlap between clusters. istiod (multi-network on)
+deploys it from the waypoint template; parametersRef customises that Deployment/Service.
+*/ -}}
+{{- $network := .Values.mesh.network | default .Values.cluster.name }}
+{{- if not $network }}{{ fail "istio-eastwest: no network (mesh.network / cluster.name)" }}{{ end }}
+{{- $g := .Values.gateway }}
+{{- $annotations := deepCopy ($g.serviceAnnotations | default dict) }}
+{{- if eq .Values.cluster.provider "hetzner" }}
+{{- $_ := set $annotations "load-balancer.hetzner.cloud/location" .Values.cluster.region }}  {{- /* hcloud-ccm needs a location (or network zone) per LB. VERIFY */}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $g.name }}-params
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: istio-mesh
+data:
+  deployment: |
+    spec:
+      replicas: {{ $g.replicas }}
+      template:
+        spec:
+          containers:
+            - name: istio-proxy
+              resources:
+                {{- toYaml $g.resources | nindent 16 }}
+  {{- with $g.loadBalancerSourceRanges }}
+  service: |
+    spec:
+      loadBalancerSourceRanges:
+        {{- toYaml . | nindent 8 }}
+  {{- end }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $g.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    topology.istio.io/network: {{ $network | quote }}
+    app.kubernetes.io/part-of: istio-mesh
+spec:
+  gatewayClassName: istio-east-west
+  infrastructure:
+    {{- with $annotations }}
+    annotations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: {{ $g.name }}-params
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
+      tls:
+        mode: Terminate             # double HBONE: the gateway terminates the outer tunnel only
+        options:
+          gateway.istio.io/tls-terminate-mode: ISTIO_MUTUAL

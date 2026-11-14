@@ -1,0 +1,78 @@
+suite: istio-eastwest - ambient east-west gateway + reader token
+templates:
+  - templates/gateway.yaml
+  - templates/reader-binding.yaml
+set:
+  cluster.name: prod1
+  mesh: { group: local, network: prod1 }
+tests:
+  - it: renders an istio-east-west Gateway with the HBONE double-HBONE listener, labelled with the network
+    template: templates/gateway.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: Gateway }
+      - equal: { path: metadata.name, value: istio-eastwestgateway }
+      - equal: { path: metadata.namespace, value: NAMESPACE }
+      - equal: { path: 'metadata.labels["topology.istio.io/network"]', value: prod1 }
+      - equal: { path: spec.gatewayClassName, value: istio-east-west }
+      - equal:
+          path: spec.listeners
+          value:
+            - name: mesh
+              port: 15008
+              protocol: HBONE
+              tls: { mode: Terminate, options: { gateway.istio.io/tls-terminate-mode: ISTIO_MUTUAL } }
+      - equal: { path: spec.infrastructure.parametersRef, value: { group: "", kind: ConfigMap, name: istio-eastwestgateway-params } }
+      - notExists: { path: spec.infrastructure.annotations }
+
+  - it: falls back to the cluster name for the network
+    template: templates/gateway.yaml
+    documentIndex: 1
+    set:
+      mesh: { group: local, network: "" }
+    asserts:
+      - equal: { path: 'metadata.labels["topology.istio.io/network"]', value: prod1 }
+
+  - it: sizes the generated Deployment through the parametersRef ConfigMap (1 replica, small requests)
+    template: templates/gateway.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ConfigMap }
+      - matchRegex: { path: data.deployment, pattern: 'replicas: 1' }
+      - matchRegex: { path: data.deployment, pattern: 'name: istio-proxy' }
+      - matchRegex: { path: data.deployment, pattern: 'memory: 64Mi' }
+      - notExists: { path: data.service }
+
+  - it: restricts the LoadBalancer when source ranges are set
+    template: templates/gateway.yaml
+    documentIndex: 0
+    set:
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
+    asserts:
+      - matchRegex: { path: data.service, pattern: '- 203.0.113.0/24' }
+
+  - it: asks hcloud-ccm for an LB in the cluster's region on Hetzner
+    template: templates/gateway.yaml
+    documentIndex: 1
+    set:
+      cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
+    asserts:
+      - equal: { path: 'spec.infrastructure.annotations["load-balancer.hetzner.cloud/location"]', value: fsn1 }
+
+  - it: uses an NLB on AWS
+    template: templates/gateway.yaml
+    documentIndex: 1
+    values: [../values/provider-aws.yaml]
+    set:
+      cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
+    asserts:
+      - equal: { path: 'spec.infrastructure.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]', value: nlb }
+
+  - it: binds the reader user (client cert from mgmt) to the istiod chart's read-only ClusterRole
+    template: templates/reader-binding.yaml
+    release:
+      namespace: istio-system
+    asserts:
+      - isKind: { of: ClusterRoleBinding }
+      - equal: { path: roleRef.name, value: istio-reader-clusterrole-istio-system }
+      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }

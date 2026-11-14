@@ -21,6 +21,7 @@ mgmt:
 #   clusterNameParameters:   [<param>]                 -> the cluster name
 #   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
 #   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
+#   clusterLabelParameters:  {<param>: {label: <key>, default: <str>}} -> a cluster secret label's value (else default)
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
@@ -56,7 +57,25 @@ addons:
   # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }
   # istiod flips its validating webhooks to failurePolicy Fail and injects caBundle once ready (manager pilot-discovery).
-  istio-ambient:            { namespace: istio-system,             roles: [workload],       default: true, ignoreDifferences: [{ group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration, managedFieldsManagers: [pilot-discovery] }] }
+  # Multicluster (docs/multicluster.md): clusterName = cluster name everywhere; meshID, network and the ambient
+  # multi-network flags only on mesh members (labels charts/cluster derives from the fleet file's mesh.group).
+  istio-ambient:
+    namespace: istio-system
+    roles: [workload]
+    default: true
+    ignoreDifferences: [{ group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration, managedFieldsManagers: [pilot-discovery] }]
+    clusterNameParameters: [global.multiCluster.clusterName]
+    clusterLabelParameters:
+      global.meshID:                              { label: mesh.platform.koorikla.io/group }
+      global.network:                             { label: mesh.platform.koorikla.io/network }
+      istiod.env.AMBIENT_ENABLE_MULTI_NETWORK:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
+      istiod.env.AMBIENT_ENABLE_BAGGAGE:          { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
+      istiod.env.PILOT_DISABLE_SELF_SIGNED_CA:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
+  # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). mesh-root-ca: the shared mesh root on mgmt (enable
+  # via installation.yaml mgmt.addons). istio-eastwest: east-west gateway + remote-secret reader token on mesh members,
+  # selected by the label charts/cluster derives from the fleet file's mesh.group.
+  mesh-root-ca:             { namespace: fleet,                    roles: [mgmt],           default: false }
+  istio-eastwest:           { namespace: istio-system,             roles: [workload],       default: false, clusterLabelParameters: { mesh.group: { label: mesh.platform.koorikla.io/group }, mesh.network: { label: mesh.platform.koorikla.io/network } } }
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
   kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }
