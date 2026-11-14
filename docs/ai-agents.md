@@ -44,7 +44,7 @@ One key in the `platform` store, `openchoreo-ai` (never committed). Each propert
 | `rca-oauth-client-secret` | `rca-agent-secret` → `OAUTH_CLIENT_SECRET`, and Thunder (`bootstrapSecret.aiAgentClients: [rca]`) | one property, both sides: they cannot drift |
 | `finops-llm-api-key` | Secret `finops-agent` → `LLM_API_KEY` | placeholder when `finOpsAgent.llmBaseUrl` is the agentgateway |
 | `finops-oauth-client-secret` | `finops-agent` → `OAUTH_CLIENT_SECRET`, and Thunder (`aiAgentClients: [finops]`) | |
-| `openai-api-key` (or `anthropic-api-key`, `gemini-api-key`) | addon agentgateway, Secret `<provider>-llm-auth` (`Authorization: Bearer …` via ESO template) | the only real provider key |
+| `openai-api-key` (or `anthropic-api-key`, `gemini-api-key`) | addon agentgateway, Secret `<provider>-llm-auth` (key `Authorization`, the raw key synced by ESO) | the only real provider key |
 
 Namespaces `openchoreo-observability-plane`, `thunder` and `agentgateway-system` are in secret-stores
 `platformStore.namespaces` (hack/tests/test_secret_store_scope.sh renders these opt-in consumers).
@@ -84,8 +84,9 @@ Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` an
 ### 2. RCA (SRE) agent
 
 1. Seed `openchoreo-ai` properties `rca-llm-api-key` (placeholder with the gateway) and `rca-oauth-client-secret`.
-2. `addons/thunder/values.yaml`: `bootstrapSecret.aiAgentClients: [rca]`, uncomment the
-   `RCA_AGENT_CLIENT_SECRET` line in `thunderid.setup.secretEnv` and script `53-rca-agent-client.yaml`.
+2. `addons/thunder/values.yaml` (or the installation overlay): `bootstrapSecret.aiAgentClients: [rca]`. That one list
+   syncs the client secret into `thunder-bootstrap` and switches on script 53 (`files/ai-agent-clients/`, mounted by
+   `templates/ai-agent-clients.yaml`); nothing to uncomment.
 3. `addons/openchoreo-observability-plane/values.yaml` (or the installation overlay):
    `openchoreo-observability-plane.rca.enabled: true` and `rca.llm.modelName` (e.g. `gpt-5.2`).
 
@@ -93,8 +94,7 @@ Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` an
 
 1. `installation.yaml`: `mgmt.addons.finops-opencost: "true"`.
 2. Seed `openchoreo-ai` properties `finops-llm-api-key` and `finops-oauth-client-secret`.
-3. Thunder: `aiAgentClients: [rca, finops]` (or `[finops]`), uncomment `FINOPS_AGENT_CLIENT_SECRET` and script
-   `60-finops-agent-client.yaml`.
+3. Thunder: `aiAgentClients: [rca, finops]` (or `[finops]`): secret + script 60, as above.
 4. `openchoreo-observability-plane.finOpsAgent.enabled: true` and `finOpsAgent.llmName` (an OpenAI model).
 
 With an agent enabled, `templates/secrets.yaml` creates its ExternalSecret and `templates/cluster-observability-plane.yaml`
@@ -105,7 +105,8 @@ outside the installation's control-plane host.
 ## Tests
 
 - `hack/tests/test_ai_agents.sh`: everything off by default; one store key across agents, Thunder and agentgateway;
-  Thunder scripts 53/60 match upstream ids and the agents' client IDs; switched on, the agents' base URLs hit the
+  Thunder scripts 53/60, secret and setup-Job env all follow `bootstrapSecret.aiAgentClients`, match upstream ids and
+  the agents' client IDs; switched on, the agents' base URLs hit the
   agentgateway Gateway, the observer/FinOps URLs hit `finops-opencost` Services, all images are digest-pinned.
 - helm-unittest: `addons/agentgateway`, `addons/openchoreo-observability-plane` (agent Secrets, plane URLs, guards),
   `addons/thunder` (agent client secrets).
@@ -116,3 +117,7 @@ outside the installation's control-plane host.
 - agentgateway controller accepting `tag@digest` for the proxy image (`AGW_PROXY_IMAGE_TAG`).
 - OpenCost attribution of remote-written workload metrics on mgmt (`defaultClusterId: mgmt`).
 - Agent SQLite PVCs under Argo CD health (Pending until first consumer on local-path).
+- Thunder bootstrap skipping the comment-only script of an unlisted agent (importer parser drops documents without
+  content; not yet seen live).
+- agentgateway honouring `AgentgatewayParameters` `spec.service` / `spec.deployment` overlays (ClusterIP, seccomp) and
+  the proxy NetworkPolicy under k3s' network policy controller (kubelet probes from the node).

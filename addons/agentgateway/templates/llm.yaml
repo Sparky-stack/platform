@@ -23,12 +23,10 @@ spec:
     name: {{ required "secrets.store is required" .Values.secrets.store }}
   target:
     name: {{ $auth }}
-    template:
-      type: Opaque
-      data:
-        Authorization: {{ printf "Bearer {{ .apikey | toString }}" | quote }}
   data:
-    - secretKey: apikey
+    # The raw provider key as key `Authorization`: upstream's documented secretRef shape (the controller strips a
+    # "Bearer " prefix if one is present, kubeutils/secrets.go), so no ESO template.
+    - secretKey: Authorization
       remoteRef: { key: {{ .Values.secrets.remoteKey }}, property: {{ printf "%s-api-key" $p }} }
 ---
 apiVersion: agentgateway.dev/v1alpha1

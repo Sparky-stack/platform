@@ -27,8 +27,8 @@ llm:
   model: ""                   # empty: the model in each request decides (agents set rca.llm.modelName / llmName)
 
 # Provider API key from ClusterSecretStore `platform` (namespace agentgateway-system is listed in addon secret-stores
-# platformStore.namespaces): key `openchoreo-ai`, property `<provider>-api-key` (e.g. openai-api-key). ESO formats it as
-# the Authorization header agentgateway injects upstream.
+# platformStore.namespaces): key `openchoreo-ai`, property `<provider>-api-key` (e.g. openai-api-key). ESO syncs it raw
+# as key `Authorization` of Secret <provider>-llm-auth; agentgateway adds it to upstream requests.
 secrets:
   store: platform
   remoteKey: openchoreo-ai

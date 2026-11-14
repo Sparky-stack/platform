@@ -17,7 +17,10 @@ assert_eq "$(yq '.addons.agentgateway.default' "$CAT")" false "addon agentgatewa
 assert_eq "$(yq '.addons["finops-opencost"].default' "$CAT")" false "addon finops-opencost is opt-in"
 assert_eq "$(yq '.addons["finops-opencost"].namespace' "$CAT")" "$(yq '.addons["openchoreo-observability-plane"].namespace' "$CAT")" "finops-opencost runs next to the observability plane"
 assert_eq "$(yq '.bootstrapSecret.aiAgentClients | length' addons/thunder/values.yaml)" 0 "Thunder agent clients off by default"
-assert_eq "$(grep -cE '^      [0-9]+-(rca|finops)-agent-client\.yaml:' addons/thunder/values.yaml || true)" 0 "Thunder scripts 53/60 stay commented"
+helm template thunder addons/thunder --namespace thunder > "$TMP/th-off.yaml"
+assert_eq "$(yq -N 'select(.metadata.name == "thunder-ai-agent-clients") | .data[]' "$TMP/th-off.yaml" | grep -c 'resource_type' || true)" 0 "Thunder scripts 53/60 render as empty documents while off"
+# Invariant 7: no commented-out clients or secretEnv entries to toggle.
+assert_eq "$(grep -cE '^ *# .*(agent-client\.yaml: \||AGENT_CLIENT_SECRET)' addons/thunder/values.yaml || true)" 0 "no commented Thunder agent blocks"
 helm template obs "$OBS" --namespace openchoreo-observability-plane > "$TMP/obs.yaml"
 assert_eq "$(yq -N 'select(.kind == "Deployment" and (.metadata.name == "sre-agent" or .metadata.name == "finops-agent")) | .metadata.name' "$TMP/obs.yaml")" "" "no agent Deployments rendered"
 
@@ -27,18 +30,26 @@ assert_eq "$key" openchoreo-ai "agents read key openchoreo-ai"
 assert_eq "$(yq '.bootstrapSecret.aiRemoteKey' addons/thunder/values.yaml)" "$key" "Thunder reads the same key"
 assert_eq "$(yq '.secrets.remoteKey' addons/agentgateway/values.yaml)" "$key" "agentgateway reads the same key"
 
-# 3. Thunder's commented clients 53/60 are the upstream ones and match the agents' OAuth client IDs.
-for pair in "53-rca-agent-client:rca:RCA_AGENT_CLIENT_SECRET:000000000062" "60-finops-agent-client:finOpsAgent:FINOPS_AGENT_CLIENT_SECRET:000000000069"; do
-  IFS=: read -r script agent env id <<EOF
+# 3. Thunder's clients 53/60 follow bootstrapSecret.aiAgentClients alone (script, secret, env), are the upstream ones and
+#    match the agents' OAuth client IDs.
+for pair in "53-rca-agent-client:rca:RCA_AGENT_CLIENT_SECRET:000000000062:rca" "60-finops-agent-client:finOpsAgent:FINOPS_AGENT_CLIENT_SECRET:000000000069:finops"; do
+  IFS=: read -r script agent env id short <<EOF
 $pair
 EOF
-  block=$(sed -n "/# ${script}.yaml: |/,/validityPeriod/p" addons/thunder/values.yaml)
-  assert_nonempty "$block" "Thunder script $script present (commented)"
+  helm template thunder addons/thunder --namespace thunder --set "bootstrapSecret.aiAgentClients={$short}" > "$TMP/th-$short.yaml"
+  block=$(S="$script.yaml" yq -N 'select(.metadata.name == "thunder-ai-agent-clients") | .data[strenv(S)]' "$TMP/th-$short.yaml")
+  assert_match "$block" "resource_type: application" "Thunder script $script present when $short is listed"
   assert_match "$block" "clientId: $(o ".$agent.oauth.clientId")" "$script clientId == $agent.oauth.clientId"
   assert_match "$block" "clientSecret: \"\\{\\{ \\.$env \\}\\}\"" "$script secret from the store ($env), not upstream's well-known value"
   assert_match "$block" "id: 01900000-0000-7000-8001-$id" "$script keeps upstream id $id"
-  assert_match "$(cat addons/thunder/values.yaml)" "# - \\{ name: $env, secretName: thunder-bootstrap" "$env secretEnv entry present (commented)"
+  assert_eq "$(S="$short-agent-client-secret" yq -N 'select(.kind == "ExternalSecret") | .spec.data[] | select(.secretKey == strenv(S)) | .remoteRef.property' "$TMP/th-$short.yaml")" "$short-oauth-client-secret" "$short client secret synced into thunder-bootstrap"
+  job_env=$(E="$env" yq -N -o json -I0 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name == strenv(E)) | .valueFrom.secretKeyRef' "$TMP/th-$short.yaml")
+  assert_eq "$job_env" "{\"name\":\"thunder-bootstrap\",\"key\":\"$short-agent-client-secret\",\"optional\":true}" "$env reaches the setup Job (optional while off)"
+  mnt=$(M="/opt/thunderid/bootstrap/$script.yaml" yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].volumeMounts[] | select(.mountPath == strenv(M)) | .subPath' "$TMP/th-$short.yaml")
+  assert_eq "$mnt" "$script.yaml" "$script mounted into the bootstrap bundle"
 done
+# The other agent stays off when only one is listed.
+assert_eq "$(yq -N 'select(.metadata.name == "thunder-ai-agent-clients") | .data["60-finops-agent-client.yaml"]' "$TMP/th-rca.yaml" | grep -c resource_type || true)" 0 "listing rca leaves the FinOps client off"
 
 # 4. Switched on: agents reach agentgateway's Gateway, the FinOps module's Services, and get their Secrets.
 helm template obs "$OBS" --namespace openchoreo-observability-plane \

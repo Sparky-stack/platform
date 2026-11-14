@@ -30,6 +30,8 @@ spec:
         key: ca.crt
   observerURL: {{ printf "http://observer.%s:%v" .Values.openchoreo.controlPlane.host $o.httpPort | quote }}
   {{- if $obs.rca.enabled }}
+  # http: the plane Gateway's HTTP listener. Fine locally; on cloud installations the portal -> agent hop carries user
+  # tokens: serve the agent routes on the TLS listener (https://) before enabling an agent there. VERIFY (docs/ai-agents.md)
   rcaAgentURL: {{ printf "http://%s:%v" (first $obs.rca.http.hostnames) $o.httpPort | quote }}
   {{- end }}
   {{- if $obs.finOpsAgent.enabled }}
