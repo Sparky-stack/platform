@@ -38,7 +38,7 @@ echo "==> Checking shell scripts"
 while IFS= read -r -d '' sf; do
   bash -n "$sf"
   if command -v shellcheck >/dev/null 2>&1; then
-    shellcheck "$sf"
+    shellcheck -x -P SCRIPTDIR "$sf"
   fi
 done < <(find bootstrap hack -type f -name '*.sh' -print0)
 

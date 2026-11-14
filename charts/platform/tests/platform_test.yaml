@@ -1,0 +1,132 @@
+suite: platform root chart (projects, mgmt cluster secret, fleet & addon ApplicationSets)
+templates:
+  - projects.yaml
+  - cluster-mgmt.yaml
+  - appset-fleet.yaml
+  - appset-addons.yaml
+values:
+  - ../../../installations/local/installation.yaml
+tests:
+  - it: renders AppProjects platform and fleet with required whitelists
+    template: projects.yaml
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument:
+          kind: AppProject
+          apiVersion: argoproj.io/v1alpha1
+          name: platform
+      - containsDocument:
+          kind: AppProject
+          apiVersion: argoproj.io/v1alpha1
+          name: fleet
+      - contains:
+          path: spec.clusterResourceWhitelist
+          content:
+            group: openchoreo.dev
+            kind: ClusterDataPlane
+        documentIndex: 1
+      - contains:
+          path: spec.namespaceResourceWhitelist
+          content:
+            group: cluster.x-k8s.io
+            kind: Cluster
+        documentIndex: 1
+      - contains:
+          path: spec.namespaceResourceWhitelist
+          content:
+            group: openchoreo.dev
+            kind: Environment
+        documentIndex: 1
+      - contains:
+          path: spec.namespaceResourceWhitelist
+          content:
+            group: external-secrets.io
+            kind: ExternalSecret
+        documentIndex: 1
+
+  - it: renders mgmt cluster secret in-cluster with installation labels
+    template: cluster-mgmt.yaml
+    set:
+      mgmt:
+        addons:
+          cert-manager: false
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Secret
+      - equal:
+          path: metadata.name
+          value: in-cluster
+      - equal:
+          path: metadata.namespace
+          value: argocd
+      - equal:
+          path: metadata.labels["argocd.argoproj.io/secret-type"]
+          value: cluster
+      - equal:
+          path: metadata.labels["platform.koorikla.io/role"]
+          value: mgmt
+      - equal:
+          path: metadata.labels["platform.koorikla.io/provider"]
+          value: docker
+      - equal:
+          path: metadata.labels["addons.platform.koorikla.io/cert-manager"]
+          value: "false"
+      - equal:
+          path: stringData.server
+          value: https://kubernetes.default.svc
+
+  - it: renders fleet ApplicationSet with ServerSideApply and ServerSideDiff
+    template: appset-fleet.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ApplicationSet
+      - equal:
+          path: metadata.name
+          value: fleet
+      - equal:
+          path: spec.generators[0].git.files[0].path
+          value: installations/local/clusters/*.yaml
+      - equal:
+          path: spec.template.spec.project
+          value: fleet
+      - equal:
+          path: spec.template.spec.source.path
+          value: charts/cluster
+      - equal:
+          path: spec.template.spec.destination.namespace
+          value: fleet
+      - contains:
+          path: spec.template.spec.syncPolicy.syncOptions
+          content: ServerSideDiff=true
+      - contains:
+          path: spec.template.spec.syncPolicy.syncOptions
+          content: ServerSideApply=true
+
+  - it: renders catalog ApplicationSets including clusterNameParameters and serverSideDiff
+    template: appset-addons.yaml
+    asserts:
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
+          name: addon-thunder
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
+          name: addon-aws-ccm
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
+          name: addon-hcloud-ccm
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
+          name: addon-openchoreo-data-plane
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
+          name: addon-clusterclasses

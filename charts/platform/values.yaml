@@ -1,5 +1,19 @@
 # Root Application values: installations/<inst>/installation.yaml is layered on top of this file.
 
+# Defaults so standalone `helm template charts/platform` works; overridden by installation.yaml.
+installation:
+  name: local
+  repoURL: https://github.com/koorikla/platform.git
+  revision: HEAD
+  githubOrg: https://github.com/koorikla
+
+mgmt:
+  name: mgmt
+  provider: docker
+  region: local
+  environment: mgmt
+  addons: {}
+
 # Addon catalog. One ApplicationSet per entry, cluster generator selecting on:
 #   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)

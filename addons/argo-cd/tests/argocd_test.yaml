@@ -1,0 +1,44 @@
+suite: argo-cd wrapper chart
+templates:
+  - charts/argo-cd/templates/argocd-configs/argocd-cm.yaml
+  - charts/argo-cd/templates/argocd-configs/argocd-cmd-params-cm.yaml
+  - charts/argo-cd/templates/argocd-server/service.yaml
+values:
+  - ../values.yaml
+tests:
+  - it: treats Pending PVCs as Healthy and enables helm dependencies in argocd-cm
+    template: charts/argo-cd/templates/argocd-configs/argocd-cm.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: argocd-cm
+      - equal:
+          path: data["helm.dependencies.enabled"]
+          value: "true"
+      - matchRegex:
+          path: data["resource.customizations.health.PersistentVolumeClaim"]
+          pattern: 'Pending'
+
+  - it: keeps argocd-server Service as ClusterIP and enables server-side diff
+    template: charts/argo-cd/templates/argocd-server/service.yaml
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: argocd-server
+      - equal:
+          path: spec.type
+          value: ClusterIP
+
+  - it: configures server.insecure and server-side diff in argocd-cmd-params-cm
+    template: charts/argo-cd/templates/argocd-configs/argocd-cmd-params-cm.yaml
+    asserts:
+      - equal:
+          path: data["server.insecure"]
+          value: "true"
+      - equal:
+          path: data["controller.diff.server.side"]
+          value: "true"

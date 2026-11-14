@@ -28,9 +28,11 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
   done
 fi
 
-# 3. argo-cd ApplicationSet uses releaseName argo-cd (matching bootstrap/bootstrap.sh)
+# 3. argo-cd ApplicationSet uses releaseName argo-cd and fullnameOverride argocd (matching bootstrap/bootstrap.sh)
 argo_rel=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-argo-cd") | .spec.template.spec.source.helm.releaseName' "$TMP/platform.yaml")
-assert_eq "$argo_rel" "argo-cd" "addon-argo-cd releaseName matches bootstrap"
+assert_eq "$argo_rel" "argo-cd" "addon-argo-cd releaseName is argo-cd"
+argo_fn=$(yq '.argo-cd.fullnameOverride' "$ROOT/addons/argo-cd/values.yaml")
+assert_eq "$argo_fn" "argocd" "addons/argo-cd fullnameOverride is argocd (matches bootstrap release)"
 
 # 4. fleet ApplicationSet targets project fleet, charts/cluster, and uses ServerSideDiff=true
 fleet_proj=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "fleet") | .spec.template.spec.project' "$TMP/platform.yaml")
@@ -40,17 +42,33 @@ assert_eq "$fleet_proj" "fleet" "fleet appset uses project fleet"
 assert_eq "$fleet_path" "charts/cluster" "fleet appset uses charts/cluster"
 assert_eq "$fleet_ssd" "ServerSideDiff=true" "fleet appset enables ServerSideDiff"
 
-# 5. Catalog alignment checks (openchoreo-data-plane planeID parameter, clusterclasses ServerSideDiff, kgateway ns, coredns-local roles)
+# 5. Catalog alignment checks
 odp_param=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-openchoreo-data-plane") | .spec.template.spec.source.helm.parameters[0].name' "$TMP/platform.yaml")
 assert_eq "$odp_param" "openchoreo-data-plane.clusterAgent.planeID" "openchoreo-data-plane sets planeID parameter"
 cc_ssd=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-clusterclasses") | .spec.template.spec.syncPolicy.syncOptions[] | select(. == "ServerSideDiff=true")' "$TMP/platform.yaml")
 assert_eq "$cc_ssd" "ServerSideDiff=true" "clusterclasses enables ServerSideDiff"
 kgw_ns=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-kgateway") | .spec.template.spec.destination.namespace' "$TMP/platform.yaml")
 assert_eq "$kgw_ns" "kgateway-system" "kgateway deploys into kgateway-system"
+coredns_roles=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-coredns-local") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == "platform.koorikla.io/role") | .values | join(",")' "$TMP/platform.yaml")
+assert_eq "$coredns_roles" "mgmt,workload" "coredns-local targets mgmt and workload"
 
-# 6. argo-cd PVC health Lua treats Pending as Healthy
+# 6. argo-cd PVC health Lua treats Pending as Healthy and server stays ClusterIP
 helm template argo-cd "$ROOT/addons/argo-cd" --namespace argocd > "$TMP/argocd.yaml"
 pvc_lua=$(yq 'select(.kind == "ConfigMap" and .metadata.name == "argocd-cm") | .data["resource.customizations.health.PersistentVolumeClaim"]' "$TMP/argocd.yaml")
 assert_match "$pvc_lua" 'Pending' "argocd-cm PVC health customization handles Pending"
+svc_type=$(yq 'select(.kind == "Service" and .metadata.name == "argocd-server") | .spec.type' "$TMP/argocd.yaml")
+assert_eq "$svc_type" "ClusterIP" "argocd-server Service stays ClusterIP"
+
+# 7. secret-stores creates platform, mgmt-fleet, mgmt-openchoreo on mgmt and default on workload
+helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-secrets \
+  --values "$ROOT/addons/secret-stores/values/role-mgmt.yaml" > "$TMP/ss-mgmt.yaml"
+for s in platform mgmt-fleet mgmt-openchoreo; do
+  found=$(yq "select(.kind == \"ClusterSecretStore\" and .metadata.name == \"$s\") | .metadata.name" "$TMP/ss-mgmt.yaml")
+  assert_eq "$found" "$s" "mgmt secret-stores creates ClusterSecretStore $s"
+done
+helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-secrets \
+  --values "$ROOT/addons/secret-stores/values/role-workload.yaml" > "$TMP/ss-wl.yaml"
+wl_store=$(yq 'select(.kind == "ClusterSecretStore" and .metadata.name == "default") | .metadata.name' "$TMP/ss-wl.yaml")
+assert_eq "$wl_store" "default" "workload secret-stores creates ClusterSecretStore default"
 
 finish

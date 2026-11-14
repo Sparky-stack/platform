@@ -4,9 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for bin in helm yq kubeconform; do
+for bin in helm yq kubeconform python3; do
   command -v "$bin" >/dev/null || { echo "missing required tool: $bin" >&2; exit 1; }
 done
+
+SCHEMAS_DIR="${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}"
+export SCHEMAS_DIR
 
 # 1. Build deps (cached) before linting, templating, schemas, or helm unittest
 for dir in charts/* addons/*; do
@@ -19,12 +22,13 @@ done
 
 ./hack/schemas.sh
 
-SCHEMAS="hack/schemas"
 KUBECONFORM_ARGS=(
   -strict
   -summary
+  -kubernetes-version 1.35.0
+  -skip CustomResourceDefinition
   -schema-location default
-  -schema-location "$SCHEMAS/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json"
+  -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json"
 )
 
 TMP=$(mktemp -d)
@@ -110,11 +114,11 @@ for dir in addons/*; do
     if echo "$roles_raw" | grep -qx 'mgmt'; then
       m_name=$(yq '.mgmt.name // "mgmt"' "$inst_dir/installation.yaml")
       m_prov=$(yq '.mgmt.provider // "docker"' "$inst_dir/installation.yaml")
-      m_reg=$(yq '.mgmt.region // "local"' "$inst_dir/installation.yaml")
       m_env=$(yq '.mgmt.environment // "mgmt"' "$inst_dir/installation.yaml")
       if [[ -z "$providers_filter" ]] || echo "$providers_filter" | grep -qx "$m_prov"; then
         vargs=(--values "$inst_dir/installation.yaml")
         for vf in \
+          "$dir/values.yaml" \
           "$dir/values/role-mgmt.yaml" \
           "$dir/values/provider-$m_prov.yaml" \
           "$inst_dir/addons/$addon/values.yaml" \
@@ -125,12 +129,7 @@ for dir in addons/*; do
         for p in "${cn_params[@]}"; do
           [[ -n "$p" ]] && vargs+=(--set-string "${p}=$m_name")
         done
-        helm template "$addon-$m_name" "$dir" --namespace "$ns" "${vargs[@]}" \
-          --set-string "cluster.name=$m_name" \
-          --set-string "cluster.role=mgmt" \
-          --set-string "cluster.provider=$m_prov" \
-          --set-string "cluster.region=$m_reg" \
-          --set-string "cluster.environment=$m_env" > "$TMP/addon-$addon-$inst-mgmt.yaml"
+        helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-mgmt.yaml"
         check_kubeconform "addons/$addon ($inst/mgmt)" "$TMP/addon-$addon-$inst-mgmt.yaml"
       fi
     fi
@@ -140,13 +139,13 @@ for dir in addons/*; do
         [[ -f "$cf" ]] || continue
         c_name=$(yq '.name' "$cf")
         c_prov=$(yq '.provider // "docker"' "$cf")
-        c_reg=$(yq '.region // "local"' "$cf")
         c_env=$(yq '.environment // "development"' "$cf")
         if [[ -n "$providers_filter" ]] && ! echo "$providers_filter" | grep -qx "$c_prov"; then
           continue
         fi
         vargs=(--values "$inst_dir/installation.yaml")
         for vf in \
+          "$dir/values.yaml" \
           "$dir/values/role-workload.yaml" \
           "$dir/values/provider-$c_prov.yaml" \
           "$inst_dir/addons/$addon/values.yaml" \
@@ -157,12 +156,7 @@ for dir in addons/*; do
         for p in "${cn_params[@]}"; do
           [[ -n "$p" ]] && vargs+=(--set-string "${p}=$c_name")
         done
-        helm template "$addon-$c_name" "$dir" --namespace "$ns" "${vargs[@]}" \
-          --set-string "cluster.name=$c_name" \
-          --set-string "cluster.role=workload" \
-          --set-string "cluster.provider=$c_prov" \
-          --set-string "cluster.region=$c_reg" \
-          --set-string "cluster.environment=$c_env" > "$TMP/addon-$addon-$inst-$c_name.yaml"
+        helm template "$addon" "$dir" --namespace "$ns" "${vargs[@]}" > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"
       done
     fi

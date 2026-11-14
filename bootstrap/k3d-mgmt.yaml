@@ -1,0 +1,31 @@
+# k3d configuration for the local management cluster (platform-mgmt).
+# Joins docker network "kind" so CAPD workload containers and k3d-platform-mgmt-serverlb share DNS/routing.
+# Mounts /var/run/docker.sock so the in-cluster CAPD controller can manage workload Docker containers.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: platform-mgmt
+servers: 1
+agents: 0
+network: kind
+options:
+  k3d:
+    wait: true
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+volumes:
+  - volume: /var/run/docker.sock:/var/run/docker.sock
+    nodeFilters:
+      - server:*
+ports:
+  # OpenChoreo console, API, and Thunder (HTTP over kgateway)
+  - port: 8080:8080
+    nodeFilters:
+      - loadbalancer
+  # OpenChoreo cluster-gateway (TLS passthrough from workload cluster-agents)
+  - port: 8443:8443
+    nodeFilters:
+      - loadbalancer
