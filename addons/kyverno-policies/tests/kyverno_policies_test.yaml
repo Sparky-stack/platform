@@ -1,0 +1,44 @@
+suite: kyverno-policies - PSS baseline (Audit) + Istio ambient enrollment of OpenChoreo cell namespaces
+release:
+  name: kyverno-policies
+  namespace: kyverno
+tests:
+  - it: ships the PSS baseline as Audit-only ValidatingPolicies that skip platform namespaces
+    template: charts/kyverno-policies/templates/baseline/disallow-privileged-containers.cel.yaml
+    asserts:
+      - isKind: { of: ValidatingPolicy }
+      - equal: { path: spec.validationActions, value: [Audit] }
+      - equal: { path: spec.failurePolicy, value: Ignore }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: "'argocd'.*'openchoreo-data-plane'.*'istio-system'" }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
+
+  - it: labels OpenChoreo cell namespaces with istio.io/dataplane-mode=ambient (admission + existing)
+    template: templates/ambient-enrollment.yaml
+    documentSelector: { path: kind, value: MutatingPolicy }
+    asserts:
+      - equal: { path: spec.failurePolicy, value: Ignore }
+      - equal: { path: spec.evaluation.mutateExisting.enabled, value: true }
+      - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [namespaces] }
+      - equal:
+          path: spec.matchConstraints.objectSelector
+          value:
+            matchLabels: { openchoreo.dev/managed-by: renderedrelease-controller }
+            matchExpressions:
+              - { key: openchoreo.dev/project, operator: Exists }
+              - { key: openchoreo.dev/environment, operator: Exists }
+              - { key: istio.io/dataplane-mode, operator: DoesNotExist }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: '"kgateway-system","istio-system"' }
+      - matchRegex: { path: "spec.mutations[0].applyConfiguration.expression", pattern: '"istio.io/dataplane-mode": "ambient"' }
+
+  - it: lets Kyverno's background controller update namespaces (mutateExisting)
+    template: templates/ambient-enrollment.yaml
+    documentSelector: { path: kind, value: ClusterRole }
+    asserts:
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-background-controller"]', value: "true" }
+      - contains: { path: rules, content: { apiGroups: [""], resources: [namespaces], verbs: [get, list, watch, update, patch] } }
+
+  - it: renders no enrollment on mgmt (values/role-mgmt.yaml)
+    template: templates/ambient-enrollment.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }
