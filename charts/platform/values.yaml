@@ -26,7 +26,7 @@ openchoreo:
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
 
 addons:
-  argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true }
+  argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
   cert-manager:             { namespace: cert-manager,             roles: [mgmt, workload], default: true }
   external-secrets:         { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   secret-stores:            { namespace: external-secrets,         roles: [mgmt, workload], default: true }

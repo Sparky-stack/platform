@@ -45,7 +45,7 @@ spec:
         targetRevision: '{{ "{{" }} $r := index .metadata.annotations "platform.koorikla.io/addons-revision" {{ "}} " | trim }}{{ "{{" }} if and $r (ne $r "HEAD") {{ "}} " | trim }}{{ "{{" }} $r {{ "}} " | trim }}{{ "{{" }} else {{ "}} " | trim }}{{ $defaultRev }}{{ "{{" }} end {{ "}} " | trim }}'
         path: {{ printf "addons/%s" $addon | quote }}
         helm:
-          releaseName: {{ $addon | quote }}
+          releaseName: {{ $cfg.releaseName | default $addon | quote }}
           ignoreMissingValueFiles: true
           valueFiles:
             - values.yaml
