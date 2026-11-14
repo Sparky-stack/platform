@@ -4,11 +4,16 @@
 # (name = short hash of the URL, idempotent) before building. OCI dependencies need no registration.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
 
-mapfile -t repos < <(yq -r '.dependencies[]?.repository' charts/*/Chart.yaml addons/*/Chart.yaml 2>/dev/null \
-  | grep -E '^https?://' | sort -u)
-for url in "${repos[@]}"; do
-  name="r$(printf '%s' "$url" | sha1sum | cut -c1-10)"
+repos=()
+while IFS= read -r url; do
+  if [[ -n "$url" ]]; then repos+=("$url"); fi
+done < <(yq -r '.dependencies[]?.repository' charts/*/Chart.yaml addons/*/Chart.yaml 2>/dev/null \
+  | tr -d '\r' | grep -E '^https?://' | sort -u)
+for url in ${repos[@]+"${repos[@]}"}; do
+  name="r$(sha1 "$url" | cut -c1-10)"
   helm repo list -o json 2>/dev/null | yq -e ".[] | select(.url == \"$url\")" >/dev/null 2>&1 \
     || helm repo add "$name" "$url" >/dev/null
 done

@@ -3,6 +3,8 @@
 # Usage: bootstrap/bootstrap.sh [--inst <name>] [up|secrets|argocd|status|down]
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=../hack/lib/portable.sh
+source hack/lib/portable.sh
 
 INST="${INST:-local}"
 CMD=""
@@ -70,14 +72,16 @@ ensure_k3d() {
   [[ "$INST" == "local" ]] || return 0
   require_bins docker k3d kubectl
   docker info >/dev/null 2>&1 || die "docker daemon is not reachable"
-  local free_gb
-  free_gb=$(df -BG --output=avail . | tail -n1 | tr -dc '0-9')
-  if [[ -n "$free_gb" ]] && (( free_gb < 15 )); then
-    warn "Low free disk space (${free_gb}GB < 15GB recommended for k3d + CAPD images)"
+  local free
+  free=$(free_gb .)
+  if [[ -n "$free" ]] && (( free < 15 )); then
+    warn "Low free disk space (${free}GB < 15GB recommended for k3d + CAPD images)"
   fi
+  # inotify limits matter where the containers run: the host on native Linux, the Docker Desktop / WSL2 VM elsewhere
+  # (raise them there, see docs/dev-environment.md). Only the native Linux host can be checked from here.
   local watches
   watches=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)
-  if [[ -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
+  if [[ "$(os_name)" == linux && -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
     warn "fs.inotify.max_user_watches=${watches} (< 524288 recommended for multi-cluster k3s/CAPD)"
   fi
   docker network inspect kind >/dev/null 2>&1 || {
@@ -116,7 +120,7 @@ seed_generated_secret() {
   local spec k fixed val
   for spec in "$@"; do
     k=${spec%%=*}; fixed=""; [[ "$spec" == *=* ]] && fixed=${spec#*=}
-    val=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o "jsonpath={.data['${k}']}" 2>/dev/null | base64 -d 2>/dev/null || true)
+    val=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o "jsonpath={.data['${k}']}" 2>/dev/null | b64dec 2>/dev/null || true)
     if [[ -z "$val" ]]; then
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
@@ -236,7 +240,7 @@ cmd_status() {
   echo ""
   echo "Argo CD UI: kubectl --context $CTX port-forward -n argocd svc/argocd-server 8081:80"
   echo "Argo CD admin password:"
-  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true
+  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | b64dec || true
   echo ""
 }
 
@@ -244,9 +248,10 @@ cmd_ui() {
   load_inst
   require_bins kubectl
   echo "Argo CD admin password:"
-  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true
+  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | b64dec || true
   echo ""
-  log "Port-forwarding Argo CD UI to http://localhost:8081 (Ctrl-C to stop)"
+  log "Port-forwarding Argo CD UI to http://localhost:8081 (Ctrl-C to stop; NO_BROWSER=1 skips opening a browser)"
+  ( sleep 3; open_url http://localhost:8081 ) &
   kubectl --context "$CTX" port-forward -n argocd svc/argocd-server 8081:80
 }
 
