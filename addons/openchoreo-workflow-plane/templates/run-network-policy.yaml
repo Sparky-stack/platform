@@ -1,0 +1,60 @@
+{{- /*
+Build run namespace workflows-<org ns> (OpenChoreo's WorkflowRun controller creates it on the first run and tolerates
+an existing one; rendered here so its NetworkPolicy exists before any run) and a default-deny NetworkPolicy for every
+pod in it. Check steps and Dockerfile RUN steps execute tenant code (rootless BuildKit with
+--oci-worker-no-process-sandbox shares the pod network), so they reach only:
+  DNS                 kube-dns in kube-system
+  the registry        the Harbor Gateway proxy pods (registry host rewritten to them by coredns-local), harbor only
+  the API server      Argo's executor (init/wait) writes workflowtaskresults; run containers carry no token
+  the internet        80/443 outside private ranges: git, base images, package registries, Trivy DB, Sigstore
+Nothing else on mgmt (argocd-repo-server, harbor-core over HTTP, webhooks, other namespaces). No ingress at all.
+Enforced by k3s' network policy controller (flannel mgmt) or Cilium. Delete=false: removing the addon must not delete
+run history.
+*/ -}}
+{{- $np := .Values.runNetworkPolicy }}
+{{- if $np.enabled }}
+{{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: build-runs-default-deny
+  namespace: {{ $ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- if and $np.registry.enabled (eq (toString (.Values.registry).type) "harbor") }}
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $np.registry.namespace }} } }
+          podSelector: { matchLabels: {{ toJson $np.registry.podLabels }} }
+      ports:
+        - { protocol: TCP, port: {{ $np.registry.port }} }
+    {{- end }}
+    {{- range $np.apiServer }}
+    - to:
+        - ipBlock: { cidr: {{ .cidr }} }
+      ports:
+        - { protocol: TCP, port: {{ .port }} }
+    {{- end }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: {{ toJson $np.internet.exceptCIDRs }}
+      ports:
+        {{- range $np.internet.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+{{- end }}
