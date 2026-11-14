@@ -46,6 +46,11 @@ all on data planes: OpenChoreo's cluster-agent dials **out** to the control plan
 clusters run no Argo component. If a future cluster sits behind a NAT where mgmt cannot reach its API, it cannot be
 CAPI-managed from this mgmt either; that case is out of scope.
 
+**Next step (decided):** move add-on delivery to pull with argocd-agent in managed mode: the ApplicationSets and the
+UI stay on mgmt, an agent per workload cluster dials out and applies locally (resilience to a mgmt outage, scale). The
+catalog and label targeting carry over unchanged; the agent's client cert reaches each cluster through the same
+ClusterResourceSet path as the OpenChoreo agent identity.
+
 ### Adding a cluster = adding one file
 `installations/<inst>/clusters/<name>.yaml` → ApplicationSet `fleet` (git files generator) → Application
 `cluster-<name>` → chart `charts/cluster`, which renders on mgmt:
