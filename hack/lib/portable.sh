@@ -18,13 +18,25 @@ os_name() {
 is_wsl() { [[ -r /proc/version ]] && grep -qi microsoft /proc/version 2>/dev/null; }
 
 # sed_inplace <sed-expr> <file>... : GNU `sed -i` and BSD `sed -i ''` disagree; write via a temp file instead.
+# Returns 1 (file untouched) when sed fails, so callers under `set -e` stop on a bad expression.
 sed_inplace() {
   local expr=$1 f tmp; shift
   for f in "$@"; do
     tmp=$(mktemp "${f}.XXXXXX")
-    sed "$expr" "$f" > "$tmp" && cat "$tmp" > "$f"   # cat keeps the original file's mode
+    sed "$expr" "$f" > "$tmp" || { rm -f "$tmp"; return 1; }
+    cat "$tmp" > "$f"   # cat keeps the original file's mode
     rm -f "$tmp"
   done
+}
+
+# file_group_other_perms <file> -> the group+other part of the mode as `ls -l` shows it (e.g. `------`, `r--r--`).
+# `stat` flags differ between GNU and BSD; `ls -lLd` (POSIX, follows symlinks) is the same everywhere. Prints nothing
+# on Windows, where Git Bash fakes the mode bits (NTFS ACLs decide), or when the file does not exist.
+file_group_other_perms() {
+  if [[ "$(os_name)" != windows && -e "$1" ]]; then
+    # shellcheck disable=SC2012  # only the mode column of a single, quoted path is read
+    ls -lLd -- "$1" 2>/dev/null | awk '{ print substr($1, 5, 6) }'
+  fi
 }
 
 # b64dec: decode base64 from stdin. GNU and macOS >= 13 accept --decode; BusyBox and old macOS only -d / -D.
