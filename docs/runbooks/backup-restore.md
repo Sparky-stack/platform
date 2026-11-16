@@ -1,5 +1,7 @@
 # Runbook: Backup and restore
 
+<img src="../diagrams/backup.svg" alt="Backup and restore: what is stateful where, and the restore order after losing mgmt" width="100%">
+
 ## When to use
 
 Use this runbook before destructive upgrades or maintenance windows, when recovering stateful components (`etcd`, OpenBao, Thunder, Harbor, CloudNativePG), when converting an older `k3d` management cluster from SQLite to embedded `etcd`, or when running periodic restore drills.

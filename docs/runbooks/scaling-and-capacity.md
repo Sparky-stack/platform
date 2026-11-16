@@ -1,5 +1,7 @@
 # Runbook: Scaling and capacity
 
+<img src="../diagrams/cluster-lifecycle.svg" alt="Cluster lifecycle: a fleet file becomes a CAPI cluster, an Argo CD cluster secret and an OpenChoreo data plane" width="100%">
+
 ## When to use
 
 Use this runbook to add or decommission a workload cluster, scale `MachineDeployment` worker pools, switch a workload cluster's control plane between `1` and `3` servers (HA mode), or shed memory and `inotify` pressure on a local host.

@@ -1,5 +1,7 @@
 # Runbook: Upgrades
 
+<img src="../diagrams/upgrade.svg" alt="Upgrade flow: Renovate PR, CI, merge, Argo CD sync waves on dev clusters, Cluster API rollouts, verify, prod follows" width="100%">
+
 ## When to use
 
 Use this runbook when merging a Renovate pull request or authoring a version bump for k3s, Cluster API and infrastructure providers, `ClusterClass` templates, wrapper-chart addons and pinned container digests, OpenChoreo planes, Istio ambient, or Kyverno policies.

@@ -1,6 +1,8 @@
 # Day-2 operations handbook
 
 Operational index and runbooks for running, upgrading, backing up, and recovering the platform after `task up`. Design rationale lives in [architecture.md](architecture.md); contracts and naming rules live in [conventions.md](conventions.md).
+Day-2 diagrams: [cluster lifecycle](diagrams/cluster-lifecycle.svg), [trust & certificates](diagrams/trust.svg),
+[backup & restore](diagrams/backup.svg), [upgrade flow](diagrams/upgrade.svg) (steps: [diagrams/](diagrams/README.md)).
 
 ## Operating rules
 
