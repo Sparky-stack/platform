@@ -62,7 +62,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **Trusted sources**: `openchoreo-trusted-registries-*` requires every container, init and ephemeral image to match a
   trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`).
 - **Failure policy**: production `Fail` (a Kyverno outage pauses production rollouts, never platform namespaces).
-  Audit `Ignore`. Webhook timeout 20 s (registry + Rekor/TUF lookups).
+  Audit `Ignore`. Webhook timeout 30 s, the maximum (registry + Rekor/TUF lookups, ~4-5 s per verification).
 
 Evidence (Kyverno CLI v1.20.0 against the real image
 `ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):

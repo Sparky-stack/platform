@@ -95,7 +95,9 @@ imageVerification:
   failurePolicy:
     Audit: Ignore
     Deny: Fail
-  timeoutSeconds: 20               # webhook timeout (registry + Rekor/TUF lookups), max 30
+  # Webhook timeout, max 30: one image = signature + 3 attestations, each a keyless verification of ~4-5 s on the
+  # local clusters (TUF trusted root + registry referrers), so 20 s left no headroom (#128).
+  timeoutSeconds: 30
   # Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
   cellNamespaceSelector:
     matchLabels:
