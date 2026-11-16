@@ -134,7 +134,11 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   the role exists, so the template resolves to exactly `pki-mesh-<group>-int/sign/<name>`. A member's token is useless
   at another member's mount (other keys) and its policy reaches no other role, mount or path (integration test: a role
   of the same name in another group, or another role in its own group, answers 403). On the member, only cert-manager's controller may mint that
-  ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`).
+  ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`), and only for Issuer `openbao-mesh`:
+  OpenBao accepts any token of that subject with that audience, so `ValidatingAdmissionPolicy
+  platform-mesh-ca-issuers` (addon istio-csr) denies every other Issuer or ClusterIssuer that names ServiceAccount
+  `istio-csr-openbao` or requests the audience `vault://istio-system/openbao-mesh` (a second Vault Issuer would
+  otherwise bypass `platform-mesh-ca-requests`, which matches `issuerRef.name == openbao-mesh` only).
 - **Issuer discovery is public, and delivered first.** OpenBao fetches the JWKS without a credential, so every member
   binds the read-only ClusterRole `system:service-account-issuer-discovery` (GET `/.well-known/openid-configuration`
   and `/openid/v1/jwks`, nothing else) to `system:unauthenticated` (`ClusterRoleBinding platform-oidc-discovery`;

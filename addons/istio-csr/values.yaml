@@ -6,6 +6,7 @@
 #                               token of ServiceAccount istio-csr-openbao (audience vault://istio-system/openbao-mesh,
 #                               added by cert-manager). No static token, no Secret holding a credential.
 #   templates/admission.yaml    ValidatingAdmissionPolicy: only istio-csr / cert-manager may request from openbao-mesh
+#                               (+ no other Issuer may use its ServiceAccount or the mesh audience)
 #   cert-manager-istio-csr      gRPC CA endpoint for ztunnel/istiod (cert-manager-istio-csr.istio-system.svc:443);
 #                               istiod serving cert (Secret istiod-tls); root CA ConfigMaps from the pinned group root
 # From mgmt (charts/cluster mesh-trust.yaml, CRS): Secret istio-system/openbao-ca (OpenBao's CA, ca.crt), Secret

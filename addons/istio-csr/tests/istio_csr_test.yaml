@@ -64,13 +64,35 @@ tests:
   - it: only istio-csr and cert-manager may request certificates from the mesh CA; only istiod's Certificate may reference it
     template: templates/admission.yaml
     asserts:
-      - hasDocuments: { count: 4 }
+      - hasDocuments: { count: 6 }
       - matchRegex: { path: 'spec.validations[0].expression', pattern: 'system:serviceaccount:istio-system:cert-manager-istio-csr' }
         documentIndex: 0
       - matchRegex: { path: 'spec.validations[0].expression', pattern: "object.metadata.name in \\[\"istiod\"\\]" }
         documentIndex: 1
       - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 3
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 5
+
+  - it: "no second Vault Issuer may obtain a token the mesh CA accepts (ServiceAccount istio-csr-openbao / mesh audience)"
+    template: templates/admission.yaml
+    asserts:
+      - isKind: { of: ValidatingAdmissionPolicy }
         documentIndex: 2
+      - equal: { path: metadata.name, value: platform-mesh-ca-issuers }
+        documentIndex: 2
+      - equal: { path: 'spec.matchConstraints.resourceRules[0].resources', value: [issuers, clusterissuers] }
+        documentIndex: 2
+      - equal:
+          path: 'spec.validations[0].expression'
+          value: "object.spec.vault.auth.kubernetes.serviceAccountRef.name != 'istio-csr-openbao' || (object.kind == 'Issuer' && object.metadata.namespace == 'istio-system' && object.metadata.name == 'openbao-mesh')"
+        documentIndex: 2
+      - matchRegex: { path: 'spec.validations[1].expression', pattern: "a == 'vault://istio-system/openbao-mesh'" }
+        documentIndex: 2
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentIndex: 2
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 5
 
   - it: istio-csr pins the group root, serves ztunnel (ambient node auth) with this cluster's ID, short workload certs
     template: charts/cert-manager-istio-csr/templates/deployment.yaml

@@ -3,7 +3,8 @@
 #   mgmt    addon openbao templates/mesh-admission.yaml: what charts/cluster renders for the remote-secret reader certs
 #           is admitted; everything that would turn a <name>-client-ca issuer into a general signing API is denied
 #   members addon istio-csr templates/admission.yaml: only istio-csr / cert-manager may ask the mesh CA (OpenBao) for
-#           certificates, only istiod's Certificate may reference it, never a CA
+#           certificates, only istiod's Certificate may reference it, never a CA, and no second Vault Issuer may obtain
+#           a token the mesh CA accepts (ServiceAccount istio-csr-openbao / audience vault://istio-system/openbao-mesh)
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -33,7 +34,7 @@ for p in $(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name'
   assert_eq "$b" "Deny" "binding for $p denies"
 done
 assert_eq "$(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml" | sort | tr '\n' ' ')" \
-  "platform-mesh-ca-certificates platform-mesh-ca-requests platform-mesh-certificaterequests platform-mesh-issuers platform-mesh-reader-certificates platform-openbao-fleet-reads " \
+  "platform-mesh-ca-certificates platform-mesh-ca-issuers platform-mesh-ca-requests platform-mesh-certificaterequests platform-mesh-issuers platform-mesh-reader-certificates platform-openbao-fleet-reads " \
   "exactly the reader-cert guards (mgmt) and the mesh-CA guards (members)"
 
 user_file() {   # user_file <username> -> path of a kyverno CLI UserInfo file
@@ -162,6 +163,27 @@ printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: ist
   | check $P alice fail "negative: istiod name outside istio-system"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: istiod, namespace: istio-system }\nspec:\n  secretName: istiod-tls\n  isCA: true\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
   | check $P "$ARGO" fail "negative: CA Certificate"
+
+P=platform-mesh-ca-issuers
+vault_issuer() {   # vault_issuer <kind> <name> <namespace|""> <serviceAccountRef yaml (flow)>
+  local md="{ name: $2 }"; [[ -n "$3" ]] && md="{ name: $2, namespace: $3 }"
+  printf 'apiVersion: cert-manager.io/v1\nkind: %s\nmetadata: %s\nspec:\n  vault:\n    server: https://openbao.example:8200\n    path: pki-mesh-local-int/sign/dev1\n    auth:\n      kubernetes:\n        mountPath: /v1/auth/mesh-dev1\n        role: istio-csr\n        serviceAccountRef: %s\n' "$1" "$md" "$4"
+}
+helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 \
+  | yq 'select(.kind == "Issuer" and .metadata.name == "openbao-mesh")' | check $P "$ARGO" pass "the chart's Issuer openbao-mesh"
+vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao }' | check $P alice fail "negative: second Issuer as istio-csr-openbao"
+vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao, audiences: ["vault://istio-system/openbao-mesh"] }' \
+  | check $P alice fail "negative: second Issuer with the mesh audience (the review's bypass)"
+vault_issuer Issuer bypass istio-system '{ name: other-sa, audiences: ["x", "vault://istio-system/openbao-mesh"] }' \
+  | check $P alice fail "negative: the mesh audience with another ServiceAccount"
+vault_issuer ClusterIssuer bypass "" '{ name: istio-csr-openbao, audiences: ["vault://istio-system/openbao-mesh"] }' \
+  | check $P alice fail "negative: ClusterIssuer with the mesh ServiceAccount/audience"
+vault_issuer Issuer openbao-mesh default '{ name: istio-csr-openbao, audiences: ["vault://istio-system/openbao-mesh"] }' \
+  | check $P alice fail "negative: an openbao-mesh Issuer in another namespace"
+vault_issuer Issuer vault-app team-a '{ name: app, audiences: ["vault://team-a/vault-app"] }' \
+  | check $P alice pass "other Vault Issuers with their own ServiceAccount and audience are admitted"
+printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: selfsigned, namespace: istio-system }\nspec:\n  selfSigned: {}\n' \
+  | check $P alice skip "non-Vault issuers are not affected"
 
 # What charts/cluster actually renders for every mesh member is admitted (Argo CD applies it).
 n=0
