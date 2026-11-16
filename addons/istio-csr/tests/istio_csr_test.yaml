@@ -39,6 +39,23 @@ tests:
       - equal: { path: subjects, value: [{ kind: ServiceAccount, name: cert-manager, namespace: cert-manager }] }
         documentSelector: { path: kind, value: RoleBinding }
 
+  - it: "sync order: the Issuer (-1) comes after the ServiceAccount and token RBAC its Ready check logs in with (-2)"
+    template: templates/issuer.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+        documentSelector: { path: kind, value: Issuer }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: Role }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: RoleBinding }
+
+  - it: "sync order: the admission policies are in force (-2) before the Issuer they guard"
+    template: templates/admission.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+
   - it: "a group is a cryptographic boundary: another group signs at its own intermediate"
     template: templates/issuer.yaml
     documentSelector: { path: kind, value: Issuer }

@@ -290,8 +290,8 @@ seed_openchoreo_secret() {
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
     observer-client-secret
-  # Falco escalation webhook (addon argo-events on mgmt; falcosidekick on every cluster) and the promotion gate's
-  # Thunder client secret (ClusterWorkflow promotion-gate). docs/observability.md, docs/promotion.md.
+  # Falco escalation webhook (mgmt only: every cluster gets a token derived from it, never the key itself) and the
+  # promotion gate's Thunder client secret (ClusterWorkflow promotion-gate). docs/observability.md, docs/promotion.md.
   seed_generated_secret falco-webhook url=http://events.openchoreo.localhost:8080/falco token
   seed_generated_secret promotion-gate client-secret
 }

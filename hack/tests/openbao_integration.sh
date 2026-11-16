@@ -67,6 +67,11 @@ initialize "zz-integration-test-only" {
     path      = "auth/userpass/users/bootstrapper"
     data      = { password = "$IT_PW", token_policies = ["platform-mesh-bootstrap"], token_no_default_policy = true }
   }
+  request "careader" {
+    operation = "update"
+    path      = "auth/userpass/users/careader"
+    data      = { password = "$IT_PW", token_policies = ["mesh-ca-read"], token_no_default_policy = true }
+  }
 }
 EOF
 
@@ -144,7 +149,7 @@ done
 chmod -R a+rX "$W"
 # shellcheck disable=SC2016  # runs inside the container
 UP='bao write -field=token auth/userpass/login'
-# PostSync Job: bootstrap token (group CAs) + member token; CronJob: member token only
+# Sync-hook Job: bootstrap token (group CAs) + member token; CronJob: member token only
 RECONCILE=". /w/env.sh; export INPUT_DIR=/w/inputs BAO_BOOTSTRAP_TOKEN=\$($UP/bootstrapper password=@/w/it-pw) BAO_TOKEN=\$($UP/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh"
 CRON=". /w/env.sh; unset BOOTSTRAP_LOGIN_ROLE; export FAIL_ON_NO_MEMBER=true INPUT_DIR=/w/inputs BAO_TOKEN=\$($UP/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh"
 rc=0; out=$(bao_in "$RECONCILE" 2>&1) || rc=$?
@@ -172,6 +177,7 @@ probes_run() {
   # shellcheck disable=SC2016  # runs inside the container
   res=$(bao_in 'T_reconciler=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw)
     T_bootstrapper=$(bao write -field=token auth/userpass/login/bootstrapper password=@/w/it-pw)
+    T_careader=$(bao write -field=token auth/userpass/login/careader password=@/w/it-pw)
     r() { id=$1; eval "t=\$T_$2"; shift 2; c=$(BAO_TOKEN=$t bao "$@" 2>&1 | grep -m1 -oE "Code: [0-9]+|Success|Key|BEGIN" | sed "s/Code: //"); echo "$id ${c:-none}"; }
     . /w/probes.sh')
   for i in "${!P_EXP[@]}"; do
@@ -232,6 +238,15 @@ pr 403 "reconciler: no other-SAN role" reconciler write pki-mesh-local-int/roles
 pr 403 "reconciler: a role write must pin every flag (required_parameters)" reconciler write pki-mesh-local-int/roles/pwn "${ROLEOK/ issuer_ref=default/}"
 pr 403 "reconciler: no extra EKU OIDs" reconciler write pki-mesh-local-int/roles/pwn "$ROLEOK" ext_key_usage_oids=1.3.6.1.5.5.7.3.3
 pr Key "positive control: the same role with the pinned flags is accepted" reconciler write pki-mesh-local-int/roles/pwn "$ROLEOK"
+# mesh-ca-read (ESO SecretStore openbao-pki-public): what ESO's vault provider does with the token, and nothing more.
+# lookup-self is its store validation (live: 403 -> InvalidProviderConfig -> openbao-ca-bundle never synced).
+pr Key "mesh-ca-read: token lookup-self (ESO validates the SecretStore with it)" careader token lookup
+pr Key "mesh-ca-read: reads a group root certificate" careader read pki-mesh-local-root/cert/ca
+pr 403 "mesh-ca-read: cannot sign" careader write pki-mesh-local-int/sign/c1 csr=@/w/rogue.csr
+pr 403 "mesh-ca-read: cannot read PKI roles" careader read pki-mesh-local-int/roles/c1
+pr 403 "mesh-ca-read: cannot list mounts" careader read sys/mounts
+pr 403 "mesh-ca-read: cannot create tokens" careader token create -policy=mesh-ca-read
+pr Success "mesh-ca-read: revoke-self (ESO closes its client)" careader token revoke -self
 probes_run
 
 # --- play member c1 -----------------------------------------------------------------------------------------------------

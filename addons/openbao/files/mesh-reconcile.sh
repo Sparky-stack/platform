@@ -1,11 +1,11 @@
 #!/bin/sh
 # Desired state of the Istio mesh PKI in OpenBao (addon openbao; docs/multicluster.md "Mesh CA"). Idempotent; run by
-# the Argo CD PostSync Job (group bootstrap + members) and the CronJob `mesh-reconcile` (members only)
+# the Argo CD Sync-hook Job, wave 1 (group bootstrap + members) and the CronJob `mesh-reconcile` (members only)
 # (templates/reconcile.yaml). POSIX sh + the bao CLI only (the OpenBao image: busybox, no jq).
 #
 # This script authors NO ACL policy. Every policy is static and is written once by OpenBao's self-initialisation
 # (values.yaml openbao.server.ha.raft.config). Two OpenBao identities, two tokens:
-#   bootstrap token (BOOTSTRAP_LOGIN_ROLE, PostSync Job only; policy platform-mesh-bootstrap), per mesh group <g>:
+#   bootstrap token (BOOTSTRAP_LOGIN_ROLE, Sync-hook Job only; policy platform-mesh-bootstrap), per mesh group <g>:
 #     pki-mesh-<g>-root   root CA, key generated inside OpenBao (root/generate/internal): never exported, never on disk
 #     pki-mesh-<g>-int    intermediate CA (intermediate/generate/internal), signed by the group root with
 #                         max_path_length=0; the root is imported next to it so every issued chain ends at the group
@@ -29,7 +29,7 @@
 # Per-member fail-safe: a member that cannot be configured (its API server unreachable, its JWKS not public yet, its
 # group not bootstrapped yet) is logged and skipped, the rest are configured, and it keeps its existing auth.
 # Exit status: non-zero for invalid groups, a failed login or group bootstrap, when every member input is invalid,
-# and - with FAIL_ON_NO_MEMBER=true (CronJob) - when no member could be configured. The PostSync hook sets
+# and - with FAIL_ON_NO_MEMBER=true (CronJob) - when no member could be configured. The Sync-hook Job sets
 # FAIL_ON_NO_MEMBER=false: on a cold boot members are registered before they are reachable, and the hook must not
 # leave the Application SyncFailed for that. The CronJob converges and keeps failing visibly until a member is
 # configured. The summary line also goes to the container termination message (pod .status...terminated.message).
@@ -106,10 +106,10 @@ if [ -n "${BAO_BOOTSTRAP_TOKEN:-}" ]; then
   for g in $MESH_GROUPS; do bootstrap_group "$g"; done
   BAO_BOOTSTRAP_TOKEN=""   # the CA-equivalent token is not used past this point
 fi
-# Groups whose intermediate exists (the CronJob cannot create one; a new group waits for the next PostSync Job).
+# Groups whose intermediate exists (the CronJob cannot create one; a new group waits for the next sync of the Job).
 ready=" "
 for g in $MESH_GROUPS; do
-  if has_cert "pki-mesh-$g-int"; then ready="$ready$g "; else log "group $g: no intermediate CA yet (created by the PostSync Job)"; fi
+  if has_cert "pki-mesh-$g-int"; then ready="$ready$g "; else log "group $g: no intermediate CA yet (created by the Sync-hook Job mesh-reconcile)"; fi
 done
 
 if [ -z "${BAO_TOKEN:-}" ]; then
@@ -200,7 +200,7 @@ summary="configured=[${ok# }] failed=[${failed# }] invalid=[${invalid# }]"
 # A single unreachable member must not fail the run for the rest of the fleet (partial failures: summary line).
 if [ -z "$ok" ]; then
   [ "$FAIL_ON_NO_MEMBER" = true ] && die "no member could be configured (failed:$failed) $summary"
-  status "WARNING: no member could be configured yet (failed:$failed) $summary - PostSync hook exits 0; the CronJob mesh-reconcile retries and fails until one is"
+  status "WARNING: no member could be configured yet (failed:$failed) $summary - the Sync-hook Job exits 0; the CronJob mesh-reconcile retries and fails until one is"
   exit 0
 fi
 status "done: $summary"

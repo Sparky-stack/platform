@@ -30,10 +30,13 @@ sourceIntegrity:
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
 # Optional helm parameters computed per cluster:
 #   clusterNameParameters:   [<param>]                 -> the cluster name
+#   clusterNameFormats:      {<param>: <fmt with %s>}  -> the cluster name inside fixed text (string), e.g. "cluster:%s"
 #   clusterIdParameters:     [<param>]                 -> <installation.name>-<cluster name> (unique across installations)
 #   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
 #   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
 #   clusterLabelParameters:  {<param>: {label: <key>, default: <str>}} -> a cluster secret label's value (else default)
+#   fleetParameters:         [<param>]                 -> {<name>,...}: every platform cluster's name (sorted helm list),
+#                                                         from the Argo CD cluster secrets (cluster generator flatList)
 # Optional extra value files, selected by installation facts rather than cluster labels:
 #   installationValueFiles:  [<tpl>]                   -> tpl over installation values, rendered once here; layered after
 #                                                         values/cni-*.yaml, before installations/<inst>/addons/<name>/*
@@ -83,11 +86,11 @@ addons:
   agentgateway:             { namespace: agentgateway-system,      roles: [mgmt],           default: false }
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
-  falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }
+  falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true, clusterNameFormats: { falco.falcosidekick.config.customfields: 'cluster:%s' } }
   # Platform event receiver on mgmt (docs/promotion.md, docs/observability.md "Falco response"): Falco escalation
   # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. The workflow objects (WorkflowTemplate,
   # Sensors) render once the workflow plane's Argo Workflows CRDs exist (addon openchoreo-workflow-plane, workflowPlane: auto).
-  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true }
+  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true, fleetParameters: [falco.clusters] }
   # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
   # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }

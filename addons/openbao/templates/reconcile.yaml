@@ -1,12 +1,12 @@
 {{- /*
 Declarative mesh PKI configuration. OpenBao has no CRDs and its self-initialisation runs once, so the desired state
-(groups from installation.yaml, members from the fleet) is applied by files/mesh-reconcile.sh: as an Argo CD PostSync
-hook after every sync and every reconcile.schedule as a CronJob (new members, removed members, drift). Chosen over
+(groups from installation.yaml, members from the fleet) is applied by files/mesh-reconcile.sh: as an Argo CD Sync
+hook (wave 1) in every sync and every reconcile.schedule as a CronJob (new members, removed members, drift). Chosen over
 OpenTofu/Terraform (state backend + an admin credential on mgmt) and over the young OpenBao config operators (no
 release, no stable CRDs for PKI + JWT auth yet): ~150 lines of POSIX sh with the bao CLI from the OpenBao image itself.
 Identities (projected tokens, audience reconcile.audience, 10 minutes, exchanged for 15-minute OpenBao tokens; all
 policies are static, written once by OpenBao's self-initialisation - the reconcile authors no ACL policy). No root token.
-  Job (PostSync)  ServiceAccount reconcile.bootstrapServiceAccount: logs in twice. Role platform-mesh-bootstrap creates
+  Job (Sync hook) ServiceAccount reconcile.bootstrapServiceAccount: logs in twice. Role platform-mesh-bootstrap creates
                   missing group CAs (internal keys; signing the intermediate is CA-equivalent, so this identity never
                   runs on a schedule), then role platform-mesh-config enrols the members.
   CronJob         ServiceAccount reconcile.serviceAccount: role platform-mesh-config only (jwt mounts mesh-*, PKI roles
@@ -86,7 +86,10 @@ metadata:
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
   annotations:
-    argocd.argoproj.io/hook: PostSync
+    # Sync hook in wave 1 (after OpenBao, wave 0, is Ready), NOT PostSync: PostSync waits for every resource to be
+    # Healthy, and openbao-ca-bundle cannot be before this Job created the group roots (bootstrap deadlock).
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 10                 # OpenBao may still be starting / self-initialising on the first sync
@@ -106,6 +109,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    # Final wave (no hook in it): a run fails until a group CA exists or while every member is unreachable, i.e. the
+    # CronJob may be Degraded. Argo CD fails a sync on a Degraded resource of an earlier wave, not of the final one.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   schedule: {{ $r.schedule | quote }}
   concurrencyPolicy: Forbid

@@ -91,10 +91,13 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `clusterIdParameters` (`<installation>-<cluster>`, unique across installations, e.g. the external-dns TXT owner),
-`installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)), `clusterLabelParameters` (a cluster secret
-label's value with a default, e.g. Istio's meshID and network from the mesh labels; [multicluster.md](multicluster.md)).
-`installationValueFiles`
+`installationParameters` (a template over installation values), `clusterServerParameters` (`url`, `host` or `port`
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)),
+`clusterLabelParameters` (a cluster secret label's value with a default, e.g. Istio's meshID and network from the mesh
+labels; [multicluster.md](multicluster.md)), `clusterNameFormats` (the cluster name inside fixed text, e.g.
+falcosidekick's `cluster:<name>` custom field) and `fleetParameters` (every platform cluster's name as a Helm list: the
+ApplicationSet matrixes its cluster generator with a `flatList` one over all cluster secrets, e.g. argo-events'
+per-cluster Falco endpoints). `installationValueFiles`
 (templates over installation values, paths under `addons/<addon>/values/`) select value files by an installation fact
 that is not a cluster label, e.g. external-dns' DNS provider ([dns.md](dns.md)). `hack/lib/addons.sh` reproduces this
 layering for every offline render (test.sh, image-audit, contract tests), reading the release name, value files,
