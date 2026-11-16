@@ -29,15 +29,15 @@ jobs:
       - name: Validate OpenChoreo manifests
         run: uv run --with pyyaml --with jsonschema python3 hack/validate-manifests.py
 
-  # INTERIM until koorikla/ci ships python.yaml (ruff, pytest and pip-audit/osv-scanner, CodeQL).
-  # TODO(koorikla/ci#1): switch to koorikla/ci/.github/workflows/python.yaml@<sha> # v1
-  # Meanwhile container.yaml builds the multi-arch image and the Dockerfile's build stage runs ruff and pytest, so
-  # a failing test fails this job. PRs: build + scan only; main: push, SBOM, provenance, keyless signature.
+  # uv lock --check, ruff, mypy (when locked), pytest + coverage, pip-audit + Trivy fs on uv.lock, CodeQL,
+  # multi-arch distroless image (PRs: build + scan only; main: push to ghcr.io, SBOM, provenance, cosign keyless
+  # signature).
   build:
     needs: validate-manifests
-    uses: koorikla/ci/.github/workflows/container.yaml@de39b1d4162e18e275c7be7e86384d22cc4e070b # v1
+    uses: koorikla/ci/.github/workflows/python.yaml@a31c2341b1effdd084d1dd4c715d65e97ade895f # v1
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
       attestations: write

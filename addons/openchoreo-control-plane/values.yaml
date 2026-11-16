@@ -99,12 +99,13 @@ openchoreo-control-plane:
         rules:
           # Backstage defaults + Resource: catalog:register adds each new repo's catalog-info.yaml (kind Resource)
           - allow: [Component, API, Resource, Location]
-          # golden-path templates: only from this repo's templates/ (a location's own `rules` would not cover the
-          # templates its Location entity points to)
+          # golden-path templates: only from this repo's templates/catalog-info.yaml. Backstage checks entities a
+          # Location emits against that Location's ORIGIN (this config target), not the template.yaml URL (#59:
+          # a templates/*/template.yaml pattern rejected all six as "not of an allowed kind for that location").
           - allow: [Template]
             locations:
               - type: url
-                pattern: https://github.com/koorikla/platform/blob/main/templates/*/template.yaml
+                exact: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
         locations:
           - type: file
             target: /app/catalog-entities/org.yaml

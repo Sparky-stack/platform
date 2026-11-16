@@ -1,4 +1,5 @@
-# Deleting a cluster file in installations/<inst>/clusters/*.yaml prunes the Application and deletes the CAPI Cluster.
+# Deleting (or disabling: *.yaml.disabled) a cluster file in installations/<inst>/clusters/*.yaml prunes the Application
+# and deletes the CAPI Cluster.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -15,8 +16,12 @@ spec:
   template:
     metadata:
       name: 'cluster-{{ "{{" }} .name {{ "}} " | trim }}'
+      # Background cascade: Argo CD deletes the CAPI Cluster like `kubectl delete` and CAPI tears it down in order
+      # (control plane and machines, then infrastructure). The default (foreground) finalizer makes the garbage
+      # collector delete the Cluster's dependents all at once: the DockerCluster went first and CAPD then never
+      # finalizes the DockerMachine ("DockerCluster is not available yet"), leaving the Cluster Deleting (#115).
       finalizers:
-        - resources-finalizer.argocd.argoproj.io
+        - resources-finalizer.argocd.argoproj.io/background
     spec:
       project: fleet
       source:

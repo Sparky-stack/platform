@@ -41,7 +41,7 @@ tests:
       - isKind: { of: ClusterWorkflowTemplate }
       - equal:
           path: 'spec.templates[?(@.name == "checkout")].container.image'
-          value: ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608
+          value: ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79
       - matchRegex:
           path: 'spec.templates[?(@.name == "build")].container.image'
           pattern: '^docker\.io/moby/buildkit:v[0-9.]+-rootless@sha256:[0-9a-f]{64}$'

@@ -12,15 +12,15 @@ deployed by Argo CD + OpenChoreo ([openchoreo.md](openchoreo.md#tenants)).
 | Template | Stack | CI (koorikla/ci, pinned by SHA `# v1`) | Runtime image |
 |---|---|---|---|
 | `go-service` | Go, stdlib `net/http` | `go.yaml` | distroless static |
-| `python-service` | Python 3.13, FastAPI, uv, ruff, pytest | `container.yaml` until `python.yaml` ([koorikla/ci#1](https://github.com/koorikla/ci/issues/1)) | distroless python3 |
-| `node-fastify-service` | Node.js 26, Fastify, pnpm, eslint, vitest | `container.yaml` until `node.yaml` ([koorikla/ci#2](https://github.com/koorikla/ci/issues/2)) | distroless nodejs26 |
-| `rust-service` | Rust, axum, tokio (static musl binary) | `container.yaml` until `rust.yaml` ([koorikla/ci#3](https://github.com/koorikla/ci/issues/3)) | distroless static |
-| `java-quarkus-service` | Java 25, Quarkus (REST, health, metrics); the recommended Java path | `container.yaml` until `java.yaml` ([koorikla/ci#4](https://github.com/koorikla/ci/issues/4)) | distroless java25 |
+| `python-service` | Python 3.13, FastAPI, uv, ruff, pytest | `python.yaml` | distroless python3 |
+| `node-fastify-service` | Node.js 26, Fastify, pnpm, eslint, vitest | `node.yaml` | distroless nodejs26 |
+| `rust-service` | Rust, axum, tokio (static musl binary) | `rust.yaml` | distroless static |
+| `java-quarkus-service` | Java 25, Quarkus (REST, health, metrics); the recommended Java path | `java.yaml` | distroless java25 |
 | `docker-service` | any language, bring your own `Dockerfile` | `container.yaml` | distroless static (placeholder) |
 
-Until a stack's own workflow exists, `container.yaml` builds, scans, signs and attests the image and the Dockerfile's
-build stage runs the stack's linters and unit tests, so a failing test still fails CI. `PENDING_CI` in
-`hack/tests/test_project_templates.sh` tracks the switch (the caller carries `TODO(koorikla/ci#N)`). More frameworks
+Each stack workflow runs the stack's linters, tests, dependency audit and CodeQL, then calls `container.yaml`, which
+builds, scans, signs and attests the multi-arch image; the Dockerfile's build stage runs the tests again, so
+`docker build` alone also fails on a broken test. More frameworks
 (Elixir, Next.js, Ruby, Spring Boot, NestJS, Crossplane configuration, Helm chart, GraphQL):
 [#59](https://github.com/koorikla/platform/issues/59).
 
@@ -71,8 +71,9 @@ OpenChoreo's Backstage (addon openchoreo-control-plane) reads extra config from
 - `catalog.locations` adds the url location `https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml`
   (a `Location` listing every `template.yaml`). Backstage replaces arrays across config files, so the list repeats the
   image's own locations (org groups and the 14 OpenChoreo wizards of openchoreo-ui v1.3.3); re-check it on a chart bump.
-- `catalog.rules` allows `Template` only from `templates/*/template.yaml` of this repo, and `Resource` (the generated
-  repos' `catalog-info.yaml`).
+- `catalog.rules` allows `Template` only from this repo's `templates/catalog-info.yaml`, and `Resource` (the generated
+  repos' `catalog-info.yaml`). Backstage checks the entities a `Location` emits against that Location's origin (the
+  configured url), so the rule matches `catalog-info.yaml` exactly; a pattern on `*/template.yaml` never matches.
 
 Templates are read from `main` of the public repo; Backstage reads it anonymously until the GitHub App below is set
 (GitHub's unauthenticated rate limit applies).

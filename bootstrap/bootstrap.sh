@@ -312,7 +312,7 @@ seed_openbao_secret() {
 # Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
 # cosign.password). Generated once with cosign from the koorikla/ci toolbox image (no host install); the private key
 # only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
-COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608"
+COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79"
 COSIGN_TMP=""
 # shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
 seed_cosign_secret() {
