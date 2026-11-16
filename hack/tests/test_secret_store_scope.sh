@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ClusterSecretStore `platform` (addon secret-stores) is limited by spec.conditions to platformStore.namespaces. Every
-# ExternalSecret that reads it must live in one of those namespaces, and every listed namespace must have a consumer
-# (no stale grants). On workload clusters, store `dns` (invariant 5 exception: the external-dns Cloudflare token) is
-# limited to namespace external-dns, and that token is never read through the tenant store `default`. Uses the
-# manifests hack/test.sh rendered for each installation's mgmt cluster and CAPI clusters
-# (RENDERED_DIR), plus opt-in consumers rendered here.
+# ExternalSecret that reads it must live in one of those namespaces, every listed namespace must have a consumer
+# (no stale grants), and no `workflows-*` run namespace may ever read `platform`: workflow runs use the key-scoped
+# `ClusterSecretStore/workflows` (Role resourceNames = workflowStore.keys). On workload clusters, store `dns`
+# (invariant 5 exception: the external-dns Cloudflare token) is limited to namespace external-dns, and that token is
+# never read through the tenant store `default`. Uses the manifests hack/test.sh rendered for each installation's mgmt
+# cluster and CAPI clusters (RENDERED_DIR), plus opt-in consumers rendered here.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -15,17 +16,25 @@ if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
 fi
 cd "$ROOT"
 
+# wp_store <file>... -> ClusterWorkflowPlane.spec.secretStoreRef.name (default: workflows)
+wp_store() {
+  local s
+  s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "$@" 2>/dev/null | head -n1 || true)
+  printf '%s\n' "${s:-workflows}"
+}
 # consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`. Includes the
 # ExternalSecrets OpenChoreo renders per WorkflowRun from ClusterWorkflow/Workflow spec.resources: namespace
 # ${metadata.namespace} is workflows-<org ns> (ORG_NS), store ${workflowplane.secretStore} is the plane's (WP_STORE).
 consumers() {
+  local wps
+  wps=${WP_STORE:-$(wp_store "$@")}
   yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
     | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
                .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
                .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
     | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
   # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
-  ORG_NS="${ORG_NS:-default}" WP_STORE="${WP_STORE:-platform}" yq -N '
+  ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
     select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
     | .spec.resources[]?.template | select(.kind == "ExternalSecret")
     | select((.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) == "platform")
@@ -36,6 +45,12 @@ consumers() {
 allowed() {
   yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform") | .spec.conditions[].namespaces[]' "$1"
 }
+# platform_workflow_conds <secret-stores render> -> any workflows-* namespace or regex on store platform
+platform_workflow_conds() {
+  yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform")
+    | (.spec.conditions[].namespaces[]?, .spec.conditions[].namespaceRegexes[]?)
+    | select(test("(^|\^)workflows-"))' "$1" 2>/dev/null | grep -v '^$' || true
+}
 
 USED=""
 check() {   # check <label> <store render> <render>...
@@ -43,6 +58,7 @@ check() {   # check <label> <store render> <render>...
   local ok ns what n=0
   ok=$(allowed "$store")
   assert_nonempty "$ok" "$label: store platform has namespace conditions"
+  assert_eq "$(platform_workflow_conds "$store")" "" "$label: store platform never admits workflows-* namespaces"
   while read -r ns what; do
     [[ -n "$ns" ]] || continue
     n=$((n + 1))
@@ -61,6 +77,61 @@ EOF
   assert_match "$n" '^[1-9]' "$label: consumers found"
 }
 
+# --- mgmt store `workflows` (ClusterWorkflowPlane secretStoreRef, key-scoped in workflows-*) ------------------------
+# wf_es_records <wp_store> <file>... -> "<ns> <wf>/<es> <store> <dataFrom count> <keys csv>" per workflow ExternalSecret
+wf_es_records() {
+  local wps=$1; shift
+  # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
+  ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
+    select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
+    | .spec.resources[]?.template | select(.kind == "ExternalSecret")
+    | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " "
+      + $k + ":" + $wf + ":" + .metadata.name + " "
+      + (.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) + " "
+      + ((.spec.dataFrom // []) | length | tostring) + " "
+      + ([.spec.data[]?.remoteRef.key] | join(","))' "$@" 2>/dev/null | grep -v '^$' || true
+}
+check_workflows() {   # check_workflows <label> <store render> <render>...
+  local label=$1 store=$2; shift 2
+  local wps ns what s df keys k used_keys="" role_keys role_verbs
+  assert_eq "$(yq -N -o json -I0 'select(.kind == "ClusterSecretStore" and .metadata.name == "workflows") | .spec.conditions' "$store")" \
+    '[{"namespaceRegexes":["^workflows-.+$"]}]' "$label: store workflows admits workflows-* namespaces only"
+  wps=$(wp_store "$@")
+  assert_eq "$wps" workflows "$label: ClusterWorkflowPlane secretStoreRef is workflows"
+  while read -r ns what s df keys; do
+    [[ -n "$ns" ]] || continue
+    assert_match "$ns" '^workflows-.+$' "$label: $what runs in a workflows-* namespace ($ns)"
+    assert_eq "$df" 0 "$label: $what uses explicit spec.data keys (no dataFrom extract/find)"
+    case "$s" in
+      workflows)
+        for k in ${keys//,/ }; do
+          [[ -n "$k" ]] && used_keys="${used_keys:+$used_keys$'\n'}$k"
+        done
+        ;;
+      mgmt-harbor) assert_eq "$keys" harbor-ca-bundle "$label: $what reads only harbor-ca-bundle from mgmt-harbor" ;;
+      *) assert_eq "$s" workflows "$label: $what uses store workflows (got $s)" ;;
+    esac
+  done <<EOF
+$(wf_es_records "$wps" "$@")
+EOF
+  used_keys=$(printf '%s\n' "$used_keys" | LC_ALL=C sort -u | paste -sd, -)
+  assert_nonempty "$used_keys" "$label: workflow ExternalSecrets read keys from store workflows"
+  role_verbs=$(yq -N -o json -I0 'select(.kind == "Role" and .metadata.name == "eso-workflows") | .rules[0].verbs' "$store" 2>/dev/null || true)
+  if [[ -n "$role_verbs" && "$role_verbs" != "null" ]]; then
+    assert_eq "$(yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "workflows") | .spec.provider.kubernetes.auth.serviceAccount.name' "$store")" \
+      eso-workflows "$label: store workflows authenticates as eso-workflows"
+    assert_eq "$role_verbs" '["get"]' "$label: Role eso-workflows grants get only (no list/watch)"
+    role_keys=$(yq -N 'select(.kind == "Role" and .metadata.name == "eso-workflows") | .rules[0].resourceNames[]' "$store" | LC_ALL=C sort -u | paste -sd, -)
+    assert_eq "$role_keys" "$used_keys" "$label: Role eso-workflows resourceNames == exact keys read by workflows"
+  else
+    local wf_sa pf_sa
+    wf_sa=$(yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "workflows") | (.spec.provider.aws.auth.jwt.serviceAccountRef.name // .spec.provider.vault.auth.kubernetes.serviceAccountRef.name)' "$store")
+    pf_sa=$(yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform") | (.spec.provider.aws.auth.jwt.serviceAccountRef.name // .spec.provider.vault.auth.kubernetes.serviceAccountRef.name)' "$store")
+    assert_nonempty "$wf_sa" "$label: store workflows has a dedicated provider ServiceAccount"
+    assert_eq "$([[ "$wf_sa" != "$pf_sa" ]] && echo distinct || echo same)" distinct "$label: store workflows ServiceAccount ($wf_sa) != store platform ($pf_sa)"
+  fi
+}
+
 for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir")
@@ -71,11 +142,13 @@ for inst_dir in installations/*; do
     [[ -f "$f" ]] && files+=("$f")
   done
   ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' "$inst_dir/installation.yaml") check "$inst" "$store" "${files[@]}"
+  ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' "$inst_dir/installation.yaml") check_workflows "$inst" "$store" "${files[@]}"
 done
 
 files=()
 for f in "$RENDERED_DIR"/addon-*-standalone.yaml; do [[ -f "$f" ]] && files+=("$f"); done
 check standalone "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "${files[@]}"
+check_workflows standalone "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "${files[@]}"
 
 # Opt-in consumers that the default renders leave out: falco's sidekick outputs on mgmt.
 falco_ns=$(yq '.addons.falco.namespace // "falco"' charts/platform/values.yaml)
@@ -158,6 +231,27 @@ if helm template external-dns addons/external-dns --namespace external-dns "${ar
 else
   assert_match "$(cat "$TMP/neg.err")" 'only store dns' "workload Cloudflare token via store default is refused"
 fi
+
+# Negative: workflows-* regaining the full platform store (via platformStore.namespaces, ClusterWorkflowPlane
+# secretStoreRef, or a mutated ClusterSecretStore/platform condition) is refused.
+if helm template secret-stores addons/secret-stores --namespace external-secrets \
+  --set 'platformStore.namespaces={argocd,workflows-default}' > /dev/null 2> "$TMP/neg-ss.err"; then
+  assert_eq rendered fails "workflows-default in platformStore.namespaces is refused at render time"
+else
+  assert_match "$(cat "$TMP/neg-ss.err")" 'must not include workflow run namespace' "workflows-default in platformStore.namespaces is refused at render time"
+fi
+if helm template openchoreo-workflow-plane addons/openchoreo-workflow-plane --namespace openchoreo-workflow-plane \
+  --set clusterWorkflowPlane.secretStore=platform > /dev/null 2> "$TMP/neg-wp.err"; then
+  assert_eq rendered fails "clusterWorkflowPlane.secretStore=platform is refused at render time"
+else
+  assert_match "$(cat "$TMP/neg-wp.err")" 'never the full platform store' "clusterWorkflowPlane.secretStore=platform is refused at render time"
+fi
+yq '(. | select(.kind == "ClusterSecretStore" and .metadata.name == "platform") | .spec.conditions[0].namespaces) += ["workflows-default"]' \
+  "$RENDERED_DIR/addon-secret-stores-standalone.yaml" > "$TMP/neg-platform-wf.yaml"
+assert_eq "$(platform_workflow_conds "$TMP/neg-platform-wf.yaml")" "workflows-default" \
+  "negative: platform_workflow_conds catches workflows-default added to ClusterSecretStore/platform"
+assert_match "$(WP_STORE=platform consumers "$RENDERED_DIR/addon-openchoreo-platform-standalone.yaml")" '^workflows-default ExternalSecret/' \
+  "negative: consumers() catches workflows-default if ClusterWorkflowPlane points at store platform"
 
 # No stale grants: every allowed namespace has a consumer somewhere.
 while read -r ns; do
