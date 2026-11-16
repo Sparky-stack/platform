@@ -31,8 +31,8 @@
 <text class="s" x="412.0" y="338.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">OpenBao</text>
 <text class="s" x="412.0" y="358.4" font-size="13" fill="#cbd5e1" text-anchor="middle">raft snapshot</text>
 <text class="s" x="412.0" y="375.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ unseal key</text>
-<rect x="420.7" y="304" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#a78bfa" stroke-width="1"/>
-<text class="s" x="449.4" y="316.5" font-size="11" font-weight="700" fill="#a78bfa" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<rect x="420.7" y="292" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#a78bfa" stroke-width="1"/>
+<text class="s" x="449.4" y="304.5" font-size="11" font-weight="700" fill="#a78bfa" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
 <rect x="504" y="312" width="152" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
 <text class="s" x="596.0" y="338.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Thunder</text>
 <text class="s" x="596.0" y="358.4" font-size="13" fill="#cbd5e1" text-anchor="middle">users and OAuth</text>
@@ -53,8 +53,8 @@
 <text class="s" x="844.0" y="634.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">CNPG databases</text>
 <text class="s" x="844.0" y="654.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Barman Cloud</text>
 <text class="s" x="844.0" y="671.9" font-size="13" fill="#cbd5e1" text-anchor="middle">plugin</text>
-<rect x="852.7" y="600" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#a78bfa" stroke-width="1"/>
-<text class="s" x="881.4" y="612.5" font-size="11" font-weight="700" fill="#a78bfa" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<rect x="852.7" y="588" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#a78bfa" stroke-width="1"/>
+<text class="s" x="881.4" y="600.5" font-size="11" font-weight="700" fill="#a78bfa" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">Backup &amp; restore · what is stateful, where</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Git rebuilds everything declarative. Only the violet boxes hold state git cannot recreate; the numbers are the restore order after losing</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#94a3b8">mgmt.</text>
@@ -71,15 +71,15 @@
 <circle cx="496.0" cy="648.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="496.0" y="652.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
 <line x1="28" y1="732" x2="932" y2="732" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="755.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="760" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="40.0" cy="755.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="40.0" y="760" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">1</text>
 <text class="s" x="60.0" y="760.0" font-size="13.5" fill="#cbd5e1">The secret backend lives outside the clusters; locally re-seed it</text>
 <text class="s" x="60.0" y="779.0" font-size="13.5" fill="#cbd5e1">with task secrets</text>
-<circle cx="506.0" cy="755.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="760" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="506.0" cy="755.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="506.0" y="760" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">4</text>
 <text class="s" x="526.0" y="760.0" font-size="13.5" fill="#cbd5e1">Restore Thunder&#x27;s database (users, OAuth clients)</text>
-<circle cx="40.0" cy="803.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="808" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="40.0" cy="803.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="40.0" y="808" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">2</text>
 <text class="s" x="60.0" y="808.0" font-size="13.5" fill="#cbd5e1">Restore mgmt etcd from a k3s snapshot: CAPI keeps its</text>
 <text class="s" x="60.0" y="827.0" font-size="13.5" fill="#cbd5e1">clusters and the CA keys come back</text>
 <circle cx="506.0" cy="803.5" r="11" fill="#fbbf24"/>

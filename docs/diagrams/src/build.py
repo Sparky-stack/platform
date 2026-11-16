@@ -122,6 +122,8 @@ def security() -> Diagram:
     d.arrow([(X[0] + BW, ymid(Y[0])), (X[1], ymid(Y[0]))], step=1)
     d.arrow([(X[1] + BW, ymid(Y[0])), (X[2], ymid(Y[0]))], step=2)
     d.arrow([(X[2] + BW / 2, Y[0] + H), (X[2] + BW / 2, Y[1])], step=3)
+    d.arrow([(X[0] + BW, ymid(Y[1])), (X[1], ymid(Y[1]))])
+    d.line_label = "production bindings only"
     d.arrow([(X[2], ymid(Y[1])), (X[1] + BW, ymid(Y[1]))], step=4)
     d.arrow([(X[1] + BW / 2, Y[1] + H), (X[1] + BW / 2, Y[2])], step=5)
     d.arrow([(X[1], ymid(Y[2])), (X[0] + BW, ymid(Y[2]))], step=6)
@@ -190,13 +192,13 @@ def observability() -> Diagram:
                 "Collectors on each workload cluster ship to OpenChoreo's observability plane on mgmt; one observer "
                 "API serves Backstage, the promotion gate and the AI agents.")
     K, KW = 32, 192
-    T, TW = 352, 130
-    O, OW = 562, 140
-    U, UW = 782, 138
+    T, TW = 336, 120
+    O, OW = 546, 140
+    U, UW = 776, 144
     R = [176, 176 + 136, 176 + 2 * 136]
     m = [ymid(y) for y in R]
     d.zone(16, 128, 224, R[2] + H + 24 - 128, "workload cluster", "workload")
-    d.zone(336, 128, 600, R[2] + H + 24 - 128, "mgmt · observability plane", "mgmt")
+    d.zone(320, 128, 616, R[2] + H + 24 - 128, "mgmt · observability plane", "mgmt")
     d.box(K, R[0], KW, H, "workload", "Fluent Bit", ["container logs,", "Falco alerts included"])
     d.box(K, R[1], KW, H, "workload", "OTel Collector", ["OTLP from apps", "+ k8s events"])
     d.box(K, R[2], KW, H, "workload", "Prometheus agent", ["cAdvisor and", "kube-state-metrics"])
@@ -206,23 +208,24 @@ def observability() -> Diagram:
     d.box(U, R[0], UW, H, "mgmt", "Backstage", ["logs, metrics"])
     d.box(U, R[1], UW, H, "mgmt", "promotion gate", ["alerts, error rate"])
     d.box(U, R[2], UW, H, "mgmt", "AI agents", ["RCA · FinOps"], status="optin")
-    xb = 296                                   # badge column between the zones
+    xb = 264                                   # badge column between the zones
     d.arrow([(K + KW, m[0]), (T, m[0])], step=1, badge=(xb, m[0]))
-    xj = 262                                   # step 2 forks here: traces/events to OpenSearch, metrics to Prometheus
-    d.arrow([(K + KW, m[1]), (xj, m[1])], step=2, head=False, badge=False)
-    d.arrow([(xj, m[1]), (T, m[1])], step=2, badge=(xb, m[1]))
+    xj = 304                                   # step 2 forks after its badge: traces/events up, metrics down
+    d.arrow([(K + KW, m[1]), (xj, m[1])], step=2, head=False, badge=(xb, m[1]))
+    d.arrow([(xj, m[1]), (T, m[1])], step=2, badge=False)
     d.arrow([(xj, m[1]), (xj, m[2] - 16), (T, m[2] - 16)], step=2, badge=False)
     d.junction(xj, m[1])
     d.arrow([(K + KW, m[2] + 16), (T, m[2] + 16)], step=3, badge=(xb, m[2] + 16))
-    xi = 522                                   # step 4 joins here: both stores feed the observer API
+    xi = 470                                   # step 4 joins before its badge: both stores feed the observer API
     mo = ymid(R[0], R[1] + H - R[0])
-    d.arrow([(T + TW, mo), (xi, mo), (xi, m[1] + 30)], step=4, head=False, badge=(xi, (mo + m[1] + 30) / 2))
+    d.arrow([(T + TW, mo), (xi, mo), (xi, m[1] + 30)], step=4, head=False, badge=False)
     d.arrow([(T + TW, m[2]), (xi, m[2]), (xi, m[1] + 30)], step=4, head=False, badge=False)
-    d.arrow([(xi, m[1] + 30), (O, m[1] + 30)], step=4, badge=False)
+    d.arrow([(xi, m[1] + 30), (O, m[1] + 30)], step=4)
     d.junction(xi, m[1] + 30)
-    xo = 742                                   # step 5 forks here to the three consumers
-    d.arrow([(O + OW, m[1]), (U, m[1])], step=5, badge=False)
-    d.arrow([(xo, m[1]), (xo, m[0]), (U, m[0])], step=5, badge=(xo, (m[0] + m[1]) / 2))
+    xo = 744                                   # step 5 forks after its badge to the three consumers
+    d.arrow([(O + OW, m[1]), (xo, m[1])], step=5, head=False)
+    d.arrow([(xo, m[1]), (U, m[1])], step=5, badge=False)
+    d.arrow([(xo, m[1]), (xo, m[0]), (U, m[0])], step=5, badge=False)
     d.arrow([(xo, m[1]), (xo, m[2]), (U, m[2])], step=5, badge=False)
     d.junction(xo, m[1])
     d.require("OTel Collector", "Fluent Bit", "Prometheus agent", "OpenSearch", "Prometheus", "observer API",
@@ -291,16 +294,16 @@ def cluster_lifecycle() -> Diagram:
     d = Diagram("Cluster lifecycle · add, upgrade, remove = edit one file",
                 "A fleet file becomes a CAPI cluster, an Argo CD cluster secret and an OpenChoreo data plane; "
                 "deleting it removes all three.")
-    AX, AW = 32, 184
+    AX, AW = 32, 160
     A, B, CW = 296, 528, 152
     WX, WW = 784, 136
-    L = [256, 256 + PITCH, 256 + 2 * PITCH]
+    L = [280, 280 + PITCH, 280 + 2 * PITCH]
     d.box(AX, 88, 264, 56, "external", "fleet file", ["`clusters/<name>.yaml`"], step=9)
     ZB = L[2] + H + 64
     d.zone(16, 192, 688, ZB - 192, "mgmt cluster", "mgmt")
     d.zone(768, 192, 168, ZB - 192, "workload", "workload")
     d.box(AX, L[0], AW, L[2] + H - L[0], "mgmt", "Argo CD",
-          ["ApplicationSet fleet", "→ cluster-<name>", "", "renders charts/cluster:", "Cluster, ExternalSecrets,",
+          ["ApplicationSet fleet", "→ cluster-<name>", "", "renders", "charts/cluster:", "Cluster, secrets,",
            "agent PKI, CRS"])
     d.box(A, L[0], CW, H, "mgmt", "Cluster API", ["ClusterClass", "k3s-<provider>"], step=10)
     d.box(WX, L[0], WW, H, "workload", "k3s nodes", ["control plane", "+ workers"])
@@ -308,23 +311,25 @@ def cluster_lifecycle() -> Diagram:
     d.box(B, L[1], CW, H, "mgmt", "addon AppSets", ["select clusters", "by label"])
     d.box(WX, L[1], WW, H, "workload", "addons", ["Cilium, Istio,", "Kyverno, ESO, …"])
     d.box(A, L[2], CW, H, "security", "agent identity", ["own CA on mgmt", "cert CN=<name>"])
-    d.box(B, L[2], CW, H, "mgmt", "data plane", ["ClusterDataPlane +", "Environments"])
+    d.box(B, L[2], CW, H, "mgmt", "data plane", ["ClusterDataPlane: the", "gateway trusts its CA"])
     d.box(WX, L[2], WW, H, "workload", "cluster-agent", ["OpenChoreo", "data plane"])
-    xf = AX + 150
+    xf = 182
     xz = 736                                    # badge column between the zones
-    d.arrow([(xf, 144), (xf, L[0])], step=1, badge=(xf, L[0] - 36))
-    d.arrow([(AX + AW, ymid(L[0])), (A, ymid(L[0]))], step=2)
+    d.arrow([(xf, 144), (xf, L[0])], step=1)
+    xj = 256                                    # step 2 forks after its badge: Argo CD renders all three
+    d.arrow([(AX + AW, ymid(L[1])), (xj, ymid(L[1]))], step=2, head=False)
+    d.arrow([(xj, ymid(L[1])), (A, ymid(L[1]))], step=2, badge=False)
+    d.arrow([(xj, ymid(L[1])), (xj, ymid(L[0])), (A, ymid(L[0]))], step=2, badge=False)
+    d.arrow([(xj, ymid(L[1])), (xj, ymid(L[2])), (A, ymid(L[2]))], step=2, badge=False)
+    d.junction(xj, ymid(L[1]))
     d.arrow([(A + CW, ymid(L[0])), (WX, ymid(L[0]))], step=3, badge=(xz, ymid(L[0])))
     d.arrow([(A + CW / 2, L[0] + H), (A + CW / 2, L[1])], step=4)
     d.arrow([(A + CW, ymid(L[1])), (B, ymid(L[1]))], step=5)
     d.arrow([(B + CW, ymid(L[1])), (WX, ymid(L[1]))], step=6, badge=(xz, ymid(L[1])))
-    d.arrow([(AX + AW, ymid(L[1])), (A, ymid(L[1]))])
-    d.arrow([(AX + AW, ymid(L[2])), (A, ymid(L[2]))])
     yb = L[2] + H + 32
     d.arrow([(A + CW / 2, L[2] + H), (A + CW / 2, yb), (WX + WW / 2, yb), (WX + WW / 2, L[2] + H)], step=7,
-            badge=(B + CW / 2, yb))
+            badge=((A + CW + B) / 2, yb))
     d.arrow([(WX, ymid(L[2])), (B + CW, ymid(L[2]))], step=8, badge=(xz, ymid(L[2])))
-    d.line_label = "rendered by Argo CD"
     d.require("fleet file", "Argo CD", "Cluster API", "k3s nodes", "cluster secret", "addon AppSets", "addons",
               "agent identity", "data plane", "cluster-agent")
     d.key("Add clusters/<name>.yaml: ApplicationSet fleet creates Application cluster-<name>",
@@ -353,7 +358,7 @@ def trust() -> Diagram:
     d.zone(16, 112, 568, ZB - 112, "mgmt cluster", "mgmt")
     d.zone(664, 112, 272, ZB - 112, "workload cluster <name>", "workload")
     d.text(32, 162, "OPENCHOREO AGENT IDENTITY", 13, INK2_TXT, weight=700, spacing=1.0)
-    d.text(32, 466, "MESH CA (OPENBAO)", 13, INK2_TXT, weight=700, spacing=1.0)
+    d.text(32, 466, "MESH CA", 13, INK2_TXT, weight=700, spacing=1.0)
     d.box(C1, A1, W1, H, "security", "cert-manager", ["agent CA per cluster (10y)", "client cert (1y)"], step=8)
     d.box(C2, A1, W2, H, "security", "ESO + CRS", ["cert, key and the public", "gateway CA, as a payload"],
           name="agent payload")

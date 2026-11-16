@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="977" viewBox="0 0 960 977" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fbbf24"/></marker></defs><rect width="960" height="977" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="961" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="977" viewBox="0 0 960 977" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fbbf24"/></marker></defs><rect width="960" height="977" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="961" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
 <path d="M 376.0 160.0 L 468.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 648.0 160.0 L 740.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 830.0 200.0 L 830.0 276.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 376.0 320.0 L 468.0 320.0" fill="none" stroke="#8b9ab0" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
 <path d="M 736.0 320.0 L 648.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 558.0 360.0 L 558.0 440.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 468.0 480.0 L 376.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
@@ -128,7 +129,9 @@
 <path d="M 594.61024 923 L 616.61024 923" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 594.61024 923 L 616.61024 923" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
 <text class="s" x="626.6" y="927.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
-<rect x="25" y="938" width="26" height="19" rx="6" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
-<rect x="28" y="941" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="2"/>
-<text class="s" x="58.0" y="951.0" font-size="13" fill="#94a3b8">focus of this view</text>
+<path d="M 26 947 L 48 947" stroke="#8b9ab0" stroke-width="1.5" marker-end="url(#ah8b9ab0)"/>
+<text class="s" x="58.0" y="951.0" font-size="13" fill="#94a3b8">production bindings only</text>
+<rect x="229.58974" y="938" width="26" height="19" rx="6" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
+<rect x="232.58974" y="941" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="2"/>
+<text class="s" x="262.6" y="951.0" font-size="13" fill="#94a3b8">focus of this view</text>
 </svg>

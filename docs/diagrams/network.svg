@@ -76,8 +76,8 @@
 <circle cx="680.0" cy="473.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="680.0" y="477.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
 <line x1="28" y1="868" x2="932" y2="868" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="891.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="896" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="40.0" cy="891.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="40.0" y="896" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">1</text>
 <text class="s" x="60.0" y="896.0" font-size="13.5" fill="#cbd5e1">Kyverno enrols every OpenChoreo dp-* namespace in Istio</text>
 <text class="s" x="60.0" y="915.0" font-size="13.5" fill="#cbd5e1">ambient (before any traffic)</text>
 <circle cx="506.0" cy="891.5" r="11" fill="#fbbf24"/>

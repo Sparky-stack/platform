@@ -41,8 +41,8 @@
 <text class="s" x="160.0" y="631.9" font-size="13" fill="#cbd5e1" text-anchor="middle"></text>
 <text class="s" x="160.0" y="649.4" font-size="13" fill="#cbd5e1" text-anchor="middle">per member: JWT auth</text>
 <text class="s" x="160.0" y="666.9" font-size="13" fill="#cbd5e1" text-anchor="middle">mount + PKI role</text>
-<rect x="188.7" y="480" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#fb7185" stroke-width="1"/>
-<text class="s" x="217.4" y="492.5" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<rect x="188.7" y="468" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#fb7185" stroke-width="1"/>
+<text class="s" x="217.4" y="480.5" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
 <rect x="336" y="488" width="232" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
 <text class="s" x="452.0" y="514.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">ESO + CRS</text>
 <text class="s" x="452.0" y="534.4" font-size="13" fill="#cbd5e1" text-anchor="middle">group root + OpenBao CA</text>
@@ -59,7 +59,7 @@
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Two chains, both rooted on mgmt: a CA per cluster for the OpenChoreo agent, and OpenBao&#x27;s mesh CA per group. Private CA keys</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#94a3b8">never leave mgmt.</text>
 <text class="s" x="32.0" y="162.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">OPENCHOREO AGENT IDENTITY</text>
-<text class="s" x="32.0" y="466.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">MESH CA (OPENBAO)</text>
+<text class="s" x="32.0" y="466.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">MESH CA</text>
 <circle cx="53.0" cy="197.0" r="11" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
 <text class="s" x="53.0" y="201.6" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">8</text>
 <circle cx="53.0" cy="509.0" r="11" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
@@ -99,16 +99,16 @@
 <text class="s" x="40.0" y="896" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <text class="s" x="60.0" y="896.0" font-size="13.5" fill="#cbd5e1">The agent dials out with mTLS; cluster-gateway accepts only</text>
 <text class="s" x="60.0" y="915.0" font-size="13.5" fill="#cbd5e1">that cluster&#x27;s CA</text>
-<circle cx="506.0" cy="891.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="896" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<circle cx="506.0" cy="891.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="506.0" y="896" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">8</text>
 <text class="s" x="526.0" y="896.0" font-size="13.5" fill="#cbd5e1">Rotation: certs renew 30 days before expiry; restart the agent</text>
 <text class="s" x="526.0" y="915.0" font-size="13.5" fill="#cbd5e1">to load them (#50)</text>
 <circle cx="40.0" cy="939.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40.0" y="944" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
 <text class="s" x="60.0" y="944.0" font-size="13.5" fill="#cbd5e1">OpenBao publishes each group root; its keys stay inside</text>
 <text class="s" x="60.0" y="963.0" font-size="13.5" fill="#cbd5e1">OpenBao</text>
-<circle cx="506.0" cy="939.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="944" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<circle cx="506.0" cy="939.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
+<text class="s" x="506.0" y="944" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">9</text>
 <text class="s" x="526.0" y="944.0" font-size="13.5" fill="#cbd5e1">Root rotation is planned: new root beside the old one, trust</text>
 <text class="s" x="526.0" y="963.0" font-size="13.5" fill="#cbd5e1">bundle, switch, drop (#71)</text>
 <circle cx="40.0" cy="987.5" r="11" fill="#fbbf24"/>

@@ -141,6 +141,7 @@ class Diagram:
         self.focus_color = None
         self.emph: list[tuple] = []          # (outer x, y, w, h, inner rect) of emphasised boxes
         self.node_badges = False
+        self.ring_steps: set[int] = set()
         self.line_label = "other relation"
         self._final = False
         # bookkeeping for check()
@@ -234,7 +235,7 @@ class Diagram:
         if chip:
             cs, sp = MIN_CHIP, 0.6
             cw = tw(chip, cs, bold=True, spacing=sp) + 12
-            chx, chy = x + w - cw - 10, y - 8
+            chx, chy = x + w - cw - 10, y - 20
             out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="17" rx="8.5" fill="{BG}" '
                        f'stroke="{color}" stroke-width="1"/>')
             out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 12.5}" font-size="{cs}" font-weight="700" '
@@ -365,10 +366,11 @@ class Diagram:
         self.badge_count[n] = self.badge_count.get(n, 0) + 1
         if ring:
             self.node_badges = True
+            self.ring_steps.add(n)
             self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r - 1}" fill="{BG}" stroke="{ACCENT}" '
                               f'stroke-width="2.2"/>')
-            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="13" font-weight="700" '
-                              f'fill="{ACCENT}" text-anchor="middle">{n}</text>')
+            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="{12 if n > 9 else 13}" '
+                              f'font-weight="700" fill="{ACCENT}" text-anchor="middle">{n}</text>')
         else:
             self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" '
                               f'stroke-width="2"/>')
@@ -409,9 +411,14 @@ class Diagram:
             for c, (n, st) in enumerate(pair):
                 cx = 28 + c * (colw + 28)
                 lines = wrap(st, 13.5, colw - 34)
-                self.l_top.append(f'<circle cx="{cx + 12}" cy="{cy - 4.5}" r="11" fill="{ACCENT}"/>')
-                self.l_top.append(f'<text class="s" x="{cx + 12}" y="{cy}" font-size="13" font-weight="700" '
-                                  f'fill="{BG}" text-anchor="middle">{n}</text>')
+                if n in self.ring_steps:
+                    self.l_top.append(f'<circle cx="{cx + 12}" cy="{cy - 4.5}" r="10" fill="{BG}" stroke="{ACCENT}" '
+                                      f'stroke-width="2.2"/>')
+                else:
+                    self.l_top.append(f'<circle cx="{cx + 12}" cy="{cy - 4.5}" r="11" fill="{ACCENT}"/>')
+                self.l_top.append(f'<text class="s" x="{cx + 12}" y="{cy}" font-size="{12 if n > 9 else 13}" '
+                                  f'font-weight="700" fill="{ACCENT if n in self.ring_steps else BG}" '
+                                  f'text-anchor="middle">{n}</text>')
                 for k, ln in enumerate(lines):
                     self._text(cx + 32, cy + k * 19, ln, 13.5, INK2, layer=self.l_top)
                 heights.append(len(lines) * 19)
