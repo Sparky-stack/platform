@@ -87,9 +87,8 @@ Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` an
 2. `addons/thunder/values.yaml` (or the installation overlay): `bootstrapSecret.aiAgentClients: [rca]`. That one list
    syncs the client secret into `thunder-bootstrap` and switches on script 53 (`files/ai-agent-clients/`, rendered by
    `templates/ai-agent-clients.yaml` into subdirectory `ai-agent-clients` of the setup Job's bootstrap directory);
-   nothing to uncomment. An
-   unlisted agent has no file there at all: Thunder's bootstrap fails the whole import on an empty or comment-only
-   document.
+   nothing to uncomment. An unlisted agent has no file there at all: Thunder's bootstrap fails the whole import on an
+   empty or comment-only document.
 3. `addons/openchoreo-observability-plane/values.yaml` (or the installation overlay):
    `openchoreo-observability-plane.rca.enabled: true` and `rca.llm.modelName` (e.g. `gpt-5.2`).
 
