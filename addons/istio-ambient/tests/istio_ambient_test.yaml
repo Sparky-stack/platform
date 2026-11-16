@@ -181,12 +181,15 @@ tests:
         template: charts/istiod/templates/configmap.yaml
         documentSelector: { path: metadata.name, value: istio }
 
-  - it: "istiod never starts Secret informers on peer clusters (peers' reader role has no Secret access)"
+  - it: "negative: never sets PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER (\"false\" SIGSEGVs istiod 1.32.0 with remote secrets)"
     template: charts/istiod/templates/deployment.yaml
     asserts:
-      - contains:
+      - notContains:
           path: spec.template.spec.containers[0].env
           content: { name: PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER, value: "false" }
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER, value: "true" }
 
   # --- mesh CA (values/mesh-member.yaml): no CA in istiod, certificates from istio-csr -> OpenBao on mgmt ---------
   - it: "member: istiod runs no CA (ENABLE_CA_SERVER=false) and hands proxies istio-csr's address"

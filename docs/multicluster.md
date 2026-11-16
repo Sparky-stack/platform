@@ -208,8 +208,11 @@ issued certificates expire within a day. The 7-day reader client certs (remote s
 ### Bootstrapping order
 1. mgmt: `make secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals; the PostSync Job
    creates the group mounts. `openbao-ca-bundle` is filled once the roots exist (ESO retries).
-2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`; the
-   next reconcile creates `auth/mesh-<name>`, role and policy; `<name>-mesh-trust` delivers the public certificates.
+2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`.
+   `ClusterResourceSet <name>-mesh-trust` applies the issuer-discovery binding as soon as the member's API server is
+   up (static ConfigMap), then the public certificates once ESO has them. The next reconcile creates
+   `auth/mesh-<name>`, role and policy; if the member's JWKS is not readable yet it is reported `FAILED`, the other
+   members are configured, and the CronJob (5 min) retries.
 3. On the member, cert-manager (catalog default) and addon istio-csr come up; the Vault issuer turns Ready once
    OpenBao accepts its login; istio-csr issues istiod's cert. istiod (gated) starts, then ztunnel (sync wave 1).
 
@@ -253,7 +256,7 @@ secret: `istio-system/istio-remote-secret-<peer>`, labelled `istio/multiCluster=
 2. `Certificate <name>-mesh-reader`: client cert `CN=platform:istio-reader`, no organisation (so no groups), ECDSA,
    **7 days**, renewed after 4.
 3. On the member, addon `istio-eastwest` binds user `platform:istio-reader` to `ClusterRole platform-istio-reader`
-   (read-only discovery, no Secrets; "Reader RBAC" below).
+   (read-only discovery; Secrets only if the installation opts in, "Reader RBAC" below).
 4. `ExternalSecret <name>-mesh-remote-secret` (store `mgmt-fleet`, refreshed every 5m) builds the kubeconfig. It
    takes the API endpoint and CA from the CAPI kubeconfig and the user from the reader cert, and writes it as JSON
    so no YAML indentation is templated. The result is a ClusterResourceSet payload.
@@ -282,14 +285,46 @@ every tenant Secret. So the reader is bound to the platform's own roles instead 
 | `serviceregistry/kube/controller` | the same + endpoints, MCS serviceimports, CRDs (delayed informers) | same |
 | `PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY` (default on) | networking.istio.io workloadentries | Istio config groups, read-only |
 | remote mesh watcher (`controller/multicluster.go`) | ConfigMap `istio-system/istio` (trust domain), by field selector | `Role platform-istio-reader`, `resourceNames: [istio]` |
-| remote credentials controller | Secrets (gateway TLS) - only needed when a gateway's istiod is in another cluster (primary-remote) | **none**: istio-ambient sets `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` |
+| remote credentials controller (`pilot/pkg/credentials/kube`) | Secrets list/watch, cluster-wide (field selector excludes only Helm releases and SA tokens). The data serves only gateways whose istiod is in another cluster (primary-remote), but the informer gates the peer's sync (below) | **none by default**; opt-in `reader.remoteCredentialsSecrets` (separate `ClusterRole platform-istio-reader-secrets`, list/watch) |
 | leader election / namespace controller on remotes | only with `EXTERNAL_ISTIOD` | none |
 | `serviceexports` writes, tokenreviews, SARs | `ENABLE_MCS_AUTO_EXPORT` (off), primary-remote proxy auth | none |
 
-Unittests pin the rules and assert the negatives. **VERIFY** on the first live run: `istioctl remote-clusters` shows
-each peer `synced` (not `timeout`: a forbidden informer would never sync and istiod gives up after
-`PILOT_REMOTE_CLUSTER_TIMEOUT`, 30s), istiod logs show no `forbidden` for the reader user, and `kubectl auth can-i
---as platform:istio-reader get secrets -A` is `no` on each member. Re-check this table on every Istio upgrade.
+#### The remote Secret informer (istiod 1.32.0): no knob keeps Secrets out and the peer in
+Read from the 1.32.0 source (also unchanged in 1.31.4 and on `release-1.32`/`master` as of this PR):
+1. `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` (added by istio/istio#59874 for exactly this RBAC) makes the
+   component constructor in `pilot/pkg/credentials/kube/multicluster.go` return a nil `*CredentialsController` for
+   each remote cluster. `Component.clusterAdded` (`pkg/kube/multicluster/component.go`) returns it as the handler's
+   syncer, and `Cluster.Run` (`pkg/kube/multicluster/cluster.go`) calls `kube.WaitForCacheSync(..., h.HasSynced)` on
+   it: `CredentialsController.HasSynced` dereferences `s.secrets` on a nil receiver, istiod SIGSEGVs as soon as it
+   has a remote secret (seen on the live boot). The flag is unusable until upstream makes it nil-safe.
+2. With the controller on (the default) and Secrets forbidden, its `kclient.NewFiltered[*v1.Secret]` informer is
+   started on the peer's client before `c.Client.RunAndWait(c.stop)`, which waits on every started informer
+   (`informerFactory.WaitForCacheSync`); a reflector whose list is forbidden never syncs. After
+   `PILOT_REMOTE_CLUSTER_TIMEOUT` (30s) `Cluster.Run` marks the peer `timeout`, and `ClusterStore.AllReady`
+   (`clusterstore.go`) leaves timed-out clusters out of the `RemoteClusters` KRT collection the ambient index is
+   built from: **the peer's services and workloads are not served**. istiod itself becomes ready (the timeout counts as
+   synced), which is why this looked harmless in sidecar-mode reports on 1.29 (istio/istio#59845) but is not on 1.32.
+3. Other knobs do not help: `PILOT_REMOTE_CLUSTER_TIMEOUT=0` blocks istiod's readiness instead,
+   `ISTIO_WATCH_NAMESPACE` restricts every informer (services, pods) to one namespace, and
+   `PILOT_ENABLE_XDS_IDENTITY_CHECK=false` (skips the credentials controller entirely) turns off XDS client
+   authorisation. RBAC cannot scope a cluster-wide list by field selector.
+
+So the choice is per installation (`installations/<inst>/addons/istio-eastwest/values.yaml`):
+- `reader.remoteCredentialsSecrets: false` (default, the B1 position): peers read no Secret; on istiod 1.32.0
+  cross-cluster discovery does not work (`istioctl remote-clusters`: `timeout`).
+- `reader.remoteCredentialsSecrets: true`: `ClusterRole platform-istio-reader-secrets` (list/watch on Secrets, no get)
+  for the reader user; peers are served. Blast radius: a compromised peer istiod of the same group reads every Secret
+  of the member (OpenChoreo agent identity, istio-csr/istiod serving keys, tenant Secrets) - on top of what a group
+  peer can already do (mint any workload identity of the trust domain). Use only where all members of a group sit
+  at one trust level.
+- Exit: once upstream makes `CredentialsController.HasSynced`/`Close` nil-safe (or skips nil components in
+  `Cluster.Run`), set `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` in istio-ambient and drop the opt-in.
+
+Unittests pin the rules and assert the negatives (default: no Secret rule; opt-in: list/watch only, separate
+objects; istio-ambient never sets the flag). **VERIFY** on the live run: no istiod restart/SIGSEGV; with the default,
+`istioctl remote-clusters` shows each peer `timeout` and istiod logs `failed to list *v1.Secret ... forbidden` (this
+analysis); with the opt-in, each peer `synced`, no `forbidden`, and `kubectl auth can-i --as platform:istio-reader get
+secrets -A` is still `no` (list/watch only). Re-check this section on every Istio upgrade.
 
 Peers can still read Pods, Services and Istio config of each other, so members of one group must sit at the same
 trust level (see "Trust").
@@ -377,6 +412,8 @@ Fresh clusters follow the same order; ztunnel simply waits until istiod is up.
 ## Follow-ups and open checks
 Deferred work (per-environment trust domains + URI name constraints, root rotation runbook, baggage stripping at the
 north-south edge, peer API 6443 restrictions on CAPA/CAPH): [#71](https://github.com/koorikla/platform/issues/71).
-Production unseal and HA: [#31](https://github.com/koorikla/platform/issues/31). Values inferred but not yet confirmed
+Production unseal and HA: [#31](https://github.com/koorikla/platform/issues/31). istiod's nil-unsafe
+`PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` (upstream fix needed before the Secret opt-in can go; "Reader
+RBAC"). Values inferred but not yet confirmed
 live (`grep -rn VERIFY docs/multicluster.md addons/openbao addons/istio-csr addons/istio-eastwest addons/istio-ambient
 charts/cluster/templates/mesh-*`): [#72](https://github.com/koorikla/platform/issues/72).

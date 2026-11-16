@@ -22,11 +22,9 @@ base: {}
 
 istiod:
   profile: ambient
-  env:
-    # No Secret informers on peer clusters: the remote credentials controller only serves gateways whose istiod is in
-    # another cluster (primary-remote). Every member runs its own istiod, and peers are bound to platform-istio-reader
-    # (addon istio-eastwest), which grants no Secret access. No-op on clusters without remote secrets.
-    PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER: "false"
+  # PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER is deliberately NOT set: "false" crashes istiod 1.32.0 as soon as it
+  # has a remote secret (nil *CredentialsController.HasSynced in multicluster.Cluster.Run, SIGSEGV seen live).
+  # Consequence for the peers' reader RBAC: docs/multicluster.md "Reader RBAC" (addon istio-eastwest reader.*).
   pilot:
     autoscaleEnabled: false
     resources:

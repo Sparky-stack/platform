@@ -126,6 +126,32 @@ tests:
       - lengthEqual: { path: 'rules[0].verbs', count: 3 }
       - lengthEqual: { path: 'rules[3].verbs', count: 3 }
 
+  - it: "default: no Secret grant to the reader anywhere (4 objects, none references secrets)"
+    template: templates/reader-rbac.yaml
+    asserts:
+      - hasDocuments: { count: 4 }
+      - notMatchRegex: { path: metadata.name, pattern: secrets }
+      - notContains: { path: rules, content: { apiGroups: [""], resources: [secrets], verbs: [list, watch] }, any: true }
+
+  - it: "opt-in reader.remoteCredentialsSecrets: a separate ClusterRole with list/watch on Secrets only (never get)"
+    template: templates/reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+    asserts:
+      - hasDocuments: { count: 6 }
+      - isKind: { of: ClusterRole }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: platform-istio-reader-secrets }
+        documentIndex: 2
+      - equal: { path: rules, value: [{ apiGroups: [""], resources: [secrets], verbs: [list, watch] }] }
+        documentIndex: 2
+      - equal: { path: roleRef.name, value: platform-istio-reader-secrets }
+        documentIndex: 3
+      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }
+        documentIndex: 3
+      - notContains: { path: 'rules[0].resources', content: secrets }
+        documentIndex: 0
+
   - it: lets peers read only the istio MeshConfig ConfigMap (trust domain) in istio-system
     template: templates/reader-rbac.yaml
     release:

@@ -38,3 +38,10 @@ gateway:
 reader:
   enabled: true
   user: platform:istio-reader
+  # istiod 1.32.0 serves a peer only after ALL its informers on that peer synced, including the remote credentials
+  # controller's cluster-wide Secret informer. Without Secret list/watch the peer times out (30s) and is left out of the
+  # mesh; the opt-out PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false SIGSEGVs istiod. There is no knob that gives
+  # both. false (default): no Secret access, cross-cluster discovery does not work on 1.32.0. true: peers of the group
+  # may list/watch every Secret of this cluster (ClusterRole platform-istio-reader-secrets). Decide per installation
+  # (installations/<inst>/addons/istio-eastwest/values.yaml); docs/multicluster.md "Reader RBAC".
+  remoteCredentialsSecrets: false
