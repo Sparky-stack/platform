@@ -16,12 +16,16 @@ task demo:check            # make demo-check; or: bash hack/demo-check.sh
 ```text
 STEP CHECK                                          RESULT       DETAIL
 ---- ---------------------------------------------- ------------ ------
-1    Argo CD apps Synced/Healthy                    PASS         51/51 Synced/Healthy
+1    Argo CD apps Synced/Healthy                    PASS         44/44 Synced/Healthy
 2    CAPI clusters Provisioned                      PASS         dev1 Provisioned/Available
 ...
-5    hello-world 200 in production                  PENDING #54  404 http://production-default.dev1.apps.localhost:19080/hello-world-http/ (node 172.18.0.7)
+4    in-cluster build succeeded                     PENDING #17  no build WorkflowRun in namespace default (workflow plane: ClusterWorkflowPlane default)
 ...
-24 PASS, 0 FAIL, 5 PENDING
+5    promotion-gate WorkflowRuns present            FAIL         no promotion-gate WorkflowRun in default (runs expire 1h after completion; promote to start one)
+...
+9    PostgreSQL claim API                           PASS         XRD postgresqls.platform.koorikla.io Established on: dev1
+
+23 PASS, 1 FAIL, 2 PENDING
 ```
 
 | Result | Meaning | Before the demo |
@@ -63,13 +67,13 @@ Also prepare:
 |---|---|---|---|
 | 1 | Clean bootstrap | 3 | live |
 | 2 | Add a cluster by adding a file | 4 | live; other providers render-only (EKS/GKE/AKS/Talos pending #87-#90) |
-| 3 | Developer self-service | 3 | console live; scaffolder templates pending #59 |
+| 3 | Developer self-service | 3 | console and the six golden-path templates live; running one needs a GitHub org (#109) |
 | 4 | Build and supply chain | 5 | signature + live deny live; in-cluster build pending #17 |
 | 5 | Deploy and promote | 5 | development/staging live; production pending #54 |
-| 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait pending #48 |
+| 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait `observability-alert-rule` allowed on the component types |
 | 7 | Runtime security | 3 | live |
 | 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1; #19); per-tenant stores pending #96 |
-| 9 | App with a database | 2 | pending #91 |
+| 9 | App with a database | 2 | live on dev1 (CloudNativePG); RDS / Cloud SQL / Flexible Server render-only (#107) |
 
 ## 1. Clean bootstrap
 
@@ -139,8 +143,10 @@ Talking points:
 - Developers get golden paths (component types, traits) and a portal; the platform team owns the templates.
 - The app repo contract is small: docs/openchoreo.md "App repo contract".
 
-Fallback / pending: Backstage scaffolder templates that create a repo plus the OpenChoreo Component are **pending #59**.
-Until then, show the existing `hello-world` component and its repo (koorikla/hello-world, `deploy/openchoreo/`).
+- Create also lists the golden-path templates of this repo (Go, Python, Docker, Quarkus, Fastify, Rust;
+  docs/project-templates.md). Show the form, do not run it: creating the repo needs a GitHub org (#109).
+
+Fallback: show the existing `hello-world` component and its repo (koorikla/hello-world, `deploy/openchoreo/`).
 
 ## 4. Build and supply chain
 
@@ -234,7 +240,7 @@ Talking points:
   traces (OTel collector) with the cluster name (docs/observability.md "Signals").
 - The same views back the RCA agent and MCP clients.
 
-Fallback / pending: an alert rule as an OpenChoreo trait is **pending #48**. If the console views are empty, the
+Alert rules: trait `observability-alert-rule` on a component (docs/observability.md). If the console views are empty, the
 observer may still be indexing after a restart: show the Prometheus query above and the Runtime Logs of the last hour.
 
 ## 7. Runtime security
@@ -295,9 +301,27 @@ debug the CA live. Per-tenant SecretStores on OpenBao are **pending #96**.
 
 Show: a developer claims a PostgreSQL database; locally CloudNativePG runs it, on AWS the same claim becomes RDS.
 
-Pending: PostgreSQL as a service (Crossplane v2 claim, CNPG live, RDS render-only) is **pending #91** (with #70 for
-OpenChoreo resource types). Fallback: show docs/data-services.md "PostgreSQL (CloudNativePG)" and the opt-in label
-in a cluster file; do not enable the addon live.
+dev1 opts in to the addons in its cluster file (`addons: { cloudnative-pg: true, crossplane: true }`). A `PostgreSQL`
+XR with an empty spec becomes a CloudNativePG cluster and a connection Secret `<name>-app`:
+
+```bash
+kubectl --kubeconfig dev1.kubeconfig create namespace pg-demo
+kubectl --kubeconfig dev1.kubeconfig -n pg-demo apply -f - <<'YAML'
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata: { name: orders-db }
+spec: {}
+YAML
+kubectl --kubeconfig dev1.kubeconfig -n pg-demo get postgresql orders-db -w   # READY True after ~1.5 min
+```
+
+Expected: `BACKEND cnpg`, `SECRET orders-db-app`, `COMPOSITION postgresql-cnpg`. A raw CNPG `Cluster` from a tenant
+is denied by the `postgresql-only-through-the-platform-api` policy (also a native ValidatingAdmissionPolicy).
+
+Talking points: the same XR becomes RDS / Aurora, Cloud SQL or Azure Flexible Server on those providers (rendered and
+tested offline, live accounts pending #107); production XRs must set HA and backups. OpenChoreo resource types: #70.
+
+Fallback: show docs/data-services.md "PostgreSQL as a service". Clean up with `kubectl delete namespace pg-demo`.
 
 ## Wrap-up (1 minute)
 
