@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# Data-service addons keda, strimzi, cloudnative-pg (docs/data-services.md):
+#   1. opt-in contract: catalog default false, workload role only, and the addon ApplicationSets' cluster selectors
+#      (evaluated here against the labels charts/cluster / charts/platform render) match no local cluster - local docker
+#      environments stay lean, no Application is generated;
+#   2. opt-in render: dev1 with `addons: {keda: true, strimzi: true, cloudnative-pg: true}` is selected, and each addon
+#      rendered like its ApplicationSet does (value files + installation values + cluster.*) passes kubeconform -strict
+#      with CRD schemas, ships its CRDs, pins every image by digest, meets Pod Security restricted, enforces it on its
+#      namespace and exposes operator metrics (ServiceMonitor/PodMonitor);
+#   3. Kyverno: the three namespaces stay policed (not in the platform exclusion lists);
+#   4. every YAML example in docs/data-services.md validates against the CRD schemas.
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+cd "$ROOT"
+# shellcheck source=../lib/portable.sh
+source hack/lib/portable.sh
+
+echo "== test_data_services =="
+ADDONS="keda strimzi cloudnative-pg"
+CATALOG=charts/platform/values.yaml
+INST_DIR=installations/local
+INST_FILE="$INST_DIR/installation.yaml"
+SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
+[[ -d "$SCHEMAS_DIR" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
+for a in $ADDONS; do
+  [[ -d "addons/$a/charts" ]] || helm dependency build "addons/$a" >/dev/null
+done
+KC_ARGS=(-strict -summary -kubernetes-version 1.35.0 -skip CustomResourceDefinition -schema-location default
+  -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json")
+
+# selected <platform render> <addon> <labels json> -> yes|no: the addon ApplicationSet's cluster generator selector
+# (matchExpressions In / NotIn / Exists / DoesNotExist) evaluated against one cluster secret's labels.
+selected() {
+  local exprs
+  exprs=$(yq -o=json -I=0 "select(.kind == \"ApplicationSet\" and .metadata.name == \"addon-$2\") | .spec.generators[0].clusters.selector.matchExpressions" "$1")
+  py -c '
+import json, sys
+exprs, labels = json.loads(sys.argv[1] or "null"), json.loads(sys.argv[2])
+if not exprs:
+    print("no"); sys.exit()
+def ok(e):
+    v, op = labels.get(e["key"]), e["operator"]
+    return {"In": v in e.get("values", []), "NotIn": v not in e.get("values", []),
+            "Exists": v is not None, "DoesNotExist": v is None}[op]
+print("yes" if all(ok(e) for e in exprs) else "no")' "$exprs" "$3"
+}
+# cluster_labels <charts/cluster render> -> labels of the Argo CD cluster secret it templates (json)
+cluster_labels() {
+  yq -o=json -I=0 'select(.kind == "ExternalSecret" and (.metadata.name | test("-argocd-cluster$"))) | .spec.target.template.metadata.labels' "$1"
+}
+render_cluster() {   # render_cluster <cluster file> <out>
+  helm template "cluster-$(yq '.name' "$1")" charts/cluster --namespace fleet --values "$INST_FILE" --values "$1" > "$2"
+}
+
+# --- 1. opt-in contract ------------------------------------------------------------------------------------------------
+helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$TMP/platform.yaml"
+mgmt_labels=$(yq -o=json -I=0 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels' "$TMP/platform.yaml")
+for a in $ADDONS; do
+  assert_eq "$(yq ".addons[\"$a\"].default" "$CATALOG")" false "catalog: $a is opt-in (default false)"
+  assert_eq "$(yq -o=json -I=0 ".addons[\"$a\"].roles" "$CATALOG")" '["workload"]' "catalog: $a targets workload clusters only"
+  assert_eq "$(selected "$TMP/platform.yaml" "$a" "$mgmt_labels")" no "local/mgmt: addon-$a generates no Application"
+done
+for cf in "$INST_DIR"/clusters/*.yaml; do
+  c=$(yq '.name' "$cf")
+  render_cluster "$cf" "$TMP/cluster-$c.yaml"
+  labels=$(cluster_labels "$TMP/cluster-$c.yaml")
+  assert_match "$labels" '"platform.koorikla.io/role":"workload"' "local/$c: cluster secret labels rendered"
+  for a in $ADDONS; do
+    assert_eq "$(selected "$TMP/platform.yaml" "$a" "$labels")" no "local/$c: addon-$a generates no Application by default"
+  done
+done
+
+# --- 2. opt-in render (dev1 opts in to all three) ----------------------------------------------------------------------
+yq '.addons.keda = true | .addons.strimzi = true | .addons["cloudnative-pg"] = true' "$INST_DIR/clusters/dev1.yaml" > "$TMP/dev1-optin.yaml"
+render_cluster "$TMP/dev1-optin.yaml" "$TMP/cluster-dev1-optin.yaml"
+labels=$(cluster_labels "$TMP/cluster-dev1-optin.yaml")
+c_prov=$(yq '.provider // "docker"' "$TMP/dev1-optin.yaml")
+c_env=$(yq '.environment // "development"' "$TMP/dev1-optin.yaml")
+c_cni=$(yq '.cni // "cilium"' "$TMP/dev1-optin.yaml")
+c_region=$(yq '.region // "local"' "$TMP/dev1-optin.yaml")
+for a in $ADDONS; do
+  assert_eq "$(selected "$TMP/platform.yaml" "$a" "$labels")" yes "dev1 (opted in): addon-$a selects the cluster"
+  ns=$(yq ".addons[\"$a\"].namespace" "$CATALOG")
+  vargs=()
+  for vf in "addons/$a/values.yaml" "addons/$a/values/role-workload.yaml" "addons/$a/values/provider-$c_prov.yaml" \
+    "addons/$a/values/cni-$c_cni.yaml" "$INST_DIR/addons/$a/values.yaml" "$INST_DIR/addons/$a/env-$c_env.yaml" \
+    "$INST_DIR/addons/$a/cluster-dev1.yaml"; do
+    if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
+  done
+  vargs+=(--values "$INST_FILE" --set-string "cluster.name=dev1,cluster.role=workload,cluster.provider=$c_prov,cluster.environment=$c_env,cluster.cni=$c_cni,cluster.region=$c_region")
+  out="$TMP/addon-$a.yaml"
+  if ! helm template "$a" "addons/$a" --namespace "$ns" --include-crds "${vargs[@]}" > "$out" 2> "$out.err"; then
+    assert_eq "render failed: $(head -c 300 "$out.err")" renders "dev1: addon $a renders with installation values"
+    continue
+  fi
+  if kc=$(kubeconform "${KC_ARGS[@]}" "$out" 2>&1); then kc_ok=yes; else kc_ok=no; echo "$kc" >&2; fi
+  assert_eq "$kc_ok" yes "dev1: addon $a passes kubeconform -strict with CRD schemas"
+  case "$a" in
+    keda) crds="scaledobjects.keda.sh scaledjobs.keda.sh triggerauthentications.keda.sh" ;;
+    strimzi) crds="kafkas.kafka.strimzi.io kafkanodepools.kafka.strimzi.io kafkatopics.kafka.strimzi.io kafkausers.kafka.strimzi.io" ;;
+    cloudnative-pg) crds="clusters.postgresql.cnpg.io poolers.postgresql.cnpg.io scheduledbackups.postgresql.cnpg.io" ;;
+  esac
+  have=$(yq -N 'select(.kind == "CustomResourceDefinition") | .metadata.name' "$out")
+  for crd in $crds; do
+    assert_eq "$(grep -cx -- "$crd" <<<"$have" || true)" 1 "dev1: addon $a installs CRD $crd from the chart"
+  done
+  ns_level=$(yq -N "select(.kind == \"Namespace\" and .metadata.name == \"$ns\") | .metadata.labels[\"pod-security.kubernetes.io/enforce\"]" "$out")
+  assert_eq "$ns_level" restricted "dev1: addon $a enforces Pod Security restricted on namespace $ns"
+  monitors=$(yq -N 'select(.kind == "ServiceMonitor" or .kind == "PodMonitor") | .metadata.name' "$out" | grep -c . || true)
+  assert_match "$monitors" '^[1-9]' "dev1: addon $a exposes operator metrics to the telemetry Prometheus agent"
+  # Every pod template: images pinned by digest + Pod Security restricted (pod or container level).
+  findings=$(yq -o=json -I=0 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")' "$out" | py -c '
+import json, re, sys
+bad, n = [], 0
+for line in sys.stdin:
+    if not line.strip():
+        continue
+    o = json.loads(line)
+    spec = o["spec"]["template"]["spec"] if o["kind"] != "CronJob" else o["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    who, psc = o["kind"] + "/" + o["metadata"]["name"], spec.get("securityContext") or {}
+    n += 1
+    for h in ("hostNetwork", "hostPID", "hostIPC"):
+        if spec.get(h):
+            bad.append(who + ": " + h)
+    if any("hostPath" in v for v in spec.get("volumes") or []):
+        bad.append(who + ": hostPath volume")
+    for c in (spec.get("initContainers") or []) + spec["containers"]:
+        cid, sc = who + "/" + c["name"], c.get("securityContext") or {}
+        if not re.search(r"^[a-z0-9.-]+(:[0-9]+)?/.+@sha256:[0-9a-f]{64}$", c["image"]):
+            bad.append(cid + ": image not fully qualified + pinned by digest: " + c["image"])
+        if sc.get("privileged"):
+            bad.append(cid + ": privileged")
+        if sc.get("allowPrivilegeEscalation") is not False:
+            bad.append(cid + ": allowPrivilegeEscalation not false")
+        if "ALL" not in ((sc.get("capabilities") or {}).get("drop") or []):
+            bad.append(cid + ": capabilities not dropping ALL")
+        if (sc.get("capabilities") or {}).get("add"):
+            bad.append(cid + ": adds capabilities")
+        if not (sc.get("runAsNonRoot", psc.get("runAsNonRoot")) is True):
+            bad.append(cid + ": runAsNonRoot not true")
+        if (sc.get("seccompProfile") or psc.get("seccompProfile") or {}).get("type") not in ("RuntimeDefault", "Localhost"):
+            bad.append(cid + ": no RuntimeDefault seccomp profile")
+print("pods=%d" % n)
+for b in bad:
+    print(b)')
+  assert_match "$findings" '^pods=[1-9]' "dev1: addon $a renders workloads"
+  assert_eq "$(printf '%s\n' "$findings" | grep -v '^pods=' || true)" "" "dev1: addon $a pins images by digest and meets Pod Security restricted"
+done
+# The Barman Cloud plugin is part of addon cloudnative-pg but off until an installation switches it on.
+assert_eq "$(yq -N 'select(.kind == "Deployment") | .metadata.name' "$TMP/addon-cloudnative-pg.yaml" | grep -c barman || true)" 0 \
+  "cloudnative-pg: Barman Cloud plugin off by default"
+helm template cloudnative-pg addons/cloudnative-pg --namespace cnpg-system --set plugin-barman-cloud.enabled=true > "$TMP/cnpg-barman.yaml"
+assert_eq "$(yq -N 'select(.kind == "Deployment") | .metadata.name' "$TMP/cnpg-barman.yaml" | grep -c barman || true)" 1 \
+  "cloudnative-pg: plugin-barman-cloud.enabled=true adds the plugin Deployment"
+
+# --- 3. Kyverno keeps policing the data-service namespaces -------------------------------------------------------------
+for a in $ADDONS; do
+  ns=$(yq ".addons[\"$a\"].namespace" "$CATALOG")
+  for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+    assert_eq "$(grep -cE "^ *- $ns\$" "$f" || true)" 0 "$ns is not excluded from Kyverno ($f)"
+  done
+done
+
+# --- 4. docs examples validate against the CRD schemas -----------------------------------------------------------------
+py - docs/data-services.md "$TMP/examples" <<'EOF'
+import os, re, sys
+src, out = sys.argv[1], sys.argv[2]
+os.makedirs(out, exist_ok=True)
+blocks = re.findall(r"^```yaml\n(.*?)^```", open(src, encoding="utf-8").read(), flags=re.M | re.S)
+for i, b in enumerate(blocks):
+    if re.search(r"^apiVersion:", b, flags=re.M):
+        open(os.path.join(out, "example-%02d.yaml" % i), "w", encoding="utf-8").write(b)
+EOF
+n_examples=$(find "$TMP/examples" -name 'example-*.yaml' | grep -c . || true)
+assert_match "$n_examples" '^[1-9]' "docs/data-services.md has YAML examples"
+kinds=$(yq -N '.kind' "$TMP"/examples/example-*.yaml | sort -u | tr '\n' ' ')
+for k in Cluster Kafka KafkaNodePool KafkaTopic ScaledObject ObjectStore; do
+  assert_match "$kinds" "(^| )$k( |$)" "docs/data-services.md shows a $k example"
+done
+if kc=$(kubeconform "${KC_ARGS[@]}" "$TMP"/examples/example-*.yaml 2>&1); then kc_ok=yes; else kc_ok=no; echo "$kc" >&2; fi
+assert_eq "$kc_ok" yes "docs/data-services.md examples pass kubeconform -strict with CRD schemas"
+assert_eq "$(grep -c -i 'zookeeper:' docs/data-services.md || true)" 0 "Kafka example is KRaft (no ZooKeeper section)"
+
+finish

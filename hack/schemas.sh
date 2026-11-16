@@ -29,6 +29,9 @@ for dir in charts/* addons/*; do
     if [[ "$(basename "$dir")" == "openchoreo-data-plane" ]]; then
       set_args+=(--set-string openchoreo-data-plane.clusterAgent.planeID=sample)
     fi
+    if [[ "$(basename "$dir")" == "cloudnative-pg" ]]; then
+      set_args+=(--set plugin-barman-cloud.enabled=true)   # ObjectStore CRD (optional Barman Cloud plugin, templates/)
+    fi
     helm template schema-extract "$dir" ${set_args[@]+"${set_args[@]}"} 2>/dev/null | \
       yq 'select(.kind == "CustomResourceDefinition")' > "$TMP/crds-tpl-$idx.yaml" 2>/dev/null || true
     idx=$((idx + 1))
