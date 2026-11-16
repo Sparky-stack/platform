@@ -160,13 +160,48 @@ watches only `KThreesConfig`s (`cluster-api-k3s/bootstrap/controllers/kthreescon
 the 10 min resync, so a new server can sit unbootstrapped for a long time. The ExternalSecret is therefore sync wave -1
 and the Cluster wave 0: Argo CD creates or changes the Cluster only once the Secret is Ready (Argo CD's built-in
 ExternalSecret health check); until then the cluster app's sync fails and is retried without limit on the latest
-revision (fleet ApplicationSet `retry.limit: -1`). Break-glass when that ExternalSecret errors:
-[#25](https://github.com/koorikla/platform/issues/25).
+revision (fleet ApplicationSet `retry.limit: -1`).
 
 `hack/tests/test_bootstrap_file_sources.sh` checks, for every installation and cluster, that each contentFrom Secret a
 class enables is rendered as such an ExternalSecret with the referenced key, in an earlier wave. Bootstrap data is
 rendered once per Machine, so a rotated token reaches only new nodes: roll the machines (CAPI `rollout.after`) or use a
 long-lived read-only token.
+
+#### Break-glass when `<name>-registries` is `Ready=False`
+Because `ExternalSecret/<name>-registries` refreshes every `1h` in sync wave `-1`, an ESO refresh error
+(`Ready=False`, e.g. secret store outage, missing/expired `platform-ghcr` or `harbor` key, or unissued
+`harbor-ca-bundle`) causes Argo CD's ExternalSecret health check to block wave `0` (`Cluster/<name>` and the rest of
+`cluster-<name>`), even if `Secret/<name>-registries` already exists from a prior sync. Because the `fleet`
+ApplicationSet sets `retry.limit: -1` (`refresh: true`, `maxDuration: 5m`), the failing sync operation stays active
+indefinitely, and Argo CD refuses manual syncs until that retry operation is terminated.
+
+1. **Diagnose** the failing secret or store in `fleet`:
+   ```bash
+   kubectl -n fleet get externalsecret <name>-registries
+   kubectl -n fleet describe externalsecret <name>-registries
+   ```
+   Check `Status.Conditions` (`SecretSyncedError`) and `Events` to see which `ClusterSecretStore` (`platform` or
+   `mgmt-harbor`) or key failed.
+2. **Unblock declaratively**:
+   - *Fix the backing secret/store (no node rollout)*: restore the key in the `platform` store (`task secrets` for the
+     `kubernetes` backend) or fix the CA/store, then force an immediate ESO sync (or wait for ESO backoff) — Argo CD's
+     `-1` retry loop will advance to wave `0` within `5m`:
+     ```bash
+     kubectl -n fleet annotate externalsecret <name>-registries force-sync=$(date +%s) --overwrite
+     ```
+   - *Bypass in git while the store is down*: set `secrets.nodeRegistryAuth.enabled: false` (and `registry.type: external`
+     if Harbor's `harbor` / `harbor-ca-bundle` is failing) in `installations/<inst>/clusters/<name>.yaml` (for one
+     cluster, since fleet files merge after `installation.yaml`) or in `installation.yaml` (installation-wide) and push.
+     `charts/cluster/templates/capi-registries.yaml` stops rendering `<name>-registries`, so Argo CD prunes the failing
+     `ExternalSecret` (and its `creationPolicy: Owner` Secret) and unblocks wave `0`. **Caveat:** changing `registryAuth` /
+     `registryCA` updates `ClusterClass` variables and rolls every node without private registry auth / Harbor mirrors;
+     only use this when public upstream pulls suffice, and revert it once the store recovers.
+3. **Manual Argo CD syncs need Terminate first**: with `retry.limit: -1`, `cluster-<name>` always has a retrying sync
+   operation in progress (`OperationState: Running`). In the Argo CD UI click **Terminate** before **Sync** (or run
+   `argocd app terminate-op cluster-<name>` before `argocd app sync cluster-<name>`). If `<name>-registries` is still
+   `Ready=False`, a full sync will still stop at wave `-1`; use a selective sync on `Cluster/<name>` alone
+   (`argocd app sync cluster-<name> --resource cluster.x-k8s.io:Cluster:<name>`) only when the existing
+   `Secret/<name>-registries` is already valid for the cluster change.
 
 ## Docker (CAPD) - local
 
