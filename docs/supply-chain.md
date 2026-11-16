@@ -34,9 +34,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
     until each allowed repository's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
     per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (suffix
-    `-<sha7>` for the transition commit) and the validations accept any of them. Steps: (1) move `workflowRef`, put
-    the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote their rebuilt images; (3) empty
-    `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
+    `-<sha7>` for the transition commit) and the validations accept any of them. Every attestor runs, so a second
+    commit doubles the verifications per image and production admission can exceed the webhook timeout: keep the
+    window short and dry-run in production first ([#136](https://github.com/koorikla/platform/issues/136)).
+    Steps: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
+    their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
     `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
     ([#128](https://github.com/koorikla/platform/issues/128));
   - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
