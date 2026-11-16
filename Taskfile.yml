@@ -80,7 +80,7 @@ tasks:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} ui'
 
   down:
-    desc: Delete the CAPD workload clusters, then the k3d mgmt cluster (local only)
+    desc: Freeze Argo CD, delete the CAPD workload clusters, then the k3d mgmt cluster (local only)
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} down'
 

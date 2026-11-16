@@ -241,8 +241,11 @@ kubectl --context k3d-platform-mgmt -n platform-secrets get secret openchoreo \
   -o jsonpath='{.data.admin-user-password}' | base64 --decode; echo
 ```
 
-Tear down: `task down` (deletes the CAPD clusters first, then the k3d mgmt). Cloud installations have no `down`:
-delete cluster files from git and let CAPI clean up.
+Tear down: `task down`. It freezes Argo CD first (application and applicationset controllers to 0 replicas: with
+selfHeal on, a running controller re-creates every deleted Cluster), deletes the CAPD clusters (`DOWN_TIMEOUT`, default
+5m), removes CAPD node containers of the installation's clusters that are still left, then deletes the k3d mgmt. To
+delete only the CAPD clusters, freeze the same way first (`task up`/`task argocd` restores the replicas). Cloud
+installations have no `down`: delete cluster files from git and let CAPI clean up.
 
 ## 5. Troubleshooting
 
