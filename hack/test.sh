@@ -11,13 +11,19 @@ for bin in helm yq kubeconform; do
 done
 pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
 
+# CHARTS="addons/x charts/y": lint/render/unittest only these chart dirs (git pre-commit hook: hack/hooks.sh charts).
+# charts/platform and charts/cluster still render (addons read their output); contract tests run in the full suite only.
+CHARTS=${CHARTS:-}
+selected() { [[ -z "$CHARTS" || " $CHARTS " == *" $1 "* ]]; }
+
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 export SCHEMAS_DIR
 
 # 1. Build deps (cached) before linting, templating, schemas, or helm unittest
 ./hack/deps.sh
 
-./hack/schemas.sh
+# A filtered run reuses cached schemas (regenerating them takes seconds); `task schemas` / the full suite refresh them.
+if [[ -z "$CHARTS" || -z "$(ls -A "$SCHEMAS_DIR" 2>/dev/null)" ]]; then ./hack/schemas.sh; fi
 
 KUBECONFORM_ARGS=(
   -strict
@@ -61,6 +67,7 @@ check_kubeconform() {
 # 2. Lint every chart in charts/ and addons/ (charts/cluster linted per cluster below)
 for dir in charts/* addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
+  selected "$dir" || continue
   if [[ "$dir" != "charts/cluster" ]]; then
     echo "==> helm lint $dir"
     lint_sets=()
@@ -104,6 +111,7 @@ fi
 echo "==> Testing addons/*"
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
+  selected "$dir" || continue
   addon=$(basename "$dir")
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" charts/platform/values.yaml)
 
@@ -223,6 +231,7 @@ passed=0
 failed=0
 for dir in charts/* addons/*; do
   [[ -d "$dir/tests" ]] || continue
+  selected "$dir" || continue
   if [[ "$dir" == "charts/cluster" && ! -f "$dir/templates/capi-cluster.yaml" ]]; then
     echo "==> SKIP helm unittest $dir (capi-cluster.yaml not present on this branch)"
     continue
@@ -239,7 +248,7 @@ done
 #    test_secret_store_scope.sh)
 export RENDERED_DIR="$TMP"
 for t in hack/tests/test_*.sh; do
-  [[ -f "$t" ]] || continue
+  [[ -f "$t" && -z "$CHARTS" ]] || continue
   if bash "$t"; then
     passed=$((passed + 1))
   else
