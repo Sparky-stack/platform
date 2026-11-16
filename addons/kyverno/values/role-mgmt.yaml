@@ -1,0 +1,9 @@
+# Kyverno on mgmt (role overlay on values.yaml). Mgmt carries far more objects than a workload cluster (Argo CD, CAPI,
+# OpenChoreo, Argo Workflows), and the reports controller lists and caches all of them on every start: at the base
+# 128Mi limit it was OOM-killed 9 times in 30 minutes on the local mgmt (2026-11, issue #76; steady state ~75Mi, the
+# peak is the initial list), and every restart starts the background scan from scratch (1-2.6 cores per start).
+kyverno:
+  reportsController:
+    resources:
+      requests: { cpu: 25m, memory: 96Mi }
+      limits: { memory: 256Mi }
