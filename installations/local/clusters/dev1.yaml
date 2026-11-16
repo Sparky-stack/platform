@@ -6,7 +6,12 @@ region: local
 environment: development
 kubernetesVersion: v1.35.10+k3s1
 controlPlane:
-  replicas: 3                # odd etcd voters: a rollout is 3 -> 4 -> 3, never through a 2-voter cluster (docs/providers.md)
+  # 1 server: host RAM (each extra CAPD k3s server costs ~1-2 GiB with its etcd and addons). Disposable: a control-plane
+  # rollout ends with an etcd 2 -> 1 member removal that can lose quorum (break-glass in docs/providers.md).
+  # HA mode: set `replicas: 3` (odd only; 5 for more tolerance). A rollout then goes 3 -> 4 -> 3 voters and never through
+  # a 2-voter cluster, and KCP remediates unhealthy servers (only from 3 up). Nothing else changes: the ClusterClass
+  # joins the extra servers to the embedded etcd, and production clusters on aws/hetzner are forced to >= 3.
+  replicas: 1
 workers:
   - name: md-0
     replicas: 0             # k3s servers schedule workloads; add workers when needed

@@ -19,6 +19,12 @@ options:
       - arg: --disable=traefik
         nodeFilters:
           - server:*
+      # Embedded etcd instead of kine/SQLite even with one server: the SQLite datastore of a busy mgmt (Argo CD, CAPI,
+      # OpenChoreo, Workflows) grew to ~1.8 GB and kine's compaction failed at the same revision on every start, a
+      # crash loop every ~11 min (#76). etcd compacts incrementally. k3d adds this flag itself only when servers > 1.
+      - arg: --cluster-init
+        nodeFilters:
+          - server:0
 volumes:
   - volume: /var/run/docker.sock:/var/run/docker.sock
     nodeFilters:

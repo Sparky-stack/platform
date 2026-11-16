@@ -134,7 +134,8 @@ the newest server is still a learner: 3 voters -> 2 + learner, still a removal f
 
 charts/cluster enforces the table: `controlPlane.replicas` must be odd and >= 1, and a non-docker cluster with
 `environment: production` needs >= 3. Local clusters stay at 1 server for host RAM (each extra CAPD server costs
-roughly 0.6-1 GiB); set `controlPlane.replicas: 3` in the fleet file to test rollouts that must not break.
+roughly 1-2 GiB with its etcd and addons); HA mode is `controlPlane.replicas: 3` in the fleet file
+(`installations/local/clusters/dev1.yaml` shows it) to test rollouts that must not break.
 
 **Single-server rollout lost quorum (break-glass, local/dev only).** The new server holds a full copy of the data (it
 was a promoted voter), so reset etcd membership to it instead of recreating the cluster:
