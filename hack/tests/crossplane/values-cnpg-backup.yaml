@@ -1,0 +1,8 @@
+# Addon crossplane on a docker cluster with an object store for the Barman Cloud plugin (IRSA-style annotation).
+cluster: { name: dev1, role: workload, provider: docker, region: local, environment: development, cni: cilium }
+postgresql:
+  cnpg:
+    backup:
+      destinationPath: s3://example-pg-backups/postgresql/
+      serviceAccountAnnotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/pg-backups

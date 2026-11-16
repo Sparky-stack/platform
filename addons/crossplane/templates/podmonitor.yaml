@@ -1,0 +1,13 @@
+{{- if .Values.monitoring.podMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: crossplane
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchExpressions:
+      - { key: app, operator: In, values: [crossplane, crossplane-rbac-manager] }
+  podMetricsEndpoints:
+    - port: metrics
+{{- end }}

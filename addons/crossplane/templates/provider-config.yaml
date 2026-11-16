@@ -1,0 +1,39 @@
+{{- /* ClusterProviderConfig "default" of the backend's provider family (the namespaced managed resources the Composition
+creates reference it): workload identity only, never a static key. CRDs come with the providers: sync wave 2. */ -}}
+{{- $cloud := include "crossplane.pgCloud" . }}
+{{- $pg := .Values.postgresql }}
+{{- if eq $cloud "aws" }}
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+  annotations:
+    {{- include "crossplane.syncAnnotations" "2" | nindent 4 }}
+spec:
+  credentials:
+    source: {{ $pg.aws.identity.source }}
+{{- else if eq $cloud "gcp" }}
+apiVersion: gcp.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+  annotations:
+    {{- include "crossplane.syncAnnotations" "2" | nindent 4 }}
+spec:
+  projectID: {{ required "postgresql.gcp.project is required for backend gcp-cloudsql" $pg.gcp.project | quote }}
+  credentials:
+    source: InjectedIdentity
+{{- else if eq $cloud "azure" }}
+apiVersion: azure.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+  annotations:
+    {{- include "crossplane.syncAnnotations" "2" | nindent 4 }}
+spec:
+  clientID: {{ $pg.azure.clientID | quote }}
+  subscriptionID: {{ required "postgresql.azure.subscriptionID is required for backend azure-flexible" $pg.azure.subscriptionID | quote }}
+  tenantID: {{ $pg.azure.tenantID | quote }}
+  credentials:
+    source: OIDCTokenFile
+{{- end }}

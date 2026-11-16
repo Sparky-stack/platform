@@ -1,0 +1,9 @@
+apiVersion: v2
+name: crossplane
+description: Crossplane v2 on workload clusters (opt-in) with the platform's PostgreSQL API - one namespaced XRD, fulfilled by CloudNativePG, Amazon RDS / Aurora, Cloud SQL or Azure Flexible Server depending on the cluster's provider
+type: application
+version: 0.1.0
+dependencies:
+  - name: crossplane
+    version: 2.4.3
+    repository: https://charts.crossplane.io/stable
