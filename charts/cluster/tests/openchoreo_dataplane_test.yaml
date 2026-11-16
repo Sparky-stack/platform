@@ -70,6 +70,26 @@ tests:
       - equal: { path: spec.isProduction, value: false }
         documentIndex: 1
 
+  - it: Environments sync one wave before their ClusterDataPlane (ReleaseBindings re-queue on its creation)
+    template: templates/openchoreo-dataplane.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "10"
+        documentIndex: 0
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "9"
+        documentIndex: 1
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "9"
+        documentIndex: 2
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: SkipDryRunOnMissingResource=true
+        documentIndex: 2
+
   - it: marks production environments
     template: templates/openchoreo-dataplane.yaml
     set:

@@ -23,3 +23,13 @@ plane's CRDs are still missing, so a fresh mgmt can create clusters before OpenC
 argocd.argoproj.io/sync-wave: "10"
 argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 {{- end }}
+
+{{- /* Environments: one wave BEFORE their ClusterDataPlane. OpenChoreo's ReleaseBinding controller (v1.3.3) does not
+watch Environments: a binding reconciled while its Environment is missing stays `EnvironmentNotFound` until something
+else touches it (10 h resync). It does re-queue the bindings of every Environment that references a ClusterDataPlane
+when that ClusterDataPlane is created, so the ClusterDataPlane must come after its Environments. In one wave Argo CD
+applies ClusterDataPlane first (kinds sort by name), which left hello-world undeployed on a clean bootstrap. */ -}}
+{{- define "openchoreo.environmentAnnotations" -}}
+argocd.argoproj.io/sync-wave: "9"
+argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+{{- end }}
