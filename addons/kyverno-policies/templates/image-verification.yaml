@@ -24,7 +24,13 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- /* sources: [{prefixes, attestors: [name], attestations: [name]}] */ -}}
 {{- $sources := list }}
 {{- $keyless := list }}
+{{- $ghSubject := "" }}
 {{- if $iv.github.enabled }}
+{{- /* Keyless identity: the reusable workflow pinned by commit SHA (a tag or branch ref is mutable). */ -}}
+{{- $wfRef := toString ($iv.github.workflowRef | default "") }}
+{{- if not (regexMatch "^[0-9a-f]{40}$" $wfRef) }}{{ fail (printf "imageVerification.github.workflowRef %q must be a 40-hex commit SHA of %s (tags and branches are mutable)" $wfRef $iv.github.workflow) }}{{ end }}
+{{- if not (regexMatch "^https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml$" ($iv.github.workflow | default "")) }}{{ fail (printf "imageVerification.github.workflow %q must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" ($iv.github.workflow | default "")) }}{{ end }}
+{{- $ghSubject = printf "%s@%s" $iv.github.workflow $wfRef }}
 {{- $triggers := $iv.github.triggers | default list }}
 {{- range $repo := $iv.github.repositories }}
 {{- range $ref := $iv.github.refs }}
@@ -123,7 +129,7 @@ spec:
         keyless:
           identities:
             - issuer: {{ $iv.github.issuer }}
-              subject: {{ $iv.github.subject }}
+              subject: {{ $ghSubject }}
           additionalExtensions:
             githubWorkflowRepository: {{ .repo }}
             githubWorkflowRef: {{ .ref }}

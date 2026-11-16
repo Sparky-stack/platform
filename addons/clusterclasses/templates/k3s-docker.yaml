@@ -24,6 +24,8 @@ template:
       serverConfig:
         tlsSan: [0.0.0.0]
         disableComponents: {{ toJson $.Values.k3s.disableComponents }}
+        kubeControllerManagerArgs: {{ toJson $.Values.k3s.dockerLeaderElectionArgs }}
+        kubeSchedulerArgs: {{ toJson $.Values.k3s.dockerLeaderElectionArgs }}
         # defaults kept: disableCloudController=true + kubelet --cloud-provider=external. CAPD acts as the cloud
         # provider: it sets the Node's providerID and removes the uninitialized taint.
 {{- end }}

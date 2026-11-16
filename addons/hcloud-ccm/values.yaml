@@ -15,3 +15,5 @@ hcloud-cloud-controller-manager:
     enabled: false   # VERIFY with the first Hetzner boot (alternative: native routing over the hcloud network)
   image:
     repository: docker.io/hetznercloud/hcloud-cloud-controller-manager
+    # pinned by multi-arch index digest (chart default "v{{ $.Chart.Version }}"; bump with the chart)
+    tag: v1.39.3@sha256:9d739ba54a13f1de79d6dbb93cbda5a2ed4a5bdb9bf2936e2687e24fa9ccfaf7   # index: amd64, arm64, arm

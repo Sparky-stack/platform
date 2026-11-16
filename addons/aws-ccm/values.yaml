@@ -11,7 +11,8 @@ installation: { name: aws-example }
 aws-cloud-controller-manager:
   image:
     repository: registry.k8s.io/provider-aws/cloud-controller-manager
-    tag: v1.35.0         # minor follows the workload Kubernetes minor (k3s v1.35)
+    # minor follows the workload Kubernetes minor (k3s v1.35); pinned by multi-arch index digest
+    tag: v1.35.0@sha256:bf5a41be5f0dd5049cc1f69e1a23ff2691f2f46483546204676cea78796e75cd   # index: amd64, arm64
   args:
     - --v=2
     - --cloud-provider=aws

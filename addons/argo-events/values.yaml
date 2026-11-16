@@ -29,11 +29,33 @@ openchoreo:
 
 argo-events:
   fullnameOverride: argo-events
+  # Images fully qualified and pinned by multi-arch index digest (docs/conventions.md invariant 9; contract:
+  # hack/tests/test_image_pins.sh). The controller also starts the EventSource / Sensor pods from this image
+  # (env ARGO_EVENTS_IMAGE).
+  global:
+    image:
+      repository: quay.io/argoproj/argo-events
+      tag: v1.9.11@sha256:fa07b2c9ece6ec60a3a8377866dfe21e8bad062d5b5407f1f181d3f1d24fb861   # index: amd64, arm64
   crds:
     install: true
     keep: true
   configs:
+    # EventBus images live in the controller config, not in a pod spec: only the versions listed here can run.
+    # NATS Streaming (STAN) never runs (the EventBus is JetStream), but the controller refuses to start without at
+    # least one STAN version (ValidateConfig): one pinned entry instead of the chart's `latest` list.
+    nats:
+      versions:
+        - version: 0.22.1
+          natsStreamingImage: docker.io/library/nats-streaming:0.22.1@sha256:3dd7b21a7fceebc956629af8ad31b7e5dfb2cc717cba4be55e6b50f7ca726932   # index: amd64, arm64, arm
+          metricsExporterImage: docker.io/natsio/prometheus-nats-exporter:0.14.0@sha256:839c59f6a23473a657f6560c2a14dca9b9ce722a017933a41d071a3c9dd3a7d7   # index: amd64, arm64, arm
     jetstream:
+      # Exactly the version eventBus.natsVersion selects (the chart default lists ten, tag-only).
+      versions:
+        - version: "2.10.29"
+          natsImage: docker.io/library/nats:2.10.29@sha256:5498ba57b9471840be3d15b033a4eec554d1c02fa6c2cc0ca2d888637f6c6e2f   # index: amd64, arm64, arm, ppc64le, s390x
+          metricsExporterImage: docker.io/natsio/prometheus-nats-exporter:0.14.0@sha256:839c59f6a23473a657f6560c2a14dca9b9ce722a017933a41d071a3c9dd3a7d7   # index: amd64, arm64, arm
+          configReloaderImage: docker.io/natsio/nats-server-config-reloader:0.14.0@sha256:8c28b75bc416bb068761b19edf9a471bf8e35062bf619ea49c8e22af517e383e   # index: amd64, arm64, arm
+          startCommand: /nats-server
       streamConfig:
         maxMsgs: 10000
         maxAge: 24h
@@ -59,7 +81,7 @@ argo-events:
     enabled: false                   # admission webhook for Argo Events CRs: not needed (GitOps-validated)
 
 eventBus:
-  natsVersion: "2.10.29"             # must be in argo-events.configs.jetstream.versions (chart default list)
+  natsVersion: "2.10.29"             # must be in argo-events.configs.jetstream.versions (pinned above)
   resources:
     nats: { requests: { cpu: 10m, memory: 48Mi }, limits: { memory: 128Mi } }
     reloader: { requests: { cpu: 5m, memory: 8Mi }, limits: { memory: 32Mi } }
@@ -101,7 +123,10 @@ falco:
     resources:
       requests: { cpu: 10m, memory: 32Mi }
       limits: { memory: 96Mi }
-    ttlSecondsAfterFinished: 86400
+    ttlSecondsAfterFinished: 21600          # 6h: keeps failures inspectable without piling up Workflows
+    # Escalation budget: at most this many falco-response Workflows per minute (Sensor trigger rateLimit). A burst of
+    # CRITICAL alerts (e.g. a noisy rule on a new node) must not flood mgmt with Workflows; events above the budget wait.
+    rateLimit: { unit: Minute, requestsPerUnit: 6 }
     # OpenChoreo RCA agent (observability plane, rca.enabled - off in this platform until an LLM endpoint exists).
     rca:
       enabled: false

@@ -40,17 +40,27 @@ gatewayCA:
   name: openchoreo-gateway-ca
   sourceSecret: cluster-gateway-ca    # cert-manager CA Secret of the chart (Certificate cluster-gateway-ca, 10y)
 
+# Images: fully qualified (chart defaults ghcr.io/openchoreo, registry.k8s.io), tag@digest pinned by multi-arch index
+# digest (docs/conventions.md invariant 9; hack/tests/test_image_pins.sh). A chart bump updates them together.
 openchoreo-control-plane:
   openchoreoApi:
+    image:
+      tag: v1.3.3@sha256:ed0fb79a93c55946a1b38b51fdf34ba9cccec0998a7befbdd62a4e3aae1ef63f   # index: amd64, arm64
     http:
       hostnames:
         - api.openchoreo.localhost
     config:
       server:
         publicUrl: "http://api.openchoreo.localhost:8080"
+      security:
+        authorization:
+          bootstrap:   # authz bootstrap Job (kubectl apply of the default roles)
+            image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
     # platform: no remoteConnect (`occ remote` tunnels): needs the data plane's SNI router published per cluster
 
   backstage:
+    image:
+      tag: v1.3.3@sha256:997f6605c620514a34557f64716830c845830119625edd1e13669d2637d3f79c   # openchoreo-ui; amd64, arm64
     secretName: backstage-secrets
     baseUrl: "http://openchoreo.localhost:8080"     # Thunder's Backstage redirect URI lives under it (addon thunder)
     http:
@@ -71,6 +81,8 @@ openchoreo-control-plane:
       limits: { cpu: "1", memory: 1Gi }
 
   controllerManager:
+    image:
+      tag: v1.3.3@sha256:ce7e9d6394cd10bdd7d4f9f5746468b3f1f010b714b878a8a51051aac0b97863   # index: amd64, arm64
     resources:                  # platform: upstream requests 200m/256Mi
       requests: { cpu: 100m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }
@@ -86,6 +98,8 @@ openchoreo-control-plane:
   # below) to Service cluster-gateway-external; mTLS end to end. Each plane's client CA comes from its ClusterDataPlane
   # (charts/cluster: per-cluster CA fleet/<name>-agent-ca).
   clusterGateway:
+    image:
+      tag: v1.3.3@sha256:a3486320d84c4dcbdccb6ecef09550b015d268c7002e504b221021a517cc0360   # index: amd64, arm64
     tlsRoute:
       enabled: true
       hosts:
@@ -100,6 +114,10 @@ openchoreo-control-plane:
         - cluster-gateway.openchoreo-control-plane.svc
         - cluster-gateway.openchoreo-control-plane.svc.cluster.local
         - cluster-gateway.openchoreo.localhost   # the name agents dial (SNI + SAN)
+
+  eventForwarder:
+    image:
+      tag: v1.3.3@sha256:9030b624d60781aa6ec25ccf5d3ff2af229882439a517afe46083fbfe769da9b   # index: amd64, arm64
 
   gateway:
     httpPort: 8080          # == k3d published port, so in-cluster and browser URLs are identical

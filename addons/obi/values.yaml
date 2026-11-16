@@ -13,6 +13,7 @@ opentelemetry-ebpf-instrumentation:
   fullnameOverride: obi
   image:
     registry: ghcr.io               # fully qualified (chart default)
+    tag: v1.0.0@sha256:a68d70e934260f72540f157ccf4fb4adfa38f11de060d7d905696dad6a3fca02   # multi-arch index digest: amd64, arm64
   preset: application
   resources:
     requests: { cpu: 50m, memory: 128Mi }

@@ -32,8 +32,8 @@ Needs Docker and [mise](https://mise.jdx.dev); `mise install` installs every oth
 ```bash
 mise install  # pinned toolchain (`task doctor` checks it)
 task up       # k3d mgmt cluster, seed secrets, Argo CD, root Application; Argo CD does the rest
-task status   # CAPI clusters, Argo CD apps, ClusterDataPlanes, Argo CD admin password
-task down     # delete the CAPD workload clusters, then the k3d mgmt cluster
+task status   # CAPI clusters, Argo CD apps, ClusterDataPlanes, how to read the Argo CD admin password
+task down     # freeze Argo CD, delete the CAPD workload clusters, then the k3d mgmt cluster
 ```
 
 To run it from your own copy: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your fork URL>`

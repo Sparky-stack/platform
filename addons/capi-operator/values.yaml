@@ -18,4 +18,4 @@ cluster-api-operator:
   image:
     manager:
       repository: registry.k8s.io/capi-operator/cluster-api-operator
-      tag: v0.30.0
+      tag: v0.30.0@sha256:2dd577d7bd9cf65deb45b8cd6444f5c89c3de3237ed8e150bd3d34df24fbce10   # index: amd64, arm64, arm, ppc64le, s390x

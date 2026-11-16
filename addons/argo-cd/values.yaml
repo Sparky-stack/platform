@@ -1,5 +1,8 @@
 # Wrapper defaults for argo-cd (mgmt only).
 # Used identically by bootstrap/bootstrap.sh and the GitOps argo-cd-mgmt Application so adoption is clean.
+# Images pinned by multi-arch index digest (docs/conventions.md invariant 9; hack/tests/test_image_pins.sh): every
+# component running quay.io/argoproj/argocd gets the same tag@digest (per component, not global.image.tag, which also
+# feeds the app.kubernetes.io/version label). A chart bump updates the anchor below and redis together.
 argo-cd:
   fullnameOverride: argocd
   global:
@@ -35,11 +38,14 @@ argo-cd:
         hs.status = "Progressing"
         return hs
   controller:
+    image:
+      tag: &argocdTag v3.6.1@sha256:296e3d74f449b2ce45265613fcb68c18ed7366488360c8ea32f5f2a93d2e5c54   # index: amd64, arm64, ppc64le, s390x
     resources:
       requests:
         cpu: 100m
         memory: 256Mi
   server:
+    image: { tag: *argocdTag }
     service:
       type: ClusterIP
     resources:
@@ -47,6 +53,7 @@ argo-cd:
         cpu: 50m
         memory: 128Mi
   repoServer:
+    image: { tag: *argocdTag }
     env:
       - name: ARGOCD_EXEC_TIMEOUT
         value: "180s"   # allow initial OCI/https helm dependency builds (e.g. openchoreo-control-plane)
@@ -56,16 +63,25 @@ argo-cd:
         memory: 256Mi
   applicationSet:
     enabled: true
+    image: { tag: *argocdTag }
     resources:
       requests:
         cpu: 25m
         memory: 64Mi
   redis:
+    image:   # chart default repository (ECR Public mirror of Docker Official redis)
+      tag: 8.6.4-alpine@sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763   # index: amd64, arm64, arm, ...
     resources:
       requests:
         cpu: 25m
         memory: 64Mi
   dex:
     enabled: false
+    initImage: { tag: *argocdTag }
   notifications:
     enabled: false
+    image: { tag: *argocdTag }
+  commitServer:
+    image: { tag: *argocdTag }
+  redisSecretInit:
+    image: { tag: *argocdTag }

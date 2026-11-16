@@ -41,7 +41,11 @@ There is no hard ordering between Applications; Argo CD retries cover it:
    data-plane agent waits in ContainerCreating until they exist, then connects.
 
 References between OpenChoreo objects (Project -> DeploymentPipeline, Environment -> ClusterDataPlane, Component ->
-ComponentType) are not validated by the API server; the controllers reconcile once the target exists.
+ComponentType) are not validated by the API server; the controllers reconcile once the target exists. One exception
+needs an order: the ReleaseBinding controller (v1.3.3) does not watch Environments, so a binding reconciled before its
+Environment exists stays `EnvironmentNotFound`. It re-queues the bindings of a ClusterDataPlane's Environments when
+that ClusterDataPlane is created, so `charts/cluster` applies the Environments in wave 9, one before the
+ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist long before the CAPD cluster is up.
 
 ### Argo CD requirements
 
@@ -59,8 +63,21 @@ ComponentType) are not validated by the API server; the controllers reconcile on
     hs.status = "Progressing"; hs.message = "Waiting for PVC"; return hs
   ```
 - Retries with backoff on every generated Application (CRDs from other Applications).
-- Helm hooks run on every sync under Argo (Helm: install only). Thunder's setup Job is idempotent; the control
-  plane's authz bootstrap Job (PostSync) re-applies its roles.
+- Helm hooks run on every sync under Argo (Helm: install only). Thunder's setup Job is idempotent and replaced on
+  every sync (`setup.preserveJob`: Argo's default BeforeHookCreation, so a failed run never blocks the next one and
+  `kubectl -n thunder logs job/thunder-setup` shows the last run); the control plane's authz bootstrap Job (PostSync)
+  re-applies its roles.
+- Thunder's PVCs are hooks Argo CD can delete: the upstream chart hardcodes them as `pre-install` hooks (they must
+  exist before the PreSync setup Job mounts them), and an Argo hook always has a delete policy (none =
+  BeforeHookCreation, i.e. every sync). They keep `hook-failed`, so a successful sync never touches them, but a failed
+  PreSync phase made Argo delete them (setup outage after PR #5: claims Terminating, kept only by the running pod).
+  Since then the PVCs carry `platform.koorikla.io/delete-protection: enabled` and the PreSync hook VAP
+  `thunder-pvc-delete-protection` (weight -30, before-hook-creation only, so it outlives a failed sync) denies their
+  DELETE for everyone, Argo CD included. Break-glass, to really drop Thunder's data:
+  `kubectl -n thunder annotate pvc <name> platform.koorikla.io/delete-protection-`, then delete. Verify the policy:
+  `kubectl -n thunder delete pvc thunder-database-pvc --dry-run=server` must answer Forbidden.
+  `hack/tests/test_pvc_hooks.sh` holds every addon to this: a hook PVC is `hook-failed` only, annotated, and covered
+  by such a policy in its render.
 
 ## Trust model
 

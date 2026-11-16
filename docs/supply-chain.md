@@ -23,7 +23,13 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   namespaces are excluded twice: Kyverno's webhook namespaceSelector and `matchConditions` (`request.namespace`).
 - **GitHub-built images** (`github.prefixes`, default `ghcr.io/koorikla/`):
   - issuer `https://token.actions.githubusercontent.com`;
-  - subject = the reusable workflow `https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1`;
+  - subject = the reusable workflow at one commit: `github.workflow` + `@` + `github.workflowRef`
+    (`https://github.com/koorikla/ci/.github/workflows/container.yaml@<40-hex SHA>`). Rendering fails for anything but
+    a full commit SHA: a tag such as `v1` is mutable, so whoever can move it would decide what is trusted. App repos
+    call koorikla/ci by the same SHA (`uses: koorikla/ci/.github/workflows/go.yaml@<sha> # v1`); the nested
+    `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
+    `workflowRef` (custom manager in `renovate.json`, tag `v1` of koorikla/ci) and the app repos' `uses:` pins
+    (github-actions digest pinning) to the same commit;
   - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
     `githubWorkflowRef` (from `github.refs`) and `githubWorkflowTrigger` (from `github.triggers`, default `push`).
     The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
@@ -52,8 +58,10 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 Evidence (Kyverno CLI v1.20.0 against the real image
 `ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
 - `hack/tests/test_kyverno_policies.sh` with `KYVERNO_ONLINE=1`:
-  - signature + SBOM + provenance + vuln attestations pass in production;
-  - the tag-only reference fails in production and passes in staging.
+  - that image was built through `koorikla/ci@v1`, before the commit pin: it now fails in production ("expected SAN
+    value …container.yaml@<sha>, got …container.yaml@refs/tags/v1") and is reported in staging. With the subject at
+    `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
+  - the tag-only reference fails in production.
   - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
     koorikla/ci's own pipeline) fails in production.
 - Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
@@ -143,9 +151,8 @@ sourceIntegrity:
     registry ([#43](https://github.com/koorikla/platform/issues/43)).
 - Not covered: tampering between `helm dependency build` and render on the Argo CD repo server (it pulls chart
   tarballs over TLS but does not check signatures), and platform images in excluded namespaces. Those come from
-  upstream charts and are pinned by version, not verified at admission.
+  upstream charts and are pinned by digest (`hack/tests/test_image_pins.sh`), not verified at admission.
 
-Open checks: web-flow key ID ([#42](https://github.com/koorikla/platform/issues/42)), koorikla/ci referenced by the
-mutable tag `refs/tags/v1` ([#41](https://github.com/koorikla/platform/issues/41)), Kyverno egress and registry
+Open checks: web-flow key ID ([#42](https://github.com/koorikla/platform/issues/42)), Kyverno egress and registry
 credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)), the rendered workflow-plane image
 host ([#40](https://github.com/koorikla/platform/issues/40)).

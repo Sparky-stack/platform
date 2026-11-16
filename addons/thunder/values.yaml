@@ -18,14 +18,19 @@
 # from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there. VERIFY live.
 #
 # Argo CD runs every Helm hook of this chart as a PreSync hook, on EVERY sync (Helm: install only):
-#   - PVCs database/certs/secrets (weight -15): hook-delete-policy hook-failed below, so a successful sync never deletes
-#     them (Argo's default BeforeHookCreation would wipe the sqlite DB and the generated keys each sync). local-path is
-#     WaitForFirstConsumer, so they stay Pending until the setup Job mounts them: Argo CD needs a PVC health override
-#     (Pending = Healthy) or the PreSync phase never finishes (argo-cd addon, see docs/openchoreo.md).
+#   - VAP thunder-pvc-delete-protection (ours, weight -30, templates/pvc-delete-protection.yaml): denies deleting the
+#     PVCs below, so a failed sync can no longer make Argo CD delete them (it did, with hook-failed, when the setup Job
+#     failed after PR #5).
+#   - PVCs database/certs/secrets (weight -15, hardcoded hooks upstream): hook-delete-policy hook-failed below, so a
+#     successful sync never deletes them (Argo's default BeforeHookCreation would wipe the sqlite DB and the generated
+#     keys each sync), plus the delete-protection annotation. local-path is WaitForFirstConsumer, so they stay Pending
+#     until the setup Job mounts them: Argo CD needs a PVC health override (Pending = Healthy) or the PreSync phase
+#     never finishes (argo-cd addon, see docs/openchoreo.md).
 #   - ExternalSecret thunder-bootstrap (ours, weight -20) before the Job; ServiceAccount/ConfigMaps (-10);
 #     setup Job (-5): starts a throw-away Thunder on localhost:8090 against the same sqlite PVC and imports the bundle
-#     below (upserts by id: re-runs are safe). RISK: the setup pod carries the Deployment's selector labels (no knob),
-#     so thunder-service routes to it for ~1 min per sync.
+#     below (upserts by id: re-runs are safe; every document must be a mapping, hack/tests/test_thunder_bootstrap.sh).
+#     Replaced on every sync (setup.preserveJob). RISK: the setup pod carries the Deployment's selector labels (no
+#     knob), so thunder-service routes to it for ~1 min per sync.
 # Footprint: one pod 100m/50Mi requests (upstream), setup Job the same while it runs, 3 small PVCs on local-path.
 
 bootstrapSecret:
@@ -54,6 +59,7 @@ thunderid:
   deployment:
     replicaCount: 1           # SQLite: single writer
     image:
+      tag: 1.0.1@sha256:d3c0613ff447a551fd440768a15bdfb6668948e80809cbb50f82d6752f22ab3e   # multi-arch index digest: amd64, arm64
       pullPolicy: IfNotPresent   # platform: chart default Always
   hpa:
     enabled: false
@@ -67,18 +73,23 @@ thunderid:
     hostnames:
       - thunder.openchoreo.localhost
 
-  # platform: keep the PVCs across successful syncs (see header)
+  # platform: keep the PVCs across successful syncs (hook-failed, see header) and make them undeletable, also by Argo CD
+  # after a failed sync (delete-protection: templates/pvc-delete-protection.yaml). Never drop hook-failed: without an
+  # explicit policy Argo CD deletes a hook before every sync (BeforeHookCreation). hack/tests/test_pvc_hooks.sh.
   persistence:
     annotations:
       helm.sh/hook-delete-policy: hook-failed
+      platform.koorikla.io/delete-protection: enabled
   certs:
     persistence:
       annotations:
         helm.sh/hook-delete-policy: hook-failed
+        platform.koorikla.io/delete-protection: enabled
   secrets:
     persistence:
       annotations:
         helm.sh/hook-delete-policy: hook-failed
+        platform.koorikla.io/delete-protection: enabled
 
   configuration:
     server:
@@ -108,6 +119,11 @@ thunderid:
 
   setup:
     enabled: true
+    # platform: no helm.sh/hook-delete-policy and no ttl on the Job, so Argo CD applies its default BeforeHookCreation:
+    # each sync replaces the previous run. Upstream's hook-succeeded left a FAILED Job in place for 24h (ttl), and Argo
+    # re-applying an existing failed hook Job re-reports the failure (or hits "field is immutable" once the spec
+    # changed) instead of running setup again. The last run stays for `kubectl logs job/thunder-setup`.
+    preserveJob: true
     admin:
       passwordRef: { name: thunder-bootstrap, key: thunder-admin-password }   # platform: no lookup()-generated Secret
     secretEnv:
@@ -121,15 +137,22 @@ thunderid:
       - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret, optional: true }
       - { name: FINOPS_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: finops-agent-client-secret, optional: true }
     # Scripts 53 / 60 (AI agent OAuth clients) from ConfigMap thunder-ai-agent-clients (templates/ai-agent-clients.yaml),
-    # derived from bootstrapSecret.aiAgentClients: a listed agent's file is the upstream client, an unlisted one a
-    # comment-only document the bootstrap skips. Fixed subPath mounts next to the shipped bundle.
+    # derived from bootstrapSecret.aiAgentClients: a listed agent's key is the upstream client, an unlisted agent has
+    # NO key. Thunder's bootstrap reads every *.yaml below /opt/thunderid/bootstrap (recursively) and fails on an empty
+    # or comment-only document, so an unlisted agent must be no file at all, not a placeholder file: the items are
+    # optional (a missing key = no file) and land in directory ai-agent-clients/, mounted by subPath so only the real
+    # files appear (no ConfigMap ..data metadata). README (always present, not *.yaml) keeps the directory.
     extraVolumes:
       - name: ai-agent-clients
         configMap:
           name: thunder-ai-agent-clients
+          optional: true      # = per-key: a key missing from the ConfigMap is skipped instead of failing the pod
+          items:
+            - { key: README, path: ai-agent-clients/README }
+            - { key: 53-rca-agent-client.yaml, path: ai-agent-clients/53-rca-agent-client.yaml }
+            - { key: 60-finops-agent-client.yaml, path: ai-agent-clients/60-finops-agent-client.yaml }
     extraVolumeMounts:
-      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/53-rca-agent-client.yaml, subPath: 53-rca-agent-client.yaml, readOnly: true }
-      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/60-finops-agent-client.yaml, subPath: 60-finops-agent-client.yaml, readOnly: true }
+      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/ai-agent-clients, subPath: ai-agent-clients, readOnly: true }
 
   # Declarative documents imported by the setup Job on top of ThunderID's shipped defaults; upserted by fixed id
   # (01900000-0000-7000-8001-* block, clear of ThunderID's own). Upstream 48, 49, 51, 54 verbatim except the client

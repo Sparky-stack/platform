@@ -28,7 +28,9 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
 7. Enable/disable files by extension (`*.yaml` ⇄ `*.yaml.disabled`), not by commenting blocks.
 8. Everything after `task up` is GitOps. `bootstrap/` is the only imperative code; it installs exactly: k3d mgmt,
    the seed secrets (local backend only), Argo CD (same chart + values as GitOps), and the root Application.
-9. Images fully qualified; versions pinned (charts in `Chart.yaml`, images via chart values). Renovate updates them.
+9. Images fully qualified and pinned by multi-arch index digest (`<host>/<path>:<tag>@sha256:…`); versions pinned
+   (charts in `Chart.yaml`, images via chart values). Renovate updates them. Contract: `hack/tests/test_image_pins.sh`
+   ([build-plane.md](build-plane.md#images-and-architectures)).
 
 ## Labels and annotations
 On the CAPI `Cluster` and the Argo CD cluster secret:
@@ -47,6 +49,10 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
+
+On a PersistentVolumeClaim, annotation `platform.koorikla.io/delete-protection: enabled` means a ValidatingAdmissionPolicy
+of the owning addon denies its deletion; every PVC that Argo CD runs as a hook must carry it (with `hook-failed` as its
+only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements).
 
 ## Names
 | Thing | Name |

@@ -1,0 +1,63 @@
+{{- /*
+Thunder's PVCs (sqlite DB = every user and OAuth client, generated keys, Direct Auth secret) can not be deleted while
+they carry platform.koorikla.io/delete-protection: enabled (values thunderid.*persistence.annotations).
+
+Why admission and not "make them normal resources": the upstream chart hardcodes helm.sh/hook: pre-install on the
+three PVCs (templates/pvc.yaml, no values knob), Argo CD treats every helm.sh/hook object as a hook (an
+argocd.argoproj.io/hook annotation can only re-type it or Skip it = never apply), and the setup Job, also a hardcoded
+PreSync hook, mounts them, so un-hooked Sync-phase PVCs would deadlock a fresh install. A hook has exactly three Argo
+delete policies and the default is BeforeHookCreation (delete on every sync), so the PVCs keep hook-failed, and a
+failed PreSync phase (the thunder-setup outage) made Argo delete them. This policy denies that DELETE, from Argo CD and
+from anyone else, so the claims stay Bound and Argo only records "failed to delete resource".
+
+PreSync hook (weight -30, before the PVCs at -15) with before-hook-creation only: in force from the first sync of a
+fresh install on, never deleted when a sync fails; Argo replaces it at the start of each sync, when it deletes no PVC.
+Break-glass (really remove Thunder's data): kubectl -n {{ .Release.Namespace }} annotate pvc <name>
+platform.koorikla.io/delete-protection- , then delete. hack/tests/test_pvc_hooks.sh: every hook PVC of every addon is
+hook-failed only, annotated and covered by such a policy.
+*/ -}}
+{{- $ns := .Release.Namespace }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $ns }}-pvc-delete-protection
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [DELETE]
+        resources: [persistentvolumeclaims]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ $ns }}
+  matchConditions:
+    - name: delete-protected
+      expression: >-
+        has(oldObject.metadata.annotations)
+        && 'platform.koorikla.io/delete-protection' in oldObject.metadata.annotations
+        && oldObject.metadata.annotations['platform.koorikla.io/delete-protection'] == 'enabled'
+  validations:
+    - expression: "false"
+      messageExpression: >-
+        'PersistentVolumeClaim ' + oldObject.metadata.name + ' holds Thunder data and is delete-protected (addon thunder'
+        + ' templates/pvc-delete-protection.yaml); to really delete it, first remove annotation'
+        + ' platform.koorikla.io/delete-protection'
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $ns }}-pvc-delete-protection
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  policyName: {{ $ns }}-pvc-delete-protection
+  validationActions: [Deny]

@@ -91,7 +91,7 @@ tests:
           value:
             identities:
               - issuer: https://token.actions.githubusercontent.com
-                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1
+                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@de39b1d4162e18e275c7be7e86384d22cc4e070b
             additionalExtensions:
               githubWorkflowRepository: koorikla/hello-world
               githubWorkflowRef: refs/heads/main
@@ -101,6 +101,53 @@ tests:
       - matchRegex: { path: "spec.validations[1].expression", pattern: 'verifyAttestationSignatures\(image, attestations\["sbom"\]' }
       - matchRegex: { path: "spec.validations[0].expression", pattern: '^variables\.images\.filter\(' }
       - matchRegex: { path: "spec.variables[0].expression", pattern: 'images\.initContainers.*images\.ephemeralContainers' }
+
+  - it: the trusted reusable workflow is pinned by commit SHA (subject = workflow@sha)
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    set:
+      imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+    asserts:
+      - equal:
+          path: spec.attestors[0].cosign.keyless.identities[0].subject
+          value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
+
+  - it: a mutable workflow ref (tag) is refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.workflowRef: refs/tags/v1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workflowRef "refs/tags/v1" must be a 40-hex commit SHA'
+
+  - it: a short tag or abbreviated SHA is refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.workflowRef: de39b1d
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workflowRef "de39b1d" must be a 40-hex commit SHA'
+
+  - it: a ref smuggled into the workflow URL is refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.workflow: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/heads/main
+    asserts:
+      - failedTemplate:
+          errorPattern: 'imageVerification.github.workflow .* without a ref'
+
+  - it: without the GitHub source no workflow pin is required
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.enabled: false
+      imageVerification.github.workflowRef: ""
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.publicKey: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEexample
+        -----END PUBLIC KEY-----
+    asserts:
+      - notFailedTemplate: {}
 
   - it: one attestor per allowed (repository, ref); the platform key only when a public key is set
     template: templates/image-verification.yaml

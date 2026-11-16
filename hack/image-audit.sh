@@ -2,8 +2,10 @@
 # Multi-arch audit: list every container image the installation runs and check that each one publishes
 # linux/amd64 AND linux/arm64 (Apple Silicon, Graviton/Ampere hosts, Windows on Arm run arm64 Docker engines).
 #
-# Usage: hack/image-audit.sh [--list] [--opt-in] [--live] [--report FILE]   (task images:audit -- --live)
+# Usage: hack/image-audit.sh [--list] [--rendered] [--opt-in] [--live] [--report FILE]   (task images:audit -- --live)
 #   --list    only print the image inventory (no registry calls)
+#   --rendered only the images this repo renders or pins (addons, CAPD kindImage, k3d mgmt node): no runtime images
+#             from upstream release manifests, k3d or CAPD defaults, no network (hack/tests/test_image_pins.sh)
 #   --opt-in  also render opt-in addons (catalog default false) not switched on in INST, e.g. before enabling one
 #   --live    also add images running in the k3d mgmt cluster (read-only `kubectl get pods`) and local containers
 #   --report  also write the result table as markdown to FILE
@@ -43,18 +45,30 @@ arch_exception() {
   done
 }
 
-# Images from rendered manifests: every `image:` string, plus images operators receive by name through env vars and
-# ConfigMap keys containing IMAGE (e.g. Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG
-# POSTGRES_IMAGE_NAME, the Barman Cloud plugin's SIDECAR_IMAGE): those pods are created by the operator, not rendered.
+# Images from rendered manifests (stdin):
+#   - every string under a key ending in `image` (`image:`, and e.g. the Argo Events controller config's natsImage);
+#   - the same keys inside YAML embedded in ConfigMap data (the Argo Events EventBus JetStream versions live there),
+#     each embedded document parsed on its own (a script that merely contains "image:" cannot abort the extraction);
+#   - images operators receive by name through env vars and ConfigMap keys containing IMAGE (e.g. ARGO_EVENTS_IMAGE,
+#     Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG POSTGRES_IMAGE_NAME, the Barman Cloud plugin's
+#     SIDECAR_IMAGE): those pods are created by the operator, not rendered.
 extract_images() {
-  local in
-  in=$(cat)
-  printf '%s\n' "$in" | yq -N '.. | select(tag == "!!map" and has("image")) | .image | select(tag == "!!str")' 2>/dev/null \
-    | tr -d '\r' | grep -E '^[a-z0-9]' || true
-  printf '%s\n' "$in" | yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
+  local f b keys='.. | select(tag == "!!map") | to_entries[] | select((.key | tag) == "!!str")
+    | select(.key | test("(?i)image$")) | .value | select(tag == "!!str")'
+  f=$(mktemp)
+  cat > "$f"
+  {
+    yq -N "$keys" "$f" 2>/dev/null || true
+    yq -N 'select(.kind == "ConfigMap") | .data[]? | select(tag == "!!str") | select(test("(?i)image: *[a-z0-9]"))
+      | @base64' "$f" 2>/dev/null | tr -d '\r' | while IFS= read -r b; do
+      if [[ -n "$b" ]]; then yq -n -N "\"$b\" | @base64d | from_yaml | $keys" 2>/dev/null || true; fi
+    done
+  } | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
       | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
-    (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' 2>/dev/null \
+    (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' "$f" 2>/dev/null \
     | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
+  rm -f "$f"
 }
 
 # enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do; with
@@ -75,14 +89,15 @@ source hack/lib/portable.sh
 source hack/lib/addons.sh
 
 INST="${INST:-local}"
-LIST_ONLY=0 LIVE=0 OPT_IN=0 REPORT=""
+LIST_ONLY=0 LIVE=0 OPT_IN=0 RENDERED=0 REPORT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list) LIST_ONLY=1 ;;
     --live) LIVE=1 ;;
     --opt-in) OPT_IN=1 ;;
+    --rendered) RENDERED=1 ;;
     --report) REPORT="$2"; shift ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -208,50 +223,58 @@ for dir in examples/*; do
   done
 done
 
-echo "==> Cluster runtime images (k3d, CAPD, CAPI providers, k3s)" >&2
+echo "==> Cluster images (k3d mgmt node, CAPD node)" >&2
 k3s_versions=""
 if [[ "$INST" == local ]]; then
   k3d_img=$(yq '.image' bootstrap/k3d-mgmt.yaml)
   add "$k3d_img" "k3d mgmt node (bootstrap/k3d-mgmt.yaml)"
-  k3s_versions=$(printf '%s' "$k3d_img" | sed -E 's/.*:(v[0-9.]+)-(k3s[0-9]+)$/\1+\2/')
-  k3d_ver=$(awk '$1 == "k3d" && $2 == "=" { gsub(/"/, "", $3); print $3 }' mise.toml)
-  add "ghcr.io/k3d-io/k3d-proxy:$k3d_ver" "k3d serverlb (k3d $k3d_ver)"
-  add "ghcr.io/k3d-io/k3d-tools:$k3d_ver" "k3d tools (k3d $k3d_ver)"
+  k3s_versions=$(printf '%s' "${k3d_img%@*}" | sed -E 's/.*:(v[0-9.]+)-(k3s[0-9]+)$/\1+\2/')
 fi
 if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
   add "$(yq '.docker.kindImage' addons/clusterclasses/values.yaml)" "CAPD node (addons/clusterclasses kindImage)"
-  # CAPD built-in load balancer default; seen live with CAPI v1.13.8 (docker ps). Re-check on CAPI bumps.
-  add "kindest/haproxy:v20230606-42a2262b" "CAPD load balancer (CAPD default)"
 fi
-for cf in "$INST_DIR"/clusters/*.yaml; do
-  [[ -f "$cf" ]] || continue
-  v=$(yq '.kubernetesVersion // ""' "$cf")
-  if [[ -n "$v" ]]; then k3s_versions=$(printf "%s\n%s" "$k3s_versions" "$v"); fi
-done
 
-pv() { yq "$1 // \"$2\"" addons/capi-providers/values.yaml 2>/dev/null || echo "$2"; }
-CAPI_VER=$(pv '.core.version' v1.13.8)
-K3S_PROV_VER=$(pv '.k3s.version' v0.5.0)
-fetch() { curl -fsSL --retry 2 "$1" 2>/dev/null || echo "WARN: could not fetch $1" >&2; }
-{
-  fetch "https://github.com/kubernetes-sigs/cluster-api/releases/download/$CAPI_VER/core-components.yaml"
-  echo "---"
-  fetch "https://github.com/k3s-io/cluster-api-k3s/releases/download/$K3S_PROV_VER/bootstrap-components.yaml"
-  echo "---"
-  fetch "https://github.com/k3s-io/cluster-api-k3s/releases/download/$K3S_PROV_VER/control-plane-components.yaml"
-} > "$TMP/providers.yaml"
-extract_images < "$TMP/providers.yaml" | while IFS= read -r img; do add "$img" "CAPI provider controller"; done
-if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
-  fetch "https://github.com/kubernetes-sigs/cluster-api/releases/download/$CAPI_VER/infrastructure-components-development.yaml" \
-    | extract_images | while IFS= read -r img; do add "$img" "CAPD controller"; done
+if (( ! RENDERED )); then
+  echo "==> Cluster runtime images (k3d helpers, CAPD load balancer, CAPI providers, k3s)" >&2
+  if [[ "$INST" == local ]]; then
+    k3d_ver=$(awk '$1 == "k3d" && $2 == "=" { gsub(/"/, "", $3); print $3 }' mise.toml)
+    add "ghcr.io/k3d-io/k3d-proxy:$k3d_ver" "k3d serverlb (k3d $k3d_ver)"
+    add "ghcr.io/k3d-io/k3d-tools:$k3d_ver" "k3d tools (k3d $k3d_ver)"
+  fi
+  if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
+    # CAPD built-in load balancer default; seen live with CAPI v1.13.8 (docker ps). Re-check on CAPI bumps.
+    add "kindest/haproxy:v20230606-42a2262b" "CAPD load balancer (CAPD default)"
+  fi
+  for cf in "$INST_DIR"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    v=$(yq '.kubernetesVersion // ""' "$cf")
+    if [[ -n "$v" ]]; then k3s_versions=$(printf "%s\n%s" "$k3s_versions" "$v"); fi
+  done
+
+  pv() { yq "$1 // \"$2\"" addons/capi-providers/values.yaml 2>/dev/null || echo "$2"; }
+  CAPI_VER=$(pv '.core.version' v1.13.8)
+  K3S_PROV_VER=$(pv '.k3s.version' v0.5.0)
+  fetch() { curl -fsSL --retry 2 "$1" 2>/dev/null || echo "WARN: could not fetch $1" >&2; }
+  {
+    fetch "https://github.com/kubernetes-sigs/cluster-api/releases/download/$CAPI_VER/core-components.yaml"
+    echo "---"
+    fetch "https://github.com/k3s-io/cluster-api-k3s/releases/download/$K3S_PROV_VER/bootstrap-components.yaml"
+    echo "---"
+    fetch "https://github.com/k3s-io/cluster-api-k3s/releases/download/$K3S_PROV_VER/control-plane-components.yaml"
+  } > "$TMP/providers.yaml"
+  extract_images < "$TMP/providers.yaml" | while IFS= read -r img; do add "$img" "CAPI provider controller"; done
+  if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
+    fetch "https://github.com/kubernetes-sigs/cluster-api/releases/download/$CAPI_VER/infrastructure-components-development.yaml" \
+      | extract_images | while IFS= read -r img; do add "$img" "CAPD controller"; done
+  fi
+  for v in $(printf '%s\n' "$k3s_versions" | sort -u); do
+    [[ -n "$v" ]] || continue
+    fetch "https://github.com/k3s-io/k3s/releases/download/${v/+/%2B}/k3s-images.txt" | tr -d '\r' \
+      | grep -v traefik | while IFS= read -r img; do
+        if [[ -n "$img" ]]; then add "$img" "k3s $v system image"; fi
+      done
+  done
 fi
-for v in $(printf '%s\n' "$k3s_versions" | sort -u); do
-  [[ -n "$v" ]] || continue
-  fetch "https://github.com/k3s-io/k3s/releases/download/${v/+/%2B}/k3s-images.txt" | tr -d '\r' \
-    | grep -v traefik | while IFS= read -r img; do
-      if [[ -n "$img" ]]; then add "$img" "k3s $v system image"; fi
-    done
-done
 
 if (( LIVE )); then
   echo "==> Live images (k3d-platform-mgmt pods, local containers)" >&2

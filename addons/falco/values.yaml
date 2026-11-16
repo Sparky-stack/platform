@@ -37,6 +37,14 @@ slack:
 
 falco:
   fullnameOverride: falco        # stable names regardless of the Argo release name
+  # Images: chart default registries (docker.io/falcosecurity), tag@digest pinned by multi-arch index digest
+  # (docs/conventions.md invariant 9). The falcosidekick chart's `helm test` pod (hardcoded curlimages/curl) is never
+  # created by Argo CD (Helm test hooks are unsupported there): listed exception in hack/tests/test_image_pins.sh.
+  image:
+    tag: 0.45.2@sha256:1562a643953f938e02f47319b5214d93a235f11f646d60e9b8a516fd5a64698e   # index: amd64, arm64
+  falcoctl:
+    image:
+      tag: 0.14.3@sha256:2230fb4802aafe09455b58d38f8f1faedd8f09f042e9a18fffd397e63488c023   # index: amd64, arm64
   driver:
     enabled: true
     kind: modern_ebpf
@@ -75,6 +83,17 @@ falco:
                 openchoreo-workflow-plane, cilium, istio-system, kyverno, argo-events]
       - macro: platform_app_namespace
         condition: (k8s.ns.name startswith "dp-")
+
+      # CAPD (provider docker): each workload-cluster node IS a container (kindest/node image), so the node's own
+      # processes (CNI installers copying binaries, mount, kubelet helpers) match upstream container rules such as
+      # "Drop and execute new binary in container" at CRITICAL - an escalation storm on every new node. Only the node
+      # image itself is excepted; containers started inside the node keep their own image and stay covered.
+      - macro: platform_capd_node_container
+        condition: (container.image.repository endswith "kindest/node")
+      - rule: Drop and execute new binary in container
+        condition: and not platform_capd_node_container
+        override:
+          condition: append
 
       - rule: Platform shell in app container
         desc: An interactive or scripted shell started inside a container of an OpenChoreo app namespace.
@@ -120,6 +139,8 @@ falco:
         tags: [platform, container, cryptomining, mitre_impact, T1496]
 
   falcosidekick:
+    image:
+      tag: 2.35.1@sha256:a9bb60d2c7742febd912315ca1155839abc0199bf322c58d3adbb8b0849fadb9   # index: amd64, arm64, arm
     enabled: true
     fullnameOverride: falco-falcosidekick
     replicaCount: 1
@@ -164,6 +185,11 @@ falco-talon:
   enabled: true
   replicaCount: 1                # upstream 2 (+ leader election); one is enough per cluster here
   image:
+    # Fully qualified on Docker Hub itself (chart default: the falco.docker.scarf.sh download-tracking proxy). Tag only:
+    # chart 0.5.0 copies image.tag into the app.kubernetes.io/version label (a tag@digest is not a valid label value)
+    # and has no digest field - listed exception in hack/tests/test_image_pins.sh until the chart supports digests.
+    registry: docker.io
+    tag: 0.3.0                   # = chart appVersion; index digest sha256:333224a111a0722ff3f418ffe6bc5d8a3be0941f37c67520bc845e62f1234ad3
     pullPolicy: IfNotPresent     # upstream Always
   resources:
     requests: { cpu: 10m, memory: 32Mi }

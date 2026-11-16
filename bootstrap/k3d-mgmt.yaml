@@ -7,7 +7,9 @@ metadata:
   name: platform-mgmt
 servers: 1
 agents: 0
-image: rancher/k3s:v1.35.10-k3s1   # same k3s as the workload clusters; OpenChoreo CRDs need a recent API server (CEL)
+# Same k3s as the workload clusters (OpenChoreo CRDs need a recent API server, CEL); fully qualified and pinned by
+# multi-arch index digest (amd64, arm64, arm). VERIFY on the next `task up` (k3d passes the reference to docker as is).
+image: docker.io/rancher/k3s:v1.35.10-k3s1@sha256:8262ca99a558dca0c0437443421986480b2359f9118f2371359f88a41514522f
 network: kind
 options:
   k3d:
@@ -17,6 +19,35 @@ options:
       - arg: --disable=traefik
         nodeFilters:
           - server:*
+      # Embedded etcd instead of kine/SQLite even with one server: the SQLite datastore of a busy mgmt (Argo CD, CAPI,
+      # OpenChoreo, Workflows) grew to ~1.8 GB and kine's compaction failed at the same revision on every start, a
+      # crash loop every ~11 min (#76). etcd compacts incrementally. k3d adds this flag itself only when servers > 1.
+      - arg: --cluster-init
+        nodeFilters:
+          - server:0
+      # Longer leader election for the embedded controllers, to ride out slow etcd fsyncs. k3s exits on a missed renewal
+      # ("leaderelection lost"), and the clean bootstrap's I/O burst (CAPD nodes, Harbor, image pulls) stalls etcd
+      # fdatasync for 5-8 s on a busy host: 5 mgmt restarts in the first 15 min, each restarting every mgmt pod.
+      # Upstream 15s/10s/2s. Same values as the CAPD ClusterClass (addons/clusterclasses k3s.dockerLeaderElectionArgs,
+      # #82; hack/tests/test_gitops_contracts.sh keeps them equal).
+      - arg: --kube-controller-manager-arg=leader-elect-lease-duration=60s
+        nodeFilters: [server:*]
+      - arg: --kube-controller-manager-arg=leader-elect-renew-deadline=40s
+        nodeFilters: [server:*]
+      - arg: --kube-controller-manager-arg=leader-elect-retry-period=10s
+        nodeFilters: [server:*]
+      - arg: --kube-scheduler-arg=leader-elect-lease-duration=60s
+        nodeFilters: [server:*]
+      - arg: --kube-scheduler-arg=leader-elect-renew-deadline=40s
+        nodeFilters: [server:*]
+      - arg: --kube-scheduler-arg=leader-elect-retry-period=10s
+        nodeFilters: [server:*]
+      - arg: --kube-cloud-controller-manager-arg=leader-elect-lease-duration=60s
+        nodeFilters: [server:*]
+      - arg: --kube-cloud-controller-manager-arg=leader-elect-renew-deadline=40s
+        nodeFilters: [server:*]
+      - arg: --kube-cloud-controller-manager-arg=leader-elect-retry-period=10s
+        nodeFilters: [server:*]
 volumes:
   - volume: /var/run/docker.sock:/var/run/docker.sock
     nodeFilters:

@@ -207,7 +207,7 @@ AWS with IRSA / EKS Pod Identity (`secrets.aws.role`), to Vault with its Kuberne
 
 ```bash
 task up         # k3d mgmt, secrets, Argo CD, root app; then everything else is Argo CD
-task status     # CAPI clusters, Argo CD apps, ClusterDataPlanes, Argo CD admin password
+task status     # CAPI clusters, Argo CD apps, ClusterDataPlanes, how to read the Argo CD admin password
 ```
 
 What happens, roughly (8-CPU / 16 GB Linux host; a warm image cache is faster; other hosts:
@@ -220,13 +220,14 @@ What happens, roughly (8-CPU / 16 GB Linux host; a warm image cache is faster; o
 | 5-20 | CAPD creates `dev1` and `prod1` (kindest/node containers), their kubeconfigs become Argo CD cluster secrets, addons land on them, the OpenChoreo data planes connect |
 | 15-30 | tenant `demo`: hello-world released to `development` |
 
-Watch it with `task ui` (Argo CD on http://localhost:8081, user `admin`, password printed) or
+Watch it with `task ui` (Argo CD on http://localhost:8081, user `admin`; it prints the command that reads the password,
+never the password) or
 `kubectl --context k3d-platform-mgmt get applications -n argocd -w`. A few Applications show `Unknown`/`OutOfSync`
 and retry until the CRDs they need exist: expected (docs/openchoreo.md "Ordering").
 
 | URL | What | Login |
 |---|---|---|
-| http://localhost:8081 (`task ui`) | Argo CD | `admin` / `task status` prints it |
+| http://localhost:8081 (`task ui`) | Argo CD | `admin` / the command `task status` prints (secret `argocd-initial-admin-secret`) |
 | http://openchoreo.localhost:8080 | OpenChoreo console (Backstage) | `admin@openchoreo.dev` / property `admin-user-password` (or `developer@openchoreo.dev` / `developer-user-password`) |
 | http://api.openchoreo.localhost:8080 | OpenChoreo API (+ `/mcp`) | same users (OIDC via Thunder) |
 | http://thunder.openchoreo.localhost:8080/console | ThunderID admin console | `admin` / property `thunder-admin-password` |
@@ -241,8 +242,11 @@ kubectl --context k3d-platform-mgmt -n platform-secrets get secret openchoreo \
   -o jsonpath='{.data.admin-user-password}' | base64 --decode; echo
 ```
 
-Tear down: `task down` (deletes the CAPD clusters first, then the k3d mgmt). Cloud installations have no `down`:
-delete cluster files from git and let CAPI clean up.
+Tear down: `task down`. It freezes Argo CD first (application and applicationset controllers to 0 replicas: with
+selfHeal on, a running controller re-creates every deleted Cluster), deletes the CAPD clusters (`DOWN_TIMEOUT`, default
+5m), removes CAPD node containers of the installation's clusters that are still left, then deletes the k3d mgmt. To
+delete only the CAPD clusters, freeze the same way first (`task up`/`task argocd` restores the replicas). Cloud
+installations have no `down`: delete cluster files from git and let CAPI clean up.
 
 ## 5. Troubleshooting
 

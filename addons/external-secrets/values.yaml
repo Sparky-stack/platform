@@ -1,16 +1,24 @@
 # Wrapper defaults for external-secrets.
+# Images: one image for controller, webhook and cert controller, pinned by multi-arch index digest (tag@digest; the
+# chart renders <repository>:<tag>; docs/conventions.md invariant 9). A chart bump updates tag and digest together.
 external-secrets:
   installCRDs: true
+  image:
+    tag: v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31   # index: amd64, arm64, ppc64le, s390x
   resources:
     requests:
       cpu: 25m
       memory: 64Mi
   webhook:
+    image:
+      tag: v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31
     resources:
       requests:
         cpu: 10m
         memory: 32Mi
   certController:
+    image:
+      tag: v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31
     resources:
       requests:
         cpu: 25m

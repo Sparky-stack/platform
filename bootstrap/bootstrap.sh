@@ -31,9 +31,9 @@ Subcommands:
            (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_* (docs/forking.md)
   argocd   Install/upgrade Argo CD via Helm, seed the bootstrap repo secret until ESO's repo-creds is Ready (then
            delete it), apply root-app. `up` waits REPO_CREDS_WAIT seconds (default 600, 0 skips) for that hand-over
-  status   Show clusters, Argo CD apps, and UI/password info
-  ui       Print Argo CD admin password and port-forward argocd-server on localhost:8081
-  down     Delete CAPD workload clusters (if any) and delete k3d platform-mgmt (local only)
+  status   Show clusters, Argo CD apps, and UI info (how to read the admin password; never the password)
+  ui       Port-forward argocd-server on localhost:8081 (prints how to read the admin password, not the password)
+  down     Freeze Argo CD, delete CAPD workload clusters (if any), then k3d platform-mgmt (local only)
 EOF
       exit 0
       ;;
@@ -561,34 +561,79 @@ cmd_status() {
   kubectl --context "$CTX" get clusterdataplanes 2>/dev/null || true
   echo ""
   echo "Argo CD UI: kubectl --context $CTX port-forward -n argocd svc/argocd-server 8081:80"
-  echo "Argo CD admin password:"
-  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | b64dec || true
-  echo ""
+  admin_password_hint
+}
+
+# admin_password_hint: how to read the Argo CD admin password, never the password itself. Output of `up`/`status` lands
+# in terminals, CI logs and agent transcripts; a printed password is an exposed password.
+admin_password_hint() {
+  # shellcheck disable=SC2016  # printed for the user to run, not expanded here
+  printf '%s\n' "Argo CD admin password (user admin; not printed): kubectl --context $CTX -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 --decode; echo" \
+    "  The secret is gone once the password was changed (argocd account update-password)."
 }
 
 cmd_ui() {
   load_inst
   require_bins kubectl
-  echo "Argo CD admin password:"
-  kubectl --context "$CTX" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' 2>/dev/null | b64dec || true
-  echo ""
+  admin_password_hint
   log "Port-forwarding Argo CD UI to http://localhost:8081 (Ctrl-C to stop; NO_BROWSER=1 skips opening a browser)"
   ( sleep 3; open_url http://localhost:8081 ) &
   kubectl --context "$CTX" port-forward -n argocd svc/argocd-server 8081:80
 }
 
+# freeze_argocd: stop the Argo CD controllers that write to clusters. The fleet Clusters are Argo CD-managed with
+# selfHeal, so a Cluster deleted under a running application-controller is re-created within seconds (a new CAPD
+# cluster boots while mgmt is being torn down), and the ApplicationSet controller rewrites Applications as cluster
+# secrets go away. Scaling to 0 is undone by the next `task up`/`task argocd` (helm upgrade restores the replicas).
+freeze_argocd() {
+  kubectl --context "$CTX" get ns argocd >/dev/null 2>&1 || return 0
+  log "Freezing Argo CD (application + applicationset controllers to 0 replicas) so it cannot re-create Clusters"
+  kubectl --context "$CTX" -n argocd scale statefulset/argocd-application-controller --replicas=0 >/dev/null 2>&1 || true
+  kubectl --context "$CTX" -n argocd scale deployment/argocd-applicationset-controller --replicas=0 >/dev/null 2>&1 || true
+  kubectl --context "$CTX" -n argocd wait --for=delete pod --timeout=2m \
+    -l 'app.kubernetes.io/name in (argocd-application-controller,argocd-applicationset-controller)' >/dev/null 2>&1 \
+    || warn "Argo CD controller pods still terminating; continuing"
+}
+
+# remove_capd_leftovers: CAPD node containers carry the kind label io.x-k8s.kind.cluster=<cluster>. Remove the ones of
+# the given clusters that CAPI could not delete in time (only those names: other kind clusters on the host are kept).
+remove_capd_leftovers() {
+  local c ids seen=" "
+  for c in "$@"; do
+    [[ "$seen" == *" $c "* ]] && continue
+    seen="$seen$c "
+    ids=$(docker ps -aq --filter "label=io.x-k8s.kind.cluster=$c" 2>/dev/null || true)
+    [[ -n "$ids" ]] || continue
+    warn "Removing leftover CAPD containers of cluster '$c'"
+    # shellcheck disable=SC2086  # one id per word
+    docker rm -f $ids >/dev/null 2>&1 || true
+  done
+}
+
 cmd_down() {
   load_inst
   [[ "$INST" == "local" ]] || die "'down' only tears down the local k3d installation (got INST=$INST)"
-  require_bins k3d kubectl
+  require_bins k3d kubectl docker yq
+  local clusters=()
   if kubectl --context "$CTX" get ns fleet >/dev/null 2>&1; then
-    local clusters
-    clusters=$(kubectl --context "$CTX" get clusters.cluster.x-k8s.io -n fleet -o name 2>/dev/null || true)
-    if [[ -n "$clusters" ]]; then
-      log "Deleting CAPI workload clusters gracefully before tearing down mgmt"
-      kubectl --context "$CTX" delete clusters.cluster.x-k8s.io -n fleet --all --wait=true --timeout=2m || true
-    fi
+    local name
+    while IFS= read -r name; do
+      [[ -n "$name" ]] && clusters+=("$name")
+    done < <(kubectl --context "$CTX" get clusters.cluster.x-k8s.io -n fleet \
+      -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
   fi
+  if (( ${#clusters[@]} > 0 )); then
+    freeze_argocd
+    log "Deleting CAPI workload clusters gracefully before tearing down mgmt: ${clusters[*]}"
+    kubectl --context "$CTX" delete clusters.cluster.x-k8s.io -n fleet --all --wait=true \
+      --timeout="${DOWN_TIMEOUT:-5m}" || warn "CAPI cluster deletion did not finish within ${DOWN_TIMEOUT:-5m}"
+  fi
+  # Leftovers of the clusters mgmt listed plus the installation's fleet files (mgmt may already be unreachable).
+  local f
+  for f in "installations/$INST/clusters/"*.yaml; do
+    [[ -f "$f" ]] && clusters+=("$(yq '.name' "$f")")
+  done
+  (( ${#clusters[@]} > 0 )) && remove_capd_leftovers "${clusters[@]}"
   log "Deleting k3d cluster 'platform-mgmt'"
   k3d cluster delete platform-mgmt 2>/dev/null || true
 }

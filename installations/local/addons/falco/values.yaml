@@ -1,0 +1,32 @@
+# Installation "local": Falco on the k3d mgmt and the CAPD clusters (overlay on addons/falco/values.yaml, every cluster).
+#
+# All local nodes are containers on ONE host kernel, so each cluster's Falco (modern eBPF, kernel-wide) sees every
+# process on the machine: other clusters' pods, the CAPD/k3d node containers' own k3s/mount/CNI processes and anything
+# else the host runs. Falco resolves Kubernetes metadata only for its own node's pods (CRI socket), so those foreign
+# events carry no k8s.ns.name. Measured (2026-11, issue #76): 100% of the Critical "Drop and execute new binary in
+# container" and Error "Platform write below etc" alerts and ~90% of "Contact K8S API Server From Container" had no
+# k8s.ns.name (one dev1 Falco: 245 Critical, 163 Error, 5573 Notice in 43 min). Each Falco escalates its Criticals to
+# mgmt (falco-response Workflows, rate-limited to 6/min, so the backlog never drains) - the same foreign event five
+# times, for a Workflow that cannot act on it (no namespace, no pod) and fails.
+#
+# Locally these rules therefore skip containers Falco cannot attribute to a pod of its own cluster. Every pod of the
+# cluster keeps full coverage (it has k8s.ns.name); a real node has only its own pods, so no other installation needs
+# this. The file name sorts after platform-rules.yaml: Falco loads /etc/falco/rules.d alphabetically and an override
+# must follow the rule it extends.
+falco:
+  customRules:
+    zz-local-unattributed.yaml: |-
+      - macro: local_unattributed_container
+        condition: (container and not k8s.ns.name exists)
+      - rule: Drop and execute new binary in container
+        condition: and not local_unattributed_container
+        override:
+          condition: append
+      - rule: Contact K8S API Server From Container
+        condition: and not local_unattributed_container
+        override:
+          condition: append
+      - rule: Platform write below etc
+        condition: and not local_unattributed_container
+        override:
+          condition: append

@@ -1,20 +1,40 @@
 # Wrapper defaults for cert-manager.
+# Images: chart default repositories (quay.io/jetstack/cert-manager-*), tag = chart appVersion, pinned by multi-arch
+# index digest (`tag` + `digest` render <repo>:<tag>@<digest>; docs/conventions.md invariant 9). Renovate / a chart bump
+# must update the digests together with the version (hack/tests/test_image_pins.sh fails on a missing one).
 cert-manager:
   crds:
     enabled: true
   config:
     enableGatewayAPI: true
+  image:
+    tag: v1.21.3
+    digest: sha256:9f4f96a33c7774cef24466fcd85031997531a03a8d117f151126baa8d1290dcc   # controller v1.21.3; amd64, arm64
   resources:
     requests:
       cpu: 25m
       memory: 64Mi
   webhook:
+    image:
+      tag: v1.21.3
+      digest: sha256:055ac8e9de6a0ba6763794838fe38944acc650f68ebe1b01dd8be079e580f458   # webhook v1.21.3; amd64, arm64
     resources:
       requests:
         cpu: 10m
         memory: 32Mi
   cainjector:
+    image:
+      tag: v1.21.3
+      digest: sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f   # cainjector v1.21.3; amd64, arm64
     resources:
       requests:
         cpu: 25m
         memory: 64Mi
+  startupapicheck:
+    image:
+      tag: v1.21.3
+      digest: sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1   # v1.21.3; amd64, arm64
+  acmesolver:   # HTTP-01 solver pods (controller flag --acme-http01-solver-image)
+    image:
+      tag: v1.21.3
+      digest: sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7   # v1.21.3; amd64, arm64

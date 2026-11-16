@@ -167,6 +167,78 @@ elsewhere:
 
 Not yet proven with a full `task up` on these hosts: [#60](https://github.com/koorikla/platform/issues/60).
 
+## Local stack load and the mgmt datastore
+
+Measured on the 20-core / 31 GiB reference host with mgmt + dev1 (3 servers) + prod1
+([#76](https://github.com/koorikla/platform/issues/76)): the local platform holds ~16 GiB RSS (mgmt ~8.3, each CAPD node
+1.6-2.5) plus ~3 GiB swapped. Next to other host workloads that is more than RAM: the host swaps at 100-160 MB/s, I/O
+pressure is `full ~30%`, and a load average of 30-40 is mostly tasks waiting on I/O (CPU pressure `some` ~8%, 30% idle),
+not CPU. Slow fsyncs then hit both datastores: CAPD k3s (embedded etcd) loses leader election on 5 s lease renewals and
+restarts (prod1: 20 restarts in 10 hours), and the k3d mgmt (single k3s server, kine/SQLite) crash-loops.
+
+**Mgmt crash loop (kine/SQLite).** A single-server k3d cluster stores its state in SQLite through kine, and kine compacts
+old revisions in batches of 1000 inside a transaction. On this host the first batch's transaction fails and k3s exits
+with `level=fatal msg="Transaction commit failed: sql: transaction has already been committed or rolled back"`, about 11
+minutes after every start, forever: the compaction never advances (`compactRev=1150478` on every logged attempt while
+`currentRev` grew 1227790 -> 1257927), so the database only grows (`state.db` 0.9 GB + `state.db-wal` 0.9 GB). Every
+restart also restarts all mgmt pods (containerd runs inside k3s: `SandboxChanged`), reruns every controller's initial
+list and the Kyverno background scan, and the I/O burst pushes the CAPD clusters' etcd over their lease deadlines.
+Embedded etcd compacts incrementally and never exits on a slow compaction; the conversion copies only the current keys.
+
+**Converting a running mgmt to embedded etcd** (data-preserving; needs a maintenance window of ~15 min; Linux paths,
+on Git Bash prefix `MSYS_NO_PATHCONV=1`). k3s converts a single SQLite server to etcd when it starts once with
+`cluster-init` ([k3s docs](https://docs.k3s.io/datastore/ha-embedded#existing-single-node-clusters)); afterwards the etcd
+files on disk select etcd by themselves. The same container is stopped and started, never recreated: its
+`/var/lib/rancher/k3s` is an anonymous volume that a recreated node would not get back.
+
+```sh
+C=k3d-platform-mgmt-server-0
+IMG=$(yq -r .image bootstrap/k3d-mgmt.yaml)                         # same k3s image: has tar and sh
+VOL=$(docker inspect "$C" -f '{{range .Mounts}}{{if eq .Destination "/var/lib/rancher/k3s"}}{{.Name}}{{end}}{{end}}')
+BK="$HOME/platform-mgmt-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK"  # needs ~2x (server/ + storage/) free, ~12 GB
+# 1. stop cleanly (k3s checkpoints the SQLite WAL); CAPD clusters keep running, Argo CD pauses with mgmt
+docker stop -t 120 "$C"
+# 2. back up the datastore, server identity (token, TLS, credentials) and the local-path PV data; agent/ (images) is
+#    re-pullable and not needed
+docker run --rm -v "$VOL":/k3s:ro -v "$BK":/backup --entrypoint tar "$IMG" -C /k3s -cf /backup/k3s.tar server storage
+tar -tf "$BK/k3s.tar" server/db/state.db server/db/state.db-wal server/token >/dev/null && echo backup-ok
+# 3. one start with cluster-init (k3s config file in the container layer; survives stop/start)
+printf 'cluster-init: true\n' > "$BK/config.yaml"
+docker cp "$BK/config.yaml" "$C":/etc/rancher/k3s/config.yaml
+docker start "$C"
+docker logs -f --since 2m "$C" 2>&1 | grep -iE 'migrat|sqlite|etcd.*(ready|started)|fatal'   # Ctrl-C once ready
+# 4. verify: etcd/ exists and state.db was renamed state.db.migrated (k3s renames it only after a complete copy)
+docker exec "$C" ls /var/lib/rancher/k3s/server/db
+kubectl --context k3d-platform-mgmt get nodes                       # ROLES control-plane,etcd
+kubectl --context k3d-platform-mgmt get applications -n argocd      # Synced/Healthy again within minutes
+kubectl --context k3d-platform-mgmt get pvc -A; kubectl --context k3d-platform-mgmt get clusters -n fleet
+docker exec "$C" k3s etcd-snapshot save --name post-migration       # first snapshot (default: every 12 h, keep 5)
+```
+
+If step 4 shows no `state.db.migrated`, or anything is missing, roll back: k3s would otherwise keep using a partial etcd.
+Writes made after the conversion are lost on rollback (Git re-applies them; PV data is not in the datastore).
+
+```sh
+docker stop -t 120 "$C"
+docker run --rm -v "$VOL":/k3s -v "$BK":/backup --entrypoint sh "$IMG" -c \
+  'rm -rf /k3s/server/db && tar -C /k3s -xf /backup/k3s.tar server/db'
+printf '{}\n' > "$BK/empty.yaml"; docker cp "$BK/empty.yaml" "$C":/etc/rancher/k3s/config.yaml
+docker start "$C"
+```
+
+New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to server:0
+([#76](https://github.com/koorikla/platform/issues/76)). The conversion above is only for a mgmt created before that.
+
+**Leader election on slow disks.** etcd alone does not stop the restarts: k3s runs kube-controller-manager, scheduler and
+cloud-controller-manager in-process and exits when one misses its lease renewal (`"leaderelection lost"`). The clean
+bootstrap's I/O burst stalled etcd `fdatasync` for 5-8 s and restarted the mgmt k3s 5 times in its first 15 minutes.
+Both the k3d mgmt (`bootstrap/k3d-mgmt.yaml`) and the CAPD control planes (ClusterClass `k3s-docker`,
+`k3s.dockerLeaderElectionArgs`) run 60 s leases with a 40 s renew deadline instead of upstream 15 s / 10 s
+([#82](https://github.com/koorikla/platform/issues/82)). k3d sets server args at create time only: an older mgmt keeps
+the short leases until it is re-created; a CAPD cluster gets them through a control-plane rollout.
+Check: `docker logs k3d-platform-mgmt-server-0 2>&1 | grep -c 'leaderelection lost'` and
+`docker inspect k3d-platform-mgmt-server-0 --format '{{.RestartCount}}'` stay 0.
+
 ## Windows notes
 
 - **Line endings**: `.gitattributes` forces LF for scripts, YAML, JSON, TOML and Markdown, so `core.autocrlf=true`

@@ -6,8 +6,9 @@ OpenChoreo registration of this cluster in the control plane (mgmt):
                            With installation.yaml openchoreo.observability.enabled: observabilityPlaneRef ->
                            ClusterObservabilityPlane `default` (addon openchoreo-observability-plane on mgmt).
   Environment <env>        one per openchoreo.dataPlane.environments, in the org namespace, bound to this
-                           ClusterDataPlane. dataPlaneRef is immutable: moving an environment to another cluster =
-                           remove it here, sync, add it there. An environment must appear in exactly one cluster file.
+                           ClusterDataPlane, applied one sync wave before it (openchoreo.environmentAnnotations).
+                           dataPlaneRef is immutable: moving an environment to another cluster = remove it here, sync,
+                           add it there. An environment must appear in exactly one cluster file.
 */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
 {{- $name := include "openchoreo.name" . }}
@@ -60,7 +61,7 @@ metadata:
   annotations:
     openchoreo.dev/display-name: {{ $env | title | quote }}
     openchoreo.dev/description: {{ printf "%s on cluster %s" ($env | title) $name | quote }}
-    {{- include "openchoreo.crAnnotations" $ | nindent 4 }}
+    {{- include "openchoreo.environmentAnnotations" $ | nindent 4 }}
 spec:
   dataPlaneRef:
     kind: ClusterDataPlane

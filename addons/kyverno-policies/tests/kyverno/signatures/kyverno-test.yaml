@@ -6,16 +6,17 @@ metadata:
 policies: [policies.yaml]
 resources: [resources.yaml]
 variables: values.yaml
+# The signed image was built through koorikla/ci@v1 (mutable tag): since the identity is pinned to a commit SHA it
+# fails everywhere ("expected SAN value ...container.yaml@<sha>, got ...@refs/tags/v1"); staging only reports it.
 results:
   - policy: openchoreo-verify-images-enforce
     kind: Pod
-    resources: [dp-default-demo-production-1/prod-signed]
-    result: pass
-  - policy: openchoreo-verify-images-enforce
-    kind: Pod
-    resources: [dp-default-demo-production-1/prod-tag-only, dp-default-demo-production-1/prod-unsigned-init]
+    resources:
+      - dp-default-demo-production-1/prod-signed-mutable-ref
+      - dp-default-demo-production-1/prod-tag-only
+      - dp-default-demo-production-1/prod-unsigned-init
     result: fail
   - policy: openchoreo-verify-images-audit
     kind: Pod
     resources: [dp-default-demo-staging-1/staging-tag]
-    result: pass
+    result: fail
