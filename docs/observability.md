@@ -93,6 +93,15 @@ The literals in the addon values are checked against `openchoreo.controlPlane.ho
 Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://telemetry-collector.telemetry.svc.cluster.local:4318`
 (Service with `internalTrafficPolicy: Local`), or `http://$(HOST_IP):4318` (hostPort).
 
+**Prometheus agent load.** The agent's memory follows its active series (~3 KB each), and the metrics module hardcodes
+its resources (requests 50m/128Mi, limits 200m/256Mi; no value in observability-metrics-prometheus 0.8.0-0.9.0). On
+k3s the kubelet `/metrics` endpoint also serves the embedded control plane: measured on dev1/prod1, 60-65k of the
+agent's 70-75k active series were `apiserver_*`, `etcd_*`, `workqueue_*`, ... histograms, holding the agent at
+220-250 MiB until the cgroup limit killed it. The telemetry addon drops those families at scrape time
+(`kube-prometheus-stack.kubelet.serviceMonitor.metricRelabelings`, contract `hack/tests/test_telemetry_series.sh`),
+leaving ~10k series per single-node cluster (kubelet ~3.4k, cAdvisor ~4k, probes, kube-state-metrics). Check:
+`prometheus_agent_active_series` on the agent's `:9090/metrics`, `kubectl top pod -n telemetry --containers`.
+
 ## Secrets
 
 | Store / key | Properties | Used by |
