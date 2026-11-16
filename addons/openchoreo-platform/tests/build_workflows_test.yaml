@@ -153,6 +153,34 @@ tests:
             - { kind: ClusterWorkflow, name: ruby }
             - { kind: ClusterWorkflow, name: dockerfile }
 
+  - it: component types allow the observability-alert-rule trait and ship the ClusterTrait
+    template: templates/upstream-defaults.yaml
+    asserts:
+      - contains:
+          path: spec.allowedTraits
+          content: { kind: ClusterTrait, name: observability-alert-rule }
+        documentSelector: { path: metadata.name, value: service }
+      - contains:
+          path: spec.allowedTraits
+          content: { kind: ClusterTrait, name: observability-alert-rule }
+        documentSelector: { path: metadata.name, value: web-application }
+      - contains:
+          path: spec.allowedTraits
+          content: { kind: ClusterTrait, name: observability-alert-rule }
+        documentSelector: { path: metadata.name, value: worker }
+      - isEmpty: { path: spec.allowedTraits }
+        documentSelector: { path: metadata.name, value: scheduled-task }
+      - isKind: { of: ClusterTrait }
+        documentSelector: { path: metadata.name, value: observability-alert-rule }
+      - equal:
+          path: spec.creates[0].targetPlane
+          value: observabilityplane
+        documentSelector: { path: metadata.name, value: observability-alert-rule }
+      - equal:
+          path: spec.creates[0].template.kind
+          value: ObservabilityAlertRule
+        documentSelector: { path: metadata.name, value: observability-alert-rule }
+
   - it: helm-chart is a generic workflow pushing to <registry>/charts
     template: templates/helm-chart-workflow.yaml
     asserts:
