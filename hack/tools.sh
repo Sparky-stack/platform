@@ -46,6 +46,7 @@ version_cmd() {
     kubeconform) echo "kubeconform -v" ;;
     crane)       echo "crane version" ;;
     kyverno)     echo "kyverno version" ;;
+    crossplane)  echo "crossplane version --client" ;;
     *)           echo "$1 --version" ;;
   esac
 }

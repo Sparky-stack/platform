@@ -118,8 +118,8 @@ yq 'select(.kind == "Function")
 render() {
   local c=$1 comp=$2 xr=$3 obs=${4:-} args=()
   [[ -n "$obs" ]] && args=(--observed-resources "$obs")
-  if ! crossplane render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" --crossplane-image "$XP_IMAGE" \
-    ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err"; then
+  if ! crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
+    --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err"; then
     cat "$TMP/render-$c.err" >&2
     assert_eq failed ok "crossplane render $c"
     : > "$TMP/out-$c.yaml"; : > "$TMP/xr-$c.yaml"
