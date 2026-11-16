@@ -82,8 +82,10 @@ Application excludes that file.
     - Another app's gated Application cannot write this component's binding either. Developers control their
       Workload's `spec.source.repository`, so a gate run could open its PR in another repo, but merging there promotes
       nothing: only the repo the tenant file names for the app feeds `<project>-<component>-production`.
-    - `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
-      projects named `<other project>-…` (their gated Applications would look like the other project's).
+    - `charts/tenant` rejects app names that end in `-<gated environment>`, and contract tests
+      (`hack/tests/test_gitops_contracts.sh`) reject tenant projects named `<other project>-…` (their gated
+      Applications would look like the other project's) and any Application name `<project>-<app>[-<env>]` that two
+      tenant files of an installation share (`a`/`b-c` and `a-b`/`c` both give `a-b-c`).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
   - The garbage collector may delete: deleting the Component cascades to its production binding. So the restricted
     groups may not delete gated Components either (next bullet); offboarding is removing the app from the tenant file

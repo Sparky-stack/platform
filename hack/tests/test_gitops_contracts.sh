@@ -339,6 +339,31 @@ for tdir in "$ROOT"/installations/*/tenants; do
   done; done
   assert_eq "$clash" "" "tenant projects are not '<other project>-' prefixed ($(basename "$(dirname "$tdir")"))"
 done
+# ... and every Application name <project>-<app>[-<gated env>] is unique across an installation's tenant files: names
+# are joined with dashes, so a-b/c and a/b-c (or one project in two files) give the same name. The VAP identifies the
+# gated Application of a component by that name alone (and Argo CD would merge two such Applications into one).
+tenant_app_dups() {   # tenant_app_dups <installation.yaml> <tenant file>... -> duplicated Application names
+  local inst=$1 f
+  shift
+  for f in "$@"; do
+    helm template t "$ROOT/charts/tenant" --values "$inst" --values "$f" -s templates/applications.yaml \
+      | yq -N 'select(.kind == "Application") | .metadata.name'
+  done | tr -d '\r' | sort | uniq -d
+}
+for tdir in "$ROOT"/installations/*/tenants; do
+  [[ -d "$tdir" ]] || continue
+  tfiles=()
+  for f in "$tdir"/*.yaml; do [[ -f "$f" ]] && tfiles+=("$f"); done
+  [[ ${#tfiles[@]} -gt 0 ]] || continue
+  inst_name=$(basename "$(dirname "$tdir")")
+  assert_eq "$(tenant_app_dups "$(dirname "$tdir")/installation.yaml" "${tfiles[@]}")" "" \
+    "tenant Application names <project>-<app>[-<env>] are unique across tenant files ($inst_name)"
+done
+mkdir -p "$TMP/tenants-clash"
+printf 'project: a\napps: [{name: b-c, repoURL: https://example.com/x.git}]\n' > "$TMP/tenants-clash/a.yaml"
+printf 'project: a-b\napps: [{name: c, repoURL: https://example.com/y.git}]\n' > "$TMP/tenants-clash/a-b.yaml"
+dups=$(tenant_app_dups "$ROOT/installations/local/installation.yaml" "$TMP/tenants-clash/a.yaml" "$TMP/tenants-clash/a-b.yaml")
+assert_eq "$dups" "$(printf 'a-b-c\na-b-c-production')" "negative: a/b-c and a-b/c collide (main and gated Application)"
 # 8. Local Harbor: bootstrap/k3d-mgmt.yaml publishes the registry.host port on the load balancer (loopback), else
 #    host docker login and CAPD node pulls through the serverlb fail. Negative check: a k3d file without it is caught.
 k3d_publishes() {   # k3d_publishes <k3d file> <port> -> yes|no
