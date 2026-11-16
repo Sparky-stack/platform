@@ -1,0 +1,54 @@
+{{- /*
+Admission pin for the Falco response (docs/observability.md "Falco response"): every Workflow created in this
+namespace runs WorkflowTemplate falco-response, with nothing but its `event` argument. The Sensor falco-escalation
+(RBAC: create workflows here) can therefore not start an inline Workflow, another (Cluster)WorkflowTemplate, another
+ServiceAccount or a pod spec patch, even if its pod or token is compromised; the WorkflowTemplate itself is git-owned.
+A native ValidatingAdmissionPolicy instead of Argo Workflows' `templateReferencing: Strict`: that controller setting
+is global, and the workflow plane's controller also runs OpenChoreo's rendered Workflows with inline templates (the
+promotion gate). Matches every creator, not only the Sensor: nothing else creates Workflows in this namespace.
+The Workflow CRD is minified (spec preserve-unknown-fields), so the expressions read spec as a map.
+*/ -}}
+{{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
+{{- $ns := .Release.Namespace }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: argo-events-workflows-falco-response-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: ["*"]
+        operations: [CREATE]
+        resources: [workflows]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ $ns }}
+  validations:
+    - expression: >-
+        has(object.spec) && has(object.spec.workflowTemplateRef)
+        && object.spec.workflowTemplateRef == {'name': 'falco-response'}
+      message: Workflows in {{ $ns }} must reference WorkflowTemplate falco-response (namespaced, by name only)
+      reason: Forbidden
+    - expression: "object.spec.all(k, k in ['workflowTemplateRef', 'arguments'])"
+      messageExpression: >-
+        'Workflows in {{ $ns }} may set only spec.workflowTemplateRef and spec.arguments, not ' +
+        object.spec.filter(k, !(k in ['workflowTemplateRef', 'arguments'])).join(', ')
+      reason: Forbidden
+    - expression: >-
+        !has(object.spec.arguments)
+        || (object.spec.arguments.all(k, k == 'parameters')
+            && (!has(object.spec.arguments.parameters)
+                || object.spec.arguments.parameters.all(p, p.all(k, k in ['name', 'value']) && p.name == 'event')))
+      message: Workflows in {{ $ns }} take only the parameter `event` (falcosidekick JSON)
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: argo-events-workflows-falco-response-only
+spec:
+  policyName: argo-events-workflows-falco-response-only
+  validationActions: [Deny]
+{{- end }}

@@ -1,0 +1,72 @@
+# Workflows a compromised Sensor could try to create in argo-events: all denied.
+# 1. Inline templates, no template reference.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: inline, namespace: argo-events }
+spec:
+  entrypoint: main
+  templates:
+    - name: main
+      container: { image: docker.io/library/alpine:3, command: [sh, -c, "cat /var/run/secrets/kubernetes.io/serviceaccount/token"] }
+---
+# 2. Another WorkflowTemplate.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: other-template, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: something-else }
+---
+# 3. A ClusterWorkflowTemplate of the same name (e.g. the build template's cluster scope).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: cluster-scope, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response, clusterScope: true }
+---
+# 4. The right template with another ServiceAccount (Workflow spec fields override the template's).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: other-sa, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  serviceAccountName: argo-events-sa
+---
+# 5. The right template with a pod spec patch.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: pod-patch, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  podSpecPatch: '{"automountServiceAccountToken": true}'
+---
+# 6. The right template with an extra template merged in.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: extra-template, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  entrypoint: evil
+  templates:
+    - name: evil
+      container: { image: docker.io/library/alpine:3 }
+---
+# 7. An extra parameter.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: extra-param, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  arguments:
+    parameters:
+      - { name: event, value: "{}" }
+      - { name: image, value: docker.io/library/alpine:3 }
+---
+# 8. An artifact argument.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: artifact, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  arguments:
+    artifacts:
+      - { name: x, http: { url: "https://example.com/x" } }

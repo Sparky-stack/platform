@@ -83,8 +83,9 @@ promotionGate:
   tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
   observerURL: ""                    # http://observer.<host>:<httpPort>
   controlPlanePort: 8080             # control-plane Gateway HTTP listener (addon openchoreo-control-plane)
-  # Thunder client (client_credentials) the gate authenticates as; role binding below. Secret from the workflow
-  # plane's secret store, key `promotion-gate`, property `client-secret` (VERIFY Thunder app in addon thunder).
+  # Thunder client (client_credentials) the gate authenticates as (addon thunder bootstrap script 70, same store key);
+  # role binding in templates/promotion-authz.yaml. Secret from the workflow plane's secret store, key `promotion-gate`,
+  # property `client-secret`.
   clientID: openchoreo-promotion-gate
   clientSecret: { key: promotion-gate, property: client-secret }
   # The gate's own GitHub App (store key; properties githubAppID, githubAppInstallationID, githubAppPrivateKey), NOT

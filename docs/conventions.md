@@ -72,7 +72,7 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `harbor` | admin, robot and chart secrets | addon harbor, build pushes, node pulls | [build-plane.md](build-plane.md#secrets-clustersecretstore-platform) |
 | `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing; `cosign.pub` goes into `kyverno-policies` `imageVerification.platformKey.publicKey` | [build-plane.md](build-plane.md#signing) |
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) | [observability.md](observability.md#falco-response) |
-| `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate` (Thunder client `openchoreo-promotion-gate`) | [promotion.md](promotion.md#configuration-reference) |
+| `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate`; addon thunder registers it as client `openchoreo-promotion-gate` | [promotion.md](promotion.md#configuration-reference) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App | [promotion.md](promotion.md#configuration-reference) |
 | `external-dns-cloudflare` | `api-token` | addon external-dns with `dns.provider: cloudflare`; on workload clusters only via store `dns`, never `default`. Route 53 has no key: IRSA / Pod Identity only | [dns.md](dns.md#credentials) |
 | `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on | [ai-agents.md](ai-agents.md) |

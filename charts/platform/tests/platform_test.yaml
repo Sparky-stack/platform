@@ -214,3 +214,57 @@ tests:
         documentSelector: { path: metadata.name, value: addon-finops-opencost }
       - equal: { path: spec.template.spec.destination.namespace, value: openchoreo-observability-plane }
         documentSelector: { path: metadata.name, value: addon-finops-opencost }
+
+  - it: addon-keda is opt-in by label on workload clusters only (nothing generated unless a cluster opts in)
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-keda }
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/keda, operator: In, values: ["true"] }
+      - notContains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/keda, operator: NotIn, values: ["false"] }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: platform.koorikla.io/role, operator: In, values: [workload] }
+      - equal: { path: spec.template.spec.destination.namespace, value: keda }
+      - equal: { path: spec.template.spec.source.path, value: addons/keda }
+      - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideApply=true }
+      - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideDiff=true }
+
+  - it: addon-strimzi is opt-in by label on workload clusters only (nothing generated unless a cluster opts in)
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-strimzi }
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/strimzi, operator: In, values: ["true"] }
+      - notContains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/strimzi, operator: NotIn, values: ["false"] }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: platform.koorikla.io/role, operator: In, values: [workload] }
+      - equal: { path: spec.template.spec.destination.namespace, value: strimzi }
+      - equal: { path: spec.template.spec.source.path, value: addons/strimzi }
+      - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideApply=true }
+      - notContains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideDiff=true }
+
+  - it: addon-cloudnative-pg is opt-in by label on workload clusters only (nothing generated unless a cluster opts in)
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-cloudnative-pg }
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/cloudnative-pg, operator: In, values: ["true"] }
+      - notContains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/cloudnative-pg, operator: NotIn, values: ["false"] }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: platform.koorikla.io/role, operator: In, values: [workload] }
+      - equal: { path: spec.template.spec.destination.namespace, value: cnpg-system }
+      - equal: { path: spec.template.spec.source.path, value: addons/cloudnative-pg }
+      - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideApply=true }
+      - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideDiff=true }

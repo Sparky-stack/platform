@@ -45,25 +45,38 @@ arch_exception() {
   done
 }
 
-# Images from rendered manifests (stdin): every string under a key ending in `image` (`image:`, and e.g. the Argo Events
-# controller config's natsImage), env vars named *_IMAGE (controllers start pods from them), and the same keys inside
-# YAML embedded in ConfigMap data (the Argo Events EventBus JetStream versions live there). Each embedded document is
-# parsed on its own: a script that merely contains "image:" cannot abort the extraction.
+# Images from rendered manifests (stdin):
+#   - every string under a key ending in `image` (`image:`, and e.g. the Argo Events controller config's natsImage);
+#   - the same keys inside YAML embedded in ConfigMap data (the Argo Events EventBus JetStream versions live there),
+#     each embedded document parsed on its own (a script that merely contains "image:" cannot abort the extraction);
+#   - images operators receive by name through env vars and ConfigMap keys containing IMAGE (e.g. ARGO_EVENTS_IMAGE,
+#     Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG POSTGRES_IMAGE_NAME, the Barman Cloud plugin's
+#     SIDECAR_IMAGE): those pods are created by the operator, not rendered.
 extract_images() {
   local f b keys='.. | select(tag == "!!map") | to_entries[] | select((.key | tag) == "!!str")
     | select(.key | test("(?i)image$")) | .value | select(tag == "!!str")'
   f=$(mktemp)
   cat > "$f"
   {
-    yq -N "($keys), (.. | select(tag == \"!!map\" and has(\"name\") and has(\"value\"))
-      | select((.name | tag) == \"!!str\" and (.value | tag) == \"!!str\") | select(.name | test(\"(?i)_IMAGE\$\"))
-      | .value)" "$f" 2>/dev/null || true
+    yq -N "$keys" "$f" 2>/dev/null || true
     yq -N 'select(.kind == "ConfigMap") | .data[]? | select(tag == "!!str") | select(test("(?i)image: *[a-z0-9]"))
       | @base64' "$f" 2>/dev/null | tr -d '\r' | while IFS= read -r b; do
       if [[ -n "$b" ]]; then yq -n -N "\"$b\" | @base64d | from_yaml | $keys" 2>/dev/null || true; fi
     done
   } | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
+      | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
+    (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' "$f" 2>/dev/null \
+    | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
   rm -f "$f"
+}
+
+# enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do; with
+# OPT_IN=1 an opt-in addon counts as on unless the cluster sets it to "false". Reads the catalog file CATALOG.
+enabled() {
+  local def toggle=$2
+  def=$(yq ".addons[\"$1\"].default" "$CATALOG")   # no // : yq treats false as empty (opt-in addons would count as on)
+  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]] || (( ${OPT_IN:-0} )); }
 }
 
 # Sourced (hack/tests/test_image_audit.sh): only the functions above.
@@ -123,12 +136,6 @@ render() {
   extract_images < "$TMP/render.yaml" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
 }
 
-# enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do.
-enabled() {
-  local def toggle=$2
-  def=$(yq ".addons[\"$1\"].default" "$CATALOG")   # no // : yq treats false as empty (opt-in addons would count as on)
-  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]] || (( OPT_IN )); }
-}
 
 echo "==> Building chart dependencies" >&2
 ./hack/deps.sh >&2

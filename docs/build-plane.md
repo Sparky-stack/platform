@@ -262,8 +262,9 @@ or the chart's own `digest` / `sha` field where `tag@digest` would break a label
 the CAPD node image (`addons/clusterclasses` `docker.kindImage`) and the k3d mgmt node (`bootstrap/k3d-mgmt.yaml`).
 `hack/tests/test_image_pins.sh` renders every installation with opt-in addons (`hack/image-audit.sh --list --rendered
 --opt-in`) and fails on any image without a registry host or digest, and on a tag@digest leaking into a label. Its
-`PIN_EXCEPTIONS` (exact image, commented, failing once unused) holds what a chart cannot render: the falcosidekick
-`helm test` pod and falco-talon 0.5.0. Resolve a digest with `crane digest <image>:<tag>` (the index digest of a
+`PIN_EXCEPTIONS` (exact image or glob, commented, failing once unused) holds what a chart cannot render: the
+falcosidekick `helm test` pod, falco-talon 0.5.0 and Strimzi's per-Kafka-version broker map (pin brokers per Kafka CR,
+[data-services.md](data-services.md#kafka-strimzi)). Resolve a digest with `crane digest <image>:<tag>` (the index digest of a
 multi-arch image); a chart bump updates tag and digest together. Images created at runtime from upstream manifests
 (k3s system images, CAPI provider controllers, k3d helpers, the CAPD load balancer, the kgateway envoy proxy) are
 audited for architectures by `task images:audit` but not digest-pinned here.

@@ -13,6 +13,7 @@ in app namespaces. Planes and trust in general: [openchoreo.md](openchoreo.md).
 | mgmt | `openchoreo-observability-plane` | openchoreo-observability-plane | OpenChoreo 1.3.3 observability plane (observer, controller-manager, cluster-agent, Gateway `gateway-default` on 11080/11085) + community modules: logs `observability-logs-opensearch` 0.7.0 (OpenSearch 3.3 single node, logs-adapter), traces `observability-tracing-opensearch` 0.8.0 (OTLP receiver collector, tracing-adapter), metrics `observability-metrics-prometheus` 0.8.0 (Prometheus + operator + Alertmanager, metrics-adapter); `ClusterObservabilityPlane default` |
 | workload | `telemetry` | telemetry | Fluent Bit (container logs), Prometheus agent + kube-state-metrics (pod metrics), events collector (k8s events), OpenTelemetry Collector DaemonSet (OTLP fan-out) |
 | workload (opt-in) | `obi` | obi | OpenTelemetry eBPF Instrumentation v1.0.0: zero-code L7 RED metrics + traces for app namespaces |
+| workload (opt-in) | `keda`, `strimzi`, `cloudnative-pg` | keda, strimzi, cnpg-system | data-service operators; their ServiceMonitors/PodMonitors are scraped by the telemetry Prometheus agent (it selects every monitor in every namespace) - [data-services.md](data-services.md) |
 | mgmt + workload | `falco` | falco | Falco 0.45 (modern eBPF) + falcosidekick; Falco Talon on workload clusters |
 | mgmt | `argo-events` | argo-events | Argo Events 1.9: Falco escalation receiver -> WorkflowTemplate `falco-response`; rollout events -> promotion gate ([promotion.md](promotion.md)) |
 | mgmt | `charts/cluster` | – | `ClusterDataPlane.spec.observabilityPlaneRef` -> `ClusterObservabilityPlane default` |
@@ -203,6 +204,20 @@ data plane falcosidekick ── POST http://events.openchoreo.localhost:8080/fal
        rca:    POST sre-agent /api/v1alpha1/rca-agent/analyze      (only with falco.response.rca.enabled)
        notify: POST <falco-notify.url>                             (only with falco.response.notify.enabled)
 ```
+
+ServiceAccount tokens follow the promotion gate's executor-only pattern: the WorkflowTemplate sets
+`automountServiceAccountToken: false` and `executor.serviceAccountName: falco-response-executor` (may only report step
+outputs; its token reaches Argo's init/wait containers, never the step container). Only `enrich` and `record` opt back
+in, as ServiceAccount `falco-response` (read RenderedReleases/Environments, create Events in the org namespace).
+`rca` and `notify` (template `call`) send the event context to endpoints outside the cluster API and run without any
+token.
+
+The Sensor can create Workflows in `argo-events`, so admission pins what it may start: ValidatingAdmissionPolicy
+`argo-events-workflows-falco-response-only` (addon argo-events `templates/workflow-admission.yaml`) denies every
+Workflow created there unless its spec is exactly `workflowTemplateRef: {name: falco-response}` plus the `event`
+parameter. No inline templates, no other (Cluster)WorkflowTemplate, no `serviceAccountName`, `podSpecPatch` or other
+override, whoever the creator is. A VAP rather than Argo Workflows' `templateReferencing: Strict`: that controller
+setting is global, and the same controller runs OpenChoreo's rendered Workflows with inline templates.
 
 Name resolution needs no new rule: `events.openchoreo.localhost` matches the existing `*.openchoreo.localhost` rewrite
 of `coredns-local` (workload: to the serverlb; mgmt: to the control-plane Gateway Service). Containment stays with Talon

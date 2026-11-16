@@ -100,3 +100,10 @@ addons:
   # mgmt.addons.harbor "false"); externalURL follows registry.host.
   openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true }
   harbor:                   { namespace: harbor,                   roles: [mgmt],           default: true, installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }
+  # Data services (docs/data-services.md): opt-in per cluster (label addons.platform.koorikla.io/<addon>: "true", i.e.
+  # cluster file `addons: { <addon>: true }`); nothing is generated for clusters that do not opt in, so local docker
+  # clusters stay lean. Operators watch all namespaces (OpenChoreo cell namespaces are created at runtime); CRDs apply
+  # server-side; ServerSideDiff where the operator / cert-manager owns webhook or APIService caBundles.
+  keda:                     { namespace: keda,                     roles: [workload],       default: false, serverSideDiff: true }
+  strimzi:                  { namespace: strimzi,                  roles: [workload],       default: false }
+  cloudnative-pg:           { namespace: cnpg-system,              roles: [workload],       default: false, serverSideDiff: true }

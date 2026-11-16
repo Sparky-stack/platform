@@ -1,0 +1,12 @@
+{{- /* The operator namespace enforces Pod Security restricted (KEDA's three pods meet it upstream). Argo CD creates
+the namespace (CreateNamespace=true); this object only adds the labels. */ -}}
+{{- if .Values.namespace.podSecurity }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: {{ .Values.namespace.podSecurity | quote }}
+    pod-security.kubernetes.io/audit: {{ .Values.namespace.podSecurity | quote }}
+    pod-security.kubernetes.io/warn: {{ .Values.namespace.podSecurity | quote }}
+{{- end }}

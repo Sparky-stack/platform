@@ -1,0 +1,106 @@
+suite: keda wrapper
+release:
+  name: keda
+  namespace: keda
+templates:
+  - templates/namespace.yaml
+  - charts/keda/templates/manager/deployment.yaml
+  - charts/keda/templates/metrics-server/deployment.yaml
+  - charts/keda/templates/webhooks/deployment.yaml
+  - charts/keda/templates/metrics-server/apiservice.yaml
+  - charts/keda/templates/webhooks/validatingconfiguration.yaml
+  - charts/keda/templates/cert-manager/keda-tls-certificate.yaml
+  - charts/keda/templates/manager/servicemonitor.yaml
+  - charts/keda/templates/metrics-server/servicemonitor.yaml
+  - charts/keda/templates/webhooks/servicemonitor.yaml
+tests:
+  - it: every KEDA image is fully qualified and pinned by digest
+    templates:
+      - charts/keda/templates/manager/deployment.yaml
+      - charts/keda/templates/metrics-server/deployment.yaml
+      - charts/keda/templates/webhooks/deployment.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^ghcr\.io/kedacore/keda(-metrics-apiserver|-admission-webhooks)?:2\.21\.0@sha256:[0-9a-f]{64}$'
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: IfNotPresent
+
+  - it: every KEDA pod meets Pod Security restricted
+    templates:
+      - charts/keda/templates/manager/deployment.yaml
+      - charts/keda/templates/metrics-server/deployment.yaml
+      - charts/keda/templates/webhooks/deployment.yaml
+    asserts:
+      - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          value: [ALL]
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - equal: { path: spec.template.spec.hostNetwork, value: false }
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext.privileged
+
+  - it: certificates come from cert-manager, not from the operator patching caBundles
+    template: charts/keda/templates/manager/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: "--enable-cert-rotation=false"
+
+  - it: cert-manager injects the CA into the APIService and the admission webhook
+    templates:
+      - charts/keda/templates/metrics-server/apiservice.yaml
+      - charts/keda/templates/webhooks/validatingconfiguration.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: keda/keda-operator-tls-certificates
+
+  - it: the serving certificate is issued in-namespace by cert-manager
+    template: charts/keda/templates/cert-manager/keda-tls-certificate.yaml
+    asserts:
+      - isKind: { of: Certificate }
+      - equal: { path: spec.secretName, value: kedaorg-certs }
+
+  - it: operator, metrics apiserver and webhooks are scraped (ServiceMonitor -> telemetry Prometheus agent)
+    templates:
+      - charts/keda/templates/manager/servicemonitor.yaml
+      - charts/keda/templates/metrics-server/servicemonitor.yaml
+      - charts/keda/templates/webhooks/servicemonitor.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: ServiceMonitor }
+
+  - it: no ServiceMonitors when monitoring is switched off (clusters without addon telemetry)
+    templates:
+      - charts/keda/templates/manager/servicemonitor.yaml
+      - charts/keda/templates/metrics-server/servicemonitor.yaml
+      - charts/keda/templates/webhooks/servicemonitor.yaml
+    set:
+      keda.prometheus.operator.enabled: false
+      keda.prometheus.metricServer.enabled: false
+      keda.prometheus.webhooks.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: the operator namespace enforces Pod Security restricted
+    template: templates/namespace.yaml
+    asserts:
+      - isKind: { of: Namespace }
+      - equal: { path: metadata.name, value: keda }
+      - equal: { path: 'metadata.labels["pod-security.kubernetes.io/enforce"]', value: restricted }
+
+  - it: no Namespace object without a Pod Security level
+    template: templates/namespace.yaml
+    set:
+      namespace.podSecurity: ""
+    asserts:
+      - hasDocuments: { count: 0 }

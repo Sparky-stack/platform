@@ -79,4 +79,53 @@ assert_match "$(cat "$TMP/ocp.params")" $'workflows.enabled\tfalse' "installatio
 assert_eq "$(grep -c . "$TMP/ocp.params")" 2 "installationParameters: one line per catalog entry"
 assert_eq "$(grep -c 'eval_param' "$ROOT/hack/image-audit.sh" || true)" 0 "image-audit has no private template resolver"
 
+
+# enabled: catalog default / cluster toggle / --opt-in (OPT_IN)
+CATALOG="$TMP/catalog.yaml"
+printf 'addons:\n  on: { default: true }\n  off: { default: false }\n  plain: { namespace: x }\n' > "$CATALOG"
+st() { if OPT_IN=$1 enabled "$2" "$3"; then echo on; else echo off; fi; }
+assert_eq "$(st 0 on null)" on "enabled: default-true addon is on"
+assert_eq "$(st 0 plain null)" on "enabled: no default = on"
+assert_eq "$(st 0 on false)" off "enabled: cluster toggle false wins"
+assert_eq "$(st 0 off null)" off "enabled: opt-in addon off without a toggle (default false is not read as empty)"
+assert_eq "$(st 0 off true)" on "enabled: opt-in addon on with toggle true"
+assert_eq "$(st 1 off null)" on "enabled: --opt-in renders opt-in addons"
+assert_eq "$(st 1 off false)" off "enabled: --opt-in keeps an explicit false"
+CATALOG="$ROOT/charts/platform/values.yaml"
+for a in keda strimzi cloudnative-pg; do
+  assert_eq "$(st 0 "$a" null)" off "enabled: $a not audited by default (opt-in)"
+  assert_eq "$(st 1 "$a" null)" on "enabled: $a audited with --opt-in"
+done
+
+# extract_images: rendered image: fields plus images handed to operators by env / ConfigMap (not rendered as pods)
+cat > "$TMP/render.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: op }
+spec:
+  template:
+    spec:
+      containers:
+        - name: op
+          image: quay.io/example/operator:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          env:
+            - name: EXAMPLE_KAFKA_IMAGES
+              value: |
+                4.2.0=quay.io/example/kafka:1.0-kafka-4.2.0
+                4.3.2=quay.io/example/kafka:1.0-kafka-4.3.2
+            - name: EXAMPLE_REGISTRY_IMAGE_PREFIX
+              value: cr.example.dev/prefix-only
+            - name: LOG_LEVEL
+              value: ghcr.io/not/an:image
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: cfg }
+data:
+  POSTGRES_IMAGE_NAME: ghcr.io/example/postgresql:18.6@sha256:1111111111111111111111111111111111111111111111111111111111111111
+EOF
+got=$(extract_images < "$TMP/render.yaml" | sort | tr '\n' ' ')
+assert_eq "$got" "ghcr.io/example/postgresql:18.6@sha256:1111111111111111111111111111111111111111111111111111111111111111 quay.io/example/kafka:1.0-kafka-4.2.0 quay.io/example/kafka:1.0-kafka-4.3.2 quay.io/example/operator:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000 " \
+  "extract_images: image fields, operator image env (version=image lines) and ConfigMap keys; no prefixes, no non-IMAGE env"
+
 finish

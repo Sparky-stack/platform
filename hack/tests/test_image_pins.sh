@@ -6,7 +6,7 @@
 # `*_IMAGE` env vars, and those keys in YAML embedded in ConfigMaps (hack/image-audit.sh extract_images).
 # Not covered (runtime, not rendered here): k3s system images, CAPI provider release manifests, k3d helpers, the CAPD
 # load balancer, proxies controllers create at runtime (kgateway envoy, Istio waypoints come from rendered config).
-# Exceptions: PIN_EXCEPTIONS only, exact image + source; an exception that matches nothing fails (remove it).
+# Exceptions: PIN_EXCEPTIONS only, image (exact, or a glob with `*`) + source; one that matches nothing fails (remove it).
 # With RENDERED_DIR (hack/test.sh) also: no label value carries a tag@digest (charts that copy image.tag into
 # app.kubernetes.io/version; the API server rejects it, kubeconform does not check label syntax).
 set -euo pipefail
@@ -14,7 +14,7 @@ source "$(dirname "$0")/lib.sh"
 
 echo "== test_image_pins =="
 
-# <image>|<source substring (hack/image-audit.sh source column)>|<why; when to remove>
+# <image or glob>|<source substring (hack/image-audit.sh source column)>|<why; when to remove>
 PIN_EXCEPTIONS=(
   # falcosidekick chart (falco 9.2.2) `helm test` pod (hook test-success): image hardcoded, no value to override it.
   # Argo CD does not run Helm test hooks, so the pod is never created.
@@ -23,6 +23,11 @@ PIN_EXCEPTIONS=(
   # valid label value) and the chart has no digest field. Registry qualified, tag = chart appVersion. Remove when the
   # chart takes a digest (or stops copying the tag into the label).
   "docker.io/falcosecurity/falco-talon:0.3.0|addon falco|falco-talon chart 0.5.0 cannot render a digest"
+  # Strimzi chart 1.3.1 builds the per-Kafka-version broker map (STRIMZI_KAFKA_IMAGES and the Connect / MirrorMaker 2 /
+  # exporter / Cruise Control defaults) as <repo>:<tag>-kafka-<version>: no digest possible. The operator picks one per
+  # Kafka CR; pin it there with spec.kafka.image (docs/data-services.md "Kafka (Strimzi)"). The operator, entity
+  # operators, bridge and builders are pinned. Remove when the chart accepts digests for the version map.
+  "quay.io/strimzi/kafka:1.3.1-kafka-*|addon strimzi|Strimzi version map is tag + version suffix only"
 )
 
 # pinned <ref> -> 0 when <ref> has a registry host and a sha256 digest
@@ -67,7 +72,8 @@ while IFS=$'\t' read -r img src; do
   excepted=""
   for e in "${PIN_EXCEPTIONS[@]}"; do
     IFS='|' read -r eimg esrc _ <<<"$e"
-    if [[ "$img" == "$eimg" && "$src" == *"$esrc"* ]]; then excepted=$e; echo "$e" >> "$TMP/used"; fi
+    # shellcheck disable=SC2053  # eimg is a glob on purpose (exact strings match themselves)
+    if [[ "$img" == $eimg && "$src" == *"$esrc"* ]]; then excepted=$e; echo "$e" >> "$TMP/used"; fi
   done
   [[ -n "$excepted" ]] && continue
   bad=$((bad + 1))

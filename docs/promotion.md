@@ -60,22 +60,30 @@ Application excludes that file.
   condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`.
   - Developers keep full control of development and staging through the console, `occ` and MCP.
   - Production is rejected with a clear authz error, also for AI agents using MCP.
+  - `component:delete` is denied too, for every gated app's Component: `charts/tenant` renders an `AuthzRoleBinding`
+    `<project>-promotion-deny-component-delete-<group>` (effect `deny`, scope project + component) on the
+    `ClusterAuthzRole promotion-component-deleter` of addon openchoreo-platform. Apps with `promotionGates: false`
+    keep it.
 - **ValidatingAdmissionPolicy** `openchoreo-gated-bindings-from-git` (Kubernetes GA, no Kyverno needed on mgmt):
   - Only `system:serviceaccount:argocd:argocd-application-controller` may create, update or delete a production
     ReleaseBinding, **and only for the gated Application**: Argo CD writes for every Application with that one
     identity, so the binding's `argocd.argoproj.io/tracking-id` annotation (set by the controller on every apply,
-    `<application>:<group>/<kind>:<namespace>/<name>`; a manifest cannot override it) must name
-    `<spec.owner.projectName>-<app>-<spec.environment>` (`oldObject` on DELETE). A production binding smuggled into
-    any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs through the main Application
-    `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on `production.yaml` cannot be
-    skipped. `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
-    projects named `<other project>-…` (their gated Applications would look like the other project's). Matching the
-    component too: [#14](https://github.com/koorikla/platform/issues/14).
+    `<application>:<group>/<kind>:<namespace>/<name>`; a manifest cannot override it) must be exactly
+    `<spec.owner.projectName>-<spec.owner.componentName>-<spec.environment>` (`oldObject` on DELETE): the gated
+    Application of the app whose tenant-file name is the component (app name == Component name,
+    [openchoreo.md](openchoreo.md#app-repo-contract)).
+    - A production binding smuggled into any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs
+      through the main Application `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on
+      `production.yaml` cannot be skipped.
+    - Another app's gated Application cannot write this component's binding either. Developers control their
+      Workload's `spec.source.repository`, so a gate run could open its PR in another repo, but merging there promotes
+      nothing: only the repo the tenant file names for the app feeds `<project>-<component>-production`.
+    - `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
+      projects named `<other project>-…` (their gated Applications would look like the other project's).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
-  - The garbage collector may delete. Consequence: deleting the Component (console / openchoreo-api, which
-    developers may do for their components) cascades to its production binding. Deleting a production component is
-    an offboarding decision; restricting `component:delete` for gated projects:
-    [#55](https://github.com/koorikla/platform/issues/55).
+  - The garbage collector may delete: deleting the Component cascades to its production binding. So the restricted
+    groups may not delete gated Components either (next bullet); offboarding is removing the app from the tenant file
+    (reviewed), and Argo CD deletes its objects.
   - Everyone else is denied: openchoreo-api acting for any user, kubectl, scripts.
   - Break glass: `promotion.gitOnly.breakGlassGroups` (empty by default).
 
@@ -171,7 +179,7 @@ platform renders for it:
 - Applications `demo-hello-world` (everything except `release-bindings/production.yaml`) and
   `demo-hello-world-production`;
 - the AppProject `tenant-demo` sync window;
-- the authz deny and the VAP.
+- the authz denies (production bindings, deleting `hello-world`) and the VAP.
 
 App repo changes (koorikla/hello-world, outside this repo):
 
@@ -239,13 +247,12 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 
 | Key | Properties | Used by |
 |---|---|---|
-| `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials) |
+| `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials, created by addon thunder bootstrap script `70-openchoreo-promotion-gate-app.yaml`; also read by addon thunder) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | gate workflow: its own GitHub App; per-run token for the component's repo only (branch, PR, commit status). Seeded from `GITHUB_GATE_APP_*` (docs/forking.md) |
 
 ## Limits
 
-- The gate fails closed until its Thunder client exists ([#11](https://github.com/koorikla/platform/issues/11)) and its
-  GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
+- The gate fails closed until its GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
 - Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the smoke probe is
   off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on.
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
