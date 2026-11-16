@@ -20,12 +20,14 @@ kubeconform = "0.8.0"      # aqua:yannh/kubeconform
 crane = "0.22.1"           # aqua:google/go-containerregistry; multi-arch image audit (task images:audit)
 shellcheck = "0.11.0"      # aqua:koalaman/shellcheck
 actionlint = "1.7.12"      # aqua:rhysd/actionlint
+gitleaks = "8.30.1"        # aqua:gitleaks/gitleaks; secret scan of staged changes (prek.toml) and CI
 # kyverno CLI: = addons/kyverno appVersion; policy tests (hack/tests/test_kyverno_policies.sh). github backend: the aqua
 # registry entry pins an outdated cosign signer identity (release.yaml vs release-publish.yaml) and fails verification.
 "github:kyverno/kyverno" = { version = "1.20.0", bin = "kyverno" }
 python = "3.14.10"         # core:python (precompiled); hack/crd2schema.py and test.sh helpers, stdlib only
 # Workflow
 task = "3.54.0"            # aqua:go-task/task; cross-platform entrypoint (Taskfile.yml)
+prek = "0.5.10"            # aqua:j178/prek; git hooks from prek.toml (task hooks:install), same hooks in CI
 gh = "2.104.0"             # aqua:cli/cli; `task secrets` seeds GitHub credentials from `gh auth token`
 
 [env]

@@ -30,7 +30,7 @@ spec:
       metadata:
         labels:
           {{- include "openchoreo.labels" . | nindent 10 }}
-      data:
+      data:   # gitleaks:allow: ESO template of the CRS payload Secret; values come from the store, none in git
         # One key, two documents in order: CAPI applies them top to bottom (Namespace first).
         openchoreo-agent.yaml: |
           apiVersion: v1

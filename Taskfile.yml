@@ -21,10 +21,11 @@ tasks:
 
   # ---- toolchain -------------------------------------------------------------------------------------------------
   setup:
-    desc: Install the pinned toolchain (mise install) and the helm-unittest plugin
+    desc: Install the pinned toolchain (mise install), the helm-unittest plugin and the git hooks
     cmds:
       - mise install
       - task: tools:plugins
+      - task: hooks:install
 
   doctor:
     desc: Check every tool from mise.toml is installed at the pinned version
@@ -40,6 +41,16 @@ tasks:
     desc: Refresh mise.lock (URLs + checksums) for all six developer platforms
     cmds:
       - mise lock --platform linux-x64,linux-arm64,macos-x64,macos-arm64,windows-x64,windows-arm64
+
+  hooks:install:
+    desc: Install the git hooks from prek.toml (pre-commit + commit-msg; per clone, shared by its worktrees)
+    cmds:
+      - prek install --allow-missing-config
+
+  hooks:run:
+    desc: Run every git hook on every tracked file, as CI does (SKIP=charts,... skips hooks)
+    cmds:
+      - prek run --all-files --show-diff-on-failure
 
   # ---- local / cloud installation ---------------------------------------------------------------------------------
   up:
