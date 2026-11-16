@@ -8,14 +8,36 @@
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
 #   tests/kyverno/platform-key offline: with a platform key only <registry.host>/<appsProject>/ is trusted
-#   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image;
-#                              runs only with KYVERNO_ONLINE=1
+#   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
+#                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
 # A suite's helm-values.yaml (optional) is passed to helm template. The kyverno CLI comes from mise.toml; skips only
 # when it is missing (KYVERNO=/path/to/kyverno overrides).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
 
 echo "== test_kyverno_policies =="
+
+# Keyless identity (#41): the trusted koorikla/ci workflow is a commit SHA, and Renovate's custom manager
+# (renovate.json) really matches that line - otherwise the pin would silently never be bumped.
+wf_ref=$(yq -r '.imageVerification.github.workflowRef' "$ROOT/addons/kyverno-policies/values.yaml" | tr -d '\r')
+assert_match "$wf_ref" '^[0-9a-f]{40}$' "kyverno-policies trusts koorikla/ci by commit SHA"
+renovated=$(py - "$ROOT/renovate.json" "$ROOT/addons/kyverno-policies/values.yaml" <<'PY'
+import json, re, sys
+cfg = json.load(open(sys.argv[1]))
+text = open(sys.argv[2]).read()
+for m in cfg.get("customManagers", []):
+    if not any(re.search(p.strip("/"), "addons/kyverno-policies/values.yaml") for p in m.get("managerFilePatterns", [])):
+        continue
+    for ms in m.get("matchStrings", []):
+        hit = re.search(ms.replace("(?<", "(?P<"), text)
+        if hit and m.get("depNameTemplate") == "koorikla/ci":
+            print(hit.group("currentDigest"), hit.group("currentValue"))
+PY
+)
+assert_eq "${renovated%% *}" "$wf_ref" "renovate.json custom manager tracks workflowRef (datasource github-tags koorikla/ci)"
+
 KYVERNO=${KYVERNO:-kyverno}
 if ! command -v "$KYVERNO" >/dev/null 2>&1; then
   echo "  SKIP kyverno CLI not found (set KYVERNO=/path/to/kyverno)"
