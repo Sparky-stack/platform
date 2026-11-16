@@ -42,3 +42,8 @@ ports:
   - port: 127.0.0.1:9443:9443
     nodeFilters:
       - loadbalancer
+  # OpenBao, the Istio mesh CA (Gateway in ns openbao, TLS passthrough, installation.yaml mesh.ca.port): CAPD mesh
+  # members reach it on this load balancer over network kind (coredns-local), the host only for debugging.
+  - port: 127.0.0.1:8200:8200
+    nodeFilters:
+      - loadbalancer

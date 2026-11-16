@@ -1,62 +1,70 @@
-suite: mesh (opt-in Istio ambient multicluster) - PKI, cacerts and remote-secret delivery
+suite: mesh (opt-in Istio ambient multicluster) - OpenBao inputs, public trust payload and remote-secret delivery
 templates:
-  - templates/mesh-pki.yaml
-  - templates/mesh-crs.yaml
+  - templates/mesh-openbao.yaml
+  - templates/mesh-trust.yaml
   - templates/mesh-remote-secret.yaml
   - templates/mesh-helpers.yaml
 values: [values/capi-docker.yaml]
 set:
-  mesh: { group: local, groups: [local, prod] }
-  mgmt: { addons: { mesh-root-ca: true } }
+  mesh: { group: local, groups: [local, prod], ca: { host: openbao.example.test, port: 8200 } }
+  mgmt: { addons: { openbao: true } }
 tests:
   - it: renders nothing without mesh.group
     set:
       mesh: { group: "" }
     asserts:
       - hasDocuments: { count: 0 }
-        template: templates/mesh-pki.yaml
+        template: templates/mesh-openbao.yaml
       - hasDocuments: { count: 0 }
-        template: templates/mesh-crs.yaml
+        template: templates/mesh-trust.yaml
       - hasDocuments: { count: 0 }
         template: templates/mesh-remote-secret.yaml
 
-  - it: issues a short-lived per-cluster intermediate CA from its group's root (ClusterIssuer mesh-root-<group>)
-    template: templates/mesh-pki.yaml
+  - it: publishes this member's PUBLIC auth inputs for OpenBao (API server + cluster CA from the CAPI kubeconfig)
+    template: templates/mesh-openbao.yaml
     asserts:
       - hasDocuments: { count: 1 }
-      - isKind: { of: Certificate }
-      - equal: { path: metadata.name, value: dev1-mesh-ca }
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.name, value: dev1-mesh-openbao }
       - equal: { path: metadata.namespace, value: fleet }
-      - equal: { path: spec.isCA, value: true }
-      - equal: { path: spec.secretName, value: dev1-mesh-ca }
-      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: ClusterIssuer, name: mesh-root-local } }
-      - equal: { path: spec.duration, value: 336h }
-      - equal: { path: spec.renewBefore, value: 168h }
-      - equal: { path: spec.usages, value: [cert sign, crl sign, digital signature] }
-      - notContains: { path: spec.usages, content: key encipherment }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
+      - equal: { path: 'spec.target.template.metadata.labels["mesh.platform.koorikla.io/openbao-client"]', value: "true" }
+      - equal: { path: spec.target.template.data.cluster, value: dev1 }
+      - equal: { path: spec.target.template.data.group, value: local }
+      - matchRegex: { path: spec.target.template.data.server, pattern: '\.cluster\.server' }
+      - matchRegex: { path: spec.target.template.data.ca, pattern: 'certificate-authority-data" \| b64dec' }
+      - equal: { path: spec.data, value: [{ secretKey: kubeconfig, remoteRef: { key: dev1-kubeconfig, property: value } }] }
 
-  - it: "a group is a cryptographic boundary: another group's member chains to another root"
-    template: templates/mesh-pki.yaml
-    set:
-      mesh: { group: prod }
+  - it: "negative: never templates the kubeconfig's client credentials into the OpenBao inputs"
+    template: templates/mesh-openbao.yaml
     asserts:
-      - equal: { path: spec.issuerRef.name, value: mesh-root-prod }
+      - notMatchRegex: { path: spec.target.template.data.server, pattern: 'client-(key|certificate)-data' }
+      - notMatchRegex: { path: spec.target.template.data.ca, pattern: 'client-(key|certificate)-data' }
+      - notExists: { path: spec.target.template.data.kubeconfig }
 
-  - it: delivers cacerts + the network label to exactly this cluster via an ESO-templated CRS payload
-    template: templates/mesh-crs.yaml
+  - it: delivers only public trust (OpenBao CA, group root) + the network label to exactly this cluster
+    template: templates/mesh-trust.yaml
     asserts:
       - hasDocuments: { count: 2 }
       - isKind: { of: ExternalSecret }
         documentIndex: 0
-      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-openbao } }
         documentIndex: 0
       - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
         documentIndex: 0
-      - matchRegex: { path: 'spec.target.template.data["mesh-cacerts.yaml"]', pattern: 'topology.istio.io/network: dev1' }
+      - matchRegex: { path: 'spec.target.template.data["mesh-trust.yaml"]', pattern: 'topology.istio.io/network: dev1' }
         documentIndex: 0
-      - matchRegex: { path: 'spec.target.template.data["mesh-cacerts.yaml"]', pattern: 'name: cacerts\n\s+namespace: istio-system' }
+      - matchRegex: { path: 'spec.target.template.data["mesh-trust.yaml"]', pattern: 'name: openbao-ca\n\s+namespace: istio-system' }
         documentIndex: 0
-      - equal: { path: 'spec.data[*].remoteRef.key', value: dev1-mesh-ca }
+      - matchRegex: { path: 'spec.target.template.data["mesh-trust.yaml"]', pattern: 'name: mesh-root-ca\n\s+namespace: istio-system' }
+        documentIndex: 0
+      - notMatchRegex: { path: 'spec.target.template.data["mesh-trust.yaml"]', pattern: 'tls\.key|cacerts|kubernetes\.io/tls' }
+        documentIndex: 0
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: openbaoca, remoteRef: { key: openbao-ca-bundle, property: ca.crt } }
+            - { secretKey: root, remoteRef: { key: openbao-ca-bundle, property: mesh-root-local.pem } }
         documentIndex: 0
       - isKind: { of: ClusterResourceSet }
         documentIndex: 1
@@ -64,8 +72,16 @@ tests:
         documentIndex: 1
       - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
         documentIndex: 1
-      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-cacerts }] }
+      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-trust }] }
         documentIndex: 1
+
+  - it: "a group is a cryptographic boundary: another group's member pins another root"
+    template: templates/mesh-trust.yaml
+    documentIndex: 0
+    set:
+      mesh: { group: prod }
+    asserts:
+      - equal: { path: 'spec.data[1].remoteRef.property', value: mesh-root-prod.pem }
 
   - it: issues a short-lived reader client cert from the cluster's k3s client CA (CAPI secret <name>-cca)
     template: templates/mesh-remote-secret.yaml

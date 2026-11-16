@@ -1,0 +1,40 @@
+{{- /*
+Inputs of the mesh reconcile: every mesh member's PUBLIC auth data, one fleet Secret per member rendered by
+charts/cluster (mesh-openbao.yaml: cluster, group, server = API server URL, ca = cluster CA certificate, all from the
+CAPI kubeconfig and the fleet file), labelled meshClients.label=true. ESO finds them by label through
+ClusterSecretStore mgmt-fleet and flattens them into Secret mesh-clients: <cluster>.group, <cluster>.server,
+<cluster>.ca - the files the reconcile Job mounts (it has no Kubernetes API access of its own).
+Retain: a store error keeps the last list; the reconcile never prunes on an empty list either.
+*/ -}}
+{{- $m := .Values.meshClients }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $m.secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $m.store }}
+  target:
+    name: {{ $m.secretName }}
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      engineVersion: v2
+      templateFrom:
+        - target: Data
+          literal: |
+            {{`{{- range $secret, $json := . }}`}}
+            {{`{{- $c := $json | fromJson }}`}}
+            {{`{{ $c.cluster }}.group: {{ $c.group | toJson }}`}}
+            {{`{{ $c.cluster }}.server: {{ $c.server | toJson }}`}}
+            {{`{{ $c.cluster }}.ca: {{ $c.ca | toJson }}`}}
+            {{`{{- end }}`}}
+  dataFrom:
+    - find:
+        tags:
+          {{ $m.label }}: "true"

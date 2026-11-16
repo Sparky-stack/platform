@@ -1,0 +1,44 @@
+suite: openbao - server configuration (upstream chart values)
+release: { name: openbao, namespace: openbao }
+templates:
+  - charts/openbao/templates/server-config-configmap.yaml
+  - charts/openbao/templates/server-statefulset.yaml
+set:
+  mesh: { groups: [local], ca: { host: openbao.example.test, port: 8200 } }
+tests:
+  - it: static auto-unseal, TLS with auto-reload, raft storage, stdout audit device
+    template: charts/openbao/templates/server-config-configmap.yaml
+    asserts:
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'seal "static" \{\s+current_key_id = "platform-1"\s+current_key\s+= "file:///openbao/unseal/key"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'tls_auto_reload\s+= true' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'storage "raft"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'audit "file" "stdout"' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'tls_disable' }
+
+  - it: self-initialisation creates only the scoped reconcile identity (Kubernetes auth, audience-bound, 15m)
+    template: charts/openbao/templates/server-config-configmap.yaml
+    asserts:
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'initialize "kubernetes-auth"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-mesh-config"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'bound_service_account_names\s+= \["openbao-mesh-config"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'audience\s+= "openbao"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'token_max_ttl\s+= "15m"' }
+
+  - it: "the reconcile policy covers only the mesh namespace and cannot rewrite itself"
+    template: charts/openbao/templates/server-config-configmap.yaml
+    asserts:
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/mesh-\*"' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/platform-' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/role/platform-' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\*"|path "sys/\*"|sys/raw|sys/seal|generate-root' }
+
+  - it: pinned multi-arch image, restricted pod security, seal key and TLS mounted read-only
+    template: charts/openbao/templates/server-statefulset.yaml
+    asserts:
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "quay.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f" }
+      - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext', value: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } } }
+      - contains: { path: 'spec.template.spec.containers[0].volumeMounts', content: { name: unseal, mountPath: /openbao/unseal, readOnly: true } }
+      - contains: { path: 'spec.template.spec.containers[0].volumeMounts', content: { name: tls, mountPath: /openbao/tls, readOnly: true } }
+      - equal: { path: spec.replicas, value: 1 }

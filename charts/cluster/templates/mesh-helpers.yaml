@@ -8,12 +8,11 @@ key `mesh.group` (docs/multicluster.md). Prefix `mesh.` avoids collisions with t
 {{- ((.Values.mesh | default dict).group | default "") -}}
 {{- end }}
 
-{{- /* ClusterIssuer of this cluster's mesh group root (one root per group); addon mesh-root-ca renders it on mgmt
-from installation.yaml mesh.groups (prefix = mesh-root-ca root.issuerPrefix, contract test). */ -}}
-{{- define "mesh.rootIssuer" -}}mesh-root-{{ include "mesh.group" . }}{{- end }}
+{{- /* Key of this group's root certificate in mgmt's openbao/openbao-ca-bundle (addon openbao templates/pki.yaml). */ -}}
+{{- define "mesh.rootKey" -}}mesh-root-{{ include "mesh.group" . }}.pem{{- end }}
 
 {{- /* Kubernetes user peers' istiods authenticate as (client cert CN); addon istio-eastwest binds it on every member
-to ClusterRole platform-istio-reader (discovery reads only, no Secrets). Also mesh-root-ca admission.readerUser. */ -}}
+to ClusterRole platform-istio-reader (discovery reads only, no Secrets). Also addon openbao admission.readerUser. */ -}}
 {{- define "mesh.readerUser" -}}platform:istio-reader{{- end }}
 
 {{- define "mesh.labels" -}}

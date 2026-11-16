@@ -163,6 +163,7 @@ for dir in addons/*; do
           "$dir/values/role-mgmt.yaml" \
           "$dir/values/provider-$m_prov.yaml" \
           "$dir/values/cni-$m_cni.yaml" \
+          "$dir/values/mesh-none.yaml" \
           "$inst_dir/addons/$addon/values.yaml" \
           "$inst_dir/addons/$addon/env-$m_env.yaml" \
           "$inst_dir/addons/$addon/cluster-$m_name.yaml"; do
@@ -200,6 +201,8 @@ for dir in addons/*; do
           continue
         fi
         c_cni=$(yq '.cni // "cilium"' "$cf")
+        # values/mesh-member.yaml on mesh members (fleet file mesh.group), as the ApplicationSet layers it
+        c_mesh=none; [[ -n "$(yq '.mesh.group // ""' "$cf")" ]] && c_mesh=member
         # addon labels as rendered by charts/cluster (step 4), e.g. addons.platform.koorikla.io/cilium derives from cni
         c_toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" "$TMP/cluster-$inst-$c_name.yaml" 2>/dev/null || true)
         [[ -n "$c_toggle" && "$c_toggle" != "null" ]] || c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
@@ -213,6 +216,7 @@ for dir in addons/*; do
           "$dir/values/role-workload.yaml" \
           "$dir/values/provider-$c_prov.yaml" \
           "$dir/values/cni-$c_cni.yaml" \
+          "$dir/values/mesh-$c_mesh.yaml" \
           "$inst_dir/addons/$addon/values.yaml" \
           "$inst_dir/addons/$addon/env-$c_env.yaml" \
           "$inst_dir/addons/$addon/cluster-$c_name.yaml"; do

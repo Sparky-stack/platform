@@ -1,0 +1,116 @@
+{{- /*
+Admission guards for the remote-secret reader certs on mgmt (docs/multicluster.md "Admission guards"). cert-manager's
+internal approver approves every CertificateRequest, and a CA issuer signs whatever the request asks for. The
+<name>-client-ca Issuers (charts/cluster mesh-remote-secret.yaml) wrap the CAPI k3s client CA of a workload cluster:
+its API server accepts anything they sign for client auth (O=system:masters = cluster-admin, system:node:*, sub-CAs).
+These policies admit exactly what charts/cluster renders and nothing else:
+  platform-mesh-reader-certificates    Certificates for *-client-ca: CN=<readerUser>, no subject/SANs, not a CA,
+                                       client auth + digital signature only, duration <= readerMaxDuration, in fleet
+  platform-mesh-certificaterequests    CertificateRequests for *-client-ca: created by cert-manager's controller only
+                                       (so they come from an admitted Certificate; CEL cannot parse the CSR itself),
+                                       same isCA/usages/duration limits
+  platform-mesh-issuers                a <name>-cca Secret may back only Issuer fleet/<name>-client-ca (else a
+                                       self-made issuer would bypass the checks above)
+The mesh CA itself is not a cert-manager issuer on mgmt: it lives in OpenBao (keys never exported) and is reachable
+only through per-member JWT auth and per-member policies (files/mesh-reconcile.sh).
+*/ -}}
+{{- $a := .Values.admission }}
+{{- if $a.enabled }}
+{{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}
+{{- $clientIssuer := "has(object.spec.issuerRef) && object.spec.issuerRef.name.endsWith('-client-ca') && (!has(object.spec.issuerRef.kind) || object.spec.issuerRef.kind == 'Issuer')" }}
+{{- $noSANs := "!has(object.spec.dnsNames) && !has(object.spec.ipAddresses) && !has(object.spec.uris) && !has(object.spec.emailAddresses) && !has(object.spec.otherNames)" }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-reader-certificates
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificates]
+  matchConditions:
+    - name: client-ca-issuer
+      expression: {{ $clientIssuer | quote }}
+  validations:
+    - expression: {{ printf "object.metadata.namespace == '%s'" $a.readerNamespace | quote }}
+      message: {{ printf "certificates from a *-client-ca issuer live in %s only" $a.readerNamespace | quote }}
+    - expression: {{ printf "has(object.spec.commonName) && object.spec.commonName == '%s'" $a.readerUser | quote }}
+      message: {{ printf "*-client-ca issuers sign only CN=%s (the mesh reader identity)" $a.readerUser | quote }}
+    - expression: "!has(object.spec.subject) && !has(object.spec.literalSubject)"
+      message: "no subject (O = Kubernetes groups, e.g. system:masters) on *-client-ca certificates"
+    - expression: {{ $noSANs | quote }}
+      message: "no SANs on *-client-ca certificates"
+    - expression: "!has(object.spec.isCA) || object.spec.isCA == false"
+      message: "*-client-ca issuers never sign a CA"
+    - expression: "has(object.spec.usages) && size(object.spec.usages) > 0 && object.spec.usages.all(u, u in ['client auth', 'digital signature'])"
+      message: "usages must be client auth / digital signature only"
+    - expression: {{ printf "has(object.spec.duration) && duration(object.spec.duration) <= duration('%s')" $a.readerMaxDuration | quote }}
+      message: {{ printf "duration must be set and <= %s (client certs cannot be revoked)" $a.readerMaxDuration | quote }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-certificaterequests
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificaterequests]
+  matchConditions:
+    - name: client-ca-issuer
+      expression: {{ $clientIssuer | quote }}
+  validations:
+    - expression: {{ printf "request.operation != 'CREATE' || request.userInfo.username in %s" (toJson $a.requestCreators) | quote }}
+      message: "reader CertificateRequests are created only by cert-manager from an admitted Certificate"
+    - expression: {{ printf "object.metadata.namespace == '%s'" $a.readerNamespace | quote }}
+      message: {{ printf "reader CertificateRequests live in %s only" $a.readerNamespace | quote }}
+    - expression: "!has(object.spec.isCA) || object.spec.isCA == false"
+      message: "*-client-ca issuers never sign a CA"
+    - expression: "has(object.spec.usages) && object.spec.usages.all(u, u in ['client auth', 'digital signature'])"
+      message: "usages outside the reader profile"
+    - expression: {{ printf "has(object.spec.duration) && duration(object.spec.duration) <= duration('%s')" $a.readerMaxDuration | quote }}
+      message: "duration outside the reader profile"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-issuers
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [issuers, clusterissuers]
+  matchConditions:
+    - name: wraps-client-ca-secret
+      expression: "has(object.spec.ca) && object.spec.ca.secretName.endsWith('-cca')"
+  validations:
+    - expression: {{ printf "request.kind.kind == 'Issuer' && object.metadata.namespace == '%s' && object.metadata.name == object.spec.ca.secretName.substring(0, size(object.spec.ca.secretName) - 4) + '-client-ca'" $a.readerNamespace | quote }}
+      message: {{ printf "a CAPI client CA Secret <x>-cca may only back Issuer %s/<x>-client-ca" $a.readerNamespace | quote }}
+{{- range $p := list "platform-mesh-reader-certificates" "platform-mesh-certificaterequests" "platform-mesh-issuers" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $p }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  policyName: {{ $p }}
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

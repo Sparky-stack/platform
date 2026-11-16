@@ -90,15 +90,17 @@ addons:
       global.network:                             { label: mesh.platform.koorikla.io/network }
       istiod.env.AMBIENT_ENABLE_MULTI_NETWORK:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
       istiod.env.AMBIENT_ENABLE_BAGGAGE:          { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
-      istiod.env.PILOT_DISABLE_SELF_SIGNED_CA:    { label: addons.platform.koorikla.io/istio-eastwest, default: "false" }
       # Joining/leaving a group rolls ztunnel (after istiod: sync wave 1 in addons/istio-ambient/values.yaml).
       'ztunnel.podAnnotations.mesh\.platform\.koorikla\.io/group': { label: mesh.platform.koorikla.io/group }
-  # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). mesh-root-ca: one mesh root per installation.yaml
-  # mesh.groups entry on mgmt (ClusterIssuers; keys in cert-manager's namespace) + admission guards for the mesh PKI
-  # (enable via installation.yaml mgmt.addons). istio-eastwest: east-west gateway + reader RBAC on mesh members,
-  # selected by the label charts/cluster derives from the fleet file's mesh.group.
-  mesh-root-ca:             { namespace: cert-manager,             roles: [mgmt],           default: false }
+  # Cluster-to-cluster connectivity (opt-in; docs/multicluster.md). openbao (mgmt, enable via installation.yaml
+  # mgmt.addons): the mesh CA - one root + intermediate PKI mount per installation.yaml mesh.groups entry, keys generated
+  # inside OpenBao - with per-member JWT auth, plus the reader-cert admission guards. On mesh members (selected by the
+  # labels charts/cluster derives from the fleet file's mesh.group): istio-eastwest (east-west gateway + reader RBAC)
+  # and istio-csr (istiod's CA off; certificates signed by OpenBao through a cert-manager Vault Issuer). istio-ambient
+  # layers values/mesh-member.yaml there (valueFiles: values/mesh-member.yaml on clusters with a mesh group).
+  openbao:                  { namespace: openbao,                  roles: [mgmt],           default: false }
   istio-eastwest:           { namespace: istio-system,             roles: [workload],       default: false, clusterLabelParameters: { mesh.group: { label: mesh.platform.koorikla.io/group }, mesh.network: { label: mesh.platform.koorikla.io/network } } }
+  istio-csr:                { namespace: istio-system,             roles: [workload],       default: false, clusterNameParameters: [cert-manager-istio-csr.app.server.clusterID], clusterLabelParameters: { mesh.group: { label: mesh.platform.koorikla.io/group } } }
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
   kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }

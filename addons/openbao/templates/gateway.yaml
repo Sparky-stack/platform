@@ -1,0 +1,48 @@
+{{- /*
+Members reach OpenBao through a kgateway TLS passthrough listener (same pattern as OpenSearch on the observability
+plane): SNI mesh.ca.host on port mesh.ca.port -> Service <release>-active:8200 (the raft leader). OpenBao terminates
+TLS itself with openbao-tls, so the gateway never sees a token or a CSR. kgateway provisions the proxy Deployment +
+Service (type LoadBalancer; klipper binds the listener port as a hostPort on mgmt, k3d publishes it on the serverlb:
+bootstrap/k3d-mgmt.yaml). Real installations: a DNS name for mesh.ca.host (external-dns gateway-tlsroute source) and
+source ranges limited to the members' egress addresses.
+*/ -}}
+{{- $g := .Values.gateway }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $g.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ $g.className }}
+  listeners:
+    - name: tls
+      protocol: TLS
+      port: {{ include "openbao-addon.port" . }}
+      hostname: {{ include "openbao-addon.host" . | quote }}
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: openbao
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $g.name }}
+      namespace: {{ .Release.Namespace }}
+      sectionName: tls
+  hostnames:
+    - {{ include "openbao-addon.host" . | quote }}
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ printf "%s-active" .Release.Name }}
+          port: 8200

@@ -1,0 +1,23 @@
+{{- /*
+OpenBao (on mgmt) verifies this cluster's ServiceAccount tokens offline against the cluster's own signing keys, fetched
+from https://<API server>/openid/v1/jwks (pinned to the cluster CA from the CAPI kubeconfig). Kubernetes ships the
+ClusterRole system:service-account-issuer-discovery for exactly this; binding it to system:unauthenticated publishes
+only the issuer's PUBLIC keys and discovery document (upstream "Service account issuer discovery"). Without it mgmt
+would need a credential on every member (TokenReview) - this way OpenBao holds none.
+*/ -}}
+{{- if .Values.oidcDiscovery.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-oidc-discovery
+  labels:
+    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:service-account-issuer-discovery
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated
+{{- end }}

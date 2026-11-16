@@ -111,11 +111,13 @@ MGMT_SERVER=https://kubernetes.default.svc
 # render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels-file>]
 render() {
   local addon=$1 role=$2 name=$3 prov=$4 env=$5 region=$6 cni=$7 server=$8 labels=${9:-} dir="addons/$1" ns vf p ip it part
-  local key def v img
+  local key def v img mesh
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
+  mesh=none   # values/mesh-member.yaml on clusters with a mesh group label (as appset-addons.yaml)
+  if [[ -n "$labels" && -s "$labels" && -n "$(yq -r '.["mesh.platform.koorikla.io/group"] // ""' "$labels")" ]]; then mesh=member; fi
   for vf in "$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" \
-    "$dir/values/cni-$cni.yaml" "$INST_DIR/addons/$addon/values.yaml" "$INST_DIR/addons/$addon/env-$env.yaml" \
+    "$dir/values/cni-$cni.yaml" "$dir/values/mesh-$mesh.yaml" "$INST_DIR/addons/$addon/values.yaml" "$INST_DIR/addons/$addon/env-$env.yaml" \
     "$INST_DIR/addons/$addon/cluster-$name.yaml"; do
     if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
   done

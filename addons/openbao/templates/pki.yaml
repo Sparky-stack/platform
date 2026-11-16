@@ -1,0 +1,205 @@
+{{- /*
+TLS for OpenBao and publication of PUBLIC certificates only.
+  Issuer openbao-selfsigned -> Certificate openbao-ca (CA, key stays in this namespace) -> Issuer openbao-ca
+  Certificate openbao-tls       listener cert: in-cluster names + the member-facing host (SNI of the passthrough
+                                Gateway). OpenBao reloads it on renewal (listener tls_auto_reload).
+  ExternalSecret openbao-ca-bundle -> Secret openbao-ca-bundle with
+    ca.crt             OpenBao's CA certificate (SecretStore openbao-ca-source: GET of Secret openbao-ca only)
+    mesh-root-<g>.pem  each mesh group's root certificate, read from OpenBao (SecretStore openbao-pki-public: Kubernetes
+                       auth role mesh-ca-read, whose policy - written by the reconcile - allows read of
+                       pki-mesh-<g>-root/cert/ca and nothing else)
+ClusterSecretStore mgmt-openbao (templates/ca-store.yaml) may GET only openbao-ca-bundle: consumers never reach a key.
+*/ -}}
+{{- $ns := .Release.Namespace }}
+{{- $t := .Values.tls }}
+{{- $host := include "openbao-addon.host" . }}
+{{- $groups := include "openbao-addon.groups" . | fromJsonArray }}
+{{- $name := .Release.Name }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-selfsigned
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $t.caIssuer }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ printf "%s OpenBao CA" .Values.installation.name | quote }}
+  secretName: {{ $t.caIssuer }}
+  duration: {{ $t.caDuration }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never     # members pin this CA (Vault issuer caBundleSecretRef); rotate deliberately
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: openbao-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $t.caIssuer }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ $t.caIssuer }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $t.secretName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  secretName: {{ $t.secretName }}
+  commonName: {{ printf "%s.%s.svc" $name $ns | quote }}
+  dnsNames:
+    - {{ $host | quote }}
+    - {{ $name }}
+    - {{ printf "%s.%s" $name $ns }}
+    - {{ printf "%s.%s.svc" $name $ns }}
+    - {{ printf "%s.%s.svc.cluster.local" $name $ns }}
+    - {{ printf "%s-active.%s.svc" $name $ns }}
+    - {{ printf "*.%s-internal" $name | quote }}
+    - {{ printf "*.%s-internal.%s.svc" $name $ns | quote }}
+  ipAddresses: [127.0.0.1]
+  duration: {{ $t.duration }}
+  renewBefore: {{ $t.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth, client auth, digital signature]    # client auth: raft peers (retry_join) present it
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: {{ $t.caIssuer }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-openbao-ca-source
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-openbao-ca-source
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ $t.caIssuer }}]
+    verbs: [get]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-openbao-ca-source
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-openbao-ca-source }
+subjects:
+  - { kind: ServiceAccount, name: eso-openbao-ca-source, namespace: {{ $ns }} }
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao-ca-source
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $ns }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+      auth:
+        serviceAccount:
+          name: eso-openbao-ca-source
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.caPublic.pkiReader }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+# Logs in with a projected token of the ServiceAccount above (audience == reconcile.audience); role mesh-ca-read is
+# written by the reconcile (files/mesh-reconcile.sh) with a policy that reads the group roots' cert/ca only.
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao-pki-public
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  provider:
+    vault:
+      server: {{ printf "https://%s-active.%s.svc:8200" $name $ns | quote }}
+      version: v1                 # raw logical reads (pki-mesh-<g>-root/cert/ca), no KV semantics
+      caProvider:
+        type: Secret
+        name: {{ $t.secretName }}
+        key: ca.crt
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: mesh-ca-read
+          serviceAccountRef:
+            name: {{ .Values.caPublic.pkiReader }}
+            audiences: [{{ .Values.reconcile.audience | quote }}]
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.caPublic.secretName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 15m
+  secretStoreRef: { kind: SecretStore, name: openbao-ca-source }
+  target:
+    name: {{ .Values.caPublic.secretName }}
+    creationPolicy: Owner
+  data:
+    - secretKey: ca.crt
+      remoteRef: { key: {{ $t.caIssuer }}, property: tls.crt }    # the CA certificate itself (self-signed)
+    {{- range $g := $groups }}
+    - secretKey: {{ printf "mesh-root-%s.pem" $g }}
+      sourceRef:
+        storeRef: { kind: SecretStore, name: openbao-pki-public }
+      remoteRef: { key: {{ printf "pki-mesh-%s-root/cert/ca" $g }}, property: certificate }
+    {{- end }}

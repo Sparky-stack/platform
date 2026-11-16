@@ -1,0 +1,45 @@
+{{- /*
+This member's entry for the mesh CA on mgmt (addon openbao): Secret fleet/<name>-mesh-openbao, labelled
+mesh.platform.koorikla.io/openbao-client=true, with PUBLIC data only:
+  cluster, group   from the fleet file
+  server           the member's API server URL (CAPI kubeconfig)  -> OpenBao fetches <server>/openid/v1/jwks
+  ca               the member's cluster CA certificate (CAPI kubeconfig) -> pins that TLS connection
+addon openbao's ExternalSecret mesh-clients collects every such Secret (find by label) and its reconcile creates, for
+exactly this cluster, JWT auth at auth/mesh-<name> (this cluster's own ServiceAccount signing keys), PKI role
+pki-mesh-<group>-int/roles/<name> and policy mesh-member-<name> (sign on that role only). Removing mesh.group (or the
+fleet file) deletes this Secret, and the next reconcile removes the member's auth mount and policy: it cannot obtain
+a new certificate from then on. The kubeconfig's client credentials are read by ESO only and never templated.
+*/ -}}
+{{- if include "mesh.group" . }}
+{{- $name := .Values.name }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-mesh-openbao
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+spec:
+  # 5m: a re-created cluster (same name) has a new API endpoint and cluster CA (argocd-cluster-secret.yaml).
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: mgmt-fleet
+  target:
+    name: {{ $name }}-mesh-openbao
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          {{- include "mesh.labels" . | nindent 10 }}
+          mesh.platform.koorikla.io/openbao-client: "true"
+      data:
+        cluster: {{ $name | quote }}
+        group: {{ include "mesh.group" . | quote }}
+        server: {{`'{{ (index (fromYaml .kubeconfig).clusters 0).cluster.server }}'`}}
+        ca: {{`'{{ index (index (fromYaml .kubeconfig).clusters 0).cluster "certificate-authority-data" | b64dec }}'`}}
+  data:
+    - secretKey: kubeconfig
+      remoteRef: { key: {{ $name }}-kubeconfig, property: value }
+{{- end }}

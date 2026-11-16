@@ -36,6 +36,7 @@ platformStore:
     - falco                            # falcosidekick-outputs when escalation/slack is on (addon falco, role mgmt)
     - argo-events                      # falco-webhook (+ falco-notify when on) (addon argo-events)
     - harbor                           # harbor-platform: admin, robot and component secrets (addon harbor)
+    - openbao                          # openbao-unseal: static auto-unseal key of the mesh CA (addon openbao)
     - workflows-default                # per-run ExternalSecrets of ClusterWorkflows (addon openchoreo-platform), rendered by
                                        # OpenChoreo into workflows-<openchoreo.orgNamespace>: builds (git, registry, cosign),
                                        # promotion-gate (promotion-gate, promotion-gate-github)

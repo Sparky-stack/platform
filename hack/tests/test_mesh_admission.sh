@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Mesh PKI admission guards (addon mesh-root-ca templates/admission.yaml), evaluated offline with the kyverno CLI
-# (CEL, same expression language as the API server): what charts/cluster renders is admitted, everything that would
-# turn a <name>-client-ca issuer or a mesh root into a general signing API is denied (negative cases below).
+# Mesh admission guards, evaluated offline with the kyverno CLI (CEL, same expression language as the API server):
+#   mgmt    addon openbao templates/mesh-admission.yaml: what charts/cluster renders for the remote-secret reader certs
+#           is admitted; everything that would turn a <name>-client-ca issuer into a general signing API is denied
+#   members addon istio-csr templates/admission.yaml: only istio-csr / cert-manager may ask the mesh CA (OpenBao) for
+#           certificates, only istiod's Certificate may reference it, never a CA
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -15,7 +17,12 @@ cd "$ROOT"
 ARGO=system:serviceaccount:argocd:argocd-application-controller
 CM=system:serviceaccount:cert-manager:cert-manager
 
-helm template mesh-root-ca addons/mesh-root-ca --namespace cert-manager --set 'mesh.groups={local}' > "$TMP/mrc.yaml"
+{
+  helm template openbao addons/openbao --namespace openbao --set 'mesh.groups={local}' -s templates/mesh-admission.yaml
+  echo '---'
+  helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local \
+    --set-string cluster.name=dev1 -s templates/admission.yaml
+} > "$TMP/mrc.yaml"
 helm template cert-manager addons/cert-manager --namespace cert-manager \
   | yq 'select(.kind == "CustomResourceDefinition" and .spec.group == "cert-manager.io")' > "$TMP/crds.yaml"
 for p in $(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml"); do
@@ -23,6 +30,9 @@ for p in $(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name'
   b=$(yq -N "select(.kind == \"ValidatingAdmissionPolicyBinding\" and .spec.policyName == \"$p\") | .spec.validationActions[]" "$TMP/mrc.yaml")
   assert_eq "$b" "Deny" "binding for $p denies"
 done
+assert_eq "$(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml" | sort | tr '\n' ' ')" \
+  "platform-mesh-ca-certificates platform-mesh-ca-requests platform-mesh-certificaterequests platform-mesh-issuers platform-mesh-reader-certificates " \
+  "exactly the reader-cert guards (mgmt) and the mesh-CA guards (members)"
 
 user_file() {   # user_file <username> -> path of a kyverno CLI UserInfo file
   local f="$TMP/user-${1//[^a-zA-Z0-9]/_}.yaml"
@@ -86,26 +96,6 @@ reader "$R_OK" default | check $P alice fail "negative: outside fleet"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: web, namespace: default }\nspec:\n  secretName: web\n  dnsNames: [web.example]\n  issuerRef: { kind: ClusterIssuer, name: letsencrypt }\n' \
   | check $P alice skip "other issuers are not affected"
 
-inter() {   # inter <extra spec yaml> [namespace] [name]
-  printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: %s, namespace: %s }\nspec:\n  commonName: dev1-mesh-ca\n  secretName: dev1-mesh-ca\n  issuerRef: { group: cert-manager.io, kind: ClusterIssuer, name: mesh-root-local }\n%s\n' "${3:-dev1-mesh-ca}" "${2:-fleet}" "$1"
-}
-I_OK='  isCA: true
-  duration: 336h
-  usages: [cert sign, crl sign, digital signature]'
-P=platform-mesh-intermediate-certificates
-inter "$I_OK" | check $P "$ARGO" pass "the intermediate charts/cluster renders, applied by Argo CD"
-inter "$I_OK" | check $P alice fail "negative: created by anyone but Argo CD (not from git)"
-inter "$I_OK" default | check $P "$ARGO" fail "negative: outside fleet"
-inter "$I_OK" fleet rogue-ca | check $P "$ARGO" fail "negative: not a <cluster>-mesh-ca"
-inter '  isCA: true
-  duration: 2160h
-  usages: [cert sign, crl sign, digital signature]' | check $P "$ARGO" fail "negative: duration > 14d"
-inter '  isCA: true
-  duration: 336h
-  usages: [cert sign, crl sign, digital signature, key encipherment]' | check $P "$ARGO" fail "negative: key encipherment on a CA"
-inter '  duration: 168h
-  usages: [client auth]' | check $P "$ARGO" fail "negative: leaf cert straight from a mesh root"
-
 cr() {   # cr <issuer kind> <issuer name> <extra spec yaml> [namespace]
   printf 'apiVersion: cert-manager.io/v1\nkind: CertificateRequest\nmetadata: { name: x-1, namespace: %s }\nspec:\n  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0K\n  issuerRef: { group: cert-manager.io, kind: %s, name: %s }\n%s\n' "${4:-fleet}" "$1" "$2" "$3"
 }
@@ -117,15 +107,10 @@ cr Issuer dev1-client-ca '  duration: 168h
 cr Issuer dev1-client-ca '  isCA: true
   duration: 168h
   usages: [client auth, digital signature]' | check $P "$CM" fail "negative: CA request on a client CA"
-cr ClusterIssuer mesh-root-local '  isCA: true
-  duration: 336h
-  usages: [cert sign, crl sign, digital signature]' | check $P "$CM" pass "intermediate request from cert-manager"
-cr ClusterIssuer mesh-root-local '  isCA: true
-  duration: 336h
-  usages: [cert sign, crl sign, digital signature]' default | check $P "$CM" fail "negative: mesh root request outside fleet"
-cr ClusterIssuer mesh-root-local '  isCA: true
-  duration: 8760h
-  usages: [cert sign, crl sign, digital signature]' | check $P "$CM" fail "negative: intermediate request > 14d"
+cr Issuer dev1-client-ca '  duration: 2160h
+  usages: [client auth, digital signature]' | check $P "$CM" fail "negative: reader request > 168h"
+cr Issuer dev1-client-ca '  duration: 168h
+  usages: [client auth, digital signature]' default | check $P "$CM" fail "negative: reader request outside fleet"
 cr ClusterIssuer letsencrypt '  duration: 2160h
   usages: [server auth]' default | check $P alice skip "other issuers are not affected"
 
@@ -136,23 +121,40 @@ printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: mine, na
   | check $P alice fail "negative: second issuer over a CAPI client CA"
 printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: dev1-client-ca, namespace: fleet }\nspec:\n  ca: { secretName: prod1-cca }\n' \
   | check $P alice fail "negative: client-ca issuer over another cluster's CA"
-printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: x, namespace: fleet }\nspec:\n  ca: { secretName: dev1-mesh-ca }\n' \
-  | check $P alice fail "negative: issuer over a mesh intermediate"
-printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: mesh-root-local }\nspec:\n  ca: { secretName: mesh-root-local }\n' \
-  | check $P "$ARGO" pass "ClusterIssuer mesh-root-<group> over its own root"
-printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: anything }\nspec:\n  ca: { secretName: mesh-root-local }\n' \
-  | check $P alice fail "negative: another ClusterIssuer over a mesh root"
+printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: dev1-client-ca }\nspec:\n  ca: { secretName: dev1-cca }\n' \
+  | check $P alice fail "negative: ClusterIssuer over a CAPI client CA"
 printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: selfsigned }\nspec:\n  selfSigned: {}\n' \
   | check $P alice skip "unrelated issuers are not affected"
+
+# --- members: who may use the mesh CA (Vault Issuer istio-system/openbao-mesh) ---------------------------------------
+CSR=system:serviceaccount:istio-system:cert-manager-istio-csr
+P=platform-mesh-ca-requests
+cr Issuer openbao-mesh '  duration: 24h
+  uris: []' istio-system | check $P "$CSR" pass "workload request from istio-csr"
+cr Issuer openbao-mesh '  duration: 48h' istio-system | check $P "$CM" pass "istiod Certificate request from cert-manager"
+cr Issuer openbao-mesh '  duration: 24h' istio-system | check $P alice fail "negative: hand-made request (any SPIFFE ID the role allows)"
+cr Issuer openbao-mesh '  duration: 24h' default | check $P system:serviceaccount:default:app fail "negative: request from a workload ServiceAccount"
+cr Issuer openbao-mesh '  isCA: true
+  duration: 24h' istio-system | check $P "$CSR" fail "negative: CA request"
+cr Issuer letsencrypt '  duration: 24h' istio-system | check $P alice skip "other issuers are not affected"
+P=platform-mesh-ca-certificates
+helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 \
+  | yq 'select(.kind == "Certificate" and .metadata.name == "istiod")' | check $P "$ARGO" pass "the chart's istiod Certificate"
+printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: impostor, namespace: istio-system }\nspec:\n  secretName: impostor\n  uris: [spiffe://cluster.local/ns/prod/sa/payments]\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
+  | check $P alice fail "negative: another Certificate minting a SPIFFE identity"
+printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: istiod, namespace: default }\nspec:\n  secretName: x\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
+  | check $P alice fail "negative: istiod name outside istio-system"
+printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: istiod, namespace: istio-system }\nspec:\n  secretName: istiod-tls\n  isCA: true\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
+  | check $P "$ARGO" fail "negative: CA Certificate"
 
 # What charts/cluster actually renders for every mesh member is admitted (Argo CD applies it).
 n=0
 for f in "${RENDERED_DIR:-/nonexistent}"/cluster-*.yaml; do
   [[ -f "$f" ]] || continue
-  for c in $(yq -N 'select(.kind == "Certificate" and (.metadata.name | test("-mesh-(ca|reader)$"))) | .metadata.name' "$f"); do
+  for c in $(yq -N 'select(.kind == "Certificate" and (.metadata.name | test("-mesh-reader$"))) | .metadata.name' "$f"); do
     n=$((n + 1))
-    case "$c" in *-mesh-ca) P=platform-mesh-intermediate-certificates ;; *) P=platform-mesh-reader-certificates ;; esac
-    yq "select(.kind == \"Certificate\" and .metadata.name == \"$c\")" "$f" | check $P "$ARGO" pass "rendered $(basename "$f" .yaml): $c"
+    yq "select(.kind == \"Certificate\" and .metadata.name == \"$c\")" "$f" \
+      | check platform-mesh-reader-certificates "$ARGO" pass "rendered $(basename "$f" .yaml): $c"
   done
   for i in $(yq -N 'select(.kind == "Issuer" and (.metadata.name | test("-client-ca$"))) | .metadata.name' "$f"); do
     yq "select(.kind == \"Issuer\" and .metadata.name == \"$i\")" "$f" | check platform-mesh-issuers "$ARGO" pass "rendered $(basename "$f" .yaml): Issuer $i"
@@ -160,9 +162,5 @@ for f in "${RENDERED_DIR:-/nonexistent}"/cluster-*.yaml; do
 done
 tally
 if [[ -n "${RENDERED_DIR:-}" ]]; then assert_match "$n" '^[1-9]' "rendered mesh Certificates found"; fi
-for i in $(yq -N 'select(.kind == "ClusterIssuer") | .metadata.name' "$TMP/mrc.yaml"); do
-  yq "select(.kind == \"ClusterIssuer\" and .metadata.name == \"$i\")" "$TMP/mrc.yaml" | check platform-mesh-issuers "$ARGO" pass "rendered ClusterIssuer $i"
-done
-tally
 
 finish

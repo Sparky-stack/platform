@@ -50,15 +50,20 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- if eq (index ($v.addons | default dict) "istio-ambient" | toString) "false" -}}
 {{- fail (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name) -}}
 {{- end -}}
-{{- if not (index ((($v.mgmt | default dict).addons) | default dict) "mesh-root-ca") -}}
-{{- fail (printf "cluster %s: mesh.group needs the mesh root CA on mgmt: set mgmt.addons.mesh-root-ca: true in installation.yaml" $v.name) -}}
+{{- if not (index ((($v.mgmt | default dict).addons) | default dict) "openbao") -}}
+{{- fail (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name) -}}
 {{- end -}}
 {{- if not (has $mesh.group ($mesh.groups | default list)) -}}
-{{- fail (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group on mgmt)" $v.name $mesh.group) -}}
+{{- fail (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mesh.group) -}}
+{{- end -}}
+{{- if not (($mesh.ca | default dict).host) -}}
+{{- fail (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name) -}}
 {{- end -}}
 {{- end -}}
-{{- if and (hasKey ($v.addons | default dict) "istio-eastwest") (ne (index $v.addons "istio-eastwest") (not (empty $mesh.group))) -}}
-{{- fail (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $v.addons "istio-eastwest") ($mesh.group | default "")) -}}
+{{- range $a := list "istio-eastwest" "istio-csr" -}}
+{{- if and (hasKey ($v.addons | default dict) $a) (ne (index $v.addons $a) (not (empty $mesh.group))) -}}
+{{- fail (printf "cluster %s: addons.%s=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.%s)" $v.name $a (index $v.addons $a) ($mesh.group | default "") $a) -}}
+{{- end -}}
 {{- end -}}
 {{- /* Control plane size = embedded etcd voters (cluster-api-k3s v0.5.0 supports no other datastore). Odd only: an
 even count adds a voter without adding failure tolerance, and 2 voters is the state a rollout must never shrink from.
@@ -96,7 +101,7 @@ platform.koorikla.io/cni: {{ .Values.cni | quote }}
 mesh.platform.koorikla.io/group: {{ . | quote }}
 mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
 {{- end }}
-{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium") "istio-eastwest" (not (empty $meshGroup))) (.Values.addons | default dict) }}
+{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium") "istio-eastwest" (not (empty $meshGroup)) "istio-csr" (not (empty $meshGroup))) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}

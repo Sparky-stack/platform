@@ -1,0 +1,107 @@
+{{- /*
+Declarative mesh PKI configuration. OpenBao has no CRDs and its self-initialisation runs once, so the desired state
+(groups from installation.yaml, members from the fleet) is applied by files/mesh-reconcile.sh: as an Argo CD PostSync
+hook after every sync and every reconcile.schedule as a CronJob (new members, removed members, drift). Chosen over
+OpenTofu/Terraform (state backend + an admin credential on mgmt) and over the young OpenBao config operators (no
+release, no stable CRDs for PKI + JWT auth yet): ~150 lines of POSIX sh with the bao CLI from the OpenBao image itself.
+Identity: ServiceAccount openbao-mesh-config, projected token (audience reconcile.audience, 10 minutes) exchanged for
+a 15-minute OpenBao token with policy platform-mesh-config (created by self-initialisation; it covers only pki-mesh-*,
+auth/mesh-*, the mesh-* policies and the mesh-ca-read role - and cannot rewrite its own policy or role). No root token.
+The pod has no Kubernetes API access (automountServiceAccountToken: false); its inputs are the mesh-clients Secret.
+*/ -}}
+{{- $r := .Values.reconcile }}
+{{- if $r.enabled }}
+{{- $groups := include "openbao-addon.groups" . | fromJsonArray }}
+{{- $p := .Values.pki }}
+{{- $m := .Values.memberAuth }}
+{{- $env := list
+  (dict "name" "BAO_ADDR" "value" (printf "https://%s-active.%s.svc:8200" .Release.Name .Release.Namespace))
+  (dict "name" "BAO_CACERT" "value" "/openbao/tls/ca.crt")
+  (dict "name" "HOME" "value" "/tmp")
+  (dict "name" "INPUT_DIR" "value" "/inputs")
+  (dict "name" "TOKEN_FILE" "value" "/var/run/secrets/openbao/token")
+  (dict "name" "LOGIN_ROLE" "value" $r.loginRole)
+  (dict "name" "LOCAL_AUDIENCE" "value" $r.audience)
+  (dict "name" "MESH_GROUPS" "value" (join " " $groups))
+  (dict "name" "INSTALLATION" "value" .Values.installation.name)
+  (dict "name" "TRUST_DOMAIN" "value" $p.trustDomain)
+  (dict "name" "ALLOWED_DOMAINS" "value" (join "," $p.allowedDomains))
+  (dict "name" "WORKLOAD_TTL" "value" $p.workloadTTL)
+  (dict "name" "WORKLOAD_MAX_TTL" "value" $p.workloadMaxTTL)
+  (dict "name" "ROOT_TTL" "value" $p.rootTTL)
+  (dict "name" "INT_TTL" "value" $p.intermediateTTL)
+  (dict "name" "KEY_TYPE" "value" $p.keyType)
+  (dict "name" "ROOT_KEY_BITS" "value" (toString $p.rootKeyBits))
+  (dict "name" "INT_KEY_BITS" "value" (toString $p.intermediateKeyBits))
+  (dict "name" "MEMBER_SA" "value" $m.serviceAccount)
+  (dict "name" "MEMBER_AUDIENCE" "value" $m.audience)
+  (dict "name" "MEMBER_ROLE" "value" $m.role)
+  (dict "name" "MEMBER_TOKEN_TTL" "value" $m.tokenTTL)
+  (dict "name" "CA_READER_SA" "value" .Values.caPublic.pkiReader)
+  (dict "name" "CA_READER_NS" "value" .Release.Namespace)
+}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $r.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mesh-reconcile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+data:
+  mesh-reconcile.sh: |
+    {{- .Files.Get "files/mesh-reconcile.sh" | nindent 4 }}
+{{- $ctx := dict "r" $r "env" $env "img" .Values.openbao.server.image "meshClients" .Values.meshClients.secretName "tlsSecret" .Values.tls.secretName }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mesh-reconcile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10                 # OpenBao may still be starting / self-initialising on the first sync
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: mesh-reconcile }
+      annotations:
+        checksum/config: {{ printf "%s%s" (.Files.Get "files/mesh-reconcile.sh") (toJson $env) | sha256sum | trunc 16 }}
+    spec:
+      {{- include "openbao-addon.reconcilePod" $ctx | nindent 6 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mesh-reconcile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $r.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: mesh-reconcile }
+        spec:
+          {{- include "openbao-addon.reconcilePod" $ctx | nindent 10 }}
+{{- end }}

@@ -5,8 +5,8 @@ as their istio-remote-secret-<this cluster>. No ServiceAccount token is minted, 
 
 The user is bound to ClusterRole platform-istio-reader, NOT to the istiod chart's istio-reader-clusterrole-istio-system:
 upstream's role also grants cluster-wide get/list/watch on secrets and configmaps, create/delete on MCS serviceexports
-and create on tokenreviews/subjectaccessreviews. With it every peer could read this cluster's cacerts (intermediate CA
-key) and every tenant Secret. What a peer istiod 1.32 (ambient multi-primary, multi-network) reads from a remote
+and create on tokenreviews/subjectaccessreviews. With it every peer could read every Secret of this cluster (the
+OpenChoreo agent identity, istiod's serving key, every tenant Secret). What a peer istiod 1.32 (ambient multi-primary, multi-network) reads from a remote
 cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
   pkg/kube/multicluster/cluster.go          namespaces, pods, services, nodes, endpointslices, gateways (Gateway API)
   serviceregistry/kube/controller           the same + endpoints, MCS serviceimports, CRDs (delayed informers)

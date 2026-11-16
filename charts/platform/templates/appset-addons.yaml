@@ -59,6 +59,8 @@ spec:
             - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}.yaml'
             - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}.yaml'
             - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}.yaml'
+            {{- /* mesh members (fleet file mesh.group -> label mesh.platform.koorikla.io/group): values/mesh-member.yaml */}}
+            - 'values/mesh-{{ "{{" }} if index .metadata.labels "mesh.platform.koorikla.io/group" {{ "}}" }}member{{ "{{" }} else {{ "}}" }}none{{ "{{" }} end {{ "}}" }}.yaml'
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
