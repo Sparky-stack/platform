@@ -239,13 +239,12 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 
 | Key | Properties | Used by |
 |---|---|---|
-| `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials) |
+| `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials, created by addon thunder bootstrap script `70-openchoreo-promotion-gate-app.yaml`; also read by addon thunder) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | gate workflow: its own GitHub App; per-run token for the component's repo only (branch, PR, commit status). Seeded from `GITHUB_GATE_APP_*` (docs/forking.md) |
 
 ## Limits
 
-- The gate fails closed until its Thunder client exists ([#11](https://github.com/koorikla/platform/issues/11)) and its
-  GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
+- The gate fails closed until its GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
 - Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the smoke probe is
   off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on.
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the

@@ -172,4 +172,16 @@ assert_eq "$(yq '.runNetworkPolicy.platformWorkflows.controlPlane.port' "$ROOT/a
   "$(yq '.promotionGate.controlPlanePort' "$ROOT/addons/openchoreo-platform/values.yaml")" \
   "platform-workflow egress port == promotionGate.controlPlanePort"
 
+# 11. The promotion gate's Thunder client (addon thunder bootstrap script 70) is the client the gate authenticates as,
+#     with the secret from the same store key (else the gate fails at the token step).
+ocp_values="$ROOT/addons/openchoreo-platform/values.yaml"
+thunder_values="$ROOT/addons/thunder/values.yaml"
+gate_client=$(yq '.thunderid.bootstrap.scripts["70-openchoreo-promotion-gate-app.yaml"]' "$thunder_values" \
+  | yq '.inboundAuthConfig[0].config.clientId')
+assert_eq "$gate_client" "$(yq '.promotionGate.clientID' "$ocp_values")" \
+  "thunder script 70 clientId == openchoreo-platform promotionGate.clientID"
+assert_eq "$(yq '.bootstrapSecret.promotionGate.remoteKey + "/" + .bootstrapSecret.promotionGate.property' "$thunder_values")" \
+  "$(yq '.promotionGate.clientSecret.key + "/" + .promotionGate.clientSecret.property' "$ocp_values")" \
+  "thunder bootstrapSecret.promotionGate == openchoreo-platform promotionGate.clientSecret"
+
 finish
