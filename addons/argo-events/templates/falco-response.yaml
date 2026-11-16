@@ -10,7 +10,8 @@ access). The steps that call endpoints outside the cluster API (rca, notify: tem
 {{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
 {{- $r := .Values.falco.response }}
 {{- $ns := .Values.openchoreo.orgNamespace }}
-{{- $run := printf "import runpy, sys; sys.argv = ['falco_response.py', '%s']; runpy.run_path('/scripts/falco_response.py', run_name='__main__')" }}
+{{- /* a plain format string: printf with no argument here rendered "%!s(MISSING)" into every step's source */}}
+{{- $run := "import runpy, sys; sys.argv = ['falco_response.py', '%s']; runpy.run_path('/scripts/falco_response.py', run_name='__main__')" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

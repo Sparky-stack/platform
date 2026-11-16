@@ -259,3 +259,20 @@ tests:
     documentSelector: { path: metadata.name, value: promotion-gate }
     asserts:
       - equal: { path: "spec.dependencies[0].eventSourceName", value: releasebindings }
+
+  - it: every falco-response step script passes its step name to falco_response.py (no printf MISSING)
+    template: templates/falco-response.yaml
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - matchRegex:
+          path: spec.templates[?(@.name == "enrich")].script.source
+          pattern: "sys.argv = \\['falco_response.py', 'enrich'\\]"
+      - matchRegex:
+          path: spec.templates[?(@.name == "record")].script.source
+          pattern: "sys.argv = \\['falco_response.py', 'record'\\]"
+      - matchRegex:
+          path: spec.templates[?(@.name == "call")].script.source
+          pattern: "sys.argv = \\['falco_response.py', '\\{\\{inputs.parameters.step\\}\\}'\\]"
+      - notMatchRegex:
+          path: spec.templates[?(@.name == "enrich")].script.source
+          pattern: "MISSING"
