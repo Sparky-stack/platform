@@ -352,9 +352,17 @@ token.
 The Sensor can create Workflows in `argo-events`, so admission pins what it may start: ValidatingAdmissionPolicy
 `argo-events-workflows-falco-response-only` (addon argo-events `templates/workflow-admission.yaml`) denies every
 Workflow created there unless its spec is exactly `workflowTemplateRef: {name: falco-response}` plus the `event` and
-`cluster` parameters. No inline templates, no other (Cluster)WorkflowTemplate, no `serviceAccountName`, `podSpecPatch` or other
-override, whoever the creator is. A VAP rather than Argo Workflows' `templateReferencing: Strict`: that controller
-setting is global, and the same controller runs OpenChoreo's rendered Workflows with inline templates.
+`cluster` parameters. No inline templates, no other (Cluster)WorkflowTemplate, no `serviceAccountName`, `executor`,
+`podSpecPatch` or other override, no `valueFrom` parameters, whoever the creator is. Updates keep the spec as created
+(only `shutdown`/`suspend` may change: `argo stop`, `terminate`, `suspend`, `resume`); the workflow controller writes
+only metadata and status. A VAP rather than Argo Workflows' `templateReferencing: Strict`: that controller setting is
+global, and the same controller runs OpenChoreo's rendered Workflows with inline templates.
+
+The `event` text is untrusted: it is the Falco alert, and its output fields (process command lines, file names) are
+controlled by whoever runs code in a tenant pod. The pin fixes the shape of the arguments, not their content, so
+`{{`/`{{=` inside the value is possible. The WorkflowTemplate passes it only as an environment variable (JSON-escaped,
+read by the Python steps as data). Never move `event` (or any field of it) into a step's `source`, `args`, `command`
+or another field Argo evaluates as a template or expression.
 
 Name resolution needs no new rule: `events.openchoreo.localhost` matches the existing `*.openchoreo.localhost` rewrite
 of `coredns-local` (workload: to the serverlb; mgmt: to the control-plane Gateway Service). Containment stays with Talon

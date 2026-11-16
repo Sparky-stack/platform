@@ -6,7 +6,9 @@
 #                              Application (either direction) or without tracking-id are denied; staging is out of scope
 #   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
 #                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
-#                              cluster scope, spec overrides and extra arguments are denied
+#                              cluster scope (even clusterScope: false), spec overrides (serviceAccountName, executor,
+#                              workflowMetadata, podSpecPatch), extra or non-string parameters, parameters[].valueFrom
+#                              and artifacts are denied
 #   addons/crossplane           ValidatingPolicies (offline): tenants are denied raw CNPG / RDS / Cloud SQL objects in
 #                              their namespaces while Crossplane and platform namespaces pass; production PostgreSQL XRs
 #                              need highAvailability + backup, other environments are not matched
@@ -86,7 +88,8 @@ cp_chart="$ROOT/addons/openchoreo-control-plane"
 helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
 helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
 # who:resources:expected  (staging bindings are out of scope and not counted)
-for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' argocd:smuggled:'pass: 0, fail: 5'; do
+for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'pass: 0, fail: 1, warn: 0, error: 0' \
+  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0'; do
   who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
   out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
     --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)
@@ -94,6 +97,8 @@ for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' ar
 done
 
 # Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
+# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule - spec kept, except
+# shutdown/suspend - is pinned by the addon's helm-unittest and was checked against a real API server in #77.)
 ae="$ROOT/addons/argo-events"
 wp_chart="$ROOT/addons/openchoreo-workflow-plane"
 [[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null
@@ -102,7 +107,7 @@ helm template wp "$wp_chart" --namespace openchoreo-workflow-plane \
 assert_nonempty "$(yq '.metadata.name' "$TMP/wf-crd.yaml")" "Argo Workflow CRD rendered from addon openchoreo-workflow-plane"
 helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true -s templates/workflow-admission.yaml \
   > "$TMP/ae-vap.yaml"
-for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 8'; do
+for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 13'; do
   res=${c%%:*}; want=${c#*:}
   out=$("$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
     --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" 2>&1 || true)

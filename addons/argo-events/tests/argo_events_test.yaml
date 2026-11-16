@@ -281,10 +281,26 @@ tests:
       - equal:
           path: spec.matchConstraints
           value:
-            resourceRules: [{ apiGroups: [argoproj.io], apiVersions: ["*"], operations: [CREATE], resources: [workflows] }]
+            resourceRules: [{ apiGroups: [argoproj.io], apiVersions: ["*"], operations: [CREATE, UPDATE], resources: [workflows] }]
             namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: argo-events } }
         documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
       - matchRegex: { path: "spec.validations[0].expression", pattern: "workflowTemplateRef == \\{'name': 'falco-response'\\}" }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - lengthEqual: { path: spec.validations, count: 4 }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      # the CREATE pin is not re-checked on UPDATE (controller writes to Workflows created before the policy pass) ...
+      - matchRegex: { path: "spec.validations[0].expression", pattern: "^request.operation != 'CREATE'\\s+\\|\\| " }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - matchRegex: { path: "spec.validations[1].expression", pattern: "^request.operation != 'CREATE'\\s+\\|\\| " }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - matchRegex: { path: "spec.validations[2].expression", pattern: "^request.operation != 'CREATE'\\s+\\|\\| " }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      # ... UPDATE keeps the spec instead; only shutdown/suspend (argo stop/terminate/suspend/resume) may change
+      - matchRegex: { path: "spec.validations[3].expression", pattern: "^request.operation != 'UPDATE'\\s+\\|\\| " }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - matchRegex: { path: "spec.validations[3].expression", pattern: "k in \\['shutdown', 'suspend'\\] \\|\\| \\(k in oldObject.spec && object.spec\\[k\\] == oldObject.spec\\[k\\]\\)" }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - matchRegex: { path: "spec.validations[3].expression", pattern: "oldObject.spec.all\\(k, k in \\['shutdown', 'suspend'\\] \\|\\| k in object.spec\\)" }
         documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
       - equal: { path: spec.validationActions, value: [Deny] }
         documentSelector: { path: kind, value: ValidatingAdmissionPolicyBinding }
