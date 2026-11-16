@@ -119,6 +119,13 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
       assert_match "$(yq -o=json -I=0 '.mesh.groups // []' "$inst_dir/installation.yaml")" "\"$g\"" "$(basename "$inst_dir")/$(basename "$cf"): mesh.group $g listed in mesh.groups"
     done
   done
+  # owner decision (docs/multicluster.md "Reader RBAC"): no installation opts peers into reading Secrets
+  assert_eq "$(yq '.reader.remoteCredentialsSecrets' "$ROOT/addons/istio-eastwest/values.yaml")" false "istio-eastwest reader.remoteCredentialsSecrets defaults to false"
+  secrets_optin=""
+  while IFS= read -r f; do
+    if [[ "$(yq '.reader.remoteCredentialsSecrets // false' "$f" 2>/dev/null)" != false ]]; then secrets_optin="$secrets_optin ${f#"$ROOT"/}"; fi
+  done < <(find "$ROOT/installations" -path '*/addons/istio-eastwest/*.yaml' -type f)
+  assert_eq "$secrets_optin" "" "no installation enables istio-eastwest reader.remoteCredentialsSecrets"
   # issuer discovery (OpenBao fetches the member's JWKS anonymously): delivered by the member's CRS from a static
   # ConfigMap (exists before the mesh reconcile), exactly one binding of the read-only discovery role, single owner
   oidc=$(yq 'select(.kind == "ConfigMap" and .metadata.name == "dev1-mesh-oidc") | .data["oidc-discovery.yaml"]' "$TMP/dev1-mesh.yaml")

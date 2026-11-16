@@ -355,7 +355,11 @@ below):
    `PILOT_ENABLE_XDS_IDENTITY_CHECK=false` (skips the credentials controller entirely) turns off XDS client
    authorisation. RBAC cannot scope a cluster-wide list by field selector.
 
-So the choice is per installation (`installations/<inst>/addons/istio-eastwest/values.yaml`):
+So the choice is per installation (`installations/<inst>/addons/istio-eastwest/values.yaml`). **Decision: off in every
+installation, `installations/local` included** (the opt-in is not approved): on istiod 1.32.0 east-west discovery stays
+non-functional (peers `timeout`, the `examples/eastwest` `client` logs `FAILED`) until istio/istio#62295 ships. The
+mesh CA path does not depend on it: istiod and ztunnel on every member get their certificates from istio-csr, signed by
+the group intermediate in OpenBao, and that is what the live run proves.
 - `reader.remoteCredentialsSecrets: false` (default, the B1 position): peers read no Secret; on istiod 1.32.0
   cross-cluster discovery does not work (`istioctl remote-clusters`: `timeout`).
 - `reader.remoteCredentialsSecrets: true` (**local/docker only**: the render fails for any other `cluster.provider`):
