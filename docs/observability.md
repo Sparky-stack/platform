@@ -43,13 +43,13 @@ workload cluster <name>                                      mgmt (k3d platform-
   `openchoreo-control-plane/cluster-gateway-ca` key `ca.crt` via ClusterSecretStore `mgmt-openchoreo`. No CA private key
   is copied anywhere.
 - **Ingestion from data planes** uses what 1.3.3 ships: OpenSearch's own TLS + basic auth for logs/events; plain HTTP
-  through the Gateway for OTLP and remote write (upstream: "TODO: Enable mTLS between collectors"). Locally that is
-  acceptable (docker network on one machine); before a real cloud installation put TLS on the Gateway's HTTP listener
-  and authenticate ingest (bearer token / mTLS at the Gateway, or an OTel collector with an auth extension in front).
+  through the Gateway for OTLP and remote write (upstream has no collector mTLS yet). Acceptable on one docker network;
+  a cloud installation needs TLS and authenticated ingest first ([#46](https://github.com/koorikla/platform/issues/46)).
 - **One OpenSearch** (single node) holds container logs (`container-logs-*`), k8s events (`k8s-events-*`) and traces
   (`otel-traces-*`); index setup Jobs and retention (7d locally) come from the modules. Prometheus keeps 7d.
-- Metric alerts: Prometheus rules (from OpenChoreo's `observability-alert-rule` trait, once added to the platform
-  component types) -> Alertmanager -> metrics-adapter -> observer; log alerts via OpenSearch alerting -> observer.
+- Metric alerts: Prometheus rules (from OpenChoreo's `observability-alert-rule` trait, not yet allowed in the platform
+  component types: [#48](https://github.com/koorikla/platform/issues/48)) -> Alertmanager -> metrics-adapter ->
+  observer; log alerts via OpenSearch alerting -> observer.
 
 ## Endpoints, ports, DNS (local)
 
@@ -102,9 +102,8 @@ Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://
 | `default` or `platform` / `falco-webhook` | `url`, `token` | falcosidekick escalation webhook; addon argo-events validates `token` |
 | `default` or `platform` / `falco-slack` (optional) | `webhook-url` | falcosidekick Slack output |
 
-Known gap: data planes use the OpenSearch admin credentials (upstream recipe). A dedicated ingest-only OpenSearch user
-(security plugin `internal_users` + role with `create_index`/`write` on `container-logs-*`, `k8s-events-*`) is the
-follow-up before a shared/cloud installation.
+Data planes use the OpenSearch admin credentials (upstream recipe); a dedicated ingest-only user is part of
+[#46](https://github.com/koorikla/platform/issues/46).
 
 ## Backstage and MCP
 
@@ -112,8 +111,8 @@ follow-up before a shared/cloud installation.
   openchoreo-api (the environment's ClusterDataPlane -> `observabilityPlaneRef` -> `observerURL`); nothing else to wire.
   The observer authorizes calls with the user's Thunder JWT (`security.oidc.*` = control plane's issuer/JWKS) and resolves
   UIDs against openchoreo-api with the client-credentials client `openchoreo-observer-resource-reader-client`
-  (role binding `observer-resource-reader-binding` ships in the control-plane chart; the Thunder app is upstream
-  `values-thunder.yaml` script 59 and must be added to addon `thunder` with the secret from `observer-client-secret`).
+  (role binding `observer-resource-reader-binding` ships in the control-plane chart; the Thunder app, upstream script
+  59, is in addon `thunder` with the secret from `observer-client-secret`).
 - MCP servers in 1.3.3 (no new exposure needed; both are behind existing routes, OAuth 2.0 protected-resource metadata
   pointing at Thunder):
   - **openchoreo-api MCP** `http://api.openchoreo.localhost:8080/mcp` — toolsets namespace, project, component,
@@ -218,8 +217,7 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
   listener (`falco.route.sectionName`) and an `https://` `url` in `falco-webhook`.
 - One `falco-webhook` token is shared by all clusters: whoever holds it (any node of any cluster) can post events that
   name another cluster. The response only records Events and asks the RCA agent; containment stays local with Talon.
-  Per-cluster tokens need one webhook endpoint per cluster in the EventSource (its `authSecret` takes one token) and
-  a per-cluster store key: follow-up.
+  Per-cluster tokens: [#47](https://github.com/koorikla/platform/issues/47).
 - argo-events renders WorkflowTemplate `falco-response` and Sensor `falco-escalation` only once the Argo Workflows
   CRDs exist (`workflowPlane: auto`, addon openchoreo-workflow-plane); until then escalations reach the EventBus and
   expire there (24h).
@@ -238,8 +236,10 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
   | `output_fields` | map: `k8s.ns.name`, `k8s.pod.name`, `container.name`, `container.image.repository`, `proc.name`, `proc.cmdline`, `fd.name` |
 
 - Delivery is best effort (sidekick retries are limited); the event also stays in OpenSearch (Falco stdout) and Talon has
-  already acted. The receiver must be idempotent on `uuid`. Cluster identity: `hostname` + namespace; add
-  `customfields: "cluster:<name>"` once the cluster name is plumbed into the falco addon values.
+  already acted. The receiver must be idempotent on `uuid`. Cluster identity: `hostname` + namespace (a `cluster`
+  field: [#47](https://github.com/koorikla/platform/issues/47)).
+- Open hardening of the response workflow: [#12](https://github.com/koorikla/platform/issues/12),
+  [#13](https://github.com/koorikla/platform/issues/13).
 
 ## Argo CD requirements (catalog)
 
@@ -264,10 +264,5 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
 Disk: OpenSearch 8 GiB, Prometheus 8 GiB, observer 128 MiB (local-path). OpenSearch needs `vm.max_map_count >= 262144`
 on the host kernel (k3d shares it; Arch/systemd default 1048576).
 
-## Known limitations and VERIFY
-
-`grep -rn VERIFY addons/{openchoreo-observability-plane,telemetry,obi,falco}` lists inferred values. Main ones:
-OTLP/HTTP and remote write through the kgateway HTTP listener from CAPD pods via the serverlb; the collector's
-`webhookevent` receiver name and the CloudEvents payload shape; OpenSearch TLS verification is off for data-plane
-shippers (demo certificate); Talon `dry_run` rule field and `kubernetes:networkpolicy` parameters; Falco's container
-plugin enriching k8s fields on k3s/CAPD containerd sockets; Backstage tabs with the observer URL on port 11080.
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-observability-plane addons/telemetry addons/obi addons/falco`):
+[#49](https://github.com/koorikla/platform/issues/49).

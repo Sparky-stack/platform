@@ -107,7 +107,7 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   Dockerfile that resolves outside the checkout (that pod also mounts the registry push credentials).
   `hack/tests/test_build_guards.sh` exercises all of it with real `git credential fill` (negative cases first).
   Residual: any build may use any repo under an allowed owner (a tenant can rebuild another tenant's repo at an old
-  commit); per-repo GitHub App installation tokens (`platform-github-app`) close that (deferred).
+  commit); per-repo GitHub App installation tokens close that ([#34](https://github.com/koorikla/platform/issues/34)).
 - Pod Security `restricted` for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
   capabilities dropped, read-only root where the tool allows) **except `build`**: rootless BuildKit runs as uid 1000,
   no privilege escalation, no added capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user
@@ -131,19 +131,20 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   run, deleted with it): git credentials, registry push credentials, registry CA (public), cosign key.
 - Signing: see "Signing" below.
 
-### Signing (deliberate deviation from keyless)
+### Signing
 
-AGENTS.md asks for keyless Sigstore signing. In-cluster builds use a **static platform key** instead: public Fulcio
+Deliberate deviation from keyless: [conventions.md](conventions.md#current-practice-only) asks for keyless Sigstore
+signing. In-cluster builds use a **static platform key** instead: public Fulcio
 issues certificates only for OIDC issuers it trusts, and a local k3d (or private EKS/Hetzner) workload identity is not
 one of them. The GitHub Actions path stays keyless.
 
 - Key pair `cosign-platform` (private key encrypted with `cosign.password`; only in the secret backend and the signing
   pod; `task secrets` generates it once). Cloud installations should use a KMS key reached through workload identity
-  instead of a key file (`COSIGN_KEY=awskms://…` with EKS Pod Identity / IRSA, GCP KMS with Workload Identity): no key
-  material in the secret backend at all. Tracked with the `gates` work.
+  instead of a key file, so no key material sits in the secret backend
+  ([#37](https://github.com/koorikla/platform/issues/37)).
 - **No public transparency log by default**: `buildWorkflows.signing.transparencyLog: false` makes the sign steps use a
-  cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest` until koorikla/ci
-  `sign-image.sh` grows a switch), so private repo names and digests never reach public Rekor and signing needs no
+  cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest`; koorikla/ci
+  `sign-image.sh` has no switch yet, [#37](https://github.com/koorikla/platform/issues/37)), so private repo names and digests never reach public Rekor and signing needs no
   egress to Sigstore. Set it `true` per installation (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to
   upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
@@ -151,7 +152,8 @@ one of them. The GitHub Actions path stays keyless.
 - Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
   only with `imageVerification.platformKey.publicKey` = this `cosign.pub` (tlog ignored, `rekor: false`); without it
   the registry is not a trusted source (production denies its images). Set per installation; local leaves it empty
-  (fresh key per bootstrap, and workload clusters cannot reach Harbor's signatures yet): docs/supply-chain.md.
+  (fresh key per bootstrap, and workload clusters cannot reach Harbor's signatures yet,
+  [#15](https://github.com/koorikla/platform/issues/15)): [supply-chain.md](supply-chain.md#wiring-the-key).
 
 ## Registry: Harbor
 
@@ -213,8 +215,9 @@ on mgmt for a handful of objects).
 | robots | `robot$builder` (push/pull `apps`, pull the rest), `robot$nodes` (pull all); secrets set from the secret backend |
 | system | CVE allowlist empty |
 
-Content trust (`enable_content_trust_cosign` on `apps`) is **off** until verified that Harbor 2.15 counts cosign v3
-Sigstore-bundle referrers as signatures; enabling it blocks every pull without one (VERIFY). Every chart secret
+Content trust (`enable_content_trust_cosign` on `apps`) is **off** until it is confirmed that Harbor 2.15 counts cosign
+v3 Sigstore-bundle referrers as signatures; enabling it blocks every pull without one
+([#39](https://github.com/koorikla/platform/issues/39)). Every chart secret
 (core, jobservice, registry, CSRF, secretKey, htpasswd, DB password, admin password) comes from key `harbor`: the
 chart's own generated values re-roll on every Argo CD render (`helm template` has no `lookup`).
 
@@ -235,12 +238,10 @@ configs:
 ```
 
 containerd tries Harbor first and falls back to the upstream registry, so a Harbor outage slows pulls instead of
-breaking them. Bootstrap data is rendered once per Machine: changes reach new machines. Applying this branch changes
-the ClusterClass patches (host alias, CA file, patch order), so CAPI **rolls every CAPD machine** of dev1 and prod1.
-
-The same change fixes a bug on main: `cni-flannel` replaced the control plane's whole `files` list after
-`registryAuth` appended `registries.yaml`, so flannel clusters (prod1) booted their control plane without GHCR auth
-(seen live: `KThreesControlPlane prod1` has only the CNI drop-in). `cni-flannel` now runs before every files patch.
+breaking them. Bootstrap data is rendered once per Machine: changes reach new machines only, and a change to the
+ClusterClass patches rolls every machine of the class ([providers.md](providers.md#template-changes-roll-clusters)).
+Patch order matters: `cni-flannel` replaces the control plane's whole `files` list, so it runs before every patch that
+appends files (`registries.yaml`, the registry CA).
 
 ### Images and architectures
 
@@ -249,7 +250,8 @@ list). This is a **deliberate, expiring exception** to the multi-arch rule: the 
 `harbor-db`, `harbor-jobservice`, `harbor-portal`, `harbor-registryctl`, `registry-photon`, `trivy-adapter-photon`,
 `valkey-photon`, tag prefix `v2.15.`) are listed in `hack/image-audit.sh` `ARCH_EXCEPTIONS` with an expiry
 (2027-03-31), so `task images:audit` stays green and reports them as `EXCEPTION`. A Harbor bump or the expiry date
-drops the exception and the audit fails again; remove the list at the Harbor 2.16 bump (arm64 tags).
+drops the exception and the audit fails again; the list goes away with Harbor 2.16
+([#27](https://github.com/koorikla/platform/issues/27)).
 `hack/tests/test_image_audit.sh` pins the list to exactly those images. On arm64 hosts use `registry.type: external`.
 Everything else added here (BuildKit, toolbox, Argo Workflows, cluster-agent, toolchains, Python, PostgreSQL) is
 multi-arch and pinned by digest.
@@ -274,7 +276,7 @@ Argo CD's read-only `platform-github` is never reused).
 |---|---|---|
 | 9443 | `bootstrap/k3d-mgmt.yaml` | Harbor (Gateway `harbor`, TLS); CAPD nodes use the same port on the serverlb |
 
-Live cluster: `k3d cluster edit platform-mgmt --port-add "127.0.0.1:9443:9443@loadbalancer"`. Names: `harbor.openchoreo.localhost`
+Names: `harbor.openchoreo.localhost`
 (browser: loopback; mgmt pods: coredns-local; workload pods: coredns-local generic rule → serverlb; CAPD nodes:
 `/etc/hosts`). Trust the CA in a browser/docker: `kubectl -n harbor get secret harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' | base64 -d`.
 
@@ -284,7 +286,7 @@ Live cluster: `k3d cluster edit platform-mgmt --port-add "127.0.0.1:9443:9443@lo
 |---|---|---|
 | Harbor core / jobservice / registry+ctl / portal | 50m / 20m / 30m / 10m | 128Mi / 64Mi / 96Mi / 32Mi |
 | Harbor PostgreSQL / Valkey / Trivy | 25m / 10m / 50m | 128Mi / 32Mi / 192Mi |
-| Harbor Gateway proxy (kgateway Envoy) | kgateway default | ~64Mi (VERIFY) |
+| Harbor Gateway proxy (kgateway Envoy) | kgateway default | ~64Mi (estimate) |
 | Argo Workflows controller / cluster-agent | 25m / 10m | 64Mi / 64Mi |
 | **Steady state total** | **~240m** | **~0.85 GiB** (budget: 1.5 GiB) |
 | Per build (peak, sequential steps) | 500m (BuildKit) | 768Mi BuildKit; checks 512Mi; scans 384Mi |
@@ -292,39 +294,14 @@ Live cluster: `k3d cluster edit platform-mgmt --port-add "127.0.0.1:9443:9443@lo
 Storage (local-path): Harbor registry 20Gi (not enforced by local-path), DB 2Gi, Trivy 2Gi, job logs 1Gi, Redis 1Gi;
 per run a 5Gi workspace PVC (deleted with the workflow).
 
-## Deferred hardening (tracked)
+## Open work
 
-Accepted for the local installation, required before builds run untrusted code on a shared cloud mgmt cluster:
-
-- **Dedicated build node or cluster.** `build` runs rootless BuildKit with seccomp/AppArmor `Unconfined` on the node
-  that also holds the CA keys, `platform-secrets` and Argo CD. Cloud installations should move the workflow plane to a
-  tainted build node pool or its own cluster (OpenChoreo supports a remote `ClusterWorkflowPlane`), and try a Localhost
-  seccomp profile allowing only what rootlesskit needs instead of `Unconfined`.
-- **Scoped cluster-agent RBAC.** The upstream workflow-plane agent ClusterRole is effectively cluster-admin (`*` on
-  secrets, pods, namespaces, ClusterSecretStores, roles/rolebindings incl. bind/escalate). Target:
-  `clusterAgent.rbac.create: false` + a platform role limited to `workflows-*`, argoproj.io and externalsecrets, no
-  ClusterSecretStores, no RBAC escalation. Needs the agent's exact API usage per OpenChoreo release first.
-- **Per-repository git credentials.** `platform-github-build` is one PAT for every allowed repository: a build may clone
-  or rebuild another tenant's repo under the same owner. Next step: `platform-github-app` installation tokens minted
-  per run by ESO's `GithubAccessToken` generator, scoped to the Component's repository.
-- **Per-project Harbor robots.** One robot `builder` pushes to all of `apps`; per-project robots (`apps/<project>/*`)
-  would contain a compromised build.
-- **Admission.** The Kyverno `ImageValidatingPolicy` for `<registry>/apps/*` exists (platform `cosign.pub` as an
-  installation value, docs/supply-chain.md); still open: delivering `cosign.pub` without copying the private key,
-  registry DNS + Harbor CA + pull credentials for Kyverno on workload clusters, and a rule restricting images in
-  `workflows-*` to digest-pinned refs.
-- **GitOps push to the branch head.** The hand-off commits straight to the built branch (development autoDeploy); with
-  the GitHub App it should honour branch protection (PR or a ruleset bypass for the App only).
-
-## Known limitations and VERIFY
-
-`grep -rn VERIFY addons/harbor addons/openchoreo-workflow-plane addons/openchoreo-platform/templates charts/cluster/templates/capi-registries.yaml`.
-
-- OpenChoreo CEL renders object/array parameters (`checks.env`, `buildArgs`) into Argo parameter values as JSON (Argo's
-  `AnyString`); upstream relies on the same for `buildArgs`.
-- Harbor GHCR replication with `koorikla/**`: GHCR has no catalog API; the adapter lists packages via the GitHub API.
-- kgateway TrafficPolicy timeouts on the Harbor route (large layers); Gateway Service name `harbor`.
-- Harbor internal PostgreSQL password via `extraEnvVars` override + `database.external.existingSecret` for core.
-- The tlog-free signing config is injected with a cosign shim (koorikla/ci `sign-image.sh` has no switch yet).
-- BuildKit pulls base images directly from upstream (no Harbor mirror for build pulls yet).
-- Builds on the dev host rely on its QEMU binfmt handlers for foreign-arch `RUN` steps.
+Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build nodes
+([#32](https://github.com/koorikla/platform/issues/32)), scoped workflow-plane agent RBAC
+([#33](https://github.com/koorikla/platform/issues/33)), per-repository git credentials and branch protection for the
+hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
+([#35](https://github.com/koorikla/platform/issues/35)), admission for Harbor-built images
+([#15](https://github.com/koorikla/platform/issues/15), [#36](https://github.com/koorikla/platform/issues/36)), a
+dedicated store for build runs ([#29](https://github.com/koorikla/platform/issues/29)). BuildKit pulls base images
+directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
+[#40](https://github.com/koorikla/platform/issues/40).
