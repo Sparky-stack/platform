@@ -172,4 +172,27 @@ assert_eq "$(yq '.runNetworkPolicy.platformWorkflows.controlPlane.port' "$ROOT/a
   "$(yq '.promotionGate.controlPlanePort' "$ROOT/addons/openchoreo-platform/values.yaml")" \
   "platform-workflow egress port == promotionGate.controlPlanePort"
 
+# 11. The promotion gate's Thunder client (addon thunder bootstrap script 70) is the client the gate authenticates as,
+#     with the secret from the same store key (else the gate fails at the token step).
+ocp_values="$ROOT/addons/openchoreo-platform/values.yaml"
+thunder_values="$ROOT/addons/thunder/values.yaml"
+gate_client=$(yq '.thunderid.bootstrap.scripts["70-openchoreo-promotion-gate-app.yaml"]' "$thunder_values" \
+  | yq '.inboundAuthConfig[0].config.clientId')
+assert_eq "$gate_client" "$(yq '.promotionGate.clientID' "$ocp_values")" \
+  "thunder script 70 clientId == openchoreo-platform promotionGate.clientID"
+assert_eq "$(yq '.bootstrapSecret.promotionGate.remoteKey + "/" + .bootstrapSecret.promotionGate.property' "$thunder_values")" \
+  "$(yq '.promotionGate.clientSecret.key + "/" + .promotionGate.clientSecret.property' "$ocp_values")" \
+  "thunder bootstrapSecret.promotionGate == openchoreo-platform promotionGate.clientSecret"
+
+# 12. Gated Components (charts/tenant authz.yaml) are protected by the component:delete role addon openchoreo-platform
+#     defines, for the same restricted groups (defaults; installation.yaml `promotion` overrides both).
+tenant_values="$ROOT/charts/tenant/values.yaml"
+deleter=$(yq '.promotion.componentDeleterRole' "$tenant_values")
+helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default -s templates/promotion-authz.yaml \
+  > "$TMP/promotion-authz.yaml"
+assert_eq "$(D="$deleter" yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == strenv(D)) | .spec.actions | join(",")' \
+  "$TMP/promotion-authz.yaml")" "component:delete" "charts/tenant componentDeleterRole is the addon's component:delete ClusterAuthzRole"
+assert_eq "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$tenant_values")" \
+  "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$ocp_values")" "promotion.restrictedGroups: charts/tenant == openchoreo-platform"
+
 finish

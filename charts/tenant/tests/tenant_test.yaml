@@ -3,6 +3,7 @@ templates:
   - templates/appproject.yaml
   - templates/project.yaml
   - templates/applications.yaml
+  - templates/authz.yaml
 set:
   project: demo
   description: Demo project
@@ -29,7 +30,7 @@ tests:
       - failedTemplate: { errorMessage: 'project "Demo_1" must be a DNS-1123 label' }
 
   - it: rejects duplicate app names (first template rendering the app list fails)
-    template: templates/appproject.yaml
+    template: templates/authz.yaml
     set:
       apps:
         - { name: a, repoURL: https://x/a.git }
@@ -38,7 +39,7 @@ tests:
       - failedTemplate: { errorMessage: 'apps: duplicate name "a"' }
 
   - it: rejects app names ending in -<gated environment> (they would pass as the gated Application in the VAP)
-    template: templates/appproject.yaml
+    template: templates/authz.yaml
     set:
       apps:
         - { name: hotfix-production, repoURL: https://x/a.git }
@@ -219,3 +220,50 @@ tests:
                 - repos: [{ url: "https://github.com/koorikla/*" }]
                   gpg: { mode: head, keys: [B5690EEEBB952194] }
       - notExists: { path: spec.signatureKeys }
+
+  - it: restricted groups may not delete gated Components (deny AuthzRoleBinding per group, one mapping per gated app)
+    template: templates/authz.yaml
+    set:
+      promotion.restrictedGroups: [developers, Contractors_EU]
+    asserts:
+      - hasDocuments: { count: 2 }
+      - isKind: { of: AuthzRoleBinding }
+      - equal: { path: metadata.namespace, value: default }
+      - equal: { path: spec.effect, value: deny }
+      - equal: { path: metadata.name, value: demo-promotion-deny-component-delete-developers }
+        documentIndex: 0
+      - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
+        documentIndex: 0
+      - equal: { path: metadata.name, value: demo-promotion-deny-component-delete-contractors-eu }
+        documentIndex: 1
+      - equal:
+          path: spec.roleMappings
+          value:
+            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: demo, component: hello-world } }
+            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: demo, component: other } }
+
+  - it: an app that opts out of promotion gates keeps component:delete
+    template: templates/authz.yaml
+    set:
+      apps:
+        - { name: hello-world, repoURL: https://github.com/koorikla/hello-world.git }
+        - { name: other, repoURL: https://github.com/koorikla/other.git, promotionGates: false }
+    asserts:
+      - equal:
+          path: spec.roleMappings
+          value:
+            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: demo, component: hello-world } }
+
+  - it: no component:delete deny without gated apps
+    template: templates/authz.yaml
+    set:
+      promotion.gatedEnvironments: []
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no component:delete deny without restricted groups
+    template: templates/authz.yaml
+    set:
+      promotion.restrictedGroups: []
+    asserts:
+      - hasDocuments: { count: 0 }
