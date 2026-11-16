@@ -30,6 +30,13 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
     `workflowRef` (custom manager in `renovate.json`, tag `v1` of koorikla/ci) and the app repos' `uses:` pins
     (github-actions digest pinning) to the same commit;
+  - **moving the pin**: running production images were signed at the previous commit, so a bare bump of
+    `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
+    (every attestor lists one identity per commit) until each allowed repository's production image is rebuilt at the
+    new one: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
+    their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering
+    and `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
+    ([#128](https://github.com/koorikla/platform/issues/128));
   - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
     `githubWorkflowRef` (from `github.refs`) and `githubWorkflowTrigger` (from `github.triggers`, default `push`).
     The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
