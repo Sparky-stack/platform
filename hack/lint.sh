@@ -39,4 +39,9 @@ while IFS= read -r -d '' sf; do
   fi
 done < <(find bootstrap hack .devcontainer -type f -name '*.sh' -print0)
 
+echo "==> Checking Markdown links, paths and commands"
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
+py hack/check-docs.py
+
 echo "lint OK"
