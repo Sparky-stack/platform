@@ -86,8 +86,8 @@ def architecture() -> Diagram:
     d.box(A, Y[2], KW, BH, "platform", "OC data plane", ["cluster-agent", "(dials out)"],
           name="OpenChoreo data plane")
     d.box(B, Y[2], KW, BH, "network", "kgateway", ["Gateway API", "north-south"])
-    d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cell namespaces",
-                                                         "opt-in CNPG·Kafka·KEDA"])
+    d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cells · opt-in",
+                                                         "Crossplane·CNPG·Kafka·KEDA"])
     d.box(B, Y[3], KW, BH, "network", "Istio ambient", ["ztunnel L4 mTLS", "waypoints: opt-in"])
     d.box(A, Y[4], KW, BH, "bus", "telemetry", ["OTel · Fluent Bit ·", "Prometheus agent"])
     d.box(B, Y[4], KW, BH, "network", "Cilium / flannel", ["CNI fixed at birth", "eBPF, no kube-proxy"])
