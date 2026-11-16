@@ -357,6 +357,15 @@ The `ApplicationSet example-eastwest` (charts/platform `templates/appset-example
   waypoint) admits only `cluster.local/ns/eastwest-demo/sa/client` on port 8080. `client` succeeds and `stranger` is
   reset, which proves the identity crossed the clusters.
 - Images are multi-arch and pinned by digest. Requests are 5m CPU / 8Mi each, limit 32Mi.
+- AppProject `examples` (charts/platform `templates/projects.yaml`) admits only the catalog's example namespaces and
+  is rendered whether or not an example is enabled, in sync wave `-1`. The generated Applications carry the resources
+  finalizer, which Argo CD can only run while their project exists (the live boot left them stuck with
+  `DeletionError: project not found` when the project went first). Turning an example off prunes just its
+  ApplicationSet, foreground, so its Applications and their resources are deleted under an unchanged project; if the
+  project is ever removed, Argo CD prunes in reverse wave order and waits for the ApplicationSets to be gone first
+  (`hack/tests/test_appprojects.sh`).
+- On istiod 1.32.0 the cross-cluster call needs the installation's `reader.remoteCredentialsSecrets` decision
+  ("Reader RBAC"); with the default the peer is not served and `client` logs `FAILED`.
 
 The example is a platform smoke test delivered like an addon (Argo CD push). Tenant apps still reach clusters through
 OpenChoreo (invariant 3). Making an OpenChoreo component cross-cluster takes the same two things: its namespace is

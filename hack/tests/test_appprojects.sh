@@ -67,4 +67,32 @@ assert_eq "$ex_wild" "" "examples AppProject has no wildcard destination namespa
 ex_proj=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "example-eastwest") | .spec.template.spec.project' "$TMP/platform.yaml")
 assert_eq "$ex_proj" "examples" "example ApplicationSets use AppProject examples, not platform"
 
+# Deletion order (live boot: deleting the examples AppProject before its Applications left them stuck with
+# "DeletionError: project not found"). Generated Applications carry the resources finalizer, which needs their project.
+# Argo CD (gitops-engine sync_context.go) creates in wave order and prunes in REVERSE wave order, waiting for each
+# pruned object (foreground: an ApplicationSet until its Applications are gone) before the next wave. So:
+# 1. every AppProject an ApplicationSet uses is rendered by this chart, in a lower wave than every ApplicationSet;
+waves() { yq -N "select(.kind == \"$1\") | (.metadata.annotations[\"argocd.argoproj.io/sync-wave\"] // \"0\")" "$2" | sort -n; }
+proj_max=$(waves AppProject "$TMP/platform.yaml" | tail -1); appset_min=$(waves ApplicationSet "$TMP/platform.yaml" | head -1)
+assert_eq "$([[ $proj_max -lt $appset_min ]] && echo ok || echo "projects $proj_max >= appsets $appset_min")" ok \
+  "every AppProject syncs before (and is pruned after) every ApplicationSet"
+for p in $(yq -N 'select(.kind == "ApplicationSet") | .spec.template.spec.project' "$TMP/platform.yaml" | sort -u); do
+  [[ "$p" == *"{{"* ]] && continue
+  assert_eq "$(yq "select(.kind == \"AppProject\" and .metadata.name == \"$p\") | .metadata.name" "$TMP/platform.yaml")" "$p" \
+    "AppProject $p used by an ApplicationSet is rendered by charts/platform"
+done
+# 2. disabling an example removes only its ApplicationSet: the examples AppProject is unchanged (never deleted or
+#    narrowed under Applications that are still being deleted).
+helm template platform "$ROOT/charts/platform" --namespace argocd --values "$ROOT/installations/local/installation.yaml" \
+  --set examples.eastwest.enabled=false > "$TMP/platform-noex.yaml"
+proj() { yq -o=json -I=0 'select(.kind == "AppProject" and .metadata.name == "examples")' "$1"; }
+assert_nonempty "$(proj "$TMP/platform-noex.yaml")" "examples disabled: AppProject examples still rendered"
+assert_eq "$(proj "$TMP/platform-noex.yaml")" "$(proj "$TMP/platform.yaml")" "examples disabled: AppProject examples identical (not narrowed)"
+assert_eq "$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "example-eastwest") | .metadata.name' "$TMP/platform-noex.yaml")" "" \
+  "examples disabled: its ApplicationSet is pruned"
+# negative: the check catches a project in the same wave as the ApplicationSets
+yq 'del(select(.kind == "AppProject").metadata.annotations)' "$TMP/platform.yaml" > "$TMP/platform-nowave.yaml"
+assert_eq "$([[ $(waves AppProject "$TMP/platform-nowave.yaml" | tail -1) -lt $appset_min ]] && echo ok || echo caught)" caught \
+  "negative: the wave check catches an AppProject sharing wave 0 with the ApplicationSets"
+
 finish

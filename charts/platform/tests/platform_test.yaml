@@ -170,14 +170,30 @@ tests:
           path: spec.template.spec.source.targetRevision
           value: '{{ $r := index .metadata.annotations "platform.koorikla.io/addons-revision" }}{{ if and $r (ne $r "HEAD") }}{{ $r }}{{ else }}main{{ end }}'
 
-  - it: renders no example ApplicationSet and no examples AppProject when disabled
+  - it: "disabled example: no ApplicationSet, but the examples AppProject stays (its Applications must delete first)"
     set:
       examples.eastwest.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
         template: appset-examples.yaml
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 3 }
         template: projects.yaml
+      - equal: { path: spec.destinations, value: [{ server: "*", namespace: eastwest-demo }] }
+        template: projects.yaml
+        documentSelector: { path: metadata.name, value: examples }
+
+  - it: "AppProjects are created one wave before, and pruned after, the ApplicationSets that use them"
+    template: projects.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+
+  - it: "no examples in the catalog: the examples AppProject admits no destination"
+    template: projects.yaml
+    documentSelector: { path: metadata.name, value: examples }
+    set:
+      examples: null
+    asserts:
+      - equal: { path: spec.destinations, value: [] }
 
   - it: requires a label selector for an enabled example
     template: appset-examples.yaml
