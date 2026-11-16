@@ -1,0 +1,90 @@
+{{- /* Tenants get PostgreSQL only through the XR. Kyverno ValidatingPolicies (CEL); autogen also emits them as native
+ValidatingAdmissionPolicies, so the API server enforces them even while Kyverno is unavailable. CRDs: addon kyverno. */ -}}
+{{- if .Values.policy.enabled }}
+{{- $pol := .Values.policy }}
+{{- $saPrefixes := list }}
+{{- range $pol.exemptServiceAccountNamespaces }}{{ $saPrefixes = append $saPrefixes (printf "system:serviceaccount:%s:" .) }}{{ end }}
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: postgresql-only-through-the-platform-api
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+    policies.kyverno.io/title: PostgreSQL only through platform.koorikla.io PostgreSQL
+    policies.kyverno.io/description: >-
+      Raw database objects (CloudNativePG, RDS / EC2 / KMS, Cloud SQL and Flexible Server managed resources) may only be
+      created or changed by the platform (Crossplane composing a PostgreSQL XR, providers, the CNPG operator, kube-system
+      controllers) or in the platform namespaces {{ join ", " $pol.exemptNamespaces }}. Everyone else asks for a
+      platform.koorikla.io/v1alpha1 PostgreSQL.
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  autogen:
+    validatingAdmissionPolicy:
+      enabled: true
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [clusters, poolers, databases, backups, scheduledbackups, publications, subscriptions]
+      - apiGroups: [barmancloud.cnpg.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [objectstores]
+      - apiGroups:
+          - rds.aws.m.upbound.io
+          - ec2.aws.m.upbound.io
+          - kms.aws.m.upbound.io
+          - sql.gcp.m.upbound.io
+          - dbforpostgresql.azure.m.upbound.io
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: ["*"]
+  matchConditions:
+    - name: outside-platform-namespaces
+      expression: '!(request.namespace in {{ $pol.exemptNamespaces | toJson }})'
+    - name: not-a-platform-controller
+      expression: '!{{ $saPrefixes | toJson }}.exists(p, request.userInfo.username.startsWith(p))'
+  validations:
+    - expression: "false"
+      messageExpression: >-
+        '"' + object.kind + '" is not available to tenants here: create a platform.koorikla.io/v1alpha1 PostgreSQL
+        (docs/data-services.md "PostgreSQL as a service"); the platform picks the backend for this cluster.'
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: postgresql-production-ha-backup
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+    policies.kyverno.io/title: Production PostgreSQL is highly available and backed up
+    policies.kyverno.io/description: >-
+      PostgreSQL XRs in OpenChoreo cells of {{ join ", " $pol.production.environments }} set highAvailability: true and
+      backup.enabled: true. Action {{ $pol.production.action }}.
+spec:
+  validationActions: [{{ $pol.production.action }}]
+  failurePolicy: {{ ternary "Fail" "Ignore" (eq $pol.production.action "Deny") }}
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [platform.koorikla.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [postgresqls]
+    namespaceSelector:
+      matchExpressions:
+        - key: openchoreo.dev/environment
+          operator: In
+          values: {{ $pol.production.environments | toJson }}
+  validations:
+    - expression: >-
+        has(object.spec.highAvailability) && object.spec.highAvailability == true &&
+        has(object.spec.backup) && has(object.spec.backup.enabled) && object.spec.backup.enabled == true
+      message: production PostgreSQL needs spec.highAvailability true and spec.backup.enabled true
+{{- end }}

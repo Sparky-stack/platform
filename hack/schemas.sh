@@ -84,6 +84,45 @@ CILIUM_VER=v$(yq '.dependencies[] | select(.name == "cilium") | .version' addons
 fetch_crd "cilium-${CILIUM_VER}-ccnp" "https://raw.githubusercontent.com/cilium/cilium/${CILIUM_VER}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml"
 fetch_crd "prometheus-servicemonitor" "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
 
+# Crossplane v2 installs its CRDs from its init container (not in the chart), the upjet providers bring theirs with the
+# package: fetch the ones addon crossplane and its PostgreSQL Compositions use, at the versions pinned there.
+xp_tag() {   # xp_tag <yq path to a package ref in addons/crossplane/values.yaml> -> its tag (v1.2.3)
+  local ref
+  ref=$(yq -r "$1" addons/crossplane/values.yaml | tr -d '\r')
+  ref=${ref%@*}
+  echo "${ref##*:}"
+}
+if [[ -f addons/crossplane/values.yaml ]]; then
+  XP_VER=$(yq -r '.crossplane.image.tag' addons/crossplane/values.yaml | tr -d '\r')
+  XP_VER=${XP_VER%@*}
+  for crd in apiextensions.crossplane.io_compositions apiextensions.crossplane.io_compositeresourcedefinitions \
+    apiextensions.crossplane.io_managedresourceactivationpolicies pkg.crossplane.io_functions pkg.crossplane.io_providers \
+    pkg.crossplane.io_deploymentruntimeconfigs; do
+    fetch_crd "crossplane-${XP_VER}-${crd}" "https://raw.githubusercontent.com/crossplane/crossplane/${XP_VER}/cluster/crds/${crd}.yaml"
+  done
+  # <repo>|<tag>|<crd file>...  (only what the Compositions compose + the family's ClusterProviderConfig)
+  for spec in \
+    "provider-upjet-aws|$(xp_tag '.packages.providers["aws-rds"]["provider-aws-rds"]')|aws.m.upbound.io_clusterproviderconfigs rds.aws.m.upbound.io_instances rds.aws.m.upbound.io_clusters rds.aws.m.upbound.io_clusterinstances rds.aws.m.upbound.io_subnetgroups ec2.aws.m.upbound.io_securitygroups ec2.aws.m.upbound.io_securitygroupingressrules kms.aws.m.upbound.io_keys" \
+    "provider-upjet-gcp|$(xp_tag '.packages.providers["gcp-cloudsql"]["provider-gcp-sql"]')|gcp.m.upbound.io_clusterproviderconfigs sql.gcp.m.upbound.io_databaseinstances sql.gcp.m.upbound.io_databases sql.gcp.m.upbound.io_users" \
+    "provider-upjet-azure|$(xp_tag '.packages.providers["azure-flexible"]["provider-azure-dbforpostgresql"]')|azure.m.upbound.io_clusterproviderconfigs dbforpostgresql.azure.m.upbound.io_flexibleservers dbforpostgresql.azure.m.upbound.io_flexibleserverdatabases"; do
+    IFS='|' read -r repo tag files <<<"$spec"
+    for crd in $files; do
+      fetch_crd "${repo}-${tag}-${crd}" "https://raw.githubusercontent.com/crossplane-contrib/${repo}/${tag}/package/crds/${crd}.yaml"
+    done
+  done
+  # The CRD Crossplane derives from the PostgreSQL XRD (Crossplane adds spec.crossplane and status.conditions), so XRs
+  # (docs examples, hack/tests/crossplane) validate like any custom resource.
+  helm template schema-extract addons/crossplane -s templates/xrd-postgresql.yaml 2>/dev/null | yq '{
+    "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition", "metadata": {"name": .metadata.name},
+    "spec": {"group": .spec.group, "names": .spec.names, "scope": .spec.scope, "versions": [.spec.versions[] | {
+      "name": .name, "served": true, "storage": true, "schema": {"openAPIV3Schema": {"type": "object", "properties": {
+        "apiVersion": {"type": "string"}, "kind": {"type": "string"}, "metadata": {"type": "object"},
+        "spec": (.schema.openAPIV3Schema.properties.spec * {"properties": {"crossplane": {"type": "object",
+          "x-kubernetes-preserve-unknown-fields": true}}}),
+        "status": (.schema.openAPIV3Schema.properties.status * {"properties": {"conditions": {"type": "array",
+          "items": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}}}})}}}}]}}' > "$TMP/crds-xrd-postgresql.yaml" 2>/dev/null || true
+fi
+
 crd_files=()
 for f in "$TMP"/*.yaml "$CACHE_DIR"/*.yaml; do
   [[ -s "$f" ]] && crd_files+=("$f")

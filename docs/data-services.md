@@ -9,8 +9,9 @@ Catalog and labels: [conventions.md](conventions.md); addon mechanics: [architec
 | `cloudnative-pg` | cnpg-system | `cloudnative-pg` 0.29.1 (operator 1.30.1) + optional `plugin-barman-cloud` 0.9.0 (v0.16.0) | PostgreSQL clusters (`Cluster`, `Pooler`, `ScheduledBackup`, `Database`); backups to object storage through the Barman Cloud plugin |
 | `strimzi` | strimzi | `strimzi-kafka-operator` 1.3.1 | Apache Kafka in KRaft mode (`Kafka`, `KafkaNodePool`, `KafkaTopic`, `KafkaUser`, Connect, MirrorMaker 2, Bridge); no ZooKeeper |
 | `keda` | keda | `keda` 2.21.0 | event-driven autoscaling (`ScaledObject`, `ScaledJob`, `TriggerAuthentication`), scale to zero, external metrics API |
+| `crossplane` | crossplane-system | `crossplane` 2.4.3 (Crossplane v2) | PostgreSQL as a service: one `PostgreSQL` API, fulfilled per cluster by CloudNativePG, RDS / Aurora, Cloud SQL or Azure Flexible Server ([below](#postgresql-as-a-service)) |
 
-All three: wrapper charts in `addons/<addon>/`, workload role only, CRDs from the chart applied server-side by Argo CD
+The three operators: wrapper charts in `addons/<addon>/`, workload role only, CRDs from the chart applied server-side by Argo CD
 (the Kafka and CNPG `Cluster` CRDs exceed the client-side apply annotation limit), images multi-arch (amd64 + arm64)
 pinned by digest, Pod Security `restricted` enforced on the operator namespace, operator metrics scraped by the
 Prometheus agent of addon `telemetry`.
@@ -135,6 +136,144 @@ cluster, so the password is generated on the data plane and never reaches the co
 same way (renders `KafkaNodePool` + `Kafka`, outputs `<name>-kafka-bootstrap.<ns>.svc:9092`; `KafkaUser` Secrets for
 authenticated listeners). The examples below are what such types render; on a dev cluster you can also apply them
 directly to try the operators.
+
+## PostgreSQL as a service
+
+One developer-facing API, `platform.koorikla.io/v1alpha1` `PostgreSQL` (a namespaced Crossplane v2 composite resource,
+no claims), fulfilled by whatever the cluster has: **CloudNativePG** in-cluster where there is no managed database
+(local docker, Hetzner, Talos on vSphere), **Amazon RDS / Aurora** on AWS, **Cloud SQL** on GCP, **Azure Database for
+PostgreSQL Flexible Server** on Azure. Developers ask for "a Postgres"; the cluster's provider decides how. Design and
+owner decisions: [#91](https://github.com/koorikla/platform/issues/91).
+
+### Developer view
+
+```yaml
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: orders-db
+  namespace: demo
+spec:
+  version: "17"            # 16 | 17 | 18; can only be raised
+  size: S                  # S | M | L (CNPG resources / RDS, Cloud SQL, Flexible Server class)
+  storageGiB: 10           # 10..16384; can only grow
+  highAvailability: false  # standby in another zone with automatic failover
+  backup:
+    enabled: false         # automated backups + point-in-time recovery
+    retentionDays: 7       # 7..35
+  database: orders         # database + owner role (= username); immutable
+  deletionPolicy: Retain   # Retain | Delete (cloud backends; see below)
+```
+
+Every field has a default: `spec: {}` gives PostgreSQL 17, size S, 10 GiB, one instance, no backups, database `app`.
+`engine: aurora` (aws-rds only, default `postgres`) picks Aurora PostgreSQL instead of an RDS instance; other backends
+ignore it.
+
+What the app gets, on every backend: Secret **`<name>-app`** in the XR's namespace with the keys `host`, `port`,
+`dbname`, `username`, `password` and `uri` (`postgresql://...`; the cloud backends add `?sslmode=require`). CNPG's
+operator Secret has a few more (`jdbc-uri`, `pgpass`, ...); only the six are the contract. The XR reports it:
+
+```
+kubectl -n demo get postgresql orders-db     # BACKEND, ENDPOINT, SECRET, READY
+```
+
+`status.backend`, `status.endpoint`, `status.port`, `status.secretName`, `status.backup` (`enabled`, `disabled`, or
+`unavailable` when asked for on a cluster without a backup target) and the `Ready` condition (all composed resources
+ready). On cloud backends `secretName` appears once the database exists (minutes); bind env vars with `secretKeyRef`.
+OpenChoreo wiring (a resource type that renders the XR for a component): [#70](https://github.com/koorikla/platform/issues/70).
+
+Rules enforced at admission (Kyverno `ValidatingPolicy`, also emitted as native `ValidatingAdmissionPolicy`):
+
+- **Only through the XR.** Raw CNPG objects (`Cluster`, `Pooler`, `Database`, `Backup`, `ScheduledBackup`,
+  `Publication`, `Subscription`, Barman `ObjectStore`) and the RDS / EC2 / KMS / Cloud SQL / Flexible Server managed
+  resources are denied outside `crossplane-system` and `cnpg-system` unless a ServiceAccount of `crossplane-system`,
+  `cnpg-system` or `kube-system` makes the request (Crossplane composing, providers, the CNPG operator, the garbage
+  collector). Lists: addon crossplane `policy.exemptNamespaces`, `policy.exemptServiceAccountNamespaces`.
+- **Production is HA and backed up.** XRs in OpenChoreo cells labelled `openchoreo.dev/environment: production` must
+  set `highAvailability: true` and `backup.enabled: true` (Deny; Audit on local docker clusters, which have neither an
+  object store nor more than one node).
+
+### Operator view
+
+Opt in per cluster (fleet file); CNPG clusters also need the operator:
+
+```
+# installations/<inst>/clusters/<name>.yaml
+addons:
+  crossplane: true
+  cloudnative-pg: true      # only where the backend is cnpg
+```
+
+**Backend selection, no developer input.** The addon ApplicationSet passes the cluster's provider label
+(`platform.koorikla.io/provider`, from the fleet file `provider`) as `cluster.provider`; addon crossplane maps it
+(`postgresql.backendByProvider`) and installs only that backend's Composition, `postgresql-<backend>`, as the XRD's
+`defaultCompositionRef`, plus only the provider family members it composes:
+
+| Provider fact | Backend / Composition | Crossplane providers (xpkg.crossplane.io/crossplane-contrib, pinned by digest) |
+|---|---|---|
+| `docker`, `hetzner`, `vsphere-talos` | `postgresql-cnpg` | none |
+| `aws`, `aws-eks` | `postgresql-aws-rds` | `provider-family-aws`, `provider-aws-rds`, `provider-aws-ec2`, `provider-aws-kms` |
+| `gcp-gke` | `postgresql-gcp-cloudsql` | `provider-family-gcp`, `provider-gcp-sql` |
+| `azure-aks` | `postgresql-azure-flexible` | `provider-family-azure`, `provider-azure-dbforpostgresql` |
+
+A provider missing from the map fails the render. `postgresql.backend` forces a backend for one cluster (e.g. cnpg on a
+cloud cluster). A `ManagedResourceActivationPolicy` activates only the managed resources the Composition composes
+(`provider.defaultActivations` is empty), so each provider installs a handful of CRDs, not its whole family.
+
+What each Composition creates (pipeline: function-go-templating, then function-auto-ready):
+
+| Backend | Composed | Connection Secret | HA | Backup |
+|---|---|---|---|---|
+| cnpg | `Cluster` (image from ClusterImageCatalog `postgresql-standard` of addon cloudnative-pg by major), `PodMonitor` | the operator's `<name>-app` | 3 instances | Barman Cloud `ObjectStore` + daily `ScheduledBackup` under `postgresql.cnpg.backup.destinationPath`/`<cluster>/<ns>/<name>` |
+| aws-rds | KMS `Key`, `SecurityGroup` + ingress 5432 from the node security group, `SubnetGroup`, RDS `Instance` (or Aurora `Cluster` + `ClusterInstance`s) | ExternalSecret from the RDS-managed master secret in Secrets Manager (`manageMasterUserPassword`), store `default` | Multi-AZ instance (Aurora: + reader in another AZ) | automated backups, `retentionDays` |
+| gcp-cloudsql | `DatabaseInstance` (private IP only, TLS required, IAM DB auth flag), `Database`, `User` | ExternalSecret with an ESO `Password` generator, once the private IP is known | `REGIONAL` | backups + PITR |
+| azure-flexible | `FlexibleServer` (delegated subnet, private DNS zone, no public access, Entra + password auth), `FlexibleServerDatabase` | ExternalSecret with an ESO `Password` generator (the server needs the password at creation) | zone-redundant | `retentionDays` (Azure keeps >= 7) |
+
+Passwords never pass through Crossplane's function pipeline: CNPG and RDS generate them; on GCP / Azure ESO generates
+one into the connection Secret (generated once; deleting the Secret rotates it) and the provider reads it from there to
+set it on the user. Cloud identifiers are `pg-<namespace>-<name>-<hash of cluster/namespace/name>`. The cloud backends'
+`username` is the owner/master role; least-privilege per-app roles: [#107](https://github.com/koorikla/platform/issues/107).
+
+**Cluster facts** (values only, `installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`; a missing
+required fact fails the render): `postgresql.aws` (`vpcId`, two or more private `subnetIds`, `nodeSecurityGroupId`,
+`identity.source` IRSA with `roleArn` or PodIdentity), `postgresql.gcp` (`project`, `privateNetwork` with private
+services access, optional `allocatedIpRange`, `identity.serviceAccount`), `postgresql.azure` (`subscriptionID`,
+`tenantID`, `clientID`, `resourceGroupName`, `delegatedSubnetId`, `privateDnsZoneId`), `postgresql.cnpg.backup`
+(object store prefix, credentials, ServiceAccount annotations; needs `plugin-barman-cloud.enabled: true` in addon
+cloudnative-pg). Example: `installations/aws-example/addons/crossplane/values.yaml`.
+
+**Credentials: workload identity only.** Each family's providers share ServiceAccount `crossplane-system/provider-<cloud>`
+(DeploymentRuntimeConfig `provider-<cloud>`): IRSA role annotation or an EKS Pod Identity association, GKE Workload
+Identity, Entra workload identity (`azure.workload.identity/use` + client id). `ClusterProviderConfig/default` uses that
+identity (`IRSA` / `PodIdentity`, `InjectedIdentity`, `OIDCTokenFile`); there is no static key anywhere. On AWS the
+identity of `ClusterSecretStore/default` must be allowed to read the RDS-managed secrets (`rds!*`); as the tenant store,
+every tenant on that cluster can then reference them.
+
+**Deletion.** `deletionPolicy: Retain` (default) gives the cloud resources `managementPolicies` without `Delete`
+(Crossplane v2 managed resources have no `deletionPolicy`) and turns on the cloud's deletion protection: deleting the XR
+leaves the database. `Delete` removes it (with a final snapshot when backups are on). CNPG data lives in PVCs owned by
+the `Cluster` and goes with the XR either way: keep backups on.
+
+**Packaging.** XRD, Compositions, Functions and providers are templates of the wrapper chart, not a Crossplane
+Configuration package: the Composition embeds per-cluster facts and the XRD's default Composition depends on the
+cluster's provider, which one immutable OCI package cannot express without its own build / sign / promote pipeline; the
+chart renders per cluster through the addon ApplicationSet and is tested like every addon. Crossplane runs on each
+workload cluster (owner decision in #91): the XR lives next to the app, uses that cluster's workload identity, and needs
+no cross-cluster Secret delivery.
+
+**Pod Security.** crossplane-system enforces `restricted`. Crossplane's default package runtime sets neither a seccomp
+profile nor a capability drop, so every Function and Provider runs under DeploymentRuntimeConfig `restricted` /
+`provider-<cloud>` (seccomp `RuntimeDefault`, drop `ALL`, non-root, read-only root filesystem). Core and RBAC manager
+get the same through the chart values. Metrics: PodMonitor for core + RBAC manager. Footprint (requests): core 50m /
+128Mi, RBAC manager 10m / 64Mi, each Function 10m / 64Mi, each provider 50m / 256Mi.
+
+**Tests (offline).** `hack/tests/test_crossplane_render.sh`: the ApplicationSet render for dev1 selects
+`postgresql-cnpg`; every backend's addon render passes kubeconform with the Crossplane and provider CRD schemas and pins
+every package; `crossplane render` (CLI from `mise.toml`, the addon's own Crossplane image and Function packages, needs
+Docker) of each Composition with the XRs and observed states in `hack/tests/crossplane/` checks the composed resources
+(kubeconform), HA / backup / deletion / Aurora mapping, the identical Secret shape and that no composed object carries a
+password. Admission: `hack/tests/test_kyverno_policies.sh`. Chart: `addons/crossplane/tests`. Live checks:
+[#107](https://github.com/koorikla/platform/issues/107).
 
 ## PostgreSQL (CloudNativePG)
 
@@ -401,4 +540,7 @@ kubectl --context <dev1> -n demo get clusters.postgresql.cnpg.io orders-db   # S
 kubectl --context <dev1> -n strimzi get deploy strimzi-cluster-operator
 kubectl --context <dev1> -n demo get kafka events                            # READY True
 kubectl --context <dev1> -n keda get apiservice v1beta1.external.metrics.k8s.io
+kubectl --context <dev1> get providers.pkg.crossplane.io,functions.pkg.crossplane.io   # INSTALLED/HEALTHY True
+kubectl --context <dev1> get xrd postgresqls.platform.koorikla.io                       # ESTABLISHED True
+kubectl --context <dev1> -n demo get postgresql orders-db                               # READY True, SECRET orders-db-app
 ```

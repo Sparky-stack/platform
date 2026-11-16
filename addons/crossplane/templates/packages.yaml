@@ -1,0 +1,110 @@
+{{- /* Functions and the backend's providers, pinned by digest, under DeploymentRuntimeConfigs that meet Pod Security
+restricted. Crossplane's default runtime has runAsNonRoot and a read-only root filesystem but neither a seccomp profile
+nor a capability drop, so a package pod without these configs would be rejected in crossplane-system. */ -}}
+{{- $rc := .Values.packages.runtimeConfig }}
+{{- $backend := include "crossplane.pgBackend" . }}
+{{- $cloud := include "crossplane.pgCloud" . }}
+{{- $pg := .Values.postgresql }}
+{{- define "crossplane.runtimeSpec" -}}
+deploymentTemplate:
+  spec:
+    selector: {}
+    template:
+      {{- with .podLabels }}
+      metadata:
+        labels:
+          {{- toYaml . | nindent 10 }}
+      {{- end }}
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 2000
+          runAsGroup: 2000
+          seccompProfile: { type: RuntimeDefault }
+        containers:
+          - name: package-runtime
+            securityContext:
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              privileged: false
+              readOnlyRootFilesystem: true
+              capabilities: { drop: [ALL] }
+              seccompProfile: { type: RuntimeDefault }
+            resources:
+              {{- toYaml .resources | nindent 14 }}
+{{- with .serviceAccount }}
+serviceAccountTemplate:
+  metadata:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: {{ $rc.name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  {{- include "crossplane.runtimeSpec" (dict "resources" $rc.resources) | nindent 2 }}
+{{- range $name, $pkg := .Values.packages.functions }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $pkg }}
+  packagePullPolicy: IfNotPresent
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: {{ $rc.name }}
+{{- end }}
+{{- if $cloud }}
+{{- /* One ServiceAccount name for every member of the family, so the cloud identity binding (IRSA trust, Pod Identity
+association, GKE / Entra federation) targets one stable subject: crossplane-system/provider-<cloud>. */}}
+{{- $sa := dict "name" (printf "provider-%s" $cloud) }}
+{{- $labels := dict }}
+{{- if eq $cloud "aws" }}
+{{- if eq $pg.aws.identity.source "IRSA" }}
+{{- $_ := set $sa "annotations" (dict "eks.amazonaws.com/role-arn" (required "postgresql.aws.identity.roleArn is required with IRSA" $pg.aws.identity.roleArn)) }}
+{{- else if ne $pg.aws.identity.source "PodIdentity" }}
+{{- fail (printf "postgresql.aws.identity.source: %q (IRSA | PodIdentity)" $pg.aws.identity.source) }}
+{{- end }}
+{{- else if eq $cloud "gcp" }}
+{{- with $pg.gcp.identity.serviceAccount }}
+{{- $_ := set $sa "annotations" (dict "iam.gke.io/gcp-service-account" .) }}
+{{- end }}
+{{- else if eq $cloud "azure" }}
+{{- $_ := set $sa "annotations" (dict "azure.workload.identity/client-id" (required "postgresql.azure.clientID is required for backend azure-flexible" $pg.azure.clientID)) }}
+{{- $labels = dict "azure.workload.identity/use" "true" }}
+{{- end }}
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-{{ $cloud }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  {{- include "crossplane.runtimeSpec" (dict "resources" $rc.providerResources "serviceAccount" $sa "podLabels" $labels) | nindent 2 }}
+{{- range $name, $pkg := get .Values.packages.providers $backend }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $pkg }}
+  packagePullPolicy: IfNotPresent
+  skipDependencyResolution: true    # the family provider is pinned above; a resolved dependency would float
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: provider-{{ $cloud }}
+{{- end }}
+{{- end }}

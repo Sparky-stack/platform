@@ -1,0 +1,39 @@
+# Raw database objects in an OpenChoreo cell namespace: denied for tenants, allowed for the platform's controllers.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sneaky
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  instances: 1
+  storage: { size: 1Gi }
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: sneaky
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  configuration:
+    destinationPath: s3://somewhere/else
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Instance
+metadata:
+  name: sneaky
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  forProvider:
+    region: eu-central-1
+    instanceClass: db.r7g.16xlarge
+    engine: postgres
+---
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: DatabaseInstance
+metadata:
+  name: sneaky
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  forProvider:
+    region: europe-west4
+    databaseVersion: POSTGRES_17

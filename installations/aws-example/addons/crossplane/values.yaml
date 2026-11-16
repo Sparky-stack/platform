@@ -1,0 +1,11 @@
+# Addon crossplane (opt-in per cluster: `addons: { crossplane: true }`) on this installation's AWS clusters: provider
+# aws -> PostgreSQL backend aws-rds. Network facts of the clusters' VPC (created by CAPA with them) and the IRSA role of
+# the Crossplane AWS providers. Placeholder ids: VERIFY / replace per cluster in cluster-<name>.yaml when VPCs differ.
+postgresql:
+  aws:
+    vpcId: vpc-0123456789abcdef0
+    subnetIds: [subnet-0123456789abcdef1, subnet-0123456789abcdef2]
+    nodeSecurityGroupId: sg-0123456789abcdef3
+    identity:
+      source: IRSA
+      roleArn: arn:aws:iam::111111111111:role/platform-crossplane-postgresql

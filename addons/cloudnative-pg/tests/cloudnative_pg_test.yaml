@@ -12,6 +12,7 @@ templates:
   - charts/cloudnative-pg/templates/crds/crds.yaml
   - charts/plugin-barman-cloud/templates/deployment.yaml
   - charts/plugin-barman-cloud/templates/configmap.yaml
+  - templates/image-catalog.yaml
 tests:
   - it: the operator image (also the instance manager in every PostgreSQL pod) is pinned by digest
     template: charts/cloudnative-pg/templates/deployment.yaml
@@ -116,5 +117,28 @@ tests:
     template: templates/namespace.yaml
     set:
       namespace.podSecurity: ""
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: the ClusterImageCatalog pins one multi-arch standard image per supported major
+    template: templates/image-catalog.yaml
+    asserts:
+      - isKind: { of: ClusterImageCatalog }
+      - equal: { path: metadata.name, value: postgresql-standard }
+      - lengthEqual: { path: spec.images, count: 3 }
+      - equal: { path: 'spec.images[0].major', value: 16 }
+      - equal: { path: 'spec.images[1].major', value: 17 }
+      - equal: { path: 'spec.images[2].major', value: 18 }
+      - matchRegex:
+          path: spec.images[0].image
+          pattern: '^ghcr\.io/cloudnative-pg/postgresql:16\.[0-9]+-standard-trixie@sha256:[0-9a-f]{64}$'
+      - matchRegex:
+          path: spec.images[2].image
+          pattern: '^ghcr\.io/cloudnative-pg/postgresql:18\.[0-9]+-standard-trixie@sha256:[0-9a-f]{64}$'
+
+  - it: no ClusterImageCatalog when switched off
+    template: templates/image-catalog.yaml
+    set:
+      imageCatalog.enabled: false
     asserts:
       - hasDocuments: { count: 0 }

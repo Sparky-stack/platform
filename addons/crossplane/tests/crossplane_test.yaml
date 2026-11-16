@@ -1,0 +1,329 @@
+suite: crossplane wrapper (Crossplane v2 + PostgreSQL as a service)
+release:
+  name: crossplane
+  namespace: crossplane-system
+templates:
+  - templates/namespace.yaml
+  - templates/packages.yaml
+  - templates/provider-config.yaml
+  - templates/activation-policy.yaml
+  - templates/rbac.yaml
+  - templates/podmonitor.yaml
+  - templates/xrd-postgresql.yaml
+  - templates/compositions.yaml
+  - templates/policies.yaml
+  - charts/crossplane/templates/deployment.yaml
+  - charts/crossplane/templates/rbac-manager-deployment.yaml
+tests:
+  # --- Crossplane core ------------------------------------------------------------------------------------------------
+  - it: core and RBAC manager run the Crossplane v2 image pinned by digest (init container too)
+    template: charts/crossplane/templates/deployment.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^xpkg\.crossplane\.io/crossplane/crossplane:v2\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].image
+          pattern: '^xpkg\.crossplane\.io/crossplane/crossplane:v2\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
+
+  - it: core meets Pod Security restricted (pod and both containers)
+    template: charts/crossplane/templates/deployment.yaml
+    asserts:
+      - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation', value: false }
+      - equal: { path: 'spec.template.spec.initContainers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: spec.template.spec.hostNetwork, value: false }
+
+  - it: RBAC manager meets Pod Security restricted
+    template: charts/crossplane/templates/rbac-manager-deployment.yaml
+    asserts:
+      - equal: { path: spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: 'spec.template.spec.initContainers[0].securityContext.capabilities.drop', value: [ALL] }
+
+  - it: no default "*" activation - only the backend's managed resources get CRDs
+    template: charts/crossplane/templates/deployment.yaml
+    asserts:
+      - notContains: { path: 'spec.template.spec.initContainers[0].args', content: --activation }
+
+  - it: crossplane-system enforces Pod Security restricted
+    template: templates/namespace.yaml
+    asserts:
+      - equal: { path: metadata.name, value: crossplane-system }
+      - equal: { path: 'metadata.labels["pod-security.kubernetes.io/enforce"]', value: restricted }
+
+  - it: no Namespace object without a Pod Security level
+    template: templates/namespace.yaml
+    set: { namespace.podSecurity: "" }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: core metrics are scraped by a PodMonitor, none when off
+    template: templates/podmonitor.yaml
+    set: { monitoring.podMonitor: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  # --- packages -------------------------------------------------------------------------------------------------------
+  - it: functions are pinned by digest and run under the restricted runtime config
+    template: templates/packages.yaml
+    documentSelector: { path: kind, value: Function, matchMany: true }
+    asserts:
+      - matchRegex:
+          path: spec.package
+          pattern: '^xpkg\.crossplane\.io/crossplane-contrib/function-(go-templating|auto-ready):v[0-9.]+@sha256:[0-9a-f]{64}$'
+      - equal: { path: spec.runtimeConfigRef.name, value: restricted }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
+
+  - it: the restricted runtime config meets Pod Security restricted
+    template: templates/packages.yaml
+    documentSelector: { path: metadata.name, value: restricted }
+    asserts:
+      - isKind: { of: DeploymentRuntimeConfig }
+      - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].name', value: package-runtime }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation', value: false }
+
+  - it: cnpg clusters install no provider at all
+    template: templates/packages.yaml
+    asserts:
+      - hasDocuments: { count: 3 }      # restricted runtime config + 2 functions
+
+  - it: aws installs exactly the rds, ec2, kms members and the family, pinned, no dependency resolution
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    documentSelector: { path: kind, value: Provider, matchMany: true }
+    asserts:
+      - matchRegex:
+          path: spec.package
+          pattern: '^xpkg\.crossplane\.io/crossplane-contrib/provider-(family-aws|aws-rds|aws-ec2|aws-kms):v[0-9.]+@sha256:[0-9a-f]{64}$'
+      - equal: { path: spec.skipDependencyResolution, value: true }
+      - equal: { path: spec.runtimeConfigRef.name, value: provider-aws }
+
+  - it: aws renders 2 runtime configs, 2 functions and 4 providers
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    asserts:
+      - hasDocuments: { count: 8 }
+
+  - it: aws providers authenticate with IRSA on one stable ServiceAccount
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    documentSelector: { path: metadata.name, value: provider-aws }
+    asserts:
+      - isKind: { of: DeploymentRuntimeConfig }
+      - equal: { path: spec.serviceAccountTemplate.metadata.name, value: provider-aws }
+      - equal:
+          path: 'spec.serviceAccountTemplate.metadata.annotations["eks.amazonaws.com/role-arn"]'
+          value: arn:aws:iam::111111111111:role/prod-euc1-crossplane-rds
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+
+  - it: with EKS Pod Identity there is no role annotation
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    set: { postgresql.aws.identity.source: PodIdentity }
+    documentSelector: { path: metadata.name, value: provider-aws }
+    asserts:
+      - notExists: { path: spec.serviceAccountTemplate.metadata.annotations }
+
+  - it: aws ProviderConfig uses workload identity, never a secret
+    template: templates/provider-config.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    asserts:
+      - isKind: { of: ClusterProviderConfig }
+      - equal: { path: apiVersion, value: aws.m.upbound.io/v1beta1 }
+      - equal: { path: spec.credentials.source, value: IRSA }
+      - notExists: { path: spec.credentials.secretRef }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+
+  - it: gcp uses GKE Workload Identity (InjectedIdentity + GSA annotation)
+    template: templates/provider-config.yaml
+    values: [../../../hack/tests/crossplane/values-gcp-cloudsql.yaml]
+    asserts:
+      - equal: { path: apiVersion, value: gcp.m.upbound.io/v1beta1 }
+      - equal: { path: spec.credentials.source, value: InjectedIdentity }
+      - equal: { path: spec.projectID, value: example-platform-prod }
+
+  - it: azure uses Entra workload identity (OIDC token file, client-id annotation, pod label)
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-azure-flexible.yaml]
+    documentSelector: { path: metadata.name, value: provider-azure }
+    asserts:
+      - equal:
+          path: 'spec.serviceAccountTemplate.metadata.annotations["azure.workload.identity/client-id"]'
+          value: 00000000-0000-0000-0000-000000000003
+      - equal:
+          path: 'spec.deploymentTemplate.spec.template.metadata.labels["azure.workload.identity/use"]'
+          value: "true"
+
+  - it: azure ProviderConfig reads the projected OIDC token
+    template: templates/provider-config.yaml
+    values: [../../../hack/tests/crossplane/values-azure-flexible.yaml]
+    asserts:
+      - equal: { path: spec.credentials.source, value: OIDCTokenFile }
+      - equal: { path: spec.tenantID, value: 00000000-0000-0000-0000-000000000002 }
+
+  - it: cnpg needs no ProviderConfig
+    template: templates/provider-config.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: cnpg needs no activation policy
+    template: templates/activation-policy.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: aws activates only the managed resources the Composition composes
+    template: templates/activation-policy.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    asserts:
+      - isKind: { of: ManagedResourceActivationPolicy }
+      - lengthEqual: { path: spec.activate, count: 7 }
+      - contains: { path: spec.activate, content: instances.rds.aws.m.upbound.io }
+      - notContains: { path: spec.activate, content: "*" }
+
+  # --- composition selection from the provider fact -------------------------------------------------------------------
+  - it: docker (local) selects cnpg
+    template: templates/compositions.yaml
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-cnpg }
+
+  - it: the XRD defaults to the selected Composition (cnpg)
+    template: templates/xrd-postgresql.yaml
+    asserts:
+      - equal: { path: spec.defaultCompositionRef.name, value: postgresql-cnpg }
+
+  - it: hetzner selects cnpg
+    template: templates/compositions.yaml
+    set: { cluster.provider: hetzner }
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-cnpg }
+
+  - it: aws selects aws-rds
+    template: templates/compositions.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-aws-rds }
+
+  - it: the XRD defaults to the selected Composition (aws-rds)
+    template: templates/xrd-postgresql.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    asserts:
+      - equal: { path: spec.defaultCompositionRef.name, value: postgresql-aws-rds }
+
+  - it: gcp-gke selects gcp-cloudsql
+    template: templates/compositions.yaml
+    values: [../../../hack/tests/crossplane/values-gcp-cloudsql.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-gcp-cloudsql }
+
+  - it: azure-aks selects azure-flexible
+    template: templates/compositions.yaml
+    values: [../../../hack/tests/crossplane/values-azure-flexible.yaml]
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-azure-flexible }
+
+  - it: an operator can force a backend per cluster
+    template: templates/compositions.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    set: { postgresql.backend: cnpg }
+    asserts:
+      - equal: { path: metadata.name, value: postgresql-cnpg }
+
+  - it: a provider without a backend fails instead of guessing
+    template: templates/xrd-postgresql.yaml
+    set: { cluster.provider: openstack }
+    asserts:
+      - failedTemplate: { errorPattern: 'no backend for provider "openstack"' }
+
+  - it: an unknown backend fails
+    template: templates/xrd-postgresql.yaml
+    set: { postgresql.backend: mysql }
+    asserts:
+      - failedTemplate: { errorPattern: 'unknown backend "mysql"' }
+
+  - it: aws without the cluster's network facts fails
+    template: templates/compositions.yaml
+    set: { cluster.provider: aws, postgresql.aws.identity.roleArn: "arn:aws:iam::111111111111:role/x" }
+    asserts:
+      - failedTemplate: { errorPattern: 'subnetIds: at least two private subnets' }
+
+  - it: aws IRSA without a role fails
+    template: templates/packages.yaml
+    values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
+    set: { postgresql.aws.identity.roleArn: "" }
+    asserts:
+      - failedTemplate: { errorPattern: 'roleArn is required with IRSA' }
+
+  - it: the Composition is a pipeline of go-templating + auto-ready with the cluster facts prepended
+    template: templates/compositions.yaml
+    asserts:
+      - equal: { path: spec.mode, value: Pipeline }
+      - equal: { path: 'spec.pipeline[0].functionRef.name', value: function-go-templating }
+      - equal: { path: 'spec.pipeline[1].functionRef.name', value: function-auto-ready }
+      - matchRegex:
+          path: 'spec.pipeline[0].input.inline.template'
+          pattern: '^\{\{- \$facts := fromYaml "\{\\"backend\\":\\"cnpg\\"'
+
+  - it: the XRD is namespaced Crossplane v2 without claims
+    template: templates/xrd-postgresql.yaml
+    asserts:
+      - equal: { path: apiVersion, value: apiextensions.crossplane.io/v2 }
+      - equal: { path: spec.scope, value: Namespaced }
+      - notExists: { path: spec.claimNames }
+      - equal: { path: 'spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.deletionPolicy.default', value: Retain }
+      - equal: { path: 'spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.version.enum', value: ["16", "17", "18"] }
+
+  # --- RBAC for composed plain resources ------------------------------------------------------------------------------
+  - it: cnpg lets Crossplane compose CNPG objects (aggregated into ClusterRole crossplane)
+    template: templates/rbac.yaml
+    asserts:
+      - equal: { path: 'metadata.labels["rbac.crossplane.io/aggregate-to-crossplane"]', value: "true" }
+      - equal: { path: 'rules[0].apiGroups', value: [postgresql.cnpg.io] }
+
+  - it: cloud backends let Crossplane compose the ESO connection Secret objects instead
+    template: templates/rbac.yaml
+    values: [../../../hack/tests/crossplane/values-gcp-cloudsql.yaml]
+    asserts:
+      - equal: { path: 'rules[0].apiGroups', value: [external-secrets.io] }
+      - equal: { path: 'rules[1].apiGroups', value: [generators.external-secrets.io] }
+
+  # --- admission ------------------------------------------------------------------------------------------------------
+  - it: tenants are denied raw database objects; platform controllers and namespaces are exempt
+    template: templates/policies.yaml
+    documentSelector: { path: metadata.name, value: postgresql-only-through-the-platform-api }
+    asserts:
+      - isKind: { of: ValidatingPolicy }
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: spec.autogen.validatingAdmissionPolicy.enabled, value: true }
+      - equal: { path: 'spec.matchConstraints.resourceRules[0].apiGroups', value: [postgresql.cnpg.io] }
+      - contains: { path: 'spec.matchConstraints.resourceRules[2].apiGroups', content: rds.aws.m.upbound.io }
+      - equal:
+          path: 'spec.matchConditions[1].expression'
+          value: '!["system:serviceaccount:crossplane-system:","system:serviceaccount:cnpg-system:","system:serviceaccount:kube-system:"].exists(p, request.userInfo.username.startsWith(p))'
+
+  - it: production PostgreSQL must be HA and backed up (Deny by default)
+    template: templates/policies.yaml
+    documentSelector: { path: metadata.name, value: postgresql-production-ha-backup }
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: 'spec.matchConstraints.namespaceSelector.matchExpressions[0].values', value: [production] }
+
+  - it: local docker clusters only audit the production rule
+    template: templates/policies.yaml
+    values: [../values/provider-docker.yaml]
+    documentSelector: { path: metadata.name, value: postgresql-production-ha-backup }
+    asserts:
+      - equal: { path: spec.validationActions, value: [Audit] }
+      - equal: { path: spec.failurePolicy, value: Ignore }
+
+  - it: no policies when switched off
+    template: templates/policies.yaml
+    set: { policy.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }

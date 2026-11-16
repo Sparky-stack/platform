@@ -1,0 +1,30 @@
+# RDS has created the instance (and the Aurora cluster): endpoint + managed master secret ARN are known.
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Instance
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  annotations:
+    crossplane.io/composition-resource-name: instance
+status:
+  atProvider:
+    address: pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com
+    port: 5432
+    masterUserSecret:
+      - secretArn: arn:aws:secretsmanager:eu-central-1:111111111111:secret:rds!db-0f0e0d0c-aaaa-bbbb-cccc-123456789abc-AbCdEf
+        secretStatus: active
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Cluster
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+status:
+  atProvider:
+    endpoint: pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com
+    port: 5432
+    masterUserSecret:
+      - secretArn: arn:aws:secretsmanager:eu-central-1:111111111111:secret:rds!cluster-0f0e0d0c-aaaa-bbbb-cccc-123456789abc-AbCdEf
+        secretStatus: active

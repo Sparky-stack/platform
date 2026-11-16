@@ -1,0 +1,17 @@
+{{- /* ClusterImageCatalog: one pinned PostgreSQL image per major version. Clusters select a major through
+spec.imageCatalogRef instead of carrying an image themselves (the PostgreSQL Composition of addon crossplane does), so a
+minor/digest bump here rolls every catalog-backed cluster of that major. The CRD comes from this chart. */ -}}
+{{- with .Values.imageCatalog }}
+{{- if .enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: ClusterImageCatalog
+metadata:
+  name: {{ .name }}
+spec:
+  images:
+    {{- range $major, $image := .images }}
+    - major: {{ int $major }}
+      image: {{ $image | quote }}
+    {{- end }}
+{{- end }}
+{{- end }}

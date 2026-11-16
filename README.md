@@ -6,8 +6,8 @@ A cloud-agnostic Kubernetes platform. **Cluster API** creates and upgrades k3s c
 **Argo CD** installs the platform addons on all of them from one catalog. **External Secrets Operator** delivers every
 credential. **OpenChoreo** is the developer platform on top: projects, components, environments, builds, promotion.
 Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco; telemetry goes to OpenChoreo's observability plane. Opt-in:
-external-dns (Route 53 / Cloudflare), OpenChoreo's RCA and FinOps AI agents, and data services (CloudNativePG,
-Strimzi Kafka, KEDA).
+external-dns (Route 53 / Cloudflare), OpenChoreo's RCA and FinOps AI agents, and data services (PostgreSQL as a service
+through Crossplane v2 - CloudNativePG, RDS, Cloud SQL or Azure Flexible Server per cluster -, Strimzi Kafka, KEDA).
 
 Why: one management cluster, one git repo and one file per cluster give every cluster the same addons, identities and
 policies, on any provider, without imperative steps after bootstrap.
@@ -59,7 +59,7 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [docs/multicluster.md](docs/multicluster.md) | opt-in Istio ambient multicluster: east-west gateways, remote secrets, mesh CA in OpenBao on mgmt |
 | [docs/observability.md](docs/observability.md) | observability plane, telemetry, Datadog, Falco and Falco response |
 | [docs/dns.md](docs/dns.md) | external-dns: DNS provider per installation, opt-in per cluster, credentials |
-| [docs/data-services.md](docs/data-services.md) | opt-in CloudNativePG (PostgreSQL + backups), Strimzi (Kafka, KRaft), KEDA; consuming them from OpenChoreo |
+| [docs/data-services.md](docs/data-services.md) | opt-in PostgreSQL as a service (Crossplane v2 XR: CloudNativePG / RDS / Cloud SQL / Azure Flexible Server), CloudNativePG (PostgreSQL + backups), Strimzi (Kafka, KRaft), KEDA; consuming them from OpenChoreo |
 | [docs/ai-agents.md](docs/ai-agents.md) | OpenChoreo RCA and FinOps agents, agentgateway, OpenCost (switched off) |
 | [docs/demo.md](docs/demo.md) | scripted full-platform demo (~30 min) and its read-only pre-flight `task demo:check` |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
@@ -78,7 +78,7 @@ Diagram boxes: solid = built on `main`, dashed = opt-in (on `main`, off by defau
 | **Built, running locally** | k3d mgmt + CAPD clusters `dev1` (Cilium) and `prod1` (flannel) from fleet files; Argo CD push mode with the addon catalog; ESO stores; per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; observability plane with workload telemetry; Falco + falcosidekick + Talon; Istio ambient with app namespaces enrolled by Kyverno; Kyverno Pod Security baseline (Audit) |
 | **Built, first live run pending** | workflow plane builds + Harbor ([#40](https://github.com/koorikla/platform/issues/40), [#17](https://github.com/koorikla/platform/issues/17)); promotion gates ([#10](https://github.com/koorikla/platform/issues/10), [#11](https://github.com/koorikla/platform/issues/11), [#54](https://github.com/koorikla/platform/issues/54)); per-environment image verification ([#15](https://github.com/koorikla/platform/issues/15), [#16](https://github.com/koorikla/platform/issues/16)); Falco escalation to Argo Events |
 | **Built, rendered only** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault backends ([#26](https://github.com/koorikla/platform/issues/26)); Istio ambient multicluster between `dev1` and `prod1` with the mesh CA in OpenBao on mgmt ([#19](https://github.com/koorikla/platform/issues/19), [docs/multicluster.md](docs/multicluster.md)) |
-| **Opt-in** | OBI (eBPF RED metrics), Datadog exporter, Talon dry run per environment; external-dns (Route 53 / Cloudflare; live check [#21](https://github.com/koorikla/platform/issues/21)); OpenChoreo RCA and FinOps agents + agentgateway + OpenCost ([#22](https://github.com/koorikla/platform/issues/22)); data services CloudNativePG, Strimzi (Kafka), KEDA ([docs/data-services.md](docs/data-services.md); OpenChoreo resource types [#70](https://github.com/koorikla/platform/issues/70)) |
+| **Opt-in** | OBI (eBPF RED metrics), Datadog exporter, Talon dry run per environment; external-dns (Route 53 / Cloudflare; live check [#21](https://github.com/koorikla/platform/issues/21)); OpenChoreo RCA and FinOps agents + agentgateway + OpenCost ([#22](https://github.com/koorikla/platform/issues/22)); data services PostgreSQL as a service (Crossplane v2; rendered offline, live check [#107](https://github.com/koorikla/platform/issues/107)), CloudNativePG, Strimzi (Kafka), KEDA ([docs/data-services.md](docs/data-services.md); OpenChoreo resource types [#70](https://github.com/koorikla/platform/issues/70)) |
 | **Planned** | argocd-agent managed mode ([#20](https://github.com/koorikla/platform/issues/20)); Crossplane v2 with gated package promotion ([#57](https://github.com/koorikla/platform/issues/57)); SSO ([#58](https://github.com/koorikla/platform/issues/58)); Backstage scaffolder ([#59](https://github.com/koorikla/platform/issues/59)); Istio multicluster east-west ([#18](https://github.com/koorikla/platform/issues/18)) |
 
 Backlog: [open issues](https://github.com/koorikla/platform/issues).

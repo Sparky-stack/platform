@@ -1,0 +1,19 @@
+{{- /* Crossplane v2 activates managed resource definitions explicitly: only what the backend's Composition composes gets a
+CRD (provider.defaultActivations is empty, so there is no "*" policy). cnpg composes no managed resources. */ -}}
+{{- $backend := include "crossplane.pgBackend" . }}
+{{- $mrds := dict
+  "aws-rds" (list "instances.rds.aws.m.upbound.io" "clusters.rds.aws.m.upbound.io" "clusterinstances.rds.aws.m.upbound.io" "subnetgroups.rds.aws.m.upbound.io" "securitygroups.ec2.aws.m.upbound.io" "securitygroupingressrules.ec2.aws.m.upbound.io" "keys.kms.aws.m.upbound.io")
+  "gcp-cloudsql" (list "databaseinstances.sql.gcp.m.upbound.io" "databases.sql.gcp.m.upbound.io" "users.sql.gcp.m.upbound.io")
+  "azure-flexible" (list "flexibleservers.dbforpostgresql.azure.m.upbound.io" "flexibleserverdatabases.dbforpostgresql.azure.m.upbound.io")
+}}
+{{- with get $mrds $backend }}
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceActivationPolicy
+metadata:
+  name: postgresql-{{ $backend }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  activate:
+    {{- toYaml . | nindent 4 }}
+{{- end }}

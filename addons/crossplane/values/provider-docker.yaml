@@ -1,0 +1,5 @@
+# Local docker (CAPD) clusters: no object store for backups and a single node, so the production rule (HA + backup)
+# reports instead of denying. Real providers keep Deny.
+policy:
+  production:
+    action: Audit

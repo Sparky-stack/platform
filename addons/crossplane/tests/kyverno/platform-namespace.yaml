@@ -1,0 +1,9 @@
+# A raw CNPG Cluster in a platform namespace (exemptNamespaces): not the policy's business.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: platform-db
+  namespace: cnpg-system
+spec:
+  instances: 1
+  storage: { size: 1Gi }

@@ -270,6 +270,7 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
     openbao) continue ;;       # mesh CA: restricted pod security, policed like a workload (check 2b4)
     external-dns) continue ;;  # external-dns meets PSS restricted: policed like a workload (check 9b)
     keda|strimzi|cnpg-system) continue ;;   # opt-in data-service operators meet PSS restricted: policed (test_data_services.sh)
+    crossplane-system) continue ;;          # Crossplane core, Functions, providers meet PSS restricted: policed (test_crossplane_render.sh)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done

@@ -47,6 +47,7 @@ version_cmd() {
     crane)       echo "crane version" ;;
     cosign)      echo "cosign version" ;;
     kyverno)     echo "kyverno version" ;;
+    crossplane)  echo "crossplane version --client" ;;
     *)           echo "$1 --version" ;;
   esac
 }
