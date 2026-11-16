@@ -240,7 +240,8 @@ the pods advertise) and keeps only `envoy_cluster_upstream_rq`: one counter per 
 `envoy_response_code`, plus the pod labels `openchoreo_dev_plane_id` and `gateway_networking_k8s_io_gateway_name`. Envoy
 creates a code's series on its first response with that code, so the count stays at backends x codes seen. The
 promotion gate queries these series directly in Prometheus, not through the observer ([promotion.md](promotion.md),
-[#104](https://github.com/koorikla/platform/issues/104)). They cover gateway traffic only (external endpoints), not east-west calls inside the mesh.
+[#104](https://github.com/koorikla/platform/issues/104)). They cover gateway traffic only (external endpoints), not east-west
+calls inside the mesh.
 
 **Observer `metric: http`.** The observer's `metric: http` (Backstage HTTP charts) is served by the
 observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble series:
