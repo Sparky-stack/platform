@@ -4,6 +4,13 @@ ValidatingAdmissionPolicies, so the API server enforces them even while Kyverno 
 {{- $pol := .Values.policy }}
 {{- $saPrefixes := list }}
 {{- range $pol.exemptServiceAccountNamespaces }}{{ $saPrefixes = append $saPrefixes (printf "system:serviceaccount:%s:" .) }}{{ end }}
+{{- /* Raw database kinds: the deny policy matches them, and Kyverno's reports controller must read them (and the XRs)
+for background evaluation, else the policies stay not ready (RBACPermissionsGranted False -> Argo CD Degraded). */ -}}
+{{- $raw := list
+  (dict "apiGroups" (list "postgresql.cnpg.io") "resources" (list "clusters" "poolers" "databases" "backups" "scheduledbackups" "publications" "subscriptions"))
+  (dict "apiGroups" (list "barmancloud.cnpg.io") "resources" (list "objectstores"))
+  (dict "apiGroups" (list "rds.aws.m.upbound.io" "ec2.aws.m.upbound.io" "kms.aws.m.upbound.io" "sql.gcp.m.upbound.io" "dbforpostgresql.azure.m.upbound.io") "resources" (list "*")) }}
+{{- $xr := dict "apiGroups" (list "platform.koorikla.io") "resources" (list "postgresqls") }}
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -27,23 +34,12 @@ spec:
       enabled: true
   matchConstraints:
     resourceRules:
-      - apiGroups: [postgresql.cnpg.io]
+      {{- range $raw }}
+      - apiGroups: {{ .apiGroups | toJson }}
         apiVersions: ["*"]
         operations: [CREATE, UPDATE]
-        resources: [clusters, poolers, databases, backups, scheduledbackups, publications, subscriptions]
-      - apiGroups: [barmancloud.cnpg.io]
-        apiVersions: ["*"]
-        operations: [CREATE, UPDATE]
-        resources: [objectstores]
-      - apiGroups:
-          - rds.aws.m.upbound.io
-          - ec2.aws.m.upbound.io
-          - kms.aws.m.upbound.io
-          - sql.gcp.m.upbound.io
-          - dbforpostgresql.azure.m.upbound.io
-        apiVersions: ["*"]
-        operations: [CREATE, UPDATE]
-        resources: ["*"]
+        resources: {{ .resources | toJson }}
+      {{- end }}
   matchConditions:
     - name: outside-platform-namespaces
       expression: '!(request.namespace in {{ $pol.exemptNamespaces | toJson }})'
@@ -73,10 +69,10 @@ spec:
       enabled: true
   matchConstraints:
     resourceRules:
-      - apiGroups: [platform.koorikla.io]
+      - apiGroups: {{ $xr.apiGroups | toJson }}
         apiVersions: ["*"]
         operations: [CREATE, UPDATE]
-        resources: [postgresqls]
+        resources: {{ $xr.resources | toJson }}
     namespaceSelector:
       matchExpressions:
         - key: openchoreo.dev/environment
@@ -87,4 +83,17 @@ spec:
         has(object.spec.highAvailability) && object.spec.highAvailability == true &&
         has(object.spec.backup) && has(object.spec.backup.enabled) && object.spec.backup.enabled == true
       message: production PostgreSQL needs spec.highAvailability true and spec.backup.enabled true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:reports-controller:postgresql-policies
+  labels:
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"   # aggregated into ClusterRole kyverno:reports-controller
+rules:
+  {{- range append $raw $xr }}
+  - apiGroups: {{ .apiGroups | toJson }}
+    resources: {{ .resources | toJson }}
+    verbs: [get, list, watch]
+  {{- end }}
 {{- end }}
