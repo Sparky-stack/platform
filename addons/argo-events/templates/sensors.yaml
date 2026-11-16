@@ -165,6 +165,14 @@ spec:
           - path: body.status.delivery.succeededAt    # set once per rollout when every resource is healthy
             type: string
             value: [".+"]
+        # ...and that rollout is the current spec's: right after a releaseName edit the controller's first status
+        # write (lastSpecUpdateTime) still carries the previous release's finished delivery, which would start a run
+        # for a release that is not rolled out yet. RFC 3339 UTC timestamps compare as strings (govaluate).
+        exprs:
+          - expr: started >= specChanged
+            fields:
+              - { name: started, path: body.status.delivery.startedAt }
+              - { name: specChanged, path: body.status.lastSpecUpdateTime }
   triggers:
     - template:
         name: promotion-gate
