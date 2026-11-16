@@ -45,9 +45,9 @@ cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line eve
 One file: `installations/<inst>/clusters/<name>.yaml` (schema and defaults: `charts/cluster/values.yaml`). The `fleet`
 ApplicationSet renders `charts/cluster` with `installation.yaml` + this file. The chart fails rendering (so Argo CD
 shows the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider`, a provider
-that the installation does not enable, a cloud provider without `region`, non-boolean `addons.*`, workers without
+that the installation does not enable, a cloud provider without `region`, unknown `environment` (`development` | `staging` | `production`), non-boolean `addons.*`, workers without
 `name`, an even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
-aws/hetzner (see "Control plane size and rollouts"; an environment enum is [#24](https://github.com/koorikla/platform/issues/24)).
+aws/hetzner (see "Control plane size and rollouts").
 
 | Fleet file | Becomes |
 |---|---|
