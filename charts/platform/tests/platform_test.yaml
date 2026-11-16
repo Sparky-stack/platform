@@ -110,6 +110,15 @@ tests:
           path: spec.template.spec.syncPolicy.syncOptions
           content: ServerSideApply=true
 
+  # Deleting a fleet file must let CAPI order the teardown: background cascade, never foreground (the GC would delete
+  # the DockerCluster before the machines and CAPD would never finalize them)
+  - it: deletes cluster Applications with a background cascade
+    template: appset-fleet.yaml
+    asserts:
+      - equal:
+          path: spec.template.metadata.finalizers
+          value: [resources-finalizer.argocd.argoproj.io/background]
+
   # charts/cluster gates the Cluster on its registries ExternalSecret (sync wave -1): a cluster app must keep retrying
   # on the latest revision until that dependency exists, not give up after N attempts
   - it: retries fleet syncs without a limit on the latest revision
