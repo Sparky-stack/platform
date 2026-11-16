@@ -44,8 +44,8 @@ PLANES = {
     "data":     ("#a78bfa", "stateful data"),
     "external": ("#94a3b8", "git, GitHub, outside"),
 }
-TINT = 0.13        # box fill = plane colour at this opacity over BASE
-ZONE_TINT = 0.045
+TINT = 0.20        # box fill = plane colour at this opacity over BASE
+ZONE_TINT = 0.075
 
 STATUSES = ("built", "optin", "planned")
 TAGS = {"optin": "OPT-IN", "planned": "PLANNED"}
@@ -149,6 +149,8 @@ class Diagram:
         self.segs: list[tuple[str, tuple, tuple]] = []
         self.ends: list[tuple[str, tuple, tuple]] = []
         self.arrow_labels: dict[str, list[tuple]] = {}
+        self.flow_arrows: dict[str, list[tuple]] = {}      # numbered-flow arrows: id -> points
+        self.arrow_badges: dict[str, list[tuple]] = {}     # arrow id -> [(x, y, r)] of its badges
         self.titles: list[str] = []
         self.required: list[str] = []
         self.statuses: dict[str, str] = {}
@@ -225,16 +227,16 @@ class Diagram:
             cs, sp = MIN_CHIP, 0.6
             cw = tw(chip, cs, bold=True, spacing=sp) + 12
             chx, chy = x + w - cw - 10, y - 8
-            out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="16" rx="8" fill="{BG}" '
+            out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="17" rx="8.5" fill="{BG}" '
                        f'stroke="{color}" stroke-width="1"/>')
-            out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 12}" font-size="{cs}" font-weight="700" '
+            out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 12.5}" font-size="{cs}" font-weight="700" '
                        f'fill="{color}" text-anchor="middle" letter-spacing="{sp}">{html.escape(chip)}</text>')
-            self.r_tags.append((chip, (chx, chy, cw, 16), rect))
+            self.r_tags.append((chip, (chx, chy, cw, 17), rect))
         if status == "planned":
             out = [f'<g opacity="{PLANNED_OPACITY}">'] + out + ["</g>"]
         self.l_boxes += out
-        if step is not None:
-            self.badge(x, y, step, owner=rect)
+        if step is not None:            # step at a component: badge inside the top-left corner
+            self.badge(x + 19, y + 19, step, owner=rect)
         self.r_boxes.append((name or title, rect))
         self.titles.append(title)
         self.statuses[name or title] = status
@@ -266,7 +268,7 @@ class Diagram:
         return f"url(#ah{color.lstrip('#')})"
 
     def arrow(self, pts, step=None, status="built", label=None, label_pos=None, label_anchor="middle", aid=None,
-              both=False, badge=True, badge_at=0.5, loose=False):
+              both=False, badge=True, badge_at=None, loose=False):
         """Arrow pts[0] -> pts[-1] (orthogonal polyline). With `step` it is part of the numbered flow: accent colour,
         animated overlay, badge (on the longest segment at `badge_at`, or at `badge=(x, y)`). Without, a neutral structural line.
         status: built (solid) | optin (dashed) | planned (dimmed dashed). loose=True: endpoints need not be on a box.
@@ -288,6 +290,8 @@ class Diagram:
             self._fx(d, step)
         for p1, p2 in zip(pts, pts[1:]):
             self.segs.append((aid, p1, p2))
+        if step is not None:
+            self.flow_arrows[aid] = [tuple(p) for p in pts]
         if not loose:
             self.ends.append((aid, pts[0], pts[-1]))
         if label:
@@ -297,8 +301,12 @@ class Diagram:
             self.badge(badge[0], badge[1], step, owner=None, arrow=aid)
         elif step is not None and badge:
             segs = list(zip(pts, pts[1:]))
-            (ax, ay), (bx, by) = max(segs, key=lambda s: abs(s[1][0] - s[0][0]) + abs(s[1][1] - s[0][1]))
-            self.badge(ax + (bx - ax) * badge_at, ay + (by - ay) * badge_at, step, owner=None, arrow=aid)
+            i = max(range(len(segs)), key=lambda k: abs(segs[k][1][0] - segs[k][0][0]) + abs(segs[k][1][1] - segs[k][0][1]))
+            (ax, ay), (bx, by) = segs[i]
+            seg = abs(bx - ax) + abs(by - ay)
+            # centre of the segment minus the arrowhead, so the shaft shows on both sides
+            f = badge_at if badge_at is not None else ((seg - (10 if i == len(segs) - 1 else 0)) / 2) / seg
+            self.badge(ax + (bx - ax) * f, ay + (by - ay) * f, step, owner=None, arrow=aid)
         self.layout.append({"kind": "arrow", "id": aid, "points": [tuple(p) for p in pts], "step": step})
         return aid
 
@@ -328,6 +336,7 @@ class Diagram:
         self.r_badges.append((n, rect, owner))
         if arrow:
             self.arrow_labels.setdefault(arrow, []).append(rect)
+            self.arrow_badges.setdefault(arrow, []).append((x, y, r))
 
     def key(self, *steps: str):
         """Numbered step texts (1..n). They must match the diagram's section in docs/diagrams/README.md."""
@@ -343,7 +352,7 @@ class Diagram:
             return
         self._final = True
         y = self.bottom + 34
-        self.l_top.append(f'<line x1="28" y1="{y - 14}" x2="{W - 28}" y2="{y - 14}" stroke="{HAIR}" stroke-width="1"/>')
+        self.l_top.append(f'<line x1="28" y1="{y - 14}" x2="{W - 28}" y2="{y - 14}" stroke="{LINE}" stroke-width="1.5"/>')
         y0 = y
         # numbered key: two columns, column-major
         items = sorted(self.steps.items())
@@ -551,6 +560,48 @@ class Diagram:
             issues.append(f"badge {n} has no key entry")
         for n in sorted(set(self.steps) - self.badges):
             issues.append(f"key step {n} has no badge in the diagram")
+        # numbered flow: every accent arrow carries its badge, with visible shaft on both sides of it
+        for aid, pts in self.flow_arrows.items():
+            bs = self.arrow_badges.get(aid, [])
+            if not bs:
+                issues.append(f"flow arrow {aid} has no badge (every numbered arrow shows its number)")
+            for bx, by, r in bs:
+                segs = list(zip(pts, pts[1:]))
+                for i, ((x1, y1), (x2, y2)) in enumerate(segs):
+                    on = (min(x1, x2) - .5 <= bx <= max(x1, x2) + .5) and (min(y1, y2) - .5 <= by <= max(y1, y2) + .5)
+                    if not on:
+                        continue
+                    d_start = abs(bx - x1) + abs(by - y1)
+                    d_end = abs(x2 - bx) + abs(y2 - by)
+                    need_end = r + (18 if i == len(segs) - 1 else 6)   # room for the arrowhead
+                    need_start = r + (10 if i == 0 else 4)
+                    if (i == 0 and d_start < need_start) or d_end < need_end:
+                        issues.append(f"badge on flow arrow {aid} hides the shaft or arrowhead "
+                                      f"(segment {i}: {d_start:.0f}/{d_end:.0f} px either side)")
+                    break
+                else:
+                    issues.append(f"badge of flow arrow {aid} is not on the arrow")
+        # flow arrows never cross each other
+        flow_segs = [(a, p1, p2) for a, pts in self.flow_arrows.items() for p1, p2 in zip(pts, pts[1:])]
+        for i, (a, (ax1, ay1), (ax2, ay2)) in enumerate(flow_segs):
+            for b, (bx1, by1), (bx2, by2) in flow_segs[i + 1:]:
+                if a == b:
+                    continue
+                if ay1 == ay2 and bx1 == bx2:      # a horizontal, b vertical
+                    hx1, hx2, hy, vx, vy1, vy2 = min(ax1, ax2), max(ax1, ax2), ay1, bx1, min(by1, by2), max(by1, by2)
+                elif ax1 == ax2 and by1 == by2:
+                    hx1, hx2, hy, vx, vy1, vy2 = min(bx1, bx2), max(bx1, bx2), by1, ax1, min(ay1, ay2), max(ay1, ay2)
+                else:
+                    continue
+                if hx1 + 1 < vx < hx2 - 1 and vy1 + 1 < hy < vy2 - 1:
+                    issues.append(f"flow arrows {a} and {b} cross at ({vx:.0f}, {hy:.0f})")
+        # badges keep clear of zone borders (4 px)
+        for n, (x, y, w, h), _o in self.r_badges:
+            for ng, (gx, gy, gw, gh) in self.r_groups:
+                outer = (gx - 4, gy - 4, gw + 8, gh + 8)
+                inner = (gx + 4, gy + 4, gw - 8, gh - 8)
+                if self._ov((x, y, w, h), outer) and not self._inside((x, y, w, h), inner, tol=0):
+                    issues.append(f"badge {n} sits on the border of zone {ng!r}")
         names = {n for n, _ in self.r_boxes} | set(self.titles)
         for n in self.required:
             if n not in names:
