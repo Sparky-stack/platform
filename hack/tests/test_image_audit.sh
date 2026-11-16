@@ -25,6 +25,47 @@ done
 # every excepted image is documented as a deliberate exception
 assert_match "$(cat "$ROOT/docs/build-plane.md")" 'ARCH_EXCEPTIONS' "docs/build-plane.md documents the exception list"
 
+# extract_images: image keys, *Image keys, *_IMAGE env vars and YAML embedded in ConfigMap data (Argo Events keeps the
+# EventBus images there); a ConfigMap script that merely mentions "image:" must not abort the extraction.
+cat > "$TMP/render.yaml" <<'YAML'
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: script }
+data:
+  run.sh: |
+    echo "image: {{ broken"   # not YAML
+    [ unbalanced
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: controller }
+data:
+  controller-config.yaml: |
+    eventBus:
+      jetstream:
+        versions:
+          - version: "2.10.29"
+            natsImage: docker.io/library/nats:2.10.29
+            configReloaderImage: docker.io/natsio/nats-server-config-reloader:0.14.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: d }
+spec:
+  template:
+    spec:
+      containers:
+        - name: c
+          image: quay.io/argoproj/argo-events:v1.9.11
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: ARGO_EVENTS_IMAGE, value: quay.io/argoproj/argo-events:v1.9.11 }
+            - { name: OTHER, value: not-an-image }
+YAML
+got=$(extract_images < "$TMP/render.yaml" | sort -u | tr '\n' ' ')
+assert_eq "$got" "docker.io/library/nats:2.10.29 docker.io/natsio/nats-server-config-reloader:0.14.0 quay.io/argoproj/argo-events:v1.9.11 " \
+  "extract_images: image, *Image keys in embedded ConfigMap YAML, *_IMAGE env; broken script ignored"
+
 # installationParameters: one renderer (hack/lib/addons.sh), templates evaluated by Helm in the ApplicationSet.
 # shellcheck source=../lib/addons.sh
 ( cd "$ROOT" && source hack/lib/addons.sh
