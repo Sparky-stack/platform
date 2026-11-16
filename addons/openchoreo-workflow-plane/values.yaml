@@ -74,6 +74,12 @@ runNetworkPolicy:
       namespace: openchoreo-observability-plane
       podLabels: { gateway.networking.k8s.io/gateway-name: gateway-default }
 
+# Token Secret <serviceAccount>.service-account-token in workflows-<org ns> (templates/run-executor-token.yaml): Argo's
+# executor reads it for runs with automountServiceAccountToken: false (all of ours). Without it run pods hang in Init.
+runExecutorToken:
+  enabled: true
+  serviceAccount: workflow-sa     # == executor.serviceAccountName of every ClusterWorkflow(Template); OpenChoreo's name
+
 # Images substituted into files/cluster-workflow-templates/*.yaml (@@NAME@@). Multi-arch, pinned by digest.
 images:
   TOOLBOX_IMAGE: ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608   # koorikla/ci scripts + trivy, syft, cosign, crane, helm, yq, jq, git
