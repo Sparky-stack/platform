@@ -24,13 +24,19 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- /* sources: [{prefixes, attestors: [name], attestations: [name]}] */ -}}
 {{- $sources := list }}
 {{- $keyless := list }}
-{{- $ghSubject := "" }}
+{{- $ghSubjects := list }}
 {{- if $iv.github.enabled }}
-{{- /* Keyless identity: the reusable workflow pinned by commit SHA (a tag or branch ref is mutable). */ -}}
-{{- $wfRef := toString ($iv.github.workflowRef | default "") }}
-{{- if not (regexMatch "^[0-9a-f]{40}$" $wfRef) }}{{ fail (printf "imageVerification.github.workflowRef %q must be a 40-hex commit SHA of %s (tags and branches are mutable)" $wfRef $iv.github.workflow) }}{{ end }}
+{{- /* Keyless identity: the reusable workflow pinned by commit SHA (a tag or branch ref is mutable). workflowRef is the
+current pin; transitionWorkflowRefs keeps the previous one trusted while app repos move to the new pin (at most two). */ -}}
 {{- if not (regexMatch "^https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml$" ($iv.github.workflow | default "")) }}{{ fail (printf "imageVerification.github.workflow %q must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" ($iv.github.workflow | default "")) }}{{ end }}
-{{- $ghSubject = printf "%s@%s" $iv.github.workflow $wfRef }}
+{{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
+{{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
+{{- range $wfRefs }}
+{{- if not (regexMatch "^[0-9a-f]{40}$" .) }}{{ fail (printf "imageVerification.github.workflowRef %q must be a 40-hex commit SHA of %s (tags and branches are mutable)" . $iv.github.workflow) }}{{ end }}
+{{- end }}
+{{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
+{{- if ne (len $wfRefs) (len (uniq $wfRefs)) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
+{{- range $wfRefs }}{{ $ghSubjects = append $ghSubjects (printf "%s@%s" $iv.github.workflow .) }}{{ end }}
 {{- $triggers := $iv.github.triggers | default list }}
 {{- range $repo := $iv.github.repositories }}
 {{- range $ref := $iv.github.refs }}
@@ -128,8 +134,10 @@ spec:
       cosign:
         keyless:
           identities:
+            {{- range $ghSubjects }}
             - issuer: {{ $iv.github.issuer }}
-              subject: {{ $ghSubject }}
+              subject: {{ . }}
+            {{- end }}
           additionalExtensions:
             githubWorkflowRepository: {{ .repo }}
             githubWorkflowRef: {{ .ref }}
