@@ -77,3 +77,11 @@ kyverno:
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }
+    rbac:
+      clusterRole:
+        # platform: kyverno-policies' image/registry policies match pods/ephemeralcontainers (kubectl debug). Without
+        # read access the reports controller marks them RBACPermissionsGranted=False (not Ready, Argo Degraded).
+        extraResources:
+          - apiGroups: [""]
+            resources: [pods/ephemeralcontainers]
+            verbs: [get, list, watch]

@@ -93,7 +93,7 @@ tests:
       - equal:
           path: spec.webhook.falco
           value: { port: "12000", endpoint: /falco, method: POST, authSecret: { name: falco-webhook, key: token } }
-        documentSelector: { path: kind, value: EventSource }
+        documentSelector: { path: metadata.name, value: platform }
       - equal:
           path: spec.data[0].remoteRef
           value: { key: falco-webhook, property: token }
@@ -119,7 +119,7 @@ tests:
       - equal:
           path: spec.resource.releasebinding-rollout
           value: { namespace: default, group: openchoreo.dev, version: v1alpha1, resource: releasebindings, eventTypes: [ADD, UPDATE] }
-        documentSelector: { path: kind, value: EventSource }
+        documentSelector: { path: metadata.name, value: releasebindings }
       - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, list, watch] }] }
         documentSelector: { path: kind, value: Role }
 
@@ -177,3 +177,17 @@ tests:
           value:
             - { apiGroups: [openchoreo.dev], resources: [renderedreleases, environments], verbs: [get, list] }
             - { apiGroups: [events.k8s.io], resources: [events], verbs: [create] }
+
+  - it: one event source type per EventSource (webhook in platform, resource watch in releasebindings)
+    template: templates/eventsource.yaml
+    asserts:
+      - notExists: { path: spec.resource }
+        documentSelector: { path: metadata.name, value: platform }
+      - notExists: { path: spec.webhook }
+        documentSelector: { path: metadata.name, value: releasebindings }
+
+  - it: the promotion-gate sensor listens on EventSource releasebindings
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: promotion-gate }
+    asserts:
+      - equal: { path: "spec.dependencies[0].eventSourceName", value: releasebindings }

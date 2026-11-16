@@ -261,8 +261,9 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 - Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the HTTP probe is off
   in `installations/local/addons/openchoreo-platform/values.yaml`. In clouds it is on. VERIFY.
 - Observer `searchScope.environment` takes the environment name (not UID). VERIFY.
-- Argo Events: a single EventSource with webhook + resource types, `sha256sum` in Sensor `dataTemplate`, and resource
-  event `body` shape. VERIFY.
+- Argo Events: one source type per EventSource (verified live: a webhook + resource spec is rejected), so the Falco
+  webhook is EventSource `platform` and the ReleaseBinding watch is EventSource `releasebindings`. `sha256sum` in
+  Sensor `dataTemplate` and the resource event `body` shape: VERIFY.
 - Workflow plane (addon `openchoreo-workflow-plane`, on main): `ClusterWorkflowPlane default` on mgmt, namespace
   `workflows-default` (OpenChoreo creates `workflow-sa` and its `workflowtaskresults` Role per run namespace), the Argo
   controller watching all namespaces (`workflowNamespaces: []`; falco-response runs in `argo-events` with its own
