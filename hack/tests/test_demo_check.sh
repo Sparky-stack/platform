@@ -294,9 +294,9 @@ assert_eq "$(result_of 'latest promotion gate passed')" "PENDING #54" "red: fail
 assert_eq "$(detail_of 'latest promotion gate passed')" "gate-new: failed" "red: failed gate detail"
 assert_eq "$(result_of 'in-cluster build succeeded')" "PENDING #17" "red: no build run -> known-pending (#17)"
 assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-falcosidekick 0/1" "red: falco not ready"
-assert_eq "$(result_of 'cluster name in Falco events')" "PENDING #47" "red: cluster name known-pending (#47), no prefix match"
+assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
-assert_match "$OUT" $'\n14 PASS, 9 FAIL, 6 PENDING$' "red: summary"
+assert_match "$OUT" $'\n14 PASS, 10 FAIL, 5 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"

@@ -53,7 +53,6 @@ pending_issue() {
   case "$1" in
     http-production|gate-latest) echo 54 ;;   # production rollout waits for a passing promotion gate
     build-in-cluster) echo 17 ;;               # hello-world built on the OpenChoreo workflow plane
-    falco-cluster-name) echo 47 ;;             # cluster name in Falco events
     *) return 1 ;;
   esac
 }

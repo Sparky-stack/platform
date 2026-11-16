@@ -67,7 +67,7 @@ Also prepare:
 | 4 | Build and supply chain | 5 | signature + live deny live; in-cluster build pending #17 |
 | 5 | Deploy and promote | 5 | development/staging live; production pending #54 |
 | 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait pending #48 |
-| 7 | Runtime security | 3 | live; cluster name in events pending #47 |
+| 7 | Runtime security | 3 | live |
 | 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1/prod1; #19); per-tenant stores pending #96 |
 | 9 | App with a database | 2 | pending #91 |
 
@@ -260,9 +260,12 @@ Talking points:
   workflow enriches the event with project, component and environment (docs/observability.md "Falco response").
 - Responses only ever touch app namespaces (`dp-*`), never platform workloads.
 
-Fallback / pending: the cluster name in escalated events and per-cluster webhook tokens are **pending #47**; mention
-it, do not show the escalation payload. Locally all clusters share one kernel (docs/observability.md "Falco"), so
-expect duplicate detections from other clusters' Falcos.
+Every event carries `cluster:<name>` (falcosidekick custom field) and each cluster posts to its own escalation
+endpoint with its own token, so one cluster cannot raise events in another's name.
+
+Fallback: if no alert shows within a minute, show `task demo:check` rows of step 7 and the falco-response WorkflowTemplate.
+Locally all clusters share one kernel (docs/observability.md "Falco"), so expect duplicate detections from other
+clusters' Falcos.
 
 ## 8. Zero trust
 
