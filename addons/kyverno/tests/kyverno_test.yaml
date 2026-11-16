@@ -26,3 +26,15 @@ tests:
     documentSelector: { path: metadata.name, value: kyverno:reports-controller:additional }
     asserts:
       - contains: { path: rules, content: { apiGroups: [""], resources: [pods/ephemeralcontainers], verbs: [get, list, watch] } }
+
+  - it: mgmt reports controller gets 256Mi (OOM-killed at 128Mi on the initial list of mgmt's objects)
+    template: charts/kyverno/templates/reports-controller/deployment.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 256Mi }
+      - notExists: { path: 'spec.template.spec.containers[0].resources.limits.cpu' }
+
+  - it: workload clusters keep the 128Mi reports controller (role overlay only on mgmt)
+    template: charts/kyverno/templates/reports-controller/deployment.yaml
+    asserts:
+      - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 128Mi }
