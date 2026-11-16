@@ -11,7 +11,7 @@
 #   templates/gateway.yaml      Gateway `openbao` (kgateway, TLS passthrough on mesh.ca.port, SNI mesh.ca.host) + TLSRoute
 #   templates/mesh-clients.yaml ExternalSecret mesh-clients: every mesh member's public auth inputs (API server URL +
 #                               cluster CA certificate), collected from the fleet Secrets charts/cluster renders
-#   templates/reconcile.yaml    Job (Argo PostSync) + CronJob `mesh-reconcile`: files/mesh-reconcile.sh applies the
+#   templates/reconcile.yaml    Job (Argo Sync hook, wave 1) + CronJob `mesh-reconcile`: files/mesh-reconcile.sh applies the
 #                               mesh PKI (group CAs: Job only; per member PKI role, identity entity, JWT auth) with
 #                               scoped, short-lived tokens. It writes no ACL policy (all static, self-initialisation).
 #   templates/mesh-admission.yaml  ValidatingAdmissionPolicies for the remote-secret reader certs (charts/cluster
@@ -98,11 +98,11 @@ memberAuth:
 
 reconcile:
   enabled: true
-  schedule: "*/5 * * * *"          # also an Argo PostSync hook; new members are picked up within one ESO refresh + 5m
+  schedule: "*/5 * * * *"          # also an Argo Sync hook (wave 1); new members are picked up within one ESO refresh + 5m
   # == openbao.server.ha.raft.config (self-initialisation; server_test.yaml checks the names match):
   serviceAccount: openbao-mesh-config          # CronJob: role platform-mesh-config (members only)
   loginRole: platform-mesh-config
-  bootstrapServiceAccount: openbao-mesh-bootstrap   # PostSync Job: also role platform-mesh-bootstrap (group CAs)
+  bootstrapServiceAccount: openbao-mesh-bootstrap   # Sync-hook Job: also role platform-mesh-bootstrap (group CAs)
   bootstrapLoginRole: platform-mesh-bootstrap
   audience: openbao                # projected token audience == the Kubernetes auth roles' `audience`
   resources:
@@ -227,12 +227,14 @@ openbao:
           # Every ACL policy and every mgmt identity is written HERE, once; nothing that runs later can author a policy
           # (docs/multicluster.md "Who may do what in OpenBao"). Identities (Kubernetes auth, projected tokens with
           # audience "openbao"; names == addon values reconcile.*, caPublic.pkiReader, contract test server_test.yaml):
-          #   platform-mesh-bootstrap  SA openbao-mesh-bootstrap (PostSync Job only): group CAs. CA-equivalent - it
+          #   platform-mesh-bootstrap  SA openbao-mesh-bootstrap (Sync-hook Job only): group CAs. CA-equivalent - it
           #                            can sign an intermediate CSR with a group root - so it never runs on a schedule.
           #   platform-mesh-config     SAs openbao-mesh-config (CronJob) + openbao-mesh-bootstrap: member enrolment
           #                            (jwt mounts, PKI roles with pinned safety flags, identity entities). No key,
           #                            no signing, no policy writes.
-          #   mesh-ca-read             SA eso-openbao-pki-public: the group roots' public certificates.
+          #   mesh-ca-read             SA eso-openbao-pki-public: the group roots' public certificates, plus the
+          #                            token self-operations ESO's vault provider needs without the default policy
+          #                            (lookup-self validates the SecretStore, revoke-self closes the client).
           # Members get the static templated policy mesh-member: sign on pki-mesh-<group>-int/sign/<cluster>, where
           # group/cluster are metadata of the identity entity mesh-<cluster> the reconcile binds to auth/mesh-<cluster>.
           # Changing these policies later is an admin action (re-initialise, or a break-glass identity) by design.
@@ -269,6 +271,8 @@ openbao:
               data = {
                 policy = <<EOP
           path "+/cert/ca" { capabilities = ["read"] }
+          path "auth/token/lookup-self" { capabilities = ["read"] }
+          path "auth/token/revoke-self" { capabilities = ["update"] }
           EOP
               }
             }
