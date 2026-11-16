@@ -135,12 +135,15 @@ render() {
   fi
   extract_images < "$TMP/render.yaml" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
   # Proxy image istiod uses for the Deployments it generates (east-west gateway, waypoints): not in any manifest,
-  # resolved from the injector values (global.hub/proxy.image/tag/variant, e.g. docker.io/istio/proxyv2:1.32.0-distroless).
+  # resolved from the injector values like the Istio charts do: global.proxy.image verbatim when it contains "/" (a
+  # full, digest-pinned reference), else global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless).
   local inj
   inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$TMP/render.yaml" 2>/dev/null || true)
   if [[ -n "$inj" ]]; then
     # shellcheck disable=SC2016  # $g/$v are yq variables
-    img=$(printf '%s' "$inj" | yq -p=json -r '.global as $g | ($g.variant // "") as $v | $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end)')
+    img=$(printf '%s' "$inj" | yq -p=json -oy -r '.global as $g | ($g.variant // "") as $v
+      | if ($g.proxy.image | test("/")) then $g.proxy.image
+        else $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end) end')
     add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
   fi
 }
@@ -201,7 +204,7 @@ yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' "$CATALOG" 
 for dir in examples/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   ex=$(basename "$dir")
-  [[ "$(yq -p=json ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
+  [[ "$(yq -p=json -oy ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
   helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
   for cf in "$INST_DIR"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue
@@ -212,7 +215,7 @@ for dir in examples/*; do
     while IFS=$'\t' read -r k v; do
       [[ -n "$k" ]] || continue
       [[ "$(yq -r ".[\"$k\"] // \"\"" "$labels")" == "$v" ]] || match=0
-    done < <(yq -p=json -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
+    done < <(yq -p=json -oy -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
     (( match )) || continue
     vargs=(--values "$dir/values.yaml")
     for vf in "$INST_DIR/examples/$ex/values.yaml" "$INST_DIR/examples/$ex/cluster-$c_name.yaml"; do
