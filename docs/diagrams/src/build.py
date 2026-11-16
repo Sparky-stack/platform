@@ -83,7 +83,7 @@ def architecture() -> Diagram:
 
     # workload clusters
     A, B, KW = 872, 1080, 192
-    d.box(A, Y[2], KW, BH, "platform", "OC data plane", ["cluster-agent", "(dials out)"],
+    d.box(A, Y[2], KW, BH, "platform", "OC data plane", ["cluster-agent · Reloader", "(dials out)"],
           name="OpenChoreo data plane")
     d.box(B, Y[2], KW, BH, "network", "kgateway", ["Gateway API", "north-south"])
     d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cell namespaces",
@@ -270,7 +270,7 @@ def security() -> Diagram:
     d.box(MR, 284, MH, 58, "platform", "cluster-gateway", ["client CA = that", "cluster's agent CA"])
     d.box(WL, 150, WW, 52, "security", "kube-apiserver OIDC", ["trusts the Thunder issuer"], planned=True)
     d.box(WL, 214, WW, 58, "security", "cluster-agent-tls", ["own cert + key (CN = cluster)", "+ public gateway CA"])
-    d.box(WL, 284, WH, 58, "platform", "cluster-agent", ["dials out", "wss + mTLS"])
+    d.box(WL, 284, WH, 58, "platform", "cluster-agent", ["dials out · Reloader", "wss + mTLS"])
     d.box(WR, 284, WH, 58, "network", "ztunnel", ["SPIFFE mTLS", "mesh: istio-csr"])
     d.arrow([(ML, 176), (EX + EW, 176)], RO, planned=True, label="OIDC federation", label_pos=(GL, 180),
             aid="fed")
