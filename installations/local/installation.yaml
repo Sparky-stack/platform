@@ -73,6 +73,11 @@ openchoreo:
   workflowPlane:
     enabled: true                              # false: disable the addon and Backstage's workflow features
 
+# Public DNS (addon external-dns, docs/dns.md): none locally, coredns-local resolves *.openchoreo.localhost.
+dns:
+  provider: none                               # none | route53 | cloudflare
+  domainFilters: []
+
 # Promotion gates (docs/promotion.md). Read by charts/tenant (per-environment Applications, Argo CD sync windows) and
 # addon openchoreo-platform (production authz deny, promotion-gate ClusterWorkflow freeze check).
 promotion:

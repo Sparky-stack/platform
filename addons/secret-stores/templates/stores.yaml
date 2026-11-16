@@ -389,4 +389,142 @@ spec:
             name: eso-vault
             namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- /*
+ClusterSecretStore `dns` (workload clusters, installation.yaml dns.provider cloudflare): the external-dns Cloudflare
+token, zone-wide DNS:Edit. The tenant store `default` is the ClusterDataPlane secretStoreRef, so anything it can read
+is readable by every tenant; this store reads from a separate backend location with its own identity and is scoped to
+dnsStore.namespaces (external-dns). AGENTS.md invariant 5 exception; addon external-dns refuses any other store.
+*/ -}}
+{{- if and (ne .Values.role "mgmt") (eq ((.Values.dns).provider | default "none") "cloudflare") }}
+{{- $dnsNs := .Values.dnsStore.namespaces | default list }}
+{{- if not $dnsNs }}{{ fail "dnsStore.namespaces must list the namespaces allowed to read ClusterSecretStore dns" }}{{ end }}
+{{- $ds := .Values.secrets.dnsStore | default dict }}
+---
+{{- if eq $backend "kubernetes" }}
+{{- $credNs := ($ds.kubernetes).namespace | default "external-dns-credentials" }}
+{{- if eq $credNs (.Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets") }}
+{{- fail "secrets.dnsStore.kubernetes.namespace must differ from secrets.workloadKubernetes.namespace (the tenant store default reads that one)" }}
+{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $credNs | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-workload-dns
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-workload-dns
+  namespace: {{ $credNs | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-workload-dns
+  namespace: {{ $credNs | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: eso-workload-dns
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-workload-dns
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: dns
+spec:
+  conditions:
+    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $credNs | quote }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-workload-dns
+          namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "aws" }}
+{{- $role := ($ds.aws).role | default "" }}
+{{- if or (not $role) (eq $role (.Values.secrets.aws.role | default "")) }}
+{{- fail "dns.provider cloudflare on AWS Secrets Manager needs secrets.dnsStore.aws.role: an IAM role that reads only the DNS key, distinct from secrets.aws.role (the tenant store default's)" }}
+{{- end }}
+# VERIFY: workload IRSA / Pod Identity auth for AWS Secrets Manager
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-aws-dns
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $role | quote }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: dns
+spec:
+  conditions:
+    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.secrets.aws.region | quote }}
+      {{- if .Values.secrets.aws.prefix }}
+      prefix: {{ .Values.secrets.aws.prefix | quote }}
+      {{- end }}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: eso-aws-dns
+            namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "vault" }}
+{{- $role := ($ds.vault).role | default "" }}
+{{- if or (not $role) (eq $role (.Values.secrets.vault.auth.kubernetes.role | default "")) }}
+{{- fail "dns.provider cloudflare on Vault needs secrets.dnsStore.vault.role: a kubernetes-auth role whose policy reads only the DNS key, distinct from secrets.vault.auth.kubernetes.role (the tenant store default's)" }}
+{{- end }}
+# VERIFY: workload Vault auth
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-vault-dns
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: dns
+spec:
+  conditions:
+    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
+  provider:
+    vault:
+      server: {{ .Values.secrets.vault.server | quote }}
+      path: {{ ($ds.vault).path | default .Values.secrets.vault.path | default "platform" | quote }}
+      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
+      auth:
+        kubernetes:
+          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
+          role: {{ $role | quote }}
+          serviceAccountRef:
+            name: eso-vault-dns
+            namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
 {{- end -}}

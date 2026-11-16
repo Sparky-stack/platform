@@ -56,13 +56,19 @@ agentServerCA:
   configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap. VERIFY ESO generic target
 
 # Secrets from ClusterSecretStore `platform` (never committed; seeded by `make secrets` locally):
-#   key `openchoreo-observability`, properties:
-#     opensearch-username   must be `admin` (OpenSearch demo security config user)
-#     opensearch-password   >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
+#   key `openchoreo-observability`:
+#     opensearch-username     must be `admin` (OpenSearch demo security config user)
+#     opensearch-password     >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
 #     observer-client-secret  == Thunder client openchoreo-observer-resource-reader-client's secret
+#   key `openchoreo-ai` (read only while rca / finOpsAgent are enabled; docs/ai-agents.md):
+#     rca-llm-api-key             provider key, or any placeholder when llm.baseUrl is the agentgateway
+#     rca-oauth-client-secret     == Thunder client openchoreo-rca-agent's secret (addon thunder reads the same property)
+#     finops-llm-api-key          provider key, or any placeholder when llmBaseUrl is the agentgateway
+#     finops-oauth-client-secret  == Thunder client openchoreo-finops-agent's secret (addon thunder reads it too)
 secrets:
   store: platform
   remoteKey: openchoreo-observability
+  aiRemoteKey: openchoreo-ai
 
 openchoreo-observability-plane:
   observer:
@@ -124,10 +130,49 @@ openchoreo-observability-plane:
   tls:
     enabled: false
 
+  # --- AI agents: switched off (docs/ai-agents.md) -----------------------------------------------------------------
+  # Configured here, inert while `enabled: false` (upstream renders nothing for them). Switch on = `enabled: true` +
+  # model name, after: key `openchoreo-ai` in the platform store, Thunder client 53/60 (addon thunder), and either addon
+  # agentgateway (base URLs below) or an empty base URL with a real provider key. The control plane's rca-agent /
+  # finops-agent authz roles and client_id bindings ship enabled upstream. templates/secrets.yaml syncs the agent
+  # Secrets; templates/cluster-observability-plane.yaml publishes the agent URLs on the plane CR.
   rca:
-    enabled: false                           # platform: needs an LLM endpoint + Thunder client openchoreo-rca-agent
+    enabled: false                           # switch 1/2 for the RCA (SRE) agent
+    image:
+      tag: v1.3.3@sha256:f61a2ac460f6eecde24cdbb36f6ab87e2b37a0827f318800a2dbb297ac23e8b5   # sre-agent, amd64 + arm64
+    openchoreoApiUrl: "http://api.openchoreo.localhost:8080"     # == observer.controlPlaneApiUrl (co-located)
+    cors:
+      allowedOrigins:
+        - "http://openchoreo.localhost:8080"
+    http:
+      hostnames:
+        - rca-agent.openchoreo.localhost     # == ClusterObservabilityPlane rcaAgentURL host (validated)
+    secretName: rca-agent-secret             # templates/secrets.yaml: RCA_LLM_API_KEY, OAUTH_CLIENT_SECRET
+    llm:
+      modelName: ""                          # switch 2/2, e.g. gpt-5.2 (required when enabled; validated)
+      baseUrl: "http://agentgateway-proxy.agentgateway-system.svc.cluster.local"   # addon agentgateway; "" = provider direct
+    oauth:
+      clientId: openchoreo-rca-agent         # == Thunder script 53
+    resources:                               # upstream requests 100m/1Gi (!), limits 250m/1.5Gi: mind host RAM
+      requests: { cpu: 50m, memory: 512Mi }
+      limits: { cpu: 250m, memory: 1536Mi }
   finOpsAgent:
-    enabled: false                           # platform: needs OpenCost + LLM
+    enabled: false                           # switch 1/2 for the FinOps agent; needs addon finops-opencost too
+    image:
+      tag: v1.3.3@sha256:1875e43e83d25c90dfc16703eb3b9ec3d12cd280117313c79e09f2348022564c   # finops-agent, amd64 + arm64
+    openchoreoApiUrl: "http://api.openchoreo.localhost:8080"
+    cors:
+      allowedOrigins:
+        - "http://openchoreo.localhost:8080"
+    http:
+      hostnames:
+        - finops-agent.openchoreo.localhost  # == ClusterObservabilityPlane finOpsAgentURL host (validated)
+    # opencostMcpServerUrl / observer.finOpsAdapter.url: upstream defaults match addon finops-opencost's Services
+    secretName: finops-agent                 # templates/secrets.yaml: LLM_API_KEY, OAUTH_CLIENT_SECRET
+    llmName: ""                              # switch 2/2, an OpenAI model (1.3.3 supports OpenAI only), e.g. gpt-5.2
+    llmBaseUrl: "http://agentgateway-proxy.agentgateway-system.svc.cluster.local"   # addon agentgateway; "" = direct
+    oauth:
+      clientId: openchoreo-finops-agent      # == Thunder script 60
 
 # --- logs: OpenSearch single node (shared with traces and k8s events) + logs-adapter --------------------------------
 observability-logs-opensearch:

@@ -30,9 +30,13 @@ sourceIntegrity:
 #   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
 # Optional helm parameters computed per cluster:
 #   clusterNameParameters:   [<param>]                 -> the cluster name
+#   clusterIdParameters:     [<param>]                 -> <installation.name>-<cluster name> (unique across installations)
 #   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
 #   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
 #   clusterLabelParameters:  {<param>: {label: <key>, default: <str>}} -> a cluster secret label's value (else default)
+# Optional extra value files, selected by installation facts rather than cluster labels:
+#   installationValueFiles:  [<tpl>]                   -> tpl over installation values, rendered once here; layered after
+#                                                         values/cni-*.yaml, before installations/<inst>/addons/<name>/*
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
@@ -47,6 +51,9 @@ openchoreo:
 registry:
   type: external
   host: ""
+dns:
+  provider: none              # none | route53 | cloudflare (docs/dns.md)
+  domainFilters: []
 
 addons:
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
@@ -65,7 +72,15 @@ addons:
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
+  # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. The DNS provider is installation.yaml
+  # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and
+  # <installation>-<cluster> (TXT owner) become helm parameters.
+  external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterIdParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
   openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
+  # AI agents (docs/ai-agents.md), opt-in: the OpenCost FinOps module next to the observability plane, and agentgateway
+  # (LLM gateway the RCA / FinOps agents call instead of holding provider keys).
+  finops-opencost:          { namespace: openchoreo-observability-plane, roles: [mgmt], default: false }
+  agentgateway:             { namespace: agentgateway-system,      roles: [mgmt],           default: false }
   telemetry:                { namespace: telemetry,                roles: [workload],       default: true }
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true }

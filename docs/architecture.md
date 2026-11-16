@@ -82,6 +82,7 @@ addons/<addon>/values.yaml                                   chart defaults (all
 addons/<addon>/values/role-<role>.yaml                       mgmt vs workload
 addons/<addon>/values/provider-<provider>.yaml               docker vs aws vs hetzner
 addons/<addon>/values/cni-<cni>.yaml                         cilium vs flannel (label platform.koorikla.io/cni)
+addons/<addon>/values/<catalog installationValueFiles>       by installation fact (e.g. external-dns dns-<dns.provider>)
 installations/<inst>/addons/<addon>/values.yaml              this installation
 installations/<inst>/addons/<addon>/env-<environment>.yaml   this environment
 installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (identity / exceptions only)
@@ -89,10 +90,15 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
+`clusterIdParameters` (`<installation>-<cluster>`, unique across installations, e.g. the external-dns TXT owner),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)) and
-`clusterLabelParameters` (a cluster secret label's value with a default, e.g. Istio's meshID and network from the mesh
-labels; [multicluster.md](multicluster.md)).
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)), `clusterLabelParameters` (a cluster secret
+label's value with a default, e.g. Istio's meshID and network from the mesh labels; [multicluster.md](multicluster.md)).
+`installationValueFiles`
+(templates over installation values, paths under `addons/<addon>/values/`) select value files by an installation fact
+that is not a cluster label, e.g. external-dns' DNS provider ([dns.md](dns.md)). `hack/lib/addons.sh` reproduces this
+layering for every offline render (test.sh, image-audit, contract tests), reading the release name, value files,
+`valuesObject` and parameters from the rendered ApplicationSet (`hack/tests/test_addon_renderer.sh`).
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (fleet file
 `addonsRevision`, default `HEAD`) is the `targetRevision` of that cluster's addon Applications, so prod can follow a
@@ -115,7 +121,10 @@ Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backe
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
-Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice.
+Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice. Every
+tenant can read through `default`, so platform credentials never live behind it: the only one on workload clusters,
+the external-dns Cloudflare token, has its own `ClusterSecretStore/dns` (namespace `external-dns` only, separate
+backend location and identity; [dns.md](dns.md#credentials)).
 Key names are flat (`platform-github`, `capi-aws`, …; [conventions.md](conventions.md#secret-keys)) so they map onto
 every backend. `platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces
 that consume it (addon secret-stores `platformStore.namespaces`); `hack/tests/test_secret_store_scope.sh` fails when a

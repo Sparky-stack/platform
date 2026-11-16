@@ -22,6 +22,29 @@ secrets:
       kubernetes:
         mountPath: kubernetes
         role: external-secrets
+  # ClusterSecretStore `dns` on workload clusters while installation.yaml dns.provider is cloudflare (dnsStore below).
+  # It must read from a backend location the tenant store `default` cannot: per backend
+  dnsStore:
+    kubernetes:
+      namespace: external-dns-credentials   # remote namespace (not workloadKubernetes.namespace)
+    aws:
+      role: ""                 # IAM role (IRSA) allowed to read only the DNS key; must differ from secrets.aws.role,
+                               # whose policy must not grant it (render fails if empty or equal)
+    vault:
+      path: ""                 # default: secrets.vault.path
+      role: ""                 # kubernetes-auth role whose policy reads only the DNS key; must differ from
+                               # secrets.vault.auth.kubernetes.role (render fails if empty or equal)
+
+# installation.yaml (valuesObject): dns.provider cloudflare puts the Cloudflare token behind store `dns` on workload clusters.
+dns:
+  provider: none
+
+# Workload clusters: ClusterSecretStore `dns` holds the external-dns Cloudflare token (zone-wide DNS:Edit) apart from the
+# tenant store `default` (the ClusterDataPlane secretStoreRef every tenant SecretReference / ExternalSecret can use).
+# Only these namespaces may reference it (AGENTS.md invariant 5 exception; hack/tests/test_secret_store_scope.sh).
+dnsStore:
+  namespaces:
+    - external-dns
 
 # Namespaces on mgmt allowed to read ClusterSecretStore `platform` (spec.conditions). Every current consumer is listed;
 # a new one must be added here (hack/tests/test_secret_store_scope.sh fails otherwise).
@@ -40,6 +63,8 @@ platformStore:
     - workflows-default                # per-run ExternalSecrets of ClusterWorkflows (addon openchoreo-platform), rendered by
                                        # OpenChoreo into workflows-<openchoreo.orgNamespace>: builds (git, registry, cosign),
                                        # promotion-gate (promotion-gate, promotion-gate-github)
+    - external-dns                     # external-dns-cloudflare when opted in on mgmt with Cloudflare (addon external-dns)
+    - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
 
 repoCreds:
   name: platform-repo-creds

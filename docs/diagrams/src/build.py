@@ -61,7 +61,7 @@ def overview() -> Diagram:
     d.box(L, R[2], WW, BH, "platform", "OpenChoreo control plane",
           ["Thunder · API · controllers · Backstage · gateway"])
     d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows · BuildKit", "koorikla/ci builds"])
-    d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps agents: off"])
+    d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps · AI gw: off"])
     d.box(L, R[4], 100, BH, "security", "Falco", ["detection"])
     d.box(L + 108, R[4], 100, BH, "security", "Kyverno", ["admission"])
     d.box(Rx, R[4], CW, BH, "data", "Harbor", ["apps · proxy caches", "Trivy scan on push"])
@@ -80,7 +80,7 @@ def overview() -> Diagram:
     d.box(A, R[5], KW, BH, "security", "ESO", ["store: default"])
     d.box(B, R[5], KW, BH, "gitops", "Crossplane v2", ["providers · XRs"], planned=True)
     d.box(A, R[6], KW, BH, "security", "Kyverno", ["PSS audit · ambient"])
-    d.box(B, R[6], KW, BH, "network", "external-dns", ["Route53 · Cloudflare"], planned=True)
+    d.box(B, R[6], KW, BH, "network", "external-dns", ["Route 53 · Cloudflare", "opt-in"])
     d.box(A, R[7], B + KW - A, BH, "platform", "app workloads",
           ["OpenChoreo cell namespaces per project / env"])
 

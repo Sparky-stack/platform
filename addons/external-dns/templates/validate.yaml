@@ -1,0 +1,95 @@
+{{- /*
+Render-time guards: what runs must equal installation.yaml `dns:` (delivered by the catalog's installationValueFiles /
+installationParameters; an installation overlay must not contradict it).
+  - dns.provider is none | route53 | cloudflare. Enabling the addon on a cluster whose installation has provider none
+    is a mistake, not a silent no-op (`installation` values exist only in platform renders, not standalone).
+  - external-dns.enabled and provider.name follow dns.provider (route53 -> aws).
+  - domainFilters is never empty while running (ExternalDNS would manage every zone the credentials reach) and equals
+    dns.domainFilters.
+  - txtOwnerId is <installation>-<cluster> (the cluster name in standalone renders); policy is upsert-only or sync;
+    Cloudflare reads its token from the ESO Secret.
+  - extraArgs cannot widen zones or change ownership (domain/zone filters, TXT owner/prefix/suffix are owned by
+    installation.yaml and the catalog) and must scope the Gateways (gateway-name or gateway-label-filter).
+  - Credentials never reach tenants: on workload clusters the Cloudflare token comes only from ClusterSecretStore `dns`
+    (addon secret-stores, scoped to this namespace), never the tenant store `default`. Route 53 runs on IRSA / EKS Pod
+    Identity only: static AWS keys (env, secrets.aws) are refused.
+*/ -}}
+{{- $dns := .Values.dns | default dict }}
+{{- $provider := $dns.provider | default "none" }}
+{{- $ext := index .Values "external-dns" }}
+{{- $map := dict "none" "" "route53" "aws" "cloudflare" "cloudflare" }}
+{{- if not (hasKey $map $provider) }}
+{{- fail (printf "dns.provider must be one of none, route53, cloudflare (installation.yaml), got %q" $provider) }}
+{{- end }}
+{{- if eq $provider "none" }}
+{{- if .Values.installation }}
+{{- fail (printf "external-dns is enabled on cluster %s but installation.yaml dns.provider is none: set dns.provider and dns.domainFilters, or drop the addon toggle" .Values.cluster.name) }}
+{{- end }}
+{{- if $ext.enabled }}
+{{- fail "external-dns.enabled must stay false while dns.provider is none" }}
+{{- end }}
+{{- else }}
+{{- if not $ext.enabled }}
+{{- fail (printf "dns.provider=%s but external-dns.enabled is false (values/dns-%s.yaml not layered?)" $provider $provider) }}
+{{- end }}
+{{- $want := index $map $provider }}
+{{- $got := "" }}
+{{- if kindIs "map" $ext.provider }}{{ $got = $ext.provider.name | default "" }}{{ else }}{{ $got = $ext.provider | toString }}{{ end }}
+{{- if ne $got $want }}
+{{- fail (printf "dns.provider=%s requires external-dns.provider.name=%s, got %q (an installation overlay must not switch providers)" $provider $want $got) }}
+{{- end }}
+{{- $filters := $dns.domainFilters | default list }}
+{{- if not $filters }}
+{{- fail "dns.domainFilters must list the zones ExternalDNS may manage (installation.yaml)" }}
+{{- end }}
+{{- if ne (sortAlpha $filters | toJson) (sortAlpha ($ext.domainFilters | default list) | toJson) }}
+{{- fail (printf "external-dns.domainFilters %v must equal installation.yaml dns.domainFilters %v (catalog installationParameters; never set it in overlays)" $ext.domainFilters $filters) }}
+{{- end }}
+{{- $owner := toString .Values.cluster.name }}
+{{- with (.Values.installation).name }}{{ $owner = printf "%s-%s" . $owner }}{{ end }}
+{{- if ne (toString $ext.txtOwnerId) $owner }}
+{{- fail (printf "external-dns.txtOwnerId (%v) must equal %s (<installation>-<cluster>, catalog clusterIdParameters)" $ext.txtOwnerId $owner) }}
+{{- end }}
+{{- if not (has $ext.policy (list "upsert-only" "sync")) }}
+{{- fail (printf "external-dns.policy must be upsert-only (default) or sync, got %q" $ext.policy) }}
+{{- end }}
+{{- if eq $provider "cloudflare" }}
+{{- $token := false }}
+{{- range ($ext.env | default list) }}
+{{- if and (eq .name "CF_API_TOKEN") (eq (((.valueFrom).secretKeyRef).name | default "") "external-dns-cloudflare") }}{{ $token = true }}{{ end }}
+{{- end }}
+{{- if not (and $token .Values.secrets.cloudflare.enabled) }}
+{{- fail "dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml)" }}
+{{- end }}
+{{- if and (eq (toString .Values.cluster.role) "workload") (ne (toString .Values.secrets.store) "dns") }}
+{{- fail (printf "dns.provider=cloudflare on workload cluster %s reads the zone-wide token from ClusterSecretStore %q: only store dns (addon secret-stores, scoped to namespace external-dns) is allowed; the tenant store default is readable by every tenant" .Values.cluster.name (toString .Values.secrets.store)) }}
+{{- end }}
+{{- end }}
+{{- if or $ext.txtPrefix $ext.txtSuffix }}
+{{- fail "external-dns.txtPrefix / txtSuffix are not allowed: they change which TXT records mark ownership (docs/dns.md)" }}
+{{- end }}
+{{- $argKeys := list }}
+{{- if kindIs "map" $ext.extraArgs }}
+{{- range $k, $v := $ext.extraArgs }}{{ if not (kindIs "invalid" $v) }}{{ $argKeys = append $argKeys $k }}{{ end }}{{ end }}
+{{- else }}
+{{- range ($ext.extraArgs | default list) }}{{ $argKeys = append $argKeys (regexReplaceAll "^--(no-)?([^=]+).*$" (toString .) "${2}") }}{{ end }}
+{{- end }}
+{{- range $argKeys }}
+{{- if has . (list "domain-filter" "regex-domain-filter" "zone-id-filter" "zone-name-filter" "txt-prefix" "txt-suffix" "txt-owner-id" "aws-zone-tags") }}
+{{- fail (printf "external-dns.extraArgs %s is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" .) }}
+{{- end }}
+{{- end }}
+{{- if not (or (has "gateway-name" $argKeys) (has "gateway-label-filter" $argKeys)) }}
+{{- fail "external-dns.extraArgs must scope the Gateways it publishes (gateway-name + gateway-namespace, or gateway-label-filter; values/role-*.yaml)" }}
+{{- end }}
+{{- /* secrets.aws.{region,role,prefix} is installation.yaml's ESO backend (valuesObject), not ours: only the removed
+     static-key switches count. */}}
+{{- if or ((.Values.secrets.aws).enabled) ((.Values.secrets.aws).remoteKey) }}
+{{- fail "secrets.aws: static AWS keys are not supported; Route 53 uses IRSA or EKS Pod Identity (values/dns-route53.yaml)" }}
+{{- end }}
+{{- range ($ext.env | default list) }}
+{{- if has .name (list "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_SHARED_CREDENTIALS_FILE") }}
+{{- fail (printf "external-dns.env %s: static AWS credentials are not supported; Route 53 uses IRSA or EKS Pod Identity" .name) }}
+{{- end }}
+{{- end }}
+{{- end }}

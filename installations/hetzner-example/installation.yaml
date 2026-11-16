@@ -16,6 +16,7 @@ mgmt:
   addons:
     harbor: "false"                           # registry.type external
     openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
+    # external-dns: "true"                    # opt-in per cluster (mgmt + workload) once Cloudflare zone + token exist
 
 secrets:
   backend: vault                              # ClusterSecretStore/platform -> Vault / OpenBao (no native manager)
@@ -27,6 +28,12 @@ secrets:
       kubernetes:
         mountPath: kubernetes
         role: external-secrets
+  # Workload ClusterSecretStore `dns` (dns.provider cloudflare below): the Cloudflare token stays out of reach of the
+  # tenant store `default`. VERIFY: Vault role bound to external-secrets/eso-vault-dns whose policy reads only key
+  # external-dns-cloudflare, and the `external-secrets` role's policy denies it (docs/dns.md "Credentials").
+  dnsStore:
+    vault:
+      role: external-secrets-dns
   nodeRegistryAuth:
     enabled: true
 
@@ -55,3 +62,10 @@ openchoreo:
     enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
     httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation
     tlsPort: 443
+
+# Public DNS for Gateway API routes (addon external-dns, opt-in per cluster: docs/dns.md). The DNS provider is
+# independent of the infra provider; provider tuning goes in installations/<inst>/addons/external-dns/values.yaml.
+dns:
+  provider: cloudflare                        # none | route53 | cloudflare
+  domainFilters:                              # the only zones ExternalDNS may touch; the TXT owner is the cluster name
+    - hetzner.example.com                     # VERIFY: a Cloudflare zone you own
