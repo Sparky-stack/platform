@@ -430,6 +430,19 @@ helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace
   > "$TMP/promotion-authz.yaml"
 assert_eq "$(D="$deleter" yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == strenv(D)) | .spec.actions | join(",")' \
   "$TMP/promotion-authz.yaml")" "component:delete" "charts/tenant componentDeleterRole is the addon's component:delete ClusterAuthzRole"
+binding_actions="releasebinding:create,releasebinding:update,releasebinding:delete,projectreleasebinding:create,projectreleasebinding:update,projectreleasebinding:delete,resourcereleasebinding:create,resourcereleasebinding:update,resourcereleasebinding:delete"
+assert_eq "$(yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == "promotion-release-binding-writer") | .spec.actions | join(",")' \
+  "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-release-binding-writer covers component, project and resource release bindings"
+assert_eq "$(yq 'select(.kind == "ClusterAuthzRoleBinding" and .metadata.name == "promotion-deny-developers") | .spec.roleMappings[0].conditions[0].actions | join(",")' \
+  "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-deny-developers condition actions match promotion-release-binding-writer"
+helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
+  -s templates/upstream-defaults.yaml > "$TMP/upstream-defaults.yaml"
+assert_eq "$(yq 'select(.kind == "ClusterTrait" and .metadata.name == "observability-alert-rule") | .spec.creates[0].template.kind' \
+  "$TMP/upstream-defaults.yaml")" "ObservabilityAlertRule" "upstream-defaults ships ClusterTrait observability-alert-rule"
+for ct in service web-application worker; do
+  assert_eq "$(CT="$ct" yq 'select(.kind == "ClusterComponentType" and .metadata.name == strenv(CT)) | .spec.allowedTraits[] | select(.name == "observability-alert-rule") | .kind' \
+    "$TMP/upstream-defaults.yaml")" "ClusterTrait" "ClusterComponentType $ct allows ClusterTrait observability-alert-rule"
+done
 assert_eq "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$tenant_values")" \
   "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$ocp_values")" "promotion.restrictedGroups: charts/tenant == openchoreo-platform"
 
