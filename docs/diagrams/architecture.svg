@@ -62,7 +62,7 @@
 <text class="s" x="840.0" y="702.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo</text>
 <text class="s" x="840.0" y="719.9" font-size="13" fill="#cbd5e1" text-anchor="middle">data plane</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">koorikla/platform · architecture</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Git is the only input. The mgmt cluster turns it into clusters, addons and app releases; the workload clusters (dev1, prod1) run the apps.</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Git is the only input. The mgmt cluster turns it into clusters, addons and app releases; the workload clusters run the apps.</text>
 <circle cx="360.0" cy="204.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
 <text class="s" x="360.0" y="208.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
 <circle cx="480.0" cy="304.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>

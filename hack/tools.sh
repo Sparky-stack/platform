@@ -45,7 +45,9 @@ version_cmd() {
     argocd)      echo "argocd version --client --short" ;;
     kubeconform) echo "kubeconform -v" ;;
     crane)       echo "crane version" ;;
+    cosign)      echo "cosign version" ;;
     kyverno)     echo "kyverno version" ;;
+    crossplane)  echo "crossplane version --client" ;;
     *)           echo "$1 --version" ;;
   esac
 }

@@ -89,6 +89,8 @@ tools and version drift against `mise.toml`.
 | yq / jq | 4.54.3 / 1.8.2 | aqua:mikefarah/yq / aqua:jqlang/jq | YAML/JSON in scripts |
 | kubeconform | 0.8.0 | aqua:yannh/kubeconform | schema validation |
 | crane | 0.22.1 | aqua:google/go-containerregistry | `images:audit` |
+| cosign | 3.1.4 | aqua:sigstore/cosign | `demo:check` verifies the demo image's signature with the pinned identity |
+| crossplane | 2.4.1 | aqua:crossplane/cli | `crossplane render` of the PostgreSQL Compositions (`hack/tests/test_crossplane_render.sh`; needs Docker, skips without) |
 | shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint`, git hooks |
 | gitleaks | 8.30.1 | aqua:gitleaks/gitleaks | secret scan in the git hooks / CI |
 | prek | 0.5.10 | aqua:j178/prek | git hook runner (`prek.toml`) |
@@ -185,49 +187,10 @@ restart also restarts all mgmt pods (containerd runs inside k3s: `SandboxChanged
 list and the Kyverno background scan, and the I/O burst pushes the CAPD clusters' etcd over their lease deadlines.
 Embedded etcd compacts incrementally and never exits on a slow compaction; the conversion copies only the current keys.
 
-**Converting a running mgmt to embedded etcd** (data-preserving; needs a maintenance window of ~15 min; Linux paths,
-on Git Bash prefix `MSYS_NO_PATHCONV=1`). k3s converts a single SQLite server to etcd when it starts once with
-`cluster-init` ([k3s docs](https://docs.k3s.io/datastore/ha-embedded#existing-single-node-clusters)); afterwards the etcd
-files on disk select etcd by themselves. The same container is stopped and started, never recreated: its
-`/var/lib/rancher/k3s` is an anonymous volume that a recreated node would not get back.
-
-```sh
-C=k3d-platform-mgmt-server-0
-IMG=$(yq -r .image bootstrap/k3d-mgmt.yaml)                         # same k3s image: has tar and sh
-VOL=$(docker inspect "$C" -f '{{range .Mounts}}{{if eq .Destination "/var/lib/rancher/k3s"}}{{.Name}}{{end}}{{end}}')
-BK="$HOME/platform-mgmt-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK"  # needs ~2x (server/ + storage/) free, ~12 GB
-# 1. stop cleanly (k3s checkpoints the SQLite WAL); CAPD clusters keep running, Argo CD pauses with mgmt
-docker stop -t 120 "$C"
-# 2. back up the datastore, server identity (token, TLS, credentials) and the local-path PV data; agent/ (images) is
-#    re-pullable and not needed
-docker run --rm -v "$VOL":/k3s:ro -v "$BK":/backup --entrypoint tar "$IMG" -C /k3s -cf /backup/k3s.tar server storage
-tar -tf "$BK/k3s.tar" server/db/state.db server/db/state.db-wal server/token >/dev/null && echo backup-ok
-# 3. one start with cluster-init (k3s config file in the container layer; survives stop/start)
-printf 'cluster-init: true\n' > "$BK/config.yaml"
-docker cp "$BK/config.yaml" "$C":/etc/rancher/k3s/config.yaml
-docker start "$C"
-docker logs -f --since 2m "$C" 2>&1 | grep -iE 'migrat|sqlite|etcd.*(ready|started)|fatal'   # Ctrl-C once ready
-# 4. verify: etcd/ exists and state.db was renamed state.db.migrated (k3s renames it only after a complete copy)
-docker exec "$C" ls /var/lib/rancher/k3s/server/db
-kubectl --context k3d-platform-mgmt get nodes                       # ROLES control-plane,etcd
-kubectl --context k3d-platform-mgmt get applications -n argocd      # Synced/Healthy again within minutes
-kubectl --context k3d-platform-mgmt get pvc -A; kubectl --context k3d-platform-mgmt get clusters -n fleet
-docker exec "$C" k3s etcd-snapshot save --name post-migration       # first snapshot (default: every 12 h, keep 5)
-```
-
-If step 4 shows no `state.db.migrated`, or anything is missing, roll back: k3s would otherwise keep using a partial etcd.
-Writes made after the conversion are lost on rollback (Git re-applies them; PV data is not in the datastore).
-
-```sh
-docker stop -t 120 "$C"
-docker run --rm -v "$VOL":/k3s -v "$BK":/backup --entrypoint sh "$IMG" -c \
-  'rm -rf /k3s/server/db && tar -C /k3s -xf /backup/k3s.tar server/db'
-printf '{}\n' > "$BK/empty.yaml"; docker cp "$BK/empty.yaml" "$C":/etc/rancher/k3s/config.yaml
-docker start "$C"
-```
-
-New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to server:0
-([#76](https://github.com/koorikla/platform/issues/76)). The conversion above is only for a mgmt created before that.
+New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to `server:0`
+([#76](https://github.com/koorikla/platform/issues/76)). To convert an older SQLite mgmt cluster in place without
+losing state (and for `etcd` snapshot and rollback commands), follow
+[runbooks/backup-restore.md](runbooks/backup-restore.md#legacy-sqlite-kine-to-embedded-etcd-conversion).
 
 **Leader election on slow disks.** etcd alone does not stop the restarts: k3s runs kube-controller-manager, scheduler and
 cloud-controller-manager in-process and exits when one misses its lease renewal (`"leaderelection lost"`). The clean

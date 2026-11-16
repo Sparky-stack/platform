@@ -1,0 +1,11 @@
+# Azure has created the server: the FQDN is reported.
+apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+kind: FlexibleServer
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  annotations:
+    crossplane.io/composition-resource-name: server
+status:
+  atProvider:
+    fqdn: pg-example.postgres.database.azure.com

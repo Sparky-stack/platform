@@ -19,7 +19,7 @@ openchoreo:
   dataPlane:
     enabled: true
     gatewayHost: dev1.apps.localhost
-    environments: [development, staging]
+    environments: [development, staging, production]   # one workload cluster, environment per namespace (#115)
 mesh:
   group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD

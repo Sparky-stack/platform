@@ -72,6 +72,7 @@ addons:
   openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}', openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}' } }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
   openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' } }
+  reloader:                 { namespace: reloader,                 roles: [workload],       default: true }   # rolls data-plane cluster-agent on cert/CA renewal
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
@@ -134,6 +135,10 @@ addons:
   keda:                     { namespace: keda,                     roles: [workload],       default: false, serverSideDiff: true }
   strimzi:                  { namespace: strimzi,                  roles: [workload],       default: false }
   cloudnative-pg:           { namespace: cnpg-system,              roles: [workload],       default: false, serverSideDiff: true }
+  # PostgreSQL as a service (docs/data-services.md): Crossplane v2 + the PostgreSQL XRD; the cluster's provider label
+  # picks the Composition (cnpg needs cloudnative-pg on the same cluster). ServerSideDiff: Crossplane fills its TLS
+  # Secrets and defaults its package / XRD objects.
+  crossplane:               { namespace: crossplane-system,        roles: [workload],       default: false, serverSideDiff: true }
 
 # AppProject examples (templates/projects.yaml): namespaced kinds the example charts may create (cluster-scoped: Namespace).
 examplesProject:

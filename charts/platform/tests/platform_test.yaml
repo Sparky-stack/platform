@@ -145,6 +145,11 @@ tests:
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
+          name: addon-reloader
+          any: true
+      - containsDocument:
+          kind: ApplicationSet
+          apiVersion: argoproj.io/v1alpha1
           name: addon-clusterclasses
           any: true
 

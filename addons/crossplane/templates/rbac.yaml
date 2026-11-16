@@ -1,0 +1,29 @@
+{{- /* Crossplane core composes plain Kubernetes kinds (no provider-kubernetes in v2): it needs RBAC for them. Aggregated
+into ClusterRole crossplane by the label. Managed resource kinds get theirs from the RBAC manager. */ -}}
+{{- $backend := include "crossplane.pgBackend" . }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane:compose-postgresql
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  {{- if eq $backend "cnpg" }}
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters, scheduledbackups]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [podmonitors]
+    verbs: [get, list, watch, create, update, patch, delete]
+  {{- else }}
+  # Connection Secret of the cloud backends: ESO ExternalSecret (+ Password generator on GCP / Azure).
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [generators.external-secrets.io]
+    resources: [passwords]
+    verbs: [get, list, watch, create, update, patch, delete]
+  {{- end }}

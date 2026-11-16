@@ -13,7 +13,8 @@ openchoreo:
   dataPlane:
     enabled: true
     gatewayHost: prod1.apps.localhost
-    environments: [production]
+    environments: []        # production moved to dev1 (#115); dataPlaneRef is immutable, so prod1 stays up until
+                            # OpenChoreo has cleaned its production namespaces, then the file is disabled
 mesh:
   group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD

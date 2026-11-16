@@ -1,0 +1,51 @@
+# Golden-path project templates (templates/, docs/project-templates.md): render every template and build its
+# skeleton's image natively on amd64 and arm64. The Docker build stage runs each stack's linters and unit tests; a
+# smoke test then calls GET /healthz on a read-only, non-root container. The offline render/contract part also runs
+# in `task test` (ci.yaml, portability.yaml) without Docker.
+name: templates
+
+on:
+  pull_request:
+    paths: &paths
+      - templates/**
+      - hack/tests/test_project_templates.sh
+      - hack/tests/render_template.py
+      - .github/workflows/templates.yaml
+  push:
+    branches: [main]
+    paths: *paths
+  schedule:
+    - cron: "41 4 * * 1"   # weekly: base images, registries and package indexes drift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: templates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    env:
+      GITHUB_TOKEN: ${{ github.token }}   # GitHub API quota for mise downloads
+      MISE_YES: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: 2026.11.8
+          install: true
+          cache: true
+      # every template, one after the other (TEMPLATES_ONLY="go-service ..." narrows it when debugging)
+      - name: Render, check, build and smoke-test every template
+        run: bash hack/tests/test_project_templates.sh
+        env:
+          TEMPLATES_BUILD: "1"

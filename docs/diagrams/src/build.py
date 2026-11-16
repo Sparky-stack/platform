@@ -45,7 +45,7 @@ def ymid(y, h=H):
 def architecture() -> Diagram:
     d = Diagram("koorikla/platform · architecture",
                 "Git is the only input. The mgmt cluster turns it into clusters, addons and app releases; the "
-                "workload clusters (dev1, prod1) run the apps.")
+                "workload clusters run the apps.")
     c, g, w = COLS4, GUT4, CW4
     d.box(c[1], 88, w, 56, "external", "git", ["platform + app repos"])
     R1 = 264
@@ -254,11 +254,11 @@ def sdlc() -> Diagram:
     d.box(c[1], R[1], w, H, "mgmt", "release", ["ComponentRelease:", "immutable snapshot"])
     d.box(c[2], R[1], w, H, "mgmt", "promotion gate", ["checks each edge,", "opens the PR"])
     d.box(c[3], R[1], w, H, "security", "production gate", ["VAP: only Argo CD", "writes production"])
-    d.box(c[0], R[2], w, H, "workload", "development", ["dev1 · auto"])
-    d.box(c[1], R[2], w, H, "workload", "staging", ["dev1 · PR"])
-    d.box(c[2], R[2], w, H, "workload", "production", ["prod1 · gated PR", "+ CODEOWNERS"])
-    d.box(c[3], R[2], w, H, "security", "Kyverno", ["denies unsigned or", "unpinned images"], name="Kyverno (prod1)",
-          emphasis=True)
+    d.box(c[0], R[2], w, H, "workload", "development", ["auto-deploy"])
+    d.box(c[1], R[2], w, H, "workload", "staging", ["promotion PR"])
+    d.box(c[2], R[2], w, H, "workload", "production", ["gated PR", "+ CODEOWNERS"])
+    d.box(c[3], R[2], w, H, "security", "Kyverno", ["denies unsigned or", "unpinned images"],
+          name="Kyverno (production)", emphasis=True)
     d.arrow([(c[0] + w, R[0] + 22), (c[1], R[0] + 22)], step=1)
     d.arrow([(c[2] + w, ymid(R[0])), (c[3], ymid(R[0]))], step=2)
     d.arrow([(c[1], R[0] + 58), (c[0] + w, R[0] + 58)], step=3)
@@ -276,7 +276,7 @@ def sdlc() -> Diagram:
     d.arrow([(c[3] + w / 2, R[1] + H), (c[3] + w / 2, gy), (c[2] + w - 30, gy), (c[2] + w - 30, R[2])])
     d.line_label = "gate: on an edge, or on production writes"
     d.require("app repo", "build & sign", "registry", "Argo CD", "release", "promotion gate",
-              "production gate", "development", "staging", "production", "Kyverno (prod1)")
+              "production gate", "development", "staging", "production", "Kyverno (production)")
     d.key("A push to main starts a build on the OpenChoreo workflow plane (or GitHub Actions)",
           "The build scans, writes SBOM + SLSA provenance, signs with cosign and pushes",
           "It commits the new image ref to deploy/ in the app repo",
@@ -285,7 +285,7 @@ def sdlc() -> Diagram:
           "autoDeploy binds the release to development",
           "The promotion gate checks the edge (readiness, smoke, alerts, freezes) and opens a PR for staging",
           "Production needs the gate and CODEOWNERS; a ValidatingAdmissionPolicy lets only Argo CD write it",
-          "On prod1 Kyverno denies unsigned or unpinned images")
+          "In production Kyverno denies unsigned or unpinned images (Audit in dev and staging)")
     return d
 
 
@@ -362,7 +362,7 @@ def trust() -> Diagram:
     d.box(C1, A1, W1, H, "security", "cert-manager", ["agent CA per cluster (10y)", "client cert (1y)"], step=8)
     d.box(C2, A1, W2, H, "security", "ESO + CRS", ["cert, key and the public", "gateway CA, as a payload"],
           name="agent payload")
-    d.box(WX, A1, WW, H, "workload", "cluster-agent", ["Secret cluster-agent-tls,", "dials out with mTLS"])
+    d.box(WX, A1, WW, H, "workload", "cluster-agent", ["Secret cluster-agent-tls;", "Reloader restarts it"])
     d.box(C2, A2, W2, H, "mgmt", "cluster-gateway", ["accepts only the CA in", "that ClusterDataPlane"])
     d.box(C1, B1, W1, B3 + H - B1, "security", "OpenBao",
           ["group root + intermediate", "keys generated inside,", "never exported", "", "per member: JWT auth",
@@ -389,7 +389,7 @@ def trust() -> Diagram:
           "ESO and a ClusterResourceSet deliver the root and OpenBao's CA to every member",
           "istio-csr logs in with a projected token (its own JWT mount) and gets certs signed by the group intermediate",
           "ztunnel and gateways get 24h workload certs, istiod 48h, renewed at half-life",
-          "Rotation: certs renew 30 days before expiry; restart the agent to load them (#50)",
+          "Rotation: certs renew 30 days before expiry; Reloader restarts the agent on the new cert",
           "Root rotation is planned: new root beside the old one, trust bundle, switch, drop (#71)")
     return d
 
@@ -411,10 +411,10 @@ def backup() -> Diagram:
     d.box(OX, R[3], OW, H, "external", "object storage", ["S3 · GCS · Azure Blob", "WAL + base backups"])
     d.box(M1, R[0], M2 + MW - M1, H, "data", "mgmt etcd",
           ["k3s snapshot every 12 h, keeps 5", "CAPI objects, kubeconfigs, CA keys"], step=2)
-    d.box(M1, R[1], MW, H, "data", "OpenBao", ["raft snapshot", "+ unseal key"], status="optin")
+    d.box(M1, R[1], MW, H, "data", "OpenBao", ["raft PVC copy", "+ unseal key"], status="optin")
     d.box(M2, R[1], MW, H, "data", "Thunder", ["users, OAuth", "clients (PVC)"], step=4)
     d.box(M1, R[2], MW, H, "mgmt", "Argo CD", ["re-applies", "everything else"])
-    d.box(M2, R[2], MW, H, "mgmt", "Harbor, telemetry", ["re-push images,", "retention only"])
+    d.box(M2, R[2], MW, H, "data", "Harbor", ["pushed images: PVC,", "or re-run builds"])
     d.box(WX, R[0], WW, H, "workload", "workload etcd", ["rebuilt by Argo CD", "+ OpenChoreo"])
     d.box(WX, R[3], WW, H, "data", "CNPG databases", ["Barman Cloud", "plugin"], status="optin")
     xz = 280
@@ -422,16 +422,17 @@ def backup() -> Diagram:
     d.arrow([(OX + OW, ymid(R[2])), (M1, ymid(R[2]))], step=5, badge=(xz, ymid(R[2])))
     d.arrow([(OX + OW, ymid(R[3])), (WX, ymid(R[3]))], step=6)
     d.legend_label("data", "stateful: needs a backup")
-    d.legend_label("mgmt", "mgmt: refills by itself")
+    d.legend_label("mgmt", "mgmt: rebuilt from git")
     d.legend_label("workload", "workload: rebuilt from git")
     d.legend_label("security", "secrets: outside, backed up by the backend")
-    d.require("git", "secret backend", "mgmt etcd", "OpenBao", "Thunder", "Harbor, telemetry", "workload etcd",
+    d.require("git", "secret backend", "mgmt etcd", "OpenBao", "Thunder", "Harbor", "workload etcd",
               "CNPG databases")
     d.key("The secret backend lives outside the clusters; locally re-seed it with task secrets",
           "Restore mgmt etcd from a k3s snapshot: CAPI keeps its clusters and the CA keys come back",
-          "Restore OpenBao's raft snapshot; it unseals with the key from the backend",
-          "Restore Thunder's database (users, OAuth clients)",
-          "Argo CD re-syncs everything else from git; Harbor and telemetry refill",
+          "Restore OpenBao's raft data (a cold PVC copy); it unseals with the key from the backend",
+          "Restore Thunder's PVCs (users, OAuth clients, signing keys)",
+          "Argo CD re-syncs everything else from git; Harbor's images come back from its PVCs or new builds, "
+          "telemetry starts empty",
           "Databases restore from object storage (CNPG bootstrap.recovery)")
     return d
 

@@ -5,3 +5,17 @@
 promotionGate:
   smoke:
     http: false
+
+# TEMPORARY (#115): production leaves the pipeline while its Environment moves from prod1 to dev1. OpenChoreo blocks
+# deleting an Environment a DeploymentPipeline references, and dataPlaneRef is immutable. Reverted once production is
+# Ready on dev1.
+deploymentPipeline:
+  environments: [development, staging]
+# TEMPORARY (#115): the Environment finalizer deletes production's ReleaseBindings as OpenChoreo's controller, which
+# the git-only gate denies (templates/promotion-git-only.yaml). DELETE only; reverted with the pipeline above.
+promotion:
+  gitOnly:
+    deleters:
+      - system:serviceaccount:kube-system:generic-garbage-collector
+      - system:serviceaccount:kube-system:namespace-controller
+      - system:serviceaccount:openchoreo-control-plane:controller-manager

@@ -50,13 +50,13 @@
 <text class="s" x="840.0" y="335.9" font-size="13" fill="#cbd5e1" text-anchor="middle">writes production</text>
 <rect x="40" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="120.0" y="467.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">development</text>
-<text class="s" x="120.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">dev1 · auto</text>
+<text class="s" x="120.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">auto-deploy</text>
 <rect x="280" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="360.0" y="467.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">staging</text>
-<text class="s" x="360.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">dev1 · PR</text>
+<text class="s" x="360.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">promotion PR</text>
 <rect x="520" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="600.0" y="458.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production</text>
-<text class="s" x="600.0" y="478.4" font-size="13" fill="#cbd5e1" text-anchor="middle">prod1 · gated PR</text>
+<text class="s" x="600.0" y="478.4" font-size="13" fill="#cbd5e1" text-anchor="middle">gated PR</text>
 <text class="s" x="600.0" y="495.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ CODEOWNERS</text>
 <rect x="756" y="428" width="168" height="88" rx="11" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
 <rect x="760" y="432" width="160" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="2.2"/>
@@ -113,7 +113,8 @@
 <text class="s" x="60.0" y="723.0" font-size="13.5" fill="#cbd5e1">OpenChoreo</text>
 <circle cx="506.0" cy="699.5" r="11" fill="#fbbf24"/>
 <text class="s" x="506.0" y="704" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
-<text class="s" x="526.0" y="704.0" font-size="13.5" fill="#cbd5e1">On prod1 Kyverno denies unsigned or unpinned images</text>
+<text class="s" x="526.0" y="704.0" font-size="13.5" fill="#cbd5e1">In production Kyverno denies unsigned or unpinned images</text>
+<text class="s" x="526.0" y="723.0" font-size="13.5" fill="#cbd5e1">(Audit in dev and staging)</text>
 <circle cx="40.0" cy="747.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40.0" y="752" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
 <text class="s" x="60.0" y="752.0" font-size="13.5" fill="#cbd5e1">OpenChoreo snapshots them as an immutable</text>

@@ -1,0 +1,10 @@
+# Addon crossplane on an AKS cluster: provider fact azure-aks -> backend azure-flexible. Fake ids.
+cluster: { name: prod-weu, role: workload, provider: azure-aks, region: westeurope, environment: production, cni: cilium }
+postgresql:
+  azure:
+    subscriptionID: 00000000-0000-0000-0000-000000000001
+    tenantID: 00000000-0000-0000-0000-000000000002
+    clientID: 00000000-0000-0000-0000-000000000003
+    resourceGroupName: platform-prod-weu
+    delegatedSubnetId: /subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/platform-prod-weu/providers/Microsoft.Network/virtualNetworks/platform/subnets/postgresql
+    privateDnsZoneId: /subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/platform-prod-weu/providers/Microsoft.Network/privateDnsZones/platform.private.postgres.database.azure.com

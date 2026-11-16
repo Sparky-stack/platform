@@ -85,8 +85,17 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
 - **Encryption: WireGuard** for all pod traffic between nodes, mesh or not (udp/51871). Needs the kernel's wireguard
   module (on CAPD: the docker host's kernel).
 - **Hubble**: relay on, UI off. Metrics on: `dns, drop, tcp, flow, port-distribution, icmp, httpV2`. TLS comes from
-  the certgen CronJob, so Helm generates no random certs and Argo CD shows no diff. ServiceMonitors are off: workload
-  clusters have no Prometheus Operator CRDs, so metrics are collected via scrape annotations/OTel instead.
+  the certgen CronJob, so Helm generates no random certs and Argo CD shows no diff. The chart's ServiceMonitors stay
+  off (this CNI app syncs before the Prometheus Operator CRDs exist); addon telemetry scrapes `hubble-metrics` instead
+  (docs/observability.md "HTTP metrics").
+- **L7 HTTP visibility** (`l7Visibility`, CiliumClusterwideNetworkPolicy `openchoreo-http-visibility`), **off**: on dev1
+  the redirected connections into ambient pods hung at Cilium's proxy and cut the apps off ([#104](https://github.com/koorikla/platform/issues/104)). When on: an allow-all
+  `http: [{}]` rule on port 8080 of every pod with an `openchoreo.dev/component` label, with `enableDefaultDeny: false`
+  on both directions, so it never denies anything. Hubble only emits `hubble_http_*` for traffic Cilium's L7 proxy
+  parses, and that takes an L7 rule. Only list ports that serve HTTP on every component pod: the proxy rejects other
+  protocols on a listed port (Cilium rejects L7 rules without a port). It sees plaintext only, i.e. the out-of-mesh
+  gateway's traffic into the app; HBONE between ambient pods stays opaque, and so would the gateway's traffic after
+  [#53](https://github.com/koorikla/platform/issues/53) (STRICT mTLS).
 - **Gateway API, Ingress, standalone Envoy: off.** kgateway owns north-south Gateway API; Istio owns waypoints.
 - **Istio ambient compatibility** (from Istio's Cilium prerequisites):
   - `cni.exclusive: false`: Cilium must not delete istio-cni's chained config.

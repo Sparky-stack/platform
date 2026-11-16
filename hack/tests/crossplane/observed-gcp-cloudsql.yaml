@@ -1,0 +1,11 @@
+# Cloud SQL has created the instance: its private IP is known.
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: DatabaseInstance
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  annotations:
+    crossplane.io/composition-resource-name: instance
+status:
+  atProvider:
+    privateIpAddress: 192.0.2.25

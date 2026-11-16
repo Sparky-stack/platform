@@ -1,0 +1,32 @@
+# PostgreSQL XRs: production cells need HA + backup; other environments are free.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: prod-ok
+  namespace: dp-default-shop-production-5e6f7a8b
+spec:
+  highAvailability: true
+  backup: { enabled: true, retentionDays: 14 }
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: prod-single
+  namespace: dp-default-shop-production-5e6f7a8b
+spec:
+  highAvailability: false
+  backup: { enabled: true }
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: prod-defaults
+  namespace: dp-default-shop-production-5e6f7a8b
+spec: {}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: dev-defaults
+  namespace: dp-default-shop-development-1a2b3c4d
+spec: {}

@@ -48,9 +48,10 @@ workload cluster <name>                                      mgmt (k3d platform-
   a cloud installation needs TLS and authenticated ingest first ([#46](https://github.com/koorikla/platform/issues/46)).
 - **One OpenSearch** (single node) holds container logs (`container-logs-*`), k8s events (`k8s-events-*`) and traces
   (`otel-traces-*`); index setup Jobs and retention (7d locally) come from the modules. Prometheus keeps 7d.
-- Metric alerts: Prometheus rules (from OpenChoreo's `observability-alert-rule` trait, not yet allowed in the platform
-  component types: [#48](https://github.com/koorikla/platform/issues/48)) -> Alertmanager -> metrics-adapter ->
-  observer; log alerts via OpenSearch alerting -> observer.
+- Metric and log alerts: `ClusterTrait observability-alert-rule` (allowed on `service`, `web-application`, `worker`;
+  [Component alert rules](#component-alert-rules)) -> `ObservabilityAlertRule` on the observability plane ->
+  PrometheusRule -> Alertmanager -> metrics-adapter -> observer (`source.type: metric`), or OpenSearch alerting ->
+  observer (`source.type: log`).
 
 ## Endpoints, ports, DNS (local)
 
@@ -88,6 +89,7 @@ The literals in the addon values are checked against `openchoreo.controlPlane.ho
 | Pod CPU/memory | Prometheus agent: kubelet/cAdvisor + kube-state-metrics with `openchoreo.dev/*` pod labels | remote write -> Prometheus | Metrics, RuntimeHealthCard |
 | Traces | apps (OTLP SDK) / OBI -> OTel Collector (k8s_attributes: all pod labels, cluster name) | OTLP/HTTP -> receiver -> OpenSearch `otel-traces-*` | Traces |
 | OTLP metrics | apps / OBI / falcosidekick -> OTel Collector | remote write -> Prometheus | (PromQL) |
+| HTTP request metrics | Cilium Hubble L7 (`hubble_http_*`, Cilium data planes only) -> Prometheus agent (ServiceMonitor `hubble-http`) | remote write -> Prometheus | Metrics (HTTP), promotion gate error rate |
 | Falco alerts | Falco JSON on stdout -> Fluent Bit; falcosidekick -> collector (CloudEvents) | OpenSearch `container-logs-*` (ns falco); Datadog overlay | logs |
 
 Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://telemetry-collector.telemetry.svc.cluster.local:4318`
@@ -101,6 +103,74 @@ agent's 70-75k active series were `apiserver_*`, `etcd_*`, `workqueue_*`, ... hi
 (`kube-prometheus-stack.kubelet.serviceMonitor.metricRelabelings`, contract `hack/tests/test_telemetry_series.sh`),
 leaving ~10k series per single-node cluster (kubelet ~3.4k, cAdvisor ~4k, probes, kube-state-metrics). Check:
 `prometheus_agent_active_series` on the agent's `:9090/metrics`, `kubectl top pod -n telemetry --containers`.
+
+## Component alert rules
+
+`ClusterTrait observability-alert-rule` (`addons/openchoreo-platform/files/cluster-traits/observability-alert-rule.yaml`)
+is allowed on `service`, `web-application` and `worker` `ClusterComponentType`s. A `Component` attaches one trait entry
+per rule (with a unique `instanceName`); when the component's `ClusterDataPlane` sets `observabilityPlaneRef`, each
+`ReleaseBinding` renders an `ObservabilityAlertRule` (`targetPlane: observabilityplane`) that the observability-plane
+controller reconciles through `observer`:
+
+- `source.type: metric` (`metric: cpu_usage` or `memory_usage`): `metrics-adapter` writes a `PrometheusRule` in
+  `openchoreo-observability-plane`; firing alerts go Prometheus -> Alertmanager -> `observer` (`/api/v1alpha1/alerts/webhook`)
+  -> notification channel and the observer alert store (queried by Backstage and by the promotion gate via
+  `POST /api/v1/alerts/query`).
+- `source.type: log` (`query`: substring matched against `container-logs-*`): `logs-adapter` writes an OpenSearch
+  alerting monitor that posts firing alerts to `observer`.
+
+OpenChoreo's trait validation requires a notification channel for every rule: either set
+`traitEnvironmentConfigs.<instanceName>.actions.notifications.channels` on the `ReleaseBinding` (naming an
+`ObservabilityAlertsNotificationChannel` in the org namespace for that environment) or set
+`spec.defaultNotificationChannel` on the `Environment`.
+
+```yaml
+apiVersion: openchoreo.dev/v1alpha1
+kind: Component
+metadata:
+  name: hello-world
+  namespace: default
+spec:
+  owner:
+    projectName: demo
+  componentType:
+    kind: ClusterComponentType
+    name: deployment/service
+  traits:
+    - kind: ClusterTrait
+      name: observability-alert-rule
+      instanceName: high-cpu
+      parameters:
+        description: "Pod CPU usage above 80% for 5 minutes"
+        severity: critical
+        source:
+          type: metric
+          metric: cpu_usage
+        condition:
+          window: 5m
+          interval: 1m
+          operator: gt
+          threshold: 80
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: hello-world-staging
+  namespace: default
+spec:
+  owner:
+    projectName: demo
+    componentName: hello-world
+  environment: staging
+  releaseName: hello-world-20261116-1
+  traitEnvironmentConfigs:
+    high-cpu:
+      enabled: true
+      actions:
+        notifications:
+          channels:
+            - ops-webhook-staging
+```
 
 ## Secrets
 
@@ -158,6 +228,26 @@ OpenChoreo pod labels so spans show up in Backstage's Traces tab.
 Overlap policy: when OBI is enabled it is the **single L7 RED source** — keep Cilium Hubble L7 metrics (`hubble.metrics`
 http/dns/kafka with L7 visibility) off and use Istio for mTLS, authorization and traffic management, not telemetry
 (no Istio telemetry/Prometheus merging needed). Hubble flow logs (L3/L4, Backstage "wirelogs") stay useful.
+
+## HTTP metrics
+
+The observer's `metric: http` (Backstage HTTP charts, the promotion gate's error-rate check) is served by the
+observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble series:
+`hubble_http_requests_total{reporter="server"}` (`status` 1xx-3xx ok, 4xx/5xx unsuccessful) and
+`hubble_http_request_duration_seconds`, joined to kube-state-metrics' `kube_pod_labels` on
+`(destination_namespace, destination_pod)`. Three pieces make them exist ([#104](https://github.com/koorikla/platform/issues/104)):
+
+1. addon cilium: L7 visibility policy on the component pods' HTTP port (docs/networking.md; **off**, it broke traffic
+   into ambient pods, so today there are no `hubble_http_*` series), and `httpV2`
+   `labelsContext` with `source_pod`/`destination_pod` (without them the join matches nothing).
+2. addon telemetry: ServiceMonitor `hubble-http` on `kube-system/hubble-metrics`, keeping only `hubble_http_*`.
+3. The agent's remote write to the observability plane, as for every other metric.
+
+Limits: data planes on flannel (local prod1) have no Hubble, so no HTTP metrics there. Only plaintext traffic is
+parsed, today the gateway's traffic into app pods (Istio `PERMISSIVE`); with STRICT mTLS for the gateway
+([#53](https://github.com/koorikla/platform/issues/53)) the source has to move to a waypoint or OBI, and the adapter
+reads neither. Enabling OBI with its overlap policy above (Hubble L7 off: cilium `l7Visibility.enabled: false`) empties
+the observer's HTTP metrics for the same reason.
 
 ## Falco
 

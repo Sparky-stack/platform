@@ -7,6 +7,9 @@
 #   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
 #                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
 #                              cluster scope, spec overrides and extra arguments are denied
+#   addons/crossplane           ValidatingPolicies (offline): tenants are denied raw CNPG / RDS / Cloud SQL objects in
+#                              their namespaces while Crossplane and platform namespaces pass; production PostgreSQL XRs
+#                              need highAvailability + backup, other environments are not matched
 # and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
@@ -95,6 +98,21 @@ for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 8'; do
   out=$("$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
     --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" 2>&1 || true)
   assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
+done
+
+# Kyverno ValidatingPolicies of addon crossplane: PostgreSQL only through the platform API
+xp="$ROOT/addons/crossplane"
+[[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
+helm template crossplane "$xp" --namespace crossplane-system -s templates/policies.yaml > "$TMP/xp-policies.yaml"
+# resources:userinfo:expected
+for c in raw-objects:tenant:'pass: 0, fail: 4, warn: 0, error: 0, skip: 0' \
+  raw-objects:crossplane:'pass: 0, fail: 0, warn: 0, error: 0, skip: 4' \
+  platform-namespace:tenant:'pass: 0, fail: 0, warn: 0, error: 0, skip: 1' \
+  xrs:tenant:'pass: 1, fail: 2, warn: 0, error: 0, skip: 0'; do
+  res=${c%%:*}; rest=${c#*:}; who=${rest%%:*}; want=${rest#*:}
+  out=$("$KYVERNO" apply "$TMP/xp-policies.yaml" --resource "$xp/tests/kyverno/$res.yaml" \
+    --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" 2>&1 || true)
+  assert_match "$out" "$want" "crossplane policies: $who applying tests/kyverno/$res.yaml -> $want"
 done
 
 finish

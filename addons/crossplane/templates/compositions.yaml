@@ -1,0 +1,32 @@
+{{- /* The Composition of this cluster's backend (pipeline mode): function-go-templating renders the resources from
+compositions/<backend>.gotmpl, prefixed with this cluster's facts ($facts, JSON from values; no developer input), then
+function-auto-ready derives readiness. Only this one Composition exists on the cluster. */ -}}
+{{- $backend := include "crossplane.pgBackend" . }}
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: postgresql-{{ $backend }}
+  labels:
+    platform.koorikla.io/backend: {{ $backend }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  compositeTypeRef:
+    apiVersion: platform.koorikla.io/v1alpha1
+    kind: PostgreSQL
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{ printf "{{- $facts := fromYaml %s }}" (include "crossplane.pgFacts" . | quote) }}
+            {{- .Files.Get (printf "compositions/%s.gotmpl" $backend) | nindent 12 }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

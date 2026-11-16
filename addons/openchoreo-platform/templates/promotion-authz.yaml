@@ -2,7 +2,8 @@
 Promotion authorization (docs/promotion.md "Manual approval"). OpenChoreo 1.3.3 has no approval field on
 DeploymentPipeline (removed in 1.0); its ABAC conditions on resource.environment are the native control over WHO may
 change a binding in an environment through console, openchoreo-api, occ and MCP:
-  ClusterAuthzRole promotion-release-binding-writer   releasebinding create/update/delete
+  ClusterAuthzRole promotion-release-binding-writer   releasebinding / projectreleasebinding / resourcereleasebinding
+                                                      create/update/delete
   ClusterAuthzRoleBinding promotion-deny-<group>      effect deny for each restricted group, condition: gated envs
   ClusterAuthzRole promotion-component-deleter        component:delete; charts/tenant denies it to the restricted
                                                       groups for every gated app's Component (AuthzRoleBinding
@@ -25,11 +26,17 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  description: Change ReleaseBindings (used with environment conditions to gate promotions)
+  description: Change ReleaseBindings, ProjectReleaseBindings and ResourceReleaseBindings (used with environment conditions to gate promotions)
   actions:
     - releasebinding:create
     - releasebinding:update
     - releasebinding:delete
+    - projectreleasebinding:create
+    - projectreleasebinding:update
+    - projectreleasebinding:delete
+    - resourcereleasebinding:create
+    - resourcereleasebinding:update
+    - resourcereleasebinding:delete
 ---
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterAuthzRole
@@ -62,7 +69,16 @@ spec:
       scope:
         namespace: {{ $ns }}
       conditions:
-        - actions: [releasebinding:create, releasebinding:update, releasebinding:delete]
+        - actions:
+            - releasebinding:create
+            - releasebinding:update
+            - releasebinding:delete
+            - projectreleasebinding:create
+            - projectreleasebinding:update
+            - projectreleasebinding:delete
+            - resourcereleasebinding:create
+            - resourcereleasebinding:update
+            - resourcereleasebinding:delete
           expression: {{ printf "resource.environment in %s" ($envIds | toJson) | quote }}
 {{- end }}
 {{- end }}

@@ -15,9 +15,9 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | [observability.svg](observability.svg) | every signal lands in the observability plane | [observability.md](../observability.md) |
 | [sdlc.svg](sdlc.svg) | git push → signed image → environments → gated production | [promotion.md](../promotion.md) |
 | [cluster-lifecycle.svg](cluster-lifecycle.svg) | add, upgrade, remove a cluster by editing one file | [providers.md](../providers.md) |
-| [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [multicluster.md](../multicluster.md) |
-| [backup.svg](backup.svg) | what is stateful where, and the restore order | [dev-environment.md](../dev-environment.md) |
-| [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → Argo CD → verify | [conventions.md](../conventions.md) |
+| [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [runbooks/certificates-and-secrets.md](../runbooks/certificates-and-secrets.md) |
+| [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
+| [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → Argo CD → verify | [runbooks/upgrades.md](../runbooks/upgrades.md) |
 
 `../images/hero.png` is the README banner, generated with Gemini's image model; it is abstract and has no text in it.
 
@@ -104,7 +104,7 @@ The numbered flow of each diagram, word for word.
 6. autoDeploy binds the release to development
 7. The promotion gate checks the edge (readiness, smoke, alerts, freezes) and opens a PR for staging
 8. Production needs the gate and CODEOWNERS; a ValidatingAdmissionPolicy lets only Argo CD write it
-9. On prod1 Kyverno denies unsigned or unpinned images
+9. In production Kyverno denies unsigned or unpinned images (Audit in dev and staging)
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
@@ -128,16 +128,16 @@ The numbered flow of each diagram, word for word.
 5. ESO and a ClusterResourceSet deliver the root and OpenBao's CA to every member
 6. istio-csr logs in with a projected token (its own JWT mount) and gets certs signed by the group intermediate
 7. ztunnel and gateways get 24h workload certs, istiod 48h, renewed at half-life
-8. Rotation: certs renew 30 days before expiry; restart the agent to load them (#50)
+8. Rotation: certs renew 30 days before expiry; Reloader restarts the agent on the new cert
 9. Root rotation is planned: new root beside the old one, trust bundle, switch, drop (#71)
 
 ### Backup & restore ([backup.svg](backup.svg))
 
 1. The secret backend lives outside the clusters; locally re-seed it with `task secrets`
 2. Restore mgmt etcd from a k3s snapshot: CAPI keeps its clusters and the CA keys come back
-3. Restore OpenBao's raft snapshot; it unseals with the key from the backend
-4. Restore Thunder's database (users, OAuth clients)
-5. Argo CD re-syncs everything else from git; Harbor and telemetry refill
+3. Restore OpenBao's raft data (a cold PVC copy); it unseals with the key from the backend
+4. Restore Thunder's PVCs (users, OAuth clients, signing keys)
+5. Argo CD re-syncs everything else from git; Harbor's images come back from its PVCs or new builds, telemetry starts empty
 6. Databases restore from object storage (CNPG `bootstrap.recovery`)
 
 ### Upgrade flow ([upgrade.svg](upgrade.svg))

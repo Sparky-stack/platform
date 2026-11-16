@@ -74,6 +74,8 @@ cilium:
         memory: 256Mi
     prometheus:
       enabled: true
+      # Scraped by the telemetry addon's Prometheus agent (ServiceMonitor `hubble-http` there, which owns the
+      # Prometheus Operator CRDs; this CNI app syncs before they exist).
       serviceMonitor:
         enabled: false
 
@@ -83,6 +85,10 @@ cilium:
       memory: 128Mi
     limits:
       memory: 512Mi
+
+  # The agent reads cilium-config only at startup (e.g. a changed hubble.metrics list would not take effect until the
+  # next restart): a checksum annotation rolls the DaemonSet when the ConfigMap changes.
+  rollOutCiliumPods: true
 
   prometheus:
     enabled: true
@@ -116,6 +122,29 @@ cilium:
         - flow
         - port-distribution
         - icmp
-        - httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction
+        # OpenChoreo's observer (metrics adapter 0.8.0) reads hubble_http_requests_total{reporter="server"} and
+        # hubble_http_request_duration_seconds and joins them to kube_pod_labels on (destination_namespace,
+        # destination_pod) / (source_namespace, source_pod): the *_pod context labels are required (#104). Series only
+        # exist for traffic Cilium parses at L7, i.e. ports in the l7Visibility policy below (templates/l7-visibility.yaml).
+        - httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,source_pod,destination_ip,destination_namespace,destination_workload,destination_pod,traffic_direction
+      # Scraped by the telemetry addon's Prometheus agent (ServiceMonitor `hubble-http` there, which owns the
+      # Prometheus Operator CRDs; this CNI app syncs before they exist).
       serviceMonitor:
         enabled: false
+
+# --- platform glue (templates/) -------------------------------------------------------------------------------------
+# L7 HTTP visibility for OpenChoreo component pods (#104): Hubble only emits hubble_http_* for traffic Cilium redirects
+# to its L7 proxy, which takes an L7 rule. This CiliumClusterwideNetworkPolicy adds an allow-all `http: [{}]` rule on
+# the listed container ports of every pod with an `openchoreo.dev/component` label. `enableDefaultDeny: false` on
+# both directions: it only adds visibility and never puts an endpoint into default deny (needs
+# enable-non-default-deny-policies, on by default since Cilium 1.17).
+# - L7 rules need explicit ports (Cilium rejects port 0 with L7 rules). Only list ports that serve HTTP/1.1, h2c or
+#   gRPC on every component pod: the proxy rejects anything else on a listed port. 8080 is OpenChoreo's sample default.
+# - Sees plaintext only: north-south traffic from the out-of-mesh gateway (Istio PERMISSIVE, docs/networking.md).
+#   HBONE mTLS between ambient pods goes to 15008 and stays opaque. Once the gateway joins the mesh with STRICT
+#   mTLS (#53), Hubble is blind and HTTP metrics need another source (Istio waypoint, OBI).
+# OFF: on dev1 (Istio ambient, embedded Envoy) the redirected connections hang at the proxy (SYN to-proxy, no reply),
+# which took every component's 8080 down; see #104 before re-enabling.
+l7Visibility:
+  enabled: false
+  httpPorts: ["8080"]

@@ -269,7 +269,9 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
     harbor) continue ;;        # Harbor meets PSS baseline: policed like a workload (check 9)
     openbao) continue ;;       # mesh CA: restricted pod security, policed like a workload (check 2b4)
     external-dns) continue ;;  # external-dns meets PSS restricted: policed like a workload (check 9b)
+    reloader) continue ;;      # reloader meets PSS restricted: policed like a workload (check 9c)
     keda|strimzi|cnpg-system) continue ;;   # opt-in data-service operators meet PSS restricted: policed (test_data_services.sh)
+    crossplane-system) continue ;;          # Crossplane core, Functions, providers meet PSS restricted: policed (test_crossplane_render.sh)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
@@ -305,10 +307,10 @@ assert_match "$pvc_lua" 'Pending' "argocd-cm PVC health customization handles Pe
 svc_type=$(yq 'select(.kind == "Service" and .metadata.name == "argocd-server") | .spec.type' "$TMP/argocd.yaml")
 assert_eq "$svc_type" "ClusterIP" "argocd-server Service stays ClusterIP"
 
-# 7. secret-stores creates platform, mgmt-fleet, mgmt-openchoreo on mgmt and default on workload
+# 7. secret-stores creates platform, workflows, mgmt-fleet, mgmt-openchoreo on mgmt and default on workload
 helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-secrets \
   --values "$ROOT/addons/secret-stores/values/role-mgmt.yaml" > "$TMP/ss-mgmt.yaml"
-for s in platform mgmt-fleet mgmt-openchoreo; do
+for s in platform workflows mgmt-fleet mgmt-openchoreo; do
   found=$(yq "select(.kind == \"ClusterSecretStore\" and .metadata.name == \"$s\") | .metadata.name" "$TMP/ss-mgmt.yaml")
   assert_eq "$found" "$s" "mgmt secret-stores creates ClusterSecretStore $s"
 done
@@ -389,6 +391,39 @@ assert_eq "$(yq "$edns_pod | .securityContext.seccompProfile.type // .containers
 assert_eq "$(yq "$edns_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/edns-pss.yaml")" false "external-dns no privilege escalation"
 assert_eq "$(yq -o=json -I=0 "$edns_pod | .containers[0].securityContext.capabilities.drop" "$TMP/edns-pss.yaml")" '["ALL"]' "external-dns drops ALL capabilities"
 
+# 9c. reloader (#50) is NOT a Kyverno-excluded platform namespace, meets Pod Security restricted with no ClusterRole,
+#     watches openchoreo-data-plane, and cluster-agent's Reloader annotations match the CRS-delivered Secret/ConfigMap.
+for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+  assert_eq "$(grep -cE '^ *- reloader( |$)' "$ROOT/$f" || true)" 0 "reloader not excluded from Kyverno ($f)"
+done
+rel_ns=$(yq '.addons.reloader.namespace' "$PV")
+dp_ns=$(yq '.addons["openchoreo-data-plane"].namespace' "$PV")
+helm template reloader "$ROOT/addons/reloader" --namespace "$rel_ns" > "$TMP/reloader-pss.yaml"
+rel_pod='select(.kind == "Deployment") | .spec.template.spec'
+assert_eq "$(yq "$rel_pod | .securityContext.runAsNonRoot" "$TMP/reloader-pss.yaml")" true "reloader pod runAsNonRoot"
+assert_eq "$(yq "$rel_pod | .securityContext.seccompProfile.type" "$TMP/reloader-pss.yaml")" RuntimeDefault "reloader seccomp RuntimeDefault"
+assert_eq "$(yq "$rel_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/reloader-pss.yaml")" false "reloader no privilege escalation"
+assert_eq "$(yq "$rel_pod | .containers[0].securityContext.readOnlyRootFilesystem" "$TMP/reloader-pss.yaml")" true "reloader readOnlyRootFilesystem"
+assert_eq "$(yq -o=json -I=0 "$rel_pod | .containers[0].securityContext.capabilities.drop" "$TMP/reloader-pss.yaml")" '["ALL"]' "reloader drops ALL capabilities"
+assert_eq "$(yq 'select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding") | .metadata.name' "$TMP/reloader-pss.yaml")" "" "reloader renders no ClusterRole or ClusterRoleBinding"
+assert_eq "$(NS="$dp_ns" yq 'select(.kind == "Role" and .metadata.namespace == strenv(NS)) | .metadata.name' "$TMP/reloader-pss.yaml")" reloader-role "reloader grants a Role in $dp_ns"
+helm template openchoreo-control-plane "$ROOT/addons/openchoreo-control-plane" --namespace openchoreo-control-plane \
+  -s templates/gateway-ca-crs.yaml > "$TMP/gw-ca-crs.yaml"
+crs_secret_name=$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-openchoreo-agent") | .spec.target.template.data["openchoreo-agent.yaml"]' "$TMP/dev1.yaml" \
+  | sed 's/{{.*}}/placeholder/' | yq 'select(.kind == "Secret") | .metadata.name')
+crs_cm_name=$(yq 'select(.kind == "ExternalSecret") | .spec.target.template.data["cluster-gateway-ca.yaml"]' "$TMP/gw-ca-crs.yaml" \
+  | sed 's/{{.*}}/placeholder/' | yq 'select(.kind == "ConfigMap") | .metadata.name')
+dp_reload_targets() {
+  yq 'select(.kind == "Deployment" and .metadata.name == "cluster-agent-dataplane") | (.spec.template.metadata.annotations // {})
+    | (.["secret.reloader.stakater.com/reload"] // "<none>") + "/" + (.["configmap.reloader.stakater.com/reload"] // "<none>")' "$1"
+}
+assert_eq "$(dp_reload_targets "$TMP/wl-openchoreo-data-plane.yaml")" "$crs_secret_name/$crs_cm_name" \
+  "cluster-agent-dataplane Reloader annotations match CRS Secret ($crs_secret_name) and ConfigMap ($crs_cm_name)"
+yq 'del(select(.kind == "Deployment").spec.template.metadata.annotations["secret.reloader.stakater.com/reload"])' \
+  "$TMP/wl-openchoreo-data-plane.yaml" > "$TMP/dp-noreload.yaml"
+assert_eq "$(dp_reload_targets "$TMP/dp-noreload.yaml")" "<none>/$crs_cm_name" \
+  "negative: contract catches a cluster-agent Deployment missing the Secret Reloader annotation"
+
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
@@ -429,6 +464,19 @@ helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace
   > "$TMP/promotion-authz.yaml"
 assert_eq "$(D="$deleter" yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == strenv(D)) | .spec.actions | join(",")' \
   "$TMP/promotion-authz.yaml")" "component:delete" "charts/tenant componentDeleterRole is the addon's component:delete ClusterAuthzRole"
+binding_actions="releasebinding:create,releasebinding:update,releasebinding:delete,projectreleasebinding:create,projectreleasebinding:update,projectreleasebinding:delete,resourcereleasebinding:create,resourcereleasebinding:update,resourcereleasebinding:delete"
+assert_eq "$(yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == "promotion-release-binding-writer") | .spec.actions | join(",")' \
+  "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-release-binding-writer covers component, project and resource release bindings"
+assert_eq "$(yq 'select(.kind == "ClusterAuthzRoleBinding" and .metadata.name == "promotion-deny-developers") | .spec.roleMappings[0].conditions[0].actions | join(",")' \
+  "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-deny-developers condition actions match promotion-release-binding-writer"
+helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
+  -s templates/upstream-defaults.yaml > "$TMP/upstream-defaults.yaml"
+assert_eq "$(yq 'select(.kind == "ClusterTrait" and .metadata.name == "observability-alert-rule") | .spec.creates[0].template.kind' \
+  "$TMP/upstream-defaults.yaml")" "ObservabilityAlertRule" "upstream-defaults ships ClusterTrait observability-alert-rule"
+for ct in service web-application worker; do
+  assert_eq "$(CT="$ct" yq 'select(.kind == "ClusterComponentType" and .metadata.name == strenv(CT)) | .spec.allowedTraits[] | select(.name == "observability-alert-rule") | .kind' \
+    "$TMP/upstream-defaults.yaml")" "ClusterTrait" "ClusterComponentType $ct allows ClusterTrait observability-alert-rule"
+done
 assert_eq "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$tenant_values")" \
   "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$ocp_values")" "promotion.restrictedGroups: charts/tenant == openchoreo-platform"
 

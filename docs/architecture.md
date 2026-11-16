@@ -9,7 +9,7 @@ A cloud-agnostic platform built from four parts:
 | **External Secrets Operator** | moves every credential: repo creds, cloud creds, CAPI kubeconfigs into Argo CD cluster secrets, OpenChoreo agent identities into workload clusters, app secrets on data planes |
 | **OpenChoreo** (control plane, workflow and observability planes on mgmt; a data plane per workload cluster) | the developer platform: Projects, Components, Environments, builds, promotion; it delivers app workloads to data planes itself |
 
-Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagrams: [diagrams/](diagrams/README.md).
+Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagrams: [diagrams/](diagrams/README.md). Day-2 operations: [operations.md](operations.md).
 
 ## Topology
 
@@ -130,7 +130,8 @@ the external-dns Cloudflare token, has its own `ClusterSecretStore/dns` (namespa
 backend location and identity; [dns.md](dns.md#credentials)).
 Key names are flat (`platform-github`, `capi-aws`, …; [conventions.md](conventions.md#secret-keys)) so they map onto
 every backend. `platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces
-that consume it (addon secret-stores `platformStore.namespaces`); `hack/tests/test_secret_store_scope.sh` fails when a
+that consume it (addon secret-stores `platformStore.namespaces`), while `workflows-*` run namespaces use the
+key-scoped `ClusterSecretStore/workflows`; `hack/tests/test_secret_store_scope.sh` fails when a
 rendered consumer is missing from that list or a listed namespace has no consumer.
 
 ### Installations

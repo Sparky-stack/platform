@@ -1,0 +1,22 @@
+# = the overlay docs/project-templates.md "Repository creation" shows (keep in step).
+scaffolder:
+  githubApp:
+    enabled: true
+openchoreo-control-plane:
+  backstage:
+    extraEnv:
+      - name: GITHUB_APP_ID
+        valueFrom: { secretKeyRef: { name: backstage-github-app, key: app-id } }
+      - name: GITHUB_APP_PRIVATE_KEY
+        valueFrom: { secretKeyRef: { name: backstage-github-app, key: private-key } }
+    appConfig:
+      integrations:
+        github:
+          - host: github.com
+            apps:
+              - appId: ${GITHUB_APP_ID}
+                privateKey: ${GITHUB_APP_PRIVATE_KEY}
+                # required by Backstage's config schema, used only for user OAuth (not by installation tokens)
+                clientId: not-used
+                clientSecret: not-used
+                allowedInstallationOwners: [koorikla]

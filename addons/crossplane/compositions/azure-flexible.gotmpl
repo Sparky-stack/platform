@@ -1,0 +1,143 @@
+{{- /* Shared preamble (the same in every compositions/*.gotmpl): the XR's spec with the XRD defaults as fallbacks,
+the cloud-side identifier and the deletion behaviour. $facts is prepended by templates/compositions.yaml. */}}
+{{- $xr := .observed.composite.resource }}
+{{- $spec := $xr.spec | default dict }}
+{{- $name := $xr.metadata.name }}
+{{- $ns := $xr.metadata.namespace }}
+{{- $version := dig "version" "17" $spec | toString }}
+{{- $size := dig "size" "S" $spec }}
+{{- $storage := dig "storageGiB" 10 $spec | int }}
+{{- $ha := dig "highAvailability" false $spec }}
+{{- $backup := dig "backup" "enabled" false $spec }}
+{{- $retention := dig "backup" "retentionDays" 7 $spec | int }}
+{{- $db := dig "database" "app" $spec }}
+{{- $retain := eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+{{- $observed := .observed.resources | default dict }}
+{{- /* Cloud identifier: unique per cluster/namespace/name, starts with a letter, <= 52 chars, no double hyphens. */}}
+{{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 40 | trimSuffix "-" }}
+{{- $id := printf "pg-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+{{- /* Retain: Crossplane never deletes the cloud resource (v2 managed resources have no deletionPolicy). */}}
+{{- $mp := list "*" }}
+{{- if $retain }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+{{- /* ESO template delimiters, emitted literally into ExternalSecret templates. */}}
+{{- $o := "{{" }}
+{{- $c := "}}" }}
+
+{{- /* azure-flexible: Azure Database for PostgreSQL Flexible Server with VNet integration (delegated subnet, private DNS
+zone, no public access), Entra authentication enabled next to password authentication, zone-redundant HA when
+highAvailability. The administrator password is generated in-cluster by an ESO Password generator into the connection
+Secret before the server exists (the server needs it at creation; the FQDN is deterministic); Crossplane's pipeline never
+sees it. Storage: the smallest Flexible Server size >= storageGiB. */}}
+{{- $skus := dict "S" "GP_Standard_D2ds_v5" "M" "GP_Standard_D4ds_v5" "L" "GP_Standard_D8ds_v5" }}
+{{- $storageMb := 0 }}
+{{- range $mb := list 32768 65536 131072 262144 524288 1048576 2097152 4194304 8388608 16777216 }}
+{{- if and (eq $storageMb 0) (ge $mb (mul $storage 1024)) }}{{ $storageMb = $mb }}{{ end }}
+{{- end }}
+{{- if eq $storageMb 0 }}{{ $storageMb = 16777216 }}{{ end }}
+{{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+{{- $tags := dict "platform.koorikla.io/cluster" $facts.cluster "platform.koorikla.io/namespace" $ns "platform.koorikla.io/postgresql" $name }}
+{{- $fqdn := printf "%s.postgres.database.azure.com" $id }}
+{{- $host := dig "server" "resource" "status" "atProvider" "fqdn" $fqdn $observed }}
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ $name }}-password
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: password-generator
+    gotemplating.fn.crossplane.io/ready: "True"
+spec:
+  length: 32
+  digits: 8
+  symbols: 0                          # URI-safe without escaping
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-app
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: connection-secret
+spec:
+  refreshPolicy: CreatedOnce          # deleting the Secret rotates the password (the provider applies the new one)
+  target:
+    name: {{ $name }}-app
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: Opaque
+      data:
+        host: {{ $fqdn }}
+        port: "5432"
+        dbname: {{ $db }}
+        username: {{ $db }}
+        password: '{{ $o }} .password {{ $c }}'
+        uri: 'postgresql://{{ $db }}:{{ $o }} .password {{ $c }}@{{ $fqdn }}:5432/{{ $db }}?sslmode=require'
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ $name }}-password
+---
+apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+kind: FlexibleServer
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: server
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    location: {{ $facts.location }}
+    version: {{ $version | quote }}
+    skuName: {{ get $skus $size }}
+    storageMb: {{ $storageMb }}
+    autoGrowEnabled: true
+    backupRetentionDays: {{ ternary $retention 7 (eq (toString $backup) "true") }}   # Azure always keeps >= 7 days
+    geoRedundantBackupEnabled: false
+    delegatedSubnetId: {{ $facts.delegatedSubnetId }}
+    privateDnsZoneId: {{ $facts.privateDnsZoneId }}
+    publicNetworkAccessEnabled: false
+    administratorLogin: {{ $db }}
+    administratorPasswordSecretRef:
+      name: {{ $name }}-app
+      key: password
+    authentication:
+      activeDirectoryAuthEnabled: true
+      passwordAuthEnabled: true
+      tenantId: {{ $facts.tenantID }}
+    {{- if $ha }}
+    highAvailability:
+      mode: ZoneRedundant
+    {{- end }}
+    tags: {{ toJson $tags }}
+---
+apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+kind: FlexibleServerDatabase
+metadata:
+  name: {{ $name }}-db
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: database
+    crossplane.io/external-name: {{ $db }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    serverIdRef:
+      name: {{ $name }}
+    charset: UTF8
+    collation: en_US.utf8
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+status:
+  backend: azure-flexible
+  backup: {{ ternary "enabled" "disabled" (eq (toString $backup) "true") }}
+  endpoint: {{ $host }}
+  port: 5432
+  secretName: {{ $name }}-app

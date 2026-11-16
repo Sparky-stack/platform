@@ -1,0 +1,9 @@
+# Addon crossplane on a GKE cluster: provider fact gcp-gke -> backend gcp-cloudsql. Fake project / network.
+cluster: { name: prod-ew4, role: workload, provider: gcp-gke, region: europe-west4, environment: production, cni: cilium }
+postgresql:
+  gcp:
+    project: example-platform-prod
+    privateNetwork: projects/example-platform-prod/global/networks/platform
+    allocatedIpRange: platform-psa
+    identity:
+      serviceAccount: crossplane@example-platform-prod.iam.gserviceaccount.com

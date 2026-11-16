@@ -65,7 +65,7 @@ spec:
   subject:
     organizations: [OpenChoreo]
   secretName: {{ $name }}-agent-tls
-  duration: 8760h           # 1y; the agent reads it at start: restart it after renewal (docs/openchoreo.md)
+  duration: 8760h           # 1y; addon reloader rolls the data-plane agent after renewal (docs/openchoreo.md)
   renewBefore: 720h
   privateKey:
     algorithm: RSA

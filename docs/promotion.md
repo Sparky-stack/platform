@@ -27,7 +27,8 @@ Argo CD. Nothing runs `kubectl` against a cluster. App repo layout and the basic
 - **Promotion UIs**: console "Promote" button, `occ component deploy <c> --to <env>`, openchoreo-api `PUT
   /api/v1/namespaces/{ns}/releasebindings/{name}`, MCP tools `create_release_binding` / `update_release_binding`.
   For a git-owned binding all of them are either denied (below) or reverted by Argo CD's self-heal.
-- **Authorization conditions** (CEL over `resource.environment`, etc.) on `releasebinding:create|update|delete`.
+- **Authorization conditions** (CEL over `resource.environment`, etc.) on `releasebinding:create|update|delete`,
+  `projectreleasebinding:create|update|delete` and `resourcereleasebinding:create|update|delete`.
   An explicit `deny` binding wins over an `allow` for the same entitlement value.
 - **Generic Workflows**: `ClusterWorkflow` + `WorkflowRun`, not tied to a component. They render into the workflow
   plane as Argo Workflows and appear in the console, `occ` and MCP like build runs.
@@ -57,7 +58,10 @@ Application excludes that file.
 ### 2. Git is the only path to gated bindings (native)
 
 - **OpenChoreo ABAC** (`promotion.restrictedGroups`, default `developers`): a `deny` ClusterAuthzRoleBinding with the
-  condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`.
+  condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`,
+  `projectreleasebinding:create|update|delete` and `resourcereleasebinding:create|update|delete` (deleting or editing
+  the project's production `ProjectReleaseBinding` would deprovision or re-bind the project namespace on the production
+  data plane).
   - Developers keep full control of development and staging through the console, `occ` and MCP.
   - Production is rejected with a clear authz error, also for AI agents using MCP.
   - `component:delete` is denied too, for every gated app's Component: `charts/tenant` renders an `AuthzRoleBinding`
@@ -104,8 +108,9 @@ which opts it into NetworkPolicy `platform-workflows-openchoreo`: egress to the 
 (`openchoreo.observability.httpPort`: `observer.<host>`). Build ClusterWorkflows never set the label and their
 parameters cannot (`hack/tests/test_gitops_contracts.sh` check 10 keeps both addons' labels equal).
 
-**Credentials.** A per-run ExternalSecret against `${workflowplane.secretStore}` (store `platform`, namespace
-`workflows-default` is in `addons/secret-stores` `platformStore.namespaces`) fetches, once (`refreshInterval: "0"`):
+**Credentials.** A per-run ExternalSecret against `${workflowplane.secretStore}` (`ClusterSecretStore/workflows`,
+scoped by `namespaceRegexes` to `workflows-*` and by `resourceNames` to `workflowStore.keys`; never the full
+`platform` store) fetches, once (`refreshInterval: "0"`):
 the Thunder client secret (`promotion-gate`) and the gate's own GitHub App (`promotion-gate-github`, never Argo CD's
 read-only `platform-github`). The Secret is mounted read-only as files into the single gate pod (no env vars), the
 pod is deleted when the step completes (`podGC: OnPodCompletion`), and the Secret goes with the WorkflowRun after
@@ -116,11 +121,11 @@ pod is deleted when the step completes (`podGC: OnPodCompletion`), and the Secre
 - the gate signs an App JWT and mints an installation token restricted to exactly that repository and
   `contents`, `pull_requests`, `statuses` write (GitHub caps it at 1h), and revokes it when the PR step ends.
 
-Residual: the workflow namespace is shared with tenant build runs (OpenChoreo renders every run into
-`workflows-<org namespace>`), so for the run's lifetime the App key sits in a Secret there; build run containers carry
-no ServiceAccount token, so tenant code would need a credential with Secret read RBAC in that namespace to see it. The
-App's blast radius is the app repos it is installed on. A dedicated store for run namespaces:
-[#29](https://github.com/koorikla/platform/issues/29).
+Residual: `workflows-*` can only sync `workflowStore.keys` from the secret backend (never `platform-github`,
+`openchoreo`, `openbao-unseal` or cloud provider keys), but the workflow namespace is shared with tenant build runs
+(OpenChoreo renders every run into `workflows-<org namespace>`), so for the run's lifetime the App key sits in a
+Secret there; build run containers carry no ServiceAccount token, so tenant code would need a credential with Secret
+read RBAC in that namespace to see it. The App's blast radius is the app repos it is installed on.
 For one component and one edge (default staging → next environment) the gate checks, in order:
 
 1. **pipeline**: the edge exists in the project's DeploymentPipeline (closes #4884 for the automated path).
@@ -246,7 +251,7 @@ spec:
 | `promotionGate.sourceEnvironments` | addon argo-events | `[staging]` |
 | `imageVerification.*` | addon kyverno-policies | Audit dev/staging, Deny production |
 
-Secrets (store `platform`, seeded locally by `make secrets`):
+Secrets (store `workflows` for the gate run, `platform` for addon thunder; seeded locally by `make secrets`):
 
 | Key | Properties | Used by |
 |---|---|---|

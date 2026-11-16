@@ -27,8 +27,8 @@
 <text class="s" x="452.0" y="239.9" font-size="13" fill="#cbd5e1" text-anchor="middle">gateway CA, as a payload</text>
 <rect x="680" y="176" width="240" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="800.0" y="202.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cluster-agent</text>
-<text class="s" x="800.0" y="222.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Secret cluster-agent-tls,</text>
-<text class="s" x="800.0" y="239.9" font-size="13" fill="#cbd5e1" text-anchor="middle">dials out with mTLS</text>
+<text class="s" x="800.0" y="222.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Secret cluster-agent-tls;</text>
+<text class="s" x="800.0" y="239.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Reloader restarts it</text>
 <rect x="336" y="336" width="232" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="452.0" y="362.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cluster-gateway</text>
 <text class="s" x="452.0" y="382.4" font-size="13" fill="#cbd5e1" text-anchor="middle">accepts only the CA in</text>
@@ -101,8 +101,8 @@
 <text class="s" x="60.0" y="915.0" font-size="13.5" fill="#cbd5e1">that cluster&#x27;s CA</text>
 <circle cx="506.0" cy="891.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
 <text class="s" x="506.0" y="896" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">8</text>
-<text class="s" x="526.0" y="896.0" font-size="13.5" fill="#cbd5e1">Rotation: certs renew 30 days before expiry; restart the agent</text>
-<text class="s" x="526.0" y="915.0" font-size="13.5" fill="#cbd5e1">to load them (#50)</text>
+<text class="s" x="526.0" y="896.0" font-size="13.5" fill="#cbd5e1">Rotation: certs renew 30 days before expiry; Reloader restarts</text>
+<text class="s" x="526.0" y="915.0" font-size="13.5" fill="#cbd5e1">the agent on the new cert</text>
 <circle cx="40.0" cy="939.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40.0" y="944" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
 <text class="s" x="60.0" y="944.0" font-size="13.5" fill="#cbd5e1">OpenBao publishes each group root; its keys stay inside</text>

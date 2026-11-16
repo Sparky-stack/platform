@@ -1,0 +1,44 @@
+suite: telemetry - Hubble HTTP metrics for the OpenChoreo observer (#104)
+templates:
+  - templates/hubble-servicemonitor.yaml
+set:
+  cluster.name: dev1
+tests:
+  - it: scrapes Cilium's hubble-metrics Service in kube-system
+    asserts:
+      - isKind:
+          of: ServiceMonitor
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+      - equal:
+          path: spec.namespaceSelector.matchNames
+          value: [kube-system]
+      - equal:
+          path: spec.selector.matchLabels
+          value: { k8s-app: hubble }
+      - equal:
+          path: spec.endpoints[0].port
+          value: hubble-metrics
+
+  - it: keeps only the families the observer's metrics adapter queries
+    asserts:
+      - lengthEqual:
+          path: spec.endpoints[0].metricRelabelings
+          count: 1
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].action
+          value: keep
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].sourceLabels
+          value: [__name__]
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].regex
+          value: hubble_http_(requests_total|request_duration_seconds_(bucket|sum|count))
+
+  - it: renders nothing when disabled
+    set:
+      hubbleMetrics.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
