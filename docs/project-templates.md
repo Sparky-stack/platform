@@ -57,7 +57,11 @@ entity with the same ref would conflict.
 5. `catalog:register` of the new repo's `catalog-info.yaml`.
 
 Merging the PR lets Argo CD sync the tenant: the app's Application syncs `deploy/openchoreo/`, and the first CI run on
-`main` bumps the Workload, so the service serves in `development`.
+`main` bumps the Workload, so the service serves in `development`. Production admits only images signed by the
+koorikla/ci workflow for listed repositories: before the first production promotion the new repo goes into addon
+kyverno-policies `imageVerification.github.repositories` (installation overlay; the PR description says so,
+[#108](https://github.com/koorikla/platform/issues/108)). The skeletons pin koorikla/ci at the same commit Kyverno
+trusts (`imageVerification.github.workflowRef`; the test fails when they drift).
 
 ## Backstage wiring
 

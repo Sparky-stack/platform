@@ -158,6 +158,8 @@ spec:
             ```
           {%- endif %}
 
+          - Before the first **production** promotion: add `${{ parameters.repoOwner }}/${{ parameters.name }}` to `imageVerification.github.repositories` of addon kyverno-policies (installation overlay), so its signed images are admitted there.
+
           Merging lets Argo CD sync the tenant: OpenChoreo picks up `deploy/openchoreo/` of the new repo and deploys the first image CI builds to development.
     - id: register
       name: Register in the catalog

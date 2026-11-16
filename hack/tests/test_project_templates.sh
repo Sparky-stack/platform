@@ -55,6 +55,7 @@ assert_same() {
 }
 words_in() { local w; for w in $1; do [[ " $2 " == *" $w "* ]] || { echo "$w"; return 0; }; done; echo; }
 
+TRUSTED_CI_SHA=$(yq -r '.imageVerification.github.workflowRef' addons/kyverno-policies/values.yaml)
 TEMPLATES=()
 for d in templates/*/template.yaml; do
   t=${d#templates/}; t=${t%/template.yaml}
@@ -174,6 +175,7 @@ for t in "${TEMPLATES[@]}"; do
   ci_uses=$(yq -r '.jobs[] | select(.uses) | .uses' "$wf")
   assert_match "$ci_uses" '^koorikla/ci/\.github/workflows/[a-z-]+\.yaml@[0-9a-f]{40}$' "$t: build job calls koorikla/ci by commit SHA"
   assert_eq "$(grep -cE 'uses: koorikla/ci/[^ ]+@[0-9a-f]{40} # v1$' "$wf")" 1 "$t: koorikla/ci SHA carries the '# v1' tag comment (Renovate)"
+  assert_eq "${ci_uses##*@}" "$TRUSTED_CI_SHA" "$t: koorikla/ci SHA == the commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef)"
   bad=""
   for u in $(yq -r '.jobs[].steps[]?.uses // ""' "$wf"); do [[ "$u" =~ $SHA_USES_RE ]] || bad="$bad $u"; done
   assert_eq "$bad" "" "$t: every action pinned by commit SHA"
