@@ -6,9 +6,9 @@
 <rect x="16" y="560" width="1168" height="302" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
 <text x="30.0" y="582.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">2 · Crossplane package promotion</text>
 <path d="M 212.0 152.0 L 252.0 152.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
-<path d="M 212.0 172.0 L 232.0 172.0 L 232.0 236.0 L 252.0 236.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ah94a3b8)"/>
+<path d="M 212.0 172.0 L 232.0 172.0 L 232.0 236.0 L 252.0 236.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
 <path d="M 482.0 152.0 L 522.0 152.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 482.0 236.0 L 522.0 236.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#aha78bfa)"/>
+<path d="M 482.0 236.0 L 522.0 236.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
 <path d="M 367.0 120.0 L 367.0 106.0 L 892.0 106.0 L 892.0 120.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
 <path d="M 892.0 268.0 L 892.0 284.0 L 122.0 284.0 L 122.0 300.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
 <path d="M 212.0 346.0 L 252.0 346.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
@@ -36,20 +36,20 @@
 <rect x="252" y="120" width="230" height="64" rx="6" fill="#0f172a"/>
 <rect x="252" y="120" width="230" height="64" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
 <text x="367.0" y="138.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
-<text x="367.0" y="157.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">test · build · push</text>
-<text x="367.0" y="173.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(koorikla/ci: planned)</text>
+<text x="367.0" y="157.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">optional path</text>
+<text x="367.0" y="173.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci go.yaml@v1</text>
 <rect x="252" y="204" width="230" height="64" rx="6" fill="#0f172a"/>
-<rect x="252" y="204" width="230" height="64" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="252" y="204" width="230" height="64" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
 <text x="367.0" y="222.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
-<text x="367.0" y="241.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">same koorikla/ci scripts</text>
-<text x="367.0" y="257.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">buildkit · Argo Workflows</text>
+<text x="367.0" y="241.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">default: WorkflowRun, same</text>
+<text x="367.0" y="257.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci scripts · BuildKit</text>
 <rect x="522" y="120" width="230" height="64" rx="6" fill="#0f172a"/>
 <rect x="522" y="120" width="230" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
 <text x="637.0" y="138.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
 <text x="637.0" y="157.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/&lt;app&gt;</text>
-<text x="637.0" y="173.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">sign + attest: planned</text>
+<text x="637.0" y="173.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless sign + attest</text>
 <rect x="522" y="204" width="230" height="64" rx="6" fill="#0f172a"/>
-<rect x="522" y="204" width="230" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="522" y="204" width="230" height="64" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
 <text x="637.0" y="222.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor · apps</text>
 <text x="637.0" y="241.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign: platform key</text>
 <text x="637.0" y="257.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Trivy scan on push</text>
@@ -90,7 +90,7 @@
 <rect x="792" y="460" width="200" height="52" rx="6" fill="#0f172a"/>
 <rect x="792" y="460" width="200" height="52" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
 <text x="892.0" y="479.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">production</text>
-<text x="892.0" y="499.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ReleaseBinding · PR</text>
+<text x="892.0" y="499.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">own App · freeze window</text>
 <rect x="1032" y="300" width="144" height="132" rx="6" fill="#0f172a"/>
 <rect x="1032" y="300" width="144" height="132" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
 <text x="1104.0" y="336.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">dev1</text>
@@ -150,10 +150,12 @@
 <text x="507.0" y="288.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#34d399" text-anchor="middle">Argo CD syncs deploy/openchoreo/ (tenant AppProject)</text>
 <rect x="898.0" y="358.5" width="93.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
 <text x="902.0" y="371.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="start">promote = PR</text>
-<rect x="898.0" y="438.5" width="86.4" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="902.0" y="451.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="start">PR + review</text>
+<rect x="898.0" y="438.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="902.0" y="451.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="start">gate PR + review</text>
 <text x="32.0" y="424.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">a ReleaseBinding PR sets spec.releaseName to the ComponentRelease running in the previous</text>
 <text x="32.0" y="442.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">environment · releases reach data planes only through the OpenChoreo cluster-agent (never Argo CD)</text>
+<text x="32.0" y="466.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">production: promotion-gate workflow (smoke · observer · freeze) opens the PR; CODEOWNERS approve;</text>
+<text x="32.0" y="484.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">VAP: only Argo CD writes the binding · Kyverno denies unsigned images · docs/promotion.md</text>
 <rect x="691.3" y="829.5" width="357.4" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
 <text x="870.0" y="842.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#34d399" text-anchor="middle">gate: same version healthy on every env-N cluster</text>
 <text x="40.0" y="704.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Cluster-scoped packages (Provider,</text>

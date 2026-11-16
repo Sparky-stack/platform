@@ -1,0 +1,36 @@
+{{- /*
+ClusterWorkflowPlane (cluster-scoped, control plane on mgmt). ClusterWorkflows reference it (workflowPlaneRef, default
+`default`). Trust: exactly the plane's self-signed agent cert (Secret cluster-agent-tls in this namespace; ca.crt of a
+self-signed cert is the cert itself), read live by the cluster-gateway. secretStoreRef: the ClusterSecretStore that
+workflow resources (per-run ExternalSecrets) reference as ${workflowplane.secretStore}. Build logs and run status go
+through the agent; the observability plane (when enabled) adds metrics/logs of the build pods.
+Applied after the OpenChoreo CRDs exist (control-plane addon); skipped in dry-run until then (Argo retries).
+*/ -}}
+{{- $wp := index .Values "openchoreo-workflow-plane" }}
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterWorkflowPlane
+metadata:
+  name: {{ .Values.clusterWorkflowPlane.name }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    openchoreo.dev/display-name: {{ printf "Workflow plane (%s)" .Values.cluster.name | quote }}
+    openchoreo.dev/description: "Argo Workflows on the management cluster: in-cluster builds (rootless BuildKit, koorikla/ci scripts)"
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  planeID: {{ .Values.clusterWorkflowPlane.planeID }}
+  clusterAgent:
+    clientCA:
+      secretKeyRef:
+        name: {{ $wp.clusterAgent.tls.secretName }}
+        namespace: {{ .Release.Namespace }}
+        key: ca.crt
+  secretStoreRef:
+    name: {{ .Values.clusterWorkflowPlane.secretStore }}
+  {{- if .Values.openchoreo.observability.enabled }}
+  observabilityPlaneRef:
+    kind: ClusterObservabilityPlane
+    name: default
+  {{- end }}

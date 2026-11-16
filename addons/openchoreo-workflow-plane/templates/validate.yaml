@@ -1,0 +1,17 @@
+{{- /* Render-time consistency: plane CR vs agent, no control-plane CA copied, installation toggle. */ -}}
+{{- if not .Values.openchoreo.workflowPlane.enabled }}
+{{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
+{{- end }}
+{{- $wp := index .Values "openchoreo-workflow-plane" }}
+{{- if ne $wp.clusterAgent.planeID .Values.clusterWorkflowPlane.planeID }}
+{{- fail "clusterWorkflowPlane.planeID must equal openchoreo-workflow-plane.clusterAgent.planeID" }}
+{{- end }}
+{{- if ne (index $wp "argo-workflows" "commonLabels" "openchoreo.dev/plane-id") $wp.clusterAgent.planeID }}
+{{- fail "openchoreo-workflow-plane.argo-workflows.commonLabels[openchoreo.dev/plane-id] must equal clusterAgent.planeID" }}
+{{- end }}
+{{- if or (not $wp.clusterAgent.tls.enabled) (not $wp.clusterAgent.tls.generateCerts) $wp.clusterAgent.tls.caSecretName }}
+{{- fail "openchoreo-workflow-plane.clusterAgent.tls: enabled, generateCerts, caSecretName empty (no control-plane CA key is copied)" }}
+{{- end }}
+{{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $wp.clusterAgent.tls.serverCAConfigMap) }}
+{{- fail "agentServerCA.configMapName must equal openchoreo-workflow-plane.clusterAgent.tls.serverCAConfigMap" }}
+{{- end }}

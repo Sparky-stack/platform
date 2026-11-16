@@ -1,0 +1,712 @@
+# ClusterWorkflowTemplate koorikla-build: the build pipeline behind the per-stack OpenChoreo ClusterWorkflows (addon
+# openchoreo-platform, files/cluster-workflows). Same scripts and toolbox as koorikla/ci's GitHub Actions (parity):
+#
+#   checkout ─┬─ check (stack toolchain image + koorikla/ci scripts/<stack>/check.sh) ─┐
+#             └─ scan-fs (scan-fs.sh: Trivy on lockfiles) ──────────────────────────────┴─ build (rootless BuildKit,
+#   multi-arch, push by digest, SLSA provenance) ─┬─ scan-image (scan-image.sh, every platform) ─┬─ sign (sign-image.sh:
+#                                                 └─ sbom (sbom.sh, syft SPDX) ──────────────────┘  cosign signature +
+#   vuln attestation, + SBOM attestation) ── gitops (commit the image ref into the app repo's Workload; Argo CD syncs it,
+#   autoDeploy releases it to the first environment). Git stays the source of truth: nothing writes Workloads into the
+#   cluster.
+#
+# Rendered verbatim by addons/openchoreo-workflow-plane (templates/cluster-workflow-templates.yaml) except the
+# @@...@@ image placeholders. Argo expressions ({{...}}) are untouched by Helm because the file is never templated.
+# Every pod: non-root (65532), RuntimeDefault seccomp, no privilege escalation, all capabilities dropped (Pod Security
+# restricted) except `build` (rootless BuildKit, see its comment).
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: koorikla-build
+  annotations:
+    workflows.argoproj.io/description: Build, check, scan, sign an image with koorikla/ci scripts and hand it to GitOps
+spec:
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      # identity (set by the OpenChoreo ClusterWorkflow from the WorkflowRun)
+      - name: component-name
+      - name: project-name
+      - name: namespace-name
+      - name: workflowrun-name
+      # source
+      - name: git-repo
+      - name: git-allowed-prefixes         # space-separated URL prefixes the run's git token may be sent to
+      - name: branch
+        value: main
+      - name: commit
+        value: ""
+      - name: app-path
+        value: "."
+      # stack checks (empty check-image skips them)
+      - name: stack
+        value: none
+      - name: check-image
+        value: ""
+      - name: check-setup
+        value: ""
+      - name: check-env
+        value: "{}"
+      - name: postgres
+        value: "false"
+      # image
+      - name: image-repo                   # <registry>/<project path>/<component>, no tag
+      - name: registry-host                # host[:port] the CA / credentials belong to
+      - name: docker-context
+        value: "."
+      - name: dockerfile-path
+        value: Dockerfile
+      - name: build-args
+        value: "[]"
+      - name: platforms
+        value: linux/amd64,linux/arm64
+      - name: build-cache
+        value: "true"
+      # scanning gates
+      - name: fail-severities
+        value: CRITICAL
+      - name: ignore-unfixed
+        value: "true"
+      - name: trivy-ignore-file
+        value: ""
+      # signing: "true" also records signatures in the public Rekor log (installation switch, default off)
+      - name: tlog-upload
+        value: "false"
+      # GitOps hand-off
+      - name: gitops-enabled
+        value: "true"
+      - name: gitops-branch
+        value: main
+      - name: workload-path
+        value: deploy/openchoreo/workload.yaml
+      - name: git-author
+        value: OpenChoreo build <build@openchoreo.invalid>
+      # per-run Secrets (ExternalSecrets rendered by the ClusterWorkflow)
+      - name: git-secret
+      - name: registry-secret
+      - name: registry-ca-secret
+      - name: cosign-secret
+  # No ServiceAccount token in the run's containers: check steps run tenant code in a tenant-chosen image, and
+  # workflow-sa may patch workflowtaskresults (another run's outputs, e.g. the digest that gets signed). Only Argo's
+  # executor (init/wait containers) gets the token, through executor.serviceAccountName.
+  automountServiceAccountToken: false
+  executor:
+    serviceAccountName: workflow-sa
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  volumeClaimTemplates:
+    - metadata:
+        name: work
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+  volumes:
+    - name: git
+      secret:
+        secretName: "{{workflow.parameters.git-secret}}"
+        optional: true
+    - name: registry-auth
+      secret:
+        secretName: "{{workflow.parameters.registry-secret}}"
+        items: [{ key: .dockerconfigjson, path: config.json }]
+    - name: registry-ca
+      secret:
+        secretName: "{{workflow.parameters.registry-ca-secret}}"
+        optional: true                     # external registries with public CAs have none
+    - name: cosign
+      secret:
+        secretName: "{{workflow.parameters.cosign-secret}}"
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: checkout
+            template: checkout
+          - name: check
+            depends: checkout
+            when: "'{{tasks.checkout.outputs.parameters.skip}}' != 'true' && '{{workflow.parameters.check-image}}' != '' && '{{workflow.parameters.postgres}}' != 'true'"
+            template: check
+          - name: check-with-postgres
+            depends: checkout
+            when: "'{{tasks.checkout.outputs.parameters.skip}}' != 'true' && '{{workflow.parameters.check-image}}' != '' && '{{workflow.parameters.postgres}}' == 'true'"
+            template: check-with-postgres
+          - name: scan-fs
+            depends: checkout
+            when: "'{{tasks.checkout.outputs.parameters.skip}}' != 'true'"
+            template: scan-fs
+          - name: build
+            depends: "(check.Succeeded || check.Skipped) && (check-with-postgres.Succeeded || check-with-postgres.Skipped) && scan-fs.Succeeded"
+            template: build
+            arguments:
+              parameters:
+                - { name: short-sha, value: "{{tasks.checkout.outputs.parameters.short-sha}}" }
+          - name: scan-image
+            depends: build
+            template: scan-image
+            arguments:
+              parameters:
+                - { name: digest-ref, value: "{{tasks.build.outputs.parameters.digest-ref}}" }
+          - name: sbom
+            depends: build
+            template: sbom
+            arguments:
+              parameters:
+                - { name: digest-ref, value: "{{tasks.build.outputs.parameters.digest-ref}}" }
+          - name: sign
+            depends: scan-image && sbom
+            template: sign
+            arguments:
+              parameters:
+                - { name: digest-ref, value: "{{tasks.build.outputs.parameters.digest-ref}}" }
+          - name: gitops
+            depends: sign
+            when: "'{{workflow.parameters.gitops-enabled}}' == 'true'"
+            template: gitops
+            arguments:
+              parameters:
+                - { name: image, value: "{{tasks.build.outputs.parameters.image}}" }
+                - { name: commit-sha, value: "{{tasks.checkout.outputs.parameters.commit-sha}}" }
+                - { name: short-sha, value: "{{tasks.checkout.outputs.parameters.short-sha}}" }
+
+    # --- source ------------------------------------------------------------------------------------------------------
+    # Shallow fetch of the requested commit (or branch head) with the run's git credentials (credential helper scoped
+    # to the allowed repository prefixes, see BUILD_GUARDS; never in the URL or the logs). Loop guard: a commit that only touches the GitOps directory (the
+    # hand-off commit of a previous run, or a manual promotion) is not rebuilt - relevant once autoBuild webhooks are on,
+    # because OpenChoreo's webhook matcher treats appPath "." as "every change".
+    - name: checkout
+      retryStrategy:
+        limit: "3"
+        retryPolicy: OnError
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            eval "$BUILD_GUARDS"
+            check_ref "$BRANCH"; check_ref "$COMMIT"
+            git_access "$REPO"
+            rm -rf /work/source && mkdir -p /work/source /work/out /work/home && cd /work/source
+            git init -q . && git remote add origin "$REPO"
+            ref="${COMMIT:-$BRANCH}"
+            echo ">> fetching $REPO $ref"
+            git fetch -q --depth 2 origin "$ref"
+            git -c advice.detachedHead=false checkout -q FETCH_HEAD
+            sha=$(git rev-parse HEAD)
+            skip=false
+            changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+            gitops_dir=$(dirname "$WORKLOAD_PATH")
+            if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv "^${gitops_dir}/"; then
+              skip=true
+              echo ">> $sha only changes ${gitops_dir}/ (GitOps hand-off or promotion): nothing to build"
+            fi
+            printf '%s' "$sha" > /tmp/commit-sha
+            printf '%s' "${sha:0:7}" > /tmp/short-sha
+            printf '%s' "$skip" > /tmp/skip
+            echo ">> $(git log -1 --format='%h %an: %s')"
+        env:
+          - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
+          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
+          - { name: BRANCH, value: "{{workflow.parameters.branch}}" }
+          - { name: COMMIT, value: "{{workflow.parameters.commit}}" }
+          - { name: WORKLOAD_PATH, value: "{{workflow.parameters.workload-path}}" }
+          - { name: HOME, value: /tmp }
+          # Build guards, sourced by checkout and gitops (eval "$BUILD_GUARDS"). The run's git token only ever reaches
+          # the installation's allowed repository prefixes (GIT_ALLOWED_PREFIXES, rendered by addon openchoreo-platform
+          # from installation.githubOrg; the ClusterWorkflow schema enforces the same pattern on repository.url, this
+          # is the second line): the URL is checked first, git config comes only from the environment (no system or
+          # global gitconfig, https only), and the credential helper is registered per prefix, so git never answers a
+          # 401 from any other host or owner. Ref and path parameters are checked against option injection and
+          # traversal.
+          - &build-guards
+            name: BUILD_GUARDS
+            value: |
+              die() { echo ">> $*" >&2; exit 1; }
+              # bash [[ =~ ]] matches the whole value (grep would accept any single matching line of a multi-line one)
+              re_name='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+              re_ref='^[A-Za-z0-9_][A-Za-z0-9._/-]*$'
+              re_workload='^deploy/openchoreo/[A-Za-z0-9][A-Za-z0-9._-]*\.yaml$'
+              check_repo() {
+                local p rest
+                for p in $GIT_ALLOWED_PREFIXES; do
+                  rest=${1#"$p"}
+                  if [[ "$rest" != "$1" && "$rest" =~ $re_name ]]; then return 0; fi
+                done
+                die "repository '$1' is not under an allowed prefix (${GIT_ALLOWED_PREFIXES:-none})"
+              }
+              check_ref() {
+                [[ -z "$1" || "$1" =~ $re_ref ]] || die "invalid git ref '$1'"
+              }
+              check_workload_path() {
+                [[ "$1" =~ $re_workload ]] || die "gitops.workloadPath must be deploy/openchoreo/<name>.yaml (got '$1')"
+              }
+              git_access() {
+                local n=0 p helper="${TMPDIR:-/tmp}/git-credential" dir="${GIT_SECRET_DIR:-/secrets/git}"
+                check_repo "$1"
+                unset GIT_ASKPASS SSH_ASKPASS
+                export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+                cfg() { export "GIT_CONFIG_KEY_$n=$1" "GIT_CONFIG_VALUE_$n=$2"; n=$((n + 1)); }
+                cfg protocol.allow never
+                cfg protocol.https.allow always
+                cfg credential.useHttpPath true
+                if [ -f "$dir/password" ]; then
+                  printf '#!/bin/sh\n[ "$1" = get ] || exit 0\necho "username=$(cat %s/username)"\necho "password=$(cat %s/password)"\n' \
+                    "$dir" "$dir" > "$helper"
+                  chmod 0700 "$helper"
+                  for p in $GIT_ALLOWED_PREFIXES; do cfg "credential.${p}.helper" "$helper"; done
+                fi
+                export GIT_CONFIG_COUNT=$n
+              }
+        resources:
+          requests: { cpu: 50m, memory: 64Mi }
+          limits: { cpu: "1", memory: 512Mi }
+        securityContext: &restricted
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: git, mountPath: /secrets/git, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+      outputs:
+        parameters:
+          - { name: commit-sha, valueFrom: { path: /tmp/commit-sha } }
+          - { name: short-sha, valueFrom: { path: /tmp/short-sha } }
+          - { name: skip, valueFrom: { path: /tmp/skip } }
+
+    # --- stack checks: koorikla/ci scripts/<stack>/check.sh in the official toolchain image ------------------------
+    # The toolbox (init container) copies the scripts and turns check-env (JSON object of the script's env flags) into
+    # an env file: toolchain images carry neither the scripts nor jq. Caches live on the run's volume.
+    - name: check
+      initContainers: &check-init
+        - name: scripts
+          image: "@@TOOLBOX_IMAGE@@"
+          command: [bash, -euo, pipefail, -c]
+          args:
+            - |
+              cp -R "$CI_SCRIPTS" /ci/scripts
+              printf '%s' "$CHECK_ENV" | jq -r 'to_entries[] | "export \(.key)=\(.value | tostring | @sh)"' > /ci/env.sh
+          env:
+            - { name: CHECK_ENV, value: "{{workflow.parameters.check-env}}" }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+          securityContext: *restricted
+          mirrorVolumeMounts: true
+      container:
+        image: "{{workflow.parameters.check-image}}"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            . /ci/env.sh
+            export WORKDIR="/work/source/${APP_PATH#./}"
+            cd "$WORKDIR"
+            if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
+            echo ">> koorikla/ci scripts/${STACK}/check.sh"
+            bash "/ci/scripts/${STACK}/check.sh"
+        env:
+          - { name: STACK, value: "{{workflow.parameters.stack}}" }
+          - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
+          - { name: CHECK_SETUP, value: "{{workflow.parameters.check-setup}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: HOME, value: /work/home }
+          - { name: XDG_CACHE_HOME, value: /work/.cache }
+          - { name: GOPATH, value: /work/.cache/go }
+          - { name: GOCACHE, value: /work/.cache/go-build }
+          - { name: GOFLAGS, value: -buildvcs=false }
+          - { name: npm_config_cache, value: /work/.cache/npm }
+          - { name: COREPACK_HOME, value: /work/.cache/corepack }
+          - { name: MIX_HOME, value: /work/.cache/mix }
+          - { name: HEX_HOME, value: /work/.cache/hex }
+          - { name: BUNDLE_PATH, value: /work/.cache/bundle }
+          - { name: GEM_HOME, value: /work/.cache/gem }
+          - { name: CI, value: "true" }
+        resources:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "2", memory: 3Gi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: [ALL] }    # writable root FS: toolchains write to /tmp and their own dirs
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: ci, mountPath: /ci }
+      volumes:
+        - { name: ci, emptyDir: {} }
+
+    # Same, with an ephemeral PostgreSQL sidecar (Elixir/Rails test suites). Trust auth on localhost only: the database
+    # lives and dies with the pod, there is no credential to manage.
+    - name: check-with-postgres
+      initContainers: *check-init
+      container:
+        image: "{{workflow.parameters.check-image}}"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            . /ci/env.sh
+            export WORKDIR="/work/source/${APP_PATH#./}"
+            cd "$WORKDIR"
+            if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
+            echo ">> koorikla/ci scripts/${STACK}/check.sh"
+            bash "/ci/scripts/${STACK}/check.sh"
+        env:
+          - { name: STACK, value: "{{workflow.parameters.stack}}" }
+          - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
+          - { name: CHECK_SETUP, value: "{{workflow.parameters.check-setup}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: HOME, value: /work/home }
+          - { name: XDG_CACHE_HOME, value: /work/.cache }
+          - { name: MIX_HOME, value: /work/.cache/mix }
+          - { name: HEX_HOME, value: /work/.cache/hex }
+          - { name: BUNDLE_PATH, value: /work/.cache/bundle }
+          - { name: GEM_HOME, value: /work/.cache/gem }
+          - { name: CI, value: "true" }
+          - { name: DATABASE_URL, value: "postgres://postgres@127.0.0.1:5432/test" }
+          - { name: PGHOST, value: 127.0.0.1 }
+          - { name: PGUSER, value: postgres }
+          - { name: PGDATABASE, value: test }
+        resources:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits: { cpu: "2", memory: 3Gi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: [ALL] }    # writable root FS: toolchains write to /tmp and their own dirs
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: ci, mountPath: /ci }
+      sidecars:
+        - name: postgres
+          image: "@@POSTGRES_IMAGE@@"
+          env:
+            - { name: POSTGRES_HOST_AUTH_METHOD, value: trust }
+            - { name: POSTGRES_DB, value: test }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: pgdata, mountPath: /var/lib/postgresql/data }
+            - { name: pgrun, mountPath: /var/run/postgresql }
+      volumes:
+        - { name: ci, emptyDir: {} }
+        - { name: pgdata, emptyDir: {} }
+        - { name: pgrun, emptyDir: {} }
+
+    - name: scan-fs
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            export SCAN_PATH="/work/source/${APP_PATH#./}"
+            if [ -n "$IGNORE_REL" ] && [ -f "/work/source/$IGNORE_REL" ]; then export IGNORE_FILE="/work/source/$IGNORE_REL"; fi
+            scan-fs.sh
+        env: &scan-env
+          - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
+          - { name: IGNORE_REL, value: "{{workflow.parameters.trivy-ignore-file}}" }
+          - { name: FAIL_SEVERITIES, value: "{{workflow.parameters.fail-severities}}" }
+          - { name: IGNORE_UNFIXED, value: "{{workflow.parameters.ignore-unfixed}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: TRIVY_CACHE_DIR, value: /tmp/trivy }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: "1", memory: 2Gi }
+        securityContext: *restricted
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+
+    # --- image build: rootless BuildKit (no Docker daemon, no DinD, not privileged) --------------------------------
+    # Justification for the two relaxations below (Pod Security baseline/restricted reject them): rootless BuildKit
+    # creates user namespaces (rootlesskit) and mounts inside them, which the RuntimeDefault seccomp and AppArmor
+    # profiles block. The container still runs as uid 1000 without privilege escalation or added capabilities, and
+    # --oci-worker-no-process-sandbox avoids needing a PID namespace. Per-arch images: --opt platform builds every
+    # platform (cross-compiling Dockerfiles need no emulation; RUN steps of a foreign arch need QEMU binfmt on the node).
+    - name: build
+      inputs:
+        parameters:
+          - name: short-sha
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 65532                     # reads the source written by uid 65532 on the run volume
+        seccompProfile:
+          type: Unconfined
+        appArmorProfile:
+          type: Unconfined
+      container:
+        image: "@@BUILDKIT_IMAGE@@"
+        command: [sh, -euc]
+        args:
+          - |
+            mkdir -p "$HOME/.config/buildkit" "$HOME/.docker"
+            cp /registry-auth/config.json "$HOME/.docker/config.json"
+            if [ -f /registry-ca/ca.crt ]; then
+              printf '[registry."%s"]\n  ca = ["/registry-ca/ca.crt"]\n' "$REGISTRY_HOST" > "$HOME/.config/buildkit/buildkitd.toml"
+            fi
+            ctx="/work/source/${DOCKER_CONTEXT#./}"
+            df="/work/source/${DOCKERFILE_PATH#./}"
+            [ -f "$df" ] || { echo ">> Dockerfile not found: $DOCKERFILE_PATH"; exit 1; }
+            # The context and Dockerfile must resolve inside the checkout: this pod also mounts the registry push
+            # credentials, which a ../ or a symlinked context root would otherwise hand to COPY.
+            for p in "$ctx" "$(dirname "$df")"; do
+              case "$(realpath "$p")/" in /work/source/*) ;; *) echo ">> $p resolves outside the repository"; exit 1 ;; esac
+            done
+            set -- --opt "build-arg:VERSION=$SHORT_SHA"
+            # build-args: JSON [{"name":..,"value":..}] -> --opt build-arg:NAME=VALUE (no jq in this image)
+            printf '%s' "$BUILD_ARGS" | tr -d '\n' | sed -e 's/^\[//' -e 's/\]$//' -e 's/},[[:space:]]*{/}\n{/g' > /tmp/args
+            while IFS= read -r a; do
+              [ -n "$a" ] || continue
+              n=$(printf '%s' "$a" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              v=$(printf '%s' "$a" | sed -n 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              [ -n "$n" ] && set -- "$@" --opt "build-arg:$n=$v"
+            done < /tmp/args
+            if [ "$BUILD_CACHE" = true ]; then
+              set -- "$@" --export-cache "type=registry,ref=$IMAGE_REPO:buildcache,mode=max,image-manifest=true,oci-mediatypes=true" \
+                          --import-cache "type=registry,ref=$IMAGE_REPO:buildcache"
+            fi
+            echo ">> building $IMAGE_REPO:$SHORT_SHA for $PLATFORMS"
+            buildctl-daemonless.sh build \
+              --frontend dockerfile.v0 \
+              --local context="$ctx" \
+              --local dockerfile="$(dirname "$df")" \
+              --opt filename="$(basename "$df")" \
+              --opt platform="$PLATFORMS" \
+              --opt attest:provenance=mode=min \
+              "$@" \
+              --output "type=image,name=$IMAGE_REPO:$SHORT_SHA,push=true,oci-mediatypes=true" \
+              --metadata-file /tmp/metadata.json
+            digest=$(sed -n 's/.*"containerimage.digest"[[:space:]]*:[[:space:]]*"\(sha256:[0-9a-f]*\)".*/\1/p' /tmp/metadata.json | head -1)
+            [ -n "$digest" ] || { echo ">> no digest in build metadata"; cat /tmp/metadata.json; exit 1; }
+            printf '%s@%s' "$IMAGE_REPO" "$digest" > /tmp/digest-ref
+            printf '%s:%s@%s' "$IMAGE_REPO" "$SHORT_SHA" "$digest" > /tmp/image
+            echo ">> pushed $(cat /tmp/image)"
+        env:
+          - { name: BUILDKITD_FLAGS, value: --oci-worker-no-process-sandbox }
+          - { name: HOME, value: /home/user }
+          - { name: IMAGE_REPO, value: "{{workflow.parameters.image-repo}}" }
+          - { name: REGISTRY_HOST, value: "{{workflow.parameters.registry-host}}" }
+          - { name: SHORT_SHA, value: "{{inputs.parameters.short-sha}}" }
+          - { name: DOCKER_CONTEXT, value: "{{workflow.parameters.docker-context}}" }
+          - { name: DOCKERFILE_PATH, value: "{{workflow.parameters.dockerfile-path}}" }
+          - { name: BUILD_ARGS, value: "{{workflow.parameters.build-args}}" }
+          - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
+          - { name: BUILD_CACHE, value: "{{workflow.parameters.build-cache}}" }
+        resources:
+          requests: { cpu: 500m, memory: 768Mi }
+          limits: { cpu: "4", memory: 6Gi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: [ALL] }
+          seccompProfile: { type: Unconfined }
+          appArmorProfile: { type: Unconfined }
+        volumeMounts:
+          - { name: work, mountPath: /work, readOnly: true }
+          - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
+          - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: buildkitd, mountPath: /home/user/.local/share/buildkit }
+      volumes:
+        - { name: buildkitd, emptyDir: {} }
+      outputs:
+        parameters:
+          - { name: digest-ref, valueFrom: { path: /tmp/digest-ref } }
+          - { name: image, valueFrom: { path: /tmp/image } }
+
+    # --- supply chain: koorikla/ci common scripts in the toolbox -----------------------------------------------------
+    # Registry trust: Go tools (trivy, syft, cosign, crane) read SSL_CERT_FILE; the registry CA is appended to the
+    # system bundle so public registries (Trivy DB, Sigstore) keep working. Registry auth: DOCKER_CONFIG.
+    # HOME and TRIVY_CACHE_DIR live in the pod's own /tmp emptyDir, never on the run volume the tenant check step
+    # writes (no planted tool config, no poisoned Trivy DB); scan-fs does the same.
+    - name: scan-image
+      inputs:
+        parameters:
+          - name: digest-ref
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
+            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
+            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
+            if [ -n "$IGNORE_REL" ] && [ -f "/work/source/$IGNORE_REL" ]; then export IGNORE_FILE="/work/source/$IGNORE_REL"; fi
+            IMAGE_REF="$DIGEST_REF" IMAGE_SRC=remote scan-image.sh
+        env:
+          - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
+          - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
+          - { name: IGNORE_REL, value: "{{workflow.parameters.trivy-ignore-file}}" }
+          - { name: FAIL_SEVERITIES, value: "{{workflow.parameters.fail-severities}}" }
+          - { name: IGNORE_UNFIXED, value: "{{workflow.parameters.ignore-unfixed}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: TRIVY_CACHE_DIR, value: /tmp/trivy }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 100m, memory: 384Mi }
+          limits: { cpu: "2", memory: 3Gi }
+        securityContext: *restricted
+        volumeMounts: &supply-mounts
+          - { name: work, mountPath: /work }
+          - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
+          - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+
+    - name: sbom
+      inputs:
+        parameters:
+          - name: digest-ref
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
+            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
+            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
+            IMAGE_REF="$DIGEST_REF" SOURCE=registry PLATFORM="${PLATFORMS%%,*}" sbom.sh
+        env:
+          - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
+          - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { cpu: "2", memory: 2Gi }
+        securityContext: *restricted
+        volumeMounts: *supply-mounts
+      volumes:
+        - { name: tmp, emptyDir: {} }
+
+    # cosign with the platform key (ExternalSecret from the secret backend key cosign-platform; private key never in
+    # git). Cloud installations set the ClusterWorkflow's cosign key ref to a KMS URI reached through workload identity
+    # instead of a key file. Signs the index and every platform manifest, attests the Trivy vuln report and the SBOM.
+    - name: sign
+      inputs:
+        parameters:
+          - name: digest-ref
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
+            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
+            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
+            COSIGN_PASSWORD="$(cat /cosign/cosign.password 2>/dev/null || true)"
+            export COSIGN_PASSWORD
+            if [ "$TLOG_UPLOAD" != true ]; then
+              # Private by default (installation switch buildWorkflows.signing.transparencyLog): no public Rekor entry
+              # leaking repo names and digests. cosign v3 takes a signing config without a transparency log;
+              # koorikla/ci sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
+              printf '{ "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json", "rekorTlogConfig": {}, "tsaConfig": {} }\n' > /tmp/signing-config.json
+              real=$(command -v cosign); mkdir -p /tmp/bin
+              printf '#!/bin/sh\ncase "$1" in sign|attest) c=$1; shift; exec %s "$c" --signing-config /tmp/signing-config.json "$@" ;; esac\nexec %s "$@"\n' \
+                "$real" "$real" > /tmp/bin/cosign
+              chmod 0755 /tmp/bin/cosign; export PATH="/tmp/bin:$PATH"
+            fi
+            IMAGE_DIGEST_REF="$DIGEST_REF" VULN_PREDICATE=/work/out/trivy-vuln.json sign-image.sh
+            echo ">> cosign attest --type spdxjson $DIGEST_REF"
+            cosign attest --yes --key "$COSIGN_KEY" --type spdxjson --predicate /work/out/sbom.spdx.json "$DIGEST_REF"
+        env:
+          - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
+          - { name: COSIGN_KEY, value: /cosign/cosign.key }
+          - { name: TLOG_UPLOAD, value: "{{workflow.parameters.tlog-upload}}" }
+          - { name: CI_OUT_DIR, value: /work/out }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits: { cpu: "1", memory: 512Mi }
+        securityContext: *restricted
+        volumeMounts:
+          - { name: work, mountPath: /work }
+          - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
+          - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: cosign, mountPath: /cosign, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+
+    # --- GitOps hand-off ---------------------------------------------------------------------------------------------
+    # Commit the signed image ref (tag + digest) and source commit into the app repo's Workload manifest. Argo CD
+    # syncs it (Application <project>-<app>, charts/tenant); with autoDeploy the Component controller cuts a
+    # ComponentRelease and binds the first pipeline environment. Retries rebase on concurrent pushes.
+    - name: gitops
+      inputs:
+        parameters:
+          - name: image
+          - name: commit-sha
+          - name: short-sha
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnError
+      container:
+        image: "@@TOOLBOX_IMAGE@@"
+        command: [bash, -euo, pipefail, -c]
+        args:
+          - |
+            eval "$BUILD_GUARDS"
+            check_ref "$GITOPS_BRANCH"; check_workload_path "$WORKLOAD_PATH"
+            git_access "$REPO"
+            git clone -q --depth 20 --branch "$GITOPS_BRANCH" -- "$REPO" /tmp/gitops
+            cd /tmp/gitops
+            # Only an OpenChoreo Workload under deploy/openchoreo/ is ever rewritten (no symlink out of it).
+            [ -f "$WORKLOAD_PATH" ] && [ ! -L "$WORKLOAD_PATH" ] && [ ! -L deploy ] && [ ! -L deploy/openchoreo ] \
+              || die "$WORKLOAD_PATH not found (or a symlink on its path) in $REPO@$GITOPS_BRANCH"
+            case "$(realpath -e "$WORKLOAD_PATH")" in
+              "$(realpath -e deploy/openchoreo)"/*) ;;
+              *) die "$WORKLOAD_PATH resolves outside deploy/openchoreo/" ;;
+            esac
+            [ "$(yq '.kind' "$WORKLOAD_PATH")" = Workload ] || die "$WORKLOAD_PATH is not an OpenChoreo Workload"
+            export IMAGE COMMIT_SHA
+            yq -i '.spec.container.image = strenv(IMAGE)' "$WORKLOAD_PATH"
+            if [ "$(yq '.spec | has("source")' "$WORKLOAD_PATH")" = true ]; then
+              yq -i '.spec.source.commit = strenv(COMMIT_SHA)' "$WORKLOAD_PATH"
+            fi
+            if git diff --quiet -- "$WORKLOAD_PATH"; then echo ">> $WORKLOAD_PATH already at $IMAGE"; exit 0; fi
+            # Identity for the commit and for the rebase retries below (no gitconfig: GIT_CONFIG_GLOBAL=/dev/null).
+            GIT_AUTHOR_NAME="${GIT_AUTHOR%% <*}"; GIT_AUTHOR_EMAIL="$(printf '%s' "$GIT_AUTHOR" | sed 's/.*<\(.*\)>.*/\1/')"
+            export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+            git commit -q -m "chore(deploy): ${COMPONENT} image ${SHORT_SHA} [skip ci]" \
+              -m "OpenChoreo WorkflowRun ${RUN} (${NAMESPACE}/${PROJECT}/${COMPONENT}): ${IMAGE}" -- "$WORKLOAD_PATH"
+            for i in 1 2 3 4 5; do
+              if git push -q origin "HEAD:$GITOPS_BRANCH"; then echo ">> pushed $(git rev-parse --short HEAD) to $GITOPS_BRANCH"; exit 0; fi
+              echo ">> push rejected, rebasing (attempt $i)"; git pull -q --rebase origin "$GITOPS_BRANCH"
+            done
+            exit 1
+        env:
+          - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
+          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
+          - *build-guards
+          - { name: GITOPS_BRANCH, value: "{{workflow.parameters.gitops-branch}}" }
+          - { name: WORKLOAD_PATH, value: "{{workflow.parameters.workload-path}}" }
+          - { name: GIT_AUTHOR, value: "{{workflow.parameters.git-author}}" }
+          - { name: IMAGE, value: "{{inputs.parameters.image}}" }
+          - { name: COMMIT_SHA, value: "{{inputs.parameters.commit-sha}}" }
+          - { name: SHORT_SHA, value: "{{inputs.parameters.short-sha}}" }
+          - { name: COMPONENT, value: "{{workflow.parameters.component-name}}" }
+          - { name: PROJECT, value: "{{workflow.parameters.project-name}}" }
+          - { name: NAMESPACE, value: "{{workflow.parameters.namespace-name}}" }
+          - { name: RUN, value: "{{workflow.parameters.workflowrun-name}}" }
+          - { name: HOME, value: /tmp }
+        resources:
+          requests: { cpu: 20m, memory: 64Mi }
+          limits: { cpu: 500m, memory: 256Mi }
+        securityContext: *restricted
+        volumeMounts:
+          - { name: git, mountPath: /secrets/git, readOnly: true }
+          - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

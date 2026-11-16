@@ -37,3 +37,8 @@ ports:
   - port: 127.0.0.1:11085:11085
     nodeFilters:
       - loadbalancer
+  # Harbor registry (Gateway `harbor` in ns harbor, TLS from the mgmt registry CA): UI, docker login/push/pull at
+  # https://harbor.openchoreo.localhost:9443. CAPD nodes reach the same port on this load balancer over network kind.
+  - port: 127.0.0.1:9443:9443
+    nodeFilters:
+      - loadbalancer

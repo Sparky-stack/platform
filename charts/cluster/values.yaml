@@ -13,7 +13,9 @@ cni: cilium                   # cilium | flannel - pod network, fixed at birth (
                               # -> ClusterClass variable cni, label platform.koorikla.io/cni, and
                               #    addons.platform.koorikla.io/cilium (do not set addons.cilium yourself)
 controlPlane:
-  replicas: 1
+  replicas: 1                 # k3s servers = embedded etcd voters: odd only (1, 3, 5); production on aws/hetzner >= 3.
+                              # 1 = disposable: every control plane rollout ends with a 2 -> 1 etcd member removal that
+                              # can lose quorum (docs/providers.md "Control plane size and rollouts")
   machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
 workers: []                   # [{name, replicas, machineType, failureDomain}]
 providerSpec: {}              # extra ClusterClass variables, passed as-is (docs/providers.md):
@@ -50,3 +52,22 @@ secrets:
     enabled: true
     registry: ghcr.io
     key: platform-ghcr
+
+# Image registry of the installation (installation.yaml `registry`; docs/build-plane.md). type harbor + host: nodes
+# trust the registry CA, authenticate as Harbor robot `nodeRegistry.robot` and (mirror.enabled) pull docker.io, ghcr.io,
+# ... through Harbor proxy-cache projects with upstream fallback. type external: none of that (plain upstream pulls,
+# auth via secrets.nodeRegistryAuth only).
+registry:
+  type: external
+  host: ""                    # e.g. harbor.openchoreo.localhost:9443
+  proxyCache: []              # [{upstream: docker.io, project: dockerhub}, ...]
+  mirror:
+    enabled: false
+  nodeHostAlias: ""           # docker provider only: container whose IP the registry name resolves to on CAPD nodes
+nodeRegistry:                 # Harbor node pulls (platform-side names, rarely changed)
+  robot: robot$nodes          # == addons/harbor config.robots[name=nodes] with Harbor's robot$ prefix
+  secretKey: harbor           # ClusterSecretStore platform key ...
+  secretProperty: nodes-secret   # ... and property holding the robot secret
+  caStore: mgmt-harbor        # ClusterSecretStore with name-scoped read of the CA publication Secret (addons/harbor)
+  caSecret: harbor-ca-bundle  # ca.crt = registry CA public cert
+  caFile: /etc/rancher/k3s/registry-ca.crt   # == ClusterClass registryCA file path

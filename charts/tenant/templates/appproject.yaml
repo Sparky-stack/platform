@@ -16,6 +16,19 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"     # before the Applications that reference it
 spec:
   description: {{ .Values.description | default (printf "OpenChoreo project %s" $p) | quote }}
+{{- with .Values.sourceIntegrity }}{{ if .enabled }}
+  # Git commit signature policy (Argo CD 3.5+ sourceIntegrity; replaces deprecated signatureKeys). docs/supply-chain.md
+  sourceIntegrity:
+    git:
+      policies:
+        - repos:
+            {{- range .repos }}
+            - url: {{ tpl . $ | quote }}
+            {{- end }}
+          gpg:
+            mode: {{ .mode }}
+            keys: {{ required "sourceIntegrity.keys must list GnuPG key IDs" .keys | toJson }}
+{{- end }}{{ end }}
   sourceRepos:
     {{- $repos := list }}
     {{- range $apps }}{{ $repos = append $repos .repoURL }}{{ end }}
@@ -33,3 +46,26 @@ spec:
     - group: openchoreo.dev
       kind: {{ . }}
     {{- end }}
+  {{- /* Freeze windows (docs/promotion.md): deny syncs of the gated-environment Applications, manual syncs included. */}}
+  {{- $windows := list }}
+  {{- range $w := .Values.promotion.freezeWindows | default list }}
+  {{- $names := list }}
+  {{- range $app := $apps }}
+  {{- range $env := include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}
+  {{- if or (not $w.environments) (has $env $w.environments) }}{{ $names = append $names (printf "%s-%s-%s" $p $app.name $env) }}{{ end }}
+  {{- end }}
+  {{- end }}
+  {{- if $names }}{{ $windows = append $windows (dict "w" $w "names" $names) }}{{ end }}
+  {{- end }}
+  {{- with $windows }}
+  syncWindows:
+    {{- range . }}
+    - kind: deny
+      {{- include "tenant.syncWindowTiming" .w | nindent 6 }}
+      timeZone: {{ .w.timeZone | default "UTC" }}
+      applications:
+        {{- toYaml .names | nindent 8 }}
+      manualSync: false
+      description: {{ printf "freeze %s: no promotions to %s (%s - %s %s)" (.w.name | default "window") (join ", " (.w.environments | default (list "gated environments"))) .w.start .w.end (.w.timeZone | default "UTC") | quote }}
+    {{- end }}
+  {{- end }}

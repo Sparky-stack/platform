@@ -20,10 +20,34 @@ secrets:
   backend: kubernetes                         # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+  workloadSeed:                               # local backend: copied from mgmt `platform` into each workload cluster
+    keys: [openchoreo-observability, falco-webhook]
   # No k3s registries.yaml / platform-ghcr: every image this installation pulls from ghcr.io is public (koorikla/
   # hello-world, koorikla/ci-toolbox: anonymous pull checked 2026-11). Private images: true + GHCR_* (docs/forking.md).
   nodeRegistryAuth:
     enabled: false
+
+# Image registry (docs/build-plane.md). harbor: addon harbor on mgmt is where in-cluster builds push (project
+# appsProject) and what nodes pull through (proxy caches + upstream fallback). external: builds push to
+# external.repository with credentials from the platform store; nodes pull upstream (secrets.nodeRegistryAuth).
+registry:
+  type: harbor                                # harbor | external
+  host: harbor.openchoreo.localhost:9443      # image refs, Harbor externalURL + Gateway listener; k3d publishes 9443
+  appsProject: apps
+  proxyCache:                                 # upstream -> Harbor proxy-cache project (k3s mirror rewrite)
+    - { upstream: docker.io, project: dockerhub }
+    - { upstream: ghcr.io, project: ghcr }
+    - { upstream: quay.io, project: quay }
+    - { upstream: registry.k8s.io, project: k8s }
+    - { upstream: cr.openchoreo.dev, project: openchoreo }
+    - { upstream: gcr.io, project: gcr }
+  mirror:
+    enabled: true                             # k3s registries.yaml mirrors (new machines only: bootstrap data)
+  # Local only: CAPD nodes resolve the registry name to this container on docker network kind (k3d serverlb).
+  nodeHostAlias: k3d-platform-mgmt-serverlb
+  external:
+    repository: ghcr.io/koorikla              # used when type is external
+    credentialsKey: platform-ghcr             # username, token
 
 capi:
   providers:
@@ -44,6 +68,23 @@ openchoreo:
     enabled: true                              # false: no observabilityPlaneRef; disable the two addons too
     httpPort: 11080                            # k3d publishes 11080/11085 on the mgmt load balancer
     tlsPort: 11085
+  # Workflow plane on mgmt (addon openchoreo-workflow-plane): Argo Workflows + cluster-agent, ClusterWorkflowPlane
+  # `default`; build ClusterWorkflows in addon openchoreo-platform. docs/build-plane.md.
+  workflowPlane:
+    enabled: true                              # false: disable the addon and Backstage's workflow features
+
+# Promotion gates (docs/promotion.md). Read by charts/tenant (per-environment Applications, Argo CD sync windows) and
+# addon openchoreo-platform (production authz deny, promotion-gate ClusterWorkflow freeze check).
+promotion:
+  gatedEnvironments: [production]        # bindings change only by reviewed PR; developers denied in console/API/MCP
+  restrictedGroups: [developers]
+  bindingFile: release-bindings/{environment}.yaml
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]
 
 # Istio mesh groups (docs/multicluster.md "Trust"). One root CA per group on mgmt (addon mesh-root-ca); a fleet file's
 # mesh.group must be listed. A group is a cryptographic boundary: clusters of different environments / trust levels

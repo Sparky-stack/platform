@@ -10,8 +10,15 @@
 #   ClusterAuthzRoles  the control-plane chart's authz bootstrap Job (openchoreoApi.config.security.authorization)
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
+installation:
+  githubOrg: https://github.com/koorikla      # the promotion gate opens PRs only in repositories of this owner
 openchoreo:
   orgNamespace: default
+  controlPlane:
+    host: openchoreo.localhost
+  observability:
+    enabled: true
+    httpPort: 11080
 
 # DeploymentPipeline `default`: promotion order. Every Project created from a tenant file references it (charts/tenant),
 # and charts/tenant renders one ProjectReleaseBinding per environment listed here (keep both lists in sync).
@@ -22,3 +29,166 @@ deploymentPipeline:
 # Upstream defaults from files/ (see files/README.md); set false to manage them elsewhere.
 upstreamDefaults:
   enabled: true
+
+# --- Promotion gates (docs/promotion.md) ------------------------------------------------------------------------------
+# installation.yaml `promotion` is shared with charts/tenant (Argo CD sync windows, per-environment Applications) and
+# overrides these defaults.
+promotion:
+  # Environments whose ReleaseBinding changes only through a reviewed pull request: their binding file syncs through
+  # its own Argo CD Application (charts/tenant) and in OpenChoreo only `approverGroups` may write their bindings.
+  gatedEnvironments: [production]
+  # Groups (JWT claim `groups`) denied releasebinding create/update/delete in gated environments through console,
+  # openchoreo-api, occ and MCP (an explicit deny wins over the upstream developer role's allow). Argo CD applies git
+  # through the Kubernetes API and is not affected.
+  restrictedGroups: [developers]
+  # Native ValidatingAdmissionPolicy: bindings of gated environments are written only by Argo CD (git), whoever asks
+  # (openchoreo-api on behalf of console/occ/MCP users, kubectl). templates/promotion-git-only.yaml.
+  gitOnly:
+    enabled: true
+    writers: [system:serviceaccount:argocd:argocd-application-controller]
+    metadataWriters: [system:serviceaccount:openchoreo-control-plane:controller-manager]   # finalizers only
+    deleters: [system:serviceaccount:kube-system:generic-garbage-collector, system:serviceaccount:kube-system:namespace-controller]
+    breakGlassGroups: []             # e.g. [platform-break-glass]; empty = git only, no exceptions
+  # Weekly freeze windows (gate workflow refuses, Argo CD sync window denies syncs of the gated Applications).
+  freezeWindows:
+    - name: weekend
+      start: "Fri 16:00"
+      end: "Mon 08:00"
+      timeZone: Europe/Tallinn
+      environments: [production]
+
+# ClusterWorkflow `promotion-gate`: a generic OpenChoreo Workflow (WorkflowRun, no component) that verifies a release
+# in its source environment and opens the promotion pull request (files/promotion-gate/gate.py). Started by the
+# Sensor in addon argo-events after a successful rollout in an `autoTrigger` environment, or by hand
+# (occ / console Workflows / MCP / kubectl create of a WorkflowRun). Runs in the workflow plane (namespace
+# workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
+promotionGate:
+  enabled: true
+  workflowPlane: default             # ClusterWorkflowPlane (addon openchoreo-workflow-plane)
+  # Pod labels of the gate pod: opt-in to the run namespace's NetworkPolicy platform-workflows-openchoreo (egress to the
+  # control-plane Gateway (API, Thunder) and the observer). == openchoreo-workflow-plane runNetworkPolicy.platformWorkflows.podLabels
+  podLabels: { platform.koorikla.io/egress: openchoreo }
+  autoTrigger:
+    sourceEnvironments: [staging]    # read by addon argo-events (Sensor filter); listed here for documentation
+  image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+  resources:
+    requests: { cpu: 20m, memory: 48Mi }
+    limits: { memory: 128Mi }
+  # The WorkflowRun and its per-run resources (the credentials Secret) are deleted this long after completion.
+  ttlAfterCompletion: 1h
+  # Endpoints (empty = derived from installation openchoreo.controlPlane.host / openchoreo.observability.httpPort).
+  # Derived = plain HTTP (local docker network only): every other installation sets https:// URLs here, the gate
+  # sends the Thunder client secret to tokenURL.
+  apiURL: ""                         # http://api.<host>:8080
+  tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
+  observerURL: ""                    # http://observer.<host>:<httpPort>
+  controlPlanePort: 8080             # control-plane Gateway HTTP listener (addon openchoreo-control-plane)
+  # Thunder client (client_credentials) the gate authenticates as; role binding below. Secret from the workflow
+  # plane's secret store, key `promotion-gate`, property `client-secret` (VERIFY Thunder app in addon thunder).
+  clientID: openchoreo-promotion-gate
+  clientSecret: { key: promotion-gate, property: client-secret }
+  # The gate's own GitHub App (store key; properties githubAppID, githubAppInstallationID, githubAppPrivateKey), NOT
+  # Argo CD's read-only platform-github. App permissions: Contents, Pull requests, Commit statuses: Read and write
+  # (Metadata: Read); installed on the app repos only. Per run the gate mints an installation token restricted to the
+  # one repository of the component's Workload (spec.source.repository, owner = installation.githubOrg) and revokes
+  # it at the end. Branch protection pins the required status to this App. Seeded by `task secrets` from
+  # GITHUB_GATE_APP_* (docs/forking.md).
+  github: { key: promotion-gate-github }
+  statusContext: openchoreo/promotion-gate   # required status check on the app repo's default branch
+  baseBranch: main
+  bindingPath: deploy/openchoreo/release-bindings/{environment}.yaml   # app repo contract (docs/openchoreo.md)
+  smoke:
+    http: true                       # GET every external endpoint of the source binding
+    path: /
+  observe:
+    enabled: true
+    windowMinutes: 15
+    maxErrorRate: 0.05
+# --- in-cluster builds (docs/build-plane.md) ---------------------------------------------------------------------
+# Image registry: installation.yaml `registry` (defaults for standalone renders). harbor: push to
+# <host>/<appsProject>/<project>/<component> as robot `builder`; external: push to <external.repository>/<component>.
+registry:
+  type: harbor
+  host: harbor.openchoreo.localhost:9443
+  appsProject: apps
+  external:
+    repository: ghcr.io/koorikla
+    credentialsKey: platform-ghcr
+
+# ClusterWorkflows (OpenChoreo, on the control plane) -> Argo ClusterWorkflowTemplate koorikla-build on the workflow plane
+# (addon openchoreo-workflow-plane). One component workflow per stack, same koorikla/ci scripts as the GitHub Actions
+# wrappers; the stack's ClusterComponentTypes list them in allowedWorkflows (templates/upstream-defaults.yaml).
+buildWorkflows:
+  enabled: true
+  workflowPlane: default                     # ClusterWorkflowPlane
+  workflowTemplate: koorikla-build
+  ttlAfterCompletion: 1d
+  platforms: linux/amd64,linux/arm64         # default per run; a run may narrow it (e.g. the node's arch only)
+  gitAuthor: OpenChoreo build <build@openchoreo.invalid>
+  # Signing with the platform key (cosign-platform). transparencyLog false (default): no entry in the public Rekor log
+  # (it would publish private repo names and digests); verify with `cosign verify --key cosign.pub
+  # --insecure-ignore-tlog=true`. true: also upload to public Rekor (needs egress to Sigstore). Per installation in
+  # installations/<inst>/addons/openchoreo-platform/values.yaml. docs/build-plane.md "Signing".
+  signing:
+    transparencyLog: false
+  # Repositories builds may clone and push to: https URL prefixes ending in "/" (one owner each). Empty = the
+  # installation's githubOrg. Enforced three times: the ClusterWorkflow schema pattern on repository.url, the checkout
+  # and gitops scripts (BUILD_GUARDS in koorikla-build), and git's credential helper, registered only for these
+  # prefixes, so the run's token is never sent to any other host or owner.
+  git:
+    allowedRepositoryPrefixes: []
+  # Per-run Secrets (ExternalSecrets in workflows-<org ns>, store = the ClusterWorkflowPlane's secretStoreRef):
+  secrets:
+    git: platform-github-build               # username, token: clone + GitOps push (Contents: Read and write on app
+                                             # repos only); not Argo CD's read-only platform-github
+    cosign: cosign-platform                  # cosign.key (encrypted), cosign.password; cosign.pub is public
+    harbor:                                  # registry.type harbor
+      robot: robot$builder                   # == addons/harbor config.robots[name=builder]
+      key: harbor
+      property: builder-secret
+      caStore: mgmt-harbor                   # name-scoped read of the registry CA public cert (addon harbor)
+      caSecret: harbor-ca-bundle
+  stacks:
+    - name: go
+      displayName: Go
+      description: Go module - go vet, golangci-lint (if present), go test -race, govulncheck, multi-arch image
+      stack: go
+      checkImage: docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9
+      checkSetup: ""
+      checkEnv: { RUN_LINT: "true", RUN_VULNCHECK: "true" }
+    - name: nextjs
+      displayName: Next.js
+      description: Next.js app - install, lint, typecheck, test, next build, dependency audit, multi-arch image
+      stack: nextjs
+      checkImage: docker.io/library/node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0
+      checkSetup: ""
+      checkEnv: { RUN_LINT: "true", RUN_TYPECHECK: "true", RUN_TEST: "true", RUN_BUILD: "true", RUN_AUDIT: "true", AUDIT_LEVEL: critical }
+    - name: elixir
+      displayName: Elixir / Phoenix
+      description: mix project - compile --warnings-as-errors, format, credo, test (+ PostgreSQL), sobelow, audits, image
+      stack: elixir
+      checkImage: docker.io/library/elixir:1.19.7-otp-28@sha256:7e27df3e4a684163e4a18e618eede53badb70e97e0c92a1845ab22e2e1d96da2
+      checkSetup: mix local.hex --force && mix local.rebar --force
+      checkEnv: { MIX_ENV: test, RUN_FORMAT: "true", RUN_CREDO: "true", RUN_TEST: "true", RUN_SOBELOW: "true", RUN_AUDIT: "true" }
+      postgres: true                         # offers parameter checks.postgres (ephemeral sidecar, default off)
+    - name: ruby
+      displayName: Ruby / Rails
+      description: Bundler app - rubocop, rspec / rails test (+ PostgreSQL), brakeman, bundler-audit, image
+      stack: ruby
+      checkImage: docker.io/library/ruby:3.4.12-trixie@sha256:5803b69dd8a875a9afc7e3bbc10d0ba683e12aad2640dbbd44295b4890cc8927
+      checkSetup: bundle install --jobs 4
+      checkEnv: { RUN_RUBOCOP: "true", TEST_COMMAND: auto, RUN_BRAKEMAN: auto, RUN_AUDIT: "true" }
+      postgres: true
+    - name: dockerfile
+      displayName: Dockerfile
+      description: Any Dockerfile - dependency scan, multi-arch image, scan, SBOM, signature (no language checks)
+      stack: none
+      checkImage: ""
+      checkSetup: ""
+      checkEnv: {}
+
+# Generic (non-component) workflow: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
+helmChartWorkflow:
+  enabled: true
+  name: helm-chart
+  workflowTemplate: koorikla-helm-chart

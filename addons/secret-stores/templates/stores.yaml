@@ -213,6 +213,7 @@ spec:
     - namespaces:
         - fleet                            # CRS payload openchoreo-gateway-ca (addon openchoreo-control-plane)
         - openchoreo-observability-plane   # in-cluster agent's gateway CA ConfigMap (addon openchoreo-observability-plane)
+        - openchoreo-workflow-plane        # in-cluster agent's gateway CA ConfigMap (addon openchoreo-workflow-plane)
   provider:
     kubernetes:
       remoteNamespace: openchoreo-control-plane

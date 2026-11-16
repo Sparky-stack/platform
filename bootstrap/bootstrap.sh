@@ -251,12 +251,13 @@ drop_stale_ghcr() {
 
 rand_alnum() {
   # openssl, not `tr </dev/urandom | head`: under pipefail the reader closing early kills tr with SIGPIPE (exit 141).
-  openssl rand -base64 48 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24
+  # $1 = length (default 24, max ~80).
+  openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-"${1:-24}"
 }
 
-# seed_generated_secret <secret> <key>[=<fixed value>|=@strong] ...
+# seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>] ...
 # Generates each missing property once (random alphanumeric; @strong adds upper/lower/digit/special for password
-# policies like OpenSearch 3), keeps existing values on re-runs.
+# policies like OpenSearch 3 and Harbor; @<length> exact length), keeps existing values on re-runs.
 seed_generated_secret() {
   local name=$1; shift
   local -a specs=() vals=()
@@ -268,6 +269,7 @@ seed_generated_secret() {
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
         @strong) val="Px9!$(rand_alnum)" ;;
+        @[0-9]*) val=$(rand_alnum "${fixed#@}") ;;   # exact length (Harbor secretKey 16, CSRF key 32)
         *)       val=$fixed ;;
       esac
     fi
@@ -286,6 +288,70 @@ seed_openchoreo_secret() {
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
     observer-client-secret
+  # Falco escalation webhook (addon argo-events on mgmt; falcosidekick on every cluster) and the promotion gate's
+  # Thunder client secret (ClusterWorkflow promotion-gate). docs/observability.md, docs/promotion.md.
+  seed_generated_secret falco-webhook url=http://events.openchoreo.localhost:8080/falco token
+  seed_generated_secret promotion-gate client-secret
+}
+
+# Harbor (addon harbor): every key the chart would otherwise generate per render, the admin password and the robot
+# secrets (builder: in-cluster builds, nodes: k3s node pulls). Harbor's policy: >= 8 chars, upper + lower + digit.
+seed_harbor_secret() {
+  seed_generated_secret harbor admin-password=@strong secret-key=@16 core-secret csrf-key=@32 jobservice-secret \
+    registry-http-secret registry-password database-password builder-secret=@strong nodes-secret=@strong
+}
+
+# Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
+# cosign.password). Generated once with cosign from the koorikla/ci toolbox image (no host install); the private key
+# only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
+COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608"
+COSIGN_TMP=""
+# shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
+seed_cosign_secret() {
+  if kubectl --context "$CTX" -n platform-secrets get secret cosign-platform >/dev/null 2>&1; then
+    log "  cosign-platform exists (keeping the key pair)"
+    return 0
+  fi
+  require_bins docker
+  local cosign_pass
+  COSIGN_TMP=$(mktemp -d)
+  # The private key must not outlive this function, also when docker or the apply fails (set -e exits).
+  trap 'rm -rf "$COSIGN_TMP"' EXIT
+  cosign_pass=$(rand_alnum 32)
+  log "  cosign-platform: generating the platform cosign key pair"
+  # The password reaches docker and cosign only through the environment (-e NAME, no value in argv).
+  # Git Bash rewrites POSIX-looking arguments of native programs (`-w /keys` would become C:/Program Files/Git/keys
+  # and the bind mount a `;`-joined path list): MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL switch that off (no-ops
+  # elsewhere), and native_path hands docker.exe the host dir as C:/Users/... itself.
+  COSIGN_PASSWORD="$cosign_pass" MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+    docker run --rm -u "$(id -u):$(id -g)" -e COSIGN_PASSWORD \
+    -v "$(native_path "$COSIGN_TMP"):/keys" -w /keys --entrypoint cosign "$COSIGN_IMAGE" generate-key-pair >/dev/null
+  apply_secret platform-secrets cosign-platform cosign.key=@"$COSIGN_TMP/cosign.key" \
+    cosign.pub=@"$COSIGN_TMP/cosign.pub" cosign.password=cosign_pass
+  rm -rf "$COSIGN_TMP"; COSIGN_TMP=""
+  trap - EXIT
+}
+
+# platform-github-build: git credentials of in-cluster builds (clone app repos + GitOps hand-off push), separate from
+# Argo CD's read-only platform-github. The build workflows only ever hand it to the installation's allowed repository
+# prefixes (addon openchoreo-platform buildWorkflows.git.allowedRepositories). Sources, least privilege first:
+#   PLATFORM_GITHUB_BUILD_TOKEN [+ PLATFORM_GITHUB_BUILD_USER]   fine-grained PAT, app repos only, Contents: Read and write
+#   gh CLI login (local backend only, broad OAuth token, warns; NO_GH=1 skips it)
+#   none: builds clone public repos only and the GitOps hand-off cannot push
+# shellcheck disable=SC2034  # build_user/build_token are read by apply_secret through their names
+seed_build_git_secret() {
+  local build_user build_token
+  if [[ -n "${PLATFORM_GITHUB_BUILD_TOKEN:-}" ]]; then
+    build_user="${PLATFORM_GITHUB_BUILD_USER:-git}"; build_token=$PLATFORM_GITHUB_BUILD_TOKEN
+    apply_secret platform-secrets platform-github-build username=build_user token=build_token
+    log "  platform-github-build: PLATFORM_GITHUB_BUILD_TOKEN (user $build_user)"
+  elif [[ "$GH_MODE" == gh ]]; then
+    build_user=$GH_LOGIN; build_token=$GH_SECRET
+    apply_secret platform-secrets platform-github-build username=build_user token=build_token
+    warn "  platform-github-build: gh CLI token of $GH_LOGIN (broad scopes). Least privilege: a fine-grained PLATFORM_GITHUB_BUILD_TOKEN (app repos, Contents: Read and write)"
+  else
+    warn "  platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN or gh login: skipped (builds clone public repos only; the GitOps hand-off cannot push)"
+  fi
 }
 
 cmd_secrets() {
@@ -348,7 +414,7 @@ cmd_secrets() {
     fi
   fi
 
-  # platform-github-app: write access (GitOps hand-off commits, promotion PRs, scaffolder). Optional.
+  # platform-github-app: write access (GitOps hand-off commits, scaffolder). Optional.
   if [[ -n "${GITHUB_PUSH_APP_ID:-}${GITHUB_PUSH_APP_INSTALLATION_ID:-}${GITHUB_PUSH_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_PUSH_APP_ID GITHUB_PUSH_APP_INSTALLATION_ID GITHUB_PUSH_APP_PRIVATE_KEY_FILE
     apply_secret platform-secrets platform-github-app githubAppID=GITHUB_PUSH_APP_ID \
@@ -356,8 +422,20 @@ cmd_secrets() {
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
   fi
 
+  # promotion-gate-github: the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app
+  # repos only). The gate mints a token scoped to one repository per run. Optional: without it the gate fails closed.
+  if [[ -n "${GITHUB_GATE_APP_ID:-}${GITHUB_GATE_APP_INSTALLATION_ID:-}${GITHUB_GATE_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_GATE_APP_ID GITHUB_GATE_APP_INSTALLATION_ID GITHUB_GATE_APP_PRIVATE_KEY_FILE
+    apply_secret platform-secrets promotion-gate-github githubAppID=GITHUB_GATE_APP_ID \
+      githubAppInstallationID=GITHUB_GATE_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_GATE_APP_PRIVATE_KEY_FILE"
+    log "  promotion-gate-github: GitHub App $GITHUB_GATE_APP_ID, installation $GITHUB_GATE_APP_INSTALLATION_ID"
+  fi
+
+  seed_build_git_secret
   seed_openchoreo_secret
-  log "  openchoreo, openchoreo-observability: generated once, kept on re-runs"
+  seed_harbor_secret
+  seed_cosign_secret
+  log "  openchoreo, openchoreo-observability, harbor, cosign-platform: generated once, kept on re-runs"
 }
 
 # Bootstrap repo credentials so Argo CD can read a private fork before ESO exists (same sources as platform-github;

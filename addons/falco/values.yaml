@@ -7,7 +7,7 @@
 #   falcosidekick      talon       -> Falco Talon (actions on OpenChoreo app namespaces dp-*)
 #                      cloudevents -> telemetry collector logs pipeline (Datadog overlay fans it out)
 #                      otlp.metrics-> telemetry collector metrics pipeline (alert counters -> Prometheus on mgmt)
-#                      webhook     -> escalation endpoint on mgmt (Argo Events, later): OFF until `escalation.enabled`
+#                      webhook     -> escalation endpoint on mgmt (addon argo-events, POST /falco, >= critical)
 #                      slack       -> OFF until `slack.enabled`
 #   Falco Talon        crypto miner -> label + terminate (enabled); shell in app container -> label only
 #
@@ -27,7 +27,7 @@ cluster:
 # (falco.falcosidekick.config.extraEnv), so a disabled output simply has no env var.
 secretStore: default
 escalation:
-  enabled: false                 # falco-webhook: properties url, token (docs/observability.md "Falco response")
+  enabled: true                  # falco-webhook: properties url, token -> addon argo-events on mgmt (docs/observability.md "Falco response")
   remoteKey: falco-webhook
   minimumPriority: critical
 slack:
@@ -72,7 +72,7 @@ falco:
                 external-secrets, argocd, fleet, capi-system, capi-operator-system, capd-system, caaph-system,
                 capi-k3s-bootstrap-system, capi-k3s-control-plane-system, capa-system, caph-system, thunder,
                 openchoreo-system, openchoreo-control-plane, openchoreo-data-plane, openchoreo-observability-plane,
-                openchoreo-workflow-plane, cilium, istio-system, kyverno]
+                openchoreo-workflow-plane, cilium, istio-system, kyverno, argo-events]
       - macro: platform_app_namespace
         condition: (k8s.ns.name startswith "dp-")
 

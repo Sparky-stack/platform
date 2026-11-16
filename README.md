@@ -15,7 +15,7 @@ observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents 
 | [docs/architecture.md](docs/architecture.md) | design and decisions (why push GitOps, trust model, secrets, installations, tenants) |
 | [docs/conventions.md](docs/conventions.md) / [AGENTS.md](AGENTS.md) | invariants, labels, names - the contracts every change keeps |
 | [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
-| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/multicluster.md](docs/multicluster.md), [docs/observability.md](docs/observability.md) | per-area details |
+| [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/multicluster.md](docs/multicluster.md), [docs/observability.md](docs/observability.md), [docs/promotion.md](docs/promotion.md), [docs/supply-chain.md](docs/supply-chain.md) | per-area details |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 
@@ -28,9 +28,10 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
 | State | What |
 |---|---|
 | **Running locally** | k3d mgmt + two CAPD clusters (`dev1`, `prod1`) from fleet files; Argo CD push mode with the addon catalog; ESO stores and the per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; OpenChoreo observability plane (OpenSearch, Prometheus, observer) with workload telemetry (OTel collector, Fluent Bit); Falco + falcosidekick + Talon; Cilium (`dev1`; CNI chosen at cluster birth) and flannel (`prod1`), Istio ambient with OpenChoreo app namespaces auto-enrolled by Kyverno, Kyverno Pod Security baseline (Audit) |
-| **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends; Istio ambient multicluster between `dev1` and `prod1` (east-west gateways, one mesh root per group on mgmt with PKI admission guards, declarative remote secrets with a no-Secrets reader role, `examples/eastwest`) |
+| **Rendered, not booted** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault secret backends; Istio ambient multicluster between `dev1` and `prod1` (east-west gateways, mesh CA in OpenBao on mgmt with one root per group, istio-csr on members, declarative remote secrets with a no-Secrets reader role, `examples/eastwest`) |
+| **On main, first boot pending** | OpenChoreo workflow plane as the primary build path (per-stack ClusterWorkflows running koorikla/ci scripts, rootless BuildKit, multi-arch, cosign-signed, GitOps hand-off) + Harbor (registry, proxy caches, k3s node mirrors) - [docs/build-plane.md](docs/build-plane.md) |
 | **In progress** | [koorikla/ci](https://github.com/koorikla/ci) reusable workflows (Go, Next.js, Elixir, Ruby, Helm, Crossplane), multi-arch and cosign-signed; external-dns (Route53, Cloudflare; opt-in per installation); OpenChoreo RCA (SRE) and FinOps agents + agent gateway, shipped switched off until LLM tokens exist; OS/CPU-agnostic tooling (mise + Task, devcontainer) |
-| **Next** | OpenChoreo workflow plane (in-cluster builds) + Harbor (registry, pull-through cache); Crossplane v2 with package promotion gated by Argo CD; SSO (Okta / Google via Thunder, Argo CD via Dex, apiserver OIDC) + Backstage scaffolder; Argo Events escalation for Falco; Datadog exporter; mesh: istio-csr + an external signer reachable from workload clusters (OpenBao PKI / AWS Private CA) to retire the Istio intermediate key on members (invariant-4 exception), per-environment trust domains, baggage stripping at kgateway; ImageValidatingPolicy for signed images |
+| **Next** | Crossplane v2 with package promotion gated by Argo CD; SSO (Okta / Google via Thunder, Argo CD via Dex, apiserver OIDC) + Backstage scaffolder; Argo Events escalation for Falco; Datadog exporter; mesh: OpenBao cloud auto-unseal (KMS), per-environment trust domains, baggage stripping at kgateway; ImageValidatingPolicy for signed images |
 
 ## Prerequisites
 
@@ -46,7 +47,7 @@ Solid boxes in the diagrams are built on `main`; dashed ones are planned.
 ```bash
 mise install  # once: the pinned toolchain (`task doctor` checks it)
 
-task up       # Create k3d platform-mgmt (network: kind, loopback ports 8080/8443/11080/11085), seed secrets, install Argo CD, apply root-app
+task up       # Create k3d platform-mgmt (network: kind, loopback ports 8080/8443/9443/11080/11085), seed secrets, install Argo CD, apply root-app
 task status   # Check CAPI clusters, Argo CD apps, ClusterDataPlanes, UI port-forward + admin password
 task down     # Delete CAPD workload clusters gracefully, then delete k3d platform-mgmt
 ```
@@ -69,7 +70,7 @@ labels you should *not* rename: [docs/forking.md](docs/forking.md).
 
 Individual bootstrap stages:
 
-- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `platform-github-app`, `openchoreo`) from `GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` / `GHCR_*` env vars, falling back to the `gh` CLI (preserves existing `openchoreo` secret keys; [docs/forking.md](docs/forking.md#seeding-locally-task-secrets))
+- `task secrets` — seed or refresh `platform-secrets` (`platform-github`, `platform-ghcr`, `platform-github-app`, `platform-github-build`, `openchoreo`, `harbor`, `cosign-platform`) from `GITHUB_APP_*` / `PLATFORM_GITHUB_TOKEN` / `PLATFORM_GITHUB_BUILD_TOKEN` / `GHCR_*` env vars, falling back to the `gh` CLI (preserves existing `openchoreo` secret keys; [docs/forking.md](docs/forking.md#seeding-locally-task-secrets))
 - `task argocd` — install/upgrade Argo CD (`addons/argo-cd`) and apply `bootstrap/root-app.yaml`
 - `task ui` — Argo CD UI on http://localhost:8081; `task kubeconfig CLUSTER=dev1` — host-usable kubeconfig of a CAPD cluster
 

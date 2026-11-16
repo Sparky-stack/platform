@@ -60,6 +60,22 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- if and (hasKey ($v.addons | default dict) "istio-eastwest") (ne (index $v.addons "istio-eastwest") (not (empty $mesh.group))) -}}
 {{- fail (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $v.addons "istio-eastwest") ($mesh.group | default "")) -}}
 {{- end -}}
+{{- /* Control plane size = embedded etcd voters (cluster-api-k3s v0.5.0 supports no other datastore). Odd only: an
+even count adds a voter without adding failure tolerance, and 2 voters is the state a rollout must never shrink from.
+Production on a cloud provider needs >= 3: every single-server rollout ends with a 2 -> 1 etcd member removal, which
+etcd documents as unsafe and which lost quorum on dev1 (docs/providers.md "Control plane size and rollouts"). Local
+CAPD clusters are disposable and may run 1 server whatever their environment label says. */ -}}
+{{- $cp := $v.controlPlane | default dict -}}
+{{- $replicas := hasKey $cp "replicas" | ternary $cp.replicas 1 -}}
+{{- if not (regexMatch "^[0-9]+$" (toString $replicas)) -}}
+{{- fail (printf "cluster %s: controlPlane.replicas %v must be a whole number (1, 3, 5)" $v.name $replicas) -}}
+{{- end -}}
+{{- if or (lt (int $replicas) 1) (eq (mod (int $replicas) 2) 0) -}}
+{{- fail (printf "cluster %s: controlPlane.replicas %v must be odd (1, 3, 5): k3s servers are embedded etcd voters" $v.name $replicas) -}}
+{{- end -}}
+{{- if and (ne $v.provider "docker") (eq (toString $v.environment) "production") (lt (int $replicas) 3) -}}
+{{- fail (printf "cluster %s: production on %s needs controlPlane.replicas >= 3 - a single-server rollout ends with an unsafe 2 -> 1 etcd member removal (docs/providers.md)" $v.name $v.provider) -}}
+{{- end -}}
 {{- range $i, $w := $v.workers -}}
 {{- if not $w.name -}}
 {{- fail (printf "cluster %s: workers[%d].name is required" $v.name $i) -}}
@@ -85,13 +101,29 @@ addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}
 
+{{- /* "true" when nodes pull from the installation's Harbor (installation.yaml registry.type harbor + host). */ -}}
+{{- define "capi.registry.harbor" -}}
+{{- $r := .Values.registry | default dict -}}
+{{- and (eq (toString $r.type) "harbor") (ne (toString ($r.host | default "")) "") | toString -}}
+{{- end }}
+
 {{- define "capi.annotations" -}}
 platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
 {{- end }}
 
 {{- include "capi.validate" . }}
 {{- /* ClusterClass variables: generated facts first, providerSpec (fleet file) last so it can override them */ -}}
-{{- $vars := dict "registryAuth" (.Values.secrets.nodeRegistryAuth.enabled | default false) "cni" .Values.cni }}
+{{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
+{{- $vars := dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni }}
+{{- if $harbor }}
+{{- $_ := set $vars "registryCA" true }}
+{{- /* Harbor's token realm is its externalURL: nodes must resolve the registry name itself (no mirror hop). Local
+CAPD nodes get an /etc/hosts alias to the container that publishes it (k3d serverlb); real installations use DNS. */ -}}
+{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias }}
+{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") }}
+{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias }}
+{{- end }}
+{{- end }}
 {{- if ne .Values.provider "docker" }}
 {{- $_ := set $vars "region" .Values.region }}
 {{- with .Values.controlPlane.machineType }}
