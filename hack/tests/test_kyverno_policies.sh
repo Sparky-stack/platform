@@ -88,6 +88,8 @@ for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'p
 done
 
 # Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
+# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule - spec kept, except
+# shutdown/suspend - is pinned by the addon's helm-unittest and was checked against a real API server in #77.)
 ae="$ROOT/addons/argo-events"
 wp_chart="$ROOT/addons/openchoreo-workflow-plane"
 [[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null

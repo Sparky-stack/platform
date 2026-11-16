@@ -6,6 +6,10 @@ ServiceAccount or a pod spec patch, even if its pod or token is compromised; the
 A native ValidatingAdmissionPolicy instead of Argo Workflows' `templateReferencing: Strict`: that controller setting
 is global, and the workflow plane's controller also runs OpenChoreo's rendered Workflows with inline templates (the
 promotion gate). Matches every creator, not only the Sensor: nothing else creates Workflows in this namespace.
+UPDATE keeps the spec as created (defense in depth should any identity get `update workflows` here): only
+spec.shutdown / spec.suspend may change (argo stop, terminate, suspend, resume). The workflow controller writes only
+metadata and status, so it is never denied, also not for Workflows created before this policy (the CREATE pin is not
+re-checked on UPDATE). DELETE is not matched.
 The Workflow CRD is minified (spec preserve-unknown-fields), so the expressions read spec as a map.
 */ -}}
 {{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
@@ -20,29 +24,38 @@ spec:
     resourceRules:
       - apiGroups: [argoproj.io]
         apiVersions: ["*"]
-        operations: [CREATE]
+        operations: [CREATE, UPDATE]
         resources: [workflows]
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: {{ $ns }}
   validations:
     - expression: >-
-        has(object.spec) && has(object.spec.workflowTemplateRef)
-        && object.spec.workflowTemplateRef == {'name': 'falco-response'}
+        request.operation != 'CREATE'
+        || (has(object.spec) && has(object.spec.workflowTemplateRef)
+            && object.spec.workflowTemplateRef == {'name': 'falco-response'})
       message: Workflows in {{ $ns }} must reference WorkflowTemplate falco-response (namespaced, by name only)
       reason: Forbidden
-    - expression: "object.spec.all(k, k in ['workflowTemplateRef', 'arguments'])"
+    - expression: "request.operation != 'CREATE' || object.spec.all(k, k in ['workflowTemplateRef', 'arguments'])"
       messageExpression: >-
         'Workflows in {{ $ns }} may set only spec.workflowTemplateRef and spec.arguments, not ' +
         object.spec.filter(k, !(k in ['workflowTemplateRef', 'arguments'])).join(', ')
       reason: Forbidden
     - expression: >-
-        !has(object.spec.arguments)
+        request.operation != 'CREATE' || !has(object.spec.arguments)
         || (object.spec.arguments.all(k, k == 'parameters')
             && (!has(object.spec.arguments.parameters)
                 || object.spec.arguments.parameters.all(p, p.all(k, k in ['name', 'value'])
                      && p.name in ['event', 'cluster'])))
       message: Workflows in {{ $ns }} take only the parameters `event` (falcosidekick JSON) and `cluster`
+      reason: Forbidden
+    - expression: >-
+        request.operation != 'UPDATE'
+        || (has(object.spec) && has(oldObject.spec)
+            && object.spec.all(k, k in ['shutdown', 'suspend'] || (k in oldObject.spec && object.spec[k] == oldObject.spec[k]))
+            && oldObject.spec.all(k, k in ['shutdown', 'suspend'] || k in object.spec))
+      message: >-
+        Workflows in {{ $ns }} keep the spec they were created with; only spec.shutdown and spec.suspend may change
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
