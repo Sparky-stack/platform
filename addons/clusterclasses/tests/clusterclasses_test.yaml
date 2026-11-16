@@ -56,7 +56,7 @@ tests:
             schema:
               openAPIV3Schema:
                 type: string
-                default: kindest/node:v1.35.8
+                default: docker.io/kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
                 description: Node container image (OS only; k3s is installed at boot with version = topology.version).
       - equal:
           path: "spec.patches[0].definitions[0].selector.matchResources"

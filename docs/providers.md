@@ -69,7 +69,7 @@ ClusterClass variables:
 | Class | Variable | Default | Notes |
 |---|---|---|---|
 | all | `registryAuth` | false | write `/etc/rancher/k3s/registries.yaml` from `Secret/<name>-registries` |
-| k3s-docker | `kindImage` | `kindest/node:v1.35.8` | node container image |
+| k3s-docker | `kindImage` | `docker.io/kindest/node:v1.35.8@sha256:…` | node container image (multi-arch index digest) |
 | k3s-aws | `region` | (required) | |
 | | `ami` | (required) | Ubuntu 24.04 (or any cloud-init AMI) in `region` |
 | | `sshKeyName` | `""` | EC2 key pair; `""` = none (omitting it would make CAPA use key `default`) |

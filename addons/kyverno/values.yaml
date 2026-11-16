@@ -13,6 +13,19 @@
 cluster: { name: sample, role: workload, provider: docker, region: local, environment: development, cni: cilium }
 
 kyverno:
+  # Images: chart default registries (reg.kyverno.io, ghcr.io), tag@digest pinned by multi-arch index digest
+  # (docs/conventions.md invariant 9; hack/tests/test_image_pins.sh). Every image of the chart, hooks and the helm test
+  # pod included; a chart bump updates all of them together.
+  upgrade:
+    legacyPolicyCheck:
+      image: { tag: "v1.20.0@sha256:bd2b8b7c9d550ecf04e0bacaf351adce2f82ce67fd3f291075edcee7f8ab4ab4" }   # kyverno-cli
+  crds:
+    migration:
+      image: { tag: "v1.20.0@sha256:bd2b8b7c9d550ecf04e0bacaf351adce2f82ce67fd3f291075edcee7f8ab4ab4" }   # kyverno-cli
+  test:
+    image: { tag: "v1.20.0@sha256:6079a30d75fe7ba868a5a7e5dfa71ee92a3a8bae97adcea1c8cfb1009280ee6c" }   # readiness-checker
+  webhooksCleanup:
+    image: { tag: "v1.20.0@sha256:6079a30d75fe7ba868a5a7e5dfa71ee92a3a8bae97adcea1c8cfb1009280ee6c" }   # readiness-checker
   config:
     # Webhook namespaceSelector. For Namespace objects it matches the Namespace's own labels, so platform namespaces
     # can't be mutated either; OpenChoreo cell namespaces (dp-*) are not listed and stay in scope.
@@ -58,22 +71,28 @@ kyverno:
   # the others: 2 in installations/<inst>/addons/kyverno/values.yaml.
   admissionController:
     replicas: 1
+    initContainer:
+      image: { tag: "v1.20.0@sha256:339067e083430e0c97007541bef9cfdbac89bee13f7228772c77ae8aead14b8b" }   # kyvernopre
     container:
+      image: { tag: "v1.20.0@sha256:9de49c5416ea536f00a205527197ac048abdf32c5a75d633cd9afff8928f359d" }
       resources:
         requests: { cpu: 50m, memory: 128Mi }
         limits: { memory: 384Mi }
   backgroundController:
     replicas: 1
+    image: { tag: "v1.20.0@sha256:c72df38320a48fc9de10f9d23d087a117853bb08207b7f60f6d1e8457fb3ddb7" }
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }
   cleanupController:
     replicas: 1
+    image: { tag: "v1.20.0@sha256:0f9ce0c203561c52499e871a987ff987371f57385fcafe7af1a01dfd6db1feee" }
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }
   reportsController:
     replicas: 1
+    image: { tag: "v1.20.0@sha256:f54e3cc106fadb1a615d0ec11c42f741f51d3580a5f70dfbe7bd7ec58864ef03" }
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }

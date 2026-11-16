@@ -109,7 +109,13 @@ imageVerification:
     enabled: true
     prefixes: ["ghcr.io/koorikla/"]        # image reference prefixes this source covers
     issuer: https://token.actions.githubusercontent.com
-    subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1
+    # Certificate subject = <workflow>@<workflowRef>: the reusable workflow at one exact commit. App repos call koorikla/ci
+    # by commit SHA (`uses: koorikla/ci/.github/workflows/go.yaml@<sha> # v1`); its nested container.yaml call keeps that
+    # ref, so the signing certificate names the SHA. A tag or branch is mutable (whoever moves `v1` changes what is
+    # trusted): rendering fails unless workflowRef is a 40-hex commit SHA. Renovate bumps it with the app repos' pins
+    # (renovate.json: tag v1 of koorikla/ci, the comment below is the tracked tag).
+    workflow: https://github.com/koorikla/ci/.github/workflows/container.yaml
+    workflowRef: "de39b1d4162e18e275c7be7e86384d22cc4e070b" # v1
     repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
     refs: [refs/heads/main]                # extension githubWorkflowRef
     # extension githubWorkflowTrigger: only builds of merged code. pull_request_target / workflow_run run on the main

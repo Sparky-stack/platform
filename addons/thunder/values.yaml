@@ -54,6 +54,7 @@ thunderid:
   deployment:
     replicaCount: 1           # SQLite: single writer
     image:
+      tag: 1.0.1@sha256:d3c0613ff447a551fd440768a15bdfb6668948e80809cbb50f82d6752f22ab3e   # multi-arch index digest: amd64, arm64
       pullPolicy: IfNotPresent   # platform: chart default Always
   hpa:
     enabled: false

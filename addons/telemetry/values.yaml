@@ -43,12 +43,17 @@ datadog:
   remoteKey: datadog
   property: api-key
 
+# Images: every image below is fully qualified and pinned by multi-arch index digest (docs/conventions.md invariant 9,
+# hack/tests/test_image_pins.sh), including the init containers and the Prometheus config reloader the operator injects.
+# A chart bump updates tag and digest together.
+
 # --- OpenTelemetry Collector: the fan-out point ----------------------------------------------------------------------
 opentelemetry-collector:
   mode: daemonset
   fullnameOverride: telemetry-collector
   image:
     repository: docker.io/otel/opentelemetry-collector-contrib   # contrib: k8sattributes, webhookevent, datadog, prw
+    tag: 0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849   # index: amd64, arm64, ...
   command:
     name: otelcol-contrib
   service:
@@ -173,6 +178,8 @@ observability-logs-opensearch:
     enabled: true
     image:
       repository: cr.fluentbit.io/fluent/fluent-bit   # platform: fully qualified (chart default)
+      tag: 5.1.5
+      digest: sha256:2740f387f6e68fab66d28e4fa6a853387b9cab6ffb4cb78958f69bba4eb0e7b4   # index: amd64, arm64, arm
     envFrom:
       - configMapRef:
           name: telemetry-env
@@ -182,6 +189,83 @@ observability-logs-opensearch:
     openSearchHost: k3d-platform-mgmt-serverlb
     openSearchPort: 11085                                            # == installation openchoreo.observability.tlsPort
     openSearchVHost: opensearch.observability.openchoreo.localhost   # SNI for the Gateway's TLS passthrough
+    waitForIndexTemplate:
+      image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777   # index: amd64, arm64, ...
+    # Upstream init containers (observability-logs-opensearch 0.7.0) with the busybox image fully qualified and pinned:
+    # the chart hardcodes `busybox:1.37.0` inside this templated string (copy kept identical otherwise).
+    initContainers: |-
+      - name: set-volume-ownership
+        image: "{{ with .Values.global.imageRegistry }}{{ . }}/{{ end }}docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+        command: ["sh", "-c", "chown -R 10000:10000 /var/lib/fluent-bit/db"]
+        resources:
+          limits:
+            cpu: 15m
+            memory: "32Mi"
+          requests:
+            cpu: 10m
+            memory: "24Mi"
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - CHOWN
+          readOnlyRootFilesystem: true
+          runAsUser: 0
+        volumeMounts:
+        - name: db
+          mountPath: /var/lib/fluent-bit/db
+      {{- if .Values.waitForIndexTemplate.enabled }}
+      - name: wait-for-index-template
+        image: "{{ with .Values.global.imageRegistry }}{{ . }}/{{ end }}{{ .Values.waitForIndexTemplate.image }}"
+        command:
+        - sh
+        - -c
+        - |
+          for t in $TEMPLATES; do
+            until [ "$(curl -sk -o /dev/null -w '%{http_code}' -u "$OPENSEARCH_USERNAME:$OPENSEARCH_PASSWORD" \
+                  --connect-to "$OPENSEARCH_VHOST:$OPENSEARCH_PORT:$OPENSEARCH_HOST:$OPENSEARCH_PORT" \
+                  "https://$OPENSEARCH_VHOST:$OPENSEARCH_PORT/_index_template/$t")" = "200" ]; do
+              echo "Waiting for OpenSearch index template $t..."
+              sleep 5
+            done
+            echo "Index template $t found"
+          done
+        env:
+        - name: OPENSEARCH_HOST
+          value: {{ .Values.openSearchHost | quote }}
+        - name: OPENSEARCH_PORT
+          value: {{ .Values.openSearchPort | quote }}
+        - name: OPENSEARCH_VHOST
+          value: {{ .Values.openSearchVHost | default "opensearch" | quote }}
+        - name: TEMPLATES
+          value: {{ join " " .Values.waitForIndexTemplate.templateNames | quote }}
+        - name: OPENSEARCH_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.waitForIndexTemplate.credentialsSecretName }}
+              key: username
+        - name: OPENSEARCH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.waitForIndexTemplate.credentialsSecretName }}
+              key: password
+        resources:
+          limits:
+            cpu: 15m
+            memory: "32Mi"
+          requests:
+            cpu: 10m
+            memory: "24Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10000
+      {{- end }}
     resources:                                   # platform: upstream requests 25m/125Mi
       requests: { cpu: 20m, memory: 64Mi }
       limits: { cpu: 200m, memory: 192Mi }
@@ -193,6 +277,8 @@ observability-metrics-prometheus:
   prometheusCustomizations:
     http:
       observabilityPlaneUrl: http://prometheus.observability.openchoreo.localhost:11080/api/v1/write
+    agent:
+      image: quay.io/prometheus/prometheus:v3.15.1-distroless@sha256:451a845bae1d51622b41af1780eb2ad911bbb79a9855bc8e9bb67fabbc03f934   # index: amd64, arm64, ...
   kube-prometheus-stack:
     prometheus:
       enabled: false
@@ -208,6 +294,13 @@ observability-metrics-prometheus:
             name: openchoreo-prometheus-agent-token
             key: token
     prometheusOperator:
+      image:
+        tag: v0.94.1
+        sha: 7c88d4e7bae63bd8d0f8da986054337c23b4472fa8d3c6817f5bc4b8407a2d6a   # hex only (the chart adds @sha256:); index: amd64, arm64, ...
+      prometheusConfigReloader:   # sidecar the operator adds to the Prometheus agent pod (operator flag, not a pod spec here)
+        image:
+          tag: v0.94.1
+          sha: 06b52bd4dbe3ed6dd5905aadaf8b9987d9da4c31d37bb86deaadae68cee2d26b   # index: amd64, arm64, ...
       # platform: upstream limits 40m CPU / 60Mi. CFS throttling at 40m makes the informer cache sync miss its deadline
       # on clusters with many CRDs (dev1/Cilium: CrashLoopBackOff "failed to sync cache"). A null CPU limit does not
       # remove the subchart default here (it renders as 0, which the API rejects), so a startup-safe ceiling instead.
@@ -218,6 +311,9 @@ observability-metrics-prometheus:
         certManager:
           enabled: true                           # platform: no Helm hook Jobs under Argo (cert-manager on workloads)
     kube-state-metrics:
+      image:
+        tag: v2.20.0
+        sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b   # with prefix (this chart adds only @); index: amd64, arm64, ...
       resources:
         requests: { cpu: 10m, memory: 32Mi }
         limits: { cpu: 100m, memory: 128Mi }
@@ -226,6 +322,8 @@ observability-metrics-prometheus:
 observability-events-otel-collector:
   enabled: true
   collector:
+    image:
+      tag: 0.1.2@sha256:2ac7562b98dfb9c1837593dbc585f279856f15cb6c52f438621dd82d313dcc75   # index: amd64, arm64
     resources:                                    # platform: upstream requests 100m/128Mi
       requests: { cpu: 10m, memory: 48Mi }
       limits: { memory: 256Mi }

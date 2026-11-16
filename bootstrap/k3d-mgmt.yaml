@@ -7,7 +7,9 @@ metadata:
   name: platform-mgmt
 servers: 1
 agents: 0
-image: rancher/k3s:v1.35.10-k3s1   # same k3s as the workload clusters; OpenChoreo CRDs need a recent API server (CEL)
+# Same k3s as the workload clusters (OpenChoreo CRDs need a recent API server, CEL); fully qualified and pinned by
+# multi-arch index digest (amd64, arm64, arm). VERIFY on the next `task up` (k3d passes the reference to docker as is).
+image: docker.io/rancher/k3s:v1.35.10-k3s1@sha256:8262ca99a558dca0c0437443421986480b2359f9118f2371359f88a41514522f
 network: kind
 options:
   k3d:
