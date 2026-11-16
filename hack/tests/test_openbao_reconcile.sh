@@ -216,6 +216,34 @@ rm -f "$IN"/*; run
 assert_match "$(cat "$TMP/out")" 'no member inputs: nothing pruned' "empty inputs: fail-safe message"
 assert_eq "$([[ -e "$S/auth/mesh-dev1" ]] && echo kept || echo pruned)" kept "empty inputs: nothing pruned"
 
+# mesh-clients template (ESO engine v2 = Go text/template + sprig, rendered here with helm's engine): only a fleet Secret
+# named <cluster>-mesh-openbao becomes member input; anything else is rejected.<secret> (one Secret cannot claim or
+# override another member). Then the reconcile logs rejected inputs and counts them as invalid.
+lit=$(helm template openbao addons/openbao --namespace openbao -s templates/mesh-clients.yaml | yq '.spec.target.template.templateFrom[0].literal')
+E="$TMP/esotpl"; mkdir -p "$E/templates"
+printf 'apiVersion: v2\nname: esotpl\nversion: 0.0.1\n' > "$E/Chart.yaml"
+printf '%s\n' "$lit" | sed 's/ := \. }}/ := $.Values.data }}/' > "$E/templates/out.yaml"
+cat > "$E/values.yaml" <<'EOV'
+data:
+  dev1-mesh-openbao: '{"cluster":"dev1","group":"local","server":"https://172.18.0.9:6443","ca":"-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n"}'
+  prod1-mesh-openbao: '{"cluster":"dev1","group":"local","server":"https://evil:6443","ca":"-----BEGIN CERTIFICATE-----"}'
+  rogue: '{"cluster":"rogue","group":"local","server":"https://evil:6443","ca":"-----BEGIN CERTIFICATE-----"}'
+  nocluster-mesh-openbao: '{"group":"local"}'
+EOV
+out=$(helm template e "$E" -s templates/out.yaml | yq -o json '.' )
+assert_eq "$(printf '%s' "$out" | yq -r 'keys | sort | join(" ")')" "dev1.ca dev1.group dev1.server rejected.nocluster-mesh-openbao rejected.prod1-mesh-openbao rejected.rogue" "mesh-clients: only <cluster>-mesh-openbao becomes input, the rest is rejected"
+assert_eq "$(printf '%s' "$out" | yq -r '."dev1.server"')" "https://172.18.0.9:6443" "mesh-clients: dev1's inputs come from dev1-mesh-openbao, not from the Secret that claims dev1"
+assert_match "$(printf '%s' "$out" | yq -r '."rejected.prod1-mesh-openbao"')" 'cluster "dev1" does not match the Secret name' "mesh-clients: the rejection names the reason"
+rm -f "$IN"/*; member dev1 local; printf 'cluster "dev1" does not match the Secret name' > "$IN/rejected.prod1-mesh-openbao"
+rc=0; run || rc=$?
+assert_eq "$rc" 0 "a rejected fleet Secret next to valid members: the run succeeds"
+assert_match "$(cat "$TMP/out")" 'skip fleet Secret prod1-mesh-openbao: cluster "dev1" does not match' "the reconcile logs a rejected fleet Secret"
+assert_match "$(cat "$TMP/out")" 'invalid=\[prod1-mesh-openbao\]' "a rejected fleet Secret counts as invalid input"
+rm -f "$IN"/*; printf 'x' > "$IN/rejected.rogue"
+rc=0; run || rc=$?
+assert_eq "$rc" 1 "only rejected fleet Secrets: the run fails (every input invalid)"
+rm -f "$IN"/*
+
 # Self-initialisation (static policies + roles) and the addon values name the same identities: a renamed
 # ServiceAccount, login role or member policy in values.yaml without the matching self-init change would lock the
 # reconcile (or ESO) out of OpenBao for good - self-initialisation never runs again.

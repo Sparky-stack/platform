@@ -12,7 +12,8 @@
 #                         root (cert-manager's ca.crt)
 #   member token (LOGIN_ROLE, Job + CronJob; policy platform-mesh-config), per member <c> (one input set per cluster in
 #   INPUT_DIR: <c>.group, <c>.server, <c>.ca; built by ESO from the fleet Secrets charts/cluster renders,
-#   templates/mesh-clients.yaml):
+#   templates/mesh-clients.yaml, which turns a Secret not named <c>-mesh-openbao into rejected.<secret> - logged here
+#   and counted as invalid):
 #     pki-mesh-<g>-int/roles/<c>   istiod / istio-csr serving certs (ALLOWED_DOMAINS) + workload SPIFFE IDs
 #                                  spiffe://<TRUST_DOMAIN>/ns/*/sa/* only, TTL <= WORKLOAD_MAX_TTL. The policy pins every
 #                                  widening flag (IP SANs, wildcards, globs, any name, other SANs, localhost).
@@ -157,6 +158,12 @@ configure_member() { # <cluster> <group>
 # Per-member fail-safe: a member that cannot be configured (API server down, JWKS forbidden, OpenBao error) is reported
 # and skipped; the others are configured. It stays in `seen` (still desired), so its existing auth is never pruned.
 seen=" "; ok=""; failed=""; invalid=""
+# Fleet Secrets the mesh-clients template rejected (name != <cluster>-mesh-openbao): never enrolled.
+for f in "$IN"/rejected.*; do
+  [ -e "$f" ] || continue
+  r=${f##*/rejected.}
+  log "skip fleet Secret $r: $(cat "$f")"; invalid="$invalid $r"
+done
 for f in "$IN"/*.group; do
   [ -e "$f" ] || continue
   c=$(basename "$f" .group)

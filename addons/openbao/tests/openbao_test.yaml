@@ -116,7 +116,9 @@ tests:
       - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
       - equal: { path: spec.dataFrom, value: [{ find: { tags: { mesh.platform.koorikla.io/openbao-client: "true" } } }] }
       - equal: { path: spec.target.deletionPolicy, value: Retain }
-      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: '\$c.cluster \}\}\.ca: \{\{ \$c.ca \| toJson' }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: '\$name \}\}\.ca: \{\{ get \$c "ca" \| toJson' }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: 'if ne \$secret \(printf "%s-mesh-openbao" \$name\)' }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: 'rejected\.\{\{ \$secret \}\}' }
 
   - it: the reconcile runs as a scoped identity with no Kubernetes API access and no root token
     template: templates/reconcile.yaml

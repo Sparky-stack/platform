@@ -154,7 +154,13 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
 - **Member inputs come from the fleet file, declaratively.** charts/cluster renders `ExternalSecret
   <name>-mesh-openbao` in `fleet`: it reads the CAPI kubeconfig and keeps only the API server URL and the cluster CA
   certificate (both public), labelled `mesh.platform.koorikla.io/openbao-client`. Addon openbao's `ExternalSecret
-  mesh-clients` collects all of them by label (store `mgmt-fleet`) into one file set; the reconcile turns each into
+  mesh-clients` collects all of them by label (store `mgmt-fleet`) into one file set. Its template accepts a Secret only
+  if its name is exactly `<cluster>-mesh-openbao`; anything else (a Secret claiming another cluster's name, a missing
+  `cluster`) becomes `rejected.<secret>`, which the reconcile logs and counts as invalid. Secret names are unique, so
+  no two inputs can claim one cluster (before, the later one silently overrode the other). This does not authenticate
+  the writer: anyone who may create Secrets in `fleet` can enrol a member `<x>` with their own JWKS, i.e. obtain signing
+  rights for `pki-mesh-<group>-int/sign/<x>`. Write access to Secrets in `fleet` (which also holds every cluster's
+  kubeconfig) is therefore mesh-CA admin access. The reconcile turns each accepted input into
   `auth/mesh-<name>` + PKI role + entity. A new member is configured within one ESO refresh plus the 5-minute CronJob;
   a removed member's auth mount and entity are deleted on the next run (an empty input set prunes nothing, so an ESO
   outage cannot wipe the mesh).
