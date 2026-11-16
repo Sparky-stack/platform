@@ -163,8 +163,9 @@ No upgrade or experimental channel is needed.
   engine's resource filters skip them too. The excluded namespaces: `kube-system`, `kyverno`, `argocd`,
   `cert-manager`, `external-secrets`, the CAPI provider namespaces, `fleet`, `openchoreo-*`, `thunder`,
   `kgateway-system`, `istio-system`, `cilium`, `falco`, `telemetry`, `obi`, `agentgateway-system`, and the secret
-  namespaces. Not `harbor` and not `external-dns`: their pods meet Pod Security (baseline / restricted), so they are
-  policed like workloads.
+  namespaces. Not `harbor`, `external-dns` and the opt-in data-service operators `keda`, `strimzi`, `cnpg-system`
+  ([data-services.md](data-services.md)): their pods meet Pod Security (baseline / restricted), so they are policed
+  like workloads.
   `hack/tests/test_gitops_contracts.sh` checks that `kyverno-policies` uses the same list and that every other catalog
   namespace is on it.
 - **Baseline**: upstream `kyverno-policies` Pod Security Standards **baseline**, as CEL `ValidatingPolicy`s with
