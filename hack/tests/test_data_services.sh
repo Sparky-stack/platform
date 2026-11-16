@@ -14,6 +14,8 @@ source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 # shellcheck source=../lib/portable.sh
 source hack/lib/portable.sh
+# shellcheck source=../lib/addons.sh
+source hack/lib/addons.sh
 
 echo "== test_data_services =="
 ADDONS="keda strimzi cloudnative-pg"
@@ -81,15 +83,10 @@ c_region=$(yq '.region // "local"' "$TMP/dev1-optin.yaml")
 for a in $ADDONS; do
   assert_eq "$(selected "$TMP/platform.yaml" "$a" "$labels")" yes "dev1 (opted in): addon-$a selects the cluster"
   ns=$(yq ".addons[\"$a\"].namespace" "$CATALOG")
-  vargs=()
-  for vf in "addons/$a/values.yaml" "addons/$a/values/role-workload.yaml" "addons/$a/values/provider-$c_prov.yaml" \
-    "addons/$a/values/cni-$c_cni.yaml" "$INST_DIR/addons/$a/values.yaml" "$INST_DIR/addons/$a/env-$c_env.yaml" \
-    "$INST_DIR/addons/$a/cluster-dev1.yaml"; do
-    if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
-  done
-  vargs+=(--values "$INST_FILE" --set-string "cluster.name=dev1,cluster.role=workload,cluster.provider=$c_prov,cluster.environment=$c_env,cluster.cni=$c_cni,cluster.region=$c_region")
+  vargs=()   # exactly what the ApplicationSet passes (hack/lib/addons.sh: value files, valuesObject, parameters)
+  read_lines vargs addon_helm_args "$a" "$INST_DIR" "$TMP/platform.yaml" workload dev1 "$c_prov" "$c_env" "$c_region" "$c_cni" https://192.0.2.10:6443
   out="$TMP/addon-$a.yaml"
-  if ! helm template "$a" "addons/$a" --namespace "$ns" --include-crds "${vargs[@]}" > "$out" 2> "$out.err"; then
+  if ! helm template "$(addon_release_name "$TMP/platform.yaml" "$a")" "addons/$a" --namespace "$ns" --include-crds "${vargs[@]}" > "$out" 2> "$out.err"; then
     assert_eq "render failed: $(head -c 300 "$out.err")" renders "dev1: addon $a renders with installation values"
     continue
   fi
