@@ -147,9 +147,9 @@ The numbered flow of each diagram, word for word.
 3. Review, then squash merge to main
 4. Argo CD picks up main for every cluster that follows HEAD (`addonsRevision`)
 5. Dev clusters sync first; sync waves order each app (e.g. istiod before ztunnel)
-6. Verify: Argo CD apps Synced/Healthy and `task status`
-7. Prod follows when its `addonsRevision` moves to the verified ref (a PR to its fleet file)
-8. A `kubernetesVersion` bump makes Cluster API replace servers one at a time (3 keep quorum)
+6. A `kubernetesVersion` bump goes to Cluster API instead: it replaces servers one at a time (3 keep quorum)
+7. Verify: Argo CD apps Synced/Healthy and `task status`
+8. Prod follows when its `addonsRevision` moves to the verified ref (a PR to its fleet file)
 
 ## Editing
 

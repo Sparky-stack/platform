@@ -223,7 +223,12 @@ class Diagram:
         lh = line_size + 4.5
         span = 0.72 * title_size + (len(lines) * lh + 2 if lines else 0)
         ty = y + h / 2 - span / 2 + 0.72 * title_size
-        cx = x + w / 2 + (16 if step is not None else 0)   # a node badge takes the top-left corner
+        cx = x + w / 2
+        if step is not None:            # a node badge sits left of the text block: shift the block right
+            widths = [tw(title, title_size, bold=True)] + [
+                tw(ln.strip("`"), line_size, mono=ln.startswith("`")) for ln in lines]
+            block = max(widths)
+            cx += max(16, (x + 44) - (x + w / 2 - block / 2))
         self._text(cx, ty, title, title_size, INK, weight=600, anchor="middle", container=rect, layer=out, bg=fill)
         yy = ty + 2
         for ln in lines:
@@ -244,8 +249,8 @@ class Diagram:
         if status == "planned":
             out = [f'<g opacity="{PLANNED_OPACITY}">'] + out + ["</g>"]
         self.l_boxes += out
-        if step is not None:            # step at a component: ring badge inside the top-left corner
-            self.badge(x + 21, y + 21, step, owner=rect, ring=True)
+        if step is not None:            # step at a component: ring badge left of the text block, vertically centred
+            self.badge(cx - block / 2 - 22, ty - 5 + len(lines) * lh / 2, step, owner=rect, ring=True)
         self.r_boxes.append((name or title, rect))
         self.titles.append(title)
         self.statuses[name or title] = status
@@ -373,7 +378,7 @@ class Diagram:
                               f'font-weight="700" fill="{ACCENT}" text-anchor="middle">{n}</text>')
         else:
             self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" '
-                              f'stroke-width="2"/>')
+                              f'stroke-width="1.5"/>')
             self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="13" font-weight="700" '
                               f'fill="{BG}" text-anchor="middle">{n}</text>')
         rect = (x - r, y - r, 2 * r, 2 * r)
@@ -739,8 +744,8 @@ class Diagram:
     def svg(self):
         self._finalize()
         markers = "".join(
-            f'<marker id="ah{c.lstrip("#")}" markerWidth="10" markerHeight="8" refX="9" refY="4" '
-            f'orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="{c}"/></marker>'
+            f'<marker id="ah{c.lstrip("#")}" markerWidth="13" markerHeight="10" refX="12" refY="5" '
+            f'orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="{c}"/></marker>'
             for c in sorted(self.colors)
         )
         head = (

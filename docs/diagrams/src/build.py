@@ -370,7 +370,7 @@ def trust() -> Diagram:
     d.box(C2, B1, W2, H, "security", "ESO + CRS", ["group root + OpenBao CA", "(public certificates)"],
           name="mesh trust")
     d.box(WX, B1, WW, H, "security", "istio-csr", ["cert-manager Vault Issuer", "projected SA token (JWT)"])
-    d.box(WX, B3, WW, H, "workload", "ztunnel · istiod", ["workload certs 24h", "istiod 48h · renew at ½"])
+    d.box(WX, B3, WW, H, "workload", "ztunnel · istiod", ["workload certs 24h,", "istiod 48h; renew at 50%"])
     xz = 624
     d.arrow([(C1 + W1, ymid(A1)), (C2, ymid(A1))], step=1)
     d.arrow([(C2 + W2, ymid(A1)), (WX, ymid(A1))], step=2, badge=(xz, ymid(A1)))
@@ -397,8 +397,8 @@ def trust() -> Diagram:
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · what is stateful, where",
-                "Git rebuilds everything declarative. Only the violet boxes hold state git cannot recreate; the "
-                "numbers are the restore order after losing mgmt.")
+                "Git rebuilds everything declarative; only the violet boxes hold state it cannot recreate. "
+                "Numbers: the restore order after losing mgmt.")
     OX, OW = 32, 192
     M1, M2, MW = 336, 504, 152
     WX, WW = 768, 152
@@ -412,7 +412,7 @@ def backup() -> Diagram:
     d.box(M1, R[0], M2 + MW - M1, H, "data", "mgmt etcd",
           ["k3s snapshot every 12 h, keeps 5", "CAPI objects, kubeconfigs, CA keys"], step=2)
     d.box(M1, R[1], MW, H, "data", "OpenBao", ["raft snapshot", "+ unseal key"], status="optin")
-    d.box(M2, R[1], MW, H, "data", "Thunder", ["users and OAuth", "clients (PVC)"], step=4)
+    d.box(M2, R[1], MW, H, "data", "Thunder", ["users, OAuth", "clients (PVC)"], step=4)
     d.box(M1, R[2], MW, H, "mgmt", "Argo CD", ["re-applies", "everything else"])
     d.box(M2, R[2], MW, H, "mgmt", "Harbor, telemetry", ["re-push images,", "retention only"])
     d.box(WX, R[0], WW, H, "workload", "workload etcd", ["rebuilt by Argo CD", "+ OpenChoreo"])
@@ -456,9 +456,9 @@ def upgrade() -> Diagram:
         d.arrow([(c[i] + w, ymid(R[0])), (c[i + 1], ymid(R[0]))], step=i + 1)
     d.arrow([(c[3] + w / 2, R[0] + H), (c[3] + w / 2, R[1])], step=4)
     d.arrow([(c[3], ymid(R[1])), (c[2] + w, ymid(R[1]))], step=5)
-    d.arrow([(c[2], ymid(R[1])), (c[1] + w, ymid(R[1]))], step=6)
-    d.arrow([(c[1], ymid(R[1])), (c[0] + w, ymid(R[1]))], step=7)
-    d.arrow([(c[3] + w / 2, R[1] + H), (c[3] + w / 2, R[2])], step=8)
+    d.arrow([(c[3] + w / 2, R[1] + H), (c[3] + w / 2, R[2])], step=6)
+    d.arrow([(c[2], ymid(R[1])), (c[1] + w, ymid(R[1]))], step=7)
+    d.arrow([(c[1], ymid(R[1])), (c[0] + w, ymid(R[1]))], step=8)
     d.require("Renovate", "pull request", "CI", "main", "Argo CD", "dev clusters", "verify", "prod clusters",
               "Cluster API")
     d.key("Renovate opens a PR: a Helm chart, a k3s release, an image digest or a tool pin",
@@ -467,9 +467,9 @@ def upgrade() -> Diagram:
           "Review, then squash merge to main",
           "Argo CD picks up main for every cluster that follows HEAD (addonsRevision)",
           "Dev clusters sync first; sync waves order each app (e.g. istiod before ztunnel)",
+          "A kubernetesVersion bump goes to Cluster API instead: it replaces servers one at a time (3 keep quorum)",
           "Verify: Argo CD apps Synced/Healthy and task status",
-          "Prod follows when its addonsRevision moves to the verified ref (a PR to its fleet file)",
-          "A kubernetesVersion bump makes Cluster API replace servers one at a time (3 keep quorum)")
+          "Prod follows when its addonsRevision moves to the verified ref (a PR to its fleet file)")
     return d
 
 
