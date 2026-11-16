@@ -1,0 +1,21 @@
+{{- /* Cluster operator metrics (JVM, reconciliations, resource states) on its http port. Scraped by the Prometheus agent
+of addon telemetry, which selects every PodMonitor in every namespace. Kafka clusters' own metrics: docs/data-services.md. */ -}}
+{{- if .Values.monitoring.podMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: strimzi-cluster-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: strimzi-cluster-operator
+    app.kubernetes.io/part-of: strimzi
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/kind: cluster-operator
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+{{- end }}
