@@ -91,7 +91,7 @@ tests:
           value:
             identities:
               - issuer: https://token.actions.githubusercontent.com
-                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@de39b1d4162e18e275c7be7e86384d22cc4e070b
+                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@a31c2341b1effdd084d1dd4c715d65e97ade895f
             additionalExtensions:
               githubWorkflowRepository: koorikla/hello-world
               githubWorkflowRef: refs/heads/main
@@ -107,10 +107,79 @@ tests:
     documentIndex: 2
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+      imageVerification.github.transitionWorkflowRefs: []
     asserts:
+      - lengthEqual: { path: "spec.attestors[0].cosign.keyless.identities", count: 1 }
       - equal:
           path: spec.attestors[0].cosign.keyless.identities[0].subject
           value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
+
+  - it: during a pin move the previous commit stays trusted through its own attestors (one identity each)
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    set:
+      imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+      imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
+      imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
+    asserts:
+      - lengthEqual: { path: spec.attestors, count: 4 }
+      - equal: { path: "spec.attestors[0].name", value: gh-koorikla-hello-world-heads-main }
+      - equal: { path: "spec.attestors[1].name", value: gh-koorikla-hello-world-heads-main-fedcba9 }
+      - equal: { path: "spec.attestors[3].name", value: gh-koorikla-other-heads-main-fedcba9 }
+      - equal:
+          path: spec.attestors[1].cosign.keyless
+          value:
+            identities:
+              - issuer: https://token.actions.githubusercontent.com
+                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@fedcba9876543210fedcba9876543210fedcba98
+            additionalExtensions:
+              githubWorkflowRepository: koorikla/hello-world
+              githubWorkflowRef: refs/heads/main
+              githubWorkflowTrigger: push
+      - equal:
+          path: "spec.attestors[2].cosign.keyless.identities[0].subject"
+          value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
+      - matchRegex:
+          path: "spec.validations[0].expression"
+          pattern: 'verifyImageSignatures\(image, \[attestors\["gh-koorikla-hello-world-heads-main"\], attestors\["gh-koorikla-hello-world-heads-main-fedcba9"\], attestors\["gh-koorikla-other-heads-main"\], attestors\["gh-koorikla-other-heads-main-fedcba9"\]\]\) > 0'
+      - matchRegex:
+          path: "spec.validations[1].expression"
+          pattern: 'attestors\["gh-koorikla-other-heads-main-fedcba9"\]\]\) > 0'
+
+  - it: Kyverno verifies one identity per attestor (multiple identities are unsupported)
+    template: templates/image-verification.yaml
+    documentIndex: 2
+    asserts:
+      - notExists: { path: "spec.attestors[0].cosign.keyless.identities[1]" }
+      - notExists: { path: "spec.attestors[1].cosign.keyless.identities[1]" }
+
+  - it: a transition entry that is not a full commit SHA is refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.transitionWorkflowRefs: [v1]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workflowRef "v1" must be a 40-hex commit SHA'
+
+  - it: at most two trusted workflow commits (current + previous)
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+      imageVerification.github.transitionWorkflowRefs:
+        - fedcba9876543210fedcba9876543210fedcba98
+        - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - failedTemplate:
+          errorPattern: 'trust 3 workflow commits, at most 2'
+
+  - it: a transition entry repeating workflowRef is refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+      imageVerification.github.transitionWorkflowRefs: [0123456789abcdef0123456789abcdef01234567]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'transitionWorkflowRefs must not repeat workflowRef'
 
   - it: a mutable workflow ref (tag) is refused
     template: templates/image-verification.yaml
@@ -156,6 +225,7 @@ tests:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
       imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
       imageVerification.github.refs: [refs/heads/main, refs/tags/v1]
+      imageVerification.github.transitionWorkflowRefs: []
       imageVerification.platformKey.publicKey: |
         -----BEGIN PUBLIC KEY-----
         MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEexample
@@ -173,6 +243,7 @@ tests:
     documentIndex: 2
     set:
       imageVerification.github.triggers: [push, workflow_dispatch]
+      imageVerification.github.transitionWorkflowRefs: []
     asserts:
       - lengthEqual: { path: spec.attestors, count: 2 }
       - equal: { path: "spec.attestors[1].name", value: gh-koorikla-hello-world-heads-main-workflow-dispatch }

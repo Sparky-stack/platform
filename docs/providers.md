@@ -64,6 +64,13 @@ aws/hetzner (see "Control plane size and rollouts").
 | `openchoreo.dataPlane` | ClusterDataPlane + Environments ([openchoreo.md](openchoreo.md#adding-a-data-plane)) |
 | `environment`, `addons`, `addonsRevision` | labels / annotation ([conventions.md](conventions.md#labels-and-annotations)) |
 
+Removing the file (or renaming it to `*.yaml.disabled`) deletes `Application cluster-<name>` with a **background**
+cascade (finalizer `resources-finalizer.argocd.argoproj.io/background`), so CAPI deletes the control plane and machines
+before the infrastructure, as `kubectl delete cluster` would. A foreground cascade lets the garbage collector delete
+the `DockerCluster` first, after which CAPD never finalizes the `DockerMachine` and the Cluster stays `Deleting` (seen
+when prod1 was removed, #115). Move the cluster's OpenChoreo environments away first
+([dev-environment.md](dev-environment.md#local-profiles)).
+
 ClusterClass variables:
 
 | Class | Variable | Default | Notes |

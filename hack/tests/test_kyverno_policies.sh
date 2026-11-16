@@ -45,6 +45,15 @@ for m in cfg.get("customManagers", []):
 PY
 )
 assert_eq "${renovated%% *}" "$wf_ref" "renovate.json custom manager tracks workflowRef (datasource github-tags koorikla/ci)"
+# Pin moves (#128): the allowlist (workflowRef + transitionWorkflowRefs) is the current commit and at most the previous
+# one, every entry a full commit SHA, no repeats.
+wf_refs=$(yq -r '[.imageVerification.github.workflowRef] + (.imageVerification.github.transitionWorkflowRefs // []) | .[]' \
+  "$ROOT/addons/kyverno-policies/values.yaml" | tr -d '\r')
+bad=""; n=0
+for r in $wf_refs; do n=$((n + 1)); [[ "$r" =~ ^[0-9a-f]{40}$ ]] || bad="$bad $r"; done
+assert_eq "$bad" "" "every trusted koorikla/ci workflow commit is a 40-hex SHA"
+assert_eq "$([[ $n -ge 1 && $n -le 2 ]] && echo yes)" yes "at most 2 trusted koorikla/ci workflow commits during a pin move ($n)"
+assert_eq "$(printf '%s\n' "$wf_refs" | sort -u | grep -c .)" "$n" "trusted koorikla/ci workflow commits are unique"
 
 KYVERNO=${KYVERNO:-kyverno}
 if ! command -v "$KYVERNO" >/dev/null 2>&1; then
