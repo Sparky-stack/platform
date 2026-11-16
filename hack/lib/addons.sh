@@ -38,6 +38,17 @@ addon_server_part() {
   esac
 }
 
+# addon_fleet_names <inst dir> -> "{<name>,...}": every platform cluster of the installation (mgmt + clusters/*.yaml),
+# sorted bytewise like sprig sortAlpha: what a catalog fleetParameters entry receives from the Argo CD cluster secrets.
+addon_fleet_names() {
+  local inst_dir=$1 cf names
+  names=$(yq -r '.mgmt.name // "mgmt"' "$inst_dir/installation.yaml" | tr -d '\r')
+  for cf in "$inst_dir"/clusters/*.yaml; do
+    if [[ -f "$cf" ]]; then names="$names"$'\n'"$(yq -r '.name' "$cf" | tr -d '\r')"; fi
+  done
+  printf '{%s}\n' "$(printf '%s\n' "$names" | LC_ALL=C sort -u | paste -sd, -)"
+}
+
 # addon_release_name <platform render> <addon> -> the Helm release name Argo CD uses (catalog releaseName, else addon).
 addon_release_name() {
   local r
@@ -56,12 +67,12 @@ addon_values_object() {
 #    the charts/platform render (Argo parity):
 #    valueFiles (chart, role, provider, cni, installationValueFiles, installation overlays) < valuesObject
 #    (charts/platform values + installation.yaml, then cluster.*) < parameters (as rendered; the per-cluster goTemplate
-#    expressions - cluster name label, server parts - resolved for this cluster; forceString -> --set-string).
+#    expressions - cluster name label, server parts, fleet list - resolved for this cluster; forceString -> --set-string).
 # The release name is addon_release_name. <inst dir> locates the overlay files; the valuesObject file is written next to
 # <platform render> (the caller's temp dir).
 addon_helm_args() {
   local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10}
-  local dir="addons/$addon" vf p v fs part vo="$3.values-$1.yaml"
+  local dir="addons/$addon" vf p v fs part fleet vo="$3.values-$1.yaml"
   local name_expr='{{ index .metadata.labels "platform.koorikla.io/name" }}'
   local -a files=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
   while IFS= read -r vf; do
@@ -79,6 +90,8 @@ addon_helm_args() {
     [[ -n "$p" ]] || continue
     part=$(P="$p" yq -r ".addons[\"$addon\"].clusterServerParameters[strenv(P)] // \"\"" "$ADDONS_CATALOG" | tr -d '\r')
     if [[ -n "$part" ]]; then v=$(addon_server_part "$server" "$part"); fi
+    fleet=$(P="$p" yq -r ".addons[\"$addon\"].fleetParameters // [] | .[] | select(. == strenv(P))" "$ADDONS_CATALOG" | tr -d '\r')
+    if [[ -n "$fleet" ]]; then v=$(addon_fleet_names "$inst_dir"); fi
     v=${v//"$name_expr"/$name}
     case "$v" in *"{{"*) echo "addon_helm_args: $addon parameter $p has an unresolved goTemplate: $v" >&2; return 1 ;; esac
     if [[ "$fs" == true ]]; then printf '%s\n' --set-string "$p=$v"; else printf '%s\n' --set "$p=$v"; fi   # Argo: typed --set unless forceString

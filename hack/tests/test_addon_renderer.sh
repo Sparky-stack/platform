@@ -44,6 +44,26 @@ args=()
 read_lines args addon_helm_args openchoreo-data-plane installations/hetzner-example "$R" workload dev-fsn1 hetzner development fsn1 cilium https://192.0.2.10:6443
 assert_match "$(printf '%s\n' "${args[@]}")" $'--set\nopenchoreo-data-plane.clusterAgent.planeID=dev-fsn1' "clusterNameParameters resolved"
 
+# clusterNameFormats (string with the cluster name inside) and fleetParameters (every cluster of the installation,
+# sorted helm list), as the ApplicationSet renders them (falco: customfields; argo-events: Falco endpoints).
+args=()
+read_lines args addon_helm_args falco installations/hetzner-example "$R" workload dev-fsn1 hetzner development fsn1 cilium https://192.0.2.10:6443
+assert_match "$(printf '%s\n' "${args[@]}")" $'--set-string\nfalco.falcosidekick.config.customfields=cluster:dev-fsn1' "clusterNameFormats resolved (forceString)"
+fleet_want="{$( { yq -r '.mgmt.name // "mgmt"' installations/hetzner-example/installation.yaml; for f in installations/hetzner-example/clusters/*.yaml; do yq -r '.name' "$f"; done; } | tr -d '\r' | LC_ALL=C sort -u | paste -sd, -)}"
+assert_eq "$(addon_fleet_names installations/hetzner-example)" "$fleet_want" "fleet names: mgmt + every cluster file, sorted"
+args=()
+read_lines args addon_helm_args argo-events installations/hetzner-example "$R" mgmt mgmt hetzner mgmt fsn1 flannel https://kubernetes.default.svc
+assert_match "$(printf '%s\n' "${args[@]}")" $'--set\nfalco.clusters='"$(printf '%s' "$fleet_want" | sed 's/[{}]/\\&/g')" "fleetParameters resolved to the fleet list (typed --set)"
+appset=$(addon_appset "$R" argo-events)
+assert_eq "$(yq '.spec.generators[0].matrix.generators[1].clusters.flatList' <<<"$appset")" true "fleetParameters: matrix with a flat cluster list"
+assert_eq "$(yq '.spec.generators[0].matrix.generators[0].clusters.selector.matchExpressions[0].values[0]' <<<"$appset")" mgmt "fleetParameters: the addon's own selector stays the first generator"
+assert_eq "$(addon_appset "$R" falco | yq '.spec.generators[0].clusters.flatList // "none"')" none "no fleetParameters: plain cluster generator"
+
+# clusterNameFormats needs exactly one %s
+printf 'addons:\n  falco: { clusterNameFormats: { x: "no-placeholder" } }\n' > "$TMP/bad-fmt.yaml"
+if out=$(helm template platform charts/platform --namespace argocd --values "$TMP/bad-fmt.yaml" 2>&1); then out=rendered; fi
+assert_match "$out" 'clusterNameFormats.x: "no-placeholder" must contain exactly one %s' "clusterNameFormats without %s fails"
+
 # Values are not @tsv-escaped (a backslash arrives once).
 printf 'installation: { name: t, repoURL: https://example.test/r.git, githubOrg: https://example.test }\nregistry: { type: harbor, host: "a\\\\b.example.test" }\n' > "$TMP/inst.yaml"
 helm template platform charts/platform --namespace argocd --values "$TMP/inst.yaml" > "$TMP/p.yaml"
