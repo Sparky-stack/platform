@@ -56,11 +56,12 @@ tools and version drift against `mise.toml`.
 
 | Task | What |
 |---|---|
-| `setup` | `mise install` + helm-unittest plugin |
+| `setup` | `mise install` + helm-unittest plugin + git hooks |
 | `doctor` | every tool from `mise.toml` present at the pinned version |
 | `up` / `secrets` / `argocd` / `status` / `ui` / `down` | bootstrap stages (`INST=local` default; `task up INST=aws-example`) |
 | `kubeconfig CLUSTER=dev1` | host-usable kubeconfig of a CAPD workload cluster (see Docker Desktop below) |
 | `set-repo REPO=https://github.com/<you>/platform.git` | point a fork at itself: `repoURL`, `githubOrg`, tenant app repos (`ORG=`, `APPS_ORG=`, `DOCS=1`; docs/forking.md) |
+| `hooks:install` / `hooks:run` | install the git hooks / run every hook on every tracked file, as CI does ([Git hooks](#git-hooks)) |
 | `lint` / `test` / `schemas` | offline validation (helm lint/template, kubeconform, helm-unittest, contract tests, shellcheck, actionlint) |
 | `images:audit` | every image of the installation checked for linux/amd64 + linux/arm64 (`-- --live` adds running pods) |
 | `tools:lock` | refresh `mise.lock` for all six platforms after editing `mise.toml` |
@@ -88,7 +89,9 @@ tools and version drift against `mise.toml`.
 | yq / jq | 4.54.3 / 1.8.2 | aqua:mikefarah/yq / aqua:jqlang/jq | YAML/JSON in scripts |
 | kubeconform | 0.8.0 | aqua:yannh/kubeconform | schema validation |
 | crane | 0.22.1 | aqua:google/go-containerregistry | `images:audit` |
-| shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint` |
+| shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint`, git hooks |
+| gitleaks | 8.30.1 | aqua:gitleaks/gitleaks | secret scan in the git hooks / CI |
+| prek | 0.5.10 | aqua:j178/prek | git hook runner (`prek.toml`) |
 | kyverno | 1.20.0 | github:kyverno/kyverno | offline policy tests (`hack/tests/test_kyverno_policies.sh`) |
 | python | 3.14.10 | core:python | `hack/crd2schema.py`, test helpers (stdlib only) |
 | task | 3.54.0 | aqua:go-task/task | entrypoint |
@@ -96,6 +99,35 @@ tools and version drift against `mise.toml`.
 
 Docker is the one prerequisite mise does not install (Docker Desktop, OrbStack, Colima, Rancher Desktop or Docker
 Engine). Git Bash comes with Git for Windows.
+
+## Git hooks
+
+`task hooks:install` (part of `task setup` and the dev container's post-create; after a plain `mise install` run it
+once, `task doctor` warns until you do) installs `pre-commit` and
+`commit-msg` shims for this clone and all its worktrees. [prek](https://prek.j178.dev) runs [`prek.toml`](../prek.toml):
+
+| Hook | Files | What |
+|---|---|---|
+| trailing-whitespace, end-of-file-fixer, mixed-line-ending (`--fix=lf`) | all text | fix in place; re-stage and commit again |
+| check-merge-conflict, check-added-large-files (500 KB), check-case-conflict, check-illegal-windows-names | all | stray markers, big blobs, paths macOS/Windows cannot check out |
+| check-yaml (`templates/` excluded: Go templates), check-toml, check-json | `*.yaml`, `*.toml`, `*.json` | syntax; check-toml also rejects duplicate keys in `mise.toml` |
+| gitleaks | staged files (index content) | secrets; false positives get a `gitleaks:allow` comment on the line, not a broad ignore |
+| shellcheck (`-x -P SCRIPTDIR`, as `task lint`), actionlint | `bootstrap/` `hack/` `.devcontainer/` `*.sh`, `.github/workflows/` | |
+| py-compile | `*.py` | Python syntax |
+| mise-tools-table | `mise.toml` | every `[tools]` entry parses for `task doctor` |
+| chart-lock | `Chart.yaml` / `Chart.lock` | lock digest in sync (`hack/lib/chartlock.py`; skipped with a note until it is on `main`) |
+| charts | `charts/` `addons/` `installations/` | `CHARTS=<changed charts> hack/test.sh`: helm lint + template per installation/cluster + kubeconform (cached schemas) + helm unittest of the changed charts only; installation/cluster files select `charts/platform` + `charts/cluster`. Everything else is `task test` / CI |
+| conventional-commit | commit message | warns, never blocks: squash merges make the PR title the commit on `main` |
+
+Nothing is downloaded at commit time: builtin hooks are compiled into prek, the rest run the `mise.toml` tools and
+`hack/hooks.sh`. A typical commit takes about a second; touching an addon adds its renders (~8 s).
+`hack/tests/test_hooks_config.sh` fails on a remote hook repo without a full commit SHA, a hook that would build its
+own environment, or a tool not pinned in `mise.toml`.
+
+**CI runs the same hooks** on every tracked file (`task hooks:run` in the `ci` and `portability` workflows, all four
+OS/arch jobs and the dev container; only `charts` is skipped there because `task test` renders every chart). In an
+emergency `git commit --no-verify` skips the hooks locally, and `SKIP=charts,gitleaks git commit` skips single hooks;
+CI still fails the PR on any finding.
 
 ## Portable bash rules
 

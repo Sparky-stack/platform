@@ -31,6 +31,10 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- if and (ne $v.provider "docker") (not $v.region) -}}
 {{- fail (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider) -}}
 {{- end -}}
+{{- $env := $v.environment -}}
+{{- if not (and (kindIs "string" $env) (has $env (list "development" "staging" "production"))) -}}
+{{- fail (printf "cluster %s: environment %q must be one of development, staging, production" $v.name (kindIs "invalid" $env | ternary "" (toString $env))) -}}
+{{- end -}}
 {{- if not (has $v.cni (list "cilium" "flannel")) -}}
 {{- fail (printf "cluster %s: cni %q must be cilium or flannel" $v.name $v.cni) -}}
 {{- end -}}

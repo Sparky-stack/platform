@@ -7,7 +7,7 @@
 name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
 provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
 region: local
-environment: development
+environment: development      # development | staging | production (never prod; docs/conventions.md)
 kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1
 cni: cilium                   # cilium | flannel - pod network, fixed at birth (switching = rebuild; docs/networking.md).
                               # -> ClusterClass variable cni, label platform.koorikla.io/cni, and

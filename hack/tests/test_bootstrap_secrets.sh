@@ -72,7 +72,7 @@ for a in "$@"; do
   if [[ "$prev" == -v ]]; then
     d=${a%:*}; printf '%s' "$d" > "$HLOG/cosign-dir"
     [[ "${a##*:}" == /keys && -d "$d" ]] || { echo "fake docker: bad bind mount $a" >&2; exit 1; }
-    printf -- '-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\nFAKECOSIGNKEY\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----\n' > "$d/cosign.key"
+    printf -- '-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\nFAKECOSIGNKEY\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----\n' > "$d/cosign.key"   # gitleaks:allow: fake key from the docker stub
     printf -- '-----BEGIN PUBLIC KEY-----\nFAKEPUB\n-----END PUBLIC KEY-----\n' > "$d/cosign.pub"
   fi
   prev=$a

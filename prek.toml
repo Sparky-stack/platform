@@ -1,0 +1,145 @@
+# Git hooks, run by prek (https://prek.j178.dev; pinned in mise.toml). docs/dev-environment.md "Git hooks".
+#   task hooks:install    pre-commit + commit-msg shims into .git/hooks (task setup and the devcontainer run it)
+#   task hooks:run        every hook on every tracked file: exactly what CI runs
+# Nothing here is fetched at commit time: `builtin` hooks are compiled into prek, `local` hooks run tools pinned (with
+# checksums) in mise.toml/mise.lock and scripts in hack/. A remote `repo` would need a full commit SHA as `rev`
+# (hack/tests/test_hooks_config.sh enforces it).
+# Order: fixers one at a time (they rewrite the same files), then the read-only checks in parallel, then the chart
+# renders (seconds, changed charts only).
+default_install_hook_types = ["pre-commit", "commit-msg"]
+default_stages = ["pre-commit", "manual"]
+minimum_prek_version = "0.5.10"
+
+[priorities]
+fix-whitespace = 0
+fix-eof = 1
+fix-eol = 2
+check = 10
+charts = 20
+
+[[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "trailing-whitespace"
+args = ["--markdown-linebreak-ext=md"]
+priority = "fix-whitespace"
+
+[[repos.hooks]]
+id = "end-of-file-fixer"
+priority = "fix-eof"
+
+# CRLF guard: .gitattributes already checks text out as LF everywhere; this catches CRLF written by editors.
+[[repos.hooks]]
+id = "mixed-line-ending"
+args = ["--fix=lf"]
+priority = "fix-eol"
+
+[[repos.hooks]]
+id = "check-merge-conflict"
+priority = "check"
+
+[[repos.hooks]]
+id = "check-added-large-files"
+args = ["--maxkb=500"]
+priority = "check"
+
+# Paths that cannot be checked out on macOS/Windows (case-insensitive file systems, reserved names).
+[[repos.hooks]]
+id = "check-case-conflict"
+priority = "check"
+
+[[repos.hooks]]
+id = "check-illegal-windows-names"
+priority = "check"
+
+# Helm templates are Go templates, not YAML: `helm lint` / `helm template` check those (charts hook, task test).
+[[repos.hooks]]
+id = "check-yaml"
+args = ["--allow-multiple-documents"]
+exclude = '(^|/)templates/'
+priority = "check"
+
+# mise.toml, prek.toml, ...: catches duplicate keys / tables (e.g. after a merge), which mise reports only at runtime.
+[[repos.hooks]]
+id = "check-toml"
+priority = "check"
+
+[[repos.hooks]]
+id = "check-json"
+priority = "check"
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "gitleaks"
+name = "gitleaks (secrets in staged content)"
+language = "system"
+entry = "bash hack/hooks.sh gitleaks"
+require_serial = true
+priority = "check"
+
+# Same files and flags as hack/lint.sh (task lint).
+[[repos.hooks]]
+id = "shellcheck"
+name = "shellcheck"
+language = "system"
+entry = "shellcheck -x -P SCRIPTDIR"
+files = '^(bootstrap|hack|\.devcontainer)/.*\.sh$'
+priority = "check"
+
+[[repos.hooks]]
+id = "actionlint"
+name = "actionlint (GitHub workflows)"
+language = "system"
+entry = "actionlint"
+files = '^\.github/workflows/[^/]+\.ya?ml$'
+priority = "check"
+
+[[repos.hooks]]
+id = "py-compile"
+name = "python syntax (py_compile)"
+language = "system"
+entry = "bash hack/hooks.sh py-compile"
+types = ["python"]
+priority = "check"
+
+# Every [tools] entry must parse for hack/tools.sh (task doctor, devcontainer post-create).
+[[repos.hooks]]
+id = "mise-tools-table"
+name = "mise.toml [tools] parse for task doctor"
+language = "system"
+entry = "bash hack/tests/test_tools_table.sh"
+files = '^(mise\.toml|hack/tools\.sh)$'
+pass_filenames = false
+priority = "check"
+
+[[repos.hooks]]
+id = "chart-lock"
+name = "Chart.lock in sync with Chart.yaml"
+language = "system"
+entry = "bash hack/hooks.sh chart-lock"
+files = '^(charts|addons)/[^/]+/Chart\.(yaml|lock)$'
+require_serial = true
+verbose = true
+priority = "check"
+
+# helm lint + template + kubeconform (+ helm unittest) of the changed charts only (CHARTS=... hack/test.sh). CI skips
+# it in `task hooks:run` because `task test` runs the whole suite right after.
+[[repos.hooks]]
+id = "charts"
+name = "helm lint/template + kubeconform (changed charts)"
+language = "system"
+entry = "bash hack/hooks.sh charts"
+files = '^(charts|addons|installations)/'
+require_serial = true
+priority = "charts"
+
+[[repos.hooks]]
+id = "conventional-commit"
+name = "conventional commit subject (warn only)"
+language = "system"
+entry = "bash hack/hooks.sh commit-msg"
+stages = ["commit-msg"]
+verbose = true
