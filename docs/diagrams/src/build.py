@@ -237,8 +237,133 @@ def cluster_lifecycle() -> Diagram:
 
 
 
+# ---------------------------------------------------------------------------------------------- security
+def security() -> Diagram:
+    W, H = 1400, 1380
+    d = Diagram(W, H, "Security · identity, secrets, supply chain, admission, runtime",
+                "rows = concern, columns = trust zone · gutter labels name what crosses · arrow = initiator → target "
+                "· CA private keys never leave mgmt")
+    EXZ, MZ, WZ = (16, 260), (376, 480), (1016, 368)
+    for x, label in ((EXZ[0], "external"), (MZ[0], "mgmt cluster · trust root"), (WZ[0], "workload cluster <name>")):
+        d.text(x + 14, 98, label, 12.5, "#e2e8f0", weight=700)
+    bands = [(110, 248), (370, 240), (622, 212), (846, 190), (1048, 186)]
+    for y, h in bands:
+        for zx, zw in (EXZ, MZ, WZ):
+            d.group(zx, y, zw, h, "", "zone")
+    EX, EW = 32, 228
+    ML, MR, MH, MW = 392, 624, 216, 448
+    WL, WR, WH, WW = 1032, 1208, 160, 336
+    GL, GR = 326, 936
+
+    # 1 · identity & trust
+    d.text(32, 134, "1 · identity & trust", 12.5, RO, weight=700)
+    d.box(EX, 150, EW, 52, "security", "Okta / Google", ["SSO via Thunder"], planned=True)
+    d.box(EX, 214, EW, 58, "external", "GitHub Apps", ["Argo CD repo-creds (read)", "promotion gate (PRs)"])
+    d.box(EX, 284, EW, 58, "external", "GitHub Actions OIDC", ["job token → Fulcio cert", "(keyless signing)"])
+    d.box(ML, 150, MW, 52, "security", "Thunder", ["OIDC IdP · console, API, CLI, gate client"])
+    d.box(ML, 214, MH, 58, "security", "cert-manager", ["agent CA per cluster", "gateway CA · keys stay"],
+          focus=True)
+    d.box(MR, 214, MH, 58, "security", "ESO + ClusterResourceSet", ["templates cert + key", "into CRS payload"],
+          title_size=12)
+    d.box(ML, 284, MH, 58, "security", "OpenBao", ["mesh root CA", "PR #4"], status="planned")
+    d.box(MR, 284, MH, 58, "platform", "cluster-gateway", ["client CA = that", "cluster's agent CA"])
+    d.box(WL, 150, WW, 52, "security", "kube-apiserver OIDC", ["trusts the Thunder issuer"], planned=True)
+    d.box(WL, 214, WW, 58, "security", "cluster-agent-tls", ["own cert + key (CN = cluster)", "+ public gateway CA"])
+    d.box(WL, 284, WH, 58, "platform", "cluster-agent", ["dials out", "wss + mTLS"])
+    d.box(WR, 284, WH, 58, "network", "ztunnel", ["SPIFFE mTLS", "istiod CA today"])
+    d.arrow([(ML, 176), (EX + EW, 176)], RO, planned=True, label="OIDC federation", label_pos=(GL, 180),
+            aid="fed")
+    d.arrow([(WL, 176), (ML + MW, 176)], RO, planned=True, label="trusts issuer", label_pos=(GR, 180), aid="oidc")
+    d.arrow([(ML + MH, 243), (MR, 243)], RO, aid="ca", step=0)
+    d.arrow([(MR + MH, 243), (WL, 243)], RO, label="cert + key (CRS)", label_pos=(GR, 247), aid="crs", step=1)
+    d.arrow([(WL, 313), (MR + MH, 313)], RO, label="wss + mTLS (out)", label_pos=(GR, 317), aid="wss", step=2)
+    d.arrow([(500, 342), (500, 351), (1288, 351), (1288, 342)], RO, planned=True, label="mesh intermediate CA",
+            label_pos=(GR, 355), aid="mesh")
+
+    # 2 · secrets
+    d.text(32, 394, "2 · secrets", 12.5, RO, weight=700)
+    d.group(24, 404, 244, 180, "secret backend", "zone", label_size=11.5)
+    d.box(36, 436, 220, 44, "external", "kubernetes (mgmt ns)", ["local stand-in"], title_size=12.5, sub_size=11)
+    d.box(36, 486, 220, 44, "cloud", "AWS Secrets Manager", ["rendered only"], title_size=12.5, sub_size=11)
+    d.box(36, 536, 220, 44, "cloud", "Vault", ["rendered only"], title_size=12.5, sub_size=11)
+    d.box(ML, 404, MW, 64, "security", "ClusterSecretStore platform",
+          ["namespace-scoped (spec.conditions): argocd,", "fleet, thunder, harbor, workflows-default, …"])
+    d.box(ML, 482, MW, 64, "security", "mgmt-fleet · mgmt-openchoreo · mgmt-harbor",
+          ["read-only in-cluster stores: kubeconfigs,", "agent certs, public ca.crt only"], title_size=12.5)
+    d.box(WL, 404, WW, 64, "security", "ClusterSecretStore default", ["app + collector secrets", "same backend, scoped"])
+    d.arrow([(ML, 420), (268, 420)], RO, label="reads flat keys", label_pos=(GL, 424), aid="sp", step=3)
+    d.arrow([(WL + WW / 2, 468), (WL + WW / 2, 597), (146, 597), (146, 584)], RO,
+            label="reads app secrets directly (not via mgmt)", label_pos=(616, 601), aid="sd", step=3)
+
+    # 3 · supply chain
+    d.text(32, 646, "3 · supply chain", 12.5, RO, weight=700)
+    d.box(EX, 660, EW, 72, "external", "GitHub Actions", ["koorikla/ci container.yaml", "Trivy · Syft SBOM · SLSA",
+                                                         "cosign keyless (Fulcio)"])
+    d.box(EX, 764, EW, 58, "data", "GHCR", ["image + signature +", "SBOM · SLSA · vuln"])
+    d.box(ML, 660, MW, 72, "platform", "OC workflow plane",
+          ["Trivy · SPDX SBOM · SLSA provenance", "cosign sign + attest: platform key", "(cosign-platform via ESO)"])
+    d.box(ML, 764, MW, 58, "data", "Harbor · apps", ["signed + scanned (Trivy on push)", "registry CA public via ESO"])
+    d.box(WL, 660, WW, 162, "security", "Kyverno ImageValidatingPolicy",
+          ["ghcr.io/koorikla/*: keyless, the", "koorikla/ci workflow identity,", "repo + ref + trigger pinned",
+           "SBOM · SLSA · vuln required", "Harbor apps/*: platform key", "dev, staging Audit · prod Deny"],
+          title_size=12.5, name="Kyverno image verification", focus=True)
+    d.arrow([(146, 732), (146, 764)], VI, label="sign + attest", label_pos=(156, 753), label_anchor="start",
+            aid="sign", step=4)
+    d.arrow([(616, 732), (616, 764)], VI, label="push", label_pos=(626, 753), label_anchor="start", aid="push",
+            step=4)
+    d.arrow([(WL, 793), (ML + MW, 793)], RO, label="verify platform key", label_pos=(GR, 797), aid="vk", step=5)
+    d.arrow([(WL + WW / 2, 660), (WL + WW / 2, 641), (320, 641), (320, 793), (EX + EW, 793)], RO,
+            label="verify keyless signature + attestations at GHCR (not via mgmt)", label_pos=(640, 645),
+            aid="vg", step=5)
+
+    # 4 · admission
+    d.text(32, 870, "4 · admission", 12.5, RO, weight=700)
+    for i, t in enumerate(["Pod Security baseline,", "Audit first (reports);", "restricted is the target.",
+                           "Platform namespaces are", "never touched."]):
+        d.text(32, 896 + i * 18, t, 11.5, NOTE)
+    d.box(ML, 880, MW, 58, "security", "Kyverno", ["PSS baseline ValidatingPolicies (Audit)",
+                                                  "platform namespaces excluded"])
+    d.box(ML, 952, MW, 64, "security", "ValidatingAdmissionPolicy",
+          ["gated ReleaseBindings (production): only", "Argo CD's gated Application may write"])
+    d.box(WL, 880, WW, 44, "external", "kube-apiserver", ["pod / controller create, update"], sub_size=11)
+    d.box(WL, 940, WW, 82, "security", "Kyverno", ["PSS baseline (Audit)", "trusted registries per env",
+                                                  "ambient enrolment (mutate)"], name="Kyverno (workload)", focus=True)
+    d.arrow([(WL + WW / 2, 924), (WL + WW / 2, 940)], RO, aid="adm", step=6)
+
+    # 5 · runtime
+    d.text(32, 1072, "5 · runtime", 12.5, RO, weight=700)
+    for i, t in enumerate(["Falco detects on the node;", "Talon responds in place;", "≥ Critical escalates to",
+                           "mgmt (argo-events)."]):
+        d.text(32, 1098 + i * 18, t, 11.5, NOTE)
+    d.box(ML, 1082, MW, 58, "data", "OC observability plane", ["Falco JSON stdout → Fluent Bit →",
+                                                               "OpenSearch (alerts searchable)"])
+    d.box(ML, 1160, MH, 58, "platform", "falco-response", ["enrich → Event ·", "RCA, notify: opt-in"])
+    d.box(MR, 1160, MH, 58, "bus", "argo-events", ["webhook EventSource", "Sensor ≥ Critical"])
+    d.box(WL, 1082, WH, 58, "security", "Falco", ["modern_ebpf", "dp-* rules"], focus=True)
+    d.box(WL, 1160, WH, 58, "bus", "falcosidekick", ["alert fan-out", "falco-webhook"])
+    d.box(WR, 1160, WH, 58, "security", "Falco Talon", ["terminate · label", "(scoped, dp-*)"])
+    d.arrow([(WL, 1111), (ML + MW, 1111)], OR, label="logs (Fluent Bit)", label_pos=(GR, 1115), aid="flog",
+            step=7)
+    d.arrow([(WL + WH / 2, 1140), (WL + WH / 2, 1160)], RO, aid="fsk", step=7)
+    d.arrow([(WL + WH, 1189), (WR, 1189)], RO, aid="talon", step=8)
+    d.arrow([(WL, 1189), (MR + MH, 1189)], OR, label="webhook ≥ Critical", label_pos=(GR, 1193), aid="esc",
+            step=8)
+    d.arrow([(MR, 1189), (ML + MH, 1189)], OR, aid="wf", step=9)
+
+    d.require("Thunder", "cert-manager", "ESO + ClusterResourceSet", "OpenBao", "GitHub Apps", "GitHub Actions OIDC",
+              "ClusterSecretStore platform", "ClusterSecretStore default", "Kyverno", "Kyverno (workload)",
+              "Kyverno image verification", "ValidatingAdmissionPolicy", "Falco", "falcosidekick", "Falco Talon",
+              "argo-events", "falco-response", "OC workflow plane", "Harbor · apps", "GHCR")
+    d.legend(28, 1264, ["external", "platform", "security", "network", "data", "bus", "cloud"], cols=6, col_w=226,
+             optin=False, focus=True,
+             flows=[("certs, secrets, verification", RO, False), ("artifact", VI, False),
+                    ("alerts, logs", OR, False)])
+    return d
+
+
 DIAGRAMS = {
     "architecture": architecture,
+    "security": security,
     "cluster-lifecycle": cluster_lifecycle,
 }
 
