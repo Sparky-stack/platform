@@ -172,8 +172,15 @@ enforcement (TracingPolicies that kill/override syscalls) and it fits a Cilium d
 enforcement (not just detection + response) is needed.
 
 **Local caveat:** k3d and CAPD nodes are containers on one host kernel, so every cluster's Falco (eBPF is kernel-wide)
-sees every container's syscalls on the machine, including other clusters' pods (without k8s metadata). Expect duplicate
-and foreign alerts locally; on real nodes each Falco sees only its own node.
+sees every container's syscalls on the machine, including other clusters' pods (without k8s metadata). On real nodes
+each Falco sees only its own node. Installation `local` therefore appends `not local_unattributed_container` (a container
+without `k8s.ns.name`) to the three rules that fired on foreign containers - "Drop and execute new binary in container"
+(Critical, the escalation trigger), "Platform write below etc" and "Contact K8S API Server From Container"
+(`installations/local/addons/falco/values.yaml`). Measured before ([#76](https://github.com/koorikla/platform/issues/76)):
+every Critical and Error alert of a dev1 Falco came from such containers (the CAPD nodes' own k3s/mount/CNI processes,
+other clusters' pods, a host pod), and each of the five Falcos escalated them to mgmt as falco-response Workflows that
+could not act and failed. The cluster's own pods keep full coverage. VERIFY after the next sync: Critical alerts without
+`k8s.ns.name` stop, alerts from `dp-*` pods still arrive.
 
 ## Falco response
 
