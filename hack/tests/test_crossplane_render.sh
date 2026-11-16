@@ -50,6 +50,29 @@ assert_eq "$(yq -N 'select(.kind == "CompositeResourceDefinition") | .spec.defau
 assert_eq "$(yq -N 'select(.kind == "ValidatingPolicy" and .metadata.name == "postgresql-production-ha-backup") | .spec.validationActions[0]' "$TMP/dev1.yaml")" \
   Audit "dev1: values/provider-docker.yaml makes the production rule Audit (layered like the ApplicationSet)"
 
+# Pod Security restricted on everything that runs in crossplane-system: the chart's Deployments (containers + init
+# containers) and the pod template of every DeploymentRuntimeConfig (Functions, providers), plus the namespace label.
+psa=$(yq -o=json -I=0 'select(.kind == "Deployment" or .kind == "DeploymentRuntimeConfig")' "$TMP/dev1.yaml" | py -c '
+import json, sys
+bad = []
+for line in sys.stdin:
+    if not line.strip():
+        continue
+    o = json.loads(line)
+    spec = (o["spec"]["deploymentTemplate"]["spec"] if o["kind"] == "DeploymentRuntimeConfig" else o["spec"])["template"]["spec"]
+    psc = spec.get("securityContext") or {}
+    for c in (spec.get("initContainers") or []) + spec["containers"]:
+        sc, who = c.get("securityContext") or {}, o["kind"] + "/" + o["metadata"]["name"] + "/" + c["name"]
+        if sc.get("allowPrivilegeEscalation") is not False: bad.append(who + ": allowPrivilegeEscalation")
+        if "ALL" not in ((sc.get("capabilities") or {}).get("drop") or []): bad.append(who + ": capabilities")
+        if sc.get("runAsNonRoot", psc.get("runAsNonRoot")) is not True: bad.append(who + ": runAsNonRoot")
+        if (sc.get("seccompProfile") or psc.get("seccompProfile") or {}).get("type") != "RuntimeDefault": bad.append(who + ": seccomp")
+    if spec.get("hostNetwork"): bad.append(o["metadata"]["name"] + ": hostNetwork")
+print(" ".join(bad))')
+assert_eq "$psa" "" "dev1: Crossplane core, RBAC manager and package runtime configs meet Pod Security restricted"
+assert_eq "$(yq -N 'select(.kind == "Namespace") | .metadata.labels["pod-security.kubernetes.io/enforce"]' "$TMP/dev1.yaml")" \
+  restricted "dev1: crossplane-system enforces Pod Security restricted"
+
 # --- 1b. every backend's addon render ----------------------------------------------------------------------------------
 BACKENDS="cnpg aws-rds gcp-cloudsql azure-flexible"
 for b in $BACKENDS; do
