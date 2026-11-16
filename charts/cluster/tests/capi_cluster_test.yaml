@@ -169,6 +169,30 @@ tests:
     asserts:
       - failedTemplate: { errorPattern: "must be one of docker, aws, hetzner" }
 
+  - it: fails on environment 'prod' (cannot bypass production >=3 servers rule)
+    values: [values/capi-aws.yaml]
+    set: { environment: prod, controlPlane.replicas: 1 }
+    asserts:
+      - failedTemplate: { errorPattern: "environment \"prod\" must be one of development, staging, production" }
+
+  - it: fails on an unknown or empty environment
+    values: [values/capi-docker.yaml]
+    set: { environment: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "must be one of development, staging, production" }
+
+  - it: fails when environment is null
+    values: [values/capi-docker.yaml]
+    set: { environment: null }
+    asserts:
+      - failedTemplate: { errorPattern: "must be one of development, staging, production" }
+
+  - it: accepts staging environment
+    values: [values/capi-docker.yaml]
+    set: { environment: staging }
+    asserts:
+      - equal: { path: 'metadata.labels["platform.koorikla.io/environment"]', value: staging }
+
   - it: fails when the provider is disabled in the installation
     values: [values/capi-docker.yaml]
     set: { provider: aws, region: eu-central-1 }
