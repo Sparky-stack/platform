@@ -1,0 +1,3 @@
+# prod1 only serves (the echo Service itself exists on every member).
+client:
+  enabled: false

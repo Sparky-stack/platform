@@ -257,7 +257,8 @@ rand_alnum() {
 
 # seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>] ...
 # Generates each missing property once (random alphanumeric; @strong adds upper/lower/digit/special for password
-# policies like OpenSearch 3 and Harbor; @<length> exact length), keeps existing values on re-runs.
+# policies like OpenSearch 3 and Harbor; @<length> exact length; @hex32 = 32 random bytes in hex), keeps existing values
+# on re-runs.
 seed_generated_secret() {
   local name=$1; shift
   local -a specs=() vals=()
@@ -269,6 +270,7 @@ seed_generated_secret() {
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
         @strong) val="Px9!$(rand_alnum)" ;;
+        @hex32)  val=$(openssl rand -hex 32) ;;       # 32 random bytes as 64 hex chars (OpenBao static seal key)
         @[0-9]*) val=$(rand_alnum "${fixed#@}") ;;   # exact length (Harbor secretKey 16, CSRF key 32)
         *)       val=$fixed ;;
       esac
@@ -299,6 +301,12 @@ seed_openchoreo_secret() {
 seed_harbor_secret() {
   seed_generated_secret harbor admin-password=@strong secret-key=@16 core-secret csrf-key=@32 jobservice-secret \
     registry-http-secret registry-password database-password builder-secret=@strong nodes-secret=@strong
+}
+
+# OpenBao static auto-unseal key (addon openbao, local backend only; cloud installations use a KMS seal instead). Never
+# regenerated: OpenBao's storage is encrypted with it and self-initialisation creates no recovery keys.
+seed_openbao_secret() {
+  seed_generated_secret openbao-unseal key=@hex32
 }
 
 # Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
@@ -435,7 +443,8 @@ cmd_secrets() {
   seed_openchoreo_secret
   seed_harbor_secret
   seed_cosign_secret
-  log "  openchoreo, openchoreo-observability, harbor, cosign-platform: generated once, kept on re-runs"
+  seed_openbao_secret
+  log "  openchoreo, openchoreo-observability, harbor, cosign-platform, openbao-unseal: generated once, kept on re-runs"
 }
 
 # Bootstrap repo credentials so Argo CD can read a private fork before ESO exists (same sources as platform-github;

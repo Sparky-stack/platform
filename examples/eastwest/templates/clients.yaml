@@ -1,0 +1,56 @@
+{{- if .Values.client.enabled }}
+{{- range $who := list "client" "stranger" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $who }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" $ | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $who }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" $ | nindent 4 }}
+    app: {{ $who }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ $who }}
+  template:
+    metadata:
+      labels:
+        app: {{ $who }}
+    spec:
+      serviceAccountName: {{ $who }}     # the mesh identity: {{ $.Values.trustDomain }}/ns/{{ $.Values.namespace }}/sa/{{ $who }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100                   # curl_user
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: curl
+          image: {{ $.Values.client.image }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              url=http://echo.{{ $.Values.namespace }}.svc.cluster.local:{{ $.Values.echo.port }}/
+              while true; do
+                if out=$(curl -sS -m 5 "$url" 2>&1); then echo "$(date -u +%FT%TZ) {{ $who }}@{{ $.Values.cluster.name }} OK: $out"
+                else echo "$(date -u +%FT%TZ) {{ $who }}@{{ $.Values.cluster.name }} FAILED: $out"; fi
+                sleep {{ $.Values.client.intervalSeconds }}
+              done
+          resources:
+            {{- toYaml $.Values.client.resources | nindent 12 }}
+          securityContext:
+            {{- include "eastwest.containerSecurity" $ | nindent 12 }}
+{{- end }}
+{{- end }}

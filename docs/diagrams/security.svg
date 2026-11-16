@@ -41,7 +41,7 @@
 <path d="M 608.0 243.0 L 624.0 243.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
 <path d="M 840.0 243.0 L 1032.0 243.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
 <path d="M 1032.0 313.0 L 840.0 313.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 500.0 342.0 L 500.0 351.0 L 1288.0 351.0 L 1288.0 342.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" opacity="0.55" marker-end="url(#ahfb7185)"/>
+<path d="M 1288.0 342.0 L 1288.0 351.0 L 500.0 351.0 L 500.0 342.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
 <path d="M 392.0 420.0 L 268.0 420.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
 <path d="M 1200.0 468.0 L 1200.0 597.0 L 146.0 597.0 L 146.0 584.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
 <path d="M 146.0 732.0 L 146.0 764.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
@@ -101,15 +101,13 @@
 <text x="732.0" y="228.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO + ClusterResourceSet</text>
 <text x="732.0" y="248.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">templates cert + key</text>
 <text x="732.0" y="263.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">into CRS payload</text>
-<g opacity="0.55">
 <rect x="392" y="284" width="216" height="58" rx="6" fill="#0f172a"/>
 <rect x="392" y="284" width="216" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="500.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenBao</text>
-<text x="500.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh root CA</text>
-<text x="500.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR #4</text>
-<rect x="548.8" y="274" width="51.2" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
-<text x="574.4" y="284.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">planned</text>
-</g>
+<text x="500.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh CA per group</text>
+<text x="500.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keys never exported</text>
+<rect x="554.7" y="274" width="45.3" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
+<text x="577.3" y="284.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">opt-in</text>
 <rect x="624" y="284" width="216" height="58" rx="6" fill="#0f172a"/>
 <rect x="624" y="284" width="216" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
 <text x="732.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-gateway</text>
@@ -137,7 +135,7 @@
 <rect x="1208" y="284" width="160" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
 <text x="1288.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ztunnel</text>
 <text x="1288.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SPIFFE mTLS</text>
-<text x="1288.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">istiod CA today</text>
+<text x="1288.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh: istio-csr</text>
 <rect x="36" y="436" width="220" height="44" rx="6" fill="#0f172a"/>
 <rect x="36" y="436" width="220" height="44" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
 <text x="146.0" y="452.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">kubernetes (mgmt ns)</text>
@@ -260,8 +258,8 @@
 <text x="936.0" y="247.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">cert + key (CRS)</text>
 <rect x="875.0" y="304.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
 <text x="936.0" y="317.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">wss + mTLS (out)</text>
-<rect x="860.7" y="342.5" width="150.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="355.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">mesh intermediate CA</text>
+<rect x="832.2" y="342.5" width="207.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
+<text x="936.0" y="355.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">CSR via istio-csr, JWT (out)</text>
 <text x="32.0" y="394.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">2 · secrets</text>
 <rect x="268.5" y="411.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
 <text x="326.0" y="424.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">reads flat keys</text>
