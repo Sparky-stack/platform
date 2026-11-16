@@ -70,3 +70,48 @@ spec:
   arguments:
     artifacts:
       - { name: x, http: { url: "https://example.com/x" } }
+---
+# 9. A parameter value read from elsewhere (valueFrom: ConfigMap, expression, supplied...) instead of a literal value:
+#    only `name` and `value` keys are allowed per parameter.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: param-value-from, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  arguments:
+    parameters:
+      - name: event
+        valueFrom: { configMapKeyRef: { name: kube-root-ca.crt, key: ca.crt } }
+---
+# 10. clusterScope spelled out, even as false: the reference must be exactly {name: falco-response}.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: cluster-scope-false, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response, clusterScope: false }
+---
+# 11. Another executor ServiceAccount (its token reaches the init/wait containers).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: other-executor, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  executor: { serviceAccountName: argo-events-sa }
+---
+# 12. Workflow metadata (labels/annotations on every pod).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: workflow-metadata, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  workflowMetadata: { labels: { sidecar.istio.io/inject: "false" } }
+---
+# 13. A non-string parameter name.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: param-name-int, namespace: argo-events }
+spec:
+  workflowTemplateRef: { name: falco-response }
+  arguments:
+    parameters:
+      - { name: 1, value: x }
