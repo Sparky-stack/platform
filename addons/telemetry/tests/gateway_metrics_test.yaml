@@ -1,0 +1,56 @@
+suite: telemetry - kgateway Envoy upstream response codes for the promotion gate (#104)
+templates:
+  - templates/gateway-podmonitor.yaml
+set:
+  cluster.name: dev1
+tests:
+  - it: scrapes kgateway Envoy proxy pods in openchoreo-data-plane on :9091/stats/prometheus
+    asserts:
+      - isKind:
+          of: PodMonitor
+      - equal:
+          path: metadata.name
+          value: kgateway-http
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+      - equal:
+          path: spec.namespaceSelector.matchNames
+          value: [openchoreo-data-plane]
+      - equal:
+          path: spec.selector.matchLabels
+          value: { gateway.networking.k8s.io/gateway-class-name: kgateway }
+      - equal:
+          path: spec.podTargetLabels
+          value: [openchoreo.dev/plane-id, gateway.networking.k8s.io/gateway-name]
+      - equal:
+          path: spec.podMetricsEndpoints[0].port
+          value: http-monitoring
+      - equal:
+          path: spec.podMetricsEndpoints[0].path
+          value: /stats/prometheus
+      - equal:
+          path: spec.podMetricsEndpoints[0].scheme
+          value: http
+
+  - it: keeps only envoy_cluster_upstream_rq so Envoy's other series do not bloat the agent
+    asserts:
+      - lengthEqual:
+          path: spec.podMetricsEndpoints[0].metricRelabelings
+          count: 1
+      - equal:
+          path: spec.podMetricsEndpoints[0].metricRelabelings[0].action
+          value: keep
+      - equal:
+          path: spec.podMetricsEndpoints[0].metricRelabelings[0].sourceLabels
+          value: [__name__]
+      - equal:
+          path: spec.podMetricsEndpoints[0].metricRelabelings[0].regex
+          value: envoy_cluster_upstream_rq
+
+  - it: renders nothing when disabled
+    set:
+      gatewayMetrics.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

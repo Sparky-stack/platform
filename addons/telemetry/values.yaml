@@ -331,11 +331,20 @@ observability-metrics-prometheus:
         requests: { cpu: 10m, memory: 32Mi }
         limits: { cpu: 100m, memory: 128Mi }
 
-# --- Hubble HTTP metrics -> remote write (OpenChoreo observer `metric: http`, promotion gate error rate; #104) ----------
+# --- kgateway Envoy HTTP metrics -> remote write (promotion gate 5xx error rate; #104) ----------------------------------
+# PodMonitor `kgateway-http` (templates/gateway-podmonitor.yaml) for the data-plane kgateway Envoy proxy pods in
+# `openchoreo-data-plane` (:9091/stats/prometheus, port `http-monitoring`). Terminates north-south HTTP on every data
+# plane, independent of the CNI and of Istio ambient mTLS. Only `envoy_cluster_upstream_rq` (one series per backend x
+# response code) is kept so Envoy's thousands of internal series do not cost agent memory.
+gatewayMetrics:
+  enabled: true
+  keep: envoy_cluster_upstream_rq
+
+# --- Hubble HTTP metrics -> remote write (OpenChoreo observer `metric: http`; #104) -------------------------------------
 # ServiceMonitor `hubble-http` (templates/hubble-servicemonitor.yaml) for Cilium's `kube-system/hubble-metrics` Service
-# (addon cilium; the Service does not exist on flannel clusters, so there it has no targets). Only the families the
-# observer's metrics adapter queries are kept: the other Hubble families are L3/L4 counters nobody reads and would
-# cost agent memory (see the kubelet note above).
+# (addon cilium; no targets on flannel clusters, and 0 series while cilium `l7Visibility.enabled` is false). Only the
+# families the observer's metrics adapter queries are kept: the other Hubble families are L3/L4 counters nobody reads
+# and would cost agent memory (see the kubelet note above).
 hubbleMetrics:
   enabled: true
   keep: hubble_http_(requests_total|request_duration_seconds_(bucket|sum|count))
