@@ -12,8 +12,8 @@ cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
   serviceregistry/kube/controller           the same + endpoints, MCS serviceimports, CRDs (delayed informers)
   PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY workloadentries (default on)
   remote mesh watcher (multicluster.go)     ConfigMap istio-system/istio only (trust domain), field selector by name
-  credentials controller                    Secrets (list/watch, cluster-wide, all types but helm releases and SA
-                                            tokens) - data only used for gateways served by a remote istiod
+  credentials controller                    Secrets (list/watch, cluster-wide; istiod's field selector skips helm
+                                            releases and SA tokens, RBAC cannot) - data only used for gateways served by a remote istiod
                                             (primary-remote), but istiod 1.32.0 WAITS for this informer before it
                                             serves the peer: forbidden -> the peer times out after
                                             PILOT_REMOTE_CLUSTER_TIMEOUT (30s) and is left out of the mesh.
@@ -67,10 +67,15 @@ subjects:
     kind: User
     name: {{ .Values.reader.user }}    # = charts/cluster templates/mesh-helpers.yaml "mesh.readerUser" (contract test)
 {{- if .Values.reader.remoteCredentialsSecrets }}
+{{- if ne .Values.cluster.provider "docker" }}
+{{- fail (printf "istio-eastwest (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}
+{{- end }}
 ---
-# OPT-IN (reader.remoteCredentialsSecrets, an installation decision): lets istiod 1.32.0's remote credentials informer
-# sync so the peer is served. list/watch only (an informer never GETs); still every Secret of this cluster to every
-# peer of the group. Separate objects so the grant is visible and removable on its own.
+# OPT-IN (reader.remoteCredentialsSecrets, an installation decision, docker/local only - the render fails elsewhere):
+# lets istiod 1.32.0's remote credentials informer sync so the peer is served. list/watch: LIST returns every Secret's
+# full .data, so this is read access to every Secret of this cluster (including ServiceAccount-token Secrets: the
+# informer's field selector that skips helm releases and SA tokens is istiod's own choice, not RBAC - a stolen reader
+# certificate can list them all). Separate objects so the grant is visible and removable on its own.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

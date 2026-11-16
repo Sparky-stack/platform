@@ -133,7 +133,7 @@ tests:
       - notMatchRegex: { path: metadata.name, pattern: secrets }
       - notContains: { path: rules, content: { apiGroups: [""], resources: [secrets], verbs: [list, watch] }, any: true }
 
-  - it: "opt-in reader.remoteCredentialsSecrets: a separate ClusterRole with list/watch on Secrets only (never get)"
+  - it: "opt-in reader.remoteCredentialsSecrets (docker): a separate ClusterRole with list/watch on Secrets only"
     template: templates/reader-rbac.yaml
     set:
       reader: { remoteCredentialsSecrets: true }
@@ -151,6 +151,22 @@ tests:
         documentIndex: 3
       - notContains: { path: 'rules[0].resources', content: secrets }
         documentIndex: 0
+
+  - it: "negative: reader.remoteCredentialsSecrets fails the render outside docker"
+    template: templates/reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+      cluster: { name: prod-euc1, provider: aws }
+    asserts:
+      - failedTemplate: { errorMessage: "istio-eastwest (prod-euc1, provider aws): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" }
+
+  - it: "negative: reader.remoteCredentialsSecrets fails the render on hetzner too"
+    template: templates/reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+      cluster: { name: dev-fsn1, provider: hetzner }
+    asserts:
+      - failedTemplate: {}
 
   - it: lets peers read only the istio MeshConfig ConfigMap (trust domain) in istio-system
     template: templates/reader-rbac.yaml

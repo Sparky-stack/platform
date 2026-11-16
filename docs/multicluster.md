@@ -316,7 +316,7 @@ every tenant Secret. So the reader is bound to the platform's own roles instead 
 | `serviceregistry/kube/controller` | the same + endpoints, MCS serviceimports, CRDs (delayed informers) | same |
 | `PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY` (default on) | networking.istio.io workloadentries | Istio config groups, read-only |
 | remote mesh watcher (`controller/multicluster.go`) | ConfigMap `istio-system/istio` (trust domain), by field selector | `Role platform-istio-reader`, `resourceNames: [istio]` |
-| remote credentials controller (`pilot/pkg/credentials/kube`) | Secrets list/watch, cluster-wide (field selector excludes only Helm releases and SA tokens). The data serves only gateways whose istiod is in another cluster (primary-remote), but the informer gates the peer's sync (below) | **none by default**; opt-in `reader.remoteCredentialsSecrets` (separate `ClusterRole platform-istio-reader-secrets`, list/watch) |
+| remote credentials controller (`pilot/pkg/credentials/kube`) | Secrets list/watch, cluster-wide (istiod's own field selector skips Helm releases and SA tokens; RBAC cannot express that, so a grant covers them too). The data serves only gateways whose istiod is in another cluster (primary-remote), but the informer gates the peer's sync (below) | **none by default**; opt-in `reader.remoteCredentialsSecrets` (separate `ClusterRole platform-istio-reader-secrets`, list/watch) |
 | leader election / namespace controller on remotes | only with `EXTERNAL_ISTIOD` | none |
 | `serviceexports` writes, tokenreviews, SARs | `ENABLE_MCS_AUTO_EXPORT` (off), primary-remote proxy auth | none |
 
@@ -348,11 +348,15 @@ below):
 So the choice is per installation (`installations/<inst>/addons/istio-eastwest/values.yaml`):
 - `reader.remoteCredentialsSecrets: false` (default, the B1 position): peers read no Secret; on istiod 1.32.0
   cross-cluster discovery does not work (`istioctl remote-clusters`: `timeout`).
-- `reader.remoteCredentialsSecrets: true`: `ClusterRole platform-istio-reader-secrets` (list/watch on Secrets, no get)
-  for the reader user; peers are served. Blast radius: a compromised peer istiod of the same group reads every Secret
-  of the member (OpenChoreo agent identity, istio-csr/istiod serving keys, tenant Secrets) - on top of what a group
-  peer can already do (mint any workload identity of the trust domain). Use only where all members of a group sit
-  at one trust level.
+- `reader.remoteCredentialsSecrets: true` (**local/docker only**: the render fails for any other `cluster.provider`):
+  `ClusterRole platform-istio-reader-secrets` (list/watch on Secrets) for the reader user; peers are served. "No get"
+  protects nothing: LIST returns every Secret's full `.data`, so this is read access to every Secret of the member,
+  including ServiceAccount-token Secrets (the field selector that skips them is istiod's, not RBAC's; a stolen reader
+  certificate can list them all). Blast radius: a compromised peer istiod of the same group, or anyone holding the
+  peer's `istio-remote-secret-<member>` or mgmt's `fleet/<member>-mesh-reader`, reads the member's API server key
+  (`kube-system/k3s-serving`), the OpenChoreo agent identity, istio-csr/istiod serving keys and tenant Secrets, for the
+  7-day certificate lifetime - on top of what a group peer can already do (mint any workload identity of the trust
+  domain). Acceptable only for `installations/local` (dev1 + prod1 deliberately share a group on one laptop).
 - Exit plan: get istio/istio#62295 into a release, either a 1.32 patch (an istio org member comments
   `/cherrypick release-1.32` on the PR) or 1.33 (branched from `master`, which already contains it). On that version
   set `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` in istio-ambient, remove `reader.remoteCredentialsSecrets` and
@@ -360,10 +364,11 @@ So the choice is per installation (`installations/<inst>/addons/istio-eastwest/v
   two nil checks (a forked control-plane image to sign and maintain).
 
 Unittests pin the rules and assert the negatives (default: no Secret rule; opt-in: list/watch only, separate
-objects; istio-ambient never sets the flag). **VERIFY** on the live run: no istiod restart/SIGSEGV; with the default,
-`istioctl remote-clusters` shows each peer `timeout` and istiod logs `failed to list *v1.Secret ... forbidden` (this
-analysis); with the opt-in, each peer `synced`, no `forbidden`, and `kubectl auth can-i --as platform:istio-reader get
-secrets -A` is still `no` (list/watch only). Re-check this section on every Istio upgrade.
+objects; the opt-in fails the render outside docker; istio-ambient never sets the flag). **VERIFY** on the live run: no
+istiod restart/SIGSEGV; with the default, `istioctl remote-clusters` shows each peer `timeout`, istiod logs `failed to
+list *v1.Secret ... forbidden` (this analysis) and `kubectl auth can-i --as platform:istio-reader list secrets -A` is
+`no`; with the opt-in, each peer `synced`, no `forbidden`, and that `can-i list secrets -A` is `yes` (that is the
+exposure). Re-check this section on every Istio upgrade.
 
 Peers can still read Pods, Services and Istio config of each other, so members of one group must sit at the same
 trust level (see "Trust").
