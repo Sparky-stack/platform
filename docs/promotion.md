@@ -15,7 +15,7 @@ Argo CD. Nothing runs `kubectl` against a cluster. App repo layout and the basic
 | Supply chain per environment | Kyverno on data planes | no | `addons/kyverno-policies/templates/image-verification.yaml` |
 | Freeze window | Argo CD sync window + gate check | no | `charts/tenant` (AppProject `syncWindows`) + gate workflow |
 
-## What OpenChoreo 1.3.3 offers (researched)
+## What OpenChoreo 1.3.3 offers
 
 - **DeploymentPipeline** has only `promotionPaths[].sourceEnvironmentRef` / `targetEnvironmentRefs[]`. The approval
   fields (`requiresApproval`, `isManualApprovalRequired`) were removed in v1.0 (CHANGELOG). The ReleaseBinding webhook
@@ -46,14 +46,15 @@ In the app repo, configure:
 - Branch protection / ruleset on `main`:
   - require a PR, one approval from code owners, dismiss stale approvals;
   - required status check `openchoreo/promotion-gate`. Pin it to the gate's GitHub App (store key
-    `promotion-gate-github`, docs/forking.md (c2)), so nobody else can set the status;
+    `promotion-gate-github`, [forking.md](forking.md#3-credentials) (c2); setup:
+    [#10](https://github.com/koorikla/platform/issues/10)), so nobody else can set the status;
   - no bypass for admins, except a documented break-glass role.
 
 Argo CD then syncs the merged binding: `charts/tenant` gives every gated environment its own Application
 `<project>-<app>-production`. That Application includes only `release-bindings/production.yaml`, and the app's main
 Application excludes that file.
 
-### 2. Who may write gated bindings (native)
+### 2. Git is the only path to gated bindings (native)
 
 - **OpenChoreo ABAC** (`promotion.restrictedGroups`, default `developers`): a `deny` ClusterAuthzRoleBinding with the
   condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`.
@@ -68,12 +69,13 @@ Application excludes that file.
     any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs through the main Application
     `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on `production.yaml` cannot be
     skipped. `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
-    projects named `<other project>-…` (their gated Applications would look like the other project's).
+    projects named `<other project>-…` (their gated Applications would look like the other project's). Matching the
+    component too: [#14](https://github.com/koorikla/platform/issues/14).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
   - The garbage collector may delete. Consequence: deleting the Component (console / openchoreo-api, which
     developers may do for their components) cascades to its production binding. Deleting a production component is
-    an offboarding decision; restrict `component:delete` for gated projects in Thunder roles if that must be
-    reviewed too (not done here).
+    an offboarding decision; restricting `component:delete` for gated projects:
+    [#55](https://github.com/koorikla/platform/issues/55).
   - Everyone else is denied: openchoreo-api acting for any user, kubectl, scripts.
   - Break glass: `promotion.gitOnly.breakGlassGroups` (empty by default).
 
@@ -84,7 +86,7 @@ pinned by digest, read-only root, non-root). It runs in the workflow plane, name
 ServiceAccount `workflow-sa`, on `ClusterWorkflowPlane default` (`promotionGate.workflowPlane`). Parameters
 (`project`, `component`, environments, `release`) are DNS-1123 constrained; there is no repository parameter.
 
-**Same run conventions as the builds** (docs/build-plane.md "Isolation"): the gate step gets no ServiceAccount token
+**Same run conventions as the builds** ([build-plane.md](build-plane.md#security-posture-of-build-pods)): the gate step gets no ServiceAccount token
 (`automountServiceAccountToken: false`, only Argo's executor uses `workflow-sa`; the gate talks to the OpenChoreo API
 with its Thunder token, never to the Kubernetes API). The run namespace is default-deny (NetworkPolicy
 `build-runs-default-deny` of addon openchoreo-workflow-plane: DNS, API server for the executor, public 80/443, which
@@ -108,7 +110,9 @@ pod is deleted when the step completes (`podGC: OnPodCompletion`), and the Secre
 
 Residual: the workflow namespace is shared with tenant build runs (OpenChoreo renders every run into
 `workflows-<org namespace>`), so for the run's lifetime the App key sits in a Secret there; build run containers carry
-no ServiceAccount token, so tenant code would need a credential with Secret read RBAC in that namespace to see it. The App's blast radius is the app repos it is installed on.
+no ServiceAccount token, so tenant code would need a credential with Secret read RBAC in that namespace to see it. The
+App's blast radius is the app repos it is installed on. A dedicated store for run namespaces:
+[#29](https://github.com/koorikla/platform/issues/29).
 For one component and one edge (default staging → next environment) the gate checks, in order:
 
 1. **pipeline**: the edge exists in the project's DeploymentPipeline (closes #4884 for the automated path).
@@ -143,26 +147,12 @@ with people and git stays the record. Rollback is reverting the PR.
 
 ### 4. Policy gate per environment (Kyverno)
 
-On every data plane, `addons/kyverno-policies` renders one policy set per action:
-- `Audit` for the development and staging cell namespaces;
-- `Deny` for production cell namespaces (namespace label `openchoreo.dev/environment`, set by OpenChoreo's
-  renderedrelease controller).
-
-Each set has two policies:
-- **ImageValidatingPolicy** `openchoreo-verify-images-<audit|enforce>`:
-  - `ghcr.io/koorikla/*` must carry a Sigstore keyless signature (cosign v3 bundle) whose certificate subject is the
-    reusable workflow `https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/tags/v1`. koorikla/ci is
-    public and anyone can call it, so the extensions `githubWorkflowRepository` (an allowed app repo) and
-    `githubWorkflowRef` (`refs/heads/main`) are pinned too: one attestor per (repo, ref).
-  - The image must also carry signed **SPDX SBOM, SLSA provenance and vulnerability-scan** attestations from the same
-    identity.
-  - Production also requires a digest in the image reference (`verifyDigest`).
-  - Workflow-plane images under `registry…/apps/*` need the platform cosign key once its public key is configured.
-- **ValidatingPolicy** `openchoreo-trusted-registries-<audit|enforce>`: every container image (init and ephemeral
-  included) matches a trusted source prefix, so an unsigned image cannot bypass the image policy by not matching it.
-
-Enforcement runs at admission, `failurePolicy: Fail` in production. The OpenChoreo agent's Deployment apply is
-rejected and the RenderedRelease shows the reason. Details and test evidence: [supply-chain.md](supply-chain.md).
+On every data plane `addons/kyverno-policies` renders, per action, an `ImageValidatingPolicy`
+`openchoreo-verify-images-<audit|enforce>` (Sigstore signature + SBOM, SLSA provenance and vulnerability attestations;
+digest required in production) and a `ValidatingPolicy` `openchoreo-trusted-registries-<audit|enforce>` (every image
+from a trusted prefix). `Audit` applies to development and staging cell namespaces, `Deny` with `failurePolicy: Fail`
+to production (namespace label `openchoreo.dev/environment`). A denied apply shows on the RenderedRelease. Identities,
+scope and test evidence: [supply-chain.md](supply-chain.md#image-signatures-and-attestations-at-admission).
 
 ### 5. Freeze window (optional)
 
@@ -187,7 +177,7 @@ App repo changes (koorikla/hello-world, outside this repo):
 
 - `CODEOWNERS` + branch ruleset as in gate 1.
 - CI: write the image **by digest** into `workload.yaml`. koorikla/ci outputs `image_digest_ref`; production denies
-  tag-only references. Commit through the GitHub API (signed) rather than `git push` if `sourceIntegrity` is enabled
+  tag-only references ([#16](https://github.com/koorikla/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push` if `sourceIntegrity` is enabled
   ([supply-chain.md](supply-chain.md#git-commit-signatures)).
 - Optional `/` health endpoint for the smoke test (`promotionGate.smoke.path`).
 
@@ -211,7 +201,7 @@ release manager (CODEOWNERS) approves ─► merge ─► Argo CD syncs demo-hel
 |---|---|---|---|
 | See what runs where | `occ releasebinding list --namespace default --project demo --component hello-world` | `GET /api/v1/namespaces/default/releasebindings?component=hello-world`, MCP `list_release_bindings` | Component → Deploy tab |
 | Promote dev → staging | PR in the app repo (or `occ component deploy hello-world --to staging` for a non-gated, non-git environment) | MCP `update_release_binding` (staging only) | Promote button (staging only) |
-| Run the gate by hand | `occ workflowrun create` / `kubectl create -f` the manifest below. VERIFY the exact occ verb | `POST /api/v1/namespaces/default/workflowruns`, MCP workflow tools | Workflows → promotion-gate → Run |
+| Run the gate by hand | `kubectl create -f` the manifest below (or the `occ` equivalent, [#54](https://github.com/koorikla/platform/issues/54)) | `POST /api/v1/namespaces/default/workflowruns`, MCP workflow tools | Workflows → promotion-gate → Run |
 | Production | merge the gate's PR | denied (ABAC + VAP) | denied |
 | Roll back production | revert the PR | – | – |
 
@@ -252,26 +242,21 @@ Secrets (store `platform`, seeded locally by `make secrets`):
 | `promotion-gate` | `client-secret` | gate workflow → Thunder client `openchoreo-promotion-gate` (client_credentials) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | gate workflow: its own GitHub App; per-run token for the component's repo only (branch, PR, commit status). Seeded from `GITHUB_GATE_APP_*` (docs/forking.md) |
 
-## Limits and VERIFY
+## Limits
 
-- The Thunder application `openchoreo-promotion-gate` (client credentials, secret from `promotion-gate`) must be added
-  to addon `thunder`. Until then the gate fails at the token step (fail closed). VERIFY.
-- ABAC deny semantics with conditions (deny applies when the condition is true) and the `default/production`
-  identifier format: from the upstream docs, not yet exercised live. VERIFY.
-- Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the HTTP probe is off
-  in `installations/local/addons/openchoreo-platform/values.yaml`. In clouds it is on. VERIFY.
-- Observer `searchScope.environment` takes the environment name (not UID). VERIFY.
-- Argo Events: one source type per EventSource (verified live: a webhook + resource spec is rejected), so the Falco
-  webhook is EventSource `platform` and the ReleaseBinding watch is EventSource `releasebindings`. `sha256sum` in
-  Sensor `dataTemplate` and the resource event `body` shape: VERIFY.
-- Workflow plane (addon `openchoreo-workflow-plane`, on main): `ClusterWorkflowPlane default` on mgmt, namespace
-  `workflows-default` (OpenChoreo creates `workflow-sa` and its `workflowtaskresults` Role per run namespace), the Argo
-  controller watching all namespaces (`workflowNamespaces: []`; falco-response runs in `argo-events` with its own
-  ServiceAccount, outside the build NetworkPolicy). First live gate run: VERIFY.
+- The gate fails closed until its Thunder client exists ([#11](https://github.com/koorikla/platform/issues/11)) and its
+  GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
+- Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the smoke probe is
+  off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on.
+- Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
+  ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
   no-op when production already runs the release, otherwise it updates the same PR.
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
   over the control-plane Gateway; locally these are plain HTTP on the docker network. Every other installation must
   set `promotionGate.tokenURL` / `apiURL` / `observerURL` to `https://` endpoints (HTTPS listener on the Gateway).
 - argo-events renders the promotion-gate Sensor only once the Argo Workflows CRDs exist (`workflowPlane: auto`,
-  addon openchoreo-workflow-plane).
+  addon openchoreo-workflow-plane). The Argo Workflows controller watches all namespaces (`workflowNamespaces: []`);
+  falco-response runs in `argo-events` with its own ServiceAccount, outside the build NetworkPolicy.
+- Values not yet confirmed live (ABAC deny semantics, observer environment scope, Argo Events event shapes, first gate
+  run): [#54](https://github.com/koorikla/platform/issues/54).

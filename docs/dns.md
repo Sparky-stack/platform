@@ -158,7 +158,5 @@ overlay; no cluster is opted in.
   `hetzner-example` with the toggle forced on, plus the failure cases (no provider, provider switch, zone override).
 - `charts/platform/tests/`: `installationValueFiles` order and the path guard.
 
-## VERIFY
-
-- Live reconciliation against real Route 53 / Cloudflare zones (no installation has run it yet).
-- IRSA on CAPA k3s (self-hosted issuer + pod identity webhook) is not wired by this repo yet.
+## Open items
+Live Route 53 (IRSA on CAPA k3s) and Cloudflare runs: [#21](https://github.com/koorikla/platform/issues/21).

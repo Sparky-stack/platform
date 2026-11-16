@@ -65,7 +65,7 @@ Namespaces `openchoreo-observability-plane`, `thunder` and `agentgateway-system`
   able to read any Secret on mgmt: it is upstream-maintained, digest-pinned, and only runs while the addon is opted in.
 - **Agent URLs over HTTP.** `rcaAgentURL` / `finOpsAgentURL` are `http://` on the plane Gateway's HTTP listener. Fine
   for local (`*.openchoreo.localhost`); on a cloud installation the portal-to-agent hop carries user tokens, so serve
-  them over the TLS listener (`https://`) before switching an agent on there. VERIFY with the first cloud boot.
+  them over the TLS listener (`https://`) before switching an agent on there.
 
 ## Turning them on
 
@@ -111,13 +111,6 @@ outside the installation's control-plane host.
 - helm-unittest: `addons/agentgateway`, `addons/openchoreo-observability-plane` (agent Secrets, plane URLs, guards),
   `addons/thunder` (agent client secrets).
 
-## VERIFY
-
-- Live RCA / FinOps runs against OpenChoreo 1.3.3 (no LLM key has been used yet).
-- agentgateway controller accepting `tag@digest` for the proxy image (`AGW_PROXY_IMAGE_TAG`).
-- OpenCost attribution of remote-written workload metrics on mgmt (`defaultClusterId: mgmt`).
-- Agent SQLite PVCs under Argo CD health (Pending until first consumer on local-path).
-- Thunder bootstrap skipping the comment-only script of an unlisted agent (importer parser drops documents without
-  content; not yet seen live).
-- agentgateway honouring `AgentgatewayParameters` `spec.service` / `spec.deployment` overlays (ClusterIP, seccomp) and
-  the proxy NetworkPolicy under k3s' network policy controller (kubelet probes from the node).
+## Open items
+First live run of the agents, agentgateway overlays and NetworkPolicy, OpenCost attribution, Thunder's handling of
+unlisted agents, then dropping agentgateway-system's Kyverno exemption: [#22](https://github.com/koorikla/platform/issues/22).
