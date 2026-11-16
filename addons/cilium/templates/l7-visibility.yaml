@@ -1,0 +1,37 @@
+{{- /* L7 HTTP visibility for OpenChoreo component pods: values.yaml `l7Visibility` (#104). */ -}}
+{{- with .Values.l7Visibility }}
+{{- if .enabled }}
+{{- if not .httpPorts }}
+{{- fail "l7Visibility.httpPorts is empty: Cilium L7 rules need explicit ports" }}
+{{- end }}
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: openchoreo-http-visibility
+  annotations:
+    # The CRD is registered by the cilium-operator at runtime, not by this chart: skip the dry run on a fresh cluster
+    # and apply after the agent/operator (later wave; the Application retries until the CRD exists).
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  description: "L7 HTTP visibility (hubble_http_* metrics) for OpenChoreo component pods; allows everything, denies nothing"
+  endpointSelector:
+    matchExpressions:
+      - key: openchoreo.dev/component
+        operator: Exists
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingress:
+    - fromEntities: [all]
+      toPorts:
+        - ports:
+            {{- range .httpPorts }}
+            - port: {{ . | toString | quote }}
+              protocol: TCP
+            {{- end }}
+          rules:
+            http:
+              - {}
+{{- end }}
+{{- end }}

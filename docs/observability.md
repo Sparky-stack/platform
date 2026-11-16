@@ -88,6 +88,7 @@ The literals in the addon values are checked against `openchoreo.controlPlane.ho
 | Pod CPU/memory | Prometheus agent: kubelet/cAdvisor + kube-state-metrics with `openchoreo.dev/*` pod labels | remote write -> Prometheus | Metrics, RuntimeHealthCard |
 | Traces | apps (OTLP SDK) / OBI -> OTel Collector (k8s_attributes: all pod labels, cluster name) | OTLP/HTTP -> receiver -> OpenSearch `otel-traces-*` | Traces |
 | OTLP metrics | apps / OBI / falcosidekick -> OTel Collector | remote write -> Prometheus | (PromQL) |
+| HTTP request metrics | Cilium Hubble L7 (`hubble_http_*`, Cilium data planes only) -> Prometheus agent (ServiceMonitor `hubble-http`) | remote write -> Prometheus | Metrics (HTTP), promotion gate error rate |
 | Falco alerts | Falco JSON on stdout -> Fluent Bit; falcosidekick -> collector (CloudEvents) | OpenSearch `container-logs-*` (ns falco); Datadog overlay | logs |
 
 Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://telemetry-collector.telemetry.svc.cluster.local:4318`
@@ -158,6 +159,25 @@ OpenChoreo pod labels so spans show up in Backstage's Traces tab.
 Overlap policy: when OBI is enabled it is the **single L7 RED source** — keep Cilium Hubble L7 metrics (`hubble.metrics`
 http/dns/kafka with L7 visibility) off and use Istio for mTLS, authorization and traffic management, not telemetry
 (no Istio telemetry/Prometheus merging needed). Hubble flow logs (L3/L4, Backstage "wirelogs") stay useful.
+
+## HTTP metrics
+
+The observer's `metric: http` (Backstage HTTP charts, the promotion gate's error-rate check) is served by the
+observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble series:
+`hubble_http_requests_total{reporter="server"}` (`status` 1xx-3xx ok, 4xx/5xx unsuccessful) and
+`hubble_http_request_duration_seconds`, joined to kube-state-metrics' `kube_pod_labels` on
+`(destination_namespace, destination_pod)`. Three pieces make them exist ([#104](https://github.com/koorikla/platform/issues/104)):
+
+1. addon cilium: L7 visibility policy on the component pods' HTTP port (docs/networking.md), and `httpV2`
+   `labelsContext` with `source_pod`/`destination_pod` (without them the join matches nothing).
+2. addon telemetry: ServiceMonitor `hubble-http` on `kube-system/hubble-metrics`, keeping only `hubble_http_*`.
+3. The agent's remote write to the observability plane, as for every other metric.
+
+Limits: data planes on flannel (local prod1) have no Hubble, so no HTTP metrics there. Only plaintext traffic is
+parsed, today the gateway's traffic into app pods (Istio `PERMISSIVE`); with STRICT mTLS for the gateway
+([#53](https://github.com/koorikla/platform/issues/53)) the source has to move to a waypoint or OBI, and the adapter
+reads neither. Enabling OBI with its overlap policy above (Hubble L7 off: cilium `l7Visibility.enabled: false`) empties
+the observer's HTTP metrics for the same reason.
 
 ## Falco
 
