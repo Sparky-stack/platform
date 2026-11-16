@@ -11,6 +11,8 @@ These policies admit exactly what charts/cluster renders and nothing else:
                                        same isCA/usages/duration limits
   platform-mesh-issuers                a <name>-cca Secret may back only Issuer fleet/<name>-client-ca (else a
                                        self-made issuer would bypass the checks above)
+  platform-openbao-fleet-reads         in this namespace, store mgmt-fleet may only be used to find the members' public
+                                       OpenBao inputs by label (fleet also holds kubeconfigs and k3s client CA keys)
 The mesh CA itself is not a cert-manager issuer on mgmt: it lives in OpenBao (keys never exported) and is reachable
 only through per-member JWT auth and per-member policies (files/mesh-reconcile.sh).
 */ -}}
@@ -101,7 +103,30 @@ spec:
   validations:
     - expression: {{ printf "request.kind.kind == 'Issuer' && object.metadata.namespace == '%s' && object.metadata.name == object.spec.ca.secretName.substring(0, size(object.spec.ca.secretName) - 4) + '-client-ca'" $a.readerNamespace | quote }}
       message: {{ printf "a CAPI client CA Secret <x>-cca may only back Issuer %s/<x>-client-ca" $a.readerNamespace | quote }}
-{{- range $p := list "platform-mesh-reader-certificates" "platform-mesh-certificaterequests" "platform-mesh-issuers" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-openbao-fleet-reads
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [external-secrets.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [externalsecrets]
+  matchConditions:
+    - name: this-namespace
+      expression: {{ printf "object.metadata.namespace == '%s'" $.Release.Namespace | quote }}
+    - name: uses-fleet-store
+      expression: {{ printf "(has(object.spec.secretStoreRef) && object.spec.secretStoreRef.name == '%s') || (has(object.spec.data) && object.spec.data.exists(d, has(d.sourceRef) && has(d.sourceRef.storeRef) && d.sourceRef.storeRef.name == '%s')) || (has(object.spec.dataFrom) && object.spec.dataFrom.exists(d, has(d.sourceRef) && has(d.sourceRef.storeRef) && d.sourceRef.storeRef.name == '%s'))" $.Values.meshClients.store $.Values.meshClients.store $.Values.meshClients.store | quote }}
+  validations:
+    - expression: {{ printf "object.metadata.name == '%s' && (!has(object.spec.data) || size(object.spec.data) == 0) && has(object.spec.dataFrom) && size(object.spec.dataFrom) == 1 && has(object.spec.dataFrom[0].find) && !has(object.spec.dataFrom[0].find.name) && !has(object.spec.dataFrom[0].find.path) && has(object.spec.dataFrom[0].find.tags) && object.spec.dataFrom[0].find.tags == {'%s': 'true'} && !has(object.spec.dataFrom[0].sourceRef)" $.Values.meshClients.secretName $.Values.meshClients.label | quote }}
+      message: {{ printf "store %s may only feed ExternalSecret %s with dataFrom.find.tags {%s: \"true\"} (members' public OpenBao inputs)" $.Values.meshClients.store $.Values.meshClients.secretName $.Values.meshClients.label | quote }}
+{{- range $p := list "platform-mesh-reader-certificates" "platform-mesh-certificaterequests" "platform-mesh-issuers" "platform-openbao-fleet-reads" }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

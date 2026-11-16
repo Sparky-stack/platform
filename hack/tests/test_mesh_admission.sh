@@ -25,13 +25,15 @@ CM=system:serviceaccount:cert-manager:cert-manager
 } > "$TMP/mrc.yaml"
 helm template cert-manager addons/cert-manager --namespace cert-manager \
   | yq 'select(.kind == "CustomResourceDefinition" and .spec.group == "cert-manager.io")' > "$TMP/crds.yaml"
+{ echo '---'; helm template external-secrets addons/external-secrets --namespace external-secrets \
+  | yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "externalsecrets.external-secrets.io")'; } >> "$TMP/crds.yaml"
 for p in $(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml"); do
   yq "select(.metadata.name == \"$p\" and .kind == \"ValidatingAdmissionPolicy\")" "$TMP/mrc.yaml" > "$TMP/policy-$p.yaml"
   b=$(yq -N "select(.kind == \"ValidatingAdmissionPolicyBinding\" and .spec.policyName == \"$p\") | .spec.validationActions[]" "$TMP/mrc.yaml")
   assert_eq "$b" "Deny" "binding for $p denies"
 done
 assert_eq "$(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml" | sort | tr '\n' ' ')" \
-  "platform-mesh-ca-certificates platform-mesh-ca-requests platform-mesh-certificaterequests platform-mesh-issuers platform-mesh-reader-certificates " \
+  "platform-mesh-ca-certificates platform-mesh-ca-requests platform-mesh-certificaterequests platform-mesh-issuers platform-mesh-reader-certificates platform-openbao-fleet-reads " \
   "exactly the reader-cert guards (mgmt) and the mesh-CA guards (members)"
 
 user_file() {   # user_file <username> -> path of a kyverno CLI UserInfo file
@@ -125,6 +127,20 @@ printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: d
   | check $P alice fail "negative: ClusterIssuer over a CAPI client CA"
 printf 'apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata: { name: selfsigned }\nspec:\n  selfSigned: {}\n' \
   | check $P alice skip "unrelated issuers are not affected"
+
+# --- mgmt: what the openbao namespace may read through store mgmt-fleet (fleet also holds kubeconfigs, client CA keys)
+P=platform-openbao-fleet-reads
+helm template openbao addons/openbao --namespace openbao --set 'mesh.groups={local}' -s templates/mesh-clients.yaml \
+  | check $P "$ARGO" pass "the chart's mesh-clients (find by label)"
+es() {   # es <name> <spec-body> [namespace]
+  printf 'apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata: { name: %s, namespace: %s }\nspec:\n  secretStoreRef: { kind: ClusterSecretStore, name: mgmt-fleet }\n  target: { name: x }\n%s\n' "$1" "${3:-openbao}" "$2"
+}
+es mesh-clients '  data: [{ secretKey: k, remoteRef: { key: dev1-kubeconfig, property: value } }]' | check $P "$ARGO" fail "negative: reads a kubeconfig by key"
+es mesh-clients '  dataFrom: [{ extract: { key: dev1-cca } }]' | check $P "$ARGO" fail "negative: extracts the k3s client CA"
+es mesh-clients '  dataFrom: [{ find: { name: { regexp: ".*" } } }]' | check $P "$ARGO" fail "negative: finds every Secret by name"
+es mesh-clients '  dataFrom: [{ find: { tags: { cluster.x-k8s.io/cluster-name: dev1 } } }]' | check $P "$ARGO" fail "negative: finds by another label"
+es loot '  dataFrom: [{ find: { tags: { mesh.platform.koorikla.io/openbao-client: "true" } } }]' | check $P "$ARGO" fail "negative: another ExternalSecret name"
+es x '  data: [{ secretKey: k, remoteRef: { key: dev1-kubeconfig, property: value } }]' fleet | check $P "$ARGO" skip "other namespaces are not affected"
 
 # --- members: who may use the mesh CA (Vault Issuer istio-system/openbao-mesh) ---------------------------------------
 CSR=system:serviceaccount:istio-system:cert-manager-istio-csr
