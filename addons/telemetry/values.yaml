@@ -331,6 +331,15 @@ observability-metrics-prometheus:
         requests: { cpu: 10m, memory: 32Mi }
         limits: { cpu: 100m, memory: 128Mi }
 
+# --- Hubble HTTP metrics -> remote write (OpenChoreo observer `metric: http`, promotion gate error rate; #104) ----------
+# ServiceMonitor `hubble-http` (templates/hubble-servicemonitor.yaml) for Cilium's `kube-system/hubble-metrics` Service
+# (addon cilium; the Service does not exist on flannel clusters, so there it has no targets). Only the families the
+# observer's metrics adapter queries are kept: the other Hubble families are L3/L4 counters nobody reads and would
+# cost agent memory (see the kubelet note above).
+hubbleMetrics:
+  enabled: true
+  keep: hubble_http_(requests_total|request_duration_seconds_(bucket|sum|count))
+
 # --- k8s events -> OpenSearch k8s-events-* (Backstage events) ---------------------------------------------------------
 observability-events-otel-collector:
   enabled: true
