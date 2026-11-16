@@ -69,6 +69,17 @@
       ],
       "datasourceTemplate": "github-tags",
       "depNameTemplate": "koorikla/ci"
+    },
+    {
+      "customType": "regex",
+      "description": "Crossplane packages (Functions, upjet family providers) pinned as xpkg.crossplane.io/<org>/<pkg>:<tag>@<digest> in addon crossplane; bump a provider family together (same tag for every member)",
+      "managerFilePatterns": [
+        "/^addons/crossplane/values\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>xpkg\\.crossplane\\.io/[a-z0-9-]+/[a-z0-9-]+):(?<currentValue>v[0-9][^@\\s]*)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker"
     }
   ]
 }

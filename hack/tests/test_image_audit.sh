@@ -128,4 +128,28 @@ got=$(extract_images < "$TMP/render.yaml" | sort | tr '\n' ' ')
 assert_eq "$got" "ghcr.io/example/postgresql:18.6@sha256:1111111111111111111111111111111111111111111111111111111111111111 quay.io/example/kafka:1.0-kafka-4.2.0 quay.io/example/kafka:1.0-kafka-4.3.2 quay.io/example/operator:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000 " \
   "extract_images: image fields, operator image env (version=image lines) and ConfigMap keys; no prefixes, no non-IMAGE env"
 
+# extract_images: Crossplane packages (Functions, Providers) are images too; other kinds' spec.package are not
+cat > "$TMP/render.yaml" <<'EOF'
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata: { name: fn }
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:2222222222222222222222222222222222222222222222222222222222222222
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata: { name: p }
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-rds:v2.9.0
+---
+apiVersion: example.org/v1
+kind: Thing
+metadata: { name: t }
+spec:
+  package: not-an-image
+EOF
+got=$(extract_images < "$TMP/render.yaml" | sort | tr '\n' ' ')
+assert_eq "$got" "xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:2222222222222222222222222222222222222222222222222222222222222222 xpkg.crossplane.io/crossplane-contrib/provider-aws-rds:v2.9.0 " \
+  "extract_images: Crossplane Function / Provider packages; spec.package of other kinds ignored"
+
 finish

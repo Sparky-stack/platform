@@ -51,7 +51,9 @@ arch_exception() {
 #     each embedded document parsed on its own (a script that merely contains "image:" cannot abort the extraction);
 #   - images operators receive by name through env vars and ConfigMap keys containing IMAGE (e.g. ARGO_EVENTS_IMAGE,
 #     Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG POSTGRES_IMAGE_NAME, the Barman Cloud plugin's
-#     SIDECAR_IMAGE): those pods are created by the operator, not rendered.
+#     SIDECAR_IMAGE): those pods are created by the operator, not rendered;
+#   - Crossplane package references (spec.package of Function / Provider / Configuration): OCI images Crossplane pulls
+#     and runs as pods.
 extract_images() {
   local f b keys='.. | select(tag == "!!map") | to_entries[] | select((.key | tag) == "!!str")
     | select(.key | test("(?i)image$")) | .value | select(tag == "!!str")'
@@ -68,6 +70,8 @@ extract_images() {
       | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
     (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' "$f" 2>/dev/null \
     | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
+  yq -N 'select(.apiVersion == "pkg.crossplane.io/*" and (.kind == "Function" or .kind == "Provider" or .kind == "Configuration"))
+      | .spec.package | select(tag == "!!str")' "$f" 2>/dev/null | tr -d '\r' | grep -E '^[a-z0-9]' || true
   rm -f "$f"
 }
 
