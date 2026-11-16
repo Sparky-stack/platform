@@ -169,7 +169,7 @@ tests:
 
   - it: the response identity only reads OpenChoreo objects and writes Events in the org namespace
     template: templates/falco-response.yaml
-    documentIndex: 4
+    documentSelector: { path: "rules[0].resources[0]", value: renderedreleases }
     asserts:
       - equal: { path: metadata.name, value: argo-events-falco-response }
       - equal:
@@ -177,6 +177,41 @@ tests:
           value:
             - { apiGroups: [openchoreo.dev], resources: [renderedreleases, environments], verbs: [get, list] }
             - { apiGroups: [events.k8s.io], resources: [events], verbs: [create] }
+
+  - it: no step container gets a ServiceAccount token unless it talks to the Kubernetes API (executor-only pattern)
+    template: templates/falco-response.yaml
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    set:
+      falco.response.rca.enabled: true
+      falco.response.notify.enabled: true
+      falco.response.notify.secret: { store: platform, key: falco-notify }
+    asserts:
+      - equal: { path: spec.automountServiceAccountToken, value: false }
+      - equal: { path: spec.executor.serviceAccountName, value: falco-response-executor }
+      # rca and notify call endpoints outside the cluster: template `call`, which must not opt back in
+      - equal: { path: "spec.templates[0].steps[1][1]", value: { name: rca, template: call, arguments: { parameters: [{ name: step, value: rca }, { name: context, value: "{{steps.enrich.outputs.result}}" }] } } }
+      - equal: { path: "spec.templates[0].steps[1][2].template", value: call }
+      - notExists: { path: "spec.templates[?(@.name == 'call')].automountServiceAccountToken" }
+      - notExists: { path: "spec.templates[?(@.name == 'call')].serviceAccountName" }
+      - notExists: { path: "spec.templates[?(@.name == 'call')].executor" }
+      # only the Kubernetes API steps opt in, and they get no external endpoint or notify credential
+      - equal: { path: "spec.templates[?(@.name == 'enrich')].automountServiceAccountToken", value: true }
+      - equal: { path: "spec.templates[?(@.name == 'record')].automountServiceAccountToken", value: true }
+      - notContains: { path: "spec.templates[?(@.name == 'record')].script.env", content: { name: RCA_URL, value: "http://sre-agent.openchoreo-observability-plane.svc.cluster.local:8080/api/v1alpha1/rca-agent/analyze" } }
+      - notContains: { path: "spec.templates[?(@.name == 'record')].script.env", content: { name: NOTIFY_URL, valueFrom: { secretKeyRef: { name: falco-notify, key: url } } } }
+      - lengthEqual: { path: spec.templates, count: 4 }
+
+  - it: the executor identity only reports step outputs (its token is mounted into Argo's init/wait containers only)
+    template: templates/falco-response.yaml
+    asserts:
+      - equal: { path: "rules", value: [{ apiGroups: [argoproj.io], resources: [workflowtaskresults], verbs: [create, patch] }] }
+        documentSelector: { path: "rules[0].resources[0]", value: workflowtaskresults }
+      - equal: { path: "roleRef.name", value: falco-response-executor }
+        documentSelector: { path: "subjects[0].name", value: falco-response-executor }
+      - equal: { path: type, value: kubernetes.io/service-account-token }
+        documentSelector: { path: metadata.name, value: falco-response-executor.service-account-token }
+      - equal: { path: "metadata.annotations[\"kubernetes.io/service-account.name\"]", value: falco-response-executor }
+        documentSelector: { path: metadata.name, value: falco-response-executor.service-account-token }
 
   - it: one event source type per EventSource (webhook in platform, resource watch in releasebindings)
     template: templates/eventsource.yaml

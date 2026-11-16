@@ -1,7 +1,11 @@
 {{- /*
 WorkflowTemplate falco-response (docs/observability.md "Falco response"), run by the OpenChoreo workflow plane's Argo
-Workflows controller on mgmt. files/falco_response.py (ConfigMap) does the work; the ServiceAccount can only read
-OpenChoreo RenderedReleases/Environments and write Events in the org namespace (no data-plane access).
+Workflows controller on mgmt. files/falco_response.py (ConfigMap) does the work.
+ServiceAccount tokens, the promotion gate's executor-only pattern: no step container gets one by default
+(automountServiceAccountToken: false); Argo's executor (init/wait containers) uses falco-response-executor, which may
+only report step outputs. Only the two steps that talk to the Kubernetes API opt in (enrich, record: ServiceAccount
+falco-response, read OpenChoreo RenderedReleases/Environments and write Events in the org namespace, no data-plane
+access). The steps that call endpoints outside the cluster API (rca, notify: template `call`) run without a token.
 */ -}}
 {{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
 {{- $r := .Values.falco.response }}
@@ -18,7 +22,25 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: falco-response
+  name: falco-response                        # pod identity; the WorkflowTemplate disables its token except for enrich/record
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: falco-response-executor
+automountServiceAccountToken: false
+secrets:
+  - name: falco-response-executor.service-account-token
+---
+{{- /* Argo mounts the executor's token from this Secret into the init/wait containers only (Argo Workflows
+TokenNameForServiceAccount: <sa>.service-account-token); the main container never sees it. */}}
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: falco-response-executor.service-account-token
+  annotations:
+    kubernetes.io/service-account.name: falco-response-executor
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -39,7 +61,7 @@ roleRef:
   name: falco-response-executor
 subjects:
   - kind: ServiceAccount
-    name: falco-response
+    name: falco-response-executor
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -95,6 +117,9 @@ metadata:
 spec:
   entrypoint: respond
   serviceAccountName: falco-response
+  automountServiceAccountToken: false         # default for every step; enrich/record opt in below
+  executor:
+    serviceAccountName: falco-response-executor
   activeDeadlineSeconds: 300
   ttlStrategy:
     secondsAfterCompletion: {{ $r.ttlSecondsAfterFinished }}
@@ -117,14 +142,13 @@ spec:
         - - name: enrich
             template: enrich
         - - name: record
-            template: act
+            template: record
             arguments:
               parameters:
-                - { name: step, value: record }
                 - { name: context, value: {{ `"{{steps.enrich.outputs.result}}"` }} }
           {{- if $r.rca.enabled }}
           - name: rca
-            template: act
+            template: call
             arguments:
               parameters:
                 - { name: step, value: rca }
@@ -132,13 +156,14 @@ spec:
           {{- end }}
           {{- if $r.notify.enabled }}
           - name: notify
-            template: act
+            template: call
             arguments:
               parameters:
                 - { name: step, value: notify }
                 - { name: context, value: {{ `"{{steps.enrich.outputs.result}}"` }} }
           {{- end }}
-    - name: enrich
+    - name: enrich                            # Kubernetes API (read): ServiceAccount falco-response
+      automountServiceAccountToken: true
       script:
         image: {{ $r.image }}
         command: [python3]
@@ -154,7 +179,26 @@ spec:
           capabilities: { drop: [ALL] }
         volumeMounts:
           - { name: scripts, mountPath: /scripts, readOnly: true }
-    - name: act
+    - name: record                            # Kubernetes API (Event): ServiceAccount falco-response
+      automountServiceAccountToken: true
+      inputs:
+        parameters:
+          - name: context
+      script:
+        image: {{ $r.image }}
+        command: [python3]
+        source: {{ printf $run "record" | quote }}
+        env:
+          - { name: CONTEXT, value: {{ `"{{inputs.parameters.context}}"` }} }
+          - { name: WORKFLOW_NAME, value: {{ `"{{workflow.name}}"` }} }
+        resources: {{- toYaml $r.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: scripts, mountPath: /scripts, readOnly: true }
+    - name: call                              # endpoints outside the cluster API (rca, notify): no ServiceAccount token
       inputs:
         parameters:
           - name: step
@@ -165,7 +209,6 @@ spec:
         source: {{ printf $run "{{inputs.parameters.step}}" | quote }}
         env:
           - { name: CONTEXT, value: {{ `"{{inputs.parameters.context}}"` }} }
-          - { name: WORKFLOW_NAME, value: {{ `"{{workflow.name}}"` }} }
           - { name: RCA_URL, value: {{ $r.rca.url | quote }} }
           {{- if $r.notify.enabled }}
           - name: NOTIFY_URL
