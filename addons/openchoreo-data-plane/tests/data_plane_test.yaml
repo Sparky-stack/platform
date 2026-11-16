@@ -54,3 +54,33 @@ tests:
       openchoreo-data-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca
     asserts:
       - failedTemplate: {}
+
+  - it: annotates the cluster-agent pod template so Reloader rolls it on client cert or gateway CA renewal
+    template: charts/openchoreo-data-plane/templates/cluster-agent/deployment.yaml
+    asserts:
+      - equal:
+          path: 'spec.template.metadata.annotations["secret.reloader.stakater.com/reload"]'
+          value: cluster-agent-tls
+      - equal:
+          path: 'spec.template.metadata.annotations["configmap.reloader.stakater.com/reload"]'
+          value: cluster-gateway-ca
+
+  - it: fails when the Reloader Secret annotation drifts from clientSecretName
+    template: templates/validate.yaml
+    set:
+      openchoreo-data-plane:
+        clusterAgent:
+          podAnnotations:
+            secret.reloader.stakater.com/reload: wrong-secret
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when the Reloader ConfigMap annotation drifts from serverCAConfigMap
+    template: templates/validate.yaml
+    set:
+      openchoreo-data-plane:
+        clusterAgent:
+          podAnnotations:
+            configmap.reloader.stakater.com/reload: wrong-ca
+    asserts:
+      - failedTemplate: {}

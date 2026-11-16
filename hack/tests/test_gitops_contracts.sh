@@ -269,6 +269,7 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
     harbor) continue ;;        # Harbor meets PSS baseline: policed like a workload (check 9)
     openbao) continue ;;       # mesh CA: restricted pod security, policed like a workload (check 2b4)
     external-dns) continue ;;  # external-dns meets PSS restricted: policed like a workload (check 9b)
+    reloader) continue ;;      # reloader meets PSS restricted: policed like a workload (check 9c)
     keda|strimzi|cnpg-system) continue ;;   # opt-in data-service operators meet PSS restricted: policed (test_data_services.sh)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
@@ -388,6 +389,39 @@ assert_eq "$(yq "$edns_pod | .securityContext.runAsNonRoot" "$TMP/edns-pss.yaml"
 assert_eq "$(yq "$edns_pod | .securityContext.seccompProfile.type // .containers[0].securityContext.seccompProfile.type" "$TMP/edns-pss.yaml")" RuntimeDefault "external-dns seccomp RuntimeDefault"
 assert_eq "$(yq "$edns_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/edns-pss.yaml")" false "external-dns no privilege escalation"
 assert_eq "$(yq -o=json -I=0 "$edns_pod | .containers[0].securityContext.capabilities.drop" "$TMP/edns-pss.yaml")" '["ALL"]' "external-dns drops ALL capabilities"
+
+# 9c. reloader (#50) is NOT a Kyverno-excluded platform namespace, meets Pod Security restricted with no ClusterRole,
+#     watches openchoreo-data-plane, and cluster-agent's Reloader annotations match the CRS-delivered Secret/ConfigMap.
+for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+  assert_eq "$(grep -cE '^ *- reloader( |$)' "$ROOT/$f" || true)" 0 "reloader not excluded from Kyverno ($f)"
+done
+rel_ns=$(yq '.addons.reloader.namespace' "$PV")
+dp_ns=$(yq '.addons["openchoreo-data-plane"].namespace' "$PV")
+helm template reloader "$ROOT/addons/reloader" --namespace "$rel_ns" > "$TMP/reloader-pss.yaml"
+rel_pod='select(.kind == "Deployment") | .spec.template.spec'
+assert_eq "$(yq "$rel_pod | .securityContext.runAsNonRoot" "$TMP/reloader-pss.yaml")" true "reloader pod runAsNonRoot"
+assert_eq "$(yq "$rel_pod | .securityContext.seccompProfile.type" "$TMP/reloader-pss.yaml")" RuntimeDefault "reloader seccomp RuntimeDefault"
+assert_eq "$(yq "$rel_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/reloader-pss.yaml")" false "reloader no privilege escalation"
+assert_eq "$(yq "$rel_pod | .containers[0].securityContext.readOnlyRootFilesystem" "$TMP/reloader-pss.yaml")" true "reloader readOnlyRootFilesystem"
+assert_eq "$(yq -o=json -I=0 "$rel_pod | .containers[0].securityContext.capabilities.drop" "$TMP/reloader-pss.yaml")" '["ALL"]' "reloader drops ALL capabilities"
+assert_eq "$(yq 'select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding") | .metadata.name' "$TMP/reloader-pss.yaml")" "" "reloader renders no ClusterRole or ClusterRoleBinding"
+assert_eq "$(NS="$dp_ns" yq 'select(.kind == "Role" and .metadata.namespace == strenv(NS)) | .metadata.name' "$TMP/reloader-pss.yaml")" reloader-role "reloader grants a Role in $dp_ns"
+helm template openchoreo-control-plane "$ROOT/addons/openchoreo-control-plane" --namespace openchoreo-control-plane \
+  -s templates/gateway-ca-crs.yaml > "$TMP/gw-ca-crs.yaml"
+crs_secret_name=$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-openchoreo-agent") | .spec.target.template.data["openchoreo-agent.yaml"]' "$TMP/dev1.yaml" \
+  | sed 's/{{.*}}/placeholder/' | yq 'select(.kind == "Secret") | .metadata.name')
+crs_cm_name=$(yq 'select(.kind == "ExternalSecret") | .spec.target.template.data["cluster-gateway-ca.yaml"]' "$TMP/gw-ca-crs.yaml" \
+  | sed 's/{{.*}}/placeholder/' | yq 'select(.kind == "ConfigMap") | .metadata.name')
+dp_reload_targets() {
+  yq 'select(.kind == "Deployment" and .metadata.name == "cluster-agent-dataplane") | (.spec.template.metadata.annotations // {})
+    | (.["secret.reloader.stakater.com/reload"] // "<none>") + "/" + (.["configmap.reloader.stakater.com/reload"] // "<none>")' "$1"
+}
+assert_eq "$(dp_reload_targets "$TMP/wl-openchoreo-data-plane.yaml")" "$crs_secret_name/$crs_cm_name" \
+  "cluster-agent-dataplane Reloader annotations match CRS Secret ($crs_secret_name) and ConfigMap ($crs_cm_name)"
+yq 'del(select(.kind == "Deployment").spec.template.metadata.annotations["secret.reloader.stakater.com/reload"])' \
+  "$TMP/wl-openchoreo-data-plane.yaml" > "$TMP/dp-noreload.yaml"
+assert_eq "$(dp_reload_targets "$TMP/dp-noreload.yaml")" "<none>/$crs_cm_name" \
+  "negative: contract catches a cluster-agent Deployment missing the Secret Reloader annotation"
 
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.
