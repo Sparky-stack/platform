@@ -89,6 +89,7 @@ tools and version drift against `mise.toml`.
 | yq / jq | 4.54.3 / 1.8.2 | aqua:mikefarah/yq / aqua:jqlang/jq | YAML/JSON in scripts |
 | kubeconform | 0.8.0 | aqua:yannh/kubeconform | schema validation |
 | crane | 0.22.1 | aqua:google/go-containerregistry | `images:audit` |
+| cosign | 3.1.4 | aqua:sigstore/cosign | `demo:check` verifies the demo image's signature with the pinned identity |
 | shellcheck / actionlint | 0.11.0 / 1.7.12 | aqua | `task lint`, git hooks |
 | gitleaks | 8.30.1 | aqua:gitleaks/gitleaks | secret scan in the git hooks / CI |
 | prek | 0.5.10 | aqua:j178/prek | git hook runner (`prek.toml`) |

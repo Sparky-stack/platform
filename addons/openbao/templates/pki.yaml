@@ -9,6 +9,8 @@ TLS for OpenBao and publication of PUBLIC certificates only.
                        auth role mesh-ca-read, whose static policy - written by self-initialisation - allows read of
                        +/cert/ca (public certificates) and nothing else)
 ClusterSecretStore mgmt-openbao (templates/ca-store.yaml) may GET only openbao-ca-bundle: consumers never reach a key.
+Sync order (Argo CD waves): 0 OpenBao + everything else, 1 the mesh-reconcile Job (Sync hook: group roots), 2 the
+openbao-pki-public store, openbao-ca-bundle and the CronJob (templates/reconcile.yaml).
 */ -}}
 {{- $ns := .Release.Namespace }}
 {{- $t := .Values.tls }}
@@ -164,6 +166,8 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"    # with openbao-ca-bundle: after the mesh-reconcile Sync hook (wave 1)
 spec:
   provider:
     vault:
@@ -188,6 +192,10 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    # Reads pki-mesh-<g>-root/cert/ca, which only the mesh-reconcile Job (Sync hook, wave 1) creates: in wave 2, the
+    # final wave, so it syncs after the roots exist. Ordering contract: hack/tests/test_mesh_ca_sync_order.sh.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   refreshInterval: 15m
   secretStoreRef: { kind: SecretStore, name: openbao-ca-source }

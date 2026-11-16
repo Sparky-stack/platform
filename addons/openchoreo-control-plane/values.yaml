@@ -30,6 +30,19 @@ backstageSecrets:
   store: platform
   remoteKey: openchoreo
 
+# Golden-path project templates (docs/project-templates.md). Repository creation and the platform PR authenticate as the
+# platform write GitHub App (ClusterSecretStore `platform`, key `platform-github-app`, docs/forking.md credentials (c)).
+# Off by default (the key is optional in `task secrets`): templates are listed and their forms work, the publish step
+# fails. Switching on needs this flag (renders ExternalSecret backstage-github-app, templates/backstage-github-app.yaml)
+# AND the subchart's GitHub integration + env, both shown in docs/project-templates.md "Repository creation";
+# templates/validate.yaml fails the render when only one side is set.
+scaffolder:
+  githubApp:
+    enabled: false
+    store: platform
+    remoteKey: platform-github-app
+    secretName: backstage-github-app
+
 # Shared CAPI ClusterResourceSet payload `fleet/openchoreo-gateway-ca` (templates/gateway-ca-crs.yaml): ConfigMap
 # openchoreo-data-plane/cluster-gateway-ca with the gateway CA's PUBLIC certificate, read through ClusterSecretStore
 # `mgmt-openchoreo` (read-only on this namespace). Every workload cluster's CRS (charts/cluster) lists it.
@@ -76,6 +89,70 @@ openchoreo-control-plane:
         # environment's ClusterObservabilityPlane observerURL (addon openchoreo-observability-plane); no URL here.
         # Must equal installation.yaml openchoreo.observability.enabled (templates/validate.yaml).
         enabled: true
+    # platform: extra Backstage config (ConfigMap app-config.extra.yaml, loaded last). Backstage REPLACES arrays from
+    # earlier config files, so catalog.locations repeats the image's list (openchoreo-ui v1.3.3 /app/app-config.yaml:
+    # org groups + the 14 OpenChoreo wizards) and appends the golden-path templates of this repo
+    # (templates/catalog-info.yaml, a Location; hack/tests/test_project_templates.sh). A chart bump re-checks the list.
+    # Forks: point the url target at their own repo (docs/forking.md).
+    appConfig:
+      catalog:
+        rules:
+          # Backstage defaults + Resource: catalog:register adds each new repo's catalog-info.yaml (kind Resource)
+          - allow: [Component, API, Resource, Location]
+          # golden-path templates: only from this repo's templates/ (a location's own `rules` would not cover the
+          # templates its Location entity points to)
+          - allow: [Template]
+            locations:
+              - type: url
+                pattern: https://github.com/koorikla/platform/blob/main/templates/*/template.yaml
+        locations:
+          - type: file
+            target: /app/catalog-entities/org.yaml
+            rules: [{ allow: [Group] }]
+          - type: file
+            target: /app/templates/create-openchoreo-componenttype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-resourcetype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-projecttype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-trait/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-workflow/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-environment/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-namespace/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-deploymentpipeline/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-clustercomponenttype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-clusterresourcetype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-clusterprojecttype/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-clustertrait/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-clusterworkflow/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: file
+            target: /app/templates/create-openchoreo-notification-channel/template.yaml
+            rules: [{ allow: [Template] }]
+          - type: url
+            target: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
     resources:                  # platform: upstream requests 200m/256Mi, limits 2/2Gi
       requests: { cpu: 100m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }

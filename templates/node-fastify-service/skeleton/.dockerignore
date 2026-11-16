@@ -1,0 +1,6 @@
+*
+!package.json
+!pnpm-lock.yaml
+!eslint.config.js
+!src/
+!test/

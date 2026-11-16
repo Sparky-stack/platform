@@ -1,0 +1,28 @@
+[package]
+name = "${{ values.name }}"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+publish = false
+
+# One binary, always called `app` (the Dockerfile copies target/<triple>/release/app).
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tower = { version = "0.5.3", features = ["util"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
