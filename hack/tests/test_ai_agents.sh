@@ -45,7 +45,8 @@ EOF
   assert_eq "$(S="$short-agent-client-secret" yq -N 'select(.kind == "ExternalSecret") | .spec.data[] | select(.secretKey == strenv(S)) | .remoteRef.property' "$TMP/th-$short.yaml")" "$short-oauth-client-secret" "$short client secret synced into thunder-bootstrap"
   job_env=$(E="$env" yq -N -o json -I0 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name == strenv(E)) | .valueFrom.secretKeyRef' "$TMP/th-$short.yaml")
   assert_eq "$job_env" "{\"name\":\"thunder-bootstrap\",\"key\":\"$short-agent-client-secret\",\"optional\":true}" "$env reaches the setup Job (optional while off)"
-  mnt=$(M="/opt/thunderid/bootstrap/$script.yaml" yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].volumeMounts[] | select(.mountPath == strenv(M)) | .subPath' "$TMP/th-$short.yaml")
+  # No leading slash in the env value: Git Bash rewrites absolute POSIX paths passed to native programs (C:/Program Files/Git/opt/...).
+  mnt=$(M="opt/thunderid/bootstrap/$script.yaml" yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].volumeMounts[] | select(.mountPath == "/" + strenv(M)) | .subPath' "$TMP/th-$short.yaml")
   assert_eq "$mnt" "$script.yaml" "$script mounted into the bootstrap bundle"
 done
 # The other agent stays off when only one is listed.

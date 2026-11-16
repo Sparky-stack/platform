@@ -25,7 +25,16 @@ mk; rm "$TMP/c/Chart.lock"
 assert_match "$(py hack/lib/chartlock.py "$TMP/c" || true)" 'without a Chart.lock' "a missing lock is detected"
 mk
 assert_eq "$(py hack/lib/chartlock.py "$TMP/c"; echo $?)" "0" "unchanged copy stays in sync"
-# deps.sh runs the check before its cache skip
-assert_match "$(cat hack/deps.sh)" 'chartlock.py' "hack/deps.sh checks locks before skipping cached charts"
+# Behaviour, not text: deps.sh on a scratch tree with one stale lock and a warm charts/ cache exits 1 before any
+# network call (repo registration and builds come after the lock check).
+rm -rf "$TMP/tree"; mkdir -p "$TMP/tree/hack/lib" "$TMP/tree/addons" "$TMP/tree/charts"
+cp hack/deps.sh "$TMP/tree/hack/"; cp hack/lib/portable.sh hack/lib/chartlock.py "$TMP/tree/hack/lib/"
+cp -R addons/external-dns "$TMP/tree/addons/"; mkdir -p "$TMP/tree/addons/external-dns/charts"
+yq -i 'del(.dependencies[0].condition)' "$TMP/tree/addons/external-dns/Chart.yaml"
+# A no-op helm on PATH: if deps.sh skipped the check it would "succeed" offline instead of failing.
+mkdir -p "$TMP/bin"; printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/bin/helm"; chmod +x "$TMP/bin/helm"
+out=$(PATH="$TMP/bin:$PATH" bash "$TMP/tree/hack/deps.sh" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "1" "deps.sh fails on a stale lock even with a warm charts/ cache"
+assert_match "$out" 'deps: Chart.lock out of sync' "deps.sh names the stale lock"
 
 finish

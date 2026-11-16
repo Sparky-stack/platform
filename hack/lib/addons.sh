@@ -74,12 +74,13 @@ addon_helm_args() {
   addon_values_object "$render" "$addon" "$vo"
   printf '%s\n' --values "$vo" \
     --set-string "cluster.name=$name,cluster.role=$role,cluster.provider=$prov,cluster.environment=$env,cluster.cni=$cni,cluster.region=$region"
-  while IFS=$'\t' read -r p v fs; do
+  # \x1f (unit separator), not tab: tab is IFS whitespace, so an empty value would collapse into the next field.
+  while IFS=$'\x1f' read -r p v fs; do
     [[ -n "$p" ]] || continue
     part=$(P="$p" yq -r ".addons[\"$addon\"].clusterServerParameters[strenv(P)] // \"\"" "$ADDONS_CATALOG" | tr -d '\r')
     if [[ -n "$part" ]]; then v=$(addon_server_part "$server" "$part"); fi
     v=${v//"$name_expr"/$name}
     case "$v" in *"{{"*) echo "addon_helm_args: $addon parameter $p has an unresolved goTemplate: $v" >&2; return 1 ;; esac
     if [[ "$fs" == true ]]; then printf '%s\n' --set-string "$p=$v"; else printf '%s\n' --set "$p=$v"; fi   # Argo: typed --set unless forceString
-  done < <(addon_appset "$render" "$addon" | yq -r '.spec.template.spec.source.helm.parameters[]? | .name + "\t" + .value + "\t" + ((.forceString // false) | tostring)' | tr -d '\r')
+  done < <(addon_appset "$render" "$addon" | SEP=$'\x1f' yq -r '.spec.template.spec.source.helm.parameters[]? | .name + strenv(SEP) + .value + strenv(SEP) + ((.forceString // false) | tostring)' | tr -d '\r')
 }
