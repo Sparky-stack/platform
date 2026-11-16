@@ -92,7 +92,9 @@ plus generated `cluster.*` values (name, role, provider, region, environment, cn
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `clusterIdParameters` (`<installation>-<cluster>`, unique across installations, e.g. the external-dns TXT owner),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)). `installationValueFiles`
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)), `clusterLabelParameters` (a cluster secret
+label's value with a default, e.g. Istio's meshID and network from the mesh labels; [multicluster.md](multicluster.md)).
+`installationValueFiles`
 (templates over installation values, paths under `addons/<addon>/values/`) select value files by an installation fact
 that is not a cluster label, e.g. external-dns' DNS provider ([dns.md](dns.md)). `hack/lib/addons.sh` reproduces this
 layering for every offline render (test.sh, image-audit, contract tests), reading the release name, value files,

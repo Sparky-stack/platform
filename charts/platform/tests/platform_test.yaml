@@ -4,6 +4,7 @@ templates:
   - cluster-mgmt.yaml
   - appset-fleet.yaml
   - appset-addons.yaml
+  - appset-examples.yaml
 values:
   - ../../../installations/local/installation.yaml
 tests:
@@ -11,7 +12,7 @@ tests:
     template: projects.yaml
     asserts:
       - hasDocuments:
-          count: 2
+          count: 3
       - containsDocument:
           kind: AppProject
           apiVersion: argoproj.io/v1alpha1
@@ -147,6 +148,108 @@ tests:
           name: addon-clusterclasses
           any: true
 
+  # --- examples (templates/appset-examples.yaml, AppProject examples) ----------------------------------------------
+  - it: renders ApplicationSet example-eastwest only when the installation enables it, in AppProject examples
+    template: appset-examples.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: example-eastwest }
+      - equal: { path: spec.template.spec.project, value: examples }
+      - equal: { path: spec.template.spec.source.path, value: examples/eastwest }
+      - equal: { path: spec.template.spec.destination.namespace, value: eastwest-demo }
+      - equal:
+          path: spec.generators[0].clusters.selector
+          value: { matchLabels: { platform.koorikla.io/role: workload, addons.platform.koorikla.io/istio-eastwest: "true" } }
+      - equal:
+          path: spec.template.spec.source.helm.valueFiles
+          value:
+            - values.yaml
+            - ../../installations/local/examples/eastwest/values.yaml
+            - '../../installations/local/examples/eastwest/cluster-{{ index .metadata.labels "platform.koorikla.io/name" }}.yaml'
+      - equal:
+          path: spec.template.spec.source.targetRevision
+          value: '{{ $r := index .metadata.annotations "platform.koorikla.io/addons-revision" }}{{ if and $r (ne $r "HEAD") }}{{ $r }}{{ else }}main{{ end }}'
+
+  - it: "disabled example: no ApplicationSet, but the examples AppProject stays (its Applications must delete first)"
+    set:
+      examples.eastwest.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: appset-examples.yaml
+      - hasDocuments: { count: 3 }
+        template: projects.yaml
+      - equal: { path: spec.destinations, value: [{ server: "*", namespace: eastwest-demo }] }
+        template: projects.yaml
+        documentSelector: { path: metadata.name, value: examples }
+
+  - it: "AppProjects are created one wave before, and pruned after, the ApplicationSets that use them"
+    template: projects.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+
+  - it: "no examples in the catalog: the examples AppProject admits no destination"
+    template: projects.yaml
+    documentSelector: { path: metadata.name, value: examples }
+    set:
+      examples: null
+    asserts:
+      - equal: { path: spec.destinations, value: [] }
+
+  - it: requires a label selector for an enabled example
+    template: appset-examples.yaml
+    set:
+      examples.eastwest.selector: null
+    asserts:
+      - failedTemplate: { errorMessage: "examples.eastwest.selector is required" }
+
+  - it: "AppProject examples: the example namespaces only, Namespace the only cluster-scoped kind"
+    template: projects.yaml
+    documentSelector: { path: metadata.name, value: examples }
+    asserts:
+      - equal: { path: spec.destinations, value: [{ server: "*", namespace: eastwest-demo }] }
+      - equal: { path: spec.clusterResourceWhitelist, value: [{ group: "", kind: Namespace }] }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: "*", kind: "*" } }
+      - notContains: { path: spec.destinations, content: { server: "*", namespace: "*" } }
+      - equal: { path: 'spec.sourceRepos', value: [https://github.com/koorikla/platform.git] }
+
+  # --- catalog clusterLabelParameters (templates/appset-addons.yaml) ----------------------------------------------
+  - it: "clusterLabelParameters: label value else default, always a string"
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-istio-ambient }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: istiod.env.AMBIENT_ENABLE_MULTI_NETWORK
+            value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/istio-eastwest" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
+            forceString: true
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: global.network
+            value: '{{ index .metadata.labels "mesh.platform.koorikla.io/network" }}'
+            forceString: true
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: global.multiCluster.clusterName
+            value: '{{ index .metadata.labels "platform.koorikla.io/name" }}'
+            forceString: true
+
+  - it: "negative: rejects a clusterLabelParameters entry that is not {label, default}"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: some-label } }
+    asserts:
+      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: want {label: <key>, default: <value>}" }
+
+  - it: "negative: rejects a non-string default (unquoted false would silently become empty)"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: { label: l, default: false } } }
+    asserts:
+      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: default must be a string (quote it: \"false\")" }
+
   - it: external-dns is opt-in and takes provider, zones and TXT owner from the installation
     template: appset-addons.yaml
     values: [../../../installations/hetzner-example/installation.yaml]
@@ -176,16 +279,17 @@ tests:
           content: { name: x.owner, value: 'local-{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
       - contains:
           path: spec.template.spec.source.helm.parameters
-          content: { name: x.name, value: '{{ index .metadata.labels "platform.koorikla.io/name" }}' }
+          content: { name: x.name, value: '{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
 
-  - it: installationValueFiles sit after the cni overlay and before the installation overlays
+  - it: installationValueFiles sit after the cni and mesh overlays and before the installation overlays
     template: appset-addons.yaml
     set: { dns.provider: route53, dns.domainFilters: [a.example.com, b.example.com] }
     documentSelector: { path: metadata.name, value: addon-external-dns }
     asserts:
-      - equal: { path: "spec.template.spec.source.helm.valueFiles[4]", value: values/dns-route53.yaml }
+      - equal: { path: "spec.template.spec.source.helm.valueFiles[5]", value: values/dns-route53.yaml }
       - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[3]", pattern: "^values/cni-" }
-      - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[5]", pattern: "^\\.\\./\\.\\./installations/local/addons/external-dns/values.yaml$" }
+      - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[4]", pattern: "^values/mesh-" }
+      - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[6]", pattern: "^\\.\\./\\.\\./installations/local/addons/external-dns/values.yaml$" }
       - contains:
           path: spec.template.spec.source.helm.parameters
           content: { name: external-dns.domainFilters, value: "{a.example.com,b.example.com}" }

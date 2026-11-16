@@ -14,5 +14,7 @@ openchoreo:
     enabled: true
     gatewayHost: prod1.apps.localhost
     environments: [production]
+mesh:
+  group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD
 addons: {}

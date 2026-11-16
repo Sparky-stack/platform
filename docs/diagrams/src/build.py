@@ -78,7 +78,7 @@ def architecture() -> Diagram:
     d.box(C[1], Y[4], C2, BH, "data", "OC observability plane",
           ["OpenSearch · Prometheus · observer API", "RCA + FinOps agents: opt-in, off"])
     d.box(C[0], Y[5], CW, BH, "security", "Falco", ["modern_ebpf", "+ falcosidekick"])
-    d.box(C[1], Y[5], CW, BH, "security", "OpenBao", ["mesh CA · secret", "backend (PR #4)"], status="planned")
+    d.box(C[1], Y[5], CW, BH, "security", "OpenBao", ["mesh CA per group", "keys never exported"], status="optin")
     d.box(C[2], Y[5], CW, BH, "bus", "argo-events", ["Falco escalation", "rollout events"])
 
     # workload clusters
@@ -86,8 +86,8 @@ def architecture() -> Diagram:
     d.box(A, Y[2], KW, BH, "platform", "OC data plane", ["cluster-agent", "(dials out)"],
           name="OpenChoreo data plane")
     d.box(B, Y[2], KW, BH, "network", "kgateway", ["Gateway API", "north-south"])
-    d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cells · opt-in",
-                                                         "Crossplane·CNPG·Kafka·KEDA"])
+    d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cells · opt-in KEDA",
+                                                         "Crossplane·CNPG·Kafka"])
     d.box(B, Y[3], KW, BH, "network", "Istio ambient", ["ztunnel L4 mTLS", "waypoints: opt-in"])
     d.box(A, Y[4], KW, BH, "bus", "telemetry", ["OTel · Fluent Bit ·", "Prometheus agent"])
     d.box(B, Y[4], KW, BH, "network", "Cilium / flannel", ["CNI fixed at birth", "eBPF, no kube-proxy"])
@@ -97,7 +97,7 @@ def architecture() -> Diagram:
     d.box(A, Y[6], KW, BH, "security", "ESO", ["ClusterSecretStore", "default"], name="ESO (workload)")
     d.box(B, Y[6], KW, BH, "bus", "OBI", ["eBPF L7 RED", "metrics"], status="optin")
     d.box(A, Y[7], KW, BH, "network", "external-dns", ["Route 53 · Cloudflare", "per cluster"], status="optin")
-    d.box(B, Y[7], KW, BH, "network", "east-west gateway", ["Istio multicluster", "PR #4"], status="planned")
+    d.box(B, Y[7], KW, BH, "network", "east-west gateway", ["Istio multicluster", "mesh.group"], status="optin")
     for i, (t, s) in enumerate([("docker · CAPD", ("tested locally", "#6ee7b7")), ("AWS · CAPA", "rendered only"),
                                 ("Hetzner · CAPH", "rendered only")]):
         d.box(856 + i * 148, 752, 136, 52, "cloud", t, [s], title_size=12.5)
@@ -266,20 +266,20 @@ def security() -> Diagram:
           focus=True)
     d.box(MR, 214, MH, 58, "security", "ESO + ClusterResourceSet", ["templates cert + key", "into CRS payload"],
           title_size=12)
-    d.box(ML, 284, MH, 58, "security", "OpenBao", ["mesh root CA", "PR #4"], status="planned")
+    d.box(ML, 284, MH, 58, "security", "OpenBao", ["mesh CA per group", "keys never exported"], status="optin")
     d.box(MR, 284, MH, 58, "platform", "cluster-gateway", ["client CA = that", "cluster's agent CA"])
     d.box(WL, 150, WW, 52, "security", "kube-apiserver OIDC", ["trusts the Thunder issuer"], planned=True)
     d.box(WL, 214, WW, 58, "security", "cluster-agent-tls", ["own cert + key (CN = cluster)", "+ public gateway CA"])
     d.box(WL, 284, WH, 58, "platform", "cluster-agent", ["dials out", "wss + mTLS"])
-    d.box(WR, 284, WH, 58, "network", "ztunnel", ["SPIFFE mTLS", "istiod CA today"])
+    d.box(WR, 284, WH, 58, "network", "ztunnel", ["SPIFFE mTLS", "mesh: istio-csr"])
     d.arrow([(ML, 176), (EX + EW, 176)], RO, planned=True, label="OIDC federation", label_pos=(GL, 180),
             aid="fed")
     d.arrow([(WL, 176), (ML + MW, 176)], RO, planned=True, label="trusts issuer", label_pos=(GR, 180), aid="oidc")
     d.arrow([(ML + MH, 243), (MR, 243)], RO, aid="ca", step=0)
     d.arrow([(MR + MH, 243), (WL, 243)], RO, label="cert + key (CRS)", label_pos=(GR, 247), aid="crs", step=1)
     d.arrow([(WL, 313), (MR + MH, 313)], RO, label="wss + mTLS (out)", label_pos=(GR, 317), aid="wss", step=2)
-    d.arrow([(500, 342), (500, 351), (1288, 351), (1288, 342)], RO, planned=True, label="mesh intermediate CA",
-            label_pos=(GR, 355), aid="mesh")
+    d.arrow([(1288, 342), (1288, 351), (500, 351), (500, 342)], RO, status="optin",
+            label="CSR via istio-csr, JWT (out)", label_pos=(GR, 355), aid="mesh")
 
     # 2 · secrets
     d.text(32, 394, "2 · secrets", 12.5, RO, weight=700)
@@ -380,15 +380,15 @@ def network() -> Diagram:
           status="optin")
     d.box(C2, R["A"], CW, BH, "network", "kgateway", ["GatewayClass kgateway", "Gateway API v1 · HTTPRoute"],
           focus=True)
-    d.box(C3, R["A"], CW, BH, "network", "east-west gateway", ["istio-east-west · mTLS", "dev1 ↔ prod1 · PR #4"],
-          status="planned")
+    d.box(C3, R["A"], CW, BH, "network", "east-west gateway", ["istio-east-west · mTLS", "dev1 ↔ prod1 · mesh.group"],
+          status="optin")
     d.box(C1, R["B"], CW, BH, "network", "waypoint", ["per-namespace L7 authz", "Istio ambient"], status="optin")
     d.box(C2, R["B"], CW, BH, "platform", "app pods · dp-* ns", ["istio.io/dataplane-mode", "= ambient"])
     d.box(C3, R["B"], CW, BH, "security", "Kyverno", ["MutatingPolicy: enrols", "OpenChoreo dp-* namespaces"])
     d.box(C1, R["C"], 520, BH, "network", "ztunnel · Istio ambient",
           ["per node · L4 mTLS (HBONE) · SPIFFE identity", "no sidecars · istio-cni redirects pod traffic"],
           focus=True)
-    d.box(C3, R["C"], CW, BH, "network", "istiod", ["mesh CA · xDS config", "(OpenBao CA: planned)"])
+    d.box(C3, R["C"], CW, BH, "network", "istiod", ["xDS config · CA off-mesh", "members: OpenBao CA"])
     d.box(C1, R["D"], 520, BH, "network", "Cilium",
           ["eBPF CNI · kube-proxy replacement · WireGuard", "NetworkPolicy · Hubble flows · fleet cni: cilium"],
           focus=True)

@@ -4,7 +4,8 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
   capi.validate  - fails rendering on an unusable fleet file
   capi.labels    - platform.koorikla.io/* + addons.platform.koorikla.io/* (docs/conventions.md); the Argo CD cluster
                    secret must carry exactly these labels -> include "capi.labels" there too. The cilium addon label
-                   is derived from `cni` (the CNI is a birth fact, the addon follows it).
+                   is derived from `cni` (the CNI is a birth fact, the addon follows it); istio-eastwest and the
+                   mesh.platform.koorikla.io/* labels from `mesh.group` (docs/multicluster.md).
 */ -}}
 {{- define "capi.validate" -}}
 {{- $v := .Values -}}
@@ -45,6 +46,29 @@ Helpers are prefixed capi.* and live here (charts/cluster templates are split by
 {{- fail (printf "cluster %s: addons.%s must be true or false" $v.name $addon) -}}
 {{- end -}}
 {{- end -}}
+{{- $mesh := ($v.mesh | default dict) -}}
+{{- if $mesh.group -}}
+{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" $mesh.group) -}}
+{{- fail (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mesh.group) -}}
+{{- end -}}
+{{- if eq (index ($v.addons | default dict) "istio-ambient" | toString) "false" -}}
+{{- fail (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name) -}}
+{{- end -}}
+{{- if not (index ((($v.mgmt | default dict).addons) | default dict) "openbao") -}}
+{{- fail (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name) -}}
+{{- end -}}
+{{- if not (has $mesh.group ($mesh.groups | default list)) -}}
+{{- fail (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mesh.group) -}}
+{{- end -}}
+{{- if not (($mesh.ca | default dict).host) -}}
+{{- fail (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name) -}}
+{{- end -}}
+{{- end -}}
+{{- range $a := list "istio-eastwest" "istio-csr" -}}
+{{- if and (hasKey ($v.addons | default dict) $a) (ne (index $v.addons $a) (not (empty $mesh.group))) -}}
+{{- fail (printf "cluster %s: addons.%s=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.%s)" $v.name $a (index $v.addons $a) ($mesh.group | default "") $a) -}}
+{{- end -}}
+{{- end -}}
 {{- /* Control plane size = embedded etcd voters (cluster-api-k3s v0.5.0 supports no other datastore). Odd only: an
 even count adds a voter without adding failure tolerance, and 2 voters is the state a rollout must never shrink from.
 Production on a cloud provider needs >= 3: every single-server rollout ends with a 2 -> 1 etcd member removal, which
@@ -76,7 +100,12 @@ platform.koorikla.io/region: {{ .Values.region | quote }}
 platform.koorikla.io/environment: {{ .Values.environment | quote }}
 platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
 platform.koorikla.io/cni: {{ .Values.cni | quote }}
-{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium")) (.Values.addons | default dict) }}
+{{- $meshGroup := ((.Values.mesh | default dict).group | default "") }}
+{{- with $meshGroup }}
+mesh.platform.koorikla.io/group: {{ . | quote }}
+mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
+{{- end }}
+{{- range $addon, $on := merge (dict "cilium" (eq .Values.cni "cilium") "istio-eastwest" (not (empty $meshGroup)) "istio-csr" (not (empty $meshGroup))) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: openbao
+description: OpenBao on mgmt - the Istio mesh CA (one root + intermediate PKI mount per mesh group, keys generated and kept inside OpenBao), per-member JWT auth from the fleet, reached by members through a kgateway TLS passthrough Gateway
+type: application
+version: 0.1.0
+dependencies:
+  - name: openbao
+    version: 0.30.7            # OpenBao v2.7.2
+    repository: https://openbao.github.io/openbao-helm

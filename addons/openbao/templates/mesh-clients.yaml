@@ -1,0 +1,51 @@
+{{- /*
+Inputs of the mesh reconcile: every mesh member's PUBLIC auth data, one fleet Secret per member rendered by
+charts/cluster (mesh-openbao.yaml: cluster, group, server = API server URL, ca = cluster CA certificate, all from the
+CAPI kubeconfig and the fleet file), labelled meshClients.label=true. ESO finds them by label through
+ClusterSecretStore mgmt-fleet and flattens them into Secret mesh-clients: <cluster>.group, <cluster>.server,
+<cluster>.ca - the files the reconcile Job mounts (it has no Kubernetes API access of its own).
+Retain: a store error keeps the last list; the reconcile never prunes on an empty list either.
+Validation (the template, then the reconcile): a Secret counts only if its name is exactly <cluster>-mesh-openbao (what
+charts/cluster renders). Otherwise it becomes rejected.<secret name> = reason, which the reconcile logs and counts as an
+invalid input (no auth mount, no entity). Secret names are unique in fleet, so this also rules out two Secrets claiming
+the same cluster (before, the later one silently overrode the other's inputs). It does not authenticate the writer: any Secret in fleet named <x>-mesh-openbao
+with the label enrols member <x> with its own JWKS, so write access to Secrets in fleet is mesh-CA admin access
+(fleet also holds every cluster's kubeconfig; docs/multicluster.md "Who may do what in OpenBao").
+*/ -}}
+{{- $m := .Values.meshClients }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $m.secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $m.store }}
+  target:
+    name: {{ $m.secretName }}
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      engineVersion: v2
+      templateFrom:
+        - target: Data
+          literal: |
+            {{`{{- range $secret, $json := . }}`}}
+            {{`{{- $c := $json | fromJson }}`}}
+            {{`{{- $name := toString (get $c "cluster") }}`}}
+            {{`{{- if ne $secret (printf "%s-mesh-openbao" $name) }}`}}
+            {{`rejected.{{ $secret }}: {{ printf "cluster %q does not match the Secret name (want <cluster>-mesh-openbao)" $name | toJson }}`}}
+            {{`{{- else }}`}}
+            {{`{{ $name }}.group: {{ get $c "group" | toJson }}`}}
+            {{`{{ $name }}.server: {{ get $c "server" | toJson }}`}}
+            {{`{{ $name }}.ca: {{ get $c "ca" | toJson }}`}}
+            {{`{{- end }}`}}
+            {{`{{- end }}`}}
+  dataFrom:
+    - find:
+        tags:
+          {{ $m.label }}: "true"

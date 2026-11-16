@@ -21,6 +21,41 @@ addon_installation_params() {
   done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | keys | .[]" "$ADDONS_CATALOG" | tr -d '\r')
 }
 
+# addon_label_tpl <string> [<labels file>] -> <string> with the cluster-label goTemplates Argo CD evaluates per cluster
+# resolved against a YAML map of the cluster's labels (missing file / label = empty). The three forms charts/platform
+# renders: {{ index .metadata.labels "K" }}, catalog clusterLabelParameters
+# ({{ $v := index .metadata.labels "K" }}{{ if $v }}{{ $v }}{{ else }}D{{ end }}) and label-selected value files
+# ({{ if index .metadata.labels "K" }}A{{ else }}B{{ end }}).
+addon_label() {
+  if [[ -n "${2:-}" && -s "$2" ]]; then K="$1" yq -r '.[strenv(K)] // ""' "$2" | tr -d '\r'; fi
+}
+addon_label_tpl() {
+  local s=$1 labels=${2:-} v
+  local re1='[{][{] [$]v := index [.]metadata[.]labels "([^"]+)" [}][}][{][{] if [$]v [}][}][{][{] [$]v [}][}][{][{] else [}][}]([^{]*)[{][{] end [}][}]'
+  local re2='[{][{] if index [.]metadata[.]labels "([^"]+)" [}][}]([^{]*)[{][{] else [}][}]([^{]*)[{][{] end [}][}]'
+  local re3='[{][{] index [.]metadata[.]labels "([^"]+)" [}][}]'
+  while [[ $s =~ $re1 ]]; do
+    v=$(addon_label "${BASH_REMATCH[1]}" "$labels"); s=${s/"${BASH_REMATCH[0]}"/${v:-${BASH_REMATCH[2]}}}
+  done
+  while [[ $s =~ $re2 ]]; do
+    v=$(addon_label "${BASH_REMATCH[1]}" "$labels")
+    if [[ -n "$v" ]]; then s=${s/"${BASH_REMATCH[0]}"/${BASH_REMATCH[2]}}; else s=${s/"${BASH_REMATCH[0]}"/${BASH_REMATCH[3]}}; fi
+  done
+  while [[ $s =~ $re3 ]]; do
+    v=$(addon_label "${BASH_REMATCH[1]}" "$labels"); s=${s/"${BASH_REMATCH[0]}"/$v}
+  done
+  printf '%s\n' "$s"
+}
+
+# addon_label_valuefiles <platform render> <addon> [<labels file>] -> value files chosen by a cluster label other than
+# role/provider/cni (e.g. values/mesh-<member|none>.yaml from the mesh group label), resolved for this cluster.
+addon_label_valuefiles() {
+  local f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] && addon_label_tpl "$f" "${3:-}"
+  done < <(addon_appset "$1" "$2" | yq -r '.spec.template.spec.source.helm.valueFiles[] | select(test("^values/") and test("[{][{]") and (test("^values/(role|provider|cni)-") | not))' | tr -d '\r')
+}
+
 # addon_installation_valuefiles <platform render> <addon> -> catalog installationValueFiles as rendered (relative to
 # addons/<addon>): the valueFiles entries under values/ with no per-cluster goTemplate left in them.
 addon_installation_valuefiles() {
@@ -52,18 +87,22 @@ addon_values_object() {
 }
 
 # addon_helm_args <addon> <inst dir> <platform render> <role> <name> <provider> <environment> <region> <cni> <server>
-# -> `helm template` arguments, one per line, in ApplicationSet precedence, all taken from the addon's ApplicationSet in
+#   [<labels file>] -> `helm template` arguments, one per line, in ApplicationSet precedence, all taken from the addon's ApplicationSet in
 #    the charts/platform render (Argo parity):
-#    valueFiles (chart, role, provider, cni, installationValueFiles, installation overlays) < valuesObject
+#    valueFiles (chart, role, provider, cni, label-selected files, installationValueFiles, installation overlays) < valuesObject
 #    (charts/platform values + installation.yaml, then cluster.*) < parameters (as rendered; the per-cluster goTemplate
-#    expressions - cluster name label, server parts - resolved for this cluster; forceString -> --set-string).
+#    expressions - cluster name label, server parts, other cluster labels from <labels file> - resolved for this
+#    cluster; forceString -> --set-string).
 # The release name is addon_release_name. <inst dir> locates the overlay files; the valuesObject file is written next to
 # <platform render> (the caller's temp dir).
 addon_helm_args() {
-  local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10}
+  local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10} labels=${11:-}
   local dir="addons/$addon" vf p v fs part vo="$3.values-$1.yaml"
   local name_expr='{{ index .metadata.labels "platform.koorikla.io/name" }}'
   local -a files=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
+  while IFS= read -r vf; do
+    if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
+  done < <(addon_label_valuefiles "$render" "$addon" "$labels")
   while IFS= read -r vf; do
     if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
   done < <(addon_installation_valuefiles "$render" "$addon")
@@ -80,6 +119,7 @@ addon_helm_args() {
     part=$(P="$p" yq -r ".addons[\"$addon\"].clusterServerParameters[strenv(P)] // \"\"" "$ADDONS_CATALOG" | tr -d '\r')
     if [[ -n "$part" ]]; then v=$(addon_server_part "$server" "$part"); fi
     v=${v//"$name_expr"/$name}
+    case "$v" in *"{{"*) v=$(addon_label_tpl "$v" "$labels") ;; esac
     case "$v" in *"{{"*) echo "addon_helm_args: $addon parameter $p has an unresolved goTemplate: $v" >&2; return 1 ;; esac
     if [[ "$fs" == true ]]; then printf '%s\n' --set-string "$p=$v"; else printf '%s\n' --set "$p=$v"; fi   # Argo: typed --set unless forceString
   done < <(addon_appset "$render" "$addon" | SEP=$'\x1f' yq -r '.spec.template.spec.source.helm.parameters[]? | .name + strenv(SEP) + .value + strenv(SEP) + ((.forceString // false) | tostring)' | tr -d '\r')

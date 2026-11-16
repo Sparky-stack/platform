@@ -1,0 +1,67 @@
+{{- /*
+ClusterSecretStore mgmt-openbao: read-only, name-scoped access to Secret openbao/openbao-ca-bundle (templates/pki.yaml),
+which holds PUBLIC certificates only (OpenBao's CA, the mesh group roots). ESO's kubernetes provider reads a remoteRef
+with one GET and validates the store with a SelfSubjectRulesReview that accepts a name-scoped get rule: no list/watch,
+no other Secret of this namespace (CA key, listener key, static seal key) is reachable. Consumer: charts/cluster
+mesh-trust.yaml (ns fleet, CRS payload for each member's istio-system).
+*/ -}}
+{{- $p := .Values.caPublic }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-{{ $p.store }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-{{ $p.store }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ $p.secretName }}]
+    verbs: [get]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-{{ $p.store }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-{{ $p.store }} }
+subjects:
+  - { kind: ServiceAccount, name: eso-{{ $p.store }}, namespace: {{ .Release.Namespace }} }
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ $p.store }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+spec:
+  conditions:
+    - namespaces: {{ toJson $p.namespaces }}
+  provider:
+    kubernetes:
+      remoteNamespace: {{ .Release.Namespace }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-{{ $p.store }}
+          namespace: {{ .Release.Namespace }}

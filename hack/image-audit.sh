@@ -125,19 +125,31 @@ add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
 
-# render <addon> <role> <name> <provider> <environment> <region> <cni> <server>: layered like the ApplicationSet
+# render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels file>]: layered like the ApplicationSet
 # (hack/lib/addons.sh), installation parameters / value files from the charts/platform render of this installation.
 render() {
   local addon=$1 name=$3 dir="addons/$1" ns
   local -a vargs=()
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
-  read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+  read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-}"
   if ! helm template "$(addon_release_name "$PLATFORM_RENDER" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
     > "$TMP/render.yaml" 2> "$TMP/render.err"; then
     echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
     return 0
   fi
   extract_images < "$TMP/render.yaml" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
+  # Proxy image istiod uses for the Deployments it generates (east-west gateway, waypoints): not in any manifest,
+  # resolved from the injector values like the Istio charts do: global.proxy.image verbatim when it contains "/" (a
+  # full, digest-pinned reference), else global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless).
+  local inj
+  inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$TMP/render.yaml" 2>/dev/null || true)
+  if [[ -n "$inj" ]]; then
+    # shellcheck disable=SC2016  # $g/$v are yq variables
+    img=$(printf '%s' "$inj" | yq -p=json -oy -r '.global as $g | ($g.variant // "") as $v
+      | if ($g.proxy.image | test("/")) then $g.proxy.image
+        else $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end) end')
+    add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
+  fi
 }
 
 
@@ -177,15 +189,45 @@ for dir in addons/*; do
         helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
           > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
       fi
+      [[ -f "$TMP/labels-$c_name.yaml" ]] || yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$c_name.yaml" \
+        > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
       toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" \
         "$TMP/cluster-$c_name.yaml" 2>/dev/null || true)
       [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
       if enabled "$addon" "$toggle" && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
         render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
-          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER"
+          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER" "$TMP/labels-$c_name.yaml"
       fi
     done
   fi
+done
+
+echo "==> Rendering enabled examples (examples/*), layered per matching cluster like appset-examples.yaml" >&2
+# shellcheck disable=SC2016  # $i is a yq variable
+yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' "$CATALOG" "$INST_FILE" > "$TMP/examples.json"
+for dir in examples/*; do
+  [[ -f "$dir/Chart.yaml" ]] || continue
+  ex=$(basename "$dir")
+  [[ "$(yq -p=json -oy ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
+  helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
+  for cf in "$INST_DIR"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    c_name=$(yq '.name' "$cf")
+    labels="$TMP/labels-$c_name.yaml"
+    [[ -s "$labels" ]] || continue
+    match=1   # selector matchLabels (matchExpressions are not evaluated here: render anyway)
+    while IFS=$'\t' read -r k v; do
+      [[ -n "$k" ]] || continue
+      [[ "$(yq -r ".[\"$k\"] // \"\"" "$labels")" == "$v" ]] || match=0
+    done < <(yq -p=json -oy -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
+    (( match )) || continue
+    vargs=(--values "$dir/values.yaml")
+    for vf in "$INST_DIR/examples/$ex/values.yaml" "$INST_DIR/examples/$ex/cluster-$c_name.yaml"; do
+      if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
+    done
+    helm template "$ex" "$dir" "${vargs[@]}" --set-string "cluster.name=$c_name" 2>/dev/null | extract_images \
+      | while IFS= read -r img; do add "$img" "example $ex ($c_name)"; done
+  done
 done
 
 echo "==> Cluster images (k3d mgmt node, CAPD node)" >&2

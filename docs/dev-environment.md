@@ -160,7 +160,7 @@ elsewhere:
 | Container IPs on `kind` (CAPD `<name>-kubeconfig`, node IPs) | routable from the host | **not routable** from the host. Inside Docker everything works unchanged (mgmt pods, agents, Argo CD reach the CAPD LB IP) |
 | Workload cluster kubeconfig on the host | `task kubeconfig CLUSTER=dev1` keeps the LB IP | `task kubeconfig CLUSTER=dev1` rewrites the server to `127.0.0.1:<port the <name>-lb container publishes>` (a k3s cert SAN; `KUBECONFIG_MODE=published`) |
 | App URLs on CAPD nodes (`*.dev1.apps.localhost:19080`, docs/openchoreo.md) | `curl --resolve ...:$NODE_IP` | run the client inside the network: `docker run --rm --network kind curlimages/curl:8.22.0 --resolve development-default.dev1.apps.localhost:19080:$NODE_IP http://development-default.dev1.apps.localhost:19080/hello-world-http/` |
-| `127.0.0.1:8080/8443/11080/11085` (k3d LB) | published on loopback | published on the host loopback too (Docker Desktop forwards) |
+| `127.0.0.1:8080/8443/9443/11080/11085/8200` (k3d LB) | published on loopback | published on the host loopback too (Docker Desktop forwards) |
 | `/var/run/docker.sock` mounted into the k3d node (CAPD) | host socket | the VM's socket; Docker Desktop, OrbStack, Colima and Rancher Desktop all provide `/var/run/docker.sock` inside their VM. Native Windows k3d may reject the Unix path (use WSL2) |
 | inotify limits (many k3s nodes) | `bootstrap.sh` warns below 524288 watches | limits live in the VM kernel: `docker run --rm --privileged alpine sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=8192` (resets when the VM restarts) |
 | Resources | host RAM | give the VM >= 8 CPUs / 16 GB (Docker Desktop: Settings -> Resources) |
