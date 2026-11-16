@@ -4,6 +4,9 @@
 #                              bindings from the gated Argo CD Application pass; from openchoreo-api, from the app's
 #                              main Application, another tenant's Application or without tracking-id are denied;
 #                              staging is out of scope
+#   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
+#                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
+#                              cluster scope, spec overrides and extra arguments are denied
 # and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
@@ -54,6 +57,22 @@ for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' ar
   out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
     --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)
   assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"
+done
+
+# Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
+ae="$ROOT/addons/argo-events"
+wp_chart="$ROOT/addons/openchoreo-workflow-plane"
+[[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null
+helm template wp "$wp_chart" --namespace openchoreo-workflow-plane \
+  | yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "workflows.argoproj.io")' > "$TMP/wf-crd.yaml"
+assert_nonempty "$(yq '.metadata.name' "$TMP/wf-crd.yaml")" "Argo Workflow CRD rendered from addon openchoreo-workflow-plane"
+helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true -s templates/workflow-admission.yaml \
+  > "$TMP/ae-vap.yaml"
+for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 8'; do
+  res=${c%%:*}; want=${c#*:}
+  out=$("$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
+    --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" 2>&1 || true)
+  assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
 done
 
 finish

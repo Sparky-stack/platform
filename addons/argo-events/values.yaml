@@ -9,6 +9,7 @@
 #   Sensor promotion-gate     rollout succeeded in an autoTrigger environment -> OpenChoreo WorkflowRun (ClusterWorkflow
 #                             promotion-gate, addon openchoreo-platform), one per rollout
 #   WorkflowTemplate falco-response   enrich (control-plane objects) -> record Event -> RCA agent (if on) -> notify (if set)
+#   ValidatingAdmissionPolicy argo-events-workflows-falco-response-only   Workflows here run only falco-response
 # Argo Workflows itself is the OpenChoreo workflow plane's controller on mgmt (addon openchoreo-workflow-plane); it must
 # watch this namespace (cluster-wide controller, the chart default).
 #

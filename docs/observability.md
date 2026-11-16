@@ -209,7 +209,14 @@ ServiceAccount tokens follow the promotion gate's executor-only pattern: the Wor
 outputs; its token reaches Argo's init/wait containers, never the step container). Only `enrich` and `record` opt back
 in, as ServiceAccount `falco-response` (read RenderedReleases/Environments, create Events in the org namespace).
 `rca` and `notify` (template `call`) send the event context to endpoints outside the cluster API and run without any
-token. Admission pins what the Sensor may start (below).
+token.
+
+The Sensor can create Workflows in `argo-events`, so admission pins what it may start: ValidatingAdmissionPolicy
+`argo-events-workflows-falco-response-only` (addon argo-events `templates/workflow-admission.yaml`) denies every
+Workflow created there unless its spec is exactly `workflowTemplateRef: {name: falco-response}` plus the `event`
+parameter. No inline templates, no other (Cluster)WorkflowTemplate, no `serviceAccountName`, `podSpecPatch` or other
+override, whoever the creator is. A VAP rather than Argo Workflows' `templateReferencing: Strict`: that controller
+setting is global, and the same controller runs OpenChoreo's rendered Workflows with inline templates.
 
 Name resolution needs no new rule: `events.openchoreo.localhost` matches the existing `*.openchoreo.localhost` rewrite
 of `coredns-local` (workload: to the serverlb; mgmt: to the control-plane Gateway Service). Containment stays with Talon

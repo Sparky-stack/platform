@@ -6,11 +6,12 @@ templates:
   - templates/eventsource.yaml
   - templates/sensors.yaml
   - templates/falco-response.yaml
+  - templates/workflow-admission.yaml
 set:
   workflowPlane: "true"            # most tests: as on mgmt with the workflow plane; detection is tested below
 tests:
-  - it: without the Argo Workflows CRDs (auto) no WorkflowTemplate and no Sensors render
-    templates: [templates/sensors.yaml, templates/falco-response.yaml]
+  - it: without the Argo Workflows CRDs (auto) no WorkflowTemplate, no Sensors and no Workflow admission pin render
+    templates: [templates/sensors.yaml, templates/falco-response.yaml, templates/workflow-admission.yaml]
     set:
       workflowPlane: auto
     asserts:
@@ -57,7 +58,7 @@ tests:
         documentSelector: { path: metadata.name, value: platform }
 
   - it: rejects an unknown workflowPlane mode
-    template: templates/sensors.yaml
+    template: templates/workflow-admission.yaml
     set:
       workflowPlane: maybe
     asserts:
@@ -212,6 +213,38 @@ tests:
         documentSelector: { path: metadata.name, value: falco-response-executor.service-account-token }
       - equal: { path: "metadata.annotations[\"kubernetes.io/service-account.name\"]", value: falco-response-executor }
         documentSelector: { path: metadata.name, value: falco-response-executor.service-account-token }
+
+  - it: Workflows in the release namespace are pinned to WorkflowTemplate falco-response at admission (Deny)
+    template: templates/workflow-admission.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - equal:
+          path: spec.matchConstraints
+          value:
+            resourceRules: [{ apiGroups: [argoproj.io], apiVersions: ["*"], operations: [CREATE], resources: [workflows] }]
+            namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: argo-events } }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: "workflowTemplateRef == \\{'name': 'falco-response'\\}" }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicyBinding }
+
+  - it: the Sensor's Workflow is exactly what the admission pin allows (template ref by name + the event argument)
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: falco-escalation }
+    asserts:
+      - equal:
+          path: "spec.triggers[0].template.k8s.source.resource.spec"
+          value: { workflowTemplateRef: { name: falco-response }, arguments: { parameters: [{ name: event, value: "{}" }] } }
+
+  - it: no Workflow admission pin without the Falco receiver
+    template: templates/workflow-admission.yaml
+    set:
+      falco.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
 
   - it: one event source type per EventSource (webhook in platform, resource watch in releasebindings)
     template: templates/eventsource.yaml

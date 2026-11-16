@@ -1,0 +1,15 @@
+# What Sensor falco-escalation creates (templates/sensors.yaml trigger, parameters applied): allowed.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: falco-4e1a2b3c-0000-4000-8000-000000000001
+  namespace: argo-events
+  labels:
+    platform.koorikla.io/trigger: falco
+spec:
+  workflowTemplateRef:
+    name: falco-response
+  arguments:
+    parameters:
+      - name: event
+        value: '{"uuid":"4e1a2b3c-0000-4000-8000-000000000001","priority":"Critical"}'
