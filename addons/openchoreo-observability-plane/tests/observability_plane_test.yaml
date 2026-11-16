@@ -96,3 +96,74 @@ tests:
     template: templates/validate.yaml
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: creates rca-agent-secret and finops-agent ExternalSecrets from openchoreo-ai when agents are enabled
+    template: templates/secrets.yaml
+    set:
+      openchoreo-observability-plane.rca.enabled: true
+      openchoreo-observability-plane.rca.llm.modelName: gpt-5.2
+      openchoreo-observability-plane.finOpsAgent.enabled: true
+      openchoreo-observability-plane.finOpsAgent.llmName: gpt-5.2
+    asserts:
+      - hasDocuments: { count: 4 }
+      - equal: { path: metadata.name, value: rca-agent-secret }
+        documentIndex: 2
+      - contains:
+          path: spec.data
+          content: { secretKey: RCA_LLM_API_KEY, remoteRef: { key: openchoreo-ai, property: rca-llm-api-key } }
+        documentIndex: 2
+      - contains:
+          path: spec.data
+          content: { secretKey: OAUTH_CLIENT_SECRET, remoteRef: { key: openchoreo-ai, property: rca-oauth-client-secret } }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: finops-agent }
+        documentIndex: 3
+      - contains:
+          path: spec.data
+          content: { secretKey: LLM_API_KEY, remoteRef: { key: openchoreo-ai, property: finops-llm-api-key } }
+        documentIndex: 3
+      - contains:
+          path: spec.data
+          content: { secretKey: OAUTH_CLIENT_SECRET, remoteRef: { key: openchoreo-ai, property: finops-oauth-client-secret } }
+        documentIndex: 3
+
+  - it: AI agents are off by default (no agent Secrets, no agent URLs on the plane CR)
+    asserts:
+      - hasDocuments: { count: 2 }
+        template: templates/secrets.yaml
+      - notExists: { path: spec.rcaAgentURL }
+        template: templates/cluster-observability-plane.yaml
+      - notExists: { path: spec.finOpsAgentURL }
+        template: templates/cluster-observability-plane.yaml
+
+  - it: enabled agents are published on ClusterObservabilityPlane through the plane Gateway
+    template: templates/cluster-observability-plane.yaml
+    set:
+      openchoreo-observability-plane.rca.enabled: true
+      openchoreo-observability-plane.rca.llm.modelName: gpt-5.2
+      openchoreo-observability-plane.finOpsAgent.enabled: true
+      openchoreo-observability-plane.finOpsAgent.llmName: gpt-5.2
+    asserts:
+      - equal: { path: spec.rcaAgentURL, value: "http://rca-agent.openchoreo.localhost:11080" }
+      - equal: { path: spec.finOpsAgentURL, value: "http://finops-agent.openchoreo.localhost:11080" }
+
+  - it: rejects the RCA agent without a model
+    template: templates/validate.yaml
+    set: { openchoreo-observability-plane.rca.enabled: true }
+    asserts:
+      - failedTemplate: { errorMessage: "openchoreo-observability-plane.rca.enabled needs rca.llm.modelName (docs/ai-agents.md)" }
+
+  - it: rejects the FinOps agent without a model
+    template: templates/validate.yaml
+    set: { openchoreo-observability-plane.finOpsAgent.enabled: true }
+    asserts:
+      - failedTemplate: { errorMessage: "openchoreo-observability-plane.finOpsAgent.enabled needs finOpsAgent.llmName (docs/ai-agents.md)" }
+
+  - it: rejects an agent hostname outside the installation's control-plane host
+    template: templates/validate.yaml
+    set:
+      openchoreo-observability-plane.rca.enabled: true
+      openchoreo-observability-plane.rca.llm.modelName: gpt-5.2
+      openchoreo-observability-plane.rca.http.hostnames: [rca.evil.example]
+    asserts:
+      - failedTemplate: { errorMessage: "openchoreo-observability-plane.rca.http.hostnames[0] must be rca-agent.openchoreo.localhost" }

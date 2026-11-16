@@ -146,3 +146,71 @@ tests:
           apiVersion: argoproj.io/v1alpha1
           name: addon-clusterclasses
           any: true
+
+  - it: external-dns is opt-in and takes provider, zones and TXT owner from the installation
+    template: appset-addons.yaml
+    values: [../../../installations/hetzner-example/installation.yaml]
+    documentSelector: { path: metadata.name, value: addon-external-dns }
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/external-dns, operator: In, values: ["true"] }
+      - contains: { path: spec.template.spec.source.helm.valueFiles, content: values/dns-cloudflare.yaml }
+      - notContains: { path: spec.template.spec.source.helm.valueFiles, content: values/dns-route53.yaml }
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: external-dns.domainFilters, value: "{hetzner.example.com}" }
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: external-dns.txtOwnerId, value: 'hetzner-example-{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
+
+  - it: clusterIdParameters are <installation>-<cluster> (unique across installations sharing a zone)
+    template: appset-addons.yaml
+    set:
+      addons:
+        idtest: { namespace: idtest, roles: [workload], clusterIdParameters: [x.owner], clusterNameParameters: [x.name] }
+    documentSelector: { path: metadata.name, value: addon-idtest }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: x.owner, value: 'local-{{ index .metadata.labels "platform.koorikla.io/name" }}', forceString: true }
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: x.name, value: '{{ index .metadata.labels "platform.koorikla.io/name" }}' }
+
+  - it: installationValueFiles sit after the cni overlay and before the installation overlays
+    template: appset-addons.yaml
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com, b.example.com] }
+    documentSelector: { path: metadata.name, value: addon-external-dns }
+    asserts:
+      - equal: { path: "spec.template.spec.source.helm.valueFiles[4]", value: values/dns-route53.yaml }
+      - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[3]", pattern: "^values/cni-" }
+      - matchRegex: { path: "spec.template.spec.source.helm.valueFiles[5]", pattern: "^\\.\\./\\.\\./installations/local/addons/external-dns/values.yaml$" }
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: external-dns.domainFilters, value: "{a.example.com,b.example.com}" }
+
+  - it: installationValueFiles must stay under the addon's values/
+    template: appset-addons.yaml
+    set:
+      addons:
+        evil: { namespace: evil, roles: [mgmt], installationValueFiles: ["../../installations/{{ .Values.installation.name }}/installation.yaml"] }
+    asserts:
+      - failedTemplate:
+          errorMessage: 'addons.evil.installationValueFiles: "../../installations/local/installation.yaml" must be a file under addons/evil/values/'
+
+  - it: AI agent addons are catalog entries switched off by default on mgmt
+    template: appset-addons.yaml
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/agentgateway, operator: In, values: ["true"] }
+        documentSelector: { path: metadata.name, value: addon-agentgateway }
+      - equal: { path: spec.template.spec.destination.namespace, value: agentgateway-system }
+        documentSelector: { path: metadata.name, value: addon-agentgateway }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/finops-opencost, operator: In, values: ["true"] }
+        documentSelector: { path: metadata.name, value: addon-finops-opencost }
+      - equal: { path: spec.template.spec.destination.namespace, value: openchoreo-observability-plane }
+        documentSelector: { path: metadata.name, value: addon-finops-opencost }

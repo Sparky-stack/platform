@@ -2,6 +2,7 @@ suite: thunder secrets and hooks under Argo CD
 templates:
   - templates/bootstrap-secret.yaml
   - templates/validate.yaml
+  - templates/ai-agent-clients.yaml
   - charts/thunderid/templates/pvc.yaml
   - charts/thunderid/templates/setup-job.yaml
   - charts/thunderid/templates/admin-secret.yaml
@@ -13,10 +14,10 @@ tests:
     asserts:
       - equal: { path: metadata.name, value: thunder-bootstrap }
       - equal:
-          path: metadata.annotations["helm.sh/hook-weight"]
+          path: 'metadata.annotations["helm.sh/hook-weight"]'
           value: "-20"
       - equal:
-          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          path: 'metadata.annotations["helm.sh/hook-delete-policy"]'
           value: hook-failed
       - equal: { path: spec.secretStoreRef.name, value: platform }
   - it: PVCs are never deleted by a successful sync
@@ -24,7 +25,7 @@ tests:
     asserts:
       - hasDocuments: { count: 3 }
       - equal:
-          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          path: 'metadata.annotations["helm.sh/hook-delete-policy"]'
           value: hook-failed
   - it: no lookup()-generated admin Secret (Argo renders without cluster access)
     template: charts/thunderid/templates/admin-secret.yaml
@@ -44,3 +45,51 @@ tests:
       openchoreo.controlPlane.host: example.com
     asserts:
       - failedTemplate: {}
+  - it: AI agent OAuth clients are off by default
+    template: templates/bootstrap-secret.yaml
+    asserts:
+      - notContains: { path: spec.data, content: { secretKey: rca-agent-client-secret }, any: true }
+      - notContains: { path: spec.data, content: { secretKey: finops-agent-client-secret }, any: true }
+  - it: AI agent client secrets come from openchoreo-ai, the same properties the agents read
+    template: templates/bootstrap-secret.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [rca, finops]
+    asserts:
+      - contains:
+          path: spec.data
+          content: { secretKey: rca-agent-client-secret, remoteRef: { key: openchoreo-ai, property: rca-oauth-client-secret } }
+      - contains:
+          path: spec.data
+          content: { secretKey: finops-agent-client-secret, remoteRef: { key: openchoreo-ai, property: finops-oauth-client-secret } }
+  - it: rejects an unknown AI agent client
+    template: templates/bootstrap-secret.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [portal-assistant]
+    asserts:
+      - failedTemplate: { errorMessage: 'bootstrapSecret.aiAgentClients: "portal-assistant" is not one of rca, finops' }
+
+  - it: AI agent client scripts are empty documents while no agent is listed
+    template: templates/ai-agent-clients.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["helm.sh/hook-weight"]', value: "-10" }
+      - notMatchRegex: { path: 'data["53-rca-agent-client.yaml"]', pattern: resource_type }
+      - notMatchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: resource_type }
+
+  - it: listing an agent switches on exactly its Thunder client, secret from the env (never inline)
+    template: templates/ai-agent-clients.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [finops]
+    asserts:
+      - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: 'clientId: openchoreo-finops-agent' }
+      - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: 'clientSecret: "\{\{ \.FINOPS_AGENT_CLIENT_SECRET \}\}"' }
+      - notMatchRegex: { path: 'data["53-rca-agent-client.yaml"]', pattern: resource_type }
+
+  - it: setup Job mounts both scripts and reads the agent secrets as optional env
+    template: charts/thunderid/templates/setup-job.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/53-rca-agent-client.yaml, subPath: 53-rca-agent-client.yaml, readOnly: true }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: FINOPS_AGENT_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: thunder-bootstrap, key: finops-agent-client-secret, optional: true } } }

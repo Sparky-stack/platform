@@ -1,0 +1,52 @@
+# agentgateway on mgmt (catalog default: false; switch: installation.yaml mgmt.addons.agentgateway: "true").
+# OpenChoreo's RCA (sre-agent) and FinOps agents run in openchoreo-observability-plane on mgmt and call an
+# OpenAI-compatible base URL; pointed here, the provider key lives only in this namespace and the agents' own LLM key
+# can be a placeholder. docs/ai-agents.md. Upstream module: openchoreo/community-modules ai-gateway-agentgateway (its
+# ClusterTraits target data planes; this addon only serves the platform's own agents).
+#
+#   agentgateway-crds   AgentgatewayBackend / AgentgatewayPolicy / AgentgatewayParameters (agentgateway.dev/v1alpha1)
+#   agentgateway        controller; creates GatewayClass `agentgateway` and one proxy Deployment per Gateway
+#   templates/          Gateway agentgateway-proxy + its AgentgatewayParameters (ClusterIP Service, seccomp
+#                       RuntimeDefault) and NetworkPolicy (callers: gateway.allowedNamespaces), the LLM backend + route,
+#                       its ExternalSecret
+#
+# Agents' base URL: http://agentgateway-proxy.agentgateway-system.svc.cluster.local (llm listener, port 80).
+
+# --- platform glue (templates/) -------------------------------------------------------------------------------------
+gateway:
+  name: agentgateway-proxy
+  port: 80                    # listener `llm`; routes only from this namespace (no ClusterTraits on mgmt)
+  # NetworkPolicy: the only namespaces that may call the proxy (RCA / FinOps agents). Service is ClusterIP.
+  allowedNamespaces:
+    - openchoreo-observability-plane
+
+llm:
+  enabled: true
+  provider: openai            # openai | anthropic | gemini (AgentgatewayBackend spec.ai.provider); the FinOps agent in
+                              # OpenChoreo 1.3.3 supports OpenAI models only
+  model: ""                   # empty: the model in each request decides (agents set rca.llm.modelName / llmName)
+
+# Provider API key from ClusterSecretStore `platform` (namespace agentgateway-system is listed in addon secret-stores
+# platformStore.namespaces): key `openchoreo-ai`, property `<provider>-api-key` (e.g. openai-api-key). ESO syncs it raw
+# as key `Authorization` of Secret <provider>-llm-auth; agentgateway adds it to upstream requests.
+secrets:
+  store: platform
+  remoteKey: openchoreo-ai
+
+# --- upstream charts ------------------------------------------------------------------------------------------------
+agentgateway-crds: {}
+
+agentgateway:
+  controller:
+    image:
+      tag: v1.1.0@sha256:0c4179780a3353a20f403ed51c764127f2806b6aa1a5ecb6da7655b5b27d7926   # index: amd64, arm64
+  proxy:
+    image:
+      tag: v1.1.0@sha256:b5fd647604aa37eb2da372206a6681dfd613461e2445d89ba0b80e8439a4ff29   # index: amd64, arm64. VERIFY controller accepts tag@digest
+  podSecurityContext:         # chart container defaults already: non-root, read-only root fs, drop ALL, no escalation
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  resources:                  # controller; chart sets none
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 256Mi }

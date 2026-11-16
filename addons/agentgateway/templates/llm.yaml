@@ -1,0 +1,70 @@
+{{- /*
+LLM route for the platform's own agents: every request on the llm listener goes to one AgentgatewayBackend of
+llm.provider, which authenticates upstream with the key from ClusterSecretStore `platform` (key openchoreo-ai,
+property <provider>-api-key). The agents never see the provider key.
+*/ -}}
+{{- if .Values.llm.enabled }}
+{{- $p := .Values.llm.provider }}
+{{- if not (has $p (list "openai" "anthropic" "gemini")) }}
+{{- fail (printf "llm.provider must be openai, anthropic or gemini, got %q" $p) }}
+{{- end }}
+{{- $auth := printf "%s-llm-auth" $p }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $auth }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ required "secrets.store is required" .Values.secrets.store }}
+  target:
+    name: {{ $auth }}
+  data:
+    # The raw provider key as key `Authorization`: upstream's documented secretRef shape (the controller strips a
+    # "Bearer " prefix if one is present, kubeutils/secrets.go), so no ESO template.
+    - secretKey: Authorization
+      remoteRef: { key: {{ .Values.secrets.remoteKey }}, property: {{ printf "%s-api-key" $p }} }
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: platform-agents-llm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  ai:
+    provider:
+      {{ $p }}:
+        {{- with .Values.llm.model }}
+        model: {{ . | quote }}
+        {{- else }} {}
+        {{- end }}
+  policies:
+    auth:
+      secretRef:
+        name: {{ $auth }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: platform-agents-llm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      sectionName: llm
+  rules:
+    - backendRefs:
+        - name: platform-agents-llm
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+{{- end }}

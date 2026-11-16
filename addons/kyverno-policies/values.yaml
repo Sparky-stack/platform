@@ -41,6 +41,7 @@ platformNamespaces: &platformNamespaces
   - falco
   - telemetry
   - obi
+  - agentgateway-system
 
 kyverno-policies:
   podSecurityStandard: baseline

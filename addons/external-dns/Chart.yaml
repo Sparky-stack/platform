@@ -1,0 +1,10 @@
+apiVersion: v2
+name: external-dns
+description: ExternalDNS for Gateway API routes (Route53 or Cloudflare, chosen by installation.yaml dns.provider); opt-in per cluster
+type: application
+version: 0.1.0
+dependencies:
+  - name: external-dns
+    version: 1.23.0
+    repository: https://kubernetes-sigs.github.io/external-dns/
+    condition: external-dns.enabled   # on only through values/dns-<provider>.yaml (dns.provider none = nothing runs)
