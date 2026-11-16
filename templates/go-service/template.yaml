@@ -111,10 +111,10 @@ spec:
         gitCommitMessage: 'feat: scaffold ${{ parameters.name }} from the go-service golden path'
     - id: fetch-platform-repo
       name: Governance record
-      action: fetch:template
+      action: fetch:template:file
       input:
-        url: ../_platform/repo
-        targetPath: ./platform
+        url: ../_platform/github-repository.yaml
+        targetPath: ./platform/installations/${{ parameters.installation }}/repos/${{ parameters.name }}.yaml
         values:
           name: ${{ parameters.name }}
           project: ${{ parameters.project }}
@@ -126,10 +126,10 @@ spec:
     - id: fetch-platform-tenant
       name: Tenant file
       if: ${{ parameters.newTenant }}
-      action: fetch:template
+      action: fetch:template:file
       input:
-        url: ../_platform/tenant
-        targetPath: ./platform
+        url: ../_platform/tenant.yaml
+        targetPath: ./platform/installations/${{ parameters.installation }}/tenants/${{ parameters.project }}.yaml
         values:
           name: ${{ parameters.name }}
           project: ${{ parameters.project }}

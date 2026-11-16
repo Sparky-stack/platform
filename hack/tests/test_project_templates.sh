@@ -22,8 +22,8 @@ echo "== test_project_templates =="
 cd "$ROOT"
 
 # Scaffolder actions registered in openchoreo-ui v1.3.3 (backend features of @openchoreo/backstage-portal-backend:
-# scaffolder-backend built-ins + scaffolder-backend-module-github). Golden paths need only these four.
-ALLOWED_ACTIONS="catalog:register fetch:template publish:github publish:github:pull-request"
+# scaffolder-backend built-ins + scaffolder-backend-module-github). Golden paths need only these five.
+ALLOWED_ACTIONS="catalog:register fetch:template fetch:template:file publish:github publish:github:pull-request"
 # publish:github inputs a template may set. Everything else (branch protection, required checks/reviews, collaborators,
 # merge settings, secrets, environments) is repo governance: declared in installations/<inst>/repos/ and reconciled by
 # Crossplane (#100), never set imperatively at creation. No `token`: the GitHub App integration authenticates.
@@ -42,7 +42,10 @@ SHA_USES_RE='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[^@]+)?@[0-9a-f]{40}$'
 BUSYBOX=docker.io/library/busybox:1.38.0-musl@sha256:80e38f9a1b39188b8bdb28879178edb322a4402b081a9aedda1924609decd6f6
 
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
-[[ -d "$SCHEMAS_DIR/openchoreo.dev" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
+if [[ ! -d "$SCHEMAS_DIR/openchoreo.dev" ]]; then   # standalone run (CI workflow templates.yaml): chart deps first
+  ./hack/deps.sh >/dev/null
+  SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
+fi
 KC_ARGS=(-strict -summary -kubernetes-version 1.35.0 -schema-location default
   -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json")
 kc() { local out; if out=$(kubeconform "${KC_ARGS[@]}" "$@" 2>&1); then echo yes; else echo "$out" >&2; echo no; fi; }

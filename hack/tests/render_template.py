@@ -3,7 +3,8 @@
 
 Usage: render_template.py <template dir> <template.yaml as JSON> <parameters JSON> <out dir>
 
-Reads the template (converted to JSON by yq: stdlib only here), resolves every `fetch:template` step's `values` from
+Reads the template (converted to JSON by yq: stdlib only here), resolves every `fetch:template` / `fetch:template:file`
+step's `values` from
 the sample parameters, and renders its skeleton into <out dir>/<targetPath> - the repository content (`targetPath`
 unset) or the platform PR (`./platform`). Steps with `if:` run when the parameter they name is true.
 
@@ -108,7 +109,7 @@ def main():
     with open(params_json, encoding="utf-8") as fh:
         params = json.load(fh)
     for step in tpl["spec"]["steps"]:
-        if step["action"] != "fetch:template":
+        if step["action"] not in ("fetch:template", "fetch:template:file"):
             continue
         cond = step.get("if")
         if cond is not None and not resolve_param(cond, params, step["id"]):
@@ -116,9 +117,19 @@ def main():
             continue
         inp = step["input"]
         values = {k: resolve_param(v, params, f"{step['id']}.values.{k}") for k, v in inp.get("values", {}).items()}
-        target = os.path.normpath(os.path.join(out_dir, inp.get("targetPath", ".")))
+        target = os.path.normpath(os.path.join(out_dir, resolve_param(inp.get("targetPath", "."), params, step["id"])))
         src = os.path.normpath(os.path.join(base, inp["url"]))
-        n = render_skeleton(src, target, values, inp.get("copyWithoutTemplating", []), step["id"])
+        if step["action"] == "fetch:template:file":  # one file; targetPath is the file path
+            if not os.path.isfile(src):
+                raise RenderError(f"{step['id']}: {src} is not a file")
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(src, encoding="utf-8", newline="") as fh:
+                text = render_text(fh.read(), values, step["id"])
+            with open(target, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            n = 1
+        else:
+            n = render_skeleton(src, target, values, inp.get("copyWithoutTemplating", []), step["id"])
         print(f"  rendered {step['id']}: {n} file(s) from {os.path.relpath(src, base)}")
 
 
