@@ -68,7 +68,7 @@ Also prepare:
 | 5 | Deploy and promote | 5 | development/staging live; production pending #54 |
 | 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait pending #48 |
 | 7 | Runtime security | 3 | live; cluster name in events pending #47 |
-| 8 | Zero trust | 2 | ESO live; OpenBao mesh CA: pending #19 until merged and green in `task demo:check` |
+| 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1/prod1; #19); per-tenant stores pending #96 |
 | 9 | App with a database | 2 | pending #91 |
 
 ## 1. Clean bootstrap
@@ -285,9 +285,9 @@ Talking points:
   sign, scoped to that cluster's PKI role with 10-minute tokens.
 - No secret is in Git; ESO pulls from the platform store; per-tenant stores are next (#96).
 
-Fallback / pending: the OpenBao mesh CA is **pending #19** until it is merged and `task demo:check` shows the row
-"OpenBao-issued mesh certificates" as PASS. Until then show ambient enrollment and the ClusterSecretStores, and the
-design in docs/architecture.md.
+Fallback: if `task demo:check` does not show "OpenBao-issued mesh certificates" as PASS (e.g. right after a restart
+of OpenBao or istiod), show ambient enrollment, the ClusterSecretStores and the design in docs/architecture.md; do not
+debug the CA live. Per-tenant SecretStores on OpenBao are **pending #96**.
 
 ## 9. App with a database
 
