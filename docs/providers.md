@@ -125,7 +125,7 @@ the newest server is still a learner: 3 voters -> 2 + learner, still a removal f
 | Option | Rollout safety | Cost / limits | Verdict |
 |---|---|---|---|
 | 3 (or 5) servers, embedded etcd | 3 -> 4 -> 3, quorum kept | 3 server machines | **production and anything that must survive rollouts** (enforced: `environment: production` on aws/hetzner needs >= 3) |
-| 1 server, embedded etcd | every rollout ends with a 2 -> 1 removal; can lose quorum | cheapest | disposable clusters only: local CAPD (`dev1`, `prod1`), cloud dev clusters |
+| 1 server, embedded etcd | every rollout ends with a 2 -> 1 removal; can lose quorum | cheapest | disposable clusters only: local CAPD (`dev1`, multicluster `prod1`), cloud dev clusters |
 | 2 / 4 servers | as fragile as 1 / 3, no extra tolerance | | rejected by charts/cluster (odd only) |
 | 1 server, SQLite (kine) | none: cluster-api-k3s v0.5.0 cannot run it - `cluster-init` is forced and KCP waits for an etcd member that never exists, so no rollout ever starts; a joining server would need etcd anyway | | not possible |
 | external datastore (`datastore-endpoint`, kine on Postgres) | k3s side fine (it ignores `cluster-init` then), but KCP still generates the etcd CA and requires `EtcdMemberHealthy`, so the control plane never passes preflight | an extra HA database per cluster | not possible with v0.5.0 |

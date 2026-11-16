@@ -9,6 +9,7 @@ version the platform runs (1.3.3):
     --version 1.3.3 --untar
   hack/gen-crd-schemas.py openchoreo-control-plane/crds
 """
+
 import json
 import pathlib
 import sys
@@ -28,7 +29,8 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     for fname, kind in KINDS.items():
         crd = yaml.safe_load((src / fname).read_text())
-        assert crd["spec"]["names"]["kind"] == kind, fname
+        if crd["spec"]["names"]["kind"] != kind:
+            sys.exit(f"{fname}: kind {crd['spec']['names']['kind']}, expected {kind}")
         group = crd["spec"]["group"]
         for v in crd["spec"]["versions"]:
             if not v.get("served"):

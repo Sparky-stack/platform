@@ -6,6 +6,7 @@ the app repo contract of koorikla/platform (docs/openchoreo.md "App repo contrac
 it and its project, no metadata.namespace, ReleaseBinding names are <component>-<environment>.
 Needs: pyyaml, jsonschema (CI: `uv run --with pyyaml --with jsonschema python3 hack/validate-manifests.py`).
 """
+
 import json
 import pathlib
 import sys

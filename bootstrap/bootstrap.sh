@@ -312,7 +312,7 @@ seed_openbao_secret() {
 # Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
 # cosign.password). Generated once with cosign from the koorikla/ci toolbox image (no host install); the private key
 # only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
-COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:c55730c0886405ab179be53d73099603f45334566955f6ef2cfc316f19d1c608"
+COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79"
 COSIGN_TMP=""
 # shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
 seed_cosign_secret() {
@@ -628,9 +628,10 @@ cmd_down() {
     kubectl --context "$CTX" delete clusters.cluster.x-k8s.io -n fleet --all --wait=true \
       --timeout="${DOWN_TIMEOUT:-5m}" || warn "CAPI cluster deletion did not finish within ${DOWN_TIMEOUT:-5m}"
   fi
-  # Leftovers of the clusters mgmt listed plus the installation's fleet files (mgmt may already be unreachable).
+  # Leftovers of the clusters mgmt listed plus the installation's fleet files (mgmt may already be unreachable),
+  # disabled ones included (a profile switch, docs/dev-environment.md "Local profiles", may have left containers).
   local f
-  for f in "installations/$INST/clusters/"*.yaml; do
+  for f in "installations/$INST/clusters/"*.yaml "installations/$INST/clusters/"*.yaml.disabled; do
     [[ -f "$f" ]] && clusters+=("$(yq '.name' "$f")")
   done
   (( ${#clusters[@]} > 0 )) && remove_capd_leftovers "${clusters[@]}"

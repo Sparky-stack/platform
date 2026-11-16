@@ -1,0 +1,5 @@
+# Toolchain koorikla/ci rust.yaml installs (rustup); same release as mise.toml and the Dockerfile build stage.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

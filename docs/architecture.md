@@ -141,7 +141,8 @@ booted one; `aws-example` and `hetzner-example` are reference installations that
 ([#26](https://github.com/koorikla/platform/issues/26)).
 
 Local: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind` (shared with CAPD), docker.sock mounted for
-CAPD. Workload clusters are the CAPD k3s clusters `dev1` (environments development, staging) and `prod1` (production).
+CAPD. The workload cluster is the CAPD k3s cluster `dev1`, hosting the environments development, staging and production
+as namespaces; the multicluster profile adds `prod1` for production ([dev-environment.md](dev-environment.md#local-profiles)).
 
 ### Tenants (OpenChoreo apps)
 App repos own their OpenChoreo manifests (`deploy/openchoreo/`: Component, Workload, ReleaseBindings). The platform repo

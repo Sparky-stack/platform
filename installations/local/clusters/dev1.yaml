@@ -3,7 +3,7 @@
 name: dev1
 provider: docker            # docker | aws | hetzner  -> ClusterClass k3s-<provider>
 region: local
-environment: development
+environment: development    # cluster tier (selects addon env-<environment>.yaml); app environments: openchoreo below
 kubernetesVersion: v1.35.10+k3s1
 controlPlane:
   # 1 server: host RAM (each extra CAPD k3s server costs ~1-2 GiB with its etcd and addons). Disposable: a control-plane
@@ -19,7 +19,10 @@ openchoreo:
   dataPlane:
     enabled: true
     gatewayHost: dev1.apps.localhost
-    environments: [development, staging, production]   # one workload cluster, environment per namespace (#115)
+    # Lean local profile: one workload cluster, one namespace per environment (OpenChoreo cells dp-<org>-<project>-<env>-*).
+    # Gates, freeze windows and Kyverno's per-environment policies follow the environment, not the cluster.
+    # Multicluster: prod1.yaml.disabled (docs/dev-environment.md "Local profiles").
+    environments: [development, staging, production]
 mesh:
   group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD

@@ -3,8 +3,9 @@
 Opt-in. Workloads in different workload clusters call each other's Services by their usual names
 (`<svc>.<ns>.svc.cluster.local`), with mTLS and identity-based authorization. There is no flat pod network, no VPN
 appliance and no route between pod CIDRs: each cluster exposes one **east-west gateway**, and Istio ambient carries
-cross-cluster traffic through it. Locally `dev1` (Cilium) and `prod1` (flannel) form the mesh group `local`, with the
-example service on `prod1` and its callers on `dev1`.
+cross-cluster traffic through it. Locally `dev1` (Cilium) is the mesh group `local`'s only member in the default
+profile; the multicluster profile ([dev-environment.md](dev-environment.md#local-profiles)) adds `prod1` (flannel), with
+the example service on `prod1` and its callers on `dev1`.
 
 Everything is declarative. Three settings turn it on, and adding a third cluster to the group needs nothing else:
 
@@ -407,7 +408,8 @@ CRS never deletes what it applied, and Istio checks no revocation, so decommissi
 
 ## Example (`examples/eastwest`)
 The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
-`installation.yaml` sets `examples.eastwest.enabled`. It targets clusters labelled
+`installation.yaml` sets `examples.eastwest.enabled` (locally: multicluster profile only; it needs two members, which
+`hack/tests/test_local_profiles.sh` checks). It targets clusters labelled
 `addons.platform.koorikla.io/istio-eastwest=true`, and values layer as
 `examples/eastwest/values.yaml` < `installations/<inst>/examples/eastwest/{values,cluster-<name>}.yaml`.
 

@@ -30,6 +30,15 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
     `workflowRef` (custom manager in `renovate.json`, tag `v1` of koorikla/ci) and the app repos' `uses:` pins
     (github-actions digest pinning) to the same commit;
+  - **moving the pin**: running production images were signed at the previous commit, so a bare bump of
+    `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
+    until each allowed repository's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
+    per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (suffix
+    `-<sha7>` for the transition commit) and the validations accept any of them. Steps: (1) move `workflowRef`, put
+    the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote their rebuilt images; (3) empty
+    `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
+    `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
+    ([#128](https://github.com/koorikla/platform/issues/128));
   - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
     `githubWorkflowRef` (from `github.refs`) and `githubWorkflowTrigger` (from `github.triggers`, default `push`).
     The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
@@ -62,6 +71,9 @@ Evidence (Kyverno CLI v1.20.0 against the real image
     value …container.yaml@<sha>, got …container.yaml@refs/tags/v1") and is reported in staging. With the subject at
     `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
   - the tag-only reference fails in production.
+  - `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
+    in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d`, passes only while
+    `transitionWorkflowRefs` lists `de39b1d`.
   - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
     koorikla/ci's own pipeline) fails in production.
 - Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
