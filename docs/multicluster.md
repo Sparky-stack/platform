@@ -252,7 +252,7 @@ issued certificates expire within a day. The 7-day reader client certs (remote s
    order the rest: wave 0 OpenBao (Ready = unsealed), wave 1 the `mesh-reconcile` Job (Sync hook) creates the group
    mounts, wave 2 store `openbao-pki-public`, `openbao-ca-bundle` and the CronJob. Not PostSync: a PostSync hook runs
    only once every resource is Healthy, and `openbao-ca-bundle` cannot be before the roots exist (contract:
-   `hack/tests/test_openbao_sync_order.sh`). The CronJob is in the final wave because a final-wave resource that
+   `hack/tests/test_mesh_ca_sync_order.sh`). The CronJob is in the final wave because a final-wave resource that
    degrades later does not fail a sync.
 2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`.
    `ClusterResourceSet <name>-mesh-trust` applies the issuer-discovery binding as soon as the member's API server is

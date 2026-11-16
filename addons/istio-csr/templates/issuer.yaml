@@ -8,6 +8,8 @@ cert-manager Vault Issuer for this member, pointing at the mesh CA in OpenBao on
            vault://istio-system/openbao-mesh (+ the server URL) - the role accepts only that subject and audience.
 The policy behind the role allows sign on this cluster's PKI role only: a stolen token signs nothing for another
 cluster or group, and expires in 10 minutes. No CA key is ever on this cluster.
+Sync waves: -2 the ServiceAccount, its token-request RBAC and the admission policies (templates/admission.yaml); -1
+the Issuer, whose Ready check already logs in to OpenBao (so it can only turn Ready once they exist); 0 the rest.
 */ -}}
 {{- $i := .Values.issuer }}
 {{- $c := include "istio-csr-addon.cluster" . }}
@@ -21,6 +23,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 automountServiceAccountToken: false     # only cert-manager's TokenRequest uses it
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -30,6 +34,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 rules:
   - apiGroups: [""]
     resources: [serviceaccounts/token]
@@ -43,6 +49,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

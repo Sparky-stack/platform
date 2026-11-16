@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync order of addon openbao under Argo CD's rules (gitops-engine sync_context.go): resources run in steps ordered by
+# Sync order of the mesh CA addons (openbao on mgmt, istio-csr on members) under Argo CD's rules (gitops-engine sync_context.go): resources run in steps ordered by
 # (phase PreSync < Sync < PostSync, sync-wave). Between steps Argo waits for every resource of the step to be Healthy and
 # FAILS the sync if one is Degraded; a step holding a hook waits for the hook; only the final step, when it holds no
 # hook, succeeds even if its resources degrade later. PostSync therefore needs every resource Healthy.
@@ -11,7 +11,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
-echo "== test_openbao_sync_order =="
+echo "== test_mesh_ca_sync_order =="
 pick_python || { echo "  SKIP: python3 not found"; exit 0; }
 cd "$ROOT"
 
@@ -105,5 +105,41 @@ yq '(select(.kind == "CronJob") | .metadata.annotations["argocd.argoproj.io/sync
 to_json "$TMP/cron0.yaml" "$TMP/cron0.json"
 assert_match "$(model "$TMP/cron0.json")" 'FAIL fresh install: deadlock .*CronJob/mesh-reconcile' \
   "negative: CronJob before the bootstrap Job is caught"
+
+# --- addon istio-csr (members) --------------------------------------------------------------------------------------
+# Issuer openbao-mesh: cert-manager's Ready check builds the Vault client, i.e. mints a token for ServiceAccount
+# istio-csr-openbao (TokenRequest, allowed by Role/RoleBinding <sa>-tokenrequest) and logs in. Live after #4 the Issuer
+# was in wave -1 and those in wave 0: the Issuer could never turn Ready, the sync failed, wave 0 was never applied.
+helm template istio-csr addons/istio-csr --namespace istio-system --values installations/local/installation.yaml \
+  --set cluster.name=dev1 --set mesh.group=local > "$TMP/istio-csr.yaml"
+cat > "$TMP/issuer.py" <<'EOF'
+import json, sys
+docs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+wave = lambda d: int(((d.get("metadata") or {}).get("annotations") or {}).get("argocd.argoproj.io/sync-wave", "0"))
+iss = [d for d in docs if d["kind"] == "Issuer" and "vault" in d.get("spec", {})]
+if len(iss) != 1:
+    print("FAIL exactly one Vault Issuer (found %d)" % len(iss)); sys.exit(0)
+i = iss[0]; sa = i["spec"]["vault"]["auth"]["kubernetes"]["serviceAccountRef"]["name"]
+roles = [d["metadata"]["name"] for d in docs if d["kind"] == "Role" and any(sa in r.get("resourceNames", []) for r in d.get("rules", []))]
+need = [d for d in docs if (d["kind"] == "ServiceAccount" and d["metadata"]["name"] == sa)
+        or (d["kind"] == "Role" and d["metadata"]["name"] in roles)
+        or (d["kind"] == "RoleBinding" and d["roleRef"]["name"] in roles)
+        or d["kind"].startswith("ValidatingAdmissionPolicy")]
+kinds = sorted({d["kind"] for d in need})
+if kinds != ["Role", "RoleBinding", "ServiceAccount", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"]:
+    print("FAIL prerequisites not found: %s" % kinds)
+for d in need:
+    if wave(d) >= wave(i):
+        print("FAIL %s/%s (wave %d) is not before Issuer %s (wave %d)" % (d["kind"], d["metadata"]["name"], wave(d), i["metadata"]["name"], wave(i)))
+print("ok")
+EOF
+to_json "$TMP/istio-csr.yaml" "$TMP/istio-csr.json"
+res=$(py "$TMP/issuer.py" "$TMP/istio-csr.json")
+assert_eq "$res" ok "istio-csr: token ServiceAccount, its RBAC and the admission policies sync before the Vault Issuer"
+yq 'del(.metadata.annotations["argocd.argoproj.io/sync-wave"]) | (select(.kind == "Issuer") | .metadata.annotations["argocd.argoproj.io/sync-wave"]) = "-1"' \
+  "$TMP/istio-csr.yaml" > "$TMP/istio-csr-pr4.yaml"
+to_json "$TMP/istio-csr-pr4.yaml" "$TMP/istio-csr-pr4.json"
+assert_match "$(py "$TMP/issuer.py" "$TMP/istio-csr-pr4.json")" 'FAIL ServiceAccount/istio-csr-openbao \(wave 0\) is not before Issuer' \
+  "negative: the #4 layout (Issuer -1, its ServiceAccount 0) is caught"
 
 finish

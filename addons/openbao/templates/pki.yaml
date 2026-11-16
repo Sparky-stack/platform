@@ -194,7 +194,7 @@ metadata:
     {{- include "openbao-addon.labels" . | nindent 4 }}
   annotations:
     # Reads pki-mesh-<g>-root/cert/ca, which only the mesh-reconcile Job (Sync hook, wave 1) creates: in wave 2, the
-    # final wave, so it syncs after the roots exist. Ordering contract: hack/tests/test_openbao_sync_order.sh.
+    # final wave, so it syncs after the roots exist. Ordering contract: hack/tests/test_mesh_ca_sync_order.sh.
     argocd.argoproj.io/sync-wave: "2"
 spec:
   refreshInterval: 15m
