@@ -9,12 +9,16 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    and the Argo CD cluster secret. ApplicationSets select on labels; nothing hardcodes a cluster name.
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
-   `ClusterResourceSet` payloads templated by ESO.
+   `ClusterResourceSet` payloads templated by ESO. The Istio mesh CA is OpenBao on mgmt (keys generated inside OpenBao,
+   never exported); mesh members obtain certificates through istio-csr (docs/multicluster.md "Mesh CA (OpenBao)").
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
    `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`. Only exception: read-only stores
    that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
    namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
-   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
+   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle);
+   `mgmt-openbao` (OpenBao CA + mesh group roots; name-scoped GET of `openbao/openbao-ca-bundle`; `fleet`) and the
+   namespaced `openbao/openbao-ca-source` and `openbao/openbao-pki-public` (fill that bundle; the latter reads only
+   `pki-mesh-*-root/cert/ca` from OpenBao).
    Second exception, for a credential tenants must not reach: on workload clusters the external-dns Cloudflare token
    comes from `ClusterSecretStore/dns` (only while `dns.provider: cloudflare`; conditions: namespace `external-dns`
    only; its own backend location and identity that `default`, the tenants' `secretStoreRef`, cannot read).
@@ -40,7 +44,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
 | `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`) |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
+| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
@@ -57,8 +62,10 @@ only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |
+| Mesh CA / remote secrets (opt-in) | ns `openbao`: OpenBao mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`, role `<name>`, auth `mesh-<name>`, identity entity `mesh-<name>` (static policy `mesh-member`); ns `fleet`: `<name>-mesh-openbao`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-trust` (+ ConfigMap `<name>-mesh-oidc`), `<name>-mesh-remote-secret` |
+| On mesh members, ns `istio-system` | Secrets `openbao-ca`, `mesh-root-ca` (public), Issuer `openbao-mesh`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
-| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>` |
+| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `examples` (opt-in examples; always present), `tenant-<project>`; charts/platform projects sit in sync wave `-1`, before the ApplicationSets using them (Argo CD prunes in reverse) |
 
 ## Secret keys
 Keys in the `platform` store (flat, backend-agnostic). The doc in the last column owns the details.
@@ -77,6 +84,7 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing; `cosign.pub` goes into `kyverno-policies` `imageVerification.platformKey.publicKey` | [build-plane.md](build-plane.md#signing) |
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) | [observability.md](observability.md#falco-response) |
 | `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate`; addon thunder registers it as client `openchoreo-promotion-gate` | [promotion.md](promotion.md#configuration-reference) |
+| `openbao-unseal` | `key` (64 hex characters, generated by `make secrets`) | static auto-unseal key of the mesh CA (addon openbao; local only, KMS seal in production) | [multicluster.md](multicluster.md#unseal) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App | [promotion.md](promotion.md#configuration-reference) |
 | `external-dns-cloudflare` | `api-token` | addon external-dns with `dns.provider: cloudflare`; on workload clusters only via store `dns`, never `default`. Route 53 has no key: IRSA / Pod Identity only | [dns.md](dns.md#credentials) |
 | `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on | [ai-agents.md](ai-agents.md) |
@@ -90,6 +98,7 @@ charts/platform/                root chart: AppProjects, ApplicationSets (fleet,
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications
 addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
+examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, one doc per area, diagrams
 templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each

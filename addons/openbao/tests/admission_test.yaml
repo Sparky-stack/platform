@@ -1,0 +1,44 @@
+suite: openbao - reader-cert admission guards (CEL semantics are tested with the kyverno CLI in hack/tests/test_mesh_admission.sh)
+release: { name: openbao, namespace: openbao }
+templates:
+  - templates/mesh-admission.yaml
+tests:
+  - it: renders four ValidatingAdmissionPolicies, each bound with Deny
+    asserts:
+      - hasDocuments: { count: 8 }
+      - isKind: { of: ValidatingAdmissionPolicy }
+        documentIndex: 0
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentIndex: 0
+      - isKind: { of: ValidatingAdmissionPolicyBinding }
+        documentIndex: 4
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 4
+      - equal: { path: spec.policyName, value: platform-openbao-fleet-reads }
+        documentIndex: 7
+
+  - it: limits *-client-ca certificates to the reader profile (CN, no subject, not CA, client auth, <= 168h)
+    documentIndex: 0
+    asserts:
+      - equal: { path: metadata.name, value: platform-mesh-reader-certificates }
+      - matchRegex: { path: 'spec.matchConditions[0].expression', pattern: "endsWith\\('-client-ca'\\)" }
+      - matchRegex: { path: 'spec.validations[1].expression', pattern: "commonName == 'platform:istio-reader'" }
+      - matchRegex: { path: 'spec.validations[6].expression', pattern: "duration\\('168h'\\)" }
+
+  - it: in this namespace store mgmt-fleet may only feed mesh-clients by label (fleet holds kubeconfigs + client CA keys)
+    documentIndex: 3
+    asserts:
+      - equal: { path: metadata.name, value: platform-openbao-fleet-reads }
+      - equal: { path: 'spec.matchConditions[0].expression', value: "object.metadata.namespace == 'openbao'" }
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: "object.metadata.name == 'mesh-clients'" }
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: "find.tags == \\{'mesh.platform.koorikla.io/openbao-client': 'true'\\}" }
+
+  - it: no mesh-root / intermediate policies remain (the mesh CA is OpenBao, not a cert-manager issuer)
+    asserts:
+      - notMatchRegex: { path: metadata.name, pattern: 'intermediate' }
+
+  - it: can be switched off
+    set:
+      admission.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }

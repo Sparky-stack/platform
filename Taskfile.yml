@@ -111,6 +111,11 @@ tasks:
       - task: tools:plugins
       - '"{{.BASH}}" hack/test.sh'
 
+  test:openbao:
+    desc: "Opt-in integration test of the mesh CA: pinned OpenBao in docker, chart config, reconcile, member signing"
+    cmds:
+      - '"{{.BASH}}" hack/tests/openbao_integration.sh'
+
   schemas:
     desc: Generate kubeconform JSON schemas from upstream CRDs (cached)
     cmds:

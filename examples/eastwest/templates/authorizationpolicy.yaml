@@ -1,0 +1,30 @@
+{{- /*
+Identity-based allow, enforced by the destination's ztunnel (L4, no waypoint needed). The caller's identity survives
+the east-west gateway: the inner HBONE mTLS runs end to end from the caller's ztunnel to the echo pod's ztunnel, so the
+principal is the caller's ServiceAccount, not the gateway's. ALLOW with one rule = everything else is denied
+(`stranger` gets its connection reset). Both clusters share the trust domain, so the principal is the same wherever the
+caller runs - the mesh root (mgmt) is what makes a dev1 identity verifiable in prod1.
+Rendered only where echo runs (no app=echo pods elsewhere: istioctl IST0127 noise on caller-only clusters).
+*/ -}}
+{{- if .Values.echo.enabled }}
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: echo-allow-client
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: echo
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - {{ printf "%s/ns/%s/sa/client" .Values.trustDomain .Values.namespace | quote }}
+      to:
+        - operation:
+            ports: [{{ .Values.echo.port | quote }}]
+{{- end }}

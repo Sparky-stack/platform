@@ -1,0 +1,169 @@
+suite: openbao - mesh CA on mgmt (TLS, public-cert publication, gateway, unseal, reconcile, inputs)
+release: { name: openbao, namespace: openbao }
+templates:
+  - templates/pki.yaml
+  - templates/ca-store.yaml
+  - templates/gateway.yaml
+  - templates/unseal.yaml
+  - templates/mesh-clients.yaml
+  - templates/reconcile.yaml
+set:
+  mesh: { groups: [local, prod], ca: { host: openbao.example.test, port: 8200 } }
+tests:
+  - it: listener cert covers the member-facing host and the in-cluster names; CA stays in this namespace
+    template: templates/pki.yaml
+    documentSelector: { path: metadata.name, value: openbao-tls }
+    asserts:
+      - isKind: { of: Certificate }
+      - contains: { path: spec.dnsNames, content: openbao.example.test }
+      - contains: { path: spec.dnsNames, content: openbao-active.openbao.svc }
+      - contains: { path: spec.dnsNames, content: "*.openbao-internal" }
+      - equal: { path: spec.issuerRef, value: { group: cert-manager.io, kind: Issuer, name: openbao-ca } }
+
+  - it: the public bundle carries OpenBao's CA certificate and one root certificate per group - never a key
+    template: templates/pki.yaml
+    documentSelector: { path: metadata.name, value: openbao-ca-bundle }
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: 'spec.data[0]', value: { secretKey: ca.crt, remoteRef: { key: openbao-ca, property: tls.crt } } }
+      - equal:
+          path: 'spec.data[1]'
+          value: { secretKey: mesh-root-local.pem, sourceRef: { storeRef: { kind: SecretStore, name: openbao-pki-public } }, remoteRef: { key: pki-mesh-local-root/cert/ca, property: certificate } }
+      - equal: { path: 'spec.data[2].remoteRef.key', value: pki-mesh-prod-root/cert/ca }
+      - notMatchRegex: { path: 'spec.data[*].remoteRef.property', pattern: 'key' }
+
+  - it: the CA-source store may GET only the CA Secret (no list, no other Secret)
+    template: templates/pki.yaml
+    documentSelector: { path: kind, value: Role }
+    asserts:
+      - equal: { path: metadata.name, value: eso-openbao-ca-source }
+      - equal: { path: rules, value: [{ apiGroups: [""], resources: [secrets], resourceNames: [openbao-ca], verbs: [get] }, { apiGroups: [authorization.k8s.io], resources: [selfsubjectrulesreviews], verbs: [create] }] }
+
+  - it: the OpenBao reader store logs in with an audience-bound projected token (role mesh-ca-read), no static token
+    template: templates/pki.yaml
+    documentSelector: { path: metadata.name, value: openbao-pki-public }
+    asserts:
+      - isKind: { of: SecretStore }
+      - equal: { path: spec.provider.vault.version, value: v1 }
+      - equal: { path: spec.provider.vault.auth.kubernetes.role, value: mesh-ca-read }
+      - equal: { path: spec.provider.vault.auth.kubernetes.serviceAccountRef, value: { name: eso-openbao-pki-public, audiences: [openbao] } }
+      - notExists: { path: spec.provider.vault.auth.tokenSecretRef }
+
+  - it: ClusterSecretStore mgmt-openbao - name-scoped GET of the public bundle, fleet only
+    template: templates/ca-store.yaml
+    asserts:
+      - equal: { path: 'rules[0]', value: { apiGroups: [""], resources: [secrets], resourceNames: [openbao-ca-bundle], verbs: [get] } }
+        documentIndex: 1
+      - isKind: { of: ClusterSecretStore }
+        documentIndex: 3
+      - equal: { path: spec.conditions, value: [{ namespaces: [fleet] }] }
+        documentIndex: 3
+
+  - it: members reach OpenBao only through a TLS passthrough listener (OpenBao terminates TLS itself)
+    template: templates/gateway.yaml
+    asserts:
+      - isKind: { of: Gateway }
+        documentIndex: 0
+      - equal:
+          path: spec.listeners
+          value: [{ name: tls, protocol: TLS, port: 8200, hostname: openbao.example.test, tls: { mode: Passthrough }, allowedRoutes: { namespaces: { from: Same } } }]
+        documentIndex: 0
+      - isKind: { of: TLSRoute }
+        documentIndex: 1
+      - equal: { path: 'spec.rules[0].backendRefs[0]', value: { group: "", kind: Service, name: openbao-active, port: 8200 } }
+        documentIndex: 1
+      - notExists: { path: spec.infrastructure }
+        documentIndex: 0
+
+  - it: "negative: the Gateway fails the render outside docker without source ranges"
+    template: templates/gateway.yaml
+    set:
+      cluster: { name: mgmt, provider: aws }
+    asserts:
+      - failedTemplate: { errorMessage: "openbao (mgmt, provider aws): gateway.loadBalancerSourceRanges is required outside docker - the mesh members' egress CIDRs (installations/<inst>/addons/openbao/values.yaml)" }
+
+  - it: "outside docker with source ranges: GatewayParameters restrict the proxy Service, referenced by the Gateway"
+    template: templates/gateway.yaml
+    set:
+      cluster: { name: mgmt, provider: hetzner }
+      gateway: { loadBalancerSourceRanges: [203.0.113.0/24, 198.51.100.7/32] }
+    asserts:
+      - hasDocuments: { count: 3 }
+      - isKind: { of: GatewayParameters }
+        documentIndex: 0
+      - equal: { path: spec.kube.service.loadBalancerSourceRanges, value: [203.0.113.0/24, 198.51.100.7/32] }
+        documentIndex: 0
+      - equal: { path: spec.infrastructure.parametersRef, value: { group: gateway.kgateway.dev, kind: GatewayParameters, name: openbao-gateway } }
+        documentIndex: 1
+
+  - it: "negative: fails without mesh.ca (installation.yaml)"
+    template: templates/pki.yaml
+    set:
+      mesh: { ca: { host: "" } }
+    asserts:
+      - failedTemplate: { errorMessage: "mesh.ca.host is required (installation.yaml)" }
+
+  - it: the static seal key comes from store platform and is never deleted by ESO
+    template: templates/unseal.yaml
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.deletionPolicy, value: Retain }
+      - equal: { path: 'spec.data[0].remoteRef', value: { key: openbao-unseal, property: key } }
+
+  - it: collects every member's public inputs by label through mgmt-fleet, flattened to <cluster>.{group,server,ca}
+    template: templates/mesh-clients.yaml
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-fleet } }
+      - equal: { path: spec.dataFrom, value: [{ find: { tags: { mesh.platform.koorikla.io/openbao-client: "true" } } }] }
+      - equal: { path: spec.target.deletionPolicy, value: Retain }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: '\$name \}\}\.ca: \{\{ get \$c "ca" \| toJson' }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: 'if ne \$secret \(printf "%s-mesh-openbao" \$name\)' }
+      - matchRegex: { path: 'spec.target.template.templateFrom[0].literal', pattern: 'rejected\.\{\{ \$secret \}\}' }
+
+  - it: the reconcile runs as a scoped identity with no Kubernetes API access and no root token
+    template: templates/reconcile.yaml
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: PostSync }
+      - equal: { path: spec.template.spec.serviceAccountName, value: openbao-mesh-bootstrap }
+      - equal: { path: spec.template.spec.automountServiceAccountToken, value: false }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: token, projected: { sources: [{ serviceAccountToken: { audience: openbao, expirationSeconds: 600, path: token } }] } }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: tls-ca, secret: { secretName: openbao-tls, items: [{ key: ca.crt, path: ca.crt }] } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LOGIN_ROLE, value: platform-mesh-config } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: BOOTSTRAP_LOGIN_ROLE, value: platform-mesh-bootstrap } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_POLICY, value: mesh-member } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FAIL_ON_NO_MEMBER, value: "false" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MESH_GROUPS, value: local prod } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_SA, value: "istio-system:istio-csr-openbao" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_AUDIENCE, value: "vault://istio-system/openbao-mesh" } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: TRUST_DOMAIN, value: cluster.local } }
+      - notMatchRegex: { path: 'spec.template.spec.containers[0].env[*].name', pattern: '^BAO_TOKEN$' }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem', value: true }
+
+  - it: "the CronJob enrols members on a schedule: member identity only (no group bootstrap), fails visibly"
+    template: templates/reconcile.yaml
+    documentSelector: { path: kind, value: CronJob }
+    asserts:
+      - equal: { path: spec.schedule, value: "*/5 * * * *" }
+      - equal: { path: spec.concurrencyPolicy, value: Forbid }
+      - equal: { path: spec.jobTemplate.spec.template.spec.serviceAccountName, value: openbao-mesh-config }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: FAIL_ON_NO_MEMBER, value: "true" } }
+      - notContains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: BOOTSTRAP_LOGIN_ROLE, value: platform-mesh-bootstrap } }
+
+  - it: "negative: rejects a mesh group that is not a DNS label"
+    template: templates/reconcile.yaml
+    set:
+      mesh: { groups: [Prod_1] }
+    asserts:
+      - failedTemplate: { errorMessage: "openbao: mesh.groups entry \"Prod_1\" must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" }
+
+  - it: "negative: rejects duplicate mesh groups"
+    template: templates/reconcile.yaml
+    set:
+      mesh: { groups: [local, local] }
+    asserts:
+      - failedTemplate: { errorMessage: "openbao: mesh.groups has duplicates" }

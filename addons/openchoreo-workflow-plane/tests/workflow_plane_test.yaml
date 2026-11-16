@@ -5,6 +5,7 @@ templates:
   - templates/cluster-workflow-templates.yaml
   - templates/validate.yaml
   - templates/run-network-policy.yaml
+  - templates/run-executor-token.yaml
 release:
   name: openchoreo-workflow-plane
   namespace: openchoreo-workflow-plane
@@ -126,6 +127,41 @@ tests:
             ports: [{ protocol: TCP, port: 9443 }]
       - equal: { path: 'spec.egress[4].to[0].ipBlock.except', value: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16] }
       - equal: { path: 'spec.egress[4].ports', value: [{ protocol: TCP, port: 80 }, { protocol: TCP, port: 443 }] }
+
+  - it: the run namespace has the executor token Argo mounts into init/wait (automountServiceAccountToken false)
+    template: templates/run-executor-token.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: metadata.name, value: workflow-sa }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: metadata.namespace, value: workflows-default }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: automountServiceAccountToken, value: false }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: type, value: kubernetes.io/service-account-token }
+        documentSelector: { path: kind, value: Secret }
+      - equal: { path: metadata.name, value: workflow-sa.service-account-token }
+        documentSelector: { path: kind, value: Secret }
+      - equal: { path: metadata.namespace, value: workflows-default }
+        documentSelector: { path: kind, value: Secret }
+      - equal: { path: 'metadata.annotations["kubernetes.io/service-account.name"]', value: workflow-sa }
+        documentSelector: { path: kind, value: Secret }
+
+  - it: the executor token follows the org namespace, renders the namespace without the NetworkPolicy, can be off
+    template: templates/run-executor-token.yaml
+    set: { openchoreo.orgNamespace: acme, runNetworkPolicy.enabled: false }
+    asserts:
+      - hasDocuments: { count: 3 }
+      - equal: { path: metadata.name, value: workflows-acme }
+        documentSelector: { path: kind, value: Namespace }
+      - equal: { path: metadata.namespace, value: workflows-acme }
+        documentSelector: { path: kind, value: Secret }
+
+  - it: no executor token when disabled
+    template: templates/run-executor-token.yaml
+    set: { runExecutorToken.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
 
   - it: the run namespace follows openchoreo.orgNamespace and survives addon removal
     template: templates/run-network-policy.yaml

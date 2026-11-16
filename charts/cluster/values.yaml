@@ -27,6 +27,15 @@ openchoreo:
     gatewayHost: ""           # base host for app endpoints on this cluster
     gatewayPort: 19080         # data-plane Gateway HTTP listener (klipper hostPort on the node)
     environments: []          # OpenChoreo Environments bound to this cluster's ClusterDataPlane
+mesh:
+  group: ""                   # opt-in cluster-to-cluster connectivity (Istio ambient multicluster, docs/multicluster.md).
+                              # Set -> labels mesh.platform.koorikla.io/{group,network} (meshID = group, network = name)
+                              # and addons.platform.koorikla.io/{istio-eastwest,istio-csr}: "true" (do not set them);
+                              # mgmt publishes this cluster's OpenBao auth inputs, trust payload and remote secret
+                              # (templates/mesh-*.yaml). Needs mgmt.addons.openbao: true, the group in mesh.groups and
+                              # mesh.ca (installation.yaml).
+  groups: []                  # from installation.yaml: the installation's mesh groups (one root CA each in OpenBao)
+  ca: {}                      # from installation.yaml: {host, port} where members reach OpenBao
 addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
 addons: {}                    # <addon>: true|false -> label addons.platform.koorikla.io/<addon>
 

@@ -124,8 +124,10 @@ App's blast radius is the app repos it is installed on. A dedicated store for ru
 For one component and one edge (default staging → next environment) the gate checks, in order:
 
 1. **pipeline**: the edge exists in the project's DeploymentPipeline (closes #4884 for the automated path).
-2. **readiness**: the source binding is `Ready`, `status.delivery.succeededAt` is set, and the binding runs the release
-   being promoted.
+2. **readiness**: the source binding runs the release being promoted and its **current spec** is rolled out: `Ready`
+   for the generation the controller observed, and `Ready` turned true at or after `status.lastSpecUpdateTime` (a stale
+   `Ready` of the previous release fails). openchoreo-api 1.3.3 does not return `status.delivery`; when the object has
+   it, its rollout must have started after the last spec change and succeeded.
 3. **smoke**: `GET` on every external endpoint of the source binding (`status.endpoints[].externalURLs`) answers
    2xx/3xx (5 tries with backoff).
 4. **observability** (observer API, Thunder client credentials):
@@ -145,8 +147,9 @@ in the observer (`workflow` log scope).
 
 **Triggers.**
 - Automatic: addon `argo-events` watches ReleaseBindings in the org namespace. When `status.delivery.succeededAt` is
-  set for a binding in `promotionGate.sourceEnvironments` (default `staging`), Sensor `promotion-gate` creates
-  `WorkflowRun gate-<component>-<sha256(rolloutId)[:10]>`. The name is deterministic, so one rollout gives exactly one
+  set for a binding in `promotionGate.sourceEnvironments` (default `staging`) and that rollout started at or after the
+  binding's `status.lastSpecUpdateTime` (right after a `releaseName` edit the binding still shows the previous
+  release's finished rollout), Sensor `promotion-gate` creates `WorkflowRun gate-<component>-<sha256(rolloutId)[:10]>`. The name is deterministic, so one rollout gives exactly one
   run, and re-delivered events fail with AlreadyExists.
 - Manual: create a WorkflowRun (below).
 
