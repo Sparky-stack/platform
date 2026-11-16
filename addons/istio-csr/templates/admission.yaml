@@ -27,6 +27,8 @@ metadata:
   name: platform-mesh-ca-requests
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -50,6 +52,8 @@ metadata:
   name: platform-mesh-ca-certificates
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -73,6 +77,8 @@ metadata:
   name: platform-mesh-ca-issuers
   labels:
     {{- include "istio-csr-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -97,6 +103,8 @@ metadata:
   name: {{ $p }}
   labels:
     {{- include "istio-csr-addon.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   policyName: {{ $p }}
   validationActions: [Deny]

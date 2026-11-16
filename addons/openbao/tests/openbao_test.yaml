@@ -31,6 +31,7 @@ tests:
           value: { secretKey: mesh-root-local.pem, sourceRef: { storeRef: { kind: SecretStore, name: openbao-pki-public } }, remoteRef: { key: pki-mesh-local-root/cert/ca, property: certificate } }
       - equal: { path: 'spec.data[2].remoteRef.key', value: pki-mesh-prod-root/cert/ca }
       - notMatchRegex: { path: 'spec.data[*].remoteRef.property', pattern: 'key' }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }   # after the Job (roots)
 
   - it: the CA-source store may GET only the CA Secret (no list, no other Secret)
     template: templates/pki.yaml
@@ -48,6 +49,7 @@ tests:
       - equal: { path: spec.provider.vault.auth.kubernetes.role, value: mesh-ca-read }
       - equal: { path: spec.provider.vault.auth.kubernetes.serviceAccountRef, value: { name: eso-openbao-pki-public, audiences: [openbao] } }
       - notExists: { path: spec.provider.vault.auth.tokenSecretRef }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }   # after the Job (roots)
 
   - it: ClusterSecretStore mgmt-openbao - name-scoped GET of the public bundle, fleet only
     template: templates/ca-store.yaml
@@ -124,7 +126,10 @@ tests:
     template: templates/reconcile.yaml
     documentSelector: { path: kind, value: Job }
     asserts:
-      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: PostSync }
+      # a Sync hook in wave 1, not PostSync: PostSync waits for every resource to be Healthy, and openbao-ca-bundle
+      # (wave 2) cannot be Healthy before this Job created the group roots (live deadlock after #4)
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
       - equal: { path: spec.template.spec.serviceAccountName, value: openbao-mesh-bootstrap }
       - equal: { path: spec.template.spec.automountServiceAccountToken, value: false }
       - contains:
@@ -153,6 +158,9 @@ tests:
       - equal: { path: spec.jobTemplate.spec.template.spec.serviceAccountName, value: openbao-mesh-config }
       - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: FAIL_ON_NO_MEMBER, value: "true" } }
       - notContains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: BOOTSTRAP_LOGIN_ROLE, value: platform-mesh-bootstrap } }
+      # final wave (with no hook): its runs fail until a group CA exists or while every member is down; Argo CD fails
+      # a sync on a Degraded resource of an earlier wave, but not on one of the final wave
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
 
   - it: "negative: rejects a mesh group that is not a DNS label"
     template: templates/reconcile.yaml

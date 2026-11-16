@@ -3,7 +3,7 @@
 # OpenBao is told to do per group and per member, with the environment the chart renders for the Job and the CronJob.
 # Checks: no ACL policy is ever written (static templated policy mesh-member + entity metadata cluster/group give the
 # per-cluster scope), group CAs only with the bootstrap token (Job), the SPIFFE-only PKI role, audience/subject-bound
-# JWT auth, internal (never exported) CA keys, input validation, prune + fail-safe, PostSync hook vs CronJob exit codes.
+# JWT auth, internal (never exported) CA keys, input validation, prune + fail-safe, Sync-hook Job vs CronJob exit codes.
 # The same script runs against a real OpenBao in hack/tests/openbao_integration.sh (opt-in, docker).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -191,14 +191,14 @@ assert_match "$(cat "$TMP/out")" 'group new: no intermediate CA yet' "CronJob: a
 assert_match "$(cat "$TMP/out")" 'failed=\[down1 new1\]' "CronJob: its members fail, the others are configured"
 assert_eq "$([[ -e "$S/mounts/pki-mesh-new-root" ]] && echo created || echo none)" none "CronJob: creates no group mount"
 rm -f "$IN"/new1.*; render_env
-# every member failing: the CronJob fails visibly; the PostSync hook exits 0 (cold boot: members not reachable yet)
+# every member failing: the CronJob fails visibly; the Sync-hook Job exits 0 (cold boot: members not reachable yet)
 rm -f "$IN"/*; member down1 local https://unreachable.test:6443; member down2 prod https://unreachable.test:7443
 rc=0; run "$TMP/cronenv" || rc=$?
 assert_eq "$rc" 1 "every member failed: the CronJob exits non-zero"
 assert_match "$(cat "$TMP/out")" 'ERROR: no member could be configured \(failed: down1 down2\)' "every member failed: error names them"
 assert_match "$(cat "$TMP/termination")" '^ERROR: no member could be configured' "every member failed: CronJob termination message"
 rc=0; run || rc=$?
-assert_eq "$rc" 0 "every member failed: the PostSync hook exits 0 (the CronJob converges)"
+assert_eq "$rc" 0 "every member failed: the Sync-hook Job exits 0 (the CronJob converges)"
 assert_match "$(cat "$TMP/out")" 'WARNING: no member could be configured yet \(failed: down1 down2\)' "every member failed: the hook still logs it"
 assert_match "$(cat "$TMP/termination")" '^WARNING: no member could be configured yet' "every member failed: hook termination message"
 assert_eq "$([[ -e "$S/auth/mesh-dev1" ]] && echo kept || echo pruned)" pruned "members no longer in the inputs are still pruned"

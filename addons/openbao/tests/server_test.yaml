@@ -31,7 +31,10 @@ tests:
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/mesh-member"\s+data = \{\s+policy = <<EOP\s+path "pki-mesh-\{\{identity\.entity\.metadata\.group\}\}-int/sign/\{\{identity\.entity\.metadata\.cluster\}\}" \{ capabilities = \["create", "update"\] \}\s+EOP' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/mesh-ca-read"\s+data = \{\s+policy = <<EOP\s+path "\+/cert/ca" \{ capabilities = \["read"\] \}\s+EOP' }
+      # + the token self-operations ESO's vault provider performs (token_no_default_policy: the default policy is not
+      # attached): lookup-self validates the SecretStore (403 left openbao-pki-public InvalidProviderConfig live),
+      # revoke-self when it closes the client. Nothing else.
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/mesh-ca-read"\s+data = \{\s+policy = <<EOP\s+path "\+/cert/ca" \{ capabilities = \["read"\] \}\s+path "auth/token/lookup-self" \{ capabilities = \["read"\] \}\s+path "auth/token/revoke-self" \{ capabilities = \["update"\] \}\s+EOP' }
 
   - it: "reconcile policies: no policy authoring, no key export/import, no verbatim or external CA signing, bounded parameters"
     template: charts/openbao/templates/server-config-configmap.yaml
