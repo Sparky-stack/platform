@@ -18,6 +18,7 @@ yq = "4.54.3"              # aqua:mikefarah/yq
 jq = "1.8.2"               # aqua:jqlang/jq
 kubeconform = "0.8.0"      # aqua:yannh/kubeconform
 crane = "0.22.1"           # aqua:google/go-containerregistry; multi-arch image audit (task images:audit)
+crossplane = "2.4.1"       # aqua:crossplane/cli; offline `crossplane render` of the PostgreSQL Compositions (addons/crossplane)
 shellcheck = "0.11.0"      # aqua:koalaman/shellcheck
 actionlint = "1.7.12"      # aqua:rhysd/actionlint
 gitleaks = "8.30.1"        # aqua:gitleaks/gitleaks; secret scan of staged changes (prek.toml) and CI

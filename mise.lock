@@ -166,6 +166,35 @@ checksum_source = "mise-versions"
 url = "https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Windows_x86_64.tar.gz"
 url_api = "https://api.github.com/repos/google/go-containerregistry/releases/assets/543544437"
 
+[[tools.crossplane]]
+version = "2.4.1"
+backend = "aqua:crossplane/cli"
+specifiers = ["2.4.1"]
+
+[tools.crossplane."platforms.linux-arm64"]
+checksum = "sha256:28dff5115b378fcee064d4c4c097727626e3dc17f83f9590f0ab347b8cc7d992"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/linux_arm64/crossplane"
+
+[tools.crossplane."platforms.linux-x64"]
+checksum = "sha256:963ae072cbf32a58c5bb4ec6d2490d2236b33ccb739da527d338a6251a75a1b6"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/linux_amd64/crossplane"
+
+[tools.crossplane."platforms.macos-arm64"]
+checksum = "sha256:9d6b2b5693171d50c2bf51eaa5fefbe3595f153e396012869bbcfb2ccd66b249"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/darwin_arm64/crossplane"
+
+[tools.crossplane."platforms.macos-x64"]
+checksum = "sha256:66537de6456911aab280dab07c6179de414d5a6e5cdc1c3c65c1ba6348658693"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/darwin_amd64/crossplane"
+
+[tools.crossplane."platforms.windows-arm64"]
+checksum = "sha256:b5fed239704d155ef23c262035e071cbfa1a8ce2efb5ea7c81bdb50172b15f16"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/windows_amd64/crossplane.exe"
+
+[tools.crossplane."platforms.windows-x64"]
+checksum = "sha256:b5fed239704d155ef23c262035e071cbfa1a8ce2efb5ea7c81bdb50172b15f16"
+url = "https://cli.crossplane.io/stable/v2.4.1/bin/windows_amd64/crossplane.exe"
+
 [[tools.gh]]
 version = "2.104.0"
 backend = "aqua:cli/cli"
