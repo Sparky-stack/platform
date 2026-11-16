@@ -176,10 +176,12 @@ One installation (`installations/local`), two profiles. The fleet files are the 
 
 | Profile | Fleet files | Workload clusters | Host RAM (`docker stats`, reference host) |
 |---|---|---|---|
-| lean (default) | `dev1.yaml`, `prod1.yaml.disabled` | `dev1`: development, staging, production | mgmt ~@MGMT@ GiB + dev1 ~@DEV1@ GiB = **~@LEAN@ GiB** |
-| multicluster | `dev1.yaml`, `prod1.yaml` | `dev1`: development, staging; `prod1`: production | + prod1 ~@PROD1@ GiB = **~@MULTI@ GiB** |
+| lean (default) | `dev1.yaml`, `prod1.yaml.disabled` | `dev1`: development, staging, production | mgmt ~7.8 GiB + dev1 ~4.2 GiB = **~12 GiB** |
+| multicluster | `dev1.yaml`, `prod1.yaml` | `dev1`: development, staging; `prod1`: production | + prod1 ~3.4 GiB = **~15.4 GiB** |
 
-Measured on 2026-11-16 with the same stack before and after prod1 was removed (#115): @MEASURED@
+Measured on 2026-11-16 with the same stack before and after prod1 was removed (#115): dev1 grew from 3.8 to 4.1-4.2 GiB
+when it took production over; prod1, running with no environment, held 3.3-3.6 GiB (+ 18 MiB for its load
+balancer container); mgmt 7.6-8.4 GiB in both. Single-server CAPD nodes (`controlPlane.replicas: 1`).
 
 Switch to multicluster: rename the file and move `production` to it (an environment lives on exactly one enabled
 cluster; `hack/tests/test_local_profiles.sh` checks both profiles):
@@ -195,13 +197,16 @@ Cluster is deleted gracefully; CAPD removes its containers).
 
 Before the first `task up` those two lines are the whole switch. **On a running stack** `production` already exists as
 an OpenChoreo `Environment`, whose `dataPlaneRef` is immutable, so it is deleted and created again on the other
-cluster. OpenChoreo refuses to delete an Environment that `DeploymentPipeline default` references, and cleans its
-namespaces through the old cluster's agent, so the old cluster must still run. Two merges:
+cluster. OpenChoreo refuses to delete an Environment that `DeploymentPipeline default` references, its finalizer
+deletes the environment's ReleaseBindings as OpenChoreo's controller (which the git-only gate denies for production,
+[promotion.md](promotion.md)), and it cleans the namespaces through the old cluster's agent, so the old cluster must
+still run. Two merges:
 1. Move `production` between the fleet files (to dev1 for lean: `prod1.yaml` keeps `environments: []` and stays
-   enabled) and drop it from the pipeline in `installations/local/addons/openchoreo-platform/values.yaml`
-   (`deploymentPipeline: {environments: [development, staging]}`). Wait until the production ReleaseBinding is Ready
-   on its new cluster (`kubectl -n default get releasebinding`).
-2. Restore the pipeline (delete that override) and, for lean, rename `prod1.yaml` back to `prod1.yaml.disabled` with
+   enabled) and add two temporary overrides to `installations/local/addons/openchoreo-platform/values.yaml`:
+   `deploymentPipeline: {environments: [development, staging]}` and `promotion.gitOnly.deleters` plus
+   `system:serviceaccount:openchoreo-control-plane:controller-manager` (DELETE only). Wait until the production
+   ReleaseBinding is Ready on its new cluster (`kubectl -n default get releasebinding`).
+2. Remove both overrides and, for lean, rename `prod1.yaml` back to `prod1.yaml.disabled` with
    `environments: [production]`.
 
 Lean was reached this way on the reference host (#115); the multicluster direction is render-checked only (VERIFY).

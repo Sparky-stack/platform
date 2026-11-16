@@ -192,8 +192,8 @@ needs a cluster (`hack/tests/test_local_profiles.sh`, also for each installation
 cluster may host every environment: OpenChoreo puts each in its own namespaces, and per-environment policy follows
 the namespace's `openchoreo.dev/environment` label (docs/dev-environment.md "Local profiles"). An Environment's
 `dataPlaneRef` is immutable: to move it, remove it from one file and from `DeploymentPipeline default` (OpenChoreo
-will not delete a referenced Environment), sync, then add it back to the pipeline (docs/dev-environment.md "Local
-profiles" has the two-merge procedure).
+will not delete a referenced Environment), sync, then add it back to the pipeline; a gated environment also needs the
+controller as a temporary binding deleter (docs/dev-environment.md "Local profiles" has the two-merge procedure).
 
 ## Tenants
 
