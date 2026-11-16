@@ -1,0 +1,4 @@
+# Pin move in progress: the previous koorikla/ci commit (de39b1d) is still trusted next to workflowRef (a31c234).
+imageVerification:
+  github:
+    transitionWorkflowRefs: [de39b1d4162e18e275c7be7e86384d22cc4e070b]

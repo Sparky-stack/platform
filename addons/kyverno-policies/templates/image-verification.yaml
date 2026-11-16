@@ -1,10 +1,16 @@
 {{- /*
 Supply-chain policy gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md).
-For every distinct action (Audit | Deny) in imageVerification.environments and defaultAction one pair of policies,
+For every distinct action (Audit | Deny) in imageVerification.environments and defaultAction one set of policies,
 scoped to OpenChoreo cell namespaces by their label openchoreo.dev/environment:
-  ImageValidatingPolicy openchoreo-verify-images-<audit|enforce>      per trusted source: cosign signature + required
-                                                                      signed attestations (SBOM, SLSA provenance, vuln)
+  ImageValidatingPolicy openchoreo-verify-images-<audit|enforce>      per trusted source: cosign signature
+  ImageValidatingPolicy openchoreo-attest-<name>-<audit|enforce>      one per required attestation (sbom, provenance,
+                                                                      vuln): signed by the source's attestors
   ValidatingPolicy      openchoreo-trusted-registries-<audit|enforce> every image matches a trusted source prefix
+One policy per check, not one policy with every check (#136): each keyless verification costs ~5 s (Kyverno 1.20 refreshes
+the Sigstore TUF metadata and walks the registry referrers on every call) and validations of one policy run one after
+the other, so signature + 3 attestations took ~20 s of the 30 s webhook timeout for an image not yet in Kyverno's
+verification cache. Separate policies get separate (fine-grained) webhooks that the API server calls in parallel, and
+Kyverno evaluates them concurrently. Verified results are cached per image DIGEST (addons/kyverno, imageVerifyCache*).
 The defaultAction policy covers every cell namespace whose environment has no other action (In -> NotIn), so a new
 environment is never unchecked. Pods (containers, initContainers, ephemeralContainers) and pods/ephemeralcontainers
 (kubectl debug) are matched; controllers through Kyverno autogen.
@@ -21,7 +27,7 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- if and $default (not (has $default (list "Audit" "Deny"))) }}{{ fail (printf "imageVerification.defaultAction: %q is not Audit, Deny or empty" $default) }}{{ end }}
 {{- if and $default (not (hasKey $byAction $default)) }}{{ $_ := set $byAction $default list }}{{ end }}
 {{- $platform := .Values.platformNamespaces | toJson }}
-{{- /* sources: [{prefixes, attestors: [name], attestations: [name]}] */ -}}
+{{- /* sources: [{kind: github|platform, prefixes, attestors: [name], attestations: [name]}] */ -}}
 {{- $sources := list }}
 {{- $keyless := list }}
 {{- if $iv.github.enabled }}
@@ -38,12 +44,15 @@ renders its own attestors (name suffix -<sha7> for transition commits) and the v
 {{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
 {{- if ne (len $wfRefs) (len (uniq $wfRefs)) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
 {{- $triggers := $iv.github.triggers | default list }}
+{{- /* Every attestor of the CURRENT pin comes first: validations try the attestors one at a time (CEL ||, the first that
+verifies wins) and only a successful single-attestor verification is cached, so images at the current pin cost one
+verification per check; only images still at the transition pin pay the failed attempts before theirs. */ -}}
+{{- range $i, $wf := $wfRefs }}
 {{- range $repo := $iv.github.repositories }}
 {{- range $ref := $iv.github.refs }}
 {{- range $trigger := $triggers }}
 {{- $n := printf "gh-%s-%s" ($repo | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) ($ref | trimPrefix "refs/" | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) }}
 {{- if gt (len $triggers) 1 }}{{ $n = printf "%s-%s" $n ($trigger | replace "_" "-" | lower) }}{{ end }}
-{{- range $i, $wf := $wfRefs }}
 {{- $name := ternary ($n | trunc 60 | trimSuffix "-") (printf "%s-%s" ($n | trunc 52 | trimSuffix "-") (substr 0 7 $wf)) (eq $i 0) }}
 {{- $keyless = append $keyless (dict "name" $name "repo" $repo "ref" $ref "trigger" $trigger "subject" (printf "%s@%s" $iv.github.workflow $wf)) }}
 {{- end }}
@@ -53,7 +62,7 @@ renders its own attestors (name suffix -<sha7> for transition commits) and the v
 {{- if not $keyless }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
 {{- $names := list }}{{ range $keyless }}{{ $names = append $names .name }}{{ end }}
 {{- if ne (len $names) (len (uniq $names)) }}{{ fail (printf "imageVerification.github: attestor names collide after truncation to 60 characters: %s" (join ", " $names)) }}{{ end }}
-{{- $sources = append $sources (dict "prefixes" $iv.github.prefixes "attestors" $names "attestations" $iv.github.attestations) }}
+{{- $sources = append $sources (dict "kind" "github" "prefixes" $iv.github.prefixes "attestors" $names "attestations" ($iv.github.attestations | default list)) }}
 {{- end }}
 {{- /* Platform key: images the workflow plane pushed to <registry.host>/<registry.appsProject>/ (installation.yaml).
 Trusted ONLY with a public key configured: without a key nothing could verify them, so they are not trusted at all and
@@ -67,7 +76,7 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?$" $host) }}{{ fail (printf "registry.host %q must be <dns name>[:<port>]" $host) }}{{ end }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9._]*[a-z0-9])?$" $project) }}{{ fail (printf "registry.appsProject %q is not a registry project name" $project) }}{{ end }}
 {{- $platformPrefixes = list (printf "%s/%s/" $host $project) }}
-{{- $sources = append $sources (dict "prefixes" $platformPrefixes "attestors" (list "platform-key") "attestations" $iv.platformKey.attestations) }}
+{{- $sources = append $sources (dict "kind" "platform" "prefixes" $platformPrefixes "attestors" (list "platform-key") "attestations" ($iv.platformKey.attestations | default list)) }}
 {{- end }}
 {{- $trusted := $iv.extraTrustedPrefixes | default list }}
 {{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
@@ -91,18 +100,39 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- $_ := set $nsSelector "matchExpressions" (append ($nsSelector.matchExpressions | default list) (dict "key" "openchoreo.dev/environment" "operator" "In" "values" $envs)) }}
 {{- end }}
 {{- if $sources }}
+{{- /* checks: the signature policy, then one policy per attestation any source requires */ -}}
+{{- $checks := list (dict "name" (printf "openchoreo-verify-images-%s" $suffix) "attestation" "") }}
+{{- range $usedAttestations | uniq | sortAlpha }}
+{{- $checks = append $checks (dict "name" (printf "openchoreo-attest-%s-%s" . $suffix) "attestation" .) }}
+{{- end }}
+{{- range $c := $checks }}
+{{- /* Kyverno names the policy's webhook ivpol.validate.kyverno.svc-<fail|ignore>-finegrained-<policy>: one DNS label of
+at most 63 characters, so at most 40 for the policy name. */ -}}
+{{- if gt (len $c.name) 40 }}{{ fail (printf "imageVerification: policy name %q is longer than 40 characters (Kyverno's webhook name label is limited to 63): shorten the attestation name" $c.name) }}{{ end }}
+{{- $att := $c.attestation }}
+{{- $cs := list }}
+{{- range $sources }}{{ if or (not $att) (has $att .attestations) }}{{ $cs = append $cs . }}{{ end }}{{ end }}
+{{- $kinds := list }}{{ range $cs }}{{ $kinds = append $kinds .kind }}{{ end }}
 ---
 apiVersion: policies.kyverno.io/v1
 kind: ImageValidatingPolicy
 metadata:
-  name: openchoreo-verify-images-{{ $suffix }}
+  name: {{ $c.name }}
   annotations:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-    policies.kyverno.io/title: Signed images with SBOM and provenance in OpenChoreo {{ $scope }}
+    {{- if $att }}
+    policies.kyverno.io/title: Signed {{ $att }} attestation of images in OpenChoreo {{ $scope }}
     policies.kyverno.io/description: >-
-      Images from a trusted source carry that source's cosign signature and signed attestations: keyless from the
-      koorikla/ci reusable workflow for an allowed repository and ref (SBOM, SLSA provenance, vulnerability scan), or
-      the platform key for images the workflow plane built. Action {{ $action }} in {{ $scope }}.
+      Images from a trusted source that requires it carry a signed {{ $att }} attestation
+      ({{ get $iv.attestationTypes $att }}) from that source's attestors. One policy per check so the checks run in
+      parallel (openchoreo-verify-images-{{ $suffix }} verifies the signature). Action {{ $action }} in {{ $scope }}.
+    {{- else }}
+    policies.kyverno.io/title: Signed images in OpenChoreo {{ $scope }}
+    policies.kyverno.io/description: >-
+      Images from a trusted source carry that source's cosign signature: keyless from the koorikla/ci reusable workflow
+      for an allowed repository and ref, or the platform key for images the workflow plane built. The required signed
+      attestations are checked by openchoreo-attest-*-{{ $suffix }}. Action {{ $action }} in {{ $scope }}.
+    {{- end }}
 spec:
   validationActions: [{{ $action }}]
   failurePolicy: {{ get $iv.failurePolicy $action | default "Ignore" }}
@@ -123,7 +153,7 @@ spec:
     - name: never-platform-namespaces
       expression: '!(request.namespace in {{ $platform }})'
   matchImageReferences:
-    {{- range $s := $sources }}
+    {{- range $s := $cs }}
     {{- range $s.prefixes }}
     - glob: {{ printf "%s*" . | quote }}
     {{- end }}
@@ -133,6 +163,7 @@ spec:
     verifyDigest: {{ get $iv.requireDigest $action | default false }}
     required: true
   attestors:
+    {{- if has "github" $kinds }}
     {{- range $keyless }}
     - name: {{ .name }}
       cosign:
@@ -147,7 +178,8 @@ spec:
         ctlog:
           url: {{ $iv.github.rekorURL }}
     {{- end }}
-    {{- if $platformKey }}
+    {{- end }}
+    {{- if has "platform" $kinds }}
     - name: platform-key
       cosign:
         key:
@@ -159,13 +191,11 @@ spec:
           insecureIgnoreSCT: true
         {{- end }}
     {{- end }}
-  {{- with $usedAttestations | uniq | sortAlpha }}
+  {{- if $att }}
   attestations:
-    {{- range . }}
-    - name: {{ . }}
+    - name: {{ $att }}
       intoto:
-        type: {{ get $iv.attestationTypes . }}
-    {{- end }}
+        type: {{ get $iv.attestationTypes $att }}
   {{- end }}
   variables:
     - name: images                      # every container kind (init / ephemeral too: explicit messages, not only required)
@@ -174,21 +204,29 @@ spec:
         + ("initContainers" in images ? images.initContainers : [])
         + ("ephemeralContainers" in images ? images.ephemeralContainers : [])
   validations:
-    {{- range $s := $sources }}
+    {{- range $s := $cs }}
     {{- $match := printf "[%s].exists(p, image.startsWith(p))" (include "kp.quoteList" $s.prefixes) }}
-    {{- $att := list }}{{ range $s.attestors }}{{ $att = append $att (printf "attestors[\"%s\"]" .) }}{{ end }}
-    {{- $attList := printf "[%s]" (join ", " $att) }}
+    {{- /* One attestor per call, joined with ||: CEL stops at the first attestor that verifies, and Kyverno caches a
+    result only when every attestor of the call verified - a list of several attestors would never be cached and would
+    verify all of them on every admission. */ -}}
+    {{- $calls := list }}
+    {{- range $s.attestors }}
+    {{- if $att }}
+    {{- $calls = append $calls (printf "verifyAttestationSignatures(image, attestations[\"%s\"], [attestors[\"%s\"]]) > 0" $att .) }}
+    {{- else }}
+    {{- $calls = append $calls (printf "verifyImageSignatures(image, [attestors[\"%s\"]]) > 0" .) }}
+    {{- end }}
+    {{- end }}
     - expression: >-
-        variables.images.filter(image, {{ $match }}).all(image, verifyImageSignatures(image, {{ $attList }}) > 0)
+        variables.images.filter(image, {{ $match }}).all(image, {{ join " || " $calls }})
       message: >-
+        {{- if $att }}
+        image ({{ join ", " $s.prefixes }}) has no {{ $att }} attestation ({{ get $iv.attestationTypes $att }}) signed by {{ join ", " $s.attestors }}
+        {{- else }}
         image ({{ join ", " $s.prefixes }}) is not signed by {{ join ", " $s.attestors }}
-    {{- range $a := $s.attestations }}
-    - expression: >-
-        variables.images.filter(image, {{ $match }}).all(image, verifyAttestationSignatures(image, attestations["{{ $a }}"], {{ $attList }}) > 0)
-      message: >-
-        image ({{ join ", " $s.prefixes }}) has no {{ $a }} attestation ({{ get $iv.attestationTypes $a }}) signed by {{ join ", " $s.attestors }}
+        {{- end }}
     {{- end }}
-    {{- end }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: policies.kyverno.io/v1
