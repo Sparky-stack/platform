@@ -7,9 +7,9 @@
 # (admission runs, nothing is stored), curl GETs and `cosign verify`. Workload-cluster kubeconfigs are written by
 # hack/kubeconfig.sh into a private temp dir and removed on exit; no secret value is printed.
 #
-# PENDING: the feature behind the check is not merged yet. A check whose feature is absent reports it itself (e.g. no
-# OpenBao addon); a failing check listed in pending_issue() reports PENDING #<issue> instead of FAIL. DEMO_STRICT=1
-# turns those back into FAIL.
+# PENDING: the feature behind the check is not merged yet. A check whose feature is absent can report it itself
+# (return 2, detail "#<issue> ..."); a failing check listed in pending_issue() reports PENDING #<issue> instead of FAIL.
+# DEMO_STRICT=1 turns the pending_issue() ones back into FAIL. Drop both once the issue closes.
 #
 # Environment (defaults in brackets):
 #   KUBE_CTX            mgmt kubectl context [k3d-platform-mgmt]
@@ -509,7 +509,7 @@ c_falco_cluster_name() {
 c_mesh_certs() {
   local apps c iss crt ok="" bad="" skip=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-  printf '%s\n' "$apps" | grep -q '^openbao-' || { echo "#19 OpenBao addon not installed on mgmt"; return 2; }
+  printf '%s\n' "$apps" | grep -q '^openbao-' || { echo "OpenBao addon not installed on mgmt"; return 1; }
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
     printf '%s\n' "$apps" | grep -qx "istio-csr-$c" || { skip="$skip${skip:+, }$c"; continue; }
     iss=$(kw "$c" get issuers.cert-manager.io -n istio-system openbao-mesh \
@@ -542,14 +542,21 @@ c_secret_stores() {
 }
 
 # ---- step 9: app with a database ------------------------------------------------------------------------------------
+# Crossplane runs on each workload cluster that opts in (fleet file `addons: { crossplane: true, cloudnative-pg: true }`,
+# docs/data-services.md): the PostgreSQL XRD must be Established there. No opted-in cluster fails (step 9 has nothing
+# to show).
 c_postgres() {
-  local out
-  out=$(km get compositeresourcedefinitions.apiextensions.crossplane.io \
-    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Established")].status}{"\n"}{end}' 2>/dev/null \
-    | grep -i postgres || true)
-  [[ -n "$out" ]] || { echo "#91 PostgreSQL claim API (Crossplane XRD) not installed"; return 2; }
-  printf '%s\n' "$out" | awk 'NF && $2 != "True" { print "XRD not Established: " $1; bad = 1 } END { exit bad }' || return 1
-  echo "XRD Established: $(printf '%s\n' "$out" | awk '{ print $1 }' | paste -sd, -)"
+  local apps c est ok="" bad=""
+  apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+  for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
+    printf '%s\n' "$apps" | grep -qx "crossplane-$c" || continue
+    est=$(kw "$c" get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io \
+      -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' 2>/dev/null || true)
+    if [[ "$est" == True ]]; then ok="$ok${ok:+, }$c"; else bad="$bad${bad:+, }$c(Established=${est:-missing})"; fi
+  done
+  [[ -z "$bad" ]] || { echo "XRD postgresqls.platform.koorikla.io not Established on: $bad${ok:+; ok: $ok}"; return 1; }
+  [[ -n "$ok" ]] || { echo "no workload cluster opts in to addon crossplane (fleet file addons.crossplane + cloudnative-pg)"; return 1; }
+  echo "XRD postgresqls.platform.koorikla.io Established on: $ok"
 }
 
 # ---- main -----------------------------------------------------------------------------------------------------------

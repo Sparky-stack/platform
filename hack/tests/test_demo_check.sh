@@ -107,7 +107,10 @@ chmod +x "$BIN/"*
 green() {
   local d=$1
   mkdir -p "$d"
-  printf 'root Synced Healthy\nharbor-mgmt Synced Healthy\nfalco-dev1 Synced Healthy\n' > "$d/k3d-platform-mgmt.apps"
+  printf 'root Synced Healthy\nharbor-mgmt Synced Healthy\nfalco-dev1 Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\ncrossplane-dev1 Synced Healthy\n' > "$d/k3d-platform-mgmt.apps"
+  printf 'True https://openbao.openchoreo.localhost:8200' > "$d/dev1.mesh-issuer"
+  printf 'True openbao-mesh 2026-11-18T09:00:00Z' > "$d/dev1.mesh-cert"
+  printf 'True' > "$d/dev1.xrds"
   printf 'dev1\nprod1\n' > "$d/k3d-platform-mgmt.cluster-names"
   printf 'dev1 Provisioned True\nprod1 Provisioned True\n' > "$d/k3d-platform-mgmt.clusters"
   printf 'dev1 true 1\nprod1 true 1\n' > "$d/k3d-platform-mgmt.dataplanes"
@@ -185,7 +188,7 @@ assert_eq "$RC" 0 "green: exit 0"
 assert_match "$OUT" "^Demo pre-flight \(docs/demo.md\): context k3d-platform-mgmt, workload clusters: dev1 prod1" "green: header"
 assert_match "$OUT" $'\nSTEP CHECK {42}RESULT {7}DETAIL\n' "green: table header with fixed columns"
 assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" PASS "green: argo apps"
-assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "3/3 Synced/Healthy" "green: argo apps detail"
+assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "6/6 Synced/Healthy" "green: argo apps detail"
 assert_eq "$(result_of 'CAPI clusters Provisioned')" PASS "green: clusters"
 assert_eq "$(detail_of 'OpenChoreo data planes connected')" "connected: dev1(1 agent), prod1(1 agent)" "green: data planes"
 assert_match "$(detail_of 'cluster files render for other providers')" "^renders: aws-example/dev-euc1\(aws\), aws-example/prod-euc1\(aws\)$" "green: render other providers (local skipped)"
@@ -218,30 +221,36 @@ assert_eq "$(detail_of 'Falco running (mgmt)')" "falco 1/1, falco-falcosidekick 
 assert_eq "$(result_of 'Falco running (prod1)')" PASS "green: falco prod1"
 assert_eq "$(result_of 'Falco escalation path on mgmt')" PASS "green: escalation"
 assert_eq "$(result_of 'cluster name in Falco events')" PASS "green: cluster name (exact list item)"
-assert_eq "$(result_of 'OpenBao-issued mesh certificates')" "PENDING #19" "green: OpenBao addon absent -> PENDING #19"
-assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao addon not installed on mgmt" "green: pending detail without the issue prefix"
+assert_eq "$(result_of 'OpenBao-issued mesh certificates')" PASS "green: mesh certs from OpenBao"
+assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao-issued: dev1(istiod until 2026-11-18T09:00:00Z); not mesh members: prod1" "green: mesh detail"
 assert_eq "$(result_of 'ClusterSecretStores Ready (mgmt)')" PASS "green: stores mgmt"
-assert_eq "$(result_of 'PostgreSQL claim API')" "PENDING #91" "green: no XRD -> PENDING #91"
-assert_match "$OUT" $'\n27 PASS, 0 FAIL, 2 PENDING$' "green: summary"
+assert_eq "$(result_of 'PostgreSQL claim API')" PASS "green: XRD Established on the opted-in cluster"
+assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io Established on: dev1" "green: XRD detail"
+assert_match "$CALLS" "dev1.kubeconfig --request-timeout=20s get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io " "green: XRD read on the workload cluster, not mgmt"
+assert_match "$OUT" $'\n29 PASS, 0 FAIL, 0 PENDING$' "green: summary"
 
-# OpenBao addon and PostgreSQL XRD present: the checks run instead of PENDING.
+# Mesh members and Crossplane clusters vary: failures name the cluster.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
-printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\nistio-csr-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\nistio-csr-prod1 Synced Healthy\ncrossplane-dev1 Synced Healthy\ncrossplane-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
 printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/dev1.mesh-issuer"
 printf 'True openbao-mesh 2026-11-18T10:00:00Z' > "$FIX/dev1.mesh-cert"
 printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/prod1.mesh-issuer"
 printf 'False openbao-mesh' > "$FIX/prod1.mesh-cert"
-printf 'postgresqls.platform.koorikla.io True\nkafkas.platform.koorikla.io True\n' > "$FIX/k3d-platform-mgmt.xrds"
+printf 'False' > "$FIX/prod1.xrds"
 run addons
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "addons: a not-Ready mesh certificate fails"
 assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "not issued by OpenBao: prod1(Certificate istiod Ready=False issuer=openbao-mesh); ok: dev1(istiod until 2026-11-18T10:00:00Z)" "addons: names the cluster"
 assert_match "$CALLS" "prod1.kubeconfig --request-timeout=20s get issuers.cert-manager.io -n istio-system openbao-mesh " "addons: reads the member's OpenBao Issuer"
+assert_eq "$(result_of 'PostgreSQL claim API')" FAIL "addons: XRD not Established on an opted-in cluster fails"
+assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io not Established on: prod1(Established=False); ok: dev1" "addons: names the cluster"
 # All members issued by OpenBao; a cluster without istio-csr is not a mesh member (listed, not failed).
 printf 'True openbao-mesh 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
 printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
 run addons-ok
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" PASS "addons-ok: member certs from OpenBao"
 assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao-issued: prod1(istiod until 2026-11-18T11:00:00Z); not mesh members: dev1" "addons-ok: detail"
+assert_eq "$(result_of 'PostgreSQL claim API')" FAIL "addons-ok: no cluster opts in to crossplane -> FAIL (no PENDING since #91 closed)"
+assert_match "$(detail_of 'PostgreSQL claim API')" "^no workload cluster opts in to addon crossplane" "addons-ok: says how to opt in"
 # Negative: istiod signed by another issuer (e.g. Istio's self-signed CA) is not OpenBao-issued.
 printf 'True istio-selfsigned 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
 run addons-other-issuer
@@ -251,8 +260,6 @@ printf 'True openbao-mesh 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
 printf 'True' > "$FIX/prod1.mesh-issuer"
 run addons-not-vault
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "negative: Issuer without a vault server fails"
-assert_eq "$(result_of 'PostgreSQL claim API')" PASS "addons: XRD Established"
-assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD Established: postgresqls.platform.koorikla.io" "addons: only postgres XRDs"
 assert_eq "$RC" 1 "addons: a FAIL exits 1"
 
 # ---- broken stack ---------------------------------------------------------------------------------------------------
@@ -296,12 +303,12 @@ assert_eq "$(result_of 'in-cluster build succeeded')" "PENDING #17" "red: no bui
 assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-falcosidekick 0/1" "red: falco not ready"
 assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
-assert_match "$OUT" $'\n14 PASS, 10 FAIL, 5 PENDING$' "red: summary"
+assert_match "$OUT" $'\n14 PASS, 12 FAIL, 3 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
-assert_eq "$(result_of 'OpenBao-issued mesh certificates')" "PENDING #19" "strict: absent feature stays PENDING"
-assert_match "$OUT" $'\n14 PASS, 13 FAIL, 2 PENDING$' "strict: summary"
+assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
+assert_match "$OUT" $'\n14 PASS, 15 FAIL, 0 PENDING$' "strict: summary"
 
 # ---- API server down ------------------------------------------------------------------------------------------------
 FIX="$TMP/fix/down"; mkdir -p "$FIX"
