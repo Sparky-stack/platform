@@ -525,11 +525,97 @@ def observability() -> Diagram:
     return d
 
 
+# -------------------------------------------------------------------------------------------------- sdlc
+def sdlc() -> Diagram:
+    W, H = 1400, 990
+    d = Diagram(W, H, "SDLC · from git push to production",
+                "build in-cluster (default) or on GitHub Actions → signed image → tag commit → Argo CD → "
+                "OpenChoreo release → gated promotion → admission on the data plane")
+    d.box(32, 120, 160, 64, "external", "developer", ["git push to main"])
+    d.box(222, 120, 200, 64, "external", "koorikla/hello-world", ["app repo"], title_size=12)
+    d.group(452, 92, 932, 116, "default path · OpenChoreo workflow plane (in-cluster, mgmt)", "zone")
+    d.group(452, 224, 932, 116, "optional path · GitHub Actions + koorikla/ci reusable workflows", "zone")
+    d.box(468, 128, 200, 60, "platform", "WorkflowRun", ["per-stack ClusterWorkflow", "koorikla/ci scripts"])
+    d.box(700, 128, 200, 60, "platform", "BuildKit (rootless)", ["multi-arch · SLSA", "Trivy · SPDX SBOM"])
+    d.box(932, 128, 200, 60, "security", "cosign: platform key", ["sign + attest", "(cosign-platform)"])
+    d.box(1164, 128, 188, 60, "data", "Harbor", ["apps/* · Trivy", "scan on push"])
+    steps = [("test", ["go test", "lint"], "external"), ("Trivy", ["fs + deps", "scan"], "security"),
+             ("build", ["multi-arch", "push digest"], "external"), ("Syft SBOM", ["SPDX"], "security"),
+             ("cosign", ["keyless", "Fulcio·Rekor"], "security"), ("attest", ["SBOM · SLSA", "vuln scan"], "security"),
+             ("GHCR", ["ghcr.io/", "koorikla/*"], "data")]
+    for i, (t, sub, k) in enumerate(steps):
+        d.box(468 + i * 128, 260, 116, 60, k, t, sub, sub_size=11)
+    d.arrow([(192, 152), (222, 152)], SL, aid="push", step=0)
+    d.arrow([(422, 152), (468, 152)], SL, aid="wf", step=1)
+    d.arrow([(422, 172), (440, 172), (440, 290), (468, 290)], SL, aid="gha", step=1)
+    for x in (668, 900, 1132):
+        d.arrow([(x, 158), (x + 32, 158)], VI, step=2)
+    for i in range(6):
+        d.arrow([(584 + i * 128, 290), (596 + i * 128, 290)], VI, step=2)
+    d.arrow([(1352, 158), (1370, 158), (1370, 400), (1352, 400)], VI, aid="h2c", step=3)
+    d.arrow([(1294, 320), (1294, 368)], VI, aid="g2c", step=3)
+
+    # deploy (right to left)
+    d.box(1164, 368, 188, 64, "external", "image tag commit", ["deploy/openchoreo/", "workload.yaml"])
+    d.box(932, 368, 200, 64, "gitops", "Argo CD", ["App <project>-<app>", "tenant AppProject"], focus=True)
+    d.box(700, 368, 200, 64, "platform", "Component + Workload", ["org ns default (mgmt)", "autoDeploy: true"])
+    d.box(468, 368, 200, 64, "platform", "ComponentRelease", ["immutable snapshot", "Workload + traits"])
+    d.box(32, 368, 390, 64, "gitops", "Crossplane package promotion",
+          ["xpkg per env ring, gated by Argo CD", "commit statuses (roadmap)"], status="planned")
+    d.arrow([(1164, 400), (1132, 400)], EM, step=4)
+    d.arrow([(932, 400), (900, 400)], EM, step=5)
+    d.arrow([(700, 400), (668, 400)], CY, step=6)
+
+    # promotion
+    BX = 468
+    d.box(BX, 490, 220, 58, "platform", "development", ["ReleaseBinding · auto"])
+    d.box(BX, 570, 220, 58, "platform", "staging", ["ReleaseBinding · PR"])
+    d.box(BX, 686, 220, 58, "platform", "production", ["gated PR + CODEOWNERS"], focus=True)
+    d.box(BX, 760, 220, 64, "security", "ValidatingAdmissionPolicy", ["only Argo CD's gated", "App writes prod"],
+          title_size=12.5)
+    d.box(32, 556, 390, 162, "platform", "promotion-gate",
+          ["ClusterWorkflow on the workflow plane:", "1 pipeline edge    2 readiness", "3 smoke: endpoints 2xx/3xx",
+           "4 observer: alerts + error rate", "5 freeze windows", "6 opens PR via its own GitHub App"],
+          align="start", focus=True)
+    d.arrow([(578, 432), (578, 490)], CY, label="autoDeploy", label_pos=(588, 466), label_anchor="start",
+            aid="auto", step=7)
+    d.arrow([(578, 548), (578, 570)], CY, step=8)
+    d.arrow([(422, 599), (BX, 599)], CY, step=8)
+    d.arrow([(578, 628), (578, 686)], CY, label="gate ✓ + review", label_pos=(588, 662), label_anchor="start",
+            aid="prod", step=9)
+    d.arrow([(422, 700), (BX, 700)], CY, step=9)
+    d.arrow([(578, 760), (578, 744)], RO, step=10)
+
+    # data planes
+    d.group(1000, 470, 384, 160, "dev1 · development + staging", "zone")
+    d.group(1000, 650, 384, 116, "prod1 · production", "zone")
+    d.box(1016, 506, 170, 110, "platform", "cluster-agent", ["applies", "development", "+ staging"])
+    d.box(1198, 506, 170, 110, "security", "Kyverno", ["image verify:", "Audit (report)", "PSS baseline"],
+          name="Kyverno (dev1)")
+    d.box(1016, 686, 170, 58, "platform", "cluster-agent", ["applies", "production"], name="cluster-agent (prod1)")
+    d.box(1198, 686, 170, 58, "security", "Kyverno", ["Deny unsigned", "+ digest pinned"], name="Kyverno (prod1)")
+    d.arrow([(BX + 220, 519), (1016, 519)], CY, label="OpenChoreo → cluster-agent (wss)", label_pos=(844, 523),
+            aid="dev", step=10)
+    d.arrow([(BX + 220, 599), (1016, 599)], CY, aid="stg", step=10)
+    d.arrow([(BX + 220, 715), (1016, 715)], CY, aid="prd", step=11)
+    d.arrow([(1186, 561), (1198, 561)], RO, step=11)
+    d.arrow([(1186, 715), (1198, 715)], RO, step=12)
+
+    d.require("developer", "koorikla/hello-world", "WorkflowRun", "Harbor", "GHCR", "Trivy", "Syft SBOM", "cosign",
+              "attest", "image tag commit", "Argo CD", "ComponentRelease", "development", "staging", "production",
+              "promotion-gate", "ValidatingAdmissionPolicy", "Kyverno (dev1)", "Kyverno (prod1)")
+    d.legend(28, 862, ["external", "gitops", "platform", "security", "data"], cols=5, col_w=270, optin=False,
+             focus=True, flows=[("git / trigger", SL, False), ("artifact", VI, False), ("GitOps", EM, False),
+                                ("OpenChoreo release", CY, False)])
+    return d
+
+
 DIAGRAMS = {
     "architecture": architecture,
     "security": security,
     "network": network,
     "observability": observability,
+    "sdlc": sdlc,
     "cluster-lifecycle": cluster_lifecycle,
 }
 
