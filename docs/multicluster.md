@@ -110,7 +110,7 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
 ```
 
 - **One root and one intermediate per group**: installation.yaml lists the groups (`mesh.groups`). The reconcile's
-  PostSync Job (bootstrap identity) creates `pki-mesh-<group>-root` (`root/generate/internal`, EC P-384, 10y) and `pki-mesh-<group>-int`
+  Job (Argo CD Sync hook, wave 1; bootstrap identity) creates `pki-mesh-<group>-root` (`root/generate/internal`, EC P-384, 10y) and `pki-mesh-<group>-int`
   (`intermediate/generate/internal`, EC P-256, signed by the root with `max_path_length=0`). `internal` means OpenBao
   generates the key and never returns it; every reconcile policy denies `generate/exported`, key import/rotation,
   `sign-verbatim` and `sys/raw` is granted to nobody. A fleet file's
@@ -169,14 +169,15 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   existing auth mount is kept (never pruned while it is in the inputs). Each run ends with
   `done: configured=[...] failed=[...] invalid=[...]`, also written as the pod's termination message. Both fail for
   invalid groups, a failed login or group bootstrap, or when every member input is invalid. When no member could be
-  configured, the **CronJob** fails (visible: failed Jobs, `kube_job_status_failed`), while the **PostSync hook exits
+  configured, the **CronJob** fails (visible: failed Jobs, `kube_job_status_failed`), while the **Sync-hook Job exits
   0** with a `WARNING` line: on a cold boot members are registered before they are reachable, and the hook must not
   leave the openbao Application `SyncFailed` for something the CronJob converges. Check:
   `kubectl -n openbao logs -l app.kubernetes.io/name=mesh-reconcile --tail=-1 | grep -E 'FAILED|WARNING|ERROR|done:'`
   or `kubectl -n openbao get pods -l app.kubernetes.io/name=mesh-reconcile -o
   jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].state.terminated.message}{"\n"}{end}'`.
 - **Public trust delivery.** OpenBao publishes each group root (`pki-mesh-<group>-root/cert/ca`, read by ESO with
-  OpenBao role `mesh-ca-read`, static policy: read `+/cert/ca`) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
+  OpenBao role `mesh-ca-read`, static policy: read `+/cert/ca`, plus `auth/token/lookup-self` and `revoke-self`, which
+  ESO's vault provider uses to validate the store and close its client) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
   `mgmt-openbao` may GET only that Secret (name-scoped RBAC, namespace `fleet`). `ClusterResourceSet <name>-mesh-trust`
   delivers `istio-system/openbao-ca` (verifies OpenBao's listener) and `istio-system/mesh-root-ca` (istio-csr pins it
   as its root; cert-manager's `ca.crt` must match it) plus the namespace label `topology.istio.io/network=<name>`.
@@ -194,21 +195,21 @@ OpenBao's [self-initialisation](https://openbao.org/docs/configuration/self-init
 server config, `addons/openbao/values.yaml`) runs once on the first start: it enables the file audit device to stdout
 and the Kubernetes auth method for mgmt ServiceAccounts, writes **every ACL policy** the mesh uses and their roles,
 then **revokes its own root token**. No root token or recovery key is ever stored. After that,
-`files/mesh-reconcile.sh` (Argo CD PostSync Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI) applies the
+`files/mesh-reconcile.sh` (Argo CD Sync-hook Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI) applies the
 desired state from git. It logs in with projected, audience-bound ServiceAccount tokens (15-minute OpenBao tokens, no
 Kubernetes API access) and **authors no ACL policy**.
 
 #### Who may do what in OpenBao
 | Identity (Kubernetes auth role) | Used by | May | May not (403, `task test:openbao`) |
 |---|---|---|---|
-| `platform-mesh-bootstrap` (SA `openbao/openbao-mesh-bootstrap`) | PostSync Job only | mount `pki-mesh-*` (type `pki` only); `root/generate/internal`, `intermediate/generate/internal`, `root/sign-intermediate` with `max_path_length=0` only, `intermediate/set-signed` | write any policy or auth method, enrol members, any `exported` generation, key/issuer import, `config/ca`, `sign-verbatim`, `sign-self-issued`, `cross-sign`, root rotation, issuing or signing leaves |
-| `platform-mesh-config` (SAs `openbao-mesh-config`, `openbao-mesh-bootstrap`) | CronJob + PostSync Job | enable/configure `jwt` auth at `auth/mesh-*` (type pinned to `jwt`, roles may only carry policy `mesh-member`); write `<mount>/roles/<name>` with every widening flag pinned (`required_parameters` + `allowed_parameters`: no any-name, IP SANs, localhost, globs, wildcards, subdomains, other SANs, URI templates, code-signing/email EKUs; `no_store`, `issuer_ref=default`); write identity entities `mesh-*` (metadata only, no policies) and their aliases | everything above, plus any CA operation: no mount, no key generation, no `sign-intermediate` (not CA-equivalent) |
+| `platform-mesh-bootstrap` (SA `openbao/openbao-mesh-bootstrap`) | Sync-hook Job only | mount `pki-mesh-*` (type `pki` only); `root/generate/internal`, `intermediate/generate/internal`, `root/sign-intermediate` with `max_path_length=0` only, `intermediate/set-signed` | write any policy or auth method, enrol members, any `exported` generation, key/issuer import, `config/ca`, `sign-verbatim`, `sign-self-issued`, `cross-sign`, root rotation, issuing or signing leaves |
+| `platform-mesh-config` (SAs `openbao-mesh-config`, `openbao-mesh-bootstrap`) | CronJob + Sync-hook Job | enable/configure `jwt` auth at `auth/mesh-*` (type pinned to `jwt`, roles may only carry policy `mesh-member`); write `<mount>/roles/<name>` with every widening flag pinned (`required_parameters` + `allowed_parameters`: no any-name, IP SANs, localhost, globs, wildcards, subdomains, other SANs, URI templates, code-signing/email EKUs; `no_store`, `issuer_ref=default`); write identity entities `mesh-*` (metadata only, no policies) and their aliases | everything above, plus any CA operation: no mount, no key generation, no `sign-intermediate` (not CA-equivalent) |
 | `mesh-member` (templated) | members' istio-csr (JWT, batch tokens) | `pki-mesh-<group>-int/sign/<name>` of its own entity | everything else |
-| `mesh-ca-read` (SA `eso-openbao-pki-public`) | ESO | read `+/cert/ca` (public) | everything else |
+| `mesh-ca-read` (SA `eso-openbao-pki-public`) | ESO | read `+/cert/ca` (public); `auth/token/lookup-self`, `auth/token/revoke-self` (its own token) | everything else |
 
 Read this as: **the reconcile identities are CA administrators of the mesh, not OpenBao administrators.** The bootstrap
 identity can sign an intermediate CSR with a group root, which is CA-equivalent; that is why it exists only in the
-PostSync hook and the scheduled CronJob cannot do it. The member identity decides who is a member (which JWKS a
+Sync-hook Job and the scheduled CronJob cannot do it. The member identity decides who is a member (which JWKS a
 `mesh-<name>` mount trusts), which is inherent to its job. Neither can write a policy, enable another auth method,
 export, import or rotate a key, or sign verbatim. Whoever can create pods (or ServiceAccount tokens) in namespace
 `openbao` can use these identities, and with the static seal also holds the unseal key: protect namespace `openbao`
@@ -247,8 +248,12 @@ compromised member is cut off at once by deleting its auth mount (remove `mesh.g
 issued certificates expire within a day. The 7-day reader client certs (remote secrets) cannot be revoked either.
 
 ### Bootstrapping order
-1. mgmt: `make secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals; the PostSync Job
-   creates the group mounts. `openbao-ca-bundle` is filled once the roots exist (ESO retries).
+1. mgmt: `make secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals. Argo CD sync waves
+   order the rest: wave 0 OpenBao (Ready = unsealed), wave 1 the `mesh-reconcile` Job (Sync hook) creates the group
+   mounts, wave 2 store `openbao-pki-public`, `openbao-ca-bundle` and the CronJob. Not PostSync: a PostSync hook runs
+   only once every resource is Healthy, and `openbao-ca-bundle` cannot be before the roots exist (contract:
+   `hack/tests/test_openbao_sync_order.sh`). The CronJob is in the final wave because a final-wave resource that
+   degrades later does not fail a sync.
 2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`.
    `ClusterResourceSet <name>-mesh-trust` applies the issuer-discovery binding as soon as the member's API server is
    up (static ConfigMap), then the public certificates once ESO has them. The next reconcile creates
