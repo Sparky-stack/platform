@@ -248,6 +248,8 @@ Secrets (store `platform`, seeded locally by `make secrets`):
   GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
 - Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the smoke probe is
   off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on.
+- Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
+  ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
   no-op when production already runs the release, otherwise it updates the same PR.
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
