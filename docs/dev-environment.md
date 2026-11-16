@@ -229,6 +229,16 @@ docker start "$C"
 New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to server:0
 ([#76](https://github.com/koorikla/platform/issues/76)). The conversion above is only for a mgmt created before that.
 
+**Leader election on slow disks.** etcd alone does not stop the restarts: k3s runs kube-controller-manager, scheduler and
+cloud-controller-manager in-process and exits when one misses its lease renewal (`"leaderelection lost"`). The clean
+bootstrap's I/O burst stalled etcd `fdatasync` for 5-8 s and restarted the mgmt k3s 5 times in its first 15 minutes.
+Both the k3d mgmt (`bootstrap/k3d-mgmt.yaml`) and the CAPD control planes (ClusterClass `k3s-docker`,
+`k3s.dockerLeaderElectionArgs`) run 60 s leases with a 40 s renew deadline instead of upstream 15 s / 10 s
+([#82](https://github.com/koorikla/platform/issues/82)). k3d sets server args at create time only: an older mgmt keeps
+the short leases until it is re-created; a CAPD cluster gets them through a control-plane rollout.
+Check: `docker logs k3d-platform-mgmt-server-0 2>&1 | grep -c 'leaderelection lost'` and
+`docker inspect k3d-platform-mgmt-server-0 --format '{{.RestartCount}}'` stay 0.
+
 ## Windows notes
 
 - **Line endings**: `.gitattributes` forces LF for scripts, YAML, JSON, TOML and Markdown, so `core.autocrlf=true`
