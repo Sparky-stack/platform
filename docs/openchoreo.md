@@ -41,7 +41,11 @@ There is no hard ordering between Applications; Argo CD retries cover it:
    data-plane agent waits in ContainerCreating until they exist, then connects.
 
 References between OpenChoreo objects (Project -> DeploymentPipeline, Environment -> ClusterDataPlane, Component ->
-ComponentType) are not validated by the API server; the controllers reconcile once the target exists.
+ComponentType) are not validated by the API server; the controllers reconcile once the target exists. One exception
+needs an order: the ReleaseBinding controller (v1.3.3) does not watch Environments, so a binding reconciled before its
+Environment exists stays `EnvironmentNotFound`. It re-queues the bindings of a ClusterDataPlane's Environments when
+that ClusterDataPlane is created, so `charts/cluster` applies the Environments in wave 9, one before the
+ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist long before the CAPD cluster is up.
 
 ### Argo CD requirements
 
