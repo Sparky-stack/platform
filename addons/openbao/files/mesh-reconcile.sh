@@ -21,6 +21,9 @@
 # (fail-safe: an ESO outage must not cut every member off). Their PKI role stays, unusable (no policy grants sign on
 # it; rewritten if the name joins again): the reconcile's own policy may not delete anything under pki-mesh-*. Group
 # mounts are never deleted here.
+# Per-member fail-safe: a member that cannot be configured (its API server unreachable, its JWKS not public yet) is
+# logged and skipped, the rest are configured, and it keeps its existing auth. Exit status: non-zero for invalid global
+# config (groups, environment), when no member could be configured, or when every member input is invalid; 0 otherwise.
 set -eu
 
 IN=${INPUT_DIR:-/inputs}
@@ -102,18 +105,10 @@ q write auth/kubernetes/role/mesh-ca-read bound_service_account_names="$CA_READE
   token_no_default_policy=true token_ttl=10m token_max_ttl=10m
 
 # --- members --------------------------------------------------------------------------------------------------------
-seen=" "
-for f in "$IN"/*.group; do
-  [ -e "$f" ] || continue
-  c=$(basename "$f" .group)
-  g=$(cat "$f")
-  if ! dns_label "$c"; then log "skip '$c': cluster name is not a DNS label"; continue; fi
-  case " $MESH_GROUPS " in *" $g "*) ;; *) log "skip $c: group '$g' is not in MESH_GROUPS"; continue ;; esac
-  server=$(cat "$IN/$c.server" 2>/dev/null || true)
-  case "$server" in https://*) ;; *) log "skip $c: API server '$server' is not https"; continue ;; esac
-  if ! grep -q 'BEGIN CERTIFICATE' "$IN/$c.ca" 2>/dev/null; then log "skip $c: no cluster CA"; continue; fi
-  int="pki-mesh-$g-int"
-
+# One member's role, policy and JWT auth. Every step checks its own result (`set -e` does not apply inside a function
+# called from `if`): the first failure returns 1 and the caller moves on to the next member.
+configure_member() { # <cluster> <group>
+  c=$1; g=$2; int="pki-mesh-$g-int"
   q write "$int/roles/$c" \
     allowed_domains="$ALLOWED_DOMAINS" allow_bare_domains=true allow_subdomains=false allow_glob_domains=false \
     allow_wildcard_certificates=false allow_localhost=false allow_ip_sans=false allow_any_name=false \
@@ -121,26 +116,51 @@ for f in "$IN"/*.group; do
     allowed_uri_sans="spiffe://$TRUST_DOMAIN/ns/*/sa/*" allowed_uri_sans_template=false allowed_other_sans="" \
     server_flag=true client_flag=true code_signing_flag=false email_protection_flag=false \
     key_type=any ttl="$WORKLOAD_TTL" max_ttl="$WORKLOAD_MAX_TTL" not_before_duration=30s no_store=true \
-    generate_lease=false issuer_ref=default
+    generate_lease=false issuer_ref=default || { log "member $c: PKI role failed"; return 1; }
 
-  printf 'path "%s/sign/%s" {\n  capabilities = ["create", "update"]\n}\n' "$int" "$c" | q policy write "mesh-member-$c" -
+  printf 'path "%s/sign/%s" {\n  capabilities = ["create", "update"]\n}\n' "$int" "$c" | q policy write "mesh-member-$c" - \
+    || { log "member $c: policy failed"; return 1; }
 
   if ! bao read "sys/auth/mesh-$c" >/dev/null 2>&1; then
     log "member $c (group $g): enable jwt auth at mesh-$c"
-    q auth enable -path="mesh-$c" -description="mesh member $c (group $g)" jwt
+    q auth enable -path="mesh-$c" -description="mesh member $c (group $g)" jwt || { log "member $c: auth enable failed"; return 1; }
   fi
-  q write "auth/mesh-$c/config" jwks_url="$server/openid/v1/jwks" jwks_ca_pem=@"$IN/$c.ca"
+  # OpenBao fetches the JWKS while writing the config: this is where an unreachable member, or one whose issuer
+  # discovery is not public yet (ClusterRoleBinding platform-oidc-discovery, CRS <c>-mesh-trust), fails.
+  q write "auth/mesh-$c/config" jwks_url="$server/openid/v1/jwks" jwks_ca_pem=@"$IN/$c.ca" \
+    || { log "member $c: JWKS $server/openid/v1/jwks not readable (API server unreachable, or issuer discovery not yet public)"; return 1; }
   q write "auth/mesh-$c/role/$MEMBER_ROLE" role_type=jwt user_claim=sub \
     bound_subject="system:serviceaccount:$MEMBER_SA" bound_audiences="$MEMBER_AUDIENCE" \
     token_policies="mesh-member-$c" token_no_default_policy=true token_type=batch \
-    token_ttl="$MEMBER_TOKEN_TTL" token_max_ttl="$MEMBER_TOKEN_TTL"
+    token_ttl="$MEMBER_TOKEN_TTL" token_max_ttl="$MEMBER_TOKEN_TTL" || { log "member $c: auth role failed"; return 1; }
+}
+
+# Per-member fail-safe: a member that cannot be configured (API server down, JWKS forbidden, OpenBao error) is reported
+# and skipped; the others are configured. It stays in `seen` (still desired), so its existing auth is never pruned.
+seen=" "; ok=""; failed=""; invalid=""
+for f in "$IN"/*.group; do
+  [ -e "$f" ] || continue
+  c=$(basename "$f" .group)
+  g=$(cat "$f")
+  if ! dns_label "$c"; then log "skip '$c': cluster name is not a DNS label"; invalid="$invalid $c"; continue; fi
+  case " $MESH_GROUPS " in *" $g "*) ;; *) log "skip $c: group '$g' is not in MESH_GROUPS"; invalid="$invalid $c"; continue ;; esac
+  server=$(cat "$IN/$c.server" 2>/dev/null || true)
+  case "$server" in https://*) ;; *) log "skip $c: API server '$server' is not https"; invalid="$invalid $c"; continue ;; esac
+  if ! grep -q 'BEGIN CERTIFICATE' "$IN/$c.ca" 2>/dev/null; then log "skip $c: no cluster CA"; invalid="$invalid $c"; continue; fi
   seen="$seen$c:$g "
-  log "member $c (group $g): role, policy and auth in place"
+  if configure_member "$c" "$g"; then
+    ok="$ok $c"
+    log "member $c (group $g): role, policy and auth in place"
+  else
+    failed="$failed $c"
+    log "member $c (group $g): FAILED - skipped this run, retried by the next run; its existing auth is kept"
+  fi
 done
 
 # --- prune members that left ----------------------------------------------------------------------------------------
 if [ "$seen" = " " ]; then
   log "no member inputs: nothing pruned (fail-safe)"
+  [ -z "$invalid" ] || die "every member input is invalid:$invalid"
   exit 0
 fi
 for m in $(bao auth list | awk '{print $1}' | grep '^mesh-' | sed 's#/$##'); do
@@ -151,4 +171,7 @@ for p in $(bao policy list | grep '^mesh-member-' || true); do
   c=${p#mesh-member-}
   case "$seen" in *" $c:"*) ;; *) log "prune policy $p"; q policy delete "$p" ;; esac
 done
-log "done:${seen% }"
+log "done: configured=[${ok# }] failed=[${failed# }] invalid=[${invalid# }]"
+# Non-zero only when no member could be configured (every one failed): a single unreachable member must not fail the
+# Argo CD PostSync hook or the CronJob for the rest of the fleet. Partial failures are in the summary line above.
+[ -n "$ok" ] || die "no member could be configured (failed:$failed)"

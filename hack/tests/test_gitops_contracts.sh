@@ -119,6 +119,21 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
       assert_match "$(yq -o=json -I=0 '.mesh.groups // []' "$inst_dir/installation.yaml")" "\"$g\"" "$(basename "$inst_dir")/$(basename "$cf"): mesh.group $g listed in mesh.groups"
     done
   done
+  # issuer discovery (OpenBao fetches the member's JWKS anonymously): delivered by the member's CRS from a static
+  # ConfigMap (exists before the mesh reconcile), exactly one binding of the read-only discovery role, single owner
+  oidc=$(yq 'select(.kind == "ConfigMap" and .metadata.name == "dev1-mesh-oidc") | .data["oidc-discovery.yaml"]' "$TMP/dev1-mesh.yaml")
+  assert_eq "$(printf '%s\n' "$oidc" | yq -N '.kind + " " + .roleRef.kind + "/" + .roleRef.name')" \
+    "ClusterRoleBinding ClusterRole/system:service-account-issuer-discovery" "member CRS binds only the read-only issuer-discovery role"
+  assert_eq "$(printf '%s\n' "$oidc" | yq -o=json -I=0 '.subjects')" '[{"apiGroup":"rbac.authorization.k8s.io","kind":"Group","name":"system:unauthenticated"}]' \
+    "issuer discovery is the only thing granted to system:unauthenticated"
+  assert_match "$(yq -o=json -I=0 'select(.kind == "ClusterResourceSet" and .metadata.name == "dev1-mesh-trust") | .spec.resources' "$TMP/dev1-mesh.yaml")" \
+    '"kind":"ConfigMap","name":"dev1-mesh-oidc"' "the mesh-trust CRS applies the issuer-discovery ConfigMap"
+  for a in istio-csr istio-eastwest istio-ambient; do   # one owner: the CRS, never an addon synced after the reconcile
+    helm template "$a" "$ROOT/addons/$a" --namespace istio-system --set-string mesh.group=contract --set-string cluster.name=dev1 \
+      2>/dev/null > "$TMP/oidc-$a.yaml" || true
+    assert_eq "$(yq 'select(.kind == "ClusterRoleBinding" and .roleRef.name == "system:service-account-issuer-discovery") | .metadata.name' "$TMP/oidc-$a.yaml")" "" \
+      "negative: addon $a does not (also) bind issuer discovery"
+  done
   mesh_net=$(yq 'select(.kind == "Cluster") | .metadata.labels["mesh.platform.koorikla.io/network"]' "$TMP/dev1-mesh.yaml")
   assert_eq "$mesh_net" "dev1" "mesh network label == cluster name"
   assert_match "$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-mesh-trust") | .spec.target.template.data["mesh-trust.yaml"]' "$TMP/dev1-mesh.yaml")" \

@@ -84,12 +84,12 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 |---|---|---|
 | mgmt, `openbao` | OpenBao (StatefulSet, raft, TLS), Gateway + TLSRoute `openbao`, reconcile Job/CronJob `mesh-reconcile`, ExternalSecrets `openbao-unseal`, `mesh-clients`, `openbao-ca-bundle`, ClusterSecretStore `mgmt-openbao`; ValidatingAdmissionPolicies `platform-mesh-*` (reader certs) | addon `openbao` (mgmt, opt-in) |
 | mgmt, OpenBao | per group: mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`; per member: role `<name>` in its group's intermediate, policy `mesh-member-<name>`, JWT auth mount `auth/mesh-<name>` | `addons/openbao/files/mesh-reconcile.sh` |
-| mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label) | `charts/cluster` `templates/mesh-openbao.yaml`, `mesh-trust.yaml` |
+| mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ConfigMap <name>-mesh-oidc` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label, issuer-discovery binding) | `charts/cluster` `templates/mesh-openbao.yaml`, `mesh-trust.yaml` |
 | mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/mesh-remote-secret.yaml` |
-| member, `istio-system` | istio-csr, `Issuer openbao-mesh` (cert-manager Vault issuer), ServiceAccount `istio-csr-openbao`, `Certificate istiod`; ValidatingAdmissionPolicies `platform-mesh-ca-*`; issuer-discovery binding for unauthenticated clients | addon `istio-csr` |
+| member, `istio-system` | istio-csr, `Issuer openbao-mesh` (cert-manager Vault issuer), ServiceAccount `istio-csr-openbao`, `Certificate istiod`; ValidatingAdmissionPolicies `platform-mesh-ca-*` | addon `istio-csr` |
 | member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRole`/`ClusterRoleBinding`/`Role`/`RoleBinding platform-istio-reader` | addon `istio-eastwest` |
 | member, `istio-system` | istiod/ztunnel multicluster values, istiod CA off (`values/mesh-member.yaml`) | addon `istio-ambient` (catalog parameters) |
-| member, `istio-system` | `Secret openbao-ca`, `Secret mesh-root-ca` (public certificates), label on the namespace, `Secret istio-remote-secret-<peer>` per peer | CAPI ClusterResourceSets (from mgmt) |
+| member, `istio-system` | `Secret openbao-ca`, `Secret mesh-root-ca` (public certificates), label on the namespace, `Secret istio-remote-secret-<peer>` per peer; cluster-scoped `ClusterRoleBinding platform-oidc-discovery` | CAPI ClusterResourceSets (from mgmt) |
 | member, `eastwest-demo` | example | `examples/eastwest` via ApplicationSet `example-eastwest` |
 
 ## Mesh CA (OpenBao)
@@ -129,8 +129,19 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   `serviceAccountRef`), and issues a 10-minute batch token with one policy: `create`/`update` on
   `pki-mesh-<group>-int/sign/<name>`. A member's token is useless at another member's mount (other keys) and its
   policy reaches no other role, mount or path. On the member, only cert-manager's controller may mint that
-  ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`); the addon also binds
-  `system:service-account-issuer-discovery` for unauthenticated clients so OpenBao can fetch the public JWKS.
+  ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`).
+- **Issuer discovery is public, and delivered first.** OpenBao fetches the JWKS without a credential, so every member
+  binds the read-only ClusterRole `system:service-account-issuer-discovery` (GET `/.well-known/openid-configuration`
+  and `/openid/v1/jwks`, nothing else) to `system:unauthenticated` (`ClusterRoleBinding platform-oidc-discovery`;
+  upstream's documented setup for an external relying party). It ships in the member's `ClusterResourceSet
+  <name>-mesh-trust` from a static `ConfigMap <name>-mesh-oidc` (no ESO, no OpenBao), so it is applied as soon as the
+  member's API server is up, before the reconcile configures `auth/mesh-<name>`; an addon would sync too late (seen on
+  the live boot: OpenBao got `403 system:anonymous` because addon istio-csr had not synced yet). The keys are public;
+  minting a token still needs the member's signing key. Rejected alternatives: TokenReview from OpenBao (a member
+  credential on mgmt), or mgmt reading the JWKS with the CAPI admin kubeconfig into static `jwt_validation_pubkeys`
+  (admin credential in the reconcile, manual key rotation); OpenBao's JWT auth has no authenticated JWKS fetch. Next
+  hardening: restrict anonymous requests to these paths with the API server's `AuthenticationConfiguration`
+  (`anonymous.conditions`) in the ClusterClasses.
 - **Member inputs come from the fleet file, declaratively.** charts/cluster renders `ExternalSecret
   <name>-mesh-openbao` in `fleet`: it reads the CAPI kubeconfig and keeps only the API server URL and the cluster CA
   certificate (both public), labelled `mesh.platform.koorikla.io/openbao-client`. Addon openbao's `ExternalSecret
@@ -138,6 +149,12 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   `auth/mesh-<name>` + role + policy. A new member is configured within one ESO refresh plus the 5-minute CronJob; a
   removed member's auth mount and policy are deleted on the next run (an empty input set prunes nothing, so an ESO
   outage cannot wipe the mesh).
+- **One member cannot fail the fleet.** The reconcile configures each member on its own: a member whose API server is
+  unreachable, or whose JWKS is not readable yet, is logged as `FAILED` and skipped, the others are configured, and its
+  existing auth mount is kept (never pruned while it is in the inputs). Each run ends with
+  `done: configured=[...] failed=[...] invalid=[...]`. The Job/CronJob fails only for invalid global config (groups,
+  environment), when no member could be configured, or when every member input is invalid. Check:
+  `kubectl -n openbao logs job/mesh-reconcile | grep -E 'FAILED|done:'`.
 - **Public trust delivery.** OpenBao publishes each group root (`pki-mesh-<group>-root/cert/ca`, read by ESO with
   OpenBao role `mesh-ca-read`) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
   `mgmt-openbao` may GET only that Secret (name-scoped RBAC, namespace `fleet`). `ClusterResourceSet <name>-mesh-trust`

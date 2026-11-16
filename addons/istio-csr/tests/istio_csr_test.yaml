@@ -2,7 +2,6 @@ suite: istio-csr - member side of the mesh CA (Vault Issuer -> OpenBao, JWT auth
 release: { name: istio-csr, namespace: istio-system }
 templates:
   - templates/issuer.yaml
-  - templates/oidc-discovery.yaml
   - templates/admission.yaml
   - charts/cert-manager-istio-csr/templates/deployment.yaml
   - charts/cert-manager-istio-csr/templates/certificate.yaml
@@ -61,12 +60,6 @@ tests:
       mesh: { group: Bad_Group }
     asserts:
       - failedTemplate: { errorMessage: "istio-csr: mesh.group \"Bad_Group\" must be a DNS label (set by the catalog from mesh.platform.koorikla.io/group)" }
-
-  - it: OpenBao can verify this cluster's tokens offline (public issuer discovery for unauthenticated clients)
-    template: templates/oidc-discovery.yaml
-    asserts:
-      - equal: { path: roleRef.name, value: system:service-account-issuer-discovery }
-      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: Group, name: system:unauthenticated }] }
 
   - it: only istio-csr and cert-manager may request certificates from the mesh CA; only istiod's Certificate may reference it
     template: templates/admission.yaml

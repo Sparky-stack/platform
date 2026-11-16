@@ -45,7 +45,7 @@ tests:
   - it: delivers only public trust (OpenBao CA, group root) + the network label to exactly this cluster
     template: templates/mesh-trust.yaml
     asserts:
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 3 }
       - isKind: { of: ExternalSecret }
         documentIndex: 0
       - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-openbao } }
@@ -67,13 +67,38 @@ tests:
             - { secretKey: root, remoteRef: { key: openbao-ca-bundle, property: mesh-root-local.pem } }
         documentIndex: 0
       - isKind: { of: ClusterResourceSet }
-        documentIndex: 1
+        documentIndex: 2
       - equal: { path: spec.strategy, value: Reconcile }
-        documentIndex: 1
+        documentIndex: 2
       - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
-        documentIndex: 1
-      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-trust }] }
-        documentIndex: 1
+        documentIndex: 2
+      - equal: { path: spec.resources, value: [{ kind: ConfigMap, name: dev1-mesh-oidc }, { kind: Secret, name: dev1-mesh-trust }] }
+        documentIndex: 2
+
+  - it: "publishes the member's issuer discovery (public JWKS) before the mesh reconcile: static CRS ConfigMap, no ESO"
+    template: templates/mesh-trust.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: ConfigMap }
+      - equal: { path: metadata.name, value: dev1-mesh-oidc }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal:
+          path: data["oidc-discovery.yaml"]
+          value: |
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRoleBinding
+            metadata:
+              name: platform-oidc-discovery
+              labels:
+                app.kubernetes.io/part-of: istio-mesh
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: ClusterRole
+              name: system:service-account-issuer-discovery
+            subjects:
+              - apiGroup: rbac.authorization.k8s.io
+                kind: Group
+                name: system:unauthenticated
 
   - it: "a group is a cryptographic boundary: another group's member pins another root"
     template: templates/mesh-trust.yaml

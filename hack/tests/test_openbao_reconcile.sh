@@ -33,6 +33,10 @@ case "$cmd" in
     esac ;;
   write)
     p=${args[0]}; rest=("${args[@]:1}")
+    # a member whose JWKS OpenBao cannot fetch (API server down / issuer discovery not public): the config write fails
+    if [[ "$p" == auth/*/config && "${rest[*]}" == *unreachable* ]]; then
+      echo "Error writing data to $p: Code: 400. * error checking jwks URL: 403 system:anonymous" >&2; exit 2
+    fi
     printf '%s\n' "${rest[@]}" > "$S/writes/$(enc "$p")"
     case "$p" in
       auth/kubernetes/login) [[ -n "$field" ]] && echo "fake-token" ;;
@@ -143,6 +147,41 @@ rm -f "$IN"/prod1.*; run
 assert_eq "$([[ -e "$S/auth/mesh-prod1" ]] && echo kept || echo pruned)" pruned "removed member: auth mount disabled"
 assert_eq "$([[ -e "$S/policies/mesh-member-prod1" ]] && echo kept || echo pruned)" pruned "removed member: policy deleted"
 assert_eq "$([[ -e "$S/auth/mesh-dev1" ]] && echo kept || echo pruned)" kept "remaining member untouched"
+
+# per-member fail-safe: an unreachable member (JWKS fetch fails) is skipped and reported, the rest are configured,
+# the run succeeds, and the unreachable member's existing auth is not pruned
+member prod1 prod
+member down1 local https://unreachable.test:6443
+rc=0; run || rc=$?
+assert_eq "$rc" 0 "one unreachable member: reconcile still exits 0"
+assert_match "$(cat "$TMP/out")" 'member down1 \(group local\): FAILED' "unreachable member reported as FAILED"
+assert_match "$(cat "$TMP/out")" 'JWKS https://unreachable.test:6443/openid/v1/jwks not readable' "the report names the JWKS URL"
+assert_match "$(cat "$TMP/out")" 'done: configured=\[dev1 prod1\] failed=\[down1\]' "summary: configured and failed members"
+assert_eq "$([[ -e "$S/auth/mesh-prod1" ]] && echo kept || echo missing)" kept "the other members are configured after the failure"
+assert_eq "$(wr auth/mesh-prod1/role/istio-csr | grep -c token_policies=mesh-member-prod1)" 1 "member after the failed one gets its auth role"
+assert_eq "$([[ -e "$S/writes/auth_mesh-down1_role_istio-csr" ]] && echo written || echo none)" none "negative: no auth role for the member whose JWKS failed"
+touch "$S/auth/mesh-down1"   # down1 was configured by an earlier run, then became unreachable
+rc=0; run || rc=$?
+assert_eq "$([[ -e "$S/auth/mesh-down1" ]] && echo kept || echo pruned)" kept "unreachable member keeps its existing auth (never pruned while in the inputs)"
+# every member failing is a real outage: non-zero, nothing pruned
+rm -f "$IN"/*; member down1 local https://unreachable.test:6443; member down2 prod https://unreachable.test:7443
+rc=0; run || rc=$?
+assert_eq "$rc" 1 "every member failed: reconcile exits non-zero"
+assert_match "$(cat "$TMP/out")" 'ERROR: no member could be configured \(failed: down1 down2\)' "every member failed: error names them"
+assert_eq "$([[ -e "$S/auth/mesh-dev1" ]] && echo kept || echo pruned)" pruned "members no longer in the inputs are still pruned"
+assert_eq "$([[ -e "$S/auth/mesh-down1" ]] && echo kept || echo pruned)" kept "every member failed: their auth is kept"
+# invalid configuration fails the run
+rm -f "$IN"/*; member Bad_Name local
+rc=0; run || rc=$?
+assert_eq "$rc" 1 "only invalid member inputs: reconcile exits non-zero"
+assert_match "$(cat "$TMP/out")" 'every member input is invalid: Bad_Name' "only invalid member inputs: named"
+rc=0; ( sed -i 's/^MESH_GROUPS=.*/MESH_GROUPS=Bad_Group/' "$TMP/env"; run ) || rc=$?
+assert_eq "$rc" 1 "negative: a mesh group that is not a DNS label fails the run"
+helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
+  --set 'mesh.groups={local,prod}' -s templates/reconcile.yaml \
+  | yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | .name + "=" + .value' > "$TMP/env"
+
+touch "$S/auth/mesh-dev1"
 rm -f "$IN"/*; run
 assert_match "$(cat "$TMP/out")" 'no member inputs: nothing pruned' "empty inputs: fail-safe message"
 assert_eq "$([[ -e "$S/auth/mesh-dev1" ]] && echo kept || echo pruned)" kept "empty inputs: nothing pruned"
