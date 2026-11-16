@@ -25,13 +25,17 @@ export SCHEMAS_DIR
 # A filtered run reuses cached schemas (regenerating them takes seconds); `task schemas` / the full suite refresh them.
 if [[ -z "$CHARTS" || -z "$(ls -A "$SCHEMAS_DIR" 2>/dev/null)" ]]; then ./hack/schemas.sh; fi
 
+# Offline after the first run: CRD schemas are looked up locally first (the upstream location would be asked, and fail
+# without network, for every custom resource), and downloaded upstream Kubernetes schemas are cached.
+mkdir -p "$SCHEMAS_DIR/.kubeconform-cache"
 KUBECONFORM_ARGS=(
+  -cache "$SCHEMAS_DIR/.kubeconform-cache"
   -strict
   -summary
   -kubernetes-version 1.35.0
   -skip CustomResourceDefinition
-  -schema-location default
   -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json"
+  -schema-location default
 )
 
 TMP=$(mktemp -d)
