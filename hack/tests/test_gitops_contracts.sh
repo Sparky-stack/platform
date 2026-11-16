@@ -432,4 +432,33 @@ assert_eq "$(D="$deleter" yq 'select(.kind == "ClusterAuthzRole" and .metadata.n
 assert_eq "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$tenant_values")" \
   "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$ocp_values")" "promotion.restrictedGroups: charts/tenant == openchoreo-platform"
 
+# 13. No literal env value in a ClusterWorkflow run template looks like a JSON list or map: OpenChoreo's WorkflowRun
+#     renderer decodes such a string into a list/map, and Argo's workflow controller panics on the resulting
+#     non-string env value (CrashLoopBackOff, no run of any workflow proceeds). Pass JSON base64-encoded instead.
+# shellcheck disable=SC2016  # yq expression, not shell
+json_env='select(.kind == "ClusterWorkflow") | .metadata.name as $w | .spec.runTemplate.spec.templates[]
+  | (.script, .container) | select(.) | .env[]? | select((.value | tag) == "!!str" and (.value | test("^\\s*[\\[{]")))
+  | $w + "/" + .name'
+helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
+  --values "$ROOT/installations/local/installation.yaml" > "$TMP/openchoreo-platform.yaml"
+assert_eq "$(yq "$json_env" "$TMP/openchoreo-platform.yaml" | grep -v '^---$' || true)" "" \
+  "ClusterWorkflow env values are never JSON-looking (rendered as lists/maps by OpenChoreo)"
+printf 'kind: ClusterWorkflow\nmetadata: {name: bad}\nspec:\n  runTemplate:\n    spec:\n      templates:\n        - script:\n            env: [{name: L, value: '"'"'["production"]'"'"'}]\n' \
+  > "$TMP/json-env-negative.yaml"
+assert_eq "$(yq "$json_env" "$TMP/json-env-negative.yaml")" "bad/L" "check 13 flags a JSON-looking env value (negative case)"
+
+# 14. Every run without a pod token (automountServiceAccountToken: false) names an executor ServiceAccount whose token
+#     Secret <sa>.service-account-token the workflow plane renders in the run namespace: Argo mounts the executor token
+#     from that Secret, and without it every run pod hangs in Init (FailedMount) until its deadline.
+token_sa=$(yq '.runExecutorToken.serviceAccount' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")
+helm template openchoreo-workflow-plane "$ROOT/addons/openchoreo-workflow-plane" --namespace openchoreo-workflow-plane \
+  -s templates/cluster-workflow-templates.yaml -s templates/run-executor-token.yaml > "$TMP/workflow-plane.yaml"
+assert_eq "$(yq 'select(.kind == "Secret" and .type == "kubernetes.io/service-account-token") | .metadata.name' \
+  "$TMP/workflow-plane.yaml")" "$token_sa.service-account-token" "workflow plane renders the executor token Secret"
+# shellcheck disable=SC2016  # yq expression, not shell
+executors='[(select(.kind == "ClusterWorkflowTemplate") | .spec), (select(.kind == "ClusterWorkflow") | .spec.runTemplate.spec)][]
+  | select(.automountServiceAccountToken == false) | (.executor.serviceAccountName // "<none>")'
+assert_eq "$(yq "$executors" "$TMP/workflow-plane.yaml" "$TMP/openchoreo-platform.yaml" | grep -v '^---$' | sort -u)" \
+  "$token_sa" "every token-less ClusterWorkflow(Template) uses the executor ServiceAccount with a rendered token"
+
 finish

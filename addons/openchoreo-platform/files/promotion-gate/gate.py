@@ -38,6 +38,12 @@ def env(name, default=""):
     return os.environ.get(name, default).strip()
 
 
+def json_env(name, default):
+    """JSON value from env <name>_B64 (base64: the WorkflowRun renderer would turn a JSON-looking string into a list)."""
+    raw = env(name + "_B64")
+    return json.loads(base64.b64decode(raw, validate=True)) if raw else default
+
+
 def secret(name):
     """Secret value from SECRETS_DIR/<name> (mounted Secret volume); env var fallback for local runs and tests."""
     path = os.path.join(env("SECRETS_DIR", "/var/run/secrets/promotion-gate"), name)
@@ -127,6 +133,46 @@ def condition(obj, ctype):
         if c.get("type") == ctype:
             return c
     return {}
+
+
+def rfc3339(value):
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def rollout_evidence(binding):
+    """Proof that the binding's CURRENT spec is rolled out and Ready -> evidence text; GateFailed otherwise.
+
+    openchoreo-api 1.3.3 returns no status.delivery (its ReleaseBinding schema has observedGeneration,
+    lastSpecUpdateTime and conditions only), so the proof is: Ready=True for the generation the controller last
+    observed, and Ready turned True at or after the last spec change (a releaseName edit flips Ready to False until the
+    new rollout is healthy). A stale Ready=True from the previous release predates lastSpecUpdateTime and fails.
+    When the object carries status.delivery (the CR itself), its succeededAt must belong to a rollout that started at
+    or after the last spec change."""
+    status = binding.get("status") or {}
+    name = (binding.get("metadata") or {}).get("name", "?")
+    ready = condition(binding, "Ready")
+    if ready.get("status") != "True":
+        raise GateFailed("ReleaseBinding %s not Ready: %s" % (name, ready.get("message", "no condition")))
+    observed = status.get("observedGeneration")
+    if observed is not None and ready.get("observedGeneration") not in (None, observed):
+        raise GateFailed("ReleaseBinding %s: Ready describes generation %s, the controller observed %s"
+                         % (name, ready.get("observedGeneration"), observed))
+    spec_changed = status.get("lastSpecUpdateTime")
+    delivery = status.get("delivery")
+    if delivery is not None:
+        if not delivery.get("succeededAt"):
+            raise GateFailed("rollout of ReleaseBinding %s has not succeeded yet" % name)
+        if spec_changed and rfc3339(delivery.get("startedAt") or delivery["succeededAt"]) < rfc3339(spec_changed):
+            raise GateFailed("ReleaseBinding %s: the last successful rollout started before the spec change at %s"
+                             % (name, spec_changed))
+        return "rollout succeeded %s" % delivery["succeededAt"]
+    since = ready.get("lastTransitionTime")
+    if not since:
+        raise GateFailed("ReleaseBinding %s: Ready has no lastTransitionTime" % name)
+    if spec_changed and rfc3339(since) < rfc3339(spec_changed):
+        raise GateFailed("ReleaseBinding %s: Ready since %s, before the spec change at %s (rollout still in progress)"
+                         % (name, since, spec_changed))
+    return "Ready since %s (spec changed %s)" % (since, spec_changed or "never")
 
 
 def next_environment(pipeline, source):
@@ -372,7 +418,8 @@ def main():
         target = targets[0]
     if target not in targets:
         raise GateFailed("pipeline %s has no promotion path %s -> %s" % (pipeline_name, source, target))
-    if env("GATED_TARGETS") and target not in json.loads(env("GATED_TARGETS")):
+    gated = json_env("GATED_TARGETS", None)
+    if gated is not None and target not in gated:
         log("  %s is not a gated target: nothing to do" % target)
         return
     log("  pipeline  %s: %s -> %s" % (pipeline_name, source, target))
@@ -388,14 +435,9 @@ def main():
     release = release or running
     if not release:
         raise GateFailed("%s has no release in %s" % (component, source))
-    ready = condition(src, "Ready")
-    if ready.get("status") != "True":
-        raise GateFailed("ReleaseBinding %s not Ready: %s" % (src["metadata"]["name"], ready.get("message", "no condition")))
-    delivery = (src.get("status") or {}).get("delivery") or {}
-    if not delivery.get("succeededAt"):
-        raise GateFailed("rollout of %s in %s has not succeeded yet" % (release, source))
-    evidence = ["`%s` Ready in `%s`, rollout succeeded %s" % (release, source, delivery["succeededAt"])]
-    log("  ready     %s in %s (rollout succeeded %s)" % (release, source, delivery["succeededAt"]))
+    proof = rollout_evidence(src)
+    evidence = ["`%s` Ready in `%s`, %s" % (release, source, proof)]
+    log("  ready     %s in %s (%s)" % (release, source, proof))
     tgt = next((b for b in bindings if b["spec"].get("environment") == target), None)
     if tgt and tgt["spec"].get("releaseName") == release:
         log("  %s already runs %s: nothing to do" % (target, release))
@@ -420,7 +462,7 @@ def main():
         evidence.append("observer: no alerts in %sm, %s" % (env("OBSERVE_WINDOW_MINUTES", "15"), result))
 
     # 5. freeze
-    frozen = active_freeze(json.loads(env("FREEZE_WINDOWS", "[]") or "[]"), target, dt.datetime.now(dt.timezone.utc))
+    frozen = active_freeze(json_env("FREEZE_WINDOWS", []), target, dt.datetime.now(dt.timezone.utc))
     if frozen:
         raise GateFailed("freeze window active for %s: %s - %s %s" % (target, frozen["start"], frozen["end"],
                                                                       frozen.get("timeZone", "UTC")))

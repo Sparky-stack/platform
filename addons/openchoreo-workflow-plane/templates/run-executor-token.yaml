@@ -1,0 +1,41 @@
+{{- /*
+Executor ServiceAccount token of the run namespace workflows-<org ns>. Every ClusterWorkflow / ClusterWorkflowTemplate
+on this plane sets automountServiceAccountToken: false + executor.serviceAccountName: workflow-sa (docs/build-plane.md
+"No ServiceAccount token in run containers"). Argo Workflows then mounts the executor's token into the init/wait
+containers only, from the Secret <sa>.service-account-token (TokenNameForServiceAccount); without it every run pod
+hangs in Init (FailedMount "secret workflow-sa.service-account-token not found") until activeDeadlineSeconds.
+Kubernetes no longer creates ServiceAccount token Secrets, and OpenChoreo's WorkflowRun controller creates only the
+namespace, the ServiceAccount, its Role and RoleBinding (create-if-absent, so rendering the ServiceAccount here is
+safe). The ServiceAccount is rendered too so the token controller never sees a token Secret for a missing
+ServiceAccount (it deletes those). The Role (workflowtaskresults create/patch) stays OpenChoreo's.
+*/ -}}
+{{- $t := .Values.runExecutorToken }}
+{{- if $t.enabled }}
+{{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
+{{- if not .Values.runNetworkPolicy.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+---
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $t.serviceAccount }}
+  namespace: {{ $ns }}
+automountServiceAccountToken: false     # run containers never get it; Argo mounts the Secret below into init/wait
+secrets:
+  - name: {{ $t.serviceAccount }}.service-account-token
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: {{ $t.serviceAccount }}.service-account-token
+  namespace: {{ $ns }}
+  annotations:
+    kubernetes.io/service-account.name: {{ $t.serviceAccount }}
+{{- end }}

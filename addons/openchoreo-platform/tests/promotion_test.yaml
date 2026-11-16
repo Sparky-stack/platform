@@ -118,14 +118,20 @@ tests:
       - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: API_URL, value: "http://api.openchoreo.example.com:8080" } }
       - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: OBSERVE, value: "false" } }
 
-  - it: passes the shared freeze windows to the gate
+  - it: passes the shared freeze windows and gated environments to the gate base64-encoded (never JSON-looking)
     template: templates/promotion-gate.yaml
     asserts:
       - contains:
           path: "spec.runTemplate.spec.templates[0].script.env"
           content:
-            name: FREEZE_WINDOWS
-            value: '[{"end":"Mon 08:00","environments":["production"],"name":"weekend","start":"Fri 16:00","timeZone":"Europe/Tallinn"}]'
+            name: FREEZE_WINDOWS_B64
+            # base64 of [{"end":"Mon 08:00","environments":["production"],"name":"weekend","start":"Fri 16:00","timeZone":"Europe/Tallinn"}]
+            value: W3siZW5kIjoiTW9uIDA4OjAwIiwiZW52aXJvbm1lbnRzIjpbInByb2R1Y3Rpb24iXSwibmFtZSI6IndlZWtlbmQiLCJzdGFydCI6IkZyaSAxNjowMCIsInRpbWVab25lIjoiRXVyb3BlL1RhbGxpbm4ifV0=
+      - contains:
+          path: "spec.runTemplate.spec.templates[0].script.env"
+          content: { name: GATED_TARGETS_B64, value: WyJwcm9kdWN0aW9uIl0= }   # ["production"]
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: FREEZE_WINDOWS }, any: true }
+      - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GATED_TARGETS }, any: true }
 
   - it: native VAP - gated bindings only from Argo CD, controller may only touch metadata
     template: templates/promotion-git-only.yaml
