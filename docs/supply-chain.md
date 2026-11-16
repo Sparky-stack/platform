@@ -34,9 +34,9 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
     until each allowed repository's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
     per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (suffix
-    `-<sha7>` for the transition commit) and the validations accept any of them. Every attestor runs, so a second
-    commit doubles the verifications per image and production admission can exceed the webhook timeout: keep the
-    window short and dry-run in production first ([#136](https://github.com/koorikla/platform/issues/136)).
+    `-<sha7>` for the transition commit) and the validations accept any of them, current-pin attestors first: images
+    already rebuilt cost nothing extra, images still at the old commit pay one failed verification per check on every
+    admission (failures are not cached, see "Admission latency"). Keep the window short.
     Steps: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
     their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
     `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
@@ -46,7 +46,8 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
     keeps out `pull_request_target` / `workflow_run` runs, which carry the main ref but may build untrusted PR code.
     Kyverno matches extensions exactly, so every allowed (repository, ref, trigger) renders its own attestor, and the
-    validation accepts any of them.
+    validation accepts any of them (tried in order, so an image of the n-th repository pays n-1 failed verifications
+    per check and admission: keep the list short).
   - Required signed attestations from the same identity: `https://spdx.dev/Document/v2.3` (SBOM),
     `https://slsa.dev/provenance/v1` (provenance), `https://cosign.sigstore.dev/attestation/vuln/v1` (scan).
   - Transparency log: Rekor (`github.rekorURL`).
@@ -63,8 +64,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   digest would flap. See "Digest references" below for what app repos must do.
 - **Trusted sources**: `openchoreo-trusted-registries-*` requires every container, init and ephemeral image to match a
   trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`).
+- **One policy per check**: `openchoreo-verify-images-<audit|enforce>` verifies the signature and
+  `openchoreo-attest-<sbom|provenance|vuln>-<audit|enforce>` one required attestation each, so the checks run in
+  parallel ("Admission latency" below). An image is admitted only if every one of them passes.
 - **Failure policy**: production `Fail` (a Kyverno outage pauses production rollouts, never platform namespaces).
-  Audit `Ignore`. Webhook timeout 30 s, the maximum (registry + Rekor/TUF lookups, ~4-5 s per verification).
+  Audit `Ignore`. Webhook timeout 30 s, the maximum (a cold check takes ~5-10 s, below).
 
 Evidence (Kyverno CLI v1.20.0 against the real image
 `ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
@@ -90,6 +94,54 @@ Evidence (Kyverno CLI v1.20.0 against the real image
 
 Add an app repo: append its `owner/repo` to `imageVerification.github.repositories` in
 `installations/<inst>/addons/kyverno-policies/values.yaml` (a tenant file alone does not trust its images).
+
+### Admission latency
+
+Production admission must finish within the webhook timeout (30 s max, `failurePolicy: Fail`), for every rollout
+([#136](https://github.com/koorikla/platform/issues/136)). Where the time goes, per keyless verification on Kyverno 1.20
+(measured from the local host against the real image; the admission controller logs show the same ~5-6 s per call):
+
+- **Sigstore TUF, ~1-1.5 s**: Kyverno refreshes the TUF metadata on every call, twice (sigstore `tuf.Initialize` with a
+  forced update, then a fresh sigstore-go client without cache validity): `<n+1>.root.json` (404), `timestamp.json`,
+  roots and snapshot, ~150-500 ms per request to `tuf-repo-cdn.sigstore.dev`, under a process-wide lock. No flag turns
+  it off: the attestor's `tuf` field only changes mirror and root, and the trusted root (`trustedRoot`) does not skip
+  the refresh for keyless attestors.
+- **Registry, ~3-4 s**: ghcr.io has no OCI referrers API (404), so cosign reads the `sha256-<digest>` referrers index
+  and fetches every bundle in it (signature + 3 attestations: manifest, 307 redirect, blob each), for every check.
+- No Rekor request in the trace: the cosign v3 bundle carries the inclusion proof.
+
+What the platform does about it:
+
+- **Verification cache** (`addons/kyverno` values, `imageVerifyCache*` flags of the admission controller): a
+  successful verification is cached per image **digest**, attestor definition and attestation type, so the next
+  admission of the same digest (the Deployment's ReplicaSet pods, a scale-up, a restart, the same image in production
+  after staging - same attestors, same entries) skips it. Not weakened by the cache: tag references are never cached
+  (production requires digests anyway), failed verifications are never cached (a denied image is verified again every
+  time), any change of the policy identity, extensions or Rekor URL changes the key. TTL 24 h bounds how long a
+  Sigstore trust-root change takes to reach digests verified before it; deleting the admission controller pod flushes
+  the cache (in-memory, per replica). 32 MiB per replica, ~1 MiB per image (the SPDX SBOM payload).
+- **One policy per check**: one `ImageValidatingPolicy` evaluates its validations one after the other; signature + 3
+  attestations in one policy took ~20 s cold. Each policy gets its own (fine-grained) webhook, the API server calls
+  them in parallel and Kyverno evaluates them concurrently; only the TUF refreshes stay serialized.
+- **One attestor per call**: `verifyImageSignatures(image, [a]) > 0 || verifyImageSignatures(image, [b]) > 0`, not
+  `verifyImageSignatures(image, [a, b]) > 0`. Kyverno caches a call only when every attestor in it verified and runs
+  every attestor of a list, so a list (pin move, several repositories) was never cached and cost n verifications per
+  check on every admission.
+
+Measured on dev1 with a server dry-run in production (`kubectl -n <production cell namespace> run probe
+--image=ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede… --dry-run=server`, timed), admission controller freshly
+restarted for "cold":
+
+| | before (#135: one policy, 4 checks) | after |
+|---|---|---|
+| signed image, cold (first admission of the digest) | 20.6 s | measured after rollout, [#136](https://github.com/koorikla/platform/issues/136) |
+| signed image, cached | 0.07 s | (after rollout) |
+| image signed at the previous pin (denied) | 5.7-7.0 s, every time | (after rollout) |
+| tag-only reference (denied) | 0.06 s | (after rollout) |
+| unsigned docker.io image (denied, trusted registries) | 0.09 s | (after rollout) |
+
+Further cut, not done: an in-cluster caching TUF mirror (attestor `tuf.mirror`; TUF metadata is signed, so a mirror
+needs no trust) would remove most of the per-call TUF time.
 
 ### Wiring the key
 
