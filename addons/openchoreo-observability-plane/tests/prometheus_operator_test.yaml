@@ -1,0 +1,12 @@
+suite: openchoreo-observability-plane prometheus-operator - not CPU-starved into liveness kills
+templates:
+  - charts/observability-metrics-prometheus/charts/kube-prometheus-stack/templates/prometheus-operator/deployment.yaml
+tests:
+  - it: the operator gets a startup-safe CPU ceiling instead of the upstream 40m (liveness CrashLoopBackOff on mgmt)
+    asserts:
+      - isKind: { of: Deployment }
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
