@@ -205,7 +205,7 @@ tests:
           path: spec.egress[2]
           value:
             to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: openchoreo-observability-plane } }, podSelector: { matchLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability } } }]
-            ports: [{ protocol: TCP, port: 9090 }, { protocol: TCP, port: 9091 }]
+            ports: [{ protocol: TCP, port: 9090 }]
 
   - it: no observer egress without the observability plane; the port follows openchoreo.observability.httpPort
     template: templates/run-network-policy.yaml

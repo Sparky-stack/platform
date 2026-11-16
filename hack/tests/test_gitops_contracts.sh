@@ -455,6 +455,16 @@ wp_prom_sel=$(yq -o=json -I=0 '.runNetworkPolicy.platformWorkflows.observability
 op_prom_sel=$(yq -o=json -I=0 '.prometheusIngress.podLabels' "$ROOT/addons/openchoreo-observability-plane/values.yaml")
 assert_eq "$wp_prom_sel" "$prom_svc_sel" "workflow-plane Prometheus egress podLabels == Service openchoreo-observability-prometheus selector"
 assert_eq "$op_prom_sel" "$prom_svc_sel" "observability-plane prometheusIngress.podLabels == Service openchoreo-observability-prometheus selector"
+prom_http_web='select(.kind == "Service" and .metadata.name == "openchoreo-observability-prometheus") | .spec.ports[] | select(.name == "http-web")'
+prom_target="[$(yq "$prom_http_web | .targetPort" "$TMP/obs-plane.yaml")]"
+assert_eq "$(yq -o=json -I=0 '.runNetworkPolicy.platformWorkflows.observability.prometheus.ports' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")" \
+  "$prom_target" "workflow-plane Prometheus egress ports == Service http-web targetPort (NetworkPolicy matches after DNAT)"
+assert_eq "$(yq -o=json -I=0 '.prometheusIngress.ports' "$ROOT/addons/openchoreo-observability-plane/values.yaml")" \
+  "$prom_target" "observability-plane prometheusIngress.ports == Service http-web targetPort"
+gate_prom=$(yq '.promotionGate.prometheusURL' "$ROOT/addons/openchoreo-platform/values.yaml")
+prom_port=$(yq "$prom_http_web | .port" "$TMP/obs-plane.yaml")
+assert_eq "$gate_prom" "http://openchoreo-observability-prometheus.openchoreo-observability-plane:$prom_port" \
+  "promotionGate.prometheusURL == Service openchoreo-observability-prometheus http-web port"
 
 # 11. The promotion gate's Thunder client (addon thunder bootstrap script 70) is the client the gate authenticates as,
 #     with the secret from the same store key (else the gate fails at the token step).

@@ -50,7 +50,7 @@ prometheusIngress:
   enabled: true
   podLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability }
   fromPodLabels: { platform.koorikla.io/egress: openchoreo }   # == openchoreo-platform promotionGate.podLabels
-  ports: [9090, 9091]
+  ports: [9090]             # pod port http-web: NetworkPolicy matches after the Service DNAT (:9091 -> :9090)
 
 # ClusterObservabilityPlane `default` (cluster-scoped, on mgmt). Its agent identity: the chart's self-signed client cert
 # (Secret cluster-agent-tls in this namespace, CN = planeID); the plane trusts exactly that certificate (ca.crt of a

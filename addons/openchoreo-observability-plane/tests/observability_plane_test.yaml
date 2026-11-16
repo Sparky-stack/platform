@@ -187,7 +187,6 @@ tests:
                   podSelector: { matchLabels: { platform.koorikla.io/egress: openchoreo } }
               ports:
                 - { protocol: TCP, port: 9090 }
-                - { protocol: TCP, port: 9091 }
 
   - it: Prometheus workflow ingress follows openchoreo.orgNamespace
     template: templates/prometheus-network-policy.yaml
