@@ -322,6 +322,36 @@ tests:
       - equal: { path: spec.validationActions, value: [Audit] }
       - equal: { path: spec.failurePolicy, value: Ignore }
 
+  - it: Kyverno's reports controller may read every kind the policies match (else they stay not ready, app Degraded)
+    template: templates/policies.yaml
+    documentSelector: { path: metadata.name, value: "kyverno:reports-controller:postgresql-policies" }
+    asserts:
+      - isKind: { of: ClusterRole }
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-reports-controller"]', value: "true" }
+      - lengthEqual: { path: rules, count: 4 }
+      - equal:
+          path: 'rules[0]'
+          value:
+            apiGroups: [postgresql.cnpg.io]
+            resources: [clusters, poolers, databases, backups, scheduledbackups, publications, subscriptions]
+            verbs: [get, list, watch]
+      - equal: { path: 'rules[1].apiGroups', value: [barmancloud.cnpg.io] }
+      - equal:
+          path: 'rules[2].apiGroups'
+          value: [rds.aws.m.upbound.io, ec2.aws.m.upbound.io, kms.aws.m.upbound.io, sql.gcp.m.upbound.io, dbforpostgresql.azure.m.upbound.io]
+      - equal: { path: 'rules[3]', value: { apiGroups: [platform.koorikla.io], resources: [postgresqls], verbs: [get, list, watch] } }
+
+  - it: the deny policy matches exactly the kinds the reports controller reads
+    template: templates/policies.yaml
+    documentSelector: { path: metadata.name, value: postgresql-only-through-the-platform-api }
+    asserts:
+      - lengthEqual: { path: spec.matchConstraints.resourceRules, count: 3 }
+      - equal:
+          path: 'spec.matchConstraints.resourceRules[0].resources'
+          value: [clusters, poolers, databases, backups, scheduledbackups, publications, subscriptions]
+      - equal: { path: 'spec.matchConstraints.resourceRules[1].resources', value: [objectstores] }
+      - equal: { path: 'spec.matchConstraints.resourceRules[2].resources', value: ["*"] }
+
   - it: no policies when switched off
     template: templates/policies.yaml
     set: { policy.enabled: false }
