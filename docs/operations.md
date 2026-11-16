@@ -12,8 +12,9 @@ Operational index and runbooks for running, upgrading, backing up, and recoverin
 ## Cluster access
 
 ```bash
-# Management cluster status and Argo CD UI (never prints the admin password)
+# Management cluster status, live readiness table, and Argo CD UI (never prints the admin password)
 task status
+task demo:check
 task ui
 
 # Workload cluster kubeconfig (writes <cluster>.kubeconfig, mode 0600, gitignored)

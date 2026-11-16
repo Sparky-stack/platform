@@ -113,18 +113,18 @@ Identify the matching failure mode below and execute its **Steps**, **Verify**, 
   kubectl --context k3d-platform-mgmt -n default get renderedreleases
   kubectl --context k3d-platform-mgmt -n default describe renderedrelease <renderedrelease-name>
 
-  # 2. Check Kyverno engine health and staging/dev Audit PolicyReports on workload clusters
-  task kubeconfig CLUSTER=prod1
-  kubectl --kubeconfig prod1.kubeconfig -n kyverno get pods
-  kubectl --kubeconfig prod1.kubeconfig -n kyverno logs deploy/kyverno-admission-controller --tail=80
-  kubectl --kubeconfig prod1.kubeconfig get policyreport -A
+  # 2. Check Kyverno engine health and Audit PolicyReports on the cluster hosting production (dev1 locally)
+  task kubeconfig CLUSTER=dev1
+  kubectl --kubeconfig dev1.kubeconfig -n kyverno get pods
+  kubectl --kubeconfig dev1.kubeconfig -n kyverno logs deploy/kyverno-admission-controller --tail=80
+  kubectl --kubeconfig dev1.kubeconfig get policyreport -A
   ```
   Fix the underlying cause (never weaken `production` to `Audit`):
   - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (`koorikla/ci` output `image_digest_ref`, [#16](https://github.com/koorikla/platform/issues/16)) and cut a new `ComponentRelease`.
   - **Repository or `workflowRef` mismatch**: add `owner/repo` to `imageVerification.github.repositories` in `installations/<inst>/addons/kyverno-policies/values.yaml` or align `workflowRef` with `koorikla/ci` `v1`.
   - **Harbor `apps/` image without `platformKey.publicKey`**: wire `cosign.pub` per [certificates-and-secrets.md](certificates-and-secrets.md) ([#15](https://github.com/koorikla/platform/issues/15)).
   - **Kyverno webhook down (`failurePolicy: Fail`)**: running production pods stay up and platform namespaces are excluded; restore `deploy/kyverno-admission-controller` in `kyverno`.
-- **Verify**: `bash hack/tests/test_kyverno_policies.sh` passes offline and `RenderedRelease` transitions to `Ready` on `prod1`.
+- **Verify**: `bash hack/tests/test_kyverno_policies.sh` passes offline and `RenderedRelease` transitions to `Ready` on the production data plane.
 - **Rollback**: revert `release-bindings/production.yaml` in the app repo to the previous signed `@sha256:...` release.
 
 ---

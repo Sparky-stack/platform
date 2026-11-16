@@ -34,8 +34,8 @@ kubectl --context k3d-platform-mgmt get clusterdataplane <name>
 
 ### 2. Remove (decommission) a workload cluster
 
-1. Move or remove any `openchoreo.dataPlane.environments` bound to `<name>` in a PR first so active tenant `ReleaseBinding`s are not stranded.
-2. Delete `installations/<inst>/clusters/<name>.yaml` (or rename it to `*.yaml.disabled`, Invariant 7), run `task lint` and `task test`, and merge. Argo CD prunes `cluster-<name>`, CAPI drains and deletes the nodes, and deleting `<name>-agent-ca` revokes the plane's agent identity.
+1. Move or remove any `openchoreo.dataPlane.environments` bound to `<name>` in a **first** PR while `<name>`'s `cluster-agent-dataplane` is still connected (`Environment.spec.dataPlaneRef` is immutable, and deleting an `Environment` drains `Environment -> ReleaseBinding -> RenderedRelease` finalizers through that plane's agent; deleting the cluster in the same commit can strand those finalizers).
+2. Once the `Environment` move is `Synced`, delete `installations/<inst>/clusters/<name>.yaml` (or rename it to `*.yaml.disabled`, Invariant 7) in a second PR, run `task lint` and `task test`, and merge. Argo CD prunes `cluster-<name>`, CAPI drains and deletes the nodes, and deleting `<name>-agent-ca` revokes the plane's agent identity.
 3. If `<name>` belonged to an Istio `mesh.group`, clean up the `ClusterResourceSet` objects that CAPI leaves behind ([multicluster.md](../multicluster.md#removing-a-member-decommissioning)):
 
 ```bash
@@ -93,7 +93,7 @@ sysctl fs.inotify.max_user_watches fs.inotify.max_user_instances
   ```bash
   sudo sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=512
   ```
-- **Single-workload-cluster lean profile ([#115](https://github.com/koorikla/platform/issues/115))** `(not yet verified live)`: to save ~`2 GiB` RAM in a fork while keeping all three environments (`development`, `staging`, `production`) and their Kyverno `Audit`/`Deny` policies (which match namespace label `openchoreo.dev/environment`, not cluster name), rename `installations/<inst>/clusters/prod1.yaml` to `prod1.yaml.disabled`, drop `mesh.group` from `dev1.yaml` (or keep `openbao` off), and move `production` to `installations/local/clusters/dev1.yaml` (`environments: [development, staging, production]`).
+- **Single-workload-cluster lean profile ([#115](https://github.com/koorikla/platform/issues/115))**: `installations/local/clusters/dev1.yaml` hosts all three environments (`[development, staging, production]`), and Kyverno `Audit`/`Deny` policies match namespace label `openchoreo.dev/environment` rather than cluster name. Disabling a second CAPD cluster (`installations/<inst>/clusters/<name>.yaml.disabled`, Invariant 7) and keeping `openbao` off when single-cluster saves ~`2 GiB` host RAM; re-enabling the second cluster file and `openbao` switches back to multicluster mesh.
 
 ## Verify
 

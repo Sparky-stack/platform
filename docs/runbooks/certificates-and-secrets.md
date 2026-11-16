@@ -69,7 +69,7 @@ If `openchoreo-control-plane/cluster-gateway-ca` rotates, also force-sync `openc
 
 ### 4. GitHub App keys and registry PATs
 
-Credentials live in `ClusterSecretStore/platform` keys `platform-github`, `promotion-gate-github`, `platform-github-build`, and `platform-ghcr` ([forking.md](../forking.md#3-credentials)).
+Credentials live in `ClusterSecretStore/platform` keys `platform-github`, `platform-github-app`, `promotion-gate-github`, `platform-github-build`, and `platform-ghcr` ([forking.md](../forking.md#3-credentials), [project-templates.md](../project-templates.md#repository-creation)).
 
 ```bash
 # Local backend (`secrets.backend: kubernetes`): set new env vars (key stays in a 0600 file, never printed) and re-seed

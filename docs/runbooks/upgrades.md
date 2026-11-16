@@ -63,7 +63,7 @@ task test
 task images:audit
 ```
 
-- **Stage across workload clusters** `(not yet verified live)`: before merging a risky addon change, pin `addonsRevision: <known-good-sha>` in `installations/local/clusters/prod1.yaml` while `installations/local/clusters/dev1.yaml` keeps `addonsRevision: HEAD` (sets `platform.koorikla.io/addons-revision` on the cluster secret). Verify `<addon>-dev1`, then return `prod1.yaml` to `HEAD`.
+- **Stage across workload clusters** `(not yet verified live)`: before merging a risky addon change in a multicluster fleet, pin `addonsRevision: <known-good-sha>` in `installations/<inst>/clusters/<prod-cluster>.yaml` while `installations/local/clusters/dev1.yaml` keeps `addonsRevision: HEAD` (sets `platform.koorikla.io/addons-revision` on the cluster secret). Verify `<addon>-dev1`, then return `<prod-cluster>.yaml` to `HEAD`.
 - **Argo CD (`addons/argo-cd`)**: self-managed via `argo-cd-mgmt`. If an Argo CD upgrade breaks sync itself, apply the identical chart and values from the host with `task argocd`.
 
 ### 4. OpenChoreo and Thunder
