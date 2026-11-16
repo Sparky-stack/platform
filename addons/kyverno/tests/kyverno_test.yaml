@@ -20,3 +20,9 @@ tests:
       - charts/kyverno/templates/reports-controller/deployment.yaml
     asserts:
       - equal: { path: spec.replicas, value: 1 }
+
+  - it: "reports controller can read pods/ephemeralcontainers (kyverno-policies match that subresource, else not Ready)"
+    template: charts/kyverno/templates/reports-controller/clusterrole.yaml
+    documentSelector: { path: metadata.name, value: kyverno:reports-controller:additional }
+    asserts:
+      - contains: { path: rules, content: { apiGroups: [""], resources: [pods/ephemeralcontainers], verbs: [get, list, watch] } }
