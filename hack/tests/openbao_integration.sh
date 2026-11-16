@@ -80,8 +80,15 @@ python3 "$W/jwt.py" jwks "$W/sa1.key" k1 > "$W/jwks1/openid/v1/jwks"
 python3 "$W/jwt.py" jwks "$W/sa2.key" k2 > "$W/jwks2/openid/v1/jwks"
 cat > "$W/srv.py" <<'EOF'
 import http.server, os, ssl, sys
-os.chdir(sys.argv[1])
-s = http.server.HTTPServer(("0.0.0.0", int(sys.argv[2])), http.server.SimpleHTTPRequestHandler)
+class Deny(http.server.BaseHTTPRequestHandler):   # a member whose issuer discovery is not public: 403 for anonymous
+    def do_GET(self):
+        self.send_response(403); self.end_headers(); self.wfile.write(b'{"reason":"Forbidden","message":"system:anonymous"}')
+h = http.server.SimpleHTTPRequestHandler
+if sys.argv[1] == "deny":
+    h = Deny
+else:
+    os.chdir(sys.argv[1])
+s = http.server.HTTPServer(("0.0.0.0", int(sys.argv[2])), h)
 c = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); c.load_cert_chain("/w/tls/tls.crt", "/w/tls/tls.key")
 s.socket = c.wrap_socket(s.socket, server_side=True); s.serve_forever()
 EOF
@@ -89,7 +96,7 @@ chmod -R a+rX "$W"
 
 docker network create "$NET" >/dev/null
 docker run -d --name "$NET-jwks" --network "$NET" --network-alias jwks -v "$W:/w:ro" "$PYIMG" \
-  sh -c 'python3 /w/srv.py /w/jwks1 8443 & python3 /w/srv.py /w/jwks2 8444' >/dev/null
+  sh -c 'python3 /w/srv.py /w/jwks1 8443 & python3 /w/srv.py /w/jwks2 8444 & python3 /w/srv.py deny 8445' >/dev/null
 docker volume create "$NET-data" >/dev/null
 docker run --rm --user 0 -v "$NET-data:/d" --entrypoint chown "$IMG" 100:1000 /d   # the image runs as openbao (100)
 start_bao() {
@@ -121,7 +128,7 @@ assert_eq "$(bao_in 'bao read sys/mounts >/dev/null 2>&1 && echo open || echo de
 helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local}' \
   -s templates/reconcile.yaml | yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name != "BAO_ADDR" and .name != "BAO_CACERT" and .name != "INPUT_DIR") | "export " + .name + "=\"" + .value + "\""' > "$W/env.sh"
 printf '%s' "$IT_PW" > "$W/it-pw"
-for c in 1 2; do
+for c in 1 2 3; do   # c3: JWKS answers 403 to anonymous (the live-boot failure)
   printf 'local' > "$W/inputs/c$c.group"; printf 'https://jwks:844%s' "$((c + 2))" > "$W/inputs/c$c.server"; cp "$W/tls/ca.crt" "$W/inputs/c$c.ca"
 done
 chmod -R a+rX "$W"
@@ -129,7 +136,8 @@ chmod -R a+rX "$W"
 RECONCILE='. /w/env.sh; export INPUT_DIR=/w/inputs BAO_TOKEN=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh'
 rc=0; out=$(bao_in "$RECONCILE" 2>&1) || rc=$?
 assert_eq "$rc" 0 "reconcile runs with the scoped policy only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
-assert_match "$out" 'done: c1:local c2:local' "both members configured"
+assert_match "$out" 'done: configured=\[c1 c2\] failed=\[c3\]' "c1 + c2 configured, c3 (JWKS 403) reported and skipped"
+assert_match "$out" 'member c3 \(group local\): FAILED' "real OpenBao refuses c3's config while its JWKS is forbidden"
 out=$(bao_in "$RECONCILE" 2>&1)
 assert_eq "$(printf '%s\n' "$out" | grep -c 'generate\|enable' || true)" 0 "second run is a no-op (idempotent)"
 
@@ -172,6 +180,7 @@ assert_eq "$rc" 0 "restart: auto-unseal with the static key"
 rm -f "$W"/inputs/c2.*
 out=$(bao_in "$RECONCILE" 2>&1)
 assert_match "$out" 'prune auth mesh-c2' "removed member: auth mount pruned"
+assert_eq "$(printf '%s\n' "$out" | grep -c 'prune auth mesh-c3' || true)" 0 "failing member still in the inputs is not pruned"
 assert_eq "$(bao_in "bao write -field=token auth/mesh-c2/login role=istio-csr jwt=$other >/dev/null 2>&1 && echo ok || echo denied")" denied "removed member can no longer log in"
 
 finish
