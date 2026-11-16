@@ -146,6 +146,19 @@ tests:
       - equal: { path: "spec.triggers[0].template.k8s.source.resource.spec.workflow", value: { kind: ClusterWorkflow, name: promotion-gate, parameters: { project: "", component: "", sourceEnvironment: "", release: "" } } }
       - matchRegex: { path: "spec.triggers[0].template.k8s.parameters[0].src.dataTemplate", pattern: 'rolloutId \| sha256sum' }
 
+  - it: starts the gate only for the rollout of the binding's current spec (not a stale delivery after a releaseName edit)
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: promotion-gate }
+    asserts:
+      - equal:
+          path: "spec.dependencies[0].filters.exprs"
+          value:
+            - expr: started >= specChanged
+              fields:
+                - { name: started, path: body.status.delivery.startedAt }
+                - { name: specChanged, path: body.status.lastSpecUpdateTime }
+      - notExists: { path: "spec.dependencies[0].filtersLogicalOperator" }   # default and: data AND exprs
+
   - it: rejects an unknown minimum priority
     template: templates/sensors.yaml
     set:

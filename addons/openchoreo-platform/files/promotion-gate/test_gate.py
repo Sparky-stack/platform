@@ -97,6 +97,53 @@ class Bindings(unittest.TestCase):
         self.assertEqual(gate.next_environment(p, "production"), [])
 
 
+def staging_binding(ready="True", ready_since="2026-11-16T18:33:15Z", spec_changed="2026-11-16T18:33:01Z",
+                    ready_gen=3, observed=3, delivery=None):
+    """A ReleaseBinding as openchoreo-api 1.3.3 returns it (no status.delivery) unless delivery is given."""
+    status = {"observedGeneration": observed, "lastSpecUpdateTime": spec_changed, "conditions": [
+        {"type": "Ready", "status": ready, "observedGeneration": ready_gen, "lastTransitionTime": ready_since,
+         "reason": "Ready", "message": "ReleaseBinding is ready"}]}
+    if delivery is not None:
+        status["delivery"] = delivery
+    return {"metadata": {"name": "hello-world-staging"}, "spec": {"environment": "staging"}, "status": status}
+
+
+class RolloutEvidence(unittest.TestCase):
+    def test_api_shape_ready_after_spec_change(self):
+        self.assertIn("Ready since 2026-11-16T18:33:15Z", gate.rollout_evidence(staging_binding()))
+
+    def test_stale_ready_from_previous_release_fails(self):
+        # releaseName just changed (18:33:01); Ready=True is still the previous release's (17:47:51)
+        with self.assertRaisesRegex(gate.GateFailed, "before the spec change"):
+            gate.rollout_evidence(staging_binding(ready_since="2026-11-16T17:47:51Z"))
+
+    def test_not_ready_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, "not Ready"):
+            gate.rollout_evidence(staging_binding(ready="False"))
+
+    def test_ready_of_an_older_generation_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, "generation 2"):
+            gate.rollout_evidence(staging_binding(ready_gen=2))
+
+    def test_missing_transition_time_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, "lastTransitionTime"):
+            gate.rollout_evidence(staging_binding(ready_since=None))
+
+    def test_cr_shape_delivery_of_current_rollout(self):
+        d = {"rolloutId": "r.2", "startedAt": "2026-11-16T18:33:03Z", "succeededAt": "2026-11-16T18:33:15Z"}
+        self.assertEqual(gate.rollout_evidence(staging_binding(delivery=d)), "rollout succeeded 2026-11-16T18:33:15Z")
+
+    def test_cr_shape_stale_delivery_fails(self):
+        # the live race: spec changed, delivery still describes the previous release's finished rollout
+        d = {"rolloutId": "r.1", "startedAt": "2026-11-16T17:47:01Z", "succeededAt": "2026-11-16T17:47:51Z"}
+        with self.assertRaisesRegex(gate.GateFailed, "started before the spec change"):
+            gate.rollout_evidence(staging_binding(delivery=d))
+
+    def test_cr_shape_rollout_in_progress_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, "not succeeded"):
+            gate.rollout_evidence(staging_binding(delivery={"rolloutId": "r.2", "startedAt": "2026-11-16T18:33:03Z"}))
+
+
 def read(path):
     with open(path) as f:
         return f.read()
