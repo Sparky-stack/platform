@@ -1,0 +1,10 @@
+# aws-example: Route 53 tuning on top of addons/external-dns/values/dns-route53.yaml. Provider and zones come from
+# installation.yaml `dns:` (never restated here: templates/validate.yaml rejects a mismatch). Opt in per cluster with
+# `external-dns: "true"` in installation.yaml mgmt.addons or clusters/<name>.yaml addons. docs/dns.md.
+external-dns:
+  extraArgs:
+    aws-zone-type: public
+  # IRSA (role trusted by the cluster's service-account issuer); omit for EKS Pod Identity or the node instance profile.
+  # serviceAccount:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/external-dns   # VERIFY: your role ARN

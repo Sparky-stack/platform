@@ -1,0 +1,206 @@
+suite: external-dns provider selection, credentials and installation guards
+templates:
+  - templates/validate.yaml
+  - templates/secrets.yaml
+  - charts/external-dns/templates/deployment.yaml
+tests:
+  - it: dns.provider none (standalone default) renders no glue (the subchart is off; hack/tests/test_external_dns.sh)
+    template: templates/secrets.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: route53 overlay runs the aws provider, Gateway API sources only, upsert-only, TXT owner = cluster
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: dev1, dns.provider: route53, dns.domainFilters: [aws.example.com], external-dns.domainFilters: [aws.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --provider=aws }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --policy=upsert-only }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --txt-owner-id=dev1 }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --domain-filter=aws.example.com }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-httproute }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-grpcroute }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --source=gateway-tlsroute }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --source=ingress }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --source=service }
+      - contains: { path: "spec.template.spec.containers[0].args", content: --aws-zone-type=public }
+      - notExists: { path: "spec.template.spec.containers[0].env" }
+      - matchRegex: { path: "spec.template.spec.containers[0].image", pattern: '^registry\.k8s\.io/external-dns/external-dns:v[0-9.]+@sha256:[0-9a-f]{64}$' }
+      - equal: { path: "spec.template.spec.containers[0].securityContext.runAsNonRoot", value: true }
+
+  - it: route53 uses workload identity, no ExternalSecret
+    template: templates/secrets.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: cloudflare overlay injects CF_API_TOKEN from the ESO Secret, proxied off
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { cluster.name: dev1, dns.provider: cloudflare, dns.domainFilters: [hetzner.example.com], external-dns.domainFilters: [hetzner.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --provider=cloudflare }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --cloudflare-proxied }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --aws-zone-type=public }
+      - equal: { path: "spec.template.spec.containers[0].env[0]", value: { name: CF_API_TOKEN, valueFrom: { secretKeyRef: { name: external-dns-cloudflare, key: api-token } } } }
+
+  - it: cloudflare token from the scoped store dns on workload clusters (never the tenant store default)
+    template: templates/secrets.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { cluster.role: workload, dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: external-dns-cloudflare }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: dns } }
+      - equal: { path: "spec.data[0]", value: { secretKey: api-token, remoteRef: { key: external-dns-cloudflare, property: api-token } } }
+
+  - it: cloudflare token from store platform on mgmt
+    template: templates/secrets.yaml
+    values: [../values/role-mgmt.yaml, ../values/dns-cloudflare.yaml]
+    set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+
+  - it: matching installation and overlays pass validation (sync allowed, filter order irrelevant)
+    template: templates/validate.yaml
+    values: [../values/role-mgmt.yaml, ../values/dns-cloudflare.yaml]
+    set: { installation.name: x, dns.provider: cloudflare, dns.domainFilters: [a.example.com, b.example.com], external-dns.domainFilters: [b.example.com, a.example.com], external-dns.txtOwnerId: x-sample, external-dns.policy: sync }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  # --- guards (negative) ---------------------------------------------------------------------------------------------
+  - it: rejects an unknown dns.provider
+    template: templates/validate.yaml
+    set: { dns.provider: gcp }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider must be one of none, route53, cloudflare (installation.yaml), got "gcp"' }
+
+  - it: rejects enabling the addon in an installation without a DNS provider
+    template: templates/validate.yaml
+    set: { installation.name: local, cluster.name: dev1 }
+    asserts:
+      - failedTemplate: { errorMessage: 'external-dns is enabled on cluster dev1 but installation.yaml dns.provider is none: set dns.provider and dns.domainFilters, or drop the addon toggle' }
+
+  - it: rejects running ExternalDNS while dns.provider is none
+    template: templates/validate.yaml
+    set: { external-dns.enabled: true }
+    asserts:
+      - failedTemplate: { errorMessage: external-dns.enabled must stay false while dns.provider is none }
+
+  - it: rejects a provider set without its value file
+    template: templates/validate.yaml
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com] }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider=route53 but external-dns.enabled is false (values/dns-route53.yaml not layered?)' }
+
+  - it: rejects an overlay that switches the provider away from installation.yaml
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.provider.name: cloudflare }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider=route53 requires external-dns.provider.name=aws, got "cloudflare" (an installation overlay must not switch providers)' }
+
+  - it: rejects empty dns.domainFilters (would manage every reachable zone)
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53 }
+    asserts:
+      - failedTemplate: { errorMessage: dns.domainFilters must list the zones ExternalDNS may manage (installation.yaml) }
+
+  - it: rejects domainFilters that differ from installation.yaml
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com, evil.example.org] }
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects a TXT owner other than <installation>-<cluster>
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { installation.name: aws-example, cluster.name: dev1, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.txtOwnerId (dev1) must equal aws-example-dev1 (<installation>-<cluster>, catalog clusterIdParameters)" }
+
+  - it: rejects extraArgs that widen zones or take over TXT ownership (map and list form)
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.extraArgs.zone-id-filter: Z1 }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.extraArgs zone-id-filter is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" }
+
+  - it: rejects extraArgs in list form too
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.extraArgs: ["--gateway-label-filter=a=b", "--txt-owner-id=prod"] }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.extraArgs txt-owner-id is not allowed: zones and TXT ownership come from installation.yaml dns.domainFilters and the catalog (docs/dns.md)" }
+
+  - it: rejects txtPrefix (changes which TXT records mark ownership)
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample, external-dns.txtPrefix: x- }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.txtPrefix / txtSuffix are not allowed: they change which TXT records mark ownership (docs/dns.md)" }
+
+  - it: rejects running without a Gateway scope (would publish every Gateway's routes)
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - failedTemplate: { errorMessage: "external-dns.extraArgs must scope the Gateways it publishes (gateway-name + gateway-namespace, or gateway-label-filter; values/role-*.yaml)" }
+
+  - it: mgmt publishes only Gateways labelled public; workload only the data plane Gateway
+    template: charts/external-dns/templates/deployment.yaml
+    values: [../values/role-mgmt.yaml, ../values/dns-route53.yaml]
+    set: { cluster.name: sample, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - contains: { path: "spec.template.spec.containers[0].args", content: --gateway-label-filter=platform.koorikla.io/public-dns=true }
+      - notContains: { path: "spec.template.spec.containers[0].args", content: --gateway-name=gateway-default }
+
+  - it: rejects policy create-only
+    template: templates/validate.yaml
+    values: [../values/dns-route53.yaml]
+    set: { dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.policy: create-only }
+    asserts:
+      - failedTemplate: { errorMessage: 'external-dns.policy must be upsert-only (default) or sync, got "create-only"' }
+
+  - it: rejects the Cloudflare token from the tenant store default on a workload cluster
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { cluster.name: dev1, cluster.role: workload, secrets.store: default, dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - failedTemplate: { errorMessage: 'dns.provider=cloudflare on workload cluster dev1 reads the zone-wide token from ClusterSecretStore "default": only store dns (addon secret-stores, scoped to namespace external-dns) is allowed; the tenant store default is readable by every tenant' }
+
+  - it: workload cluster with Cloudflare on store dns passes
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-cloudflare.yaml]
+    set: { cluster.name: dev1, cluster.role: workload, dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: dev1 }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: rejects static AWS keys via secrets.aws (removed path)
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set: { secrets.aws.enabled: true, dns.provider: route53, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.txtOwnerId: sample }
+    asserts:
+      - failedTemplate: { errorMessage: 'secrets.aws: static AWS keys are not supported; Route 53 uses IRSA or EKS Pod Identity (values/dns-route53.yaml)' }
+
+  - it: rejects static AWS keys in env
+    template: templates/validate.yaml
+    values: [../values/role-workload.yaml, ../values/dns-route53.yaml]
+    set:
+      dns.provider: route53
+      dns.domainFilters: [a.example.com]
+      external-dns.domainFilters: [a.example.com]
+      external-dns.txtOwnerId: sample
+      external-dns.env: [{ name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: x, key: y } } }]
+    asserts:
+      - failedTemplate: { errorMessage: 'external-dns.env AWS_SECRET_ACCESS_KEY: static AWS credentials are not supported; Route 53 uses IRSA or EKS Pod Identity' }
+
+  - it: rejects cloudflare without the token Secret wiring
+    template: templates/validate.yaml
+    values: [../values/dns-cloudflare.yaml]
+    set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.env: [] }
+    asserts:
+      - failedTemplate: { errorMessage: dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml) }

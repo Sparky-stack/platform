@@ -1,0 +1,37 @@
+{{- /*
+ConfigMap thunder-ai-agent-clients: Thunder bootstrap scripts 53 (RCA agent) and 60 (FinOps agent), mounted into the
+setup Job by values setup.extraVolumes / extraVolumeMounts. Derived from bootstrapSecret.aiAgentClients, the same list
+that adds the client secrets to Secret thunder-bootstrap (templates/bootstrap-secret.yaml): a listed agent gets the
+upstream client (files/ai-agent-clients/), an unlisted one a comment-only document. Thunder's bootstrap skips empty
+documents (importer parser: no content -> continue) and only resolves `{{ .VAR }}` placeholders that are present, so
+an unlisted agent needs neither its secret nor its env var (secretEnv entries are optional). One switch, no comments
+to toggle (AGENTS.md invariant 7). PreSync hook below the setup Job's weight (-5), like upstream's bootstrap ConfigMap.
+*/ -}}
+{{- $on := .Values.bootstrapSecret.aiAgentClients | default list }}
+{{- $scripts := dict "rca" "53-rca-agent-client.yaml" "finops" "60-finops-agent-client.yaml" }}
+{{- range $on }}
+{{- if not (hasKey $scripts .) }}
+{{- fail (printf "bootstrapSecret.aiAgentClients: %q is not one of rca, finops" .) }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thunder-ai-agent-clients
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  {{- range $agent := keys $scripts | sortAlpha }}
+  {{- $file := index $scripts $agent }}
+  {{ $file }}: |
+    {{- if has $agent $on }}
+    {{- $.Files.Get (printf "files/ai-agent-clients/%s" $file) | trim | nindent 4 }}
+    {{- else }}
+    # {{ $agent }} agent client off: bootstrapSecret.aiAgentClients does not list {{ $agent }} (docs/ai-agents.md)
+    {{- end }}
+  {{- end }}

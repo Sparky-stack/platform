@@ -1,0 +1,22 @@
+# installation.yaml dns.provider: cloudflare (catalog installationValueFiles). Any infra provider.
+#
+# Credentials: a Cloudflare API token (not the global API key) scoped to Zone:Zone:Read + Zone:DNS:Edit on the zones of
+# dns.domainFilters only. Key `external-dns-cloudflare`, property `api-token`, in the cluster's store (`platform` on
+# mgmt; on workload clusters `dns`, which addon secret-stores scopes to namespace external-dns - never `default`); templates/secrets.yaml syncs it to Secret external-dns-cloudflare.
+secrets:
+  cloudflare:
+    enabled: true
+
+external-dns:
+  enabled: true
+  provider:
+    name: cloudflare
+  env:
+    - name: CF_API_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-cloudflare
+          key: api-token
+  extraArgs:
+    cloudflare-dns-records-per-page: 5000   # fewer API calls per sync (Cloudflare rate limit: 1200 req / 5 min)
+    # cloudflare-proxied: true              # orange-cloud the records (default off: DNS only, origin IPs visible)

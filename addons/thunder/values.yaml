@@ -29,6 +29,12 @@ bootstrapSecret:
   store: platform           # ClusterSecretStore
   remoteKey: openchoreo     # flat key, see header
   name: thunder-bootstrap   # Secret consumed by thunderid.setup (admin.passwordRef, secretEnv)
+  # OAuth clients of OpenChoreo's AI agents (docs/ai-agents.md): rca | finops. Each adds <agent>-agent-client-secret,
+  # read from key `openchoreo-ai` property <agent>-oauth-client-secret: the same property the agent's own Secret uses
+  # (addon openchoreo-observability-plane), so both sides always agree, and switches on its Thunder client script
+  # (files/ai-agent-clients/, templates/ai-agent-clients.yaml). Nothing else to edit.
+  aiAgentClients: []
+  aiRemoteKey: openchoreo-ai
 
 # --- installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks the hostname -
 openchoreo:
@@ -102,12 +108,27 @@ thunderid:
       - { name: OPENCHOREO_DEVELOPER_PASSWORD, secretName: thunder-bootstrap, secretKey: developer-user-password }
       - { name: BACKSTAGE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: backstage-client-secret }
       - { name: OBSERVER_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: observer-client-secret }
+      # AI agent clients (docs/ai-agents.md): the keys exist only for agents in bootstrapSecret.aiAgentClients (optional),
+      # and only those agents' scripts reference them (templates/ai-agent-clients.yaml).
+      - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret, optional: true }
+      - { name: FINOPS_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: finops-agent-client-secret, optional: true }
+    # Scripts 53 / 60 (AI agent OAuth clients) from ConfigMap thunder-ai-agent-clients (templates/ai-agent-clients.yaml),
+    # derived from bootstrapSecret.aiAgentClients: a listed agent's file is the upstream client, an unlisted one a
+    # comment-only document the bootstrap skips. Fixed subPath mounts next to the shipped bundle.
+    extraVolumes:
+      - name: ai-agent-clients
+        configMap:
+          name: thunder-ai-agent-clients
+    extraVolumeMounts:
+      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/53-rca-agent-client.yaml, subPath: 53-rca-agent-client.yaml, readOnly: true }
+      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/60-finops-agent-client.yaml, subPath: 60-finops-agent-client.yaml, readOnly: true }
 
   # Declarative documents imported by the setup Job on top of ThunderID's shipped defaults; upserted by fixed id
   # (01900000-0000-7000-8001-* block, clear of ThunderID's own). Upstream 48, 49, 51, 54 verbatim except the client
-  # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/53/55-62 - service clients
-  # with well-known secrets for components not installed here (sample portal, RCA/FinOps agents, MCP, workload
-  # publisher, observer, e2e). Add a client back together with the feature that uses it.
+  # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/55-58/61/62 - service clients
+  # with well-known secrets for components not installed here (sample portal, MCP, workload publisher, e2e); 59 below
+  # with its secret from the store; 53/60 (AI agents) from setup.extraVolumes above. Add a client back together with
+  # the feature that uses it.
   bootstrap:
     scripts:
       # A path override replaces ThunderID's shipped entry: every directive except img-src mirrors the 1.0.1 defaults.
