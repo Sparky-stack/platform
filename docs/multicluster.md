@@ -252,7 +252,7 @@ issued certificates expire within a day. The 7-day reader client certs (remote s
 2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`.
    `ClusterResourceSet <name>-mesh-trust` applies the issuer-discovery binding as soon as the member's API server is
    up (static ConfigMap), then the public certificates once ESO has them. The next reconcile creates
-   `auth/mesh-<name>`, role and policy; if the member's JWKS is not readable yet it is reported `FAILED`, the other
+   `auth/mesh-<name>`, PKI role and entity; if the member's JWKS is not readable yet it is reported `FAILED`, the other
    members are configured, and the CronJob (5 min) retries.
 3. On the member, cert-manager (catalog default) and addon istio-csr come up; the Vault issuer turns Ready once
    OpenBao accepts its login; istio-csr issues istiod's cert. istiod (gated) starts, then ztunnel (sync wave 1).
@@ -461,8 +461,23 @@ encryption.
 | example (echo + 2 callers, only where enabled) | 15m | 24Mi |
 
 ## Turning it on for running clusters (dev1, prod1)
-Adding `mesh.group` to live clusters is handled entirely by Argo CD, ESO, CAPI and the reconcile; there is no manual
-step. Order of events:
+**One manual step on an existing local mgmt: publish port 8200.** Members reach OpenBao through the k3d load balancer
+(`bootstrap/k3d-mgmt.yaml`: `127.0.0.1:8200:8200` on the serverlb), but k3d reads that file only at `k3d cluster
+create`. A running `k3d-platform-mgmt-serverlb` keeps forwarding just the ports it was created with, so after merging
+either add the port in place (k3d recreates only the load balancer container; the cluster and its data stay):
+
+```
+k3d cluster edit platform-mgmt --port-add '127.0.0.1:8200:8200@loadbalancer'
+docker port k3d-platform-mgmt-serverlb | grep 8200     # 8200/tcp -> 127.0.0.1:8200
+```
+
+(`--port-add` is marked experimental in k3d v5.8), or recreate everything (`make down && make up`: deletes the CAPD
+workload clusters too). Without it members cannot reach OpenBao: the Vault issuer stays not Ready
+and istiod on dev1/prod1 waits for `istiod-tls` (the old istiod keeps serving). Fresh clusters get the port from the
+config file.
+
+Everything else when adding `mesh.group` to live clusters is handled by Argo CD, ESO, CAPI and the reconcile. Order of
+events:
 1. The Cluster labels change. ESO refreshes the Argo CD cluster secret (1m); the istio-ambient Application re-renders
    (istiod: multi-network, CA off, gated on `istiod-tls`; ztunnel: new network/cluster ID/CA address and the pod
    annotation `mesh.platform.koorikla.io/group`) and addon istio-csr is selected.
