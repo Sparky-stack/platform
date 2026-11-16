@@ -62,3 +62,9 @@ tests:
           path: spec.data
           content: { secretKey: webhookToken, remoteRef: { key: falco-webhook, property: token } }
       - notContains: { path: spec.data, content: { secretKey: slackUrl }, any: true }
+
+  - it: CAPD node containers (kindest/node) are excepted from "Drop and execute new binary in container" (escalation storm)
+    template: charts/falco/templates/rules-configmap.yaml
+    asserts:
+      - matchRegex: { path: 'data["platform-rules.yaml"]', pattern: 'condition: \(container.image.repository endswith "kindest/node"\)' }
+      - matchRegex: { path: 'data["platform-rules.yaml"]', pattern: '- rule: Drop and execute new binary in container\n\s+condition: and not platform_capd_node_container\n\s+override:\n\s+condition: append' }

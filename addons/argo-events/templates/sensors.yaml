@@ -70,7 +70,8 @@ spec:
             type: string
             value: ["^[0-9a-fA-F-]{8,64}$"]
   triggers:
-    - template:
+    - rateLimit: {{- toYaml .Values.falco.response.rateLimit | nindent 8 }}
+      template:
         name: falco-response
         k8s:
           operation: create
