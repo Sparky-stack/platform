@@ -64,7 +64,24 @@ spec:
         name: falco-webhook
         key: token
   {{- end }}
-  {{- if .Values.promotionGate.enabled }}
+{{- if .Values.promotionGate.enabled }}
+---
+# Argo Events allows one event source type per EventSource ("Some types of event sources can not be put in one
+# spec"): the ReleaseBinding watch has its own, next to the Falco webhook in `platform`.
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: releasebindings
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: platform-eventsource
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
   resource:
     releasebinding-rollout:
       namespace: {{ .Values.openchoreo.orgNamespace }}
@@ -72,8 +89,6 @@ spec:
       version: v1alpha1
       resource: releasebindings
       eventTypes: [ADD, UPDATE]
-  {{- end }}
-{{- if .Values.promotionGate.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

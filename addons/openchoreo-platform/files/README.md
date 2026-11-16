@@ -12,8 +12,8 @@ file, rendered verbatim by `templates/upstream-defaults.yaml` (no Helm templatin
 Component types: upstream's `spec.allowedWorkflows` removed from the files (they name upstream's podman/buildpacks
 ClusterWorkflows, which are not installed); `templates/upstream-defaults.yaml` sets it at render time to the platform's
 build ClusterWorkflows (`buildWorkflows.stacks`, docs/build-plane.md). `observability-alert-rule` /
-`vertical-pod-autoscaler` removed from `spec.allowedTraits` (need the observability plane / the VPA CRDs on data
-planes; those traits are not installed). Reproduce:
+`vertical-pod-autoscaler` removed from `spec.allowedTraits` (those traits are not installed; the VPA trait needs the
+VPA CRDs on data planes; alert rules: [#48](https://github.com/koorikla/platform/issues/48)). Reproduce:
 
 ```bash
 T='del(.spec.allowedWorkflows) | (select(.spec.allowedTraits) | .spec.allowedTraits) |=
@@ -23,6 +23,6 @@ yq "$T" samples/getting-started/component-types/service.yaml > files/cluster-com
 
 Not taken: `ClusterResourceType`s (postgres/valkey/nats; need operators on data planes), upstream `ClusterWorkflow`s and
 workflow templates (replaced by templates/build-workflows.yaml + addon openchoreo-workflow-plane: rootless BuildKit,
-koorikla/ci scripts, GitOps hand-off instead of writing Workloads through the API), `observability-alert-rule` (observability plane), the sample `Project default` and
+koorikla/ci scripts, GitOps hand-off instead of writing Workloads through the API), `observability-alert-rule` (not installed), the sample `Project default` and
 its `ProjectReleaseBinding`s (projects come from tenants), `Environment`s (charts/cluster renders them per cluster),
 `DeploymentPipeline` (templates/deployment-pipeline.yaml, from values).

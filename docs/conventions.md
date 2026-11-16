@@ -1,12 +1,12 @@
 # Conventions and contracts
 
-Design and rationale: `architecture.md`. These are the rules every change must keep.
+The rules every change keeps. Design and reasons: [architecture.md](architecture.md).
 
-## Invariants — do not break
+## Invariants
 1. **Cluster name == CAPI `Cluster` name == Argo CD cluster secret name == OpenChoreo `ClusterDataPlane` name ==
    `planeID` == agent client cert CN.**
 2. Cluster facts live only in `installations/<inst>/clusters/<name>.yaml`. Labels flow from there to the CAPI `Cluster`
-   and the Argo cluster secret. ApplicationSets select on labels; nothing hardcodes a cluster name.
+   and the Argo CD cluster secret. ApplicationSets select on labels; nothing hardcodes a cluster name.
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
    `ClusterResourceSet` payloads templated by ESO.
@@ -20,11 +20,11 @@ Design and rationale: `architecture.md`. These are the rules every change must k
    that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
    namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
    `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
-   No secret value is ever committed. Secret keys are flat names (see table below).
+   No secret value is ever committed. Secret keys are flat names (table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
 7. Enable/disable files by extension (`*.yaml` ⇄ `*.yaml.disabled`), not by commenting blocks.
-8. Everything after `make up` is GitOps. `bootstrap/` is the only imperative code; it installs exactly: k3d mgmt,
+8. Everything after `task up` is GitOps. `bootstrap/` is the only imperative code; it installs exactly: k3d mgmt,
    the seed secrets (local backend only), Argo CD (same chart + values as GitOps), and the root Application.
 9. Images fully qualified; versions pinned (charts in `Chart.yaml`, images via chart values). Renovate updates them.
 
@@ -44,6 +44,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
+The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
+
 ## Names
 | Thing | Name |
 |---|---|
@@ -57,43 +59,73 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
 | Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>` |
 
-Secret keys in the `platform` store (flat, backend-agnostic):
+## Secret keys
+Keys in the `platform` store (flat, backend-agnostic). The doc in the last column owns the details.
 
-| Key | Properties | Used by |
-|---|---|---|
-| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) |
-| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access (GitOps hand-off, scaffolder; promotion PRs use `promotion-gate-github`); reserved, no consumer yet (docs/forking.md) |
-| `platform-github-build` | `username`, `token` | in-cluster builds: clone + GitOps hand-off push, only to `buildWorkflows.git.allowedRepositoryPrefixes` (default `installation.githubOrg`/); fine-grained PAT, app repos only, Contents: Read and write (docs/build-plane.md) |
-| `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io` |
-| `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA |
-| `capi-hetzner` | `hcloud` | CAPH (`HCloudCluster.spec.hetznerSecretRef`) |
-| `harbor` | admin/robot/chart secrets (docs/build-plane.md) | addon harbor, build pushes (`builder-secret`), node pulls (`nodes-secret`) |
-| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing (OpenChoreo workflow plane); `cosign.pub` is what `kyverno-policies` `imageVerification.platformKey.publicKey` must hold (installation value) |
-| `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) |
-| `promotion-gate` | `client-secret` | ClusterWorkflow promotion-gate (Thunder client `openchoreo-promotion-gate`) |
-| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app repos only); per-run token scoped to one repo (docs/promotion.md) |
+| Key | Properties | Used by | Doc |
+|---|---|---|---|
+| `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) | [forking.md](forking.md#3-credentials) |
+| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access; reserved, no consumer yet | [forking.md](forking.md#3-credentials) |
+| `platform-github-build` | `username`, `token` | in-cluster builds: clone + GitOps hand-off push, only to `buildWorkflows.git.allowedRepositoryPrefixes` | [build-plane.md](build-plane.md#secrets-clustersecretstore-platform) |
+| `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io`; Harbor GHCR proxy cache | [providers.md](providers.md#node-registry-config) |
+| `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA | [providers.md](providers.md#aws-capa---rendered-only) |
+| `capi-hetzner` | `hcloud` | CAPH | [providers.md](providers.md#hetzner-cloud-caph---rendered-only) |
+| `openchoreo` | Thunder, OpenChoreo user and Backstage secrets | addons thunder, openchoreo-control-plane | [openchoreo.md](openchoreo.md#secrets) |
+| `openchoreo-observability` | `opensearch-username`, `opensearch-password`, `observer-client-secret` | observability plane; data-plane shippers (store `default`) | [observability.md](observability.md#secrets) |
+| `harbor` | admin, robot and chart secrets | addon harbor, build pushes, node pulls | [build-plane.md](build-plane.md#secrets-clustersecretstore-platform) |
+| `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing; `cosign.pub` goes into `kyverno-policies` `imageVerification.platformKey.publicKey` | [build-plane.md](build-plane.md#signing) |
+| `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) | [observability.md](observability.md#falco-response) |
+| `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate` (Thunder client `openchoreo-promotion-gate`) | [promotion.md](promotion.md#configuration-reference) |
+| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App | [promotion.md](promotion.md#configuration-reference) |
+
+Workload-cluster keys (store `default`): `openchoreo-observability`, `falco-webhook`, optional `datadog`, `falco-slack`.
 
 ## Layout and ownership
 ```
-bootstrap/                      k3d config, bootstrap.sh (make up/down), seed secrets
+bootstrap/                      k3d config, bootstrap.sh (task up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
+charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications
 addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
-docs/                           architecture.md, conventions.md, runbooks
+docs/                           architecture, conventions, one doc per area, diagrams
 hack/                           tests and helper scripts (task test); hack/lib/portable.sh
 mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
 ```
 
-## Working rules
-- Local mgmt context is `k3d-platform-mgmt`. The homelab context `koorikla` runs other production workloads: never
-  deploy there.
-- `make test` must pass before pushing: helm lint + template every chart with every installation, kubeconform with CRD
-  schemas, helm-unittest where present.
-- Tooling is OS/arch-agnostic (docs/dev-environment.md): tools only via `mise.toml` (aqua backends, `task tools:lock`
-  after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step), scripts bash 3.2 + GNU/BSD/MSYS
-  portable (use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty arrays). New images must be
-  multi-arch: `task images:audit`. The only exceptions are listed, with an expiry, in `hack/image-audit.sh`
-  `ARCH_EXCEPTIONS` (today: Harbor 2.15, amd64-only until 2.16; docs/build-plane.md).
-- Conventional commits (`feat(cluster): …`). `grep -rn VERIFY` lists values inferred but not yet confirmed live.
+Adding things:
+- **Workload cluster**: `installations/<inst>/clusters/<name>.yaml` (schema: `charts/cluster/values.yaml`;
+  [providers.md](providers.md#adding-a-cluster)).
+- **Addon**: `addons/<name>/` (wrapper `Chart.yaml`, `values.yaml`, optional `values/role-*.yaml`,
+  `values/provider-*.yaml`, `values/cni-*.yaml`), registered in the catalog in `charts/platform/values.yaml`
+  ([architecture.md](architecture.md#addons-catalog--labels-gitops-bridge-style)).
+- **Tenant**: `installations/<inst>/tenants/<project>.yaml` ([openchoreo.md](openchoreo.md#tenants)).
+
+## Tooling
+- OS/arch-agnostic ([dev-environment.md](dev-environment.md)): tools only via `mise.toml` (aqua backends;
+  `task tools:lock` after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step).
+- Scripts: bash 3.2 + GNU/BSD/MSYS portable; use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty
+  arrays.
+- Images: multi-arch (`task images:audit`). The only exceptions are listed, with an expiry, in `hack/image-audit.sh`
+  `ARCH_EXCEPTIONS` ([build-plane.md](build-plane.md#images-and-architectures)).
+- `grep -rn VERIFY` lists values inferred but not yet confirmed live.
+
+## Current practice only
+No legacy patterns. Every addition uses the current upstream-recommended way; anything legacy found in review is
+replaced, not copied.
+
+- **APIs:** current stable versions only (no deprecated or beta when GA exists): Gateway API instead of Ingress, CAPI
+  v1beta2 with ClusterClass topology, ESO v1, Kyverno CEL policy types (ValidatingPolicy, MutatingPolicy,
+  ImageValidatingPolicy) instead of new ClusterPolicy, ValidatingAdmissionPolicy where native fits, ApplicationSets with
+  goTemplate, server-side apply.
+- **Security defaults:** Pod Security `restricted` is the target (`baseline` Audit only as a step), no privileged
+  containers without a justifying comment, workload identity / OIDC instead of static cloud keys, secrets only via ESO,
+  keyless Sigstore signing with SBOM and provenance verified at admission, images pinned by digest and multi-arch,
+  never `latest`. Deliberate deviation: in-cluster builds sign with a platform key (`cosign-platform`, no public Rekor
+  upload by default) because public Fulcio does not trust a private cluster's OIDC issuer
+  ([build-plane.md](build-plane.md#signing)).
+- **Runtime:** Cilium eBPF with kube-proxy replacement, Istio ambient (no sidecars), OpenTelemetry (no vendor agents),
+  external cloud controller managers, OCI Helm charts, rootless BuildKit (no Docker-in-Docker), Crossplane v2.
+- **Delivery:** everything declarative from git; no imperative `kubectl` steps or hand-run scripts on the path to
+  production; CI providers are thin wrappers over the in-cluster OpenChoreo workflow plane.

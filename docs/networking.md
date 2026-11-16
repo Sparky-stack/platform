@@ -30,8 +30,8 @@ the cluster is created. It flows to three places:
    - Cilium: VXLAN udp/8472, WireGuard udp/51871, health tcp/4240 + ICMP, Hubble peer tcp/4244.
    - flannel: udp/8472.
 
-   On Hetzner, CAPH creates no firewall. Cilium's VXLAN overlay + Cilium WireGuard replaces the old flannel
-   `wireguard-native` setup (see "Cilium" below); `wireguard-native` remains the `flannel` option.
+   On Hetzner, CAPH creates no firewall. With `cilium`, pod traffic uses Cilium's VXLAN overlay + WireGuard (see
+   "Cilium" below); with `flannel`, k3s' `wireguard-native` backend.
 2. **Labels** on the CAPI `Cluster` and the Argo CD cluster secret (both use the `capi.labels` helper):
    `platform.koorikla.io/cni: <cni>` and `addons.platform.koorikla.io/cilium: "true"|"false"`. The cilium addon has
    catalog `default: false` and is selected by that label, so it lands exactly on `cni: cilium` clusters. Setting
@@ -76,14 +76,14 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   on agents. k3s sets `DisableLoadBalancer` on nodes that run the API server.
 - **CNI directories**: Cilium's defaults (`/etc/cni/net.d`, `/opt/cni/bin`). k3s points its containerd at
   `/var/lib/rancher/k3s/...` only when it runs flannel: `pkg/executor/embed/embed.go` sets `CNIConfDir`/`CNIBinDir`
-  inside the flannel branch. With `flannel-backend: none`, containerd keeps its built-in defaults. **VERIFY**
+  inside the flannel branch. With `flannel-backend: none`, containerd keeps its built-in defaults.
 - **IPAM `cluster-pool`**: pool `10.42.0.0/16` (= `Cluster.spec.clusterNetwork.pods`), a /24 per node, on every
   provider. AWS ENI IPAM is not used (it needs instance-type IP limits, IAM and more SG rules), and nothing programs
   hcloud routes.
 - **Routing: VXLAN tunnel** on every provider. No VPC route tables or hcloud network routes, and the same behaviour
   locally and in the clouds. Native routing is a possible later optimisation per provider.
-- **Encryption: WireGuard** for all pod traffic between nodes, mesh or not (udp/51871). On Hetzner this replaces
-  flannel's `wireguard-native`. Needs the kernel's wireguard module (on CAPD: the docker host's kernel). **VERIFY**
+- **Encryption: WireGuard** for all pod traffic between nodes, mesh or not (udp/51871). Needs the kernel's wireguard
+  module (on CAPD: the docker host's kernel).
 - **Hubble**: relay on, UI off. Metrics on: `dns, drop, tcp, flow, port-distribution, icmp, httpV2`. TLS comes from
   the certgen CronJob, so Helm generates no random certs and Argo CD shows no diff. ServiceMonitors are off: workload
   clusters have no Prometheus Operator CRDs, so metrics are collected via scrape annotations/OTel instead.
@@ -96,7 +96,7 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
     ambient pods.
 - **CAPD / kindest/node**: no extra mounts. The node image's entrypoint makes `/` shared, and Cilium's privileged init
   containers mount bpffs and cgroup2 themselves, as on kind. dev1 and prod1 share the host kernel, but socket LB is
-  scoped per cgroup namespace and CAPD node containers use private cgroupns. **VERIFY** on the first boot.
+  scoped per cgroup namespace and CAPD node containers use private cgroupns.
 
 ## Istio ambient (`addons/istio-ambient`)
 - Charts `base`, `istiod`, `cni`, `ztunnel` 1.32.0 from `https://blob.istio.io/istio-release/charts` (the old GCS
@@ -140,7 +140,7 @@ every tenant would have to repeat it. The platform default is a Kyverno `Mutatin
 Ingress into enrolled namespaces: the gateway pods are not in the mesh and send plaintext. ztunnel accepts it under
 Istio's default `PERMISSIVE` mode, while traffic between enrolled pods is HBONE mTLS. A namespace-wide
 `PeerAuthentication` set to `STRICT` would cut off ingress until the gateway itself joins the mesh, via kgateway's
-ambient integration or a waypoint. That is later work.
+ambient integration or a waypoint ([#53](https://github.com/koorikla/platform/issues/53)).
 
 A Kubernetes-native MutatingAdmissionPolicy was considered and rejected. It can't label namespaces that already
 exist, and in Kubernetes 1.35 it is beta and off by default (needs a feature gate on k3s). Kyverno was wanted anyway.
@@ -152,7 +152,7 @@ covers all three consumers:
 - Istio 1.32 ambient waypoints: a `Gateway` with `gatewayClassName: istio-waypoint`, standard channel.
 - Cilium: Gateway API is off, so no version constraint.
 
-No upgrade or experimental channel is needed. **VERIFY** that istiod logs no Gateway API version warning on first boot.
+No upgrade or experimental channel is needed.
 
 ## Kyverno (`addons/kyverno`, `addons/kyverno-policies`)
 - Official chart 3.10.0 (Kyverno 1.20.0) on mgmt and workload clusters, catalog `default: true`. Engine and policies
@@ -192,15 +192,7 @@ No upgrade or experimental channel is needed. **VERIFY** that istiod logs no Gat
 | **Total** | **~425m** | **~900Mi** | +175m / +320Mi per extra node |
 
 Actual usage on an idle cluster is usually close to these requests (cilium-agent ~200-300Mi, istiod ~100-200Mi,
-Kyverno admission ~150-250Mi). **VERIFY** on dev1.
+Kyverno admission ~150-250Mi).
 
-## VERIFY on the first live boot
-`grep -rn VERIFY addons/cilium addons/istio-ambient addons/kyverno* addons/clusterclasses docs/networking.md`:
-- CNI directories with `flannel-backend: none`.
-- WireGuard on CAPD.
-- kindest/node mounts, and socket LB with two CAPD clusters on one kernel.
-- klipper servicelb hostPorts (OpenChoreo gateway on CAPD) under Cilium kube-proxy replacement.
-- Argo CD resolving `urlParse` in the cilium ApplicationSet.
-- Argo CD ignoring Kyverno's helm `test` hooks.
-- OpenChoreo's renderedrelease controller keeping the added namespace label (not fighting Kyverno).
-- Hetzner MTU/WireGuard; AWS SG rules.
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/istio-ambient addons/kyverno* addons/clusterclasses`):
+[#52](https://github.com/koorikla/platform/issues/52).

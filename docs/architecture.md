@@ -4,16 +4,18 @@ A cloud-agnostic platform built from four parts:
 
 | Part | Job |
 |---|---|
-| **Cluster API** (k3s bootstrap + control plane provider; CAPD, CAPA, CAPH infra) | creates and lifecycles every workload cluster from one file in git |
+| **Cluster API** (k3s bootstrap + control plane provider; CAPD, CAPA, CAPH infra) | creates and upgrades every workload cluster from one file in git |
 | **Argo CD** (on mgmt only, push mode) | installs platform addons on mgmt and on every workload cluster; syncs OpenChoreo resources into the control plane |
-| **External Secrets Operator** | the glue for secrets and credentials: repo creds, cloud creds, CAPI kubeconfigs into Argo cluster secrets, OpenChoreo agent identities into workload clusters, app secrets on data planes |
-| **OpenChoreo** (control plane on mgmt, data plane per workload cluster) | the developer platform: Projects, Components, Environments, promotion; it delivers app workloads to data planes itself |
+| **External Secrets Operator** | moves every credential: repo creds, cloud creds, CAPI kubeconfigs into Argo CD cluster secrets, OpenChoreo agent identities into workload clusters, app secrets on data planes |
+| **OpenChoreo** (control plane, workflow and observability planes on mgmt; a data plane per workload cluster) | the developer platform: Projects, Components, Environments, builds, promotion; it delivers app workloads to data planes itself |
+
+Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagrams: [diagrams/](diagrams/README.md).
 
 ## Topology
 
 ```mermaid
 flowchart LR
-  git[(github: platform, hello-world)]
+  git[(github: platform, app repos)]
   subgraph mgmt["mgmt (k3d locally; any conformant k8s in prod)"]
     argo["Argo CD + ApplicationSets"]
     capi["CAPI operator: core, k3s, docker | aws | hetzner"]
@@ -39,40 +41,40 @@ flowchart LR
 
 ## Decisions
 
-### No argocd-agent on workload clusters
-CAPI already requires mgmt → workload API reachability (it reconciles nodes, reads the kubeconfig, drains machines), so
-Argo CD on mgmt pushing through the CAPI kubeconfig adds no new network path. App delivery does not go through Argo at
-all on data planes: OpenChoreo's cluster-agent dials **out** to the control plane and applies releases. So workload
-clusters run no Argo component. If a future cluster sits behind a NAT where mgmt cannot reach its API, it cannot be
-CAPI-managed from this mgmt either; that case is out of scope.
+### Push mode: no Argo CD component on workload clusters
+CAPI already needs mgmt -> workload API reachability (it reconciles nodes, reads the kubeconfig, drains machines), so
+Argo CD on mgmt pushing through the CAPI kubeconfig adds no new network path. App delivery does not go through Argo CD
+on data planes at all: OpenChoreo's cluster-agent dials **out** to the control plane and applies releases. A cluster
+behind a NAT where mgmt cannot reach its API cannot be CAPI-managed from this mgmt either, so that case is out of scope.
 
-**Next step (decided):** move add-on delivery to pull with argocd-agent in managed mode: the ApplicationSets and the
-UI stay on mgmt, an agent per workload cluster dials out and applies locally (resilience to a mgmt outage, scale). The
-catalog and label targeting carry over unchanged; the agent's client cert reaches each cluster through the same
-ClusterResourceSet path as the OpenChoreo agent identity.
+Planned: argocd-agent in managed mode, so addon delivery is pulled by an agent per cluster and mgmt holds no workload
+admin kubeconfigs ([#20](https://github.com/koorikla/platform/issues/20)). Catalog and label targeting stay as they
+are; the agent's client cert would reach each cluster over the same ClusterResourceSet path as the OpenChoreo agent
+identity.
 
 ### Adding a cluster = adding one file
-`installations/<inst>/clusters/<name>.yaml` → ApplicationSet `fleet` (git files generator) → Application
-`cluster-<name>` → chart `charts/cluster`, which renders on mgmt:
+`installations/<inst>/clusters/<name>.yaml` -> ApplicationSet `fleet` (git files generator) -> Application
+`cluster-<name>` -> chart `charts/cluster`, which renders on mgmt:
 
 1. CAPI `Cluster` (topology, class `k3s-<provider>`), labelled with the cluster facts.
-2. ExternalSecret → Argo CD cluster secret (built from CAPI's `<name>-kubeconfig`), carrying the same labels.
-   This is the hand-off point: as soon as the kubeconfig exists, every addon ApplicationSet whose selector matches the
-   labels generates an Application for the new cluster. Nothing hardcodes cluster names.
-3. OpenChoreo identity (if `openchoreo.dataPlane.enabled`): per-cluster agent CA + client cert (cert-manager, on mgmt),
-   delivered into the workload cluster by a CAPI `ClusterResourceSet` whose payload ESO templates from those secrets;
-   `ClusterDataPlane <name>` trusting that per-cluster CA; `Environment`s bound to it.
+2. ExternalSecret -> Argo CD cluster secret (built from CAPI's `<name>-kubeconfig`), with the same labels.
+   This is the hand-off: as soon as the kubeconfig exists, every addon ApplicationSet whose selector matches the
+   labels generates an Application for the new cluster.
+3. OpenChoreo identity (if `openchoreo.dataPlane.enabled`): per-cluster agent CA + client cert, delivered by a CAPI
+   `ClusterResourceSet`; `ClusterDataPlane <name>` trusting that CA; `Environment`s bound to it.
 
-Considered and rejected for step 2: [capi2argo-cluster-operator](https://github.com/dntosas/capi2argo-cluster-operator)
-(an extra controller, built on CAPI 1.10/v1beta1, lightly maintained, labels copied after the fact). Its one advantage
-is picking up clusters created outside git; if self-service cluster creation ever lands, swap the ExternalSecret for it
-(`ENABLE_AUTO_LABEL_COPY=true`) as a mgmt addon.
+Removing the file deletes the cluster (Argo CD prune -> CAPI delete) and all its registrations.
 
-Removing the file deletes the cluster (Argo prune → CAPI delete) and all its registrations with it.
+Rejected for step 2: [capi2argo-cluster-operator](https://github.com/dntosas/capi2argo-cluster-operator) (an extra
+controller, built on CAPI 1.10/v1beta1, lightly maintained, labels copied after the fact). Its one advantage is
+picking up clusters created outside git; if self-service cluster creation ever lands, it can replace the
+ExternalSecret (`ENABLE_AUTO_LABEL_COPY=true`) as a mgmt addon.
+
+Details (fleet file fields, ClusterClasses, control plane sizing): [providers.md](providers.md).
 
 ### Addons: catalog + labels (GitOps-Bridge style)
-`charts/platform` renders one ApplicationSet per catalog entry. Each uses a cluster generator selecting on
-`platform.koorikla.io/role` (and optionally provider) plus the opt-out/opt-in label
+`charts/platform` renders one ApplicationSet per catalog entry (`charts/platform/values.yaml` `addons`). Each uses a
+cluster generator selecting on `platform.koorikla.io/role` (and optionally provider) plus the opt-in/opt-out label
 `addons.platform.koorikla.io/<addon>`. Values are layered by Helm value files (missing files ignored):
 
 ```
@@ -88,65 +90,65 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `installationParameters` (a template over installation values) and `clusterServerParameters` (`url`, `host` or `port`
-of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; docs/networking.md) and `clusterLabelParameters`
-(a cluster secret label's value with a default, e.g. Istio's meshID and network from the mesh labels; docs/multicluster.md).
+of the cluster secret's API server, e.g. Cilium's `k8sServiceHost`; [networking.md](networking.md)) and
+`clusterLabelParameters` (a cluster secret label's value with a default, e.g. Istio's meshID and network from the mesh
+labels; [multicluster.md](multicluster.md)).
 
-Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (from the fleet
-file, default `HEAD`) is the `targetRevision` of that cluster's addon Applications. Prod can follow a tag while dev
-follows `main`. (Kargo can replace this later; it is deliberately not part of v1.)
+Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (fleet file
+`addonsRevision`, default `HEAD`) is the `targetRevision` of that cluster's addon Applications, so prod can follow a
+tag while dev follows `main`. Kargo could replace this later; it is deliberately not part of v1.
 
 ### Trust between OpenChoreo planes
 The upstream multi-cluster recipe is imperative (copy the agent's self-signed CA back to the control plane) or copies
-the control plane's CA **private key** into every plane. Neither is acceptable. Here:
-
-- CA private keys never leave mgmt. Each workload cluster gets its **own** agent CA on mgmt (`fleet/<name>-agent-ca`),
-  which signs exactly one client cert (`CN=<name>`). `ClusterDataPlane <name>` trusts only that CA, so a compromised
-  cluster cannot impersonate another plane, and deleting the CA revokes the cluster.
-- The client cert + key and the control plane's **public** gateway CA reach the workload cluster through a CAPI
-  `ClusterResourceSet` (strategy `Reconcile`, re-applied on rotation). ESO templates the CRS payload from the cert-manager
-  secrets on mgmt (ClusterSecretStore over mgmt's own API), so there is no script and no hub→worker write outside CAPI.
-- The data plane chart runs with `generateCerts: true` (its own Certificate goes to an unused secret name) and
-  `clientSecretName: cluster-agent-tls` (the delivered one).
+the control plane's CA **private key** into every plane. Neither is acceptable. Here each workload cluster gets its own
+agent CA on mgmt that signs exactly one client cert (`CN=<name>`); `ClusterDataPlane <name>` trusts only that CA, so a
+compromised cluster cannot impersonate another plane, and deleting the CA revokes the cluster. The client cert and the
+control plane's public gateway CA reach the cluster through a CAPI `ClusterResourceSet` whose payload ESO templates:
+no script, no mgmt -> workload write outside CAPI. Details: [openchoreo.md](openchoreo.md#trust-model).
 
 ### Secrets: one store name, pluggable backends
 Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backend is per installation:
 
 | Backend | Use |
 |---|---|
-| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `task secrets` (docs/forking.md) |
+| `kubernetes` | local stand-in: secrets in mgmt namespace `platform-secrets`, seeded by `task secrets` ([forking.md](forking.md#seeding-locally-task-secrets)) |
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
 Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice.
-Key names are flat (`platform-github`, `platform-ghcr`, `capi-aws`, `capi-hetzner`) so they map onto every backend.
-`platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces that consume it
-(addon secret-stores `platformStore.namespaces`: argocd, fleet, capa-system, thunder, openchoreo-control-plane,
-openchoreo-observability-plane, falco); `hack/tests/test_secret_store_scope.sh` fails when a rendered consumer is
-missing from that list or a listed namespace has no consumer. When `platform-github-app` (write) gets its consumer, it
-moves to a dedicated store limited to that namespace.
+Key names are flat (`platform-github`, `capi-aws`, …; [conventions.md](conventions.md#secret-keys)) so they map onto
+every backend. `platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces
+that consume it (addon secret-stores `platformStore.namespaces`); `hack/tests/test_secret_store_scope.sh` fails when a
+rendered consumer is missing from that list or a listed namespace has no consumer.
 
 ### Installations
 `installations/<inst>/` is one mgmt cluster and its fleet: `installation.yaml` (domain, secret backend, enabled CAPI
-providers, OpenChoreo endpoints), `clusters/`, `addons/` overrides, `tenants/`. `local` is the tested one; `aws-example`
-and `hetzner-example` are reference installations that render but are not booted (no credentials).
+providers, OpenChoreo endpoints, registry, promotion), `clusters/`, `addons/` overrides, `tenants/`. `local` is the
+booted one; `aws-example` and `hetzner-example` are reference installations that render but have not been booted
+([#26](https://github.com/koorikla/platform/issues/26)).
+
+Local: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind` (shared with CAPD), docker.sock mounted for
+CAPD. Workload clusters are the CAPD k3s clusters `dev1` (environments development, staging) and `prod1` (production).
 
 ### Tenants (OpenChoreo apps)
 App repos own their OpenChoreo manifests (`deploy/openchoreo/`: Component, Workload, ReleaseBindings). The platform repo
-registers them: `installations/<inst>/tenants/<project>.yaml` → OpenChoreo `Project` + one Argo Application per app repo,
-in AppProject `tenant-<project>` restricted to that repo and to OpenChoreo developer kinds. Onboarding an app = one file
-in the platform repo; deploying/promoting = commits in the app repo.
+registers them: `installations/<inst>/tenants/<project>.yaml` -> OpenChoreo `Project` + one Argo CD Application per
+app repo, in AppProject `tenant-<project>` restricted to that repo and to OpenChoreo developer kinds. Onboarding an app
+is one file in the platform repo; deploying and promoting are commits in the app repo
+([openchoreo.md](openchoreo.md#tenants), [promotion.md](promotion.md)).
+
+### Builds in the cluster, not in a CI provider
+Components name a ClusterWorkflow; the OpenChoreo workflow plane on mgmt builds, scans, signs and commits the new image
+ref to the app repo, and Argo CD deploys it. GitHub Actions ([koorikla/ci](https://github.com/koorikla/ci)) run the
+same scripts as an optional path. This keeps CI providers thin and the build path identical on every installation
+([build-plane.md](build-plane.md)).
 
 ### Repos
 | Repo | Owner | Contents |
 |---|---|---|
 | `koorikla/platform` | platform team | bootstrap, charts, addons, installations (fleet, tenants), OpenChoreo platform config |
-| `koorikla/hello-world` | app team | code, Dockerfile, CI (image to GHCR, bumps its own Workload), `deploy/openchoreo/` |
+| `koorikla/hello-world` | app team | code, Dockerfile, CI, `deploy/openchoreo/` |
+| `koorikla/ci` | platform team | reusable GitHub workflows and the build scripts the ClusterWorkflows run |
 
-Both are private: Argo CD reads them with repo credentials from `platform-github` (ESO → `repo-creds` secret); nodes
-pull GHCR images with `platform-ghcr`.
-
-## Local test environment
-
-- mgmt = k3d cluster `platform-mgmt` on Docker network `kind` (shared with CAPD), docker.sock mounted for CAPD.
-- Workload clusters = CAPD k3s clusters `dev1` (environments development, staging) and `prod1` (production).
-- Not tested here: AWS, Hetzner (rendered and schema-checked only).
+All three are public. Private forks work with repo credentials from `platform-github` (ESO -> Argo CD `repo-creds`);
+nodes pull private GHCR images with `platform-ghcr` ([forking.md](forking.md#3-credentials)).
