@@ -207,7 +207,10 @@ offboards the whole project. Limitation: Argo cannot restrict field values, so a
 
 An app repo owns its OpenChoreo manifests as plain YAML in `deploy/openchoreo/` (no Helm/Kustomize needed; Argo CD
 applies the directory). All objects go to the org namespace (`default`) and name the tenant's project in
-`spec.owner.projectName`. For `hello-world` (project `demo`, image `ghcr.io/koorikla/hello-world:<tag>`, HTTP 8080):
+`spec.owner.projectName`. One Component per app repo, named like the app in the tenant file: the admission policy on
+gated environments accepts a component's production binding only from Application `<project>-<component>-production`
+([promotion.md](promotion.md#2-git-is-the-only-path-to-gated-bindings-native)), so a binding of a differently named
+component is denied there. For `hello-world` (project `demo`, image `ghcr.io/koorikla/hello-world:<tag>`, HTTP 8080):
 
 `deploy/openchoreo/component.yaml`
 ```yaml

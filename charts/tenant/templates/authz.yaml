@@ -1,0 +1,43 @@
+{{- /*
+Gated Components may not be deleted through console, openchoreo-api, occ or MCP by the restricted groups
+(promotion.restrictedGroups, docs/promotion.md "Git is the only path"): deleting a Component makes the garbage collector
+delete its ReleaseBindings, production included, bypassing the reviewed pull request. Offboarding is a git change
+(remove the app from the tenant file; the Application's resources finalizer deletes the objects).
+One OpenChoreo AuthzRoleBinding per restricted group, effect deny (wins over the upstream developer role's allow),
+scoped to each gated app's Component (app name == Component name, docs/openchoreo.md "App repo contract"). The role
+ClusterAuthzRole promotion-component-deleter (component:delete) comes from addon openchoreo-platform.
+*/ -}}
+{{- $p := include "tenant.project" . }}
+{{- $components := list }}
+{{- range $app := include "tenant.apps" . | fromYamlArray }}
+{{- if include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}{{ $components = append $components $app.name }}{{ end }}
+{{- end }}
+{{- if $components }}
+{{- range $group := .Values.promotion.restrictedGroups | default list }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: AuthzRoleBinding
+metadata:
+  name: {{ printf "%s-promotion-deny-component-delete-%s" $p ($group | lower | replace "_" "-") | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $.Values.openchoreo.orgNamespace }}
+  labels:
+    {{- include "tenant.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    openchoreo.dev/description: {{ printf "%s may not delete the gated Components of project %s: offboarding is a reviewed change of the tenant file" $group $p | quote }}
+spec:
+  effect: deny
+  entitlement:
+    claim: groups
+    value: {{ $group | quote }}
+  roleMappings:
+    {{- range $components }}
+    - roleRef:
+        kind: ClusterAuthzRole
+        name: {{ $.Values.promotion.componentDeleterRole }}
+      scope:
+        project: {{ $p }}
+        component: {{ . }}
+    {{- end }}
+{{- end }}
+{{- end }}

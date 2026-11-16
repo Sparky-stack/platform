@@ -7,6 +7,7 @@ templates:
   - charts/thunderid/templates/setup-job.yaml
   - charts/thunderid/templates/admin-secret.yaml
   - charts/thunderid/templates/setup-config-map.yaml
+  - charts/thunderid/templates/bootstrap-configmap.yaml
   - charts/thunderid/templates/secret.yaml
 tests:
   - it: bootstrap ExternalSecret is a PreSync hook before the setup Job and survives successful syncs
@@ -39,6 +40,37 @@ tests:
           content:
             name: BACKSTAGE_CLIENT_SECRET
             valueFrom: { secretKeyRef: { name: thunder-bootstrap, key: backstage-client-secret } }
+  - it: bootstrap Secret carries the promotion gate's client secret from the promotion-gate store key
+    template: templates/bootstrap-secret.yaml
+    asserts:
+      - contains:
+          path: spec.data
+          content:
+            secretKey: promotion-gate-client-secret
+            remoteRef: { key: promotion-gate, property: client-secret }
+  - it: setup Job gets the promotion gate's client secret as env
+    template: charts/thunderid/templates/setup-job.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PROMOTION_GATE_CLIENT_SECRET
+            valueFrom: { secretKeyRef: { name: thunder-bootstrap, key: promotion-gate-client-secret } }
+  - it: bootstrap bundle registers the promotion gate as a client_credentials-only client with the secret from the store
+    template: charts/thunderid/templates/bootstrap-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["70-openchoreo-promotion-gate-app.yaml"]
+          pattern: 'clientId: openchoreo-promotion-gate\n'
+      - matchRegex:
+          path: data["70-openchoreo-promotion-gate-app.yaml"]
+          pattern: 'clientSecret: "\{\{ \.PROMOTION_GATE_CLIENT_SECRET \}\}"'
+      - matchRegex:
+          path: data["70-openchoreo-promotion-gate-app.yaml"]
+          pattern: 'grantTypes:\n\s+- client_credentials\n\s+tokenEndpointAuthMethod: client_secret_post'
+      - matchRegex:
+          path: data["70-openchoreo-promotion-gate-app.yaml"]
+          pattern: 'publicClient: false'
   - it: fails when the Thunder host drifts from the installation
     template: templates/validate.yaml
     set:

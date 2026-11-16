@@ -11,6 +11,9 @@
 #   developer-user-password   OpenChoreo user developer@openchoreo.dev (group developers -> OpenChoreo role developer)
 #   backstage-client-secret   OAuth client openchoreo-backstage-client (also read by addon openchoreo-control-plane)
 #   backstage-backend-secret  (read by addon openchoreo-control-plane only)
+# plus, from other keys of the same store: `openchoreo-observability` observer-client-secret (OAuth client
+# openchoreo-observer-resource-reader-client) and `promotion-gate` client-secret (OAuth client openchoreo-promotion-gate,
+# read by the promotion gate's per-run ExternalSecret too; docs/promotion.md).
 # Thunder's bootstrap (`thunderid bootstrap`, run by the setup Job) resolves `{{ .VAR }}` placeholders in the bundle
 # from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there. VERIFY live.
 #
@@ -35,6 +38,10 @@ bootstrapSecret:
   # (files/ai-agent-clients/, templates/ai-agent-clients.yaml). Nothing else to edit.
   aiAgentClients: []
   aiRemoteKey: openchoreo-ai
+  observabilityRemoteKey: openchoreo-observability   # observer-client-secret (script 59)
+  # client-secret of OAuth client openchoreo-promotion-gate (script 70) == addon openchoreo-platform
+  # promotionGate.clientSecret (same store key: the gate posts it to Thunder's token endpoint)
+  promotionGate: { remoteKey: promotion-gate, property: client-secret }
 
 # --- installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks the hostname -
 openchoreo:
@@ -108,6 +115,7 @@ thunderid:
       - { name: OPENCHOREO_DEVELOPER_PASSWORD, secretName: thunder-bootstrap, secretKey: developer-user-password }
       - { name: BACKSTAGE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: backstage-client-secret }
       - { name: OBSERVER_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: observer-client-secret }
+      - { name: PROMOTION_GATE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: promotion-gate-client-secret }
       # AI agent clients (docs/ai-agents.md): the keys exist only for agents in bootstrapSecret.aiAgentClients (optional),
       # and only those agents' scripts reference them (templates/ai-agent-clients.yaml).
       - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret, optional: true }
@@ -128,7 +136,8 @@ thunderid:
   # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/55-58/61/62 - service clients
   # with well-known secrets for components not installed here (sample portal, MCP, workload publisher, e2e); 59 below
   # with its secret from the store; 53/60 (AI agents) from setup.extraVolumes above. Add a client back together with
-  # the feature that uses it.
+  # the feature that uses it. Platform clients (70+) use ids from 01900000-0000-7000-8001-000000000100 on, clear of
+  # upstream's.
   bootstrap:
     scripts:
       # A path override replaces ThunderID's shipped entry: every directive except img-src mirrors the 1.0.1 defaults.
@@ -338,6 +347,32 @@ thunderid:
                 accessToken:
                   clientConfig:
                     validityPeriod: 3600
+
+      # Platform: the promotion gate (ClusterWorkflow promotion-gate, addon openchoreo-platform) -> OpenChoreo API and
+      # observer, client_credentials like 59. Its permissions are the ClusterAuthzRoleBinding promotion-gate-binding
+      # (entitlement claim client_id, addon openchoreo-platform templates/promotion-authz.yaml). Token lifetime = the
+      # gate's activeDeadlineSeconds. clientId == openchoreo-platform promotionGate.clientID (hack/tests contract).
+      70-openchoreo-promotion-gate-app.yaml: |
+        resource_type: application
+        id: 01900000-0000-7000-8001-000000000100
+        ouId: 01900000-0000-7000-8000-000000000001
+        name: OpenChoreo Promotion Gate
+        type: m2m
+        description: Promotion gate workflow - read-only OpenChoreo API and observer queries (docs/promotion.md)
+        inboundAuthConfig:
+          - type: oauth2
+            config:
+              clientId: openchoreo-promotion-gate
+              clientSecret: "{{ .PROMOTION_GATE_CLIENT_SECRET }}"
+              grantTypes:
+                - client_credentials
+              tokenEndpointAuthMethod: client_secret_post
+              pkceRequired: false
+              publicClient: false
+              token:
+                accessToken:
+                  clientConfig:
+                    validityPeriod: 900
 
       54-cli-app.yaml: |
         resource_type: application

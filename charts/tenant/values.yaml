@@ -6,6 +6,8 @@
 project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
 description: ""
 apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
+                            # name == the app repo's one Component name (gated bindings are admitted only from
+                            # Application <project>-<component>-<env>, addon openchoreo-platform promotion-git-only.yaml)
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
@@ -45,6 +47,10 @@ promotion:
   # reviewed pull request (CODEOWNERS + required status `openchoreo/promotion-gate`); an app opts out with
   # `promotionGates: false` in the tenant file.
   gatedEnvironments: [production]
+  # Groups (JWT claim `groups`) that may not delete a gated app's Component through console / openchoreo-api / occ /
+  # MCP (the cascade would delete its gated bindings). Same list addon openchoreo-platform denies gated binding writes.
+  restrictedGroups: [developers]
+  componentDeleterRole: promotion-component-deleter   # ClusterAuthzRole of addon openchoreo-platform (component:delete)
   bindingFile: release-bindings/{environment}.yaml   # relative to the app path (app repo contract)
   # Weekly windows -> Argo CD deny sync windows on the gated Applications (manual sync blocked too; break glass =
   # change this list in git). PRs merged during a window sync when it ends.
