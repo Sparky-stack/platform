@@ -279,6 +279,8 @@ assert_eq "$RC" 0 "cosign: rc"
 assert_eq "$(keys harbor)" "admin-password,builder-secret,core-secret,csrf-key,database-password,jobservice-secret,nodes-secret,registry-http-secret,registry-password,secret-key" "harbor: keys"
 hk=$(val harbor secret-key); assert_eq "${#hk}" 16 "harbor: secret-key exactly 16 chars"
 hk=$(val harbor csrf-key); assert_eq "${#hk}" 32 "harbor: csrf-key exactly 32 chars"
+assert_eq "$(keys openbao-unseal)" "key" "openbao-unseal: keys"
+assert_match "$(val openbao-unseal key)" '^[0-9a-f]{64}$' "openbao-unseal: 64 hex chars (32-byte AES-256 static seal key)"
 assert_eq "$(keys cosign-platform)" "cosign.key,cosign.password,cosign.pub" "cosign: keys"
 assert_match "$(val cosign-platform cosign.key)" 'FAKECOSIGNKEY' "cosign: private key from the generated file"
 cpass=$(val cosign-platform cosign.password)

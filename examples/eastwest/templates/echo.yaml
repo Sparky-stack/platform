@@ -1,0 +1,74 @@
+{{- /*
+Service echo exists on every member (DNS for callers) and is global (istio.io/global=true, matched by istiod's default
+serviceScopeConfigs). The Deployment runs only where echo.enabled; it answers with its cluster name.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" . | nindent 4 }}
+    app: echo
+    istio.io/global: "true"
+spec:
+  selector:
+    app: echo
+  ports:
+    - name: http
+      port: {{ .Values.echo.port }}
+      targetPort: http
+{{- if .Values.echo.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: echo
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "eastwest.labels" . | nindent 4 }}
+    app: echo
+spec:
+  replicas: {{ .Values.echo.replicas }}
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      serviceAccountName: echo
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: echo
+          image: {{ .Values.echo.image }}
+          args:
+            - -listen=:{{ .Values.echo.port }}
+            - {{ printf "-text=hello from %s" .Values.cluster.name | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.echo.port }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            {{- toYaml .Values.echo.resources | nindent 12 }}
+          securityContext:
+            {{- include "eastwest.containerSecurity" . | nindent 12 }}
+{{- end }}

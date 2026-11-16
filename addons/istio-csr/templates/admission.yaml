@@ -1,0 +1,104 @@
+{{- /*
+The Vault Issuer signs any SPIFFE identity of the trust domain that this cluster's OpenBao role allows, and cert-manager's
+internal approver approves every CertificateRequest. So who may ask is limited here (failurePolicy Fail, Deny):
+  platform-mesh-ca-requests      CertificateRequests for Issuer openbao-mesh: created only by istio-csr (workload
+                                 certs for ztunnel/istiod clients, its own serving cert) or cert-manager's controller
+                                 (from an admitted Certificate)
+  platform-mesh-ca-certificates  Certificates for Issuer openbao-mesh: only the chart's istiod Certificate (in this
+                                 namespace), never a CA
+  platform-mesh-ca-issuers       only Issuer openbao-mesh may use ServiceAccount istio-csr-openbao or request the
+                                 audience vault://istio-system/openbao-mesh: OpenBao accepts any token of that subject
+                                 with that audience, so a second Vault Issuer in istio-system (serviceAccountRef with
+                                 audiences: [vault://istio-system/openbao-mesh]) would bypass the two policies above.
+                                 Issuers of other namespaces cannot name this ServiceAccount (serviceAccountRef is
+                                 namespace-local) and get another subject; ClusterIssuers are covered all the same.
+OpenBao enforces the rest server-side (allowed DNS names, spiffe://<trust domain>/ns/<ns>/sa/<sa> URIs, TTL).
+*/ -}}
+{{- $a := .Values.admission }}
+{{- if $a.enabled }}
+{{- $sa := .Values.issuer.serviceAccount }}
+{{- $aud := printf "vault://%s/%s" .Release.Namespace .Values.issuer.name }}
+{{- $self := printf "object.kind == 'Issuer' && object.metadata.namespace == '%s' && object.metadata.name == '%s'" .Release.Namespace .Values.issuer.name }}
+{{- $ref := "object.spec.vault.auth.kubernetes.serviceAccountRef" }}
+{{- $issuer := printf "has(object.spec.issuerRef) && object.spec.issuerRef.name == '%s' && (!has(object.spec.issuerRef.kind) || object.spec.issuerRef.kind == 'Issuer')" .Values.issuer.name }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-ca-requests
+  labels:
+    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE]
+        resources: [certificaterequests]
+  matchConditions:
+    - name: mesh-ca-issuer
+      expression: {{ $issuer | quote }}
+  validations:
+    - expression: {{ printf "request.userInfo.username in %s" (toJson $a.requesters) | quote }}
+      message: {{ printf "CertificateRequests for Issuer %s come only from istio-csr or cert-manager" .Values.issuer.name | quote }}
+    - expression: "!has(object.spec.isCA) || object.spec.isCA == false"
+      message: "the mesh CA never signs a CA from a member"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-ca-certificates
+  labels:
+    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [certificates]
+  matchConditions:
+    - name: mesh-ca-issuer
+      expression: {{ $issuer | quote }}
+  validations:
+    - expression: {{ printf "object.metadata.namespace == '%s' && object.metadata.name in %s" .Release.Namespace (toJson $a.certificates) | quote }}
+      message: {{ printf "only %s/%s may reference Issuer %s" .Release.Namespace (join "," $a.certificates) .Values.issuer.name | quote }}
+    - expression: "!has(object.spec.isCA) || object.spec.isCA == false"
+      message: "the mesh CA never signs a CA from a member"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: platform-mesh-ca-issuers
+  labels:
+    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [issuers, clusterissuers]
+  matchConditions:
+    - name: vault-serviceaccount-auth
+      expression: "has(object.spec.vault) && has(object.spec.vault.auth) && has(object.spec.vault.auth.kubernetes) && has(object.spec.vault.auth.kubernetes.serviceAccountRef)"
+  validations:
+    - expression: {{ printf "%s.name != '%s' || (%s)" $ref $sa $self | quote }}
+      message: {{ printf "only Issuer %s/%s may log in as ServiceAccount %s (the mesh CA accepts its tokens)" .Release.Namespace .Values.issuer.name $sa | quote }}
+    - expression: {{ printf "!has(%s.audiences) || !%s.audiences.exists(a, a == '%s') || (%s)" $ref $ref $aud $self | quote }}
+      message: {{ printf "only Issuer %s/%s may request ServiceAccount tokens with audience %s" .Release.Namespace .Values.issuer.name $aud | quote }}
+{{- range $p := list "platform-mesh-ca-requests" "platform-mesh-ca-certificates" "platform-mesh-ca-issuers" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $p }}
+  labels:
+    {{- include "istio-csr-addon.labels" $ | nindent 4 }}
+spec:
+  policyName: {{ $p }}
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

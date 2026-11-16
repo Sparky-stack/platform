@@ -3,6 +3,8 @@ kind: AppProject
 metadata:
   name: platform
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # before the ApplicationSets using it; pruned after them (reverse waves)
 spec:
   description: Platform addons and management cluster components
 {{- with .Values.sourceIntegrity }}{{ if .enabled }}
@@ -35,6 +37,8 @@ kind: AppProject
 metadata:
   name: fleet
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: Workload cluster provisioning (CAPI, Argo registration, OpenChoreo identities)
 {{- with .Values.sourceIntegrity }}{{ if .enabled }}
@@ -81,3 +85,40 @@ spec:
       kind: ExternalSecret
     - group: openchoreo.dev
       kind: Environment
+{{- /* examples: the opt-in example charts (templates/appset-examples.yaml) on workload clusters. Only their own
+namespaces, only Namespace as a cluster-scoped kind, only the namespaced kinds listed in examplesProject.
+Rendered ALWAYS, with the namespaces of every example in the catalog (enabled or not), and created one sync wave
+before the ApplicationSets: the generated Applications carry the resources finalizer, and Argo CD can only delete
+them while their project exists. Disabling an example therefore prunes just its ApplicationSet (foreground: its
+Applications and their resources first) and never shrinks or deletes the project under them; if the project itself is
+ever removed, Argo CD prunes in reverse wave order and waits for the ApplicationSets' deletion to finish first. */}}
+{{- $exNs := list }}
+{{- range $ex, $cfg := (.Values.examples | default dict) }}
+{{- $exNs = append $exNs (($cfg | default dict).namespace | default $ex) }}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: examples
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Opt-in example charts (examples/<name>) - their namespaces only
+  sourceRepos:
+    - {{ .Values.installation.repoURL | quote }}
+  {{- if $exNs }}
+  destinations:
+    {{- range $ns := $exNs | uniq | sortAlpha }}
+    - server: '*'
+      namespace: {{ $ns | quote }}
+    {{- end }}
+  {{- else }}
+  destinations: []
+  {{- end }}
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    {{- toYaml .Values.examplesProject.namespaceResources | nindent 4 }}
