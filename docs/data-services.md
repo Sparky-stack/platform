@@ -41,7 +41,9 @@ Footprint (requests, operators only): CNPG 20m / 64Mi, Strimzi 50m / 384Mi (JVM)
 Every PostgreSQL / Kafka cluster you create comes on top.
 
 Turning an addon off removes its Application but no resources (the generated Applications carry no resources
-finalizer): CRDs, operators' data and the clusters they manage stay until removed deliberately.
+finalizer): operators, CRDs and the clusters they manage stay until removed deliberately. Even a cascading delete keeps
+the CloudNativePG CRDs (and with them every PostgreSQL cluster): they carry `helm.sh/resource-policy: keep`, which
+Argo CD honours (seen live).
 
 ## Security and RBAC
 
