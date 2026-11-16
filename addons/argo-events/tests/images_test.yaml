@@ -1,0 +1,50 @@
+suite: argo-events - images pinned (controller, EventBus JetStream / NATS images in the controller config)
+release:
+  name: argo-events
+  namespace: argo-events
+templates:
+  - charts/argo-events/templates/argo-events-controller/deployment.yaml
+  - charts/argo-events/templates/argo-events-controller/config.yaml
+  - templates/eventsource.yaml
+tests:
+  - it: the controller (and the EventSource / Sensor pods it starts) run the digest-pinned image
+    template: charts/argo-events/templates/argo-events-controller/deployment.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '^quay\.io/argoproj/argo-events:v[0-9.]+@sha256:[0-9a-f]{64}$'
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ARGO_EVENTS_IMAGE
+            value: quay.io/argoproj/argo-events:v1.9.11@sha256:fa07b2c9ece6ec60a3a8377866dfe21e8bad062d5b5407f1f181d3f1d24fb861
+
+  - it: the controller config lists only fully qualified, digest-pinned EventBus images (no chart default list)
+    template: charts/argo-events/templates/argo-events-controller/config.yaml
+    asserts:
+      - matchRegex:
+          path: data["controller-config.yaml"]
+          pattern: 'natsImage: docker\.io/library/nats:2\.10\.29@sha256:[0-9a-f]{64}'
+      - matchRegex:
+          path: data["controller-config.yaml"]
+          pattern: 'configReloaderImage: docker\.io/natsio/nats-server-config-reloader:[0-9.]+@sha256:[0-9a-f]{64}'
+      - matchRegex:
+          path: data["controller-config.yaml"]
+          pattern: 'metricsExporterImage: docker\.io/natsio/prometheus-nats-exporter:[0-9.]+@sha256:[0-9a-f]{64}'
+      - notMatchRegex:
+          path: data["controller-config.yaml"]
+          pattern: '[Ii]mage: (?:[^\n@]*\n|[^\n]*latest)'
+
+  - it: the EventBus version is one of the pinned JetStream versions
+    template: templates/eventsource.yaml
+    documentSelector: { path: kind, value: EventBus }
+    asserts:
+      - equal: { path: spec.jetstream.version, value: "2.10.29" }
+
+  - it: an EventBus version without pinned images fails rendering
+    template: templates/eventsource.yaml
+    set:
+      eventBus.natsVersion: "2.9.16"
+    asserts:
+      - failedTemplate:
+          errorPattern: 'eventBus.natsVersion "2.9.16" is not in argo-events.configs.jetstream.versions'

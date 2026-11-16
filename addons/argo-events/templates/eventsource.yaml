@@ -4,6 +4,12 @@ bearer-token Secret from the store, Service exposure through the control-plane G
 */ -}}
 {{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
 {{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
+{{- /* The EventBus can only run a version the controller config lists (pinned images, values.yaml). */ -}}
+{{- $jsVersions := list }}
+{{- range (index .Values "argo-events" "configs" "jetstream" "versions") }}{{ $jsVersions = append $jsVersions (toString .version) }}{{ end }}
+{{- if not (has (toString .Values.eventBus.natsVersion) $jsVersions) }}
+{{- fail (printf "eventBus.natsVersion %q is not in argo-events.configs.jetstream.versions %v (pinned EventBus images)" (toString .Values.eventBus.natsVersion) $jsVersions) }}
+{{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: EventBus
 metadata:
