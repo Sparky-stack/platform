@@ -50,6 +50,8 @@ argo-events:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       runAsNonRoot: true
+      runAsUser: 65532                 # the image declares no USER (kubelet refuses runAsNonRoot without a numeric uid)
+      runAsGroup: 65532
       capabilities: { drop: [ALL] }
       seccompProfile: { type: RuntimeDefault }
   webhook:
