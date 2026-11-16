@@ -33,8 +33,60 @@ class Tests(unittest.TestCase):
 
     def test_enrich_skips_low_priority_and_platform_namespaces(self):
         os.environ["MINIMUM_PRIORITY"] = "critical"
-        self.assertIn("skipped", fr.enrich({"priority": "Warning", "output_fields": {"k8s.ns.name": "dp-x"}}))
-        self.assertIn("skipped", fr.enrich({"priority": "Critical", "output_fields": {"k8s.ns.name": "kube-system"}}))
+        low = fr.enrich({"priority": "Warning", "output_fields": {"k8s.ns.name": "dp-x"}}, "dev1")
+        self.assertIn("priority below", low["skipped"])
+        platform = fr.enrich({"priority": "Critical", "output_fields": {"k8s.ns.name": "kube-system"}}, "dev1")
+        self.assertIn("not an OpenChoreo app namespace", platform["skipped"])
+
+
+EVENT = {"uuid": "4e1a2b3c-0000-4000-8000-000000000001", "priority": "Critical",
+         "rule": "Platform crypto miner indicators", "output": "Crypto miner indicator",
+         "output_fields": {"k8s.ns.name": "dp-default-demo-production-1", "k8s.pod.name": "hello-world-6c9d8-abcde",
+                           "cluster": "prod1"}}
+
+
+class ClusterIdentity(unittest.TestCase):
+    """The cluster comes from the authenticated per-cluster endpoint (Workflow parameter), not from the payload."""
+
+    def setUp(self):
+        os.environ["MINIMUM_PRIORITY"] = "critical"
+        os.environ["ORG_NAMESPACE"] = "default"
+        self.posted = []
+        self.kube = fr.kube
+
+        def fake_kube(method, path, body=None):
+            if method == "POST":
+                self.posted.append(body)
+                return {}
+            if path.endswith("/renderedreleases"):
+                return {"items": RRS}
+            if path.endswith("/environments/production"):
+                return {"spec": {"dataPlaneRef": {"kind": "ClusterDataPlane", "name": "prod1"}}}
+            raise AssertionError(path)
+        fr.kube = fake_kube
+
+    def tearDown(self):
+        fr.kube = self.kube
+
+    def test_no_authenticated_cluster_is_skipped(self):
+        self.assertIn("no authenticated cluster", fr.enrich(EVENT, "")["skipped"])
+
+    def test_payload_naming_another_cluster_is_skipped(self):
+        ctx = fr.enrich(EVENT, "dev1")
+        self.assertIn("names cluster prod1 but arrived on the endpoint of cluster dev1", ctx["skipped"])
+
+    def test_namespace_of_another_clusters_data_plane_is_skipped(self):
+        event = dict(EVENT, output_fields={k: v for k, v in EVENT["output_fields"].items() if k != "cluster"})
+        ctx = fr.enrich(event, "dev1")
+        self.assertIn("runs on data plane prod1, but the event came from cluster dev1", ctx["skipped"])
+
+    def test_own_workload_resolves_and_the_event_names_the_cluster(self):
+        ctx = fr.enrich(EVENT, "prod1")
+        self.assertNotIn("skipped", ctx)
+        self.assertEqual((ctx["cluster"], ctx["component"], ctx["dataPlane"]), ("prod1", "hello-world", "prod1"))
+        fr.record(ctx)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn("cluster=prod1 ", self.posted[0]["note"])
 
 
 if __name__ == "__main__":

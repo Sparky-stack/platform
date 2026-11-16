@@ -1,6 +1,8 @@
 {{- /*
 EventBus + EventSource `platform` (Falco escalation webhook, OpenChoreo ReleaseBinding events) + their plumbing:
-bearer-token Secret from the store, Service exposure through the control-plane Gateway, read-only RBAC on bindings.
+per-cluster bearer tokens derived from the store, Service exposure through the control-plane Gateway, read-only RBAC on
+bindings. Falco: one endpoint per cluster (POST /falco/<cluster>, event falco-<cluster>), each accepting only that
+cluster's token, so the endpoint an event arrives on authenticates the cluster it names (docs/observability.md).
 */ -}}
 {{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
 {{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
@@ -56,19 +58,22 @@ spec:
       resources: {{- toYaml .Values.podResources | nindent 8 }}
       securityContext: {{- toYaml $sc | nindent 8 }}
   {{- if .Values.falco.enabled }}
+  {{- $clusters := include "ae.falcoClusters" . | fromJsonArray }}
   service:
     ports:
       - name: falco
         port: {{ .Values.falco.port }}
         targetPort: {{ .Values.falco.port }}
   webhook:
-    falco:
-      port: {{ .Values.falco.port | quote }}
-      endpoint: {{ .Values.falco.endpoint }}
+    {{- range $c := $clusters }}
+    {{ printf "falco-%s" $c }}:
+      port: {{ $.Values.falco.port | quote }}
+      endpoint: {{ printf "%s/%s" $.Values.falco.endpoint $c }}
       method: POST
       authSecret:                       # requests without "Authorization: Bearer <token>" are rejected (401)
         name: falco-webhook
-        key: token
+        key: {{ $c | quote }}
+    {{- end }}
   {{- end }}
 {{- if .Values.promotionGate.enabled }}
 ---
@@ -136,6 +141,12 @@ spec:
     name: {{ .Values.falco.tokenSecret.store }}
   target:
     name: falco-webhook
+    template:
+      engineVersion: v2
+      data:   # gitleaks:allow: ESO template; one derived token per cluster, the store's token is never written here
+        {{- range $c := include "ae.falcoClusters" . | fromJsonArray }}
+        {{ $c | quote }}: {{ include "ae.falcoToken" $c | quote }}
+        {{- end }}
   data:
     - secretKey: token
       remoteRef: { key: {{ .Values.falco.tokenSecret.key }}, property: {{ .Values.falco.tokenSecret.property }} }
@@ -154,8 +165,10 @@ spec:
     - {{ printf "%s.%s" .Values.falco.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
   rules:
     - matches:
-        - path: { type: Exact, value: {{ .Values.falco.endpoint }} }
+        {{- range $c := include "ae.falcoClusters" . | fromJsonArray }}
+        - path: { type: Exact, value: {{ printf "%s/%s" $.Values.falco.endpoint $c }} }
           method: POST
+        {{- end }}
       backendRefs:
         - name: platform-eventsource-svc   # Service the controller creates for EventSource `platform`
           port: {{ .Values.falco.port }}
