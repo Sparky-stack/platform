@@ -45,6 +45,10 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
 
+On a PersistentVolumeClaim, annotation `platform.koorikla.io/delete-protection: enabled` means a ValidatingAdmissionPolicy
+of the owning addon denies its deletion; every PVC that Argo CD runs as a hook must carry it (with `hook-failed` as its
+only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements).
+
 ## Names
 | Thing | Name |
 |---|---|
