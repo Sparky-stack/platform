@@ -73,6 +73,11 @@ tasks:
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} status'
 
+  demo:check:
+    desc: "Read-only pre-flight of every demo step (docs/demo.md) on the live local stack: PASS/FAIL/PENDING table"
+    cmds:
+      - '"{{.BASH}}" hack/demo-check.sh'
+
   ui:
     desc: Port-forward the Argo CD UI to http://localhost:8081 and open it (NO_BROWSER=1 to skip)
     interactive: true
