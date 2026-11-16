@@ -40,6 +40,8 @@ openchoreo-data-plane:
       enabled: false        # HTTPS needs a real wildcard cert for the gateway host; v1 serves HTTP only
 
   clusterAgent:
+    image:   # fully qualified (chart default) and pinned by multi-arch index digest (docs/conventions.md invariant 9)
+      tag: v1.3.3@sha256:de4907fcf4ffa6822dcbcaff876b02861bae0804c3aa86db6df64f918ef8451c   # index: amd64, arm64
     serverUrl: wss://cluster-gateway.openchoreo.localhost:8443/ws
     planeID: default        # overridden per cluster by the addon ApplicationSet (see header)
     resources:              # platform: upstream requests 50m/128Mi; one websocket + applies from the control plane

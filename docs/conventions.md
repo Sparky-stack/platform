@@ -24,7 +24,9 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
 7. Enable/disable files by extension (`*.yaml` ⇄ `*.yaml.disabled`), not by commenting blocks.
 8. Everything after `task up` is GitOps. `bootstrap/` is the only imperative code; it installs exactly: k3d mgmt,
    the seed secrets (local backend only), Argo CD (same chart + values as GitOps), and the root Application.
-9. Images fully qualified; versions pinned (charts in `Chart.yaml`, images via chart values). Renovate updates them.
+9. Images fully qualified and pinned by multi-arch index digest (`<host>/<path>:<tag>@sha256:…`); versions pinned
+   (charts in `Chart.yaml`, images via chart values). Renovate updates them. Contract: `hack/tests/test_image_pins.sh`
+   ([build-plane.md](build-plane.md#images-and-architectures)).
 
 ## Labels and annotations
 On the CAPI `Cluster` and the Argo CD cluster secret:

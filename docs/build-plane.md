@@ -256,6 +256,18 @@ drops the exception and the audit fails again; the list goes away with Harbor 2.
 Everything else added here (BuildKit, toolbox, Argo Workflows, cluster-agent, toolchains, Python, PostgreSQL) is
 multi-arch and pinned by digest.
 
+Digest pinning (every addon, not only the build plane): each image an addon renders is
+`<registry host>/<path>:<tag>@sha256:<multi-arch index digest>`, set in the addon's `values.yaml` (`tag: <v>@sha256:…`,
+or the chart's own `digest` / `sha` field where `tag@digest` would break a label or a semver parse). The same holds for
+the CAPD node image (`addons/clusterclasses` `docker.kindImage`) and the k3d mgmt node (`bootstrap/k3d-mgmt.yaml`).
+`hack/tests/test_image_pins.sh` renders every installation with opt-in addons (`hack/image-audit.sh --list --rendered
+--opt-in`) and fails on any image without a registry host or digest, and on a tag@digest leaking into a label. Its
+`PIN_EXCEPTIONS` (exact image, commented, failing once unused) holds what a chart cannot render: the falcosidekick
+`helm test` pod and falco-talon 0.5.0. Resolve a digest with `crane digest <image>:<tag>` (the index digest of a
+multi-arch image); a chart bump updates tag and digest together. Images created at runtime from upstream manifests
+(k3s system images, CAPI provider controllers, k3d helpers, the CAPD load balancer, the kgateway envoy proxy) are
+audited for architectures by `task images:audit` but not digest-pinned here.
+
 ## Secrets (ClusterSecretStore `platform`)
 
 | Key | Properties | Used by |

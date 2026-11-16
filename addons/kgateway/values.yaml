@@ -12,6 +12,10 @@ kgateway-crds: {}
 
 kgateway:
   controller:
+    # Controller image pinned by multi-arch index digest (docs/conventions.md invariant 9). Only the controller: the
+    # global image.tag also names the envoy-wrapper proxy image the controller deploys at runtime (another digest).
+    image:
+      tag: v2.3.1@sha256:fe72209a3dfa735d1155cc8b7ba4605d0600a0b32ec515816052c678f2d5afbf   # index: amd64, arm64
     resources:              # chart sets none; modest requests for a laptop, no CPU limit
       requests: { cpu: 50m, memory: 128Mi }
       limits: { memory: 512Mi }
