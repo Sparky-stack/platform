@@ -1,0 +1,27 @@
+{{- /*
+GitHub App credentials for the Backstage scaffolder (golden-path templates, docs/project-templates.md): the platform
+write App (docs/forking.md credentials (c)) from ClusterSecretStore `platform`, key `platform-github-app`. Consumed as
+env GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY by the subchart's integrations.github[].apps config (values in the doc;
+templates/validate.yaml keeps both sides in step). Only while scaffolder.githubApp.enabled.
+*/ -}}
+{{- with .Values.scaffolder.githubApp }}{{ if .enabled }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .secretName }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # before the Backstage Deployment that reads it
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ required "scaffolder.githubApp.store" .store }}
+  target:
+    name: {{ .secretName }}
+  data:
+    - secretKey: app-id
+      remoteRef: { key: {{ .remoteKey }}, property: githubAppID }
+    - secretKey: private-key
+      remoteRef: { key: {{ .remoteKey }}, property: githubAppPrivateKey }
+{{- end }}{{ end }}
