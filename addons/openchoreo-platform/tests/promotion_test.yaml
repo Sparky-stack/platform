@@ -13,8 +13,35 @@ tests:
       - equal:
           path: spec.roleMappings[0].conditions
           value:
-            - actions: [releasebinding:create, releasebinding:update, releasebinding:delete]
+            - actions:
+                - releasebinding:create
+                - releasebinding:update
+                - releasebinding:delete
+                - projectreleasebinding:create
+                - projectreleasebinding:update
+                - projectreleasebinding:delete
+                - resourcereleasebinding:create
+                - resourcereleasebinding:update
+                - resourcereleasebinding:delete
               expression: 'resource.environment in ["default/production"]'
+
+  - it: release-binding writer role covers component, project and resource release bindings
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-release-binding-writer }
+    asserts:
+      - isKind: { of: ClusterAuthzRole }
+      - equal:
+          path: spec.actions
+          value:
+            - releasebinding:create
+            - releasebinding:update
+            - releasebinding:delete
+            - projectreleasebinding:create
+            - projectreleasebinding:update
+            - projectreleasebinding:delete
+            - resourcereleasebinding:create
+            - resourcereleasebinding:update
+            - resourcereleasebinding:delete
 
   - it: follows the org namespace and the gated environments
     template: templates/promotion-authz.yaml
@@ -45,6 +72,8 @@ tests:
     documentSelector: { path: metadata.name, value: promotion-gate }
     asserts:
       - notContains: { path: spec.actions, content: releasebinding:update }
+      - notContains: { path: spec.actions, content: projectreleasebinding:update }
+      - notContains: { path: spec.actions, content: projectreleasebinding:delete }
       - contains: { path: spec.actions, content: alerts:view }
 
   - it: promotion-gate is a generic ClusterWorkflow running in the enforced workflow namespace

@@ -27,7 +27,8 @@ Argo CD. Nothing runs `kubectl` against a cluster. App repo layout and the basic
 - **Promotion UIs**: console "Promote" button, `occ component deploy <c> --to <env>`, openchoreo-api `PUT
   /api/v1/namespaces/{ns}/releasebindings/{name}`, MCP tools `create_release_binding` / `update_release_binding`.
   For a git-owned binding all of them are either denied (below) or reverted by Argo CD's self-heal.
-- **Authorization conditions** (CEL over `resource.environment`, etc.) on `releasebinding:create|update|delete`.
+- **Authorization conditions** (CEL over `resource.environment`, etc.) on `releasebinding:create|update|delete`,
+  `projectreleasebinding:create|update|delete` and `resourcereleasebinding:create|update|delete`.
   An explicit `deny` binding wins over an `allow` for the same entitlement value.
 - **Generic Workflows**: `ClusterWorkflow` + `WorkflowRun`, not tied to a component. They render into the workflow
   plane as Argo Workflows and appear in the console, `occ` and MCP like build runs.
@@ -57,7 +58,10 @@ Application excludes that file.
 ### 2. Git is the only path to gated bindings (native)
 
 - **OpenChoreo ABAC** (`promotion.restrictedGroups`, default `developers`): a `deny` ClusterAuthzRoleBinding with the
-  condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`.
+  condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`,
+  `projectreleasebinding:create|update|delete` and `resourcereleasebinding:create|update|delete` (deleting or editing
+  the project's production `ProjectReleaseBinding` would deprovision or re-bind the project namespace on the production
+  data plane).
   - Developers keep full control of development and staging through the console, `occ` and MCP.
   - Production is rejected with a clear authz error, also for AI agents using MCP.
   - `component:delete` is denied too, for every gated app's Component: `charts/tenant` renders an `AuthzRoleBinding`
