@@ -151,7 +151,7 @@ spec:
       securityContext: {{- toYaml $sc | nindent 8 }}
   dependencies:
     - name: rollout
-      eventSourceName: platform
+      eventSourceName: releasebindings
       eventName: releasebinding-rollout
       filters:
         data:
