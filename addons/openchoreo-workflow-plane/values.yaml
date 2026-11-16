@@ -61,8 +61,9 @@ runNetworkPolicy:
     ports: [80, 443]              # 80: Debian/Alpine package mirrors in Dockerfile RUN steps
     exceptCIDRs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
   # Extra egress for platform-authored workflows (promotion-gate, addon openchoreo-platform) whose pods carry podLabels:
-  # the OpenChoreo API and Thunder (api./thunder.<host>, rewritten by coredns-local to the control-plane Gateway) and the
-  # observer (observer.<host>:<openchoreo.observability.httpPort>, the observability Gateway). Builds never get it.
+  # the OpenChoreo API and Thunder (api./thunder.<host>, rewritten by coredns-local to the control-plane Gateway), the
+  # observer (observer.<host>:<openchoreo.observability.httpPort>, the observability Gateway), and the observability
+  # Prometheus (in-cluster Service :9091 -> pod :9090, for the promotion gate's 5xx query). Builds never get it.
   platformWorkflows:
     enabled: true
     podLabels: { platform.koorikla.io/egress: openchoreo }   # == openchoreo-platform promotionGate.podLabels
@@ -70,9 +71,12 @@ runNetworkPolicy:
       namespace: openchoreo-control-plane
       podLabels: { gateway.networking.k8s.io/gateway-name: gateway-default }
       port: 8080
-    observability:                # Gateway gateway-default of addon openchoreo-observability-plane (port: httpPort)
+    observability:                # Gateway gateway-default (port: httpPort) + Prometheus in openchoreo-observability-plane
       namespace: openchoreo-observability-plane
       podLabels: { gateway.networking.k8s.io/gateway-name: gateway-default }
+      prometheus:
+        podLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability }
+        ports: [9090, 9091]       # Service openchoreo-observability-prometheus :9091 -> pod http-web :9090 (pre- and post-DNAT)
 
 # Token Secret <serviceAccount>.service-account-token in workflows-<org ns> (templates/run-executor-token.yaml): Argo's
 # executor reads it for runs with automountServiceAccountToken: false (all of ours). Without it run pods hang in Init.

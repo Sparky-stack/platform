@@ -183,14 +183,14 @@ tests:
     asserts:
       - lengthEqual: { path: spec.egress, count: 4 }
 
-  - it: platform workflows (label opt-in) may also reach the control-plane and observability Gateways, nothing else
+  - it: platform workflows (label opt-in) may also reach the control-plane Gateway, observability Gateway and Prometheus, nothing else
     template: templates/run-network-policy.yaml
     documentSelector: { path: metadata.name, value: platform-workflows-openchoreo }
     asserts:
       - equal: { path: spec.podSelector, value: { matchLabels: { platform.koorikla.io/egress: openchoreo } } }
       - equal: { path: spec.policyTypes, value: [Egress] }
       - notExists: { path: spec.ingress }
-      - lengthEqual: { path: spec.egress, count: 2 }
+      - lengthEqual: { path: spec.egress, count: 3 }
       - equal:
           path: spec.egress[0]
           value:
@@ -201,6 +201,11 @@ tests:
           value:
             to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: openchoreo-observability-plane } }, podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: gateway-default } } }]
             ports: [{ protocol: TCP, port: 11080 }]
+      - equal:
+          path: spec.egress[2]
+          value:
+            to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: openchoreo-observability-plane } }, podSelector: { matchLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability } } }]
+            ports: [{ protocol: TCP, port: 9090 }, { protocol: TCP, port: 9091 }]
 
   - it: no observer egress without the observability plane; the port follows openchoreo.observability.httpPort
     template: templates/run-network-policy.yaml
