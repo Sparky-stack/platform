@@ -4,10 +4,16 @@ Declarative mesh PKI configuration. OpenBao has no CRDs and its self-initialisat
 hook after every sync and every reconcile.schedule as a CronJob (new members, removed members, drift). Chosen over
 OpenTofu/Terraform (state backend + an admin credential on mgmt) and over the young OpenBao config operators (no
 release, no stable CRDs for PKI + JWT auth yet): ~150 lines of POSIX sh with the bao CLI from the OpenBao image itself.
-Identity: ServiceAccount openbao-mesh-config, projected token (audience reconcile.audience, 10 minutes) exchanged for
-a 15-minute OpenBao token with policy platform-mesh-config (created by self-initialisation; it covers only pki-mesh-*,
-auth/mesh-*, the mesh-* policies and the mesh-ca-read role - and cannot rewrite its own policy or role). No root token.
-The pod has no Kubernetes API access (automountServiceAccountToken: false); its inputs are the mesh-clients Secret.
+Identities (projected tokens, audience reconcile.audience, 10 minutes, exchanged for 15-minute OpenBao tokens; all
+policies are static, written once by OpenBao's self-initialisation - the reconcile authors no ACL policy). No root token.
+  Job (PostSync)  ServiceAccount reconcile.bootstrapServiceAccount: logs in twice. Role platform-mesh-bootstrap creates
+                  missing group CAs (internal keys; signing the intermediate is CA-equivalent, so this identity never
+                  runs on a schedule), then role platform-mesh-config enrols the members.
+  CronJob         ServiceAccount reconcile.serviceAccount: role platform-mesh-config only (jwt mounts mesh-*, PKI roles
+                  with pinned flags, identity entities mesh-*). It cannot generate, import, export or sign with a CA key
+                  and cannot write a policy (negative tests: hack/tests/openbao_integration.sh).
+Both are CA-administration identities nonetheless: protect namespace openbao (who may create pods there may use them).
+The pods have no Kubernetes API access (automountServiceAccountToken: false); their inputs are the mesh-clients Secret.
 */ -}}
 {{- $r := .Values.reconcile }}
 {{- if $r.enabled }}
@@ -21,7 +27,6 @@ The pod has no Kubernetes API access (automountServiceAccountToken: false); its 
   (dict "name" "INPUT_DIR" "value" "/inputs")
   (dict "name" "TOKEN_FILE" "value" "/var/run/secrets/openbao/token")
   (dict "name" "LOGIN_ROLE" "value" $r.loginRole)
-  (dict "name" "LOCAL_AUDIENCE" "value" $r.audience)
   (dict "name" "MESH_GROUPS" "value" (join " " $groups))
   (dict "name" "INSTALLATION" "value" .Values.installation.name)
   (dict "name" "TRUST_DOMAIN" "value" $p.trustDomain)
@@ -36,14 +41,26 @@ The pod has no Kubernetes API access (automountServiceAccountToken: false); its 
   (dict "name" "MEMBER_SA" "value" $m.serviceAccount)
   (dict "name" "MEMBER_AUDIENCE" "value" $m.audience)
   (dict "name" "MEMBER_ROLE" "value" $m.role)
+  (dict "name" "MEMBER_POLICY" "value" $m.policy)
   (dict "name" "MEMBER_TOKEN_TTL" "value" $m.tokenTTL)
-  (dict "name" "CA_READER_SA" "value" .Values.caPublic.pkiReader)
-  (dict "name" "CA_READER_NS" "value" .Release.Namespace)
 }}
+{{- $jobEnv := concat $env (list
+  (dict "name" "BOOTSTRAP_LOGIN_ROLE" "value" $r.bootstrapLoginRole)
+  (dict "name" "FAIL_ON_NO_MEMBER" "value" "false")) }}
+{{- $cronEnv := append $env (dict "name" "FAIL_ON_NO_MEMBER" "value" "true") }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $r.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $r.bootstrapServiceAccount }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
@@ -59,7 +76,7 @@ metadata:
 data:
   mesh-reconcile.sh: |
     {{- .Files.Get "files/mesh-reconcile.sh" | nindent 4 }}
-{{- $ctx := dict "r" $r "env" $env "img" .Values.openbao.server.image "meshClients" .Values.meshClients.secretName "tlsSecret" .Values.tls.secretName }}
+{{- $ctx := dict "r" $r "img" .Values.openbao.server.image "meshClients" .Values.meshClients.secretName "tlsSecret" .Values.tls.secretName }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -78,9 +95,9 @@ spec:
     metadata:
       labels: { app.kubernetes.io/name: mesh-reconcile }
       annotations:
-        checksum/config: {{ printf "%s%s" (.Files.Get "files/mesh-reconcile.sh") (toJson $env) | sha256sum | trunc 16 }}
+        checksum/config: {{ printf "%s%s" (.Files.Get "files/mesh-reconcile.sh") (toJson $jobEnv) | sha256sum | trunc 16 }}
     spec:
-      {{- include "openbao-addon.reconcilePod" $ctx | nindent 6 }}
+      {{- include "openbao-addon.reconcilePod" (merge (dict "env" $jobEnv "sa" $r.bootstrapServiceAccount) $ctx) | nindent 6 }}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -103,5 +120,5 @@ spec:
         metadata:
           labels: { app.kubernetes.io/name: mesh-reconcile }
         spec:
-          {{- include "openbao-addon.reconcilePod" $ctx | nindent 10 }}
+          {{- include "openbao-addon.reconcilePod" (merge (dict "env" $cronEnv "sa" $r.serviceAccount) $ctx) | nindent 10 }}
 {{- end }}

@@ -12,7 +12,8 @@
 #   templates/mesh-clients.yaml ExternalSecret mesh-clients: every mesh member's public auth inputs (API server URL +
 #                               cluster CA certificate), collected from the fleet Secrets charts/cluster renders
 #   templates/reconcile.yaml    Job (Argo PostSync) + CronJob `mesh-reconcile`: files/mesh-reconcile.sh applies the
-#                               mesh PKI (mounts, roles, policies, per-member JWT auth) with a scoped, short-lived token
+#                               mesh PKI (group CAs: Job only; per member PKI role, identity entity, JWT auth) with
+#                               scoped, short-lived tokens. It writes no ACL policy (all static, self-initialisation).
 #   templates/mesh-admission.yaml  ValidatingAdmissionPolicies for the remote-secret reader certs (charts/cluster
 #                               <name>-client-ca issuers over the CAPI k3s client CAs)
 #
@@ -52,7 +53,7 @@ tls:
 #   ca.crt               OpenBao's CA (members verify the OpenBao listener with it: Vault issuer caBundleSecretRef)
 #   mesh-root-<g>.pem    each mesh group's root CA certificate (members pin it as istio-csr rootCAFile)
 # filled by ESO from the CA Secret (SecretStore openbao-ca-source, GET of openbao-ca only) and from OpenBao itself
-# (SecretStore openbao-pki-public: Kubernetes auth role mesh-ca-read, policy = read pki-mesh-<g>-root/cert/ca only).
+# (SecretStore openbao-pki-public: Kubernetes auth role mesh-ca-read, policy = read +/cert/ca only; self-initialisation).
 caPublic:
   store: mgmt-openbao
   secretName: openbao-ca-bundle
@@ -88,13 +89,17 @@ memberAuth:
   serviceAccount: istio-system:istio-csr-openbao
   audience: vault://istio-system/openbao-mesh
   role: istio-csr
+  policy: mesh-member              # static templated policy from self-initialisation (entity metadata cluster/group)
   tokenTTL: 10m
 
 reconcile:
   enabled: true
   schedule: "*/5 * * * *"          # also an Argo PostSync hook; new members are picked up within one ESO refresh + 5m
-  serviceAccount: openbao-mesh-config   # == openbao.server.ha.raft.config role platform-mesh-config
+  # == openbao.server.ha.raft.config (self-initialisation; server_test.yaml checks the names match):
+  serviceAccount: openbao-mesh-config          # CronJob: role platform-mesh-config (members only)
   loginRole: platform-mesh-config
+  bootstrapServiceAccount: openbao-mesh-bootstrap   # PostSync Job: also role platform-mesh-bootstrap (group CAs)
+  bootstrapLoginRole: platform-mesh-bootstrap
   audience: openbao                # projected token audience == the Kubernetes auth roles' `audience`
   resources:
     requests: { cpu: 10m, memory: 32Mi }
@@ -215,8 +220,18 @@ openbao:
             }
           }
           # One-time self-initialisation (first start only; the root token is revoked afterwards and never returned).
-          # It creates exactly one identity: the mesh reconcile (ServiceAccount openbao/openbao-mesh-config, projected
-          # token with audience "openbao", 15 minutes). Everything else is applied by that reconcile from git.
+          # Every ACL policy and every mgmt identity is written HERE, once; nothing that runs later can author a policy
+          # (docs/multicluster.md "Who may do what in OpenBao"). Identities (Kubernetes auth, projected tokens with
+          # audience "openbao"; names == addon values reconcile.*, caPublic.pkiReader, contract test server_test.yaml):
+          #   platform-mesh-bootstrap  SA openbao-mesh-bootstrap (PostSync Job only): group CAs. CA-equivalent - it
+          #                            can sign an intermediate CSR with a group root - so it never runs on a schedule.
+          #   platform-mesh-config     SAs openbao-mesh-config (CronJob) + openbao-mesh-bootstrap: member enrolment
+          #                            (jwt mounts, PKI roles with pinned safety flags, identity entities). No key,
+          #                            no signing, no policy writes.
+          #   mesh-ca-read             SA eso-openbao-pki-public: the group roots' public certificates.
+          # Members get the static templated policy mesh-member: sign on pki-mesh-<group>-int/sign/<cluster>, where
+          # group/cluster are metadata of the identity entity mesh-<cluster> the reconcile binds to auth/mesh-<cluster>.
+          # Changing these policies later is an admin action (re-initialise, or a break-glass identity) by design.
           initialize "kubernetes-auth" {
             request "enable" {
               operation = "update"
@@ -234,35 +249,161 @@ openbao:
               }
             }
           }
-          initialize "mesh-config" {
-            request "policy" {
+          initialize "mesh-policies" {
+            request "member" {
+              operation = "update"
+              path      = "sys/policies/acl/mesh-member"
+              data = {
+                policy = <<EOP
+          path "pki-mesh-{{ "{{identity.entity.metadata.group}}" }}-int/sign/{{ "{{identity.entity.metadata.cluster}}" }}" { capabilities = ["create", "update"] }
+          EOP
+              }
+            }
+            request "ca-read" {
+              operation = "update"
+              path      = "sys/policies/acl/mesh-ca-read"
+              data = {
+                policy = <<EOP
+          path "+/cert/ca" { capabilities = ["read"] }
+          EOP
+              }
+            }
+            request "config" {
               operation = "update"
               path      = "sys/policies/acl/platform-mesh-config"
               data = {
                 policy = <<EOP
-          path "sys/mounts" { capabilities = ["read"] }
-          path "sys/mounts/pki-mesh-*" { capabilities = ["create", "read", "update"] }
-          path "pki-mesh-*" { capabilities = ["create", "read", "update", "list"] }
           path "sys/auth" { capabilities = ["read"] }
-          path "sys/auth/mesh-*" { capabilities = ["create", "read", "update", "delete", "sudo"] }
-          path "auth/mesh-*" { capabilities = ["create", "read", "update", "list"] }
-          path "sys/policies/acl" { capabilities = ["list"] }
-          path "sys/policies/acl/mesh-*" { capabilities = ["create", "read", "update", "delete"] }
-          path "auth/kubernetes/role/mesh-ca-read" { capabilities = ["create", "read", "update"] }
+          path "sys/auth/mesh-*" {
+            capabilities       = ["create", "read", "update", "delete", "sudo"]
+            allowed_parameters = { "*" = [], "type" = ["jwt"] }
+            denied_parameters  = { "plugin_name" = [] }
+          }
+          path "auth/mesh-*" {
+            capabilities       = ["create", "read", "update", "list"]
+            allowed_parameters = { "*" = [], "token_policies" = ["mesh-member"] }
+            denied_parameters  = { "policies" = [] }
+          }
+          path "+/roles/+" {
+            capabilities        = ["create", "read", "update"]
+            required_parameters = ["allow_any_name", "allow_ip_sans", "allow_localhost", "allow_subdomains", "allow_glob_domains", "allow_wildcard_certificates", "enforce_hostnames", "allowed_uri_sans_template", "allowed_other_sans", "code_signing_flag", "email_protection_flag", "no_store", "generate_lease", "issuer_ref"]
+            allowed_parameters  = { "*" = [], "allow_any_name" = ["false"], "allow_ip_sans" = ["false"], "allow_localhost" = ["false"], "allow_subdomains" = ["false"], "allow_glob_domains" = ["false"], "allow_wildcard_certificates" = ["false"], "enforce_hostnames" = ["true"], "allowed_uri_sans_template" = ["false"], "allowed_other_sans" = [""], "code_signing_flag" = ["false"], "email_protection_flag" = ["false"], "no_store" = ["true"], "generate_lease" = ["false"], "issuer_ref" = ["default"] }
+            denied_parameters   = { "allowed_domains_template" = [], "ext_key_usage_oids" = [], "basic_constraints_valid_for_non_ca" = [] }
+          }
+          path "identity/entity/name/mesh-*" {
+            capabilities       = ["create", "read", "update", "delete"]
+            allowed_parameters = { "metadata" = [] }
+          }
+          path "identity/entity-alias" {
+            capabilities       = ["create", "update"]
+            allowed_parameters = { "name" = [], "canonical_id" = [], "mount_accessor" = [] }
+          }
+          path "+/root/sign-intermediate" { capabilities = ["deny"] }
+          path "sys/mounts/*" { capabilities = ["deny"] }
+          path "sys/policies/*" { capabilities = ["deny"] }
+          path "sys/policy/*" { capabilities = ["deny"] }
+          path "auth/kubernetes/*" { capabilities = ["deny"] }
+          path "+/root/generate/exported" { capabilities = ["deny"] }
+          path "+/intermediate/generate/exported" { capabilities = ["deny"] }
+          path "+/issuers/generate/+/exported" { capabilities = ["deny"] }
+          path "+/keys/*" { capabilities = ["deny"] }
+          path "+/config/ca" { capabilities = ["deny"] }
+          path "+/config/keys" { capabilities = ["deny"] }
+          path "+/config/issuers" { capabilities = ["deny"] }
+          path "+/issuers/import/*" { capabilities = ["deny"] }
+          path "+/issuer/+" { capabilities = ["deny"] }
+          path "+/intermediate/cross-sign" { capabilities = ["deny"] }
+          path "+/root/rotate/*" { capabilities = ["deny"] }
+          path "+/root/replace" { capabilities = ["deny"] }
+          path "+/root/sign-self-issued" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-self-issued" { capabilities = ["deny"] }
+          path "+/sign-verbatim*" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-verbatim*" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-intermediate" { capabilities = ["deny"] }
           EOP
               }
             }
-            request "role" {
+            request "bootstrap" {
+              operation = "update"
+              path      = "sys/policies/acl/platform-mesh-bootstrap"
+              data = {
+                policy = <<EOP
+          path "sys/mounts/pki-mesh-*" {
+            capabilities       = ["create", "read", "update"]
+            allowed_parameters = { "*" = [], "type" = ["pki"] }
+            denied_parameters  = { "plugin_name" = [] }
+          }
+          path "+/root/generate/internal" { capabilities = ["create", "update"] }
+          path "+/intermediate/generate/internal" { capabilities = ["create", "update"] }
+          path "+/root/sign-intermediate" {
+            capabilities        = ["create", "update"]
+            required_parameters = ["max_path_length"]
+            allowed_parameters  = { "*" = [], "max_path_length" = ["0"] }
+          }
+          path "+/intermediate/set-signed" { capabilities = ["create", "update"] }
+          path "sys/policies/*" { capabilities = ["deny"] }
+          path "sys/policy/*" { capabilities = ["deny"] }
+          path "sys/auth/*" { capabilities = ["deny"] }
+          path "auth/kubernetes/*" { capabilities = ["deny"] }
+          path "+/root/generate/exported" { capabilities = ["deny"] }
+          path "+/intermediate/generate/exported" { capabilities = ["deny"] }
+          path "+/issuers/generate/+/exported" { capabilities = ["deny"] }
+          path "+/keys/*" { capabilities = ["deny"] }
+          path "+/config/ca" { capabilities = ["deny"] }
+          path "+/config/keys" { capabilities = ["deny"] }
+          path "+/config/issuers" { capabilities = ["deny"] }
+          path "+/issuers/import/*" { capabilities = ["deny"] }
+          path "+/issuer/+" { capabilities = ["deny"] }
+          path "+/intermediate/cross-sign" { capabilities = ["deny"] }
+          path "+/root/rotate/*" { capabilities = ["deny"] }
+          path "+/root/replace" { capabilities = ["deny"] }
+          path "+/root/sign-self-issued" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-self-issued" { capabilities = ["deny"] }
+          path "+/sign-verbatim*" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-verbatim*" { capabilities = ["deny"] }
+          path "+/issuer/+/sign-intermediate" { capabilities = ["deny"] }
+          EOP
+              }
+            }
+          }
+          initialize "mesh-roles" {
+            request "config" {
               operation = "update"
               path      = "auth/kubernetes/role/platform-mesh-config"
               data = {
-                bound_service_account_names      = ["openbao-mesh-config"]
+                bound_service_account_names      = ["openbao-mesh-config", "openbao-mesh-bootstrap"]
                 bound_service_account_namespaces = ["openbao"]
                 audience                         = "openbao"
                 token_policies                   = ["platform-mesh-config"]
                 token_no_default_policy          = true
                 token_ttl                        = "15m"
                 token_max_ttl                    = "15m"
+              }
+            }
+            request "bootstrap" {
+              operation = "update"
+              path      = "auth/kubernetes/role/platform-mesh-bootstrap"
+              data = {
+                bound_service_account_names      = ["openbao-mesh-bootstrap"]
+                bound_service_account_namespaces = ["openbao"]
+                audience                         = "openbao"
+                token_policies                   = ["platform-mesh-bootstrap"]
+                token_no_default_policy          = true
+                token_ttl                        = "15m"
+                token_max_ttl                    = "15m"
+              }
+            }
+            request "ca-read" {
+              operation = "update"
+              path      = "auth/kubernetes/role/mesh-ca-read"
+              data = {
+                bound_service_account_names      = ["eso-openbao-pki-public"]
+                bound_service_account_namespaces = ["openbao"]
+                audience                         = "openbao"
+                token_policies                   = ["mesh-ca-read"]
+                token_no_default_policy          = true
+                token_ttl                        = "10m"
+                token_max_ttl                    = "10m"
               }
             }
           }

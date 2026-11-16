@@ -26,9 +26,9 @@ app.kubernetes.io/part-of: openbao
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{- /* Pod spec of the mesh reconcile Job/CronJob (templates/reconcile.yaml); context: dict r env img meshClients tlsSecret. */ -}}
+{{- /* Pod spec of the mesh reconcile Job/CronJob (templates/reconcile.yaml); context: dict r env sa img meshClients tlsSecret. */ -}}
 {{- define "openbao-addon.reconcilePod" }}
-serviceAccountName: {{ .r.serviceAccount }}
+serviceAccountName: {{ .sa }}
 automountServiceAccountToken: false
 restartPolicy: Never
 securityContext:

@@ -83,7 +83,8 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 | Where | What | Owner |
 |---|---|---|
 | mgmt, `openbao` | OpenBao (StatefulSet, raft, TLS), Gateway + TLSRoute `openbao`, reconcile Job/CronJob `mesh-reconcile`, ExternalSecrets `openbao-unseal`, `mesh-clients`, `openbao-ca-bundle`, ClusterSecretStore `mgmt-openbao`; ValidatingAdmissionPolicies `platform-mesh-*` (reader certs) | addon `openbao` (mgmt, opt-in) |
-| mgmt, OpenBao | per group: mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`; per member: role `<name>` in its group's intermediate, policy `mesh-member-<name>`, JWT auth mount `auth/mesh-<name>` | `addons/openbao/files/mesh-reconcile.sh` |
+| mgmt, OpenBao | static (self-initialisation, once): policies `mesh-member` (templated), `mesh-ca-read`, `platform-mesh-config`, `platform-mesh-bootstrap` and their Kubernetes auth roles | `addons/openbao/values.yaml` |
+| mgmt, OpenBao | per group: mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`; per member: role `<name>` in its group's intermediate, identity entity `mesh-<name>` (metadata `cluster`, `group`), JWT auth mount `auth/mesh-<name>` | `addons/openbao/files/mesh-reconcile.sh` |
 | mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ConfigMap <name>-mesh-oidc` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label, issuer-discovery binding) | `charts/cluster` `templates/mesh-openbao.yaml`, `mesh-trust.yaml` |
 | mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/mesh-remote-secret.yaml` |
 | member, `istio-system` | istio-csr, `Issuer openbao-mesh` (cert-manager Vault issuer), ServiceAccount `istio-csr-openbao`, `Certificate istiod`; ValidatingAdmissionPolicies `platform-mesh-ca-*` | addon `istio-csr` |
@@ -103,15 +104,16 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
                                                                  | JWT login: projected token of SA istio-csr-openbao,
                                                                  |   audience vault://istio-system/openbao-mesh
                                                                  v   (TLS passthrough via kgateway, mesh.ca.host:port)
-                                                    auth/mesh-<name> --policy mesh-member-<name>-->
+                                                    auth/mesh-<name> --entity mesh-<name>, policy mesh-member-->
                                                     pki-mesh-<group>-int/sign/<name>  (intermediate key inside OpenBao)
                                                     pki-mesh-<group>-root             (root key inside OpenBao)
 ```
 
-- **One root and one intermediate per group**: installation.yaml lists the groups (`mesh.groups`). The reconcile
-  creates `pki-mesh-<group>-root` (`root/generate/internal`, EC P-384, 10y) and `pki-mesh-<group>-int`
+- **One root and one intermediate per group**: installation.yaml lists the groups (`mesh.groups`). The reconcile's
+  PostSync Job (bootstrap identity) creates `pki-mesh-<group>-root` (`root/generate/internal`, EC P-384, 10y) and `pki-mesh-<group>-int`
   (`intermediate/generate/internal`, EC P-256, signed by the root with `max_path_length=0`). `internal` means OpenBao
-  generates the key and never returns it; no policy grants `generate/exported`, key import or `sys/raw`. A fleet file's
+  generates the key and never returns it; every reconcile policy denies `generate/exported`, key import/rotation,
+  `sign-verbatim` and `sys/raw` is granted to nobody. A fleet file's
   `mesh.group` must be listed (charts/cluster fails otherwise). A group is a cryptographic boundary: a member of group A
   can only reach group A's intermediate, so it cannot obtain an identity that group B accepts. All groups still use the
   trust domain `cluster.local` (per-environment trust domains:
@@ -126,9 +128,12 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   against that member's own API server keys (`<server>/openid/v1/jwks`, TLS pinned to the member's cluster CA). Its
   only role accepts subject `system:serviceaccount:istio-system:istio-csr-openbao` and audience
   `vault://istio-system/openbao-mesh` (cert-manager requests exactly this audience for a Vault issuer's
-  `serviceAccountRef`), and issues a 10-minute batch token with one policy: `create`/`update` on
-  `pki-mesh-<group>-int/sign/<name>`. A member's token is useless at another member's mount (other keys) and its
-  policy reaches no other role, mount or path. On the member, only cert-manager's controller may mint that
+  `serviceAccountRef`), and issues a 10-minute batch token with the static policy `mesh-member`: `create`/`update` on
+  `pki-mesh-{{identity.entity.metadata.group}}-int/sign/{{identity.entity.metadata.cluster}}`. The reconcile binds the
+  mount's alias for that subject to identity entity `mesh-<name>` (metadata `cluster=<name>`, `group=<group>`) before
+  the role exists, so the template resolves to exactly `pki-mesh-<group>-int/sign/<name>`. A member's token is useless
+  at another member's mount (other keys) and its policy reaches no other role, mount or path (integration test: a role
+  of the same name in another group, or another role in its own group, answers 403). On the member, only cert-manager's controller may mint that
   ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`).
 - **Issuer discovery is public, and delivered first.** OpenBao fetches the JWKS without a credential, so every member
   binds the read-only ClusterRole `system:service-account-issuer-discovery` (GET `/.well-known/openid-configuration`
@@ -146,17 +151,22 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   <name>-mesh-openbao` in `fleet`: it reads the CAPI kubeconfig and keeps only the API server URL and the cluster CA
   certificate (both public), labelled `mesh.platform.koorikla.io/openbao-client`. Addon openbao's `ExternalSecret
   mesh-clients` collects all of them by label (store `mgmt-fleet`) into one file set; the reconcile turns each into
-  `auth/mesh-<name>` + role + policy. A new member is configured within one ESO refresh plus the 5-minute CronJob; a
-  removed member's auth mount and policy are deleted on the next run (an empty input set prunes nothing, so an ESO
+  `auth/mesh-<name>` + PKI role + entity. A new member is configured within one ESO refresh plus the 5-minute CronJob;
+  a removed member's auth mount and entity are deleted on the next run (an empty input set prunes nothing, so an ESO
   outage cannot wipe the mesh).
 - **One member cannot fail the fleet.** The reconcile configures each member on its own: a member whose API server is
   unreachable, or whose JWKS is not readable yet, is logged as `FAILED` and skipped, the others are configured, and its
   existing auth mount is kept (never pruned while it is in the inputs). Each run ends with
-  `done: configured=[...] failed=[...] invalid=[...]`. The Job/CronJob fails only for invalid global config (groups,
-  environment), when no member could be configured, or when every member input is invalid. Check:
-  `kubectl -n openbao logs job/mesh-reconcile | grep -E 'FAILED|done:'`.
+  `done: configured=[...] failed=[...] invalid=[...]`, also written as the pod's termination message. Both fail for
+  invalid groups, a failed login or group bootstrap, or when every member input is invalid. When no member could be
+  configured, the **CronJob** fails (visible: failed Jobs, `kube_job_status_failed`), while the **PostSync hook exits
+  0** with a `WARNING` line: on a cold boot members are registered before they are reachable, and the hook must not
+  leave the openbao Application `SyncFailed` for something the CronJob converges. Check:
+  `kubectl -n openbao logs -l app.kubernetes.io/name=mesh-reconcile --tail=-1 | grep -E 'FAILED|WARNING|ERROR|done:'`
+  or `kubectl -n openbao get pods -l app.kubernetes.io/name=mesh-reconcile -o
+  jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[0].state.terminated.message}{"\n"}{end}'`.
 - **Public trust delivery.** OpenBao publishes each group root (`pki-mesh-<group>-root/cert/ca`, read by ESO with
-  OpenBao role `mesh-ca-read`) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
+  OpenBao role `mesh-ca-read`, static policy: read `+/cert/ca`) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
   `mgmt-openbao` may GET only that Secret (name-scoped RBAC, namespace `fleet`). `ClusterResourceSet <name>-mesh-trust`
   delivers `istio-system/openbao-ca` (verifies OpenBao's listener) and `istio-system/mesh-root-ca` (istio-csr pins it
   as its root; cert-manager's `ca.crt` must match it) plus the namespace label `topology.istio.io/network=<name>`.
@@ -169,14 +179,33 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
 
 ### Configuration as code, no root token
 OpenBao's [self-initialisation](https://openbao.org/docs/configuration/self-init/) (`initialize` blocks in the
-server config, `addons/openbao/values.yaml`) runs once on the first start: it enables the file audit device to stdout,
-the Kubernetes auth method for mgmt ServiceAccounts, the policy `platform-mesh-config` and its role, then **revokes
-its own root token**. No root token or recovery key is ever stored. Everything after that is applied by
-`files/mesh-reconcile.sh` (Argo CD PostSync Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI), which logs in
-with a projected, audience-bound token of ServiceAccount `openbao/openbao-mesh-config` (15-minute OpenBao token, no
-Kubernetes API access). `platform-mesh-config` covers only the mesh: `pki-mesh-*` mounts, their roles and
-`root/generate/internal` / `intermediate/*`, `auth/mesh-*`, policies `mesh-*`. It cannot read or change itself,
-`platform-*` policies, `sys/raw`, seal or generate-root, and it cannot export a key.
+server config, `addons/openbao/values.yaml`) runs once on the first start: it enables the file audit device to stdout
+and the Kubernetes auth method for mgmt ServiceAccounts, writes **every ACL policy** the mesh uses and their roles,
+then **revokes its own root token**. No root token or recovery key is ever stored. After that,
+`files/mesh-reconcile.sh` (Argo CD PostSync Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI) applies the
+desired state from git. It logs in with projected, audience-bound ServiceAccount tokens (15-minute OpenBao tokens, no
+Kubernetes API access) and **authors no ACL policy**.
+
+#### Who may do what in OpenBao
+| Identity (Kubernetes auth role) | Used by | May | May not (403, `task test:openbao`) |
+|---|---|---|---|
+| `platform-mesh-bootstrap` (SA `openbao/openbao-mesh-bootstrap`) | PostSync Job only | mount `pki-mesh-*` (type `pki` only); `root/generate/internal`, `intermediate/generate/internal`, `root/sign-intermediate` with `max_path_length=0` only, `intermediate/set-signed` | write any policy or auth method, enrol members, any `exported` generation, key/issuer import, `config/ca`, `sign-verbatim`, `sign-self-issued`, `cross-sign`, root rotation, issuing or signing leaves |
+| `platform-mesh-config` (SAs `openbao-mesh-config`, `openbao-mesh-bootstrap`) | CronJob + PostSync Job | enable/configure `jwt` auth at `auth/mesh-*` (type pinned to `jwt`, roles may only carry policy `mesh-member`); write `<mount>/roles/<name>` with every widening flag pinned (`required_parameters` + `allowed_parameters`: no any-name, IP SANs, localhost, globs, wildcards, subdomains, other SANs, URI templates, code-signing/email EKUs; `no_store`, `issuer_ref=default`); write identity entities `mesh-*` (metadata only, no policies) and their aliases | everything above, plus any CA operation: no mount, no key generation, no `sign-intermediate` (not CA-equivalent) |
+| `mesh-member` (templated) | members' istio-csr (JWT, batch tokens) | `pki-mesh-<group>-int/sign/<name>` of its own entity | everything else |
+| `mesh-ca-read` (SA `eso-openbao-pki-public`) | ESO | read `+/cert/ca` (public) | everything else |
+
+Read this as: **the reconcile identities are CA administrators of the mesh, not OpenBao administrators.** The bootstrap
+identity can sign an intermediate CSR with a group root, which is CA-equivalent; that is why it exists only in the
+PostSync hook and the scheduled CronJob cannot do it. The member identity decides who is a member (which JWKS a
+`mesh-<name>` mount trusts), which is inherent to its job. Neither can write a policy, enable another auth method,
+export, import or rotate a key, or sign verbatim. Whoever can create pods (or ServiceAccount tokens) in namespace
+`openbao` can use these identities, and with the static seal also holds the unseal key: protect namespace `openbao`
+like the CA itself (Argo AppProject + RBAC; production: KMS seal, [#31](https://github.com/koorikla/platform/issues/31)).
+
+The static policies are applied only on the first start. Changing them later is a deliberate admin action (locally:
+re-initialise OpenBao, i.e. delete its PVC; production: a break-glass identity added to self-initialisation before the
+first start). `hack/tests/test_openbao_reconcile.sh` checks that the self-init roles and the addon values name the same
+ServiceAccounts, so a rename cannot lock the reconcile out.
 
 Chosen over the alternatives: a Terraform/OpenTofu provider needs state and a runner outside GitOps; the young
 OpenBao config operators (CR per mount/role/policy) are not yet widely used and would add a privileged controller
@@ -335,7 +364,7 @@ the CAPA API ELB, on Hetzner the API load balancer.
 ### Removing a member (decommissioning)
 CRS never deletes what it applied, and Istio checks no revocation, so decommissioning is explicit:
 1. Remove `mesh.group` from the fleet file (or delete the fleet file). `<name>-mesh-openbao` goes with the cluster
-   chart, and the next reconcile deletes `auth/mesh-<name>` and policy `mesh-member-<name>`: the member can no longer
+   chart, and the next reconcile deletes `auth/mesh-<name>` and entity `mesh-<name>`: the member can no longer
    get certificates. Its issued certificates expire within 24h (istiod's 48h).
 2. On every remaining member delete `istio-system/istio-remote-secret-<gone>` (CRS leaves it behind; istiod logs a
    failing remote cluster until then). Its reader cert stops authenticating within 7 days in any case.

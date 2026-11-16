@@ -6,9 +6,9 @@ mesh.platform.koorikla.io/openbao-client=true, with PUBLIC data only:
   ca               the member's cluster CA certificate (CAPI kubeconfig) -> pins that TLS connection
 addon openbao's ExternalSecret mesh-clients collects every such Secret (find by label) and its reconcile creates, for
 exactly this cluster, JWT auth at auth/mesh-<name> (this cluster's own ServiceAccount signing keys), PKI role
-pki-mesh-<group>-int/roles/<name> and policy mesh-member-<name> (sign on that role only). Removing mesh.group (or the
-fleet file) deletes this Secret, and the next reconcile removes the member's auth mount and policy: it cannot obtain
-a new certificate from then on. The kubeconfig's client credentials are read by ESO only and never templated.
+pki-mesh-<group>-int/roles/<name> and identity entity mesh-<name> (static policy mesh-member: sign on that role only).
+Removing mesh.group (or the fleet file) deletes this Secret, and the next reconcile removes the member's auth mount and
+entity: it cannot obtain a new certificate from then on. The kubeconfig's client credentials are read by ESO only and never templated.
 */ -}}
 {{- if include "mesh.group" . }}
 {{- $name := .Values.name }}

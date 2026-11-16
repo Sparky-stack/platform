@@ -15,22 +15,45 @@ tests:
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'audit "file" "stdout"' }
       - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'tls_disable' }
 
-  - it: self-initialisation creates only the scoped reconcile identity (Kubernetes auth, audience-bound, 15m)
+  - it: self-initialisation writes every policy and identity once (Kubernetes auth, audience-bound, 15m)
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'initialize "kubernetes-auth"' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-mesh-config"' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'bound_service_account_names\s+= \["openbao-mesh-config"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'initialize "mesh-policies"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'initialize "mesh-roles"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-mesh-config"\s+data = \{\s+bound_service_account_names\s+= \["openbao-mesh-config", "openbao-mesh-bootstrap"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-mesh-bootstrap"\s+data = \{\s+bound_service_account_names\s+= \["openbao-mesh-bootstrap"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/mesh-ca-read"\s+data = \{\s+bound_service_account_names\s+= \["eso-openbao-pki-public"\]' }
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'audience\s+= "openbao"' }
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'token_max_ttl\s+= "15m"' }
 
-  - it: "the reconcile policy covers only the mesh namespace and cannot rewrite itself"
+  - it: "member policy: static, templated on the identity entity (sign on its own role in its own group only)"
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/mesh-\*"' }
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/platform-' }
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/role/platform-' }
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\*"|path "sys/\*"|sys/raw|sys/seal|generate-root' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/mesh-member"\s+data = \{\s+policy = <<EOP\s+path "pki-mesh-\{\{identity\.entity\.metadata\.group\}\}-int/sign/\{\{identity\.entity\.metadata\.cluster\}\}" \{ capabilities = \["create", "update"\] \}\s+EOP' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/mesh-ca-read"\s+data = \{\s+policy = <<EOP\s+path "\+/cert/ca" \{ capabilities = \["read"\] \}\s+EOP' }
+
+  - it: "reconcile policies: no policy authoring, no key export/import, no verbatim or external CA signing, bounded parameters"
+    template: charts/openbao/templates/server-config-configmap.yaml
+    asserts:
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies?/[^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list|delete|sudo)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/[^"]*" \{\s*capabilities\s*=\s*\["(create|update)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\*"|path "sys/\*"|path "pki-mesh-\*"|path "\+/\*"|sys/raw|sys/seal|generate-root' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/auth/mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "type" = \["jwt"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "token_policies" = \["mesh-member"\] \}\s+denied_parameters\s+= \{ "policies" = \[\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "identity/entity/name/mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "metadata" = \[\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/mounts/pki-mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "type" = \["pki"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/sign-intermediate" \{\s+capabilities\s+= \["create", "update"\]\s+required_parameters = \["max_path_length"\]\s+allowed_parameters\s+= \{ "\*" = \[\], "max_path_length" = \["0"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/sign-intermediate" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: '"allow_ip_sans" = \["false"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: '"allow_any_name" = \["false"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/intermediate/generate/exported" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/generate/exported" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/issuers/import/\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/sign-verbatim\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/sign-self-issued" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/keys/\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/rotate/\*" \{ capabilities = \["deny"\] \}' }
 
   - it: pinned multi-arch image, restricted pod security, seal key and TLS mounted read-only
     template: charts/openbao/templates/server-statefulset.yaml

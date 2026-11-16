@@ -5,10 +5,15 @@
 #   - JWT login against auth/mesh-<cluster> with a token signed by that cluster's key (served as JWKS over TLS)
 #   - signs a SPIFFE workload cert and istiod's cert at its role; chain ends at the group root
 #   - negatives: wrong audience / subject / other cluster's key, foreign DNS names, other trust domain, another
-#     cluster's role, the root mount, sys/ paths
+#     cluster's role, another group's intermediate (templated policy), the root mount, sys/ paths
+#   - least privilege of the reconcile identities (platform-mesh-config, platform-mesh-bootstrap): the escalation
+#     probes of the PR #4 security review (author a policy, enable userpass under mesh-*, rewrite its own policy,
+#     exported CA keys, sign-verbatim, external intermediates, key import/rotation, widening PKI roles, entity
+#     policies) all answer 403
+#   - CronJob mode (member token only) configures members but creates no group
 #   - restart: auto-unseals with the static key; prune removes a member's auth
-# Kubernetes-only parts are faked: a dummy ServiceAccount mount for the Kubernetes auth config, and a userpass user
-# with the reconcile's policy (instead of the projected-token login) - initialised in a test-only extra stanza.
+# Kubernetes-only parts are faked: a dummy ServiceAccount mount for the Kubernetes auth config, and userpass users with
+# the reconcile policies (instead of the projected-token logins) - initialised in a test-only extra stanza.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 echo "== openbao_integration =="
@@ -35,7 +40,7 @@ openssl x509 -req -in "$W/tls.csr" -CA "$W/tls/ca.crt" -CAkey "$W/ca.key" -CAcre
 printf '%s' "$(openssl rand -hex 32)" > "$W/unseal/key"
 cp "$W/tls/ca.crt" "$W/sa/ca.crt"; printf 'dummy' > "$W/sa/token"; printf 'openbao' > "$W/sa/namespace"
 chmod -R a+rX "$W"
-helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local}' \
+helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local,prod}' \
   -s charts/openbao/templates/server-config-configmap.yaml | yq '.data["extraconfig-from-values.hcl"]' \
   | python3 -c '
 import re, sys
@@ -56,6 +61,11 @@ initialize "zz-integration-test-only" {
     operation = "update"
     path      = "auth/userpass/users/reconciler"
     data      = { password = "$IT_PW", token_policies = ["platform-mesh-config"], token_no_default_policy = true }
+  }
+  request "bootstrapper" {
+    operation = "update"
+    path      = "auth/userpass/users/bootstrapper"
+    data      = { password = "$IT_PW", token_policies = ["platform-mesh-bootstrap"], token_no_default_policy = true }
   }
 }
 EOF
@@ -125,7 +135,7 @@ assert_match "$(docker logs "$NET-bao" 2>&1 | grep -c 'revoked lease: lease_id=a
 assert_eq "$(bao_in 'bao read sys/mounts >/dev/null 2>&1 && echo open || echo denied')" denied "no token -> nothing"
 
 # --- reconcile with the Job's rendered environment (scoped login) ---------------------------------------------------
-helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local}' \
+helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local,prod}' \
   -s templates/reconcile.yaml | yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name != "BAO_ADDR" and .name != "BAO_CACERT" and .name != "INPUT_DIR") | "export " + .name + "=\"" + .value + "\""' > "$W/env.sh"
 printf '%s' "$IT_PW" > "$W/it-pw"
 for c in 1 2 3; do   # c3: JWKS answers 403 to anonymous (the live-boot failure)
@@ -133,13 +143,96 @@ for c in 1 2 3; do   # c3: JWKS answers 403 to anonymous (the live-boot failure)
 done
 chmod -R a+rX "$W"
 # shellcheck disable=SC2016  # runs inside the container
-RECONCILE='. /w/env.sh; export INPUT_DIR=/w/inputs BAO_TOKEN=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh'
+UP='bao write -field=token auth/userpass/login'
+# PostSync Job: bootstrap token (group CAs) + member token; CronJob: member token only
+RECONCILE=". /w/env.sh; export INPUT_DIR=/w/inputs BAO_BOOTSTRAP_TOKEN=\$($UP/bootstrapper password=@/w/it-pw) BAO_TOKEN=\$($UP/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh"
+CRON=". /w/env.sh; unset BOOTSTRAP_LOGIN_ROLE; export FAIL_ON_NO_MEMBER=true INPUT_DIR=/w/inputs BAO_TOKEN=\$($UP/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh"
 rc=0; out=$(bao_in "$RECONCILE" 2>&1) || rc=$?
-assert_eq "$rc" 0 "reconcile runs with the scoped policy only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
+assert_eq "$rc" 0 "reconcile runs with the scoped policies only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
 assert_match "$out" 'done: configured=\[c1 c2\] failed=\[c3\]' "c1 + c2 configured, c3 (JWKS 403) reported and skipped"
 assert_match "$out" 'member c3 \(group local\): FAILED' "real OpenBao refuses c3's config while its JWKS is forbidden"
 out=$(bao_in "$RECONCILE" 2>&1)
 assert_eq "$(printf '%s\n' "$out" | grep -c 'generate\|enable' || true)" 0 "second run is a no-op (idempotent)"
+rc=0; out=$(bao_in "$CRON" 2>&1) || rc=$?
+assert_eq "$rc" 0 "CronJob mode (member token only) reconciles the members"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
+assert_match "$out" 'done: configured=\[c1 c2\] failed=\[c3\]' "CronJob mode: same members configured"
+
+# --- least privilege: escalation probes with the reconcile identities' own tokens (PR #4 review) --------------------
+# 403 = refused by the ACL before the backend sees the request. Each must fail; any other answer is a finding.
+probe() { # probe <user> <bao args...>: prints 403, or the first error/success line
+  local u=$1; shift
+  bao_in "export BAO_TOKEN=\$($UP/$u password=@/w/it-pw); bao $* 2>&1" | grep -m1 -oE 'Code: [0-9]+|Success|Key|BEGIN' | sed 's/Code: //'
+}
+# Batched (one container, one login per user): pr <expected> <label> <user> <bao args...>; probes_run asserts them all.
+P_EXP=(); P_LABEL=(); : > "$W/probes.sh"
+pr() { P_EXP+=("$1"); P_LABEL+=("$2"); printf 'r %s %s %s\n' "${#P_EXP[@]}" "$3" "${*:4}" >> "$W/probes.sh"; }
+probes_run() {
+  local res i got
+  chmod a+r "$W/probes.sh"
+  # shellcheck disable=SC2016  # runs inside the container
+  res=$(bao_in 'T_reconciler=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw)
+    T_bootstrapper=$(bao write -field=token auth/userpass/login/bootstrapper password=@/w/it-pw)
+    r() { id=$1; eval "t=\$T_$2"; shift 2; c=$(BAO_TOKEN=$t bao "$@" 2>&1 | grep -m1 -oE "Code: [0-9]+|Success|Key|BEGIN" | sed "s/Code: //"); echo "$id ${c:-none}"; }
+    . /w/probes.sh')
+  for i in "${!P_EXP[@]}"; do
+    got=$(printf '%s\n' "$res" | awk -v id=$((i + 1)) '$1 == id {print $2}')
+    assert_eq "$got" "${P_EXP[$i]}" "${P_LABEL[$i]}"
+  done
+}
+mkcsr0() { openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout /dev/null -subj "/CN=$2" -out "$W/$1.csr" 2>/dev/null; chmod a+r "$W/$1.csr"; }
+mkcsr0 rogue "rogue intermediate"
+openssl ecparam -name prime256v1 -genkey -noout -out "$W/rogue.key" 2>/dev/null; chmod a+r "$W/rogue.key"
+PWN="path \"*\" { capabilities = [\"sudo\", \"create\", \"read\", \"update\", \"delete\", \"list\"] }"
+printf '%s\n' "$PWN" > "$W/pwn.hcl"; chmod a+r "$W/pwn.hcl"
+for u in reconciler bootstrapper; do
+  pr 403 "$u: cannot author an ACL policy" $u policy write mesh-pwn /w/pwn.hcl
+  pr 403 "$u: cannot rewrite its own policy" $u policy write platform-mesh-config /w/pwn.hcl
+  pr 403 "$u: cannot rewrite the bootstrap policy" $u policy write platform-mesh-bootstrap /w/pwn.hcl
+  pr 403 "$u: cannot enable a non-jwt auth method under mesh-*" $u auth enable -path=mesh-pwn userpass
+  pr 403 "$u: cannot rewrite its own login role" $u write auth/kubernetes/role/platform-mesh-config bound_service_account_names=x bound_service_account_namespaces=x token_policies=platform-mesh-config
+  pr 403 "$u: no intermediate with an exported key" $u write pki-mesh-local-int/intermediate/generate/exported common_name=rogue key_type=ec
+  pr 403 "$u: no root with an exported key" $u write pki-mesh-local-root/root/generate/exported common_name=rogue key_type=ec
+  pr 403 "$u: no issuer with an exported key" $u write pki-mesh-local-root/issuers/generate/root/exported common_name=rogue key_type=ec
+  pr 403 "$u: no sign-verbatim on a group root" $u write pki-mesh-local-root/sign-verbatim csr=@/w/rogue.csr
+  pr 403 "$u: no sign-verbatim on an intermediate" $u write pki-mesh-local-int/sign-verbatim/c1 csr=@/w/rogue.csr
+  pr 403 "$u: no issuer sign-verbatim" $u write pki-mesh-local-root/issuer/default/sign-verbatim csr=@/w/rogue.csr
+  pr 403 "$u: no issuer sign-intermediate" $u write pki-mesh-local-root/issuer/default/sign-intermediate csr=@/w/rogue.csr
+  pr 403 "$u: no sign-self-issued" $u write pki-mesh-local-root/root/sign-self-issued certificate=@/w/tls/ca.crt
+  pr 403 "$u: no cross-sign" $u write pki-mesh-local-int/intermediate/cross-sign common_name=rogue
+  pr 403 "$u: no issuer/key import" $u write pki-mesh-local-root/issuers/import/bundle pem_bundle=@/w/rogue.key
+  pr 403 "$u: no config/ca import" $u write pki-mesh-local-root/config/ca pem_bundle=@/w/rogue.key
+  pr 403 "$u: no key import" $u write pki-mesh-local-root/keys/import key=@/w/rogue.key
+  pr 403 "$u: no exported key generation" $u write pki-mesh-local-root/keys/generate/exported key_type=ec
+  pr 403 "$u: no root rotation (exported)" $u write pki-mesh-local-root/root/rotate/exported common_name=rogue
+  pr 403 "$u: no root rotation (internal)" $u write pki-mesh-local-root/root/rotate/internal common_name=rogue
+  pr 403 "$u: cannot repoint the default issuer" $u write pki-mesh-local-int/config/issuers default=root
+  pr 403 "$u: cannot issue a leaf itself" $u write pki-mesh-local-int/issue/c1 uri_sans=spiffe://cluster.local/ns/a/sa/b
+  pr 403 "$u: cannot sign a leaf itself" $u write pki-mesh-local-int/sign/c1 csr=@/w/rogue.csr
+  pr 403 "$u: cannot mount a non-PKI engine under pki-mesh-*" $u secrets enable -path=pki-mesh-kv kv
+  pr 403 "$u: cannot touch other auth methods" $u write sys/auth/userpass/tune default_lease_ttl=1h
+done
+pr 403 "reconciler (CronJob): cannot sign an intermediate (not CA-equivalent)" reconciler write pki-mesh-local-root/root/sign-intermediate csr=@/w/rogue.csr max_path_length=0
+pr 403 "reconciler: cannot generate a CA" reconciler write pki-mesh-local-int/intermediate/generate/internal common_name=rogue
+pr 403 "reconciler: cannot mount a PKI engine" reconciler secrets enable -path=pki-mesh-rogue pki
+pr 403 "bootstrapper: sign-intermediate requires max_path_length" bootstrapper write pki-mesh-local-root/root/sign-intermediate csr=@/w/rogue.csr
+pr 403 "bootstrapper: no intermediate that may sign further CAs" bootstrapper write pki-mesh-local-root/root/sign-intermediate csr=@/w/rogue.csr max_path_length=1
+pr 403 "bootstrapper: cannot enrol members" bootstrapper auth enable -path=mesh-rogue jwt
+pr 403 "bootstrapper: cannot write identities" bootstrapper write identity/entity/name/mesh-rogue metadata=cluster=c1
+# member enrolment (reconciler) is bounded: the member policy is fixed, entities carry no policies, PKI roles keep the flags
+pr 403 "reconciler: a member role cannot carry another policy" reconciler write auth/mesh-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=platform-mesh-config
+pr 403 "reconciler: ... nor an extra one" reconciler write auth/mesh-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=mesh-member,platform-mesh-bootstrap
+pr 403 "reconciler: ... nor via the legacy policies field" reconciler write auth/mesh-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x policies=platform-mesh-config
+pr 403 "reconciler: an entity cannot carry policies" reconciler write identity/entity/name/mesh-c1 policies=platform-mesh-config
+pr 403 "reconciler: only mesh-* entities" reconciler write identity/entity/name/admin metadata=cluster=c1
+pr 403 "reconciler: no identity groups" reconciler write identity/group name=pwn policies=platform-mesh-config
+ROLEOK='allow_subdomains=false allow_glob_domains=false allow_wildcard_certificates=false allow_localhost=false allow_ip_sans=false allow_any_name=false enforce_hostnames=true allowed_uri_sans_template=false allowed_other_sans= code_signing_flag=false email_protection_flag=false no_store=true generate_lease=false issuer_ref=default'
+pr 403 "reconciler: no allow_any_name role" reconciler write pki-mesh-local-int/roles/pwn "${ROLEOK/allow_any_name=false/allow_any_name=true}"
+pr 403 "reconciler: no IP SAN role" reconciler write pki-mesh-local-int/roles/pwn "${ROLEOK/allow_ip_sans=false/allow_ip_sans=true}"
+pr 403 "reconciler: no other-SAN role" reconciler write pki-mesh-local-int/roles/pwn "${ROLEOK/allowed_other_sans= /allowed_other_sans=* }"
+pr 403 "reconciler: a role write must pin every flag (required_parameters)" reconciler write pki-mesh-local-int/roles/pwn "${ROLEOK/ issuer_ref=default/}"
+pr 403 "reconciler: no extra EKU OIDs" reconciler write pki-mesh-local-int/roles/pwn "$ROLEOK" ext_key_usage_oids=1.3.6.1.5.5.7.3.3
+pr Key "positive control: the same role with the pinned flags is accepted" reconciler write pki-mesh-local-int/roles/pwn "$ROLEOK"
+probes_run
 
 # --- play member c1 -----------------------------------------------------------------------------------------------------
 AUD="vault://istio-system/openbao-mesh"; SUB="system:serviceaccount:istio-system:istio-csr-openbao"
@@ -165,6 +258,12 @@ assert_eq "$(sign 'pki-mesh-local-int/sign/c1 csr=@/w/evil.csr common_name=evil.
 assert_eq "$(sign 'pki-mesh-local-int/sign/c1 csr=@/w/td.csr uri_sans=spiffe://evil.org/ns/a/sa/b')" denied "negative: other trust domain"
 assert_eq "$(sign 'pki-mesh-local-int/sign/c2 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" denied "negative: c2's role"
 assert_eq "$(sign 'pki-mesh-local-root/root/sign-intermediate csr=@/w/wl.csr')" denied "negative: the group root"
+# templated member policy: a role named c1 in group prod and a role pwn in group local exist; neither is c1's
+sign_code() { bao_in "export BAO_TOKEN=\$(bao write -field=token auth/mesh-c1/login role=istio-csr jwt=$good); bao write $1 2>&1" | grep -m1 -oE 'Code: [0-9]+|Key' | sed 's/Code: //'; }
+assert_eq "$(probe reconciler write pki-mesh-prod-int/roles/c1 "$ROLEOK" allowed_uri_sans=spiffe://cluster.local/ns/*/sa/*)" Key "setup: a role c1 in group prod"
+assert_eq "$(sign_code 'pki-mesh-prod-int/sign/c1 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" 403 "negative: another group's intermediate, even with a role of its name (entity metadata group=local)"
+assert_eq "$(sign_code 'pki-mesh-local-int/sign/pwn csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" 403 "negative: another role in its own group"
+assert_eq "$(sign_code 'pki-mesh-local-int/sign/c1 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" Key "positive control: its own role"
 assert_eq "$(sign 'sys/policies/acl/x policy=x')" denied "negative: sys/"
 chain=$(bao_in "export BAO_TOKEN=\$(bao write -field=token auth/mesh-c1/login role=istio-csr jwt=$good); bao write -format=json pki-mesh-local-int/sign/c1 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client")
 root=$(bao_in 'bao read -field=certificate pki-mesh-local-root/cert/ca')

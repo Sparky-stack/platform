@@ -100,7 +100,7 @@ tests:
     documentSelector: { path: kind, value: Job }
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: PostSync }
-      - equal: { path: spec.template.spec.serviceAccountName, value: openbao-mesh-config }
+      - equal: { path: spec.template.spec.serviceAccountName, value: openbao-mesh-bootstrap }
       - equal: { path: spec.template.spec.automountServiceAccountToken, value: false }
       - contains:
           path: spec.template.spec.volumes
@@ -109,6 +109,9 @@ tests:
           path: spec.template.spec.volumes
           content: { name: tls-ca, secret: { secretName: openbao-tls, items: [{ key: ca.crt, path: ca.crt }] } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: LOGIN_ROLE, value: platform-mesh-config } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: BOOTSTRAP_LOGIN_ROLE, value: platform-mesh-bootstrap } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_POLICY, value: mesh-member } }
+      - contains: { path: 'spec.template.spec.containers[0].env', content: { name: FAIL_ON_NO_MEMBER, value: "false" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MESH_GROUPS, value: local prod } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_SA, value: "istio-system:istio-csr-openbao" } }
       - contains: { path: 'spec.template.spec.containers[0].env', content: { name: MEMBER_AUDIENCE, value: "vault://istio-system/openbao-mesh" } }
@@ -116,13 +119,15 @@ tests:
       - notMatchRegex: { path: 'spec.template.spec.containers[0].env[*].name', pattern: '^BAO_TOKEN$' }
       - equal: { path: 'spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem', value: true }
 
-  - it: the CronJob re-applies the same pod on a schedule
+  - it: "the CronJob enrols members on a schedule: member identity only (no group bootstrap), fails visibly"
     template: templates/reconcile.yaml
     documentSelector: { path: kind, value: CronJob }
     asserts:
       - equal: { path: spec.schedule, value: "*/5 * * * *" }
       - equal: { path: spec.concurrencyPolicy, value: Forbid }
       - equal: { path: spec.jobTemplate.spec.template.spec.serviceAccountName, value: openbao-mesh-config }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: FAIL_ON_NO_MEMBER, value: "true" } }
+      - notContains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: BOOTSTRAP_LOGIN_ROLE, value: platform-mesh-bootstrap } }
 
   - it: "negative: rejects a mesh group that is not a DNS label"
     template: templates/reconcile.yaml

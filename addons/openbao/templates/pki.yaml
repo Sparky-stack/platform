@@ -6,8 +6,8 @@ TLS for OpenBao and publication of PUBLIC certificates only.
   ExternalSecret openbao-ca-bundle -> Secret openbao-ca-bundle with
     ca.crt             OpenBao's CA certificate (SecretStore openbao-ca-source: GET of Secret openbao-ca only)
     mesh-root-<g>.pem  each mesh group's root certificate, read from OpenBao (SecretStore openbao-pki-public: Kubernetes
-                       auth role mesh-ca-read, whose policy - written by the reconcile - allows read of
-                       pki-mesh-<g>-root/cert/ca and nothing else)
+                       auth role mesh-ca-read, whose static policy - written by self-initialisation - allows read of
+                       +/cert/ca (public certificates) and nothing else)
 ClusterSecretStore mgmt-openbao (templates/ca-store.yaml) may GET only openbao-ca-bundle: consumers never reach a key.
 */ -}}
 {{- $ns := .Release.Namespace }}
@@ -155,8 +155,8 @@ metadata:
     {{- include "openbao-addon.labels" . | nindent 4 }}
 automountServiceAccountToken: false
 ---
-# Logs in with a projected token of the ServiceAccount above (audience == reconcile.audience); role mesh-ca-read is
-# written by the reconcile (files/mesh-reconcile.sh) with a policy that reads the group roots' cert/ca only.
+# Logs in with a projected token of the ServiceAccount above (audience == reconcile.audience); role mesh-ca-read and
+# its policy (read +/cert/ca only) are written once by self-initialisation (values.yaml).
 apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
