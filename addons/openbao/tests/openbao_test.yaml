@@ -72,6 +72,29 @@ tests:
         documentIndex: 1
       - equal: { path: 'spec.rules[0].backendRefs[0]', value: { group: "", kind: Service, name: openbao-active, port: 8200 } }
         documentIndex: 1
+      - notExists: { path: spec.infrastructure }
+        documentIndex: 0
+
+  - it: "negative: the Gateway fails the render outside docker without source ranges"
+    template: templates/gateway.yaml
+    set:
+      cluster: { name: mgmt, provider: aws }
+    asserts:
+      - failedTemplate: { errorMessage: "openbao (mgmt, provider aws): gateway.loadBalancerSourceRanges is required outside docker - the mesh members' egress CIDRs (installations/<inst>/addons/openbao/values.yaml)" }
+
+  - it: "outside docker with source ranges: GatewayParameters restrict the proxy Service, referenced by the Gateway"
+    template: templates/gateway.yaml
+    set:
+      cluster: { name: mgmt, provider: hetzner }
+      gateway: { loadBalancerSourceRanges: [203.0.113.0/24, 198.51.100.7/32] }
+    asserts:
+      - hasDocuments: { count: 3 }
+      - isKind: { of: GatewayParameters }
+        documentIndex: 0
+      - equal: { path: spec.kube.service.loadBalancerSourceRanges, value: [203.0.113.0/24, 198.51.100.7/32] }
+        documentIndex: 0
+      - equal: { path: spec.infrastructure.parametersRef, value: { group: gateway.kgateway.dev, kind: GatewayParameters, name: openbao-gateway } }
+        documentIndex: 1
 
   - it: "negative: fails without mesh.ca (installation.yaml)"
     template: templates/pki.yaml

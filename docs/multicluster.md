@@ -424,6 +424,12 @@ that is an OpenChoreo ComponentType/trait design question, left open here.
 | AWS (CAPA + aws-ccm) | `values/provider-aws.yaml`: NLB (`aws-load-balancer-type: nlb`), internet-facing. CAPA's default node SG already admits NodePorts (30000-32767) for the NLB targets, so **no ClusterClass change**. `gateway.loadBalancerSourceRanges` (the peers' NAT gateway EIPs) is **required** outside docker: the render fails without it, so 15008/15021 are never open to 0.0.0.0/0. Also narrow CAPA's NodePort CIDRs (`AWSCluster.spec.network.nodePortIngressRuleCidrBlocks`). **VERIFY** NLB with aws-ccm and that CAPA keeps CCM-added SG rules | CAPA API ELB (`controlPlaneLoadBalancer.scheme` internet-facing by default); restrict 6443 via `controlPlaneLoadBalancer.ingressRules` to the peers' egress IPs (**VERIFY** CAPA's default ingress CIDRs) |
 | Hetzner (CAPH + hcloud-ccm) | the template adds `load-balancer.hetzner.cloud/location: <region>` (hcloud-ccm needs a location or network zone). CAPH creates no firewall, so the LB reaches the node ports; `gateway.loadBalancerSourceRanges` is required here too. **VERIFY** that hcloud-ccm honours it | CAPH API LB (public) |
 
+**OpenBao on mgmt** (addon `openbao`, Gateway `openbao-gateway`, TLS passthrough on `mesh.ca.port`): the listener
+exposes the whole OpenBao API, including the unauthenticated `sys/health`, `sys/seal-status` and the login endpoints.
+Locally k3d publishes it on 127.0.0.1 only. Outside docker `gateway.loadBalancerSourceRanges` (the members' egress
+CIDRs, `installations/<inst>/addons/openbao/values.yaml`) is **required**, the render fails without it, and kgateway
+applies it to the proxy Service through `GatewayParameters openbao-gateway`.
+
 Only 15008 (HBONE) needs to be reachable between clusters for data. 15012/15017 (istiod xDS/webhook) don't cross
 clusters in multi-primary, and API access is 6443 on the existing API load balancers. In real installations, restrict
 both to the peers' egress addresses.

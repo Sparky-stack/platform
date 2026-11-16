@@ -65,6 +65,10 @@ caPublic:
 gateway:
   name: openbao-gateway
   className: kgateway
+  # REQUIRED outside docker (render fails): the mesh members' egress CIDRs. The listener exposes the whole OpenBao API
+  # (unauthenticated sys/health, sys/seal-status, login endpoints). Applied to the proxy Service via GatewayParameters.
+  # Locally empty: k3d publishes the port on 127.0.0.1 only.
+  loadBalancerSourceRanges: []
 
 # Mesh PKI applied by files/mesh-reconcile.sh. TTLs follow the outage budget (docs/multicluster.md "When OpenBao is
 # down"): workload certificates 24h (ztunnel renews at half-life, so running pods survive >= 12h without OpenBao),
