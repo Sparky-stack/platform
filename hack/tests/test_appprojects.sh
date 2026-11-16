@@ -5,8 +5,13 @@ source "$(dirname "$0")/lib.sh"
 
 echo "== test_appprojects =="
 
+# Every example enabled (local's multicluster profile turns eastwest on; docs/dev-environment.md "Local profiles").
+ex_on=()
+for ex_dir in "$ROOT"/examples/*; do
+  [[ -f "$ex_dir/Chart.yaml" ]] && ex_on+=(--set "examples.$(basename "$ex_dir").enabled=true")
+done
 helm template platform "$ROOT/charts/platform" --namespace argocd \
-  --values "$ROOT/installations/local/installation.yaml" > "$TMP/platform.yaml"
+  --values "$ROOT/installations/local/installation.yaml" "${ex_on[@]}" > "$TMP/platform.yaml"
 
 check_fleet_allows() {
   local group="$1" kind="$2" ns="$3"
@@ -40,11 +45,10 @@ plat_crw=$(yq 'select(.kind == "AppProject" and .metadata.name == "platform") | 
 assert_eq "$plat_dest" "*" "platform AppProject allows all destination namespaces"
 assert_eq "$plat_crw" "*" "platform AppProject allows all cluster-scoped kinds"
 
-# examples AppProject admits every resource the enabled example charts render, and nothing cluster-wide but Namespace
+# examples AppProject admits every resource the example charts render, and nothing cluster-wide but Namespace
 for ex_dir in "$ROOT"/examples/*; do
   [[ -f "$ex_dir/Chart.yaml" ]] || continue
   ex=$(basename "$ex_dir")
-  [[ "$(yq ".examples[\"$ex\"].enabled // false" "$ROOT/installations/local/installation.yaml")" == "true" ]] || continue
   helm template "$ex" "$ex_dir" > "$TMP/example-$ex.yaml"
   while IFS=$'\t' read -r api kind ns; do
     [[ -n "$kind" ]] || continue
