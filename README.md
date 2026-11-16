@@ -8,13 +8,23 @@ credential, and **OpenChoreo** is the developer platform on top (projects, compo
 Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco, external-dns (Route53 / Cloudflare); telemetry to OpenChoreo's
 observability plane (Datadog-ready), with OpenChoreo's RCA and FinOps AI agents ready to switch on.
 
-<img src="docs/diagrams/overview.svg" alt="Architecture overview: repos, management cluster, workload clusters" width="100%">
+<img src="docs/diagrams/architecture.svg" alt="Architecture: git repos, mgmt cluster (Argo CD, Cluster API, ESO, cert-manager, OpenChoreo planes, Harbor, Kyverno, Falco, argo-events), workload clusters (data plane, kgateway, Istio ambient, Cilium, Kyverno, Falco, telemetry), cloud providers" width="100%">
+
+### Diagrams
+
+Animated SVGs (motion stops with the OS "reduce motion" setting). Click a view for full size; all of them, plus
+[cluster lifecycle](docs/diagrams/cluster-lifecycle.svg), are explained in [docs/diagrams/](docs/diagrams/README.md).
+
+| | |
+|---|---|
+| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: identity & trust, secrets, supply chain, admission, runtime | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: kgateway, Istio ambient, Cilium / flannel, paths to mgmt |
+| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, OpenSearch, Prometheus, observer API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, GitOps hand-off, gated promotion |
 
 | Read | For |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | design and decisions (why push GitOps, trust model, secrets, installations, tenants) |
 | [docs/conventions.md](docs/conventions.md) / [AGENTS.md](AGENTS.md) | invariants, labels, names - the contracts every change keeps |
-| [docs/diagrams/](docs/diagrams/README.md) | cluster lifecycle, trust model, delivery, runtime security |
+| [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC, cluster lifecycle |
 | [docs/providers.md](docs/providers.md), [docs/openchoreo.md](docs/openchoreo.md), [docs/networking.md](docs/networking.md), [docs/observability.md](docs/observability.md), [docs/promotion.md](docs/promotion.md), [docs/supply-chain.md](docs/supply-chain.md) | per-area details |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task) on macOS / Linux / Windows, amd64 / arm64; devcontainer |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
@@ -23,7 +33,7 @@ Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (
 
 ## Status and roadmap
 
-Solid boxes in the diagrams are built on `main`; dashed ones are planned.
+Diagram boxes: solid = built on `main`, dashed = opt-in (on `main`, off by default), dimmed with a "planned" tag = not on `main` yet.
 
 | State | What |
 |---|---|
