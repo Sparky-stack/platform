@@ -102,7 +102,10 @@ tests:
           pattern: 'target: /app/templates/create-openchoreo-clusterworkflow/template.yaml'
       - matchRegex:
           path: data["app-config.extra.yaml"]
-          pattern: '- allow:\n    - Template\n    locations:\n    - pattern: https://github.com/koorikla/platform/blob/main/templates/\*/template.yaml'
+          pattern: '- allow:\n    - Template\n    locations:\n    - exact: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml\n      type: url'
+      - notMatchRegex:
+          path: data["app-config.extra.yaml"]
+          pattern: 'template.yaml\n      type: url'   # a per-template pattern never matches the origin Backstage checks
 
   - it: the extra config is passed to Backstage
     template: charts/openchoreo-control-plane/templates/backstage/deployment.yaml

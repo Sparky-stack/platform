@@ -71,8 +71,9 @@ OpenChoreo's Backstage (addon openchoreo-control-plane) reads extra config from
 - `catalog.locations` adds the url location `https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml`
   (a `Location` listing every `template.yaml`). Backstage replaces arrays across config files, so the list repeats the
   image's own locations (org groups and the 14 OpenChoreo wizards of openchoreo-ui v1.3.3); re-check it on a chart bump.
-- `catalog.rules` allows `Template` only from `templates/*/template.yaml` of this repo, and `Resource` (the generated
-  repos' `catalog-info.yaml`).
+- `catalog.rules` allows `Template` only from this repo's `templates/catalog-info.yaml`, and `Resource` (the generated
+  repos' `catalog-info.yaml`). Backstage checks the entities a `Location` emits against that Location's origin (the
+  configured url), so the rule matches `catalog-info.yaml` exactly; a pattern on `*/template.yaml` never matches.
 
 Templates are read from `main` of the public repo; Backstage reads it anonymously until the GitHub App below is set
 (GitHub's unauthenticated rate limit applies).
