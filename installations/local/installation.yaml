@@ -3,7 +3,7 @@
 installation:
   name: local
   repoURL: https://github.com/koorikla/platform.git
-  revision: main
+  revision: agent/eastwest-live
   githubOrg: https://github.com/koorikla      # repo-creds prefix (covers app repos too)
   domain: localhost                           # base domain for platform endpoints
 
