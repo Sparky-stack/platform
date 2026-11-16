@@ -108,6 +108,11 @@ thunderid:
 
   setup:
     enabled: true
+    # platform: no helm.sh/hook-delete-policy and no ttl on the Job, so Argo CD applies its default BeforeHookCreation:
+    # each sync replaces the previous run. Upstream's hook-succeeded left a FAILED Job in place for 24h (ttl), and Argo
+    # re-applying an existing failed hook Job re-reports the failure (or hits "field is immutable" once the spec
+    # changed) instead of running setup again. The last run stays for `kubectl logs job/thunder-setup`.
+    preserveJob: true
     admin:
       passwordRef: { name: thunder-bootstrap, key: thunder-admin-password }   # platform: no lookup()-generated Secret
     secretEnv:

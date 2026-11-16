@@ -32,6 +32,12 @@ tests:
     template: charts/thunderid/templates/admin-secret.yaml
     asserts:
       - hasDocuments: { count: 0 }
+  - it: setup Job is replaced on every sync (Argo BeforeHookCreation), never left failed for a day
+    template: charts/thunderid/templates/setup-job.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["helm.sh/hook"]', value: pre-install }
+      - notExists: { path: 'metadata.annotations["helm.sh/hook-delete-policy"]' }
+      - notExists: { path: spec.ttlSecondsAfterFinished }
   - it: setup Job gets the generated values as env
     template: charts/thunderid/templates/setup-job.yaml
     asserts:
