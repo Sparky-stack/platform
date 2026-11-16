@@ -1,0 +1,10 @@
+apiVersion: v2
+name: finops-opencost
+description: OpenChoreo FinOps module (OpenCost + Cost Insights adapter) next to the observability plane on mgmt; opt-in (docs/ai-agents.md)
+type: application
+version: 0.1.0
+dependencies:
+  # Module 0.2.x = OpenChoreo v1.3.x (community-modules finops-opencost compatibility table; 0.3.x needs v1.4.0+).
+  - name: finops-opencost
+    version: 0.2.1
+    repository: oci://cr.openchoreo.dev/openchoreo/helm-charts

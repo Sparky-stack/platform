@@ -1,0 +1,23 @@
+# installation.yaml dns.provider: route53 (catalog installationValueFiles). Any infra provider: the zone lives in AWS.
+#
+# Credentials: workload identity only, no static keys (templates/validate.yaml refuses AWS key env vars and secrets).
+#   - IRSA: annotate the service account with the role (per installation, see below). On CAPA k3s clusters this needs
+#     the cluster's service-account issuer published as an IAM OIDC provider + the pod identity webhook.
+#   - EKS Pod Identity: a PodIdentityAssociation for external-dns/external-dns; no annotation needed.
+# Not the nodes' EC2 instance profile: reaching IMDS from pods needs metadata hop limit 2, which hands the node role to
+# every pod on the node.
+# IAM policy: route53:ChangeResourceRecordSets on the hosted zone ARNs of dns.domainFilters only, plus
+# route53:ListHostedZones, route53:ListResourceRecordSets, route53:ListTagsForResources on *. Per cluster, also
+# condition ChangeResourceRecordSets on route53:ChangeResourceRecordSetsNormalizedRecordNames (the cluster's own name
+# suffix) so one cluster cannot claim another's hostnames (docs/dns.md "Ownership").
+external-dns:
+  enabled: true
+  provider:
+    name: aws
+  extraArgs:
+    aws-zone-type: public     # public | private (override per installation)
+    # aws-assume-role: arn:aws:iam::111111111111:role/external-dns   # cross-account zone
+  serviceAccount:
+    annotations: {}
+    # IRSA, in installations/<inst>/addons/external-dns/values.yaml:
+    #   eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/external-dns

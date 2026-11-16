@@ -50,6 +50,7 @@ kyverno:
               - falco
               - telemetry
               - obi
+              - agentgateway-system   # not external-dns: it meets Pod Security restricted, so it gets admission + policies
     # ...and the engine skips them too (background scans, reports).
     resourceFiltersIncludeNamespaces: *platformNamespaces
 

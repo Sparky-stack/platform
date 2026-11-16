@@ -51,6 +51,7 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
     default) continue ;;       # OpenChoreo org namespace on mgmt (CRs only), deliberately in scope
     argo-events) continue ;;   # externally reachable webhook receiver: deliberately in scope (PSS, Kyverno reports)
     harbor) continue ;;        # Harbor meets PSS baseline: policed like a workload (check 9)
+    external-dns) continue ;;  # external-dns meets PSS restricted: policed like a workload (check 9b)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
@@ -137,6 +138,19 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
 done
 yq 'del(.ports[] | select(.port | test(":9443:9443$")))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noharbor.yaml"
 assert_eq "$(k3d_publishes "$TMP/k3d-noharbor.yaml" 9443)" no "contract catches a k3d config without the registry port"
+
+# 9b. external-dns is NOT a Kyverno-excluded platform namespace either: the chart defaults meet Pod Security restricted.
+for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+  assert_eq "$(grep -cE '^ *- external-dns( |$)' "$ROOT/$f" || true)" 0 "external-dns not excluded from Kyverno ($f)"
+done
+helm template external-dns "$ROOT/addons/external-dns" --namespace external-dns -f "$ROOT/addons/external-dns/values/role-workload.yaml" \
+  -f "$ROOT/addons/external-dns/values/dns-route53.yaml" --set dns.provider=route53 --set 'dns.domainFilters={a.example.com}' \
+  --set 'external-dns.domainFilters={a.example.com}' --set-string external-dns.txtOwnerId=sample > "$TMP/edns-pss.yaml"
+edns_pod='select(.kind == "Deployment") | .spec.template.spec'
+assert_eq "$(yq "$edns_pod | .securityContext.runAsNonRoot" "$TMP/edns-pss.yaml")" true "external-dns pod runAsNonRoot"
+assert_eq "$(yq "$edns_pod | .securityContext.seccompProfile.type // .containers[0].securityContext.seccompProfile.type" "$TMP/edns-pss.yaml")" RuntimeDefault "external-dns seccomp RuntimeDefault"
+assert_eq "$(yq "$edns_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/edns-pss.yaml")" false "external-dns no privilege escalation"
+assert_eq "$(yq -o=json -I=0 "$edns_pod | .containers[0].securityContext.capabilities.drop" "$TMP/edns-pss.yaml")" '["ALL"]' "external-dns drops ALL capabilities"
 
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.

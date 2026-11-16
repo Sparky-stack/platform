@@ -15,7 +15,10 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
    namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
    `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
-   No secret value is ever committed. Secret keys are flat names (table below).
+   Second exception, for a credential tenants must not reach: on workload clusters the external-dns Cloudflare token
+   comes from `ClusterSecretStore/dns` (only while `dns.provider: cloudflare`; conditions: namespace `external-dns`
+   only; its own backend location and identity that `default`, the tenants' `secretStoreRef`, cannot read).
+   No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
 7. Enable/disable files by extension (`*.yaml` ⇄ `*.yaml.disabled`), not by commenting blocks.
@@ -69,8 +72,10 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) | [observability.md](observability.md#falco-response) |
 | `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate` (Thunder client `openchoreo-promotion-gate`) | [promotion.md](promotion.md#configuration-reference) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App | [promotion.md](promotion.md#configuration-reference) |
+| `external-dns-cloudflare` | `api-token` | addon external-dns with `dns.provider: cloudflare`; on workload clusters only via store `dns`, never `default`. Route 53 has no key: IRSA / Pod Identity only | [dns.md](dns.md#credentials) |
+| `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on | [ai-agents.md](ai-agents.md) |
 
-Workload-cluster keys (store `default`): `openchoreo-observability`, `falco-webhook`, optional `datadog`, `falco-slack`.
+Workload-cluster keys (store `default`): `openchoreo-observability`, `falco-webhook`, optional `datadog`, `falco-slack`; store `dns`: `external-dns-cloudflare`.
 
 ## Layout and ownership
 ```

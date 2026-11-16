@@ -45,3 +45,20 @@ subcharts' literal hostnames/ports must match, and the plane CR's planeID must e
 {{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $obs.clusterAgent.tls.serverCAConfigMap) }}
 {{- fail "agentServerCA.configMapName must equal openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap" }}
 {{- end }}
+{{- /* AI agents (docs/ai-agents.md): a model is required, the published URL host is ours, the API URL is real. */}}
+{{- if $obs.rca.enabled }}
+{{- if not $obs.rca.llm.modelName }}
+{{- fail "openchoreo-observability-plane.rca.enabled needs rca.llm.modelName (docs/ai-agents.md)" }}
+{{- end }}
+{{- if ne (first $obs.rca.http.hostnames) (printf "rca-agent.%s" $host) }}
+{{- fail (printf "openchoreo-observability-plane.rca.http.hostnames[0] must be rca-agent.%s" $host) }}
+{{- end }}
+{{- end }}
+{{- if $obs.finOpsAgent.enabled }}
+{{- if not $obs.finOpsAgent.llmName }}
+{{- fail "openchoreo-observability-plane.finOpsAgent.enabled needs finOpsAgent.llmName (docs/ai-agents.md)" }}
+{{- end }}
+{{- if ne (first $obs.finOpsAgent.http.hostnames) (printf "finops-agent.%s" $host) }}
+{{- fail (printf "openchoreo-observability-plane.finOpsAgent.http.hostnames[0] must be finops-agent.%s" $host) }}
+{{- end }}
+{{- end }}

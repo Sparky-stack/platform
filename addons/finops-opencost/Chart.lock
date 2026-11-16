@@ -1,0 +1,6 @@
+dependencies:
+- name: finops-opencost
+  repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
+  version: 0.2.1
+digest: sha256:d0ea6179ae34a7715a2092132338e42cad53c78f1bc7c1c236ce8a358f2c8786
+generated: "2026-11-14T15:50:38.749521383+02:00"

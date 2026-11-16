@@ -1,0 +1,14 @@
+apiVersion: v2
+name: agentgateway
+description: agentgateway (LLM gateway, Gateway API) on mgmt for OpenChoreo's RCA / FinOps agents; opt-in (docs/ai-agents.md)
+type: application
+version: 0.1.0
+dependencies:
+  # v1.1.0 = the version OpenChoreo's ai-gateway-agentgateway community module installs and its traits are written for
+  # (agentgateway.dev/v1alpha1). Bump together with that module.
+  - name: agentgateway-crds
+    version: v1.1.0
+    repository: oci://cr.agentgateway.dev/charts
+  - name: agentgateway
+    version: v1.1.0
+    repository: oci://cr.agentgateway.dev/charts

@@ -1,0 +1,86 @@
+{{- /*
+Gateway agentgateway-proxy (class `agentgateway`, created by the controller). One HTTP listener for OpenAI-compatible
+LLM traffic; only routes in this namespace may attach. The controller deploys the proxy (Deployment + Service of the
+same name) from it, overlaid by the AgentgatewayParameters below (infrastructure.parametersRef). Applied after the
+agentgateway CRDs/controller sync (Argo retries until the GatewayClass exists).
+
+Exposure: the controller's proxy Service template is hard-coded `type: LoadBalancer` (k3d servicelb / a cloud LB would
+publish the provider key as an open relay), so the parameters force ClusterIP and the NetworkPolicy admits only the
+agents' namespace. Pod Security restricted: the template sets no seccompProfile; the overlay adds RuntimeDefault.
+*/ -}}
+{{- $sel := dict "gateway.networking.k8s.io/gateway-name" .Values.gateway.name }}
+{{- if not .Values.gateway.allowedNamespaces }}
+{{- fail "gateway.allowedNamespaces must list the namespaces allowed to call the LLM proxy (an empty list would leave it open)" }}
+{{- end }}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  service:
+    spec:
+      type: ClusterIP                      # in-cluster callers only (controller default: LoadBalancer)
+  deployment:
+    spec:
+      template:
+        spec:
+          securityContext:                 # merged (strategic merge patch) with the template's safe sysctl
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: agentgateway-proxy
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: {{ .Values.gateway.name }}
+  listeners:
+    - name: llm
+      protocol: HTTP
+      port: {{ .Values.gateway.port }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+# Callers: only the agents' namespace(s) (gateway.allowedNamespaces) reach the proxy, on the llm listener and the
+# metrics port (Prometheus of the observability plane). Everything else, including other mgmt namespaces and CAPD
+# workload nodes on the docker network, is dropped. Kubelet probes come from the node and are not subject to it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.gateway.name }}-callers
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+spec:
+  podSelector:
+    matchLabels: {{- toYaml $sel | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- range .Values.gateway.allowedNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.gateway.port }} }
+        - { protocol: TCP, port: 15020 }   # proxy metrics

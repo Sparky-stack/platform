@@ -1,0 +1,8 @@
+# hetzner-example: Cloudflare tuning on top of addons/external-dns/values/dns-cloudflare.yaml. Provider and zones come
+# from installation.yaml `dns:` (never restated here: templates/validate.yaml rejects a mismatch). Opt in per cluster
+# with `external-dns: "true"` in installation.yaml mgmt.addons or clusters/<name>.yaml addons. Needs key
+# `external-dns-cloudflare` (property api-token) in the store of each opted-in cluster. docs/dns.md.
+external-dns:
+  extraArgs:
+    cloudflare-record-comment: managed by external-dns (koorikla/platform hetzner-example)
+    # cloudflare-proxied: true   # orange-cloud the records (default: DNS only)

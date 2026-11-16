@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # hack/image-audit.sh helpers, offline: the deliberate multi-arch exception list (ARCH_EXCEPTIONS: prefix + expiry,
-# nothing broader) and eval_param (catalog installationParameters resolved against an installation file).
+# nothing broader) and the shared renderer's installationParameters (hack/lib/addons.sh: Helm-evaluated, no regex).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -25,12 +25,17 @@ done
 # every excepted image is documented as a deliberate exception
 assert_match "$(cat "$ROOT/docs/build-plane.md")" 'ARCH_EXCEPTIONS' "docs/build-plane.md documents the exception list"
 
-# eval_param
-INST_FILE="$TMP/inst.yaml"
-printf 'registry:\n  host: harbor.example.test:9443\nopenchoreo:\n  observability:\n    enabled: true\n' > "$INST_FILE"
-assert_eq "$(eval_param 'https://{{ .Values.registry.host }}')" "https://harbor.example.test:9443" "eval_param: embedded reference"
-assert_eq "$(eval_param '{{ .Values.openchoreo.observability.enabled }}')" "true" "eval_param: nested path"
-assert_eq "$(eval_param '{{.Values.registry.host}}/{{ .Values.registry.host }}')" "harbor.example.test:9443/harbor.example.test:9443" "eval_param: two references, no spaces"
-assert_eq "$(eval_param 'plain')" "plain" "eval_param: no reference"
+# installationParameters: one renderer (hack/lib/addons.sh), templates evaluated by Helm in the ApplicationSet.
+# shellcheck source=../lib/addons.sh
+( cd "$ROOT" && source hack/lib/addons.sh
+  printf 'registry:\n  type: harbor\n  host: harbor.example.test:9443\nopenchoreo:\n  observability:\n    enabled: true\n  workflowPlane:\n    enabled: false\n' > "$TMP/inst.yaml"
+  helm template platform charts/platform --namespace argocd --values "$TMP/inst.yaml" > "$TMP/platform.yaml"
+  addon_installation_params "$TMP/platform.yaml" harbor > "$TMP/harbor.params"
+  addon_installation_params "$TMP/platform.yaml" openchoreo-control-plane > "$TMP/ocp.params" )
+assert_eq "$(cat "$TMP/harbor.params")" $'harbor.externalURL\thttps://harbor.example.test:9443' "installationParameters: embedded reference"
+assert_match "$(cat "$TMP/ocp.params")" $'observability.enabled\ttrue' "installationParameters: nested path"
+assert_match "$(cat "$TMP/ocp.params")" $'workflows.enabled\tfalse' "installationParameters: second parameter, other value"
+assert_eq "$(grep -c . "$TMP/ocp.params")" 2 "installationParameters: one line per catalog entry"
+assert_eq "$(grep -c 'eval_param' "$ROOT/hack/image-audit.sh" || true)" 0 "image-audit has no private template resolver"
 
 finish
