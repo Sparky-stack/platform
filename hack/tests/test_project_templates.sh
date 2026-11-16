@@ -28,15 +28,6 @@ ALLOWED_ACTIONS="catalog:register fetch:template fetch:template:file publish:git
 # merge settings, secrets, environments) is repo governance: declared in installations/<inst>/repos/ and reconciled by
 # Crossplane (#100), never set imperatively at creation. No `token`: the GitHub App integration authenticates.
 PUBLISH_INPUTS="defaultBranch description gitCommitMessage protectDefaultBranch repoUrl repoVisibility"
-# Stacks whose koorikla/ci workflow is not released yet: <template>|<workflow>|<tracking issue>. Their CI caller uses
-# container.yaml (the Dockerfile build stage runs the tests) and carries `TODO(<issue>)`. Drop a line when the
-# workflow exists and the skeleton calls it by SHA; a stale line fails below.
-PENDING_CI=(
-  "python-service|python.yaml|koorikla/ci#1"
-  "node-fastify-service|node.yaml|koorikla/ci#2"
-  "rust-service|rust.yaml|koorikla/ci#3"
-  "java-quarkus-service|java.yaml|koorikla/ci#4"
-)
 PIN_RE='^([a-z0-9-]+(\.[a-z0-9-]+)+)(:[0-9]+)?/[a-z0-9._/-]+(:[A-Za-z0-9._-]{1,128})?@sha256:[0-9a-f]{64}$'
 SHA_USES_RE='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[^@]+)?@[0-9a-f]{40}$'
 BUSYBOX=docker.io/library/busybox:1.38.0-musl@sha256:80e38f9a1b39188b8bdb28879178edb322a4402b081a9aedda1924609decd6f6
@@ -122,10 +113,6 @@ for t in "${TEMPLATES[@]}"; do
 done
 
 # --- render + check every template --------------------------------------------------------------------------------
-pending_for() { local e; for e in "${PENDING_CI[@]}"; do [[ "${e%%|*}" == "$1" ]] && { echo "$e"; return 0; }; done; echo; }
-for e in "${PENDING_CI[@]}"; do
-  assert_eq "$([[ -f "templates/${e%%|*}/template.yaml" ]] && echo yes)" yes "PENDING_CI ${e%%|*} is a template"
-done
 params() {   # <newTenant>
   printf '{"name":"sample-svc","description":"Sample \\"quoted\\" service: golden path","owner":"group:default/openchoreo-users","project":"demo","newTenant":%s,"installation":"local","repoOwner":"koorikla","visibility":"public","codeowners":"@koorikla @octocat"}' "$1"
 }
@@ -184,17 +171,9 @@ for t in "${TEMPLATES[@]}"; do
   assert_eq "$bad" "" "$t: every action pinned by commit SHA"
   ci_wf=${ci_uses#koorikla/ci/.github/workflows/}; ci_wf=${ci_wf%@*}
   want_wf=$(yq -r '.metadata.annotations["platform.koorikla.io/ci-workflow"]' "templates/$t/template.yaml")
-  pend=$(pending_for "$t")
-  if [[ -n "$pend" ]]; then
-    issue=${pend##*|}; pwf=${pend#*|}; pwf=${pwf%|*}
-    assert_eq "$want_wf" "$pwf" "$t: PENDING_CI workflow == annotation ci-workflow"
-    assert_eq "$ci_wf" container.yaml "$t: interim CI = container.yaml until koorikla/ci ships $pwf ($issue)"
-    assert_eq "$(grep -c "TODO($issue)" "$wf")" 1 "$t: CI caller carries TODO($issue)"
-    echo "  WARN $t: koorikla/ci $pwf not released yet ($issue); CI uses container.yaml (tests run in the Docker build)"
-  else
-    assert_eq "$ci_wf" "$want_wf" "$t: CI calls koorikla/ci $want_wf"
-    assert_eq "$(grep -c 'TODO(koorikla/ci#' "$wf")" 0 "$t: no stale TODO(koorikla/ci#...) (drop the PENDING_CI line)"
-  fi
+  assert_eq "$ci_wf" "$want_wf" "$t: CI calls koorikla/ci $want_wf (annotation platform.koorikla.io/ci-workflow)"
+  assert_eq "$(grep -c 'TODO(koorikla/ci#' "$wf")" 0 "$t: no interim TODO(koorikla/ci#...) left in the CI caller"
+  assert_eq "$(grep -c 'actions: read' "$wf")" "$([[ "$want_wf" == container.yaml ]] && echo 0 || echo 1)" "$t: caller grants actions: read exactly when the stack workflow runs CodeQL"
   if command -v actionlint >/dev/null 2>&1; then
     if out=$(cd "$R" && actionlint -no-color .github/workflows/ci.yaml 2>&1); then ok=yes; else ok=no; echo "$out" >&2; fi
     assert_eq "$ok" yes "$t: actionlint"
