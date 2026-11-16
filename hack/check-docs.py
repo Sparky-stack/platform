@@ -7,7 +7,9 @@ the docs of the repositories they become; hack/tests/test_project_templates.sh r
   - `doc.md "Section"` cross-references (in prose or code spans) match a heading of that doc;
   - repo paths in code spans (`addons/...`, `charts/...`, `hack/...`, `docs/...`, `installations/...`,
     `bootstrap/...`, `.github/...`, `.devcontainer/...`) exist, unless they hold a placeholder (<x>, *, {a,b}, $x, ...);
-  - `task <name>` / `make <name>` in code spans and code blocks name a Taskfile task / Makefile target.
+  - `task <name>` / `make <name>` in code spans and code blocks name a Taskfile task / Makefile target;
+  - never `--context koorikla` / `use-context koorikla`; `docs/runbooks/*.md` are linked from `docs/operations.md`,
+    carry the standard headings, and pass `--context` or `--kubeconfig` on every `kubectl` block command.
 
 Usage: check-docs.py [ROOT]   (default: the repo root). Exits 1 and lists every problem.
 """
@@ -23,6 +25,9 @@ HTML_LINK = re.compile(r"<(?:img|a)\b[^>]*?\b(?:src|href)=\"([^\"]+)\"", re.I)
 SECTION_REF = re.compile(r"([A-Za-z0-9_./-]*[A-Za-z0-9_-]\.md)`?,? \"([^\"]+)\"")
 CODE_SPAN = re.compile(r"(`+)(.+?)\1")
 CMD = re.compile(r"(?:^|[\s;&|(`])(task|make) ([a-z][a-z0-9:-]*)")
+FORBIDDEN_CTX = re.compile(r"(?:--context(?:=|\s+)|use-context\s+)['\"]?koorikla\b")
+KUBECTL_CMD = re.compile(r"(?:^|[;&|(`]\s*)kubectl\s+")
+RUNBOOK_SECTIONS = ("when to use", "symptoms", "steps", "verify", "rollback", "related links")
 
 
 def md_files():
@@ -97,9 +102,18 @@ def tasks():
 
 def main():
     problems = []
+    ops_links, runbooks = set(), []
     task_names, make_targets = tasks()
     for path in md_files():
         rel = os.path.relpath(path, ROOT)
+        rel_posix = rel.replace("\\", "/")
+        is_ops = rel_posix == "docs/operations.md" or rel_posix.startswith("docs/runbooks/")
+        if rel_posix.startswith("docs/runbooks/"):
+            runbooks.append(rel_posix)
+            htexts = set(headings(path)[0])
+            for sec in RUNBOOK_SECTIONS:
+                if sec not in htexts:
+                    problems.append('%s: runbook missing section "%s"' % (rel, sec))
         base = os.path.dirname(path)
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().split("\n")
@@ -112,6 +126,8 @@ def main():
             spans = [m.group(2) for m in CODE_SPAN.finditer(line)] if not fence else [line]
             # commands
             for text in spans:
+                if FORBIDDEN_CTX.search(text):
+                    problems.append("%s: forbidden kube context `koorikla`" % where)
                 for m in CMD.finditer(text):
                     kind, name = m.groups()
                     if kind == "task" and task_names and name not in task_names and not name.startswith("-"):
@@ -119,6 +135,9 @@ def main():
                     if kind == "make" and make_targets and name not in make_targets:
                         problems.append("%s: `make %s` is not a Makefile target" % (where, name))
             if fence:
+                if is_ops and not line.lstrip().startswith("#") and KUBECTL_CMD.search(line) \
+                        and "--context" not in line and "--kubeconfig" not in line:
+                    problems.append("%s: `kubectl` in operations/runbook must pass --context or --kubeconfig" % where)
                 continue
             prose = CODE_SPAN.sub(lambda m: "`" + "x" * len(m.group(2)) + "`", line)
             # links
@@ -129,8 +148,11 @@ def main():
                 dest = path if not file_part else os.path.normpath(os.path.join(base, file_part))
                 if not os.path.exists(dest):
                     problems.append("%s: link target %s does not exist" % (where, target))
-                elif frag and dest.endswith(".md") and frag.lower() not in headings(dest)[1]:
-                    problems.append("%s: link %s: no heading #%s in %s" % (where, target, frag, os.path.relpath(dest, ROOT)))
+                else:
+                    if rel_posix == "docs/operations.md":
+                        ops_links.add(os.path.relpath(dest, ROOT).replace("\\", "/"))
+                    if frag and dest.endswith(".md") and frag.lower() not in headings(dest)[1]:
+                        problems.append("%s: link %s: no heading #%s in %s" % (where, target, frag, os.path.relpath(dest, ROOT)))
             # "doc.md "Section"" cross-references
             for m in SECTION_REF.finditer(line):
                 doc, section = m.groups()
@@ -156,6 +178,10 @@ def main():
             for m in re.finditer(r"(?<![\w/.-])(docs/[\w/-]+\.md)", bare):
                 if not os.path.exists(os.path.join(ROOT, m.group(1))):
                     problems.append("%s: %s does not exist" % (where, m.group(1)))
+    if os.path.isfile(os.path.join(ROOT, "docs", "operations.md")):
+        for rb in runbooks:
+            if rb not in ops_links:
+                problems.append("docs/operations.md: runbook %s is not linked" % rb)
     for p in problems:
         print("  FAIL " + p)
     if problems:

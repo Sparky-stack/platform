@@ -8,12 +8,13 @@ echo "== test_set_repo =="
 
 copy() {
   local dst=$1
-  mkdir -p "$dst/hack" "$dst/charts/platform" "$dst/docs/diagrams/src"
+  mkdir -p "$dst/hack" "$dst/charts/platform" "$dst/docs/runbooks" "$dst/docs/diagrams/src"
   cp -R "$ROOT/bootstrap" "$ROOT/installations" "$dst/"
   cp -R "$ROOT/hack/lib" "$ROOT/hack/set-repo.sh" "$dst/hack/"
   cp "$ROOT/charts/platform/values.yaml" "$dst/charts/platform/"
   cp "$ROOT/README.md" "$dst/"
   cp "$ROOT"/docs/*.md "$dst/docs/"
+  cp "$ROOT"/docs/runbooks/*.md "$dst/docs/runbooks/"
   cp "$ROOT/docs/diagrams/src/build.py" "$dst/docs/diagrams/src/"
 }
 
@@ -52,6 +53,7 @@ W="$TMP/docs"; copy "$W"
 DOCS=1 bash "$W/hack/set-repo.sh" https://github.com/Example/platform.git >/dev/null
 assert_eq "$(has '\[Example/hello-world\]\(https://github\.com/Example/hello-world\)' "$W/README.md")" yes "README hello-world link + text follow APPS_ORG"
 assert_eq "$(has '\[koorikla/ci\]\(https://github\.com/koorikla/ci\)' "$W/README.md")" yes "koorikla/ci links kept without CI_ORG"
+assert_eq "$(has 'https://github\.com/Example/platform/issues/' "$W/docs/runbooks/incidents.md")" yes "runbook issue links follow REPO"
 assert_eq "$(grep -c 'ghcr\.io/koorikla/' "$W/docs/openchoreo.md" || true)" "0" "GHCR refs rewritten (lowercase owner)"
 assert_eq "$(has 'ghcr\.io/example/hello-world' "$W/docs/openchoreo.md")" yes "GHCR owner lowercased"
 assert_eq "$(has 'platform\.koorikla\.io/name' "$W/docs/conventions.md")" yes "label keys kept in docs"
