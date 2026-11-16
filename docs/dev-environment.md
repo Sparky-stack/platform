@@ -205,7 +205,10 @@ still run. Two merges:
    enabled) and add two temporary overrides to `installations/local/addons/openchoreo-platform/values.yaml`:
    `deploymentPipeline: {environments: [development, staging]}` and `promotion.gitOnly.deleters` plus
    `system:serviceaccount:openchoreo-control-plane:controller-manager` (DELETE only). Wait until the production
-   ReleaseBinding is Ready on its new cluster (`kubectl -n default get releasebinding`).
+   ReleaseBinding is Ready on its new cluster (`kubectl -n default get releasebinding`). Argo CD recreates the binding
+   while the Environment is still missing, and OpenChoreo 1.3.3 does not retry an `EnvironmentNotFound` binding: if it
+   stays there after `kubectl -n default get environments` lists production again, delete the
+   `openchoreo-control-plane` controller-manager pod (its restart reconciles every binding).
 2. Remove both overrides and, for lean, rename `prod1.yaml` back to `prod1.yaml.disabled` with
    `environments: [production]`.
 
