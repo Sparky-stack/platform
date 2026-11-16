@@ -1,0 +1,13 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: dp-default-shop-production-5e6f7a8b
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/environment: production
+  - name: dp-default-shop-development-1a2b3c4d
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/environment: development
+  - name: cnpg-system
+    labels: {}
