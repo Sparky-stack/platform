@@ -4,7 +4,7 @@ templates:
 set:
   cluster.name: dev1
 tests:
-  - it: scrapes kgateway Envoy proxy pods in openchoreo-data-plane on :9091/stats/prometheus
+  - it: scrapes kgateway Envoy proxy pods in openchoreo-data-plane on :9091/metrics
     asserts:
       - isKind:
           of: PodMonitor
@@ -28,7 +28,7 @@ tests:
           value: http-monitoring
       - equal:
           path: spec.podMetricsEndpoints[0].path
-          value: /stats/prometheus
+          value: /metrics
       - equal:
           path: spec.podMetricsEndpoints[0].scheme
           value: http

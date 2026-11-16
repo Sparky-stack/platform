@@ -19,7 +19,7 @@ spec:
     - gateway.networking.k8s.io/gateway-name
   podMetricsEndpoints:
     - port: http-monitoring
-      path: /stats/prometheus
+      path: /metrics
       scheme: http
       metricRelabelings:
         - action: keep

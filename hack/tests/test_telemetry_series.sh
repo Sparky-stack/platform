@@ -98,6 +98,6 @@ for line in open(sys.argv[2]):
 PY
 )
 while read -r want got name; do
-  assert_eq "$got" "$want" "kgateway-http /stats/prometheus: $name"
+  assert_eq "$got" "$want" "kgateway-http /metrics: $name"
 done <<<"$gw_verdicts"
 finish

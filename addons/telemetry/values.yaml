@@ -333,9 +333,11 @@ observability-metrics-prometheus:
 
 # --- kgateway Envoy HTTP metrics -> remote write (promotion gate 5xx error rate; #104) ----------------------------------
 # PodMonitor `kgateway-http` (templates/gateway-podmonitor.yaml) for the data-plane kgateway Envoy proxy pods in
-# `openchoreo-data-plane` (:9091/stats/prometheus, port `http-monitoring`). Terminates north-south HTTP on every data
-# plane, independent of the CNI and of Istio ambient mTLS. Only `envoy_cluster_upstream_rq` (one series per backend x
-# response code) is kept so Envoy's thousands of internal series do not cost agent memory.
+# `openchoreo-data-plane` (port `http-monitoring` :9091, path /metrics = kgateway's `prometheus.io/*` annotations; the
+# proxy serves Envoy's used-only stats there, ~3k lines vs ~11k on /stats/prometheus). The gateway terminates
+# north-south HTTP on every data plane, independent of the CNI and of Istio ambient mTLS. Only
+# `envoy_cluster_upstream_rq` (one series per upstream cluster x response code, labels envoy_cluster_name =
+# kube_<namespace>_<service>_<port> and envoy_response_code) is kept so Envoy's other series do not cost agent memory.
 gatewayMetrics:
   enabled: true
   keep: envoy_cluster_upstream_rq
