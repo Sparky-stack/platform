@@ -30,16 +30,19 @@ chart_dirs() {
 }
 
 cmd_gitleaks() {
-  local tmp ignore rc=0
+  local tmp ignore bin rc=0
   (( $# > 0 )) || return 0
   command -v gitleaks >/dev/null 2>&1 || { echo "gitleaks not on PATH: run 'mise install'" >&2; return 1; }
+  # The real binary, resolved here in the (trusted) checkout: a mise shim run inside the temp copy below would read the
+  # staged mise.toml there, which mise refuses as an untrusted config whenever a commit touches mise.toml.
+  bin=$(mise which gitleaks 2>/dev/null) || bin=$(command -v gitleaks)
   # Scan what is about to be committed: the index copy of each file (git checkout-index), so partially staged files
   # are checked as staged, and untracked/ignored files (kubeconfigs, .env) never trip the hook. Paths stay
   # repo-relative, so .gitleaksignore fingerprints (<file>:<rule>:<line>) and `gitleaks:allow` comments apply.
   tmp=$(mktemp -d)
   printf '%s\0' "$@" | git checkout-index -z --stdin --force --prefix="$(native_path "$tmp")/"
   ignore=$(native_path "$ROOT/.gitleaksignore")
-  (cd "$tmp" && gitleaks dir . --no-banner --redact --verbose --gitleaks-ignore-path "$ignore") || rc=$?
+  (cd "$tmp" && "$bin" dir . --no-banner --redact --verbose --gitleaks-ignore-path "$ignore") || rc=$?
   rm -rf "$tmp"
   return "$rc"
 }

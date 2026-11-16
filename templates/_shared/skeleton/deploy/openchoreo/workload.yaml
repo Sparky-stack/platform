@@ -1,0 +1,26 @@
+# OpenChoreo Workload: the runtime contract (image, endpoints, config).
+# spec.container.image (<image>:<tag>@sha256:<digest>) and spec.source.commit are bumped by CI on every push to main
+# (.github/workflows/ci.yaml, job `bump`). Do not edit them by hand. Until the first CI run they name the image CI is
+# about to publish.
+apiVersion: openchoreo.dev/v1alpha1
+kind: Workload
+metadata:
+  name: ${{ values.name }}-workload
+spec:
+  owner:
+    projectName: ${{ values.project }}
+    componentName: ${{ values.name }}
+  source:
+    repository: https://github.com/${{ values.repoOwner }}/${{ values.name }}
+    branch: main            # CI adds `commit: <sha>` below with the first image bump
+  container:
+    image: ghcr.io/${{ values.imageOwner }}/${{ values.name }}:main
+    env:
+      - key: GREETING
+        value: hello
+  endpoints:
+    http:
+      type: HTTP
+      port: 8080
+      # external = routed through the environment's external gateway.
+      visibility: [external]

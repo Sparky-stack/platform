@@ -1,0 +1,27 @@
+# Backstage catalog entry for the repository (registered by the scaffolder's catalog:register step).
+#
+# Not a `Component`: OpenChoreo's catalog provider already publishes component:<org namespace>/${{ values.name }} from the
+# OpenChoreo Component (deploy/openchoreo/component.yaml); a second Component with the same ref would conflict and one
+# of them would be dropped. This Resource carries what OpenChoreo does not know (source location, GitHub slug, owner)
+# and points at that Component.
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.name }}-repo
+  title: ${{ values.name }} repository
+  description: ${{ values.description | dump }}
+  annotations:
+    github.com/project-slug: ${{ values.repoOwner }}/${{ values.name }}
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.name }}/tree/main/
+  tags:
+    - golden-path
+    - ${{ values.stack }}
+  links:
+    - url: https://github.com/${{ values.repoOwner }}/${{ values.name }}
+      title: Repository
+      icon: github
+spec:
+  type: repository
+  owner: ${{ values.owner }}
+  dependencyOf:
+    - component:default/${{ values.name }}

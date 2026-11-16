@@ -51,6 +51,7 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [AGENTS.md](AGENTS.md) | working rules for AI agents and contributors (CLAUDE.md and GEMINI.md point to it) |
 | [docs/providers.md](docs/providers.md) | Cluster API: k3s on CAPD, CAPA, CAPH; adding a cluster; control plane sizing |
 | [docs/openchoreo.md](docs/openchoreo.md) | OpenChoreo planes, plane trust, local networking, tenants, app repo contract |
+| [docs/project-templates.md](docs/project-templates.md) | golden-path project templates (Backstage scaffolder): Go, Python, Node.js, Rust, Java, Docker |
 | [docs/build-plane.md](docs/build-plane.md) | in-cluster builds (OpenChoreo workflow plane) and the Harbor registry |
 | [docs/promotion.md](docs/promotion.md) | development -> staging -> production gates |
 | [docs/supply-chain.md](docs/supply-chain.md) | signatures, attestations, admission, git and chart verification |
@@ -60,6 +61,7 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [docs/dns.md](docs/dns.md) | external-dns: DNS provider per installation, opt-in per cluster, credentials |
 | [docs/data-services.md](docs/data-services.md) | opt-in PostgreSQL as a service (Crossplane v2 XR: CloudNativePG / RDS / Cloud SQL / Azure Flexible Server), CloudNativePG (PostgreSQL + backups), Strimzi (Kafka, KRaft), KEDA; consuming them from OpenChoreo |
 | [docs/ai-agents.md](docs/ai-agents.md) | OpenChoreo RCA and FinOps agents, agentgateway, OpenCost (switched off) |
+| [docs/demo.md](docs/demo.md) | scripted full-platform demo (~30 min) and its read-only pre-flight `task demo:check` |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task), hosts, portable scripts, image architecture audit |
 | [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC, cluster lifecycle |

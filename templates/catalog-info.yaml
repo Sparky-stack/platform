@@ -1,0 +1,16 @@
+# Golden-path project templates, registered in OpenChoreo's Backstage by one catalog location
+# (addons/openchoreo-control-plane values `backstage.appConfig.catalog.locations`). Add a template = add its
+# template.yaml here; hack/tests/test_project_templates.sh fails when this list and templates/*/template.yaml differ.
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: golden-path-templates
+  description: koorikla/platform golden-path project templates (docs/project-templates.md)
+spec:
+  targets:
+    - ./docker-service/template.yaml
+    - ./go-service/template.yaml
+    - ./java-quarkus-service/template.yaml
+    - ./node-fastify-service/template.yaml
+    - ./python-service/template.yaml
+    - ./rust-service/template.yaml
