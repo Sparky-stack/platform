@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Generate docs/diagrams/*.svg. Usage: python3 docs/diagrams/src/build.py [--png DIR] [name ...]
 
-Prints layout issues found by svglib.Diagram.check() (overlaps, overflow, arrows through text).
-With --png DIR every SVG is also rendered with rsvg-convert at 1200px width for visual review.
+Prints the issues found by svglib.Diagram.check(): overlaps, text overflow, arrows through text or boxes, arrows not
+anchored on a box, missing required components, missing animation / reduced-motion rules, size over budget.
+Exits non-zero when there is any. With --png DIR every SVG is also rendered with rsvg-convert (static frame) for
+visual review.
+
+Status on every diagram must match main: built = on main and on by default (or selected by the fleet file, like
+Cilium), opt-in = on main but off by default (catalog `default: false` or a values switch), planned = not on main
+(open PR or roadmap). Source of truth: charts/platform/values.yaml `addons`, the addon values, README "Status".
 """
 from __future__ import annotations
 
@@ -23,98 +29,118 @@ VI = KINDS["data"][2]
 OR = KINDS["bus"][2]
 SL = KINDS["external"][2]
 AM = KINDS["cloud"][2]
+NOTE = "#cbd5e1"
 
 ALL_KINDS = ["gitops", "platform", "network", "security", "data", "bus", "external", "cloud"]
 
 
-# ---------------------------------------------------------------------------------------------- overview
-def overview() -> Diagram:
-    W, H = 1200, 1008
-    d = Diagram(W, H, "koorikla/platform · architecture overview",
-                "mgmt runs GitOps, cluster lifecycle, secrets/PKI and the OpenChoreo planes · "
-                "workload clusters run apps · dashed = planned")
-    R = [140, 228, 316, 404, 492, 580, 668, 756]
-    BH = 60
-    yc = lambda r: R[r] + BH / 2  # noqa: E731
+# ------------------------------------------------------------------------------------------ architecture
+def architecture() -> Diagram:
+    W, H = 1320, 990
+    d = Diagram(W, H, "koorikla/platform · architecture",
+                "mgmt runs GitOps, cluster lifecycle, secrets/PKI, policy and the OpenChoreo planes · "
+                "workload clusters run apps · every box is an addon from one catalog")
+    Y = [140 + 74 * i for i in range(8)]
+    BH = 58
+    yc = lambda r: Y[r] + BH / 2  # noqa: E731
 
     # boundaries
-    d.group(16, 104, 168, 464, "git & external", "zone")
-    d.group(240, 104, 464, 464, "mgmt cluster · k3d locally, any k8s", "zone")
-    d.group(752, 104, 432, 740, "cloud providers · CAPI infrastructure", "cloud")
-    d.group(768, 216, 392, 606, "workload clusters · dev1, prod1", "zone", stacked=1,
-            sub=["k3s via CAPI · one fleet file each", "dev1: development+staging · prod1: production"])
+    d.group(16, 104, 200, 406, "git & GitHub", "zone")
+    d.group(240, 104, 568, 478, "mgmt cluster · k3d locally, any k8s", "zone")
+    d.group(840, 104, 464, 716, "cloud providers · CAPI infrastructure", "cloud")
+    d.group(856, 140, 432, 592, "workload clusters · dev1, prod1", "zone", stacked=1,
+            sub=["k3s via Cluster API · one fleet file each", "dev1: development + staging · prod1: production"])
 
-    # left column
-    LX, LW = 24, 152
-    d.box(LX, R[0], LW, BH, "external", "koorikla/platform", ["fleet/addons/tenants"], sub_size=11)
-    d.box(LX, R[1], LW, BH, "external", "app repos", ["e.g. hello-world"])
-    d.box(LX, 308, LW, 52, "external", "GitHub Actions", ["app CI → koorikla/ci"], sub_size=11)
-    d.box(LX, 420, LW, 52, "data", "GHCR", ["ghcr.io/koorikla/*"], sub_size=11)
-    d.box(LX, R[4], LW, BH, "security", "Okta / Google", ["SSO identity"], planned=True)
+    # git & GitHub
+    LX, LW = 40, 164
+    d.box(LX, Y[0], LW, BH, "external", "koorikla/platform", ["fleet · addons ·", "tenants"])
+    d.box(LX, Y[1], LW, BH, "external", "koorikla/hello-world", ["example app repo", "deploy/openchoreo/"],
+          title_size=12)
+    d.box(LX, Y[2], LW, BH, "external", "koorikla/ci", ["reusable workflows", "+ build scripts"])
+    d.box(LX, Y[3], LW, BH, "external", "GitHub Actions", ["test · scan · build", "sign keyless"])
+    d.box(LX, Y[4], LW, BH, "data", "GHCR", ["ghcr.io/koorikla/*", "+ SBOM · SLSA"])
 
-    # mgmt
-    L, Rx, CW, WW = 256, 480, 208, 432
-    d.box(L, R[0], CW, BH, "security", "ESO · cert-manager", ["secret stores · CAs"])
-    d.box(Rx, R[0], CW, BH, "gitops", "Cluster API", ["k3s · CAPD · CAPA · CAPH"])
-    d.box(L, R[1], WW, BH, "gitops", "Argo CD + ApplicationSets",
-          ["push mode · AppSets: fleet, addon catalog, tenants"])
-    d.box(L, R[2], WW, BH, "platform", "OpenChoreo control plane",
-          ["Thunder · API · controllers · Backstage · gateway"])
-    d.box(L, R[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows · BuildKit", "koorikla/ci builds"])
-    d.box(Rx, R[3], CW, BH, "platform", "OC observability", ["logs · metrics · traces", "RCA · FinOps agents: off"])
-    d.box(L, R[4], 100, BH, "security", "Falco", ["detection"])
-    d.box(L + 108, R[4], 100, BH, "security", "Kyverno", ["admission"])
-    d.box(Rx, R[4], CW, BH, "data", "Harbor", ["apps · proxy caches", "Trivy scan on push"])
+    # mgmt: three columns; everything the workload clusters talk to sits in the right column
+    C = [256, 440, 624]
+    CW, C2 = 170, 354
+    d.box(C[0], Y[0], 538, BH, "gitops", "Argo CD + ApplicationSets",
+          ["push mode · fleet, addon catalog, tenants · the only Argo CD"], focus=True)
+    d.box(C[0], Y[1], CW, BH, "security", "ESO", ["ClusterSecretStore", "platform (scoped)"])
+    d.box(C[1], Y[1], CW, BH, "security", "cert-manager", ["agent CA per cluster", "gateway CA · keys stay"])
+    d.box(C[2], Y[1], CW, BH, "gitops", "Cluster API", ["k3s · ClusterClass", "CAPD · CAPA · CAPH"])
+    d.box(C[0], Y[2], CW, BH, "security", "Thunder", ["OIDC identity", "provider"])
+    d.box(C[1], Y[2], C2, BH, "platform", "OpenChoreo control plane",
+          ["API · controllers · cluster-gateway", "projects · components · environments"], focus=True)
+    d.box(C[0], Y[3], CW, BH, "platform", "Backstage", ["developer portal", "logs · metrics"])
+    d.box(C[1], Y[3], CW, BH, "platform", "OC workflow plane", ["Argo Workflows", "rootless BuildKit"])
+    d.box(C[2], Y[3], CW, BH, "data", "Harbor", ["registry · caches", "Trivy on push"])
+    d.box(C[0], Y[4], CW, BH, "security", "Kyverno", ["admission policy", "PSS baseline"])
+    d.box(C[1], Y[4], C2, BH, "data", "OC observability plane",
+          ["OpenSearch · Prometheus · observer API", "RCA + FinOps agents: opt-in, off"])
+    d.box(C[0], Y[5], CW, BH, "security", "Falco", ["modern_ebpf", "+ falcosidekick"])
+    d.box(C[1], Y[5], CW, BH, "security", "OpenBao", ["mesh CA · secret", "backend (PR #4)"], status="planned")
+    d.box(C[2], Y[5], CW, BH, "bus", "argo-events", ["Falco escalation", "rollout events"])
 
-    # providers strip (top of the cloud region) + workload chips
-    for i, (t, s) in enumerate([("docker · CAPD", ("tested", "#6ee7b7")), ("aws · CAPA", "rendered only"),
-                                ("hetzner · CAPH", "rendered only")]):
-        d.box(768 + i * 136, R[0], 120, BH, "cloud", t, [s], title_size=12.5)
-    A, B, KW = 784, 974, 174
-    d.box(A, R[2], KW, BH, "platform", "OC data plane", ["cluster-agent"])
-    d.box(B, R[2], KW, BH, "network", "kgateway", ["north-south ingress"])
-    d.box(A, R[3], KW, BH, "bus", "OTel collector", ["fan-out · Datadog-ready"])
-    d.box(B, R[3], KW, BH, "network", "Cilium", ["CNI · no kube-proxy"])
-    d.box(A, R[4], KW, BH, "security", "Falco + Talon", ["detect · respond"])
-    d.box(B, R[4], KW, BH, "network", "Istio ambient", ["ztunnel · waypoints"])
-    d.box(A, R[5], KW, BH, "security", "ESO", ["store: default"])
-    d.box(B, R[5], KW, BH, "gitops", "Crossplane v2", ["providers · XRs"], planned=True)
-    d.box(A, R[6], KW, BH, "security", "Kyverno", ["PSS audit · ambient"])
-    d.box(B, R[6], KW, BH, "network", "external-dns", ["Route53 · Cloudflare"], planned=True)
-    d.box(A, R[7], B + KW - A, BH, "platform", "app workloads",
-          ["OpenChoreo cell namespaces per project / env"])
+    # workload clusters
+    A, B, KW = 872, 1080, 192
+    d.box(A, Y[2], KW, BH, "platform", "OC data plane", ["cluster-agent", "(dials out)"],
+          name="OpenChoreo data plane")
+    d.box(B, Y[2], KW, BH, "network", "kgateway", ["Gateway API", "north-south"])
+    d.box(A, Y[3], KW, BH, "platform", "app workloads", ["dp-* cell namespaces", "per project × env"])
+    d.box(B, Y[3], KW, BH, "network", "Istio ambient", ["ztunnel L4 mTLS", "waypoints: opt-in"])
+    d.box(A, Y[4], KW, BH, "bus", "telemetry", ["OTel · Fluent Bit ·", "Prometheus agent"])
+    d.box(B, Y[4], KW, BH, "network", "Cilium / flannel", ["CNI fixed at birth", "eBPF, no kube-proxy"])
+    d.box(A, Y[5], KW, BH, "security", "Falco + Talon", ["modern_ebpf detect", "Talon: kill · label"])
+    d.box(B, Y[5], KW, BH, "security", "Kyverno", ["PSS · image verify", "ambient enrolment"],
+          name="Kyverno (workload)")
+    d.box(A, Y[6], KW, BH, "security", "ESO", ["ClusterSecretStore", "default"], name="ESO (workload)")
+    d.box(B, Y[6], KW, BH, "bus", "OBI", ["eBPF L7 RED", "metrics"], status="optin")
+    d.box(A, Y[7], KW, BH, "network", "external-dns", ["Route 53 · Cloudflare", "PR #5"], status="planned")
+    d.box(B, Y[7], KW, BH, "network", "east-west gateway", ["Istio multicluster", "PR #4"], status="planned")
+    for i, (t, s) in enumerate([("docker · CAPD", ("tested locally", "#6ee7b7")), ("AWS · CAPA", "rendered only"),
+                                ("Hetzner · CAPH", "rendered only")]):
+        d.box(856 + i * 148, 752, 136, 52, "cloud", t, [s], title_size=12.5)
 
-    # flows (arrow = initiator -> target)
-    d.arrow([(L, yc(1)), (184, yc(1))], EM, badge=1, badge_pos=(222, yc(1)), aid="git")
-    d.arrow([(198, yc(1)), (198, yc(0)), (184, yc(0))], EM, aid="git-p")
-    d.arrow([(L + WW, yc(1)), (768, yc(1))], EM, badge=2, badge_pos=(728, yc(1)), aid="push")
-    d.arrow([(Rx + CW, yc(0)), (768, yc(0))], EM, badge=3, badge_pos=(728, yc(0)), aid="capi")
-    d.arrow([(A, yc(2)), (L + WW, yc(2))], RO, badge=4, badge_pos=(728, yc(2)), aid="agent")
-    d.arrow([(A, yc(3)), (Rx + CW, yc(3))], OR, badge=5, badge_pos=(728, yc(3)), aid="otel")
-    d.arrow([(A, yc(7)), (728, yc(7)), (728, yc(4)), (Rx + CW, yc(4))], VI,
-            badge=6, badge_pos=(728, 610), aid="pull")
-    d.arrow([(100, 360), (100, 420)], VI, badge=7, badge_pos=(100, 390), aid="ci")
-    d.arrow([(L, R[2] + 44), (212, R[2] + 44), (212, yc(4)), (176, yc(4))], RO, planned=True,
-            badge=8, badge_pos=(212, 440), aid="sso")
+    d.require("Argo CD + ApplicationSets", "Cluster API", "ESO", "cert-manager", "OpenChoreo control plane",
+              "Thunder", "Backstage", "OC workflow plane", "Harbor", "OC observability plane", "Kyverno", "Falco",
+              "argo-events", "OpenBao", "OpenChoreo data plane", "kgateway", "Cilium / flannel", "Istio ambient",
+              "Kyverno (workload)", "Falco + Talon", "telemetry", "koorikla/platform", "koorikla/ci",
+              "koorikla/hello-world", "docker · CAPD", "AWS · CAPA", "Hetzner · CAPH")
 
-    # legend (free space under git/mgmt, outside every boundary) + flow key
-    d.legend(28, 612, ALL_KINDS, cols=4, col_w=172)
-    e1 = [(1, "Argo CD pulls git: platform (fleet, addons, tenants) + app repos"),
-          (2, "Argo CD pushes addons via each cluster's CAPI kubeconfig"),
-          (3, "CAPI creates/upgrades clusters on docker / aws / hetzner"),
-          (4, "OpenChoreo cluster-agent dials out: wss + mTLS, per-cluster CA")]
-    e2 = [(5, "OTel collector ships logs/metrics/traces to obs plane (Datadog: opt-in)"),
-          (6, "nodes pull via Harbor proxy caches (upstream fallback)"),
-          (7, "optional GitHub Actions path: koorikla/ci → GHCR, keyless"),
-          (8, "Thunder federates console/API login to Okta / Google")]
-    d.flowkey(28, 888, e1, [EM, EM, EM, RO], title="Flows · arrow = initiator → target, colour = concern")
-    d.flowkey(612, 888, e2, [OR, VI, VI, RO], title=None, planned=(8,))
+    # flows (arrow = initiator -> target); badge = flow key number = animation order
+    d.arrow([(C[0], yc(0)), (LX + LW, yc(0))], EM, badge=1, badge_pos=(228, yc(0)), aid="git", step=0)
+    d.arrow([(C[0], yc(0) + 16), (222, yc(0) + 16), (222, yc(1)), (LX + LW, yc(1))], EM, aid="git-app", step=0)
+    d.arrow([(C[0] + 538, yc(0)), (856, yc(0))], EM, badge=2, badge_pos=(825, yc(0)), aid="push", step=1)
+    d.arrow([(C[2] + CW, yc(1)), (856, yc(1))], EM, badge=3, badge_pos=(825, yc(1)), aid="capi", step=2)
+    d.arrow([(A, yc(2)), (C[1] + C2, yc(2))], RO, badge=4, badge_pos=(825, yc(2)), aid="agent", step=3)
+    d.arrow([(A, yc(3)), (C[2] + CW, yc(3))], VI, badge=5, badge_pos=(825, yc(3)), aid="pull", step=4)
+    d.arrow([(A, yc(4)), (C[1] + C2, yc(4))], OR, badge=6, badge_pos=(825, yc(4)), aid="otel", step=5)
+    d.arrow([(A, yc(5)), (C[2] + CW, yc(5))], OR, badge=7, badge_pos=(825, yc(5)), aid="falco", step=6)
+    d.arrow([(LX, yc(1) + 14), (28, yc(1) + 14), (28, yc(3)), (LX, yc(3))], SL, badge=8, badge_pos=(28, 330),
+            aid="ci", step=7)
+    d.arrow([(LX + LW / 2, Y[2] + BH), (LX + LW / 2, Y[3])], SL, aid="uses", step=7)
+    d.arrow([(LX + LW / 2, Y[3] + BH), (LX + LW / 2, Y[4])], VI, aid="ghcr", step=8)
+    d.arrow([(C[1] + CW, yc(3)), (C[2], yc(3))], VI, aid="build", step=8, badge=9, badge_pos=(617, yc(3)))
+
+    # legend + flow key: free space under git & mgmt, outside every boundary
+    d.legend(28, 612, ALL_KINDS, cols=4, col_w=196, focus=True)
+    flows = [(1, "Argo CD pulls git: koorikla/platform (fleet, addons, tenants) + app repos (deploy/)"),
+             (2, "Argo CD pushes every addon to every cluster (push mode, kubeconfig from CAPI)"),
+             (3, "Cluster API creates and upgrades the k3s clusters on docker / AWS / Hetzner"),
+             (4, "cluster-agent dials out to cluster-gateway: wss + mTLS, one CA per cluster"),
+             (5, "nodes pull images through Harbor (registry + proxy caches)"),
+             (6, "telemetry ships logs, metrics, traces and k8s events to the observability plane"),
+             (7, "Falco alert ≥ Critical: falcosidekick webhook → argo-events → falco-response"),
+             (8, "app CI (optional path): GitHub Actions with koorikla/ci → GHCR, cosign keyless"),
+             (9, "default build path: OC workflow plane builds in-cluster → Harbor, platform key")]
+    d.flowkey(28, 736, flows, [EM, EM, EM, RO, VI, OR, OR, SL, VI],
+              title="Flows · arrow = initiator → target · animated in this order")
     return d
 
 
 # ------------------------------------------------------------------------------------- cluster lifecycle
 def cluster_lifecycle() -> Diagram:
-    W, H = 1200, 910
+    W, H = 1200, 940
     d = Diagram(W, H, "Adding a cluster = adding one file",
                 "fleet file → CAPI cluster → Argo CD registration → addons, plus the per-cluster OpenChoreo "
                 "identity · all on mgmt, ns fleet")
@@ -203,260 +229,17 @@ def cluster_lifecycle() -> Diagram:
            "addons-revision annotation pins a ring to a git ref",
            "delete the file → prune → cluster + its CA gone",
            "CA private keys never leave mgmt"], align="start", sub_size=11.5)
-    d.legend(28, 840, ["external", "gitops", "security", "platform", "cloud"], planned=False, cols=5, col_w=228,
+    d.legend(28, 840, ["external", "gitops", "security", "platform", "cloud"], planned=False, optin=False,
+             cols=5, col_w=228,
              flows=[("GitOps / CAPI", EM, False), ("certs & mTLS", RO, False),
                     ("OpenChoreo reference", CY, False)])
     return d
 
 
-# ------------------------------------------------------------------------------------------- trust model
-def trust_model() -> Diagram:
-    W, H = 1200, 1200
-    d = Diagram(W, H, "Trust model · what crosses which boundary",
-                "rows = concern, columns = trust zone · gutter labels name exactly what crosses · "
-                "arrow = initiator → target")
-    EXZ, MZ, WZ = (16, 240), (400, 360), (920, 264)
-    for x, label in ((EXZ[0], "external"), (MZ[0], "mgmt cluster · trust root"), (WZ[0], "workload cluster <name>")):
-        d.text(x + 14, 112, label, 12.5, "#e2e8f0", weight=700)
-    bands = [(124, 230), (370, 230), (622, 154), (798, 254)]
-    for y, h in bands:
-        for zx, zw in (EXZ, MZ, WZ):
-            d.group(zx, y, zw, h, "", "zone")
-    MX, MW, WX, WW, EX, EW = 416, 328, 936, 232, 32, 208
-    GL, GR = 328, 840  # gutter label centres
-
-    # --- PKI
-    d.text(32, 150, "PKI · agent identity", 12.5, RO, weight=700)
-    for i, t in enumerate(["CA private keys never", "leave mgmt. One CA per", "cluster: delete the", "fleet file = revoke."]):
-        d.text(32, 178 + i * 18, t, 11.5, "#cbd5e1")
-    d.box(MX, 162, MW, 52, "security", "agent CA · one per cluster", ["fleet/<name>-agent-ca · key stays"])
-    d.box(MX, 226, MW, 52, "security", "gateway CA", ["server cert of cluster-gateway · key stays"])
-    d.box(MX, 290, MW, 52, "platform", "cluster-gateway", ["client CA = that cluster's agent CA"])
-    d.box(WX, 162, WW, 52, "security", "cluster-agent-tls", ["own cert + key, CA cert"])
-    d.box(WX, 226, WW, 52, "security", "cluster-gateway-ca", ["ConfigMap · public cert"])
-    d.box(WX, 290, WW, 52, "platform", "cluster-agent", ["verifies gateway CA"])
-    d.arrow([(MX + MW, 188), (WX, 188)], RO, label="cert + key (CRS)", label_pos=(GR, 192), aid="crs1")
-    d.arrow([(MX + MW, 252), (WX, 252)], RO, label="public cert (CRS)", label_pos=(GR, 256), aid="crs2")
-    d.arrow([(WX, 316), (MX + MW, 316)], RO, label="wss + mTLS (out)", label_pos=(GR, 320), aid="wss")
-
-    # --- secrets
-    d.text(32, 390, "secrets", 12.5, RO, weight=700)
-    d.group(24, 400, 224, 190, "secret backend", "zone", label_size=11.5)
-    d.box(36, 432, 200, 44, "external", "kubernetes (mgmt ns)", ["local stand-in"], title_size=12.5, sub_size=11)
-    d.box(36, 482, 200, 44, "cloud", "AWS Secrets Manager", ["rendered only"], title_size=12.5, sub_size=11)
-    d.box(36, 532, 200, 44, "cloud", "Vault / OpenBao", ["rendered only"], title_size=12.5, sub_size=11)
-    d.box(MX, 400, MW, 64, "security", "ClusterSecretStore platform",
-          ["platform-github, platform-ghcr,", "capi-aws, capi-hetzner, openchoreo"])
-    d.box(MX, 478, MW, 64, "security", "mgmt-fleet · mgmt-openchoreo",
-          ["read-only in-cluster stores:", "kubeconfigs, agent certs, ca.crt"])
-    d.box(WX, 400, WW, 64, "security", "ClusterSecretStore default", ["OpenChoreo app secrets", "same backend, scoped"])
-    d.arrow([(MX, 412), (248, 412)], RO, label="reads flat keys", label_pos=(GL, 416), aid="sp")
-    d.arrow([(WX + WW / 2, 464), (WX + WW / 2, 611), (136, 611), (136, 590)], RO,
-            label="reads app secrets directly (not via mgmt)", label_pos=(580, 615), aid="sd")
-
-    # --- SSO
-    d.text(32, 640, "SSO · human identity", 12.5, RO, weight=700)
-    d.box(EX, 652, EW, 112, "security", "Okta / Google", ["workforce IdP"], planned=True)
-    d.box(MX, 650, MW, 52, "security", "Thunder", ["OpenChoreo IdP · console, API, CLI"])
-    d.box(MX, 712, MW, 52, "gitops", "Argo CD SSO", ["OIDC via Dex"], planned=True)
-    d.box(WX, 650, WW, 52, "security", "kube-apiserver OIDC", ["k3s --oidc-issuer-url"], planned=True)
-    d.arrow([(MX, 676), (EX + EW, 676)], RO, planned=True, label="OIDC federation", label_pos=(GL, 680), aid="fed")
-    d.arrow([(MX, 738), (EX + EW, 738)], RO, planned=True, label="OIDC (Dex)", label_pos=(GL, 742), aid="dex")
-    d.arrow([(WX, 676), (MX + MW, 676)], RO, planned=True, label="trusts issuer", label_pos=(GR, 680), aid="k3s")
-
-    # --- supply chain
-    d.text(32, 816, "supply chain · signing", 12.5, RO, weight=700)
-    d.box(EX, 826, EW, 60, "external", "GitHub Actions", ["keyless: Fulcio + Rekor", "koorikla/ci container.yaml"])
-    d.box(EX, 918, EW, 64, "data", "GHCR", ["ghcr.io/koorikla/*", "+ sig, SBOM, SLSA, vuln"])
-    d.box(EX, 994, EW, 48, "external", "GitHub App", ["Backstage scaffolder"], planned=True)
-    d.box(MX, 826, MW, 60, "platform", "OC workflow plane",
-          ["cosign sign with platform key", "(cosign-platform via ESO)"])
-    d.box(MX, 918, MW, 44, "data", "Harbor · apps", ["signed + scanned; CA on mgmt"])
-    d.box(MX, 994, MW, 48, "platform", "Backstage scaffolder", ["new app repo + platform PR"], planned=True)
-    d.box(WX, 826, WW, 136, "security", "Kyverno ImageValidating",
-          ["ghcr.io/koorikla/*: keyless,", "reusable workflow + repo/ref", "SBOM · SLSA · vuln attested",
-           "harbor apps/*: platform key", "Audit dev/stg · Deny prod"])
-    d.arrow([(136, 886), (136, 918)], VI, label="sign + attest", label_pos=(146, 907),
-            label_anchor="start", aid="sign")
-    d.arrow([(580, 886), (580, 918)], VI, label="push", label_pos=(590, 907), label_anchor="start",
-            aid="push")
-    d.arrow([(WX, 940), (MX + MW, 940)], RO, planned=True, label="verify platform key", label_pos=(GR, 944),
-            aid="vk")
-    d.arrow([(WX + WW / 2, 826), (WX + WW / 2, 787), (248, 787), (248, 950), (EX + EW, 950)], RO,
-            label="verify keyless sig directly (not via mgmt)", label_pos=(580, 791), aid="vg")
-    d.arrow([(MX, 1018), (EX + EW, 1018)], RO, planned=True, label="App token (ESO)", label_pos=(GL, 1022),
-            aid="app")
-
-    d.legend(28, 1102, ["external", "gitops", "security", "platform", "data", "cloud"], cols=6, col_w=190,
-             flows=[("certs, secrets, mTLS", RO, False), ("artifact", VI, False)])
-    return d
-
-
-# ---------------------------------------------------------------------------------------------- delivery
-def delivery() -> Diagram:
-    W, H = 1200, 1000
-    d = Diagram(W, H, "Delivery · from git push to data planes",
-                "apps: CI → signed image → tag commit → Argo CD → OpenChoreo releases per environment · "
-                "platform packages: gated PRs per env ring")
-    d.group(16, 84, 1168, 452, "1 · app delivery (GitOps + OpenChoreo)", "zone")
-    d.group(16, 560, 1168, 302, "2 · Crossplane package promotion", "zone")
-
-    # row 1: build
-    d.box(32, 120, 180, 64, "external", "git push", ["app repo, e.g.", "koorikla/hello-world"])
-    d.box(252, 120, 230, 64, "external", "GitHub Actions", ["optional path", "koorikla/ci go.yaml@v1"])
-    d.box(252, 204, 230, 64, "platform", "OC workflow plane", ["default: WorkflowRun, same", "koorikla/ci scripts · BuildKit"])
-    d.box(522, 120, 230, 64, "data", "GHCR", ["ghcr.io/koorikla/<app>", "keyless sign + attest"])
-    d.box(522, 204, 230, 64, "data", "Harbor · apps", ["cosign: platform key", "Trivy scan on push"])
-    d.box(792, 120, 200, 148, "external", "bot commit",
-          ["by CI or workflow:", "deploy/openchoreo/", "workload.yaml", "image: <new tag>", "[skip ci]"])
-    d.arrow([(212, 152), (252, 152)], SL)
-    d.arrow([(212, 172), (232, 172), (232, 236), (252, 236)], SL)
-    d.arrow([(482, 152), (522, 152)], VI)
-    d.arrow([(482, 236), (522, 236)], VI)
-    d.arrow([(367, 120), (367, 106), (892, 106), (892, 120)], SL, label="commit new image tag",
-            label_pos=(630, 110), aid="tag")
-    d.arrow([(892, 268), (892, 284), (122, 284), (122, 300)], EM,
-            label="Argo CD syncs deploy/openchoreo/ (tenant AppProject)", label_pos=(507, 288), aid="sync")
-
-    # row 2: deploy
-    d.box(32, 300, 180, 92, "gitops", "Argo CD", ["App <project>-<app>", "AppProject", "tenant-<project>"])
-    d.box(252, 300, 230, 92, "platform", "Component + Workload", ["org ns default (mgmt)", "autoDeploy: true",
-                                                                 "project demo"])
-    d.box(522, 300, 230, 92, "platform", "ComponentRelease", ["immutable snapshot:", "Workload + type +", "traits"])
-    envs = [("development", "ReleaseBinding · auto"), ("staging", "ReleaseBinding · PR"),
-            ("production", "own App · freeze window")]
-    EY = [300, 380, 460]
-    for (t, sub), y in zip(envs, EY):
-        d.box(792, y, 200, 52, "platform", t, [sub])
-    d.box(1032, 300, 144, 132, "cloud", "dev1", ["cluster-agent", "applies:", "development,", "staging"])
-    d.box(1032, 460, 144, 52, "cloud", "prod1", ["agent: production"])
-    d.arrow([(212, 346), (252, 346)], EM)
-    d.arrow([(482, 346), (522, 346)], CY)
-    d.arrow([(752, 326), (792, 326)], CY)
-    d.arrow([(892, 352), (892, 380)], CY, label="promote = PR", label_pos=(902, 371), label_anchor="start",
-            aid="p1")
-    d.arrow([(892, 432), (892, 460)], CY, label="gate PR + review", label_pos=(902, 451), label_anchor="start",
-            aid="p2")
-    d.arrow([(992, 326), (1032, 326)], CY)
-    d.arrow([(992, 406), (1032, 406)], CY)
-    d.arrow([(992, 486), (1032, 486)], CY)
-    d.text(32, 424, "a ReleaseBinding PR sets spec.releaseName to the ComponentRelease running in the previous",
-           11.5, "#cbd5e1")
-    d.text(32, 442, "environment · releases reach data planes only through the OpenChoreo cluster-agent "
-           "(never Argo CD)", 11.5, "#cbd5e1")
-    d.text(32, 466, "production: promotion-gate workflow (smoke · observer · freeze) opens the PR; CODEOWNERS approve;",
-           11.5, "#cbd5e1")
-    d.text(32, 484, "VAP: only Argo CD writes the binding · Kyverno denies unsigned images · docs/promotion.md",
-           11.5, "#cbd5e1")
-
-    # lane 2: crossplane packages
-    d.box(32, 600, 180, 64, "external", "package repos", ["configurations,", "providers (xpkg)"])
-    d.box(252, 600, 230, 64, "external", "koorikla/ci", ["crossplane-*.yaml: xpkg", "build · push · cosign"],
-          planned=True)
-    d.box(522, 600, 230, 212, "gitops", "promote.yaml",
-          ["repository_dispatch", "package-released →", "PR to development;", "gate ✓ → next env;",
-           "order = OpenChoreo", "DeploymentPipeline"], planned=True)
-    PY = [600, 680, 760]
-    for (t, sub), y in zip([("env-development.yaml", "PR 1 · on release"),
-                            ("env-staging.yaml", "PR 2 · after gate ✓"),
-                            ("env-production.yaml", "PR 3 · gate ✓ + review")], PY):
-        d.box(792, y, 200, 52, "gitops", t, [sub], planned=True)
-    d.box(1032, 600, 144, 212, "gitops", "Argo CD",
-          ["syncs crossplane-", "packages-<cluster>", "", "Notifications →", "commit status", "argocd/<app>"],
-          planned=True)
-    d.arrow([(212, 632), (252, 632)], EM, planned=True)
-    d.arrow([(482, 632), (522, 632)], EM, planned=True)
-    for y in PY:
-        d.arrow([(752, y + 26), (792, y + 26)], EM, planned=True)
-        d.arrow([(992, y + 26), (1032, y + 26)], EM, planned=True)
-    d.arrow([(1104, 812), (1104, 838), (637, 838), (637, 812)], EM, planned=True,
-            label="gate: same version healthy on every env-N cluster", label_pos=(870, 842), aid="gate")
-    for i, t in enumerate(["Cluster-scoped packages (Provider,", "Function, Configuration) promote",
-                           "here, per env ring. App-level XRs", "(OpenChoreo resource types) promote",
-                           "with the app release in lane 1."]):
-        d.text(40, 704 + i * 19, t, 11.5, "#cbd5e1")
-
-    d.legend(28, 902, ["external", "gitops", "platform", "data", "cloud"], cols=5, col_w=228, zone=False,
-             flows=[("git trigger", SL, False), ("artifact", VI, False), ("GitOps", EM, False),
-                    ("OpenChoreo", CY, False)])
-    return d
-
-
-# -------------------------------------------------------------------------------------- runtime security
-def runtime_security() -> Diagram:
-    W, H = 1200, 890
-    d = Diagram(W, H, "Runtime security · layers on every workload cluster",
-                "datapath (kgateway, Istio ambient, Cilium) · admission (Kyverno) · detection and response "
-                "(Falco, Talon) · escalation to mgmt")
-    CA, CW, CB, WIDE = 176, 256, 468, 548
-    R = [180, 268, 356, 444, 532, 620]
-    BH = 60
-    yc = lambda r: R[r] + BH / 2  # noqa: E731
-
-    d.box(CA, 84, CW, 48, "external", "client", ["HTTP to the app URL"])
-    d.group(16, 148, 724, 552, "workload cluster · dev1, prod1", "zone")
-    d.group(840, 408, 344, 292, "mgmt cluster", "zone")
-
-    tags = [("north-south", BL), ("mesh · L4/L7", BL), ("CNI · L3/L4", BL), ("admission", RO), ("detection", RO),
-            ("response", RO)]
-    for (t, c), y in zip(tags, R):
-        d.text(32, y + 35, t, 12, c, weight=700)
-
-    d.box(CA, R[0], CW, BH, "network", "kgateway", ["Gateway API · OpenChoreo", "gateway :19080"])
-    d.box(CB, R[0], CW, BH, "platform", "app pods", ["cell namespace", "ambient-enrolled"])
-    d.box(CA, R[1], WIDE, BH, "network", "Istio ambient",
-          ["ztunnel per node: L4 mTLS, SPIFFE identity", "waypoint per namespace: L7 authz (optional)"])
-    d.box(CA, R[2], WIDE, BH, "network", "Cilium",
-          ["eBPF CNI · kube-proxy replacement", "NetworkPolicy · Hubble flow visibility"])
-    d.box(CA, R[3], CW, BH, "external", "kube-apiserver", ["pod create / update"])
-    d.box(CB, R[3], CW, BH, "security", "Kyverno", ["PSS audit · ambient · signed",
-          "images: Audit dev/stg, Deny prod"])
-    d.box(CA, R[4], CW, BH, "security", "Falco", ["eBPF syscall rules", "e.g. crypto-miner"])
-    d.box(CB, R[4], CW, BH, "bus", "falcosidekick", ["alert fan-out"])
-    d.box(CA, R[5], CW, BH, "security", "Falco Talon", ["kill crypto-miner pod,", "label, isolate (netpol)"])
-    d.box(CB, R[5], CW, BH, "bus", "OTel collector", ["workload telemetry +", "alerts → exporters"])
-
-    # mgmt side
-    d.box(856, 444, 312, BH, "platform", "workflow falco-response",
-          ["enrich pod / owner / ns →", "Event · RCA agent · notify"])
-    d.box(856, 532, 312, BH, "bus", "Argo Events", ["webhook EventSource +", "Sensor: priority ≥ Critical"])
-    d.box(856, 620, 312, BH, "data", "OC observability plane", ["logs · metrics · traces", "Backstage + MCP read it"])
-    d.box(856, 724, 312, 52, "external", "Datadog", ["opt-in exporter (planned)"], planned=True)
-    d.box(840, 148, 344, 248, "note", "division of labour",
-          ["Cilium: packets, policy, Hubble", "Istio ambient: identity + mTLS", "kgateway: north-south only",
-           "Kyverno: admission (Audit first)", "Falco detects · Talon responds", "OBI (opt-in): the one L7",
-           "RED source; Hubble L7 off"], align="start")
-
-    # flows
-    d.arrow([(CA + CW / 2, 132), (CA + CW / 2, R[0])], BL)
-    d.arrow([(CA + CW, yc(0)), (CB, yc(0))], BL)
-    d.arrow([(CA + CW, yc(3)), (CB, yc(3))], RO)
-    d.arrow([(CA + CW, yc(4)), (CB, yc(4))], RO)
-    d.text(CA, R[2] + BH + 18, "every pod-to-pod hop: ztunnel mTLS (HBONE) over the Cilium eBPF datapath", 11.5,
-           "#93c5fd")
-    d.arrow([(CB + 64, R[4] + BH), (CB + 64, R[4] + BH + 14), (CA + CW / 2, R[4] + BH + 14),
-             (CA + CW / 2, R[5])], RO)
-    d.arrow([(CB + 192, R[4] + BH), (CB + 192, R[5])], OR)
-    d.arrow([(CB + CW, yc(4)), (856, yc(4))], OR, label="webhook", label_pos=(790, yc(4) + 4),
-            aid="esc")
-    d.arrow([(856 + 156, R[4]), (856 + 156, R[3] + BH)], OR)
-    d.arrow([(CB + CW, yc(5) - 10), (856, yc(5) - 10)], OR, label="OTLP",
-            label_pos=(790, yc(5) - 6), aid="otlp")
-    d.arrow([(CB + CW, yc(5) + 14), (800, yc(5) + 14), (800, 750), (856, 750)], OR, planned=True,
-            label="OTLP (opt-in)", label_pos=(800, 716), aid="dd")
-
-    d.legend(28, 808, ["external", "network", "platform", "security", "bus", "data"], cols=6, col_w=190,
-             labels={"external": "client / k8s core", "data": "telemetry store"},
-             flows=[("traffic", BL, False), ("admission / response", RO, False), ("telemetry, events", OR, False)])
-    return d
-
 
 DIAGRAMS = {
-    "overview": overview,
+    "architecture": architecture,
     "cluster-lifecycle": cluster_lifecycle,
-    "trust-model": trust_model,
-    "delivery": delivery,
-    "runtime-security": runtime_security,
 }
 
 
@@ -474,13 +257,14 @@ def main(argv):
         d.save(path)
         issues = d.check()
         size = os.path.getsize(path)
-        print(f"{n}.svg  {size / 1024:.1f} KB  issues: {len(issues)}")
+        print(f"{n}.svg  {size / 1024:.1f} KB  boxes: {len(d.titles)}  animated flows: {len(d.steps)} steps  "
+              f"issues: {len(issues)}")
         for s in issues:
             print("   -", s)
         bad += len(issues)
         if png_dir:
             os.makedirs(png_dir, exist_ok=True)
-            subprocess.run(["rsvg-convert", "-w", "1200", "-o", os.path.join(png_dir, f"{n}.png"), path],
+            subprocess.run(["rsvg-convert", "-w", str(d.w), "-o", os.path.join(png_dir, f"{n}.png"), path],
                            check=True)
     return 1 if bad else 0
 
