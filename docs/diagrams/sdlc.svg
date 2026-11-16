@@ -1,258 +1,141 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="990" viewBox="0 0 1400 990" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.fx{fill:none;stroke-width:3;stroke-linecap:round;stroke-dasharray:5 9;opacity:0;animation:fxdash .8s linear infinite,fxseq 14.10s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:.3}4%{opacity:1}14.0%{opacity:1}20.0%{opacity:.3}100%{opacity:.3}}.pulse{opacity:.35;animation:pulse 2.6s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:.15}50%{opacity:.9}}@media (prefers-reduced-motion:reduce){.fx,.pulse{animation:none}.fx{opacity:0}.pulse{opacity:.35}}</style><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern><marker id="ah22d3ee" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#22d3ee"/></marker><marker id="ah34d399" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#34d399"/></marker><marker id="ah94a3b8" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#94a3b8"/></marker><marker id="aha78bfa" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#a78bfa"/></marker><marker id="ahe2e8f0" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#e2e8f0"/></marker><marker id="ahfb7185" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb7185"/></marker></defs><rect width="1400" height="990" rx="16" fill="#020617"/><rect width="1400" height="990" rx="16" fill="url(#grid)"/><rect x="8" y="8" width="1384" height="974" rx="14" fill="none" stroke="#1e293b" stroke-width="1"/>
-<rect x="452" y="92" width="932" height="116" rx="12" fill="#020617" stroke="none"/>
-<rect x="452" y="92" width="932" height="116" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<text x="466.0" y="114.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">default path · OpenChoreo workflow plane (in-cluster, mgmt)</text>
-<rect x="452" y="224" width="932" height="116" rx="12" fill="#020617" stroke="none"/>
-<rect x="452" y="224" width="932" height="116" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<text x="466.0" y="246.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">optional path · GitHub Actions + koorikla/ci reusable workflows</text>
-<rect x="1000" y="470" width="384" height="160" rx="12" fill="#020617" stroke="none"/>
-<rect x="1000" y="470" width="384" height="160" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<text x="1014.0" y="492.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">dev1 · development + staging</text>
-<rect x="1000" y="650" width="384" height="116" rx="12" fill="#020617" stroke="none"/>
-<rect x="1000" y="650" width="384" height="116" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<text x="1014.0" y="672.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">prod1 · production</text>
-<rect class="pulse" x="927" y="363" width="210" height="74" rx="10" fill="none" stroke="#34d399" stroke-width="2.5"/>
-<rect class="pulse" x="463" y="681" width="230" height="68" rx="10" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
-<rect class="pulse" x="27" y="551" width="400" height="172" rx="10" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
-<path d="M 192.0 152.0 L 222.0 152.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
-<path d="M 422.0 152.0 L 468.0 152.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
-<path d="M 422.0 172.0 L 440.0 172.0 L 440.0 290.0 L 468.0 290.0" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah94a3b8)"/>
-<path d="M 668.0 158.0 L 700.0 158.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 900.0 158.0 L 932.0 158.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1132.0 158.0 L 1164.0 158.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 584.0 290.0 L 596.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 712.0 290.0 L 724.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 840.0 290.0 L 852.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 968.0 290.0 L 980.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1096.0 290.0 L 1108.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1224.0 290.0 L 1236.0 290.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1352.0 158.0 L 1370.0 158.0 L 1370.0 400.0 L 1352.0 400.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1294.0 320.0 L 1294.0 368.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1164.0 400.0 L 1132.0 400.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
-<path d="M 932.0 400.0 L 900.0 400.0" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah34d399)"/>
-<path d="M 700.0 400.0 L 668.0 400.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 578.0 432.0 L 578.0 490.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 578.0 548.0 L 578.0 570.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 422.0 599.0 L 468.0 599.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 578.0 628.0 L 578.0 686.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 422.0 700.0 L 468.0 700.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 578.0 760.0 L 578.0 744.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 688.0 519.0 L 1016.0 519.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 688.0 599.0 L 1016.0 599.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 688.0 715.0 L 1016.0 715.0" fill="none" stroke="#22d3ee" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah22d3ee)"/>
-<path d="M 1186.0 561.0 L 1198.0 561.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1186.0 715.0 L 1198.0 715.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path class="fx" d="M 192.0 152.0 L 222.0 152.0" stroke="#ced5df" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 422.0 152.0 L 468.0 152.0" stroke="#ced5df" style="animation-delay:0s,0.90s"/>
-<path class="fx" d="M 422.0 172.0 L 440.0 172.0 L 440.0 290.0 L 468.0 290.0" stroke="#ced5df" style="animation-delay:0s,0.90s"/>
-<path class="fx" d="M 668.0 158.0 L 700.0 158.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 900.0 158.0 L 932.0 158.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 1132.0 158.0 L 1164.0 158.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 584.0 290.0 L 596.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 712.0 290.0 L 724.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 840.0 290.0 L 852.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 968.0 290.0 L 980.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 1096.0 290.0 L 1108.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 1224.0 290.0 L 1236.0 290.0" stroke="#d7cafc" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 1352.0 158.0 L 1370.0 158.0 L 1370.0 400.0 L 1352.0 400.0" stroke="#d7cafc" style="animation-delay:0s,2.70s"/>
-<path class="fx" d="M 1294.0 320.0 L 1294.0 368.0" stroke="#d7cafc" style="animation-delay:0s,2.70s"/>
-<path class="fx" d="M 1164.0 400.0 L 1132.0 400.0" stroke="#a3ebd1" style="animation-delay:0s,3.60s"/>
-<path class="fx" d="M 932.0 400.0 L 900.0 400.0" stroke="#a3ebd1" style="animation-delay:0s,4.50s"/>
-<path class="fx" d="M 700.0 400.0 L 668.0 400.0" stroke="#9bebf7" style="animation-delay:0s,5.40s"/>
-<path class="fx" d="M 578.0 432.0 L 578.0 490.0" stroke="#9bebf7" style="animation-delay:0s,6.30s"/>
-<path class="fx" d="M 578.0 548.0 L 578.0 570.0" stroke="#9bebf7" style="animation-delay:0s,7.20s"/>
-<path class="fx" d="M 422.0 599.0 L 468.0 599.0" stroke="#9bebf7" style="animation-delay:0s,7.20s"/>
-<path class="fx" d="M 578.0 628.0 L 578.0 686.0" stroke="#9bebf7" style="animation-delay:0s,8.10s"/>
-<path class="fx" d="M 422.0 700.0 L 468.0 700.0" stroke="#9bebf7" style="animation-delay:0s,8.10s"/>
-<path class="fx" d="M 578.0 760.0 L 578.0 744.0" stroke="#fdbfc8" style="animation-delay:0s,9.00s"/>
-<path class="fx" d="M 688.0 519.0 L 1016.0 519.0" stroke="#9bebf7" style="animation-delay:0s,9.00s"/>
-<path class="fx" d="M 688.0 599.0 L 1016.0 599.0" stroke="#9bebf7" style="animation-delay:0s,9.00s"/>
-<path class="fx" d="M 688.0 715.0 L 1016.0 715.0" stroke="#9bebf7" style="animation-delay:0s,9.90s"/>
-<path class="fx" d="M 1186.0 561.0 L 1198.0 561.0" stroke="#fdbfc8" style="animation-delay:0s,9.90s"/>
-<path class="fx" d="M 1186.0 715.0 L 1198.0 715.0" stroke="#fdbfc8" style="animation-delay:0s,10.80s"/>
-<rect x="32" y="120" width="160" height="64" rx="6" fill="#0f172a"/>
-<rect x="32" y="120" width="160" height="64" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="112.0" y="145.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">developer</text>
-<text x="112.0" y="165.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">git push to main</text>
-<rect x="222" y="120" width="200" height="64" rx="6" fill="#0f172a"/>
-<rect x="222" y="120" width="200" height="64" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="322.0" y="145.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#f1f5f9" text-anchor="middle">koorikla/hello-world</text>
-<text x="322.0" y="165.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">app repo</text>
-<rect x="468" y="128" width="200" height="60" rx="6" fill="#0f172a"/>
-<rect x="468" y="128" width="200" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="568.0" y="144.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">WorkflowRun</text>
-<text x="568.0" y="163.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">per-stack ClusterWorkflow</text>
-<text x="568.0" y="179.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci scripts</text>
-<rect x="700" y="128" width="200" height="60" rx="6" fill="#0f172a"/>
-<rect x="700" y="128" width="200" height="60" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="800.0" y="144.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">BuildKit (rootless)</text>
-<text x="800.0" y="163.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">multi-arch · SLSA</text>
-<text x="800.0" y="179.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Trivy · SPDX SBOM</text>
-<rect x="932" y="128" width="200" height="60" rx="6" fill="#0f172a"/>
-<rect x="932" y="128" width="200" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1032.0" y="144.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cosign: platform key</text>
-<text x="1032.0" y="163.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">sign + attest</text>
-<text x="1032.0" y="179.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(cosign-platform)</text>
-<rect x="1164" y="128" width="188" height="60" rx="6" fill="#0f172a"/>
-<rect x="1164" y="128" width="188" height="60" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="1258.0" y="144.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor</text>
-<text x="1258.0" y="163.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">apps/* · Trivy</text>
-<text x="1258.0" y="179.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">scan on push</text>
-<rect x="468" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="468" y="260" width="116" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="526.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">test</text>
-<text x="526.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">go test</text>
-<text x="526.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">lint</text>
-<rect x="596" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="596" y="260" width="116" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="654.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Trivy</text>
-<text x="654.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">fs + deps</text>
-<text x="654.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">scan</text>
-<rect x="724" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="724" y="260" width="116" height="60" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="782.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">build</text>
-<text x="782.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">multi-arch</text>
-<text x="782.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">push digest</text>
-<rect x="852" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="852" y="260" width="116" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="910.0" y="284.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Syft SBOM</text>
-<text x="910.0" y="303.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">SPDX</text>
-<rect x="980" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="980" y="260" width="116" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1038.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cosign</text>
-<text x="1038.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">keyless</text>
-<text x="1038.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">Fulcio·Rekor</text>
-<rect x="1108" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="1108" y="260" width="116" height="60" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1166.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">attest</text>
-<text x="1166.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">SBOM · SLSA</text>
-<text x="1166.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">vuln scan</text>
-<rect x="1236" y="260" width="116" height="60" rx="6" fill="#0f172a"/>
-<rect x="1236" y="260" width="116" height="60" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="1294.0" y="276.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
-<text x="1294.0" y="295.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/</text>
-<text x="1294.0" y="310.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/*</text>
-<rect x="1164" y="368" width="188" height="64" rx="6" fill="#0f172a"/>
-<rect x="1164" y="368" width="188" height="64" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="1258.0" y="386.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">image tag commit</text>
-<text x="1258.0" y="405.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">deploy/openchoreo/</text>
-<text x="1258.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">workload.yaml</text>
-<rect x="932" y="368" width="200" height="64" rx="6" fill="#0f172a"/>
-<rect x="932" y="368" width="200" height="64" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5"/>
-<text x="1032.0" y="386.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Argo CD</text>
-<text x="1032.0" y="405.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">App &lt;project&gt;-&lt;app&gt;</text>
-<text x="1032.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">tenant AppProject</text>
-<rect x="700" y="368" width="200" height="64" rx="6" fill="#0f172a"/>
-<rect x="700" y="368" width="200" height="64" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="800.0" y="386.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Component + Workload</text>
-<text x="800.0" y="405.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">org ns default (mgmt)</text>
-<text x="800.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">autoDeploy: true</text>
-<rect x="468" y="368" width="200" height="64" rx="6" fill="#0f172a"/>
-<rect x="468" y="368" width="200" height="64" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="568.0" y="386.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ComponentRelease</text>
-<text x="568.0" y="405.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">immutable snapshot</text>
-<text x="568.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Workload + traits</text>
-<g opacity="0.55">
-<rect x="32" y="368" width="390" height="64" rx="6" fill="#0f172a"/>
-<rect x="32" y="368" width="390" height="64" rx="6" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="227.0" y="386.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Crossplane package promotion</text>
-<text x="227.0" y="405.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">xpkg per env ring, gated by Argo CD</text>
-<text x="227.0" y="421.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">commit statuses (roadmap)</text>
-<rect x="362.8" y="358" width="51.2" height="14" rx="7" fill="#020617" stroke="#34d399" stroke-width="1"/>
-<text x="388.4" y="368.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#34d399" text-anchor="middle">planned</text>
-</g>
-<rect x="468" y="490" width="220" height="58" rx="6" fill="#0f172a"/>
-<rect x="468" y="490" width="220" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="578.0" y="512.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">development</text>
-<text x="578.0" y="532.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ReleaseBinding · auto</text>
-<rect x="468" y="570" width="220" height="58" rx="6" fill="#0f172a"/>
-<rect x="468" y="570" width="220" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="578.0" y="592.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">staging</text>
-<text x="578.0" y="612.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ReleaseBinding · PR</text>
-<rect x="468" y="686" width="220" height="58" rx="6" fill="#0f172a"/>
-<rect x="468" y="686" width="220" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="578.0" y="708.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">production</text>
-<text x="578.0" y="728.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">gated PR + CODEOWNERS</text>
-<rect x="468" y="760" width="220" height="64" rx="6" fill="#0f172a"/>
-<rect x="468" y="760" width="220" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="578.0" y="777.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">ValidatingAdmissionPolicy</text>
-<text x="578.0" y="797.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">only Argo CD&#x27;s gated</text>
-<text x="578.0" y="812.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">App writes prod</text>
-<rect x="32" y="556" width="390" height="162" rx="6" fill="#0f172a"/>
-<rect x="32" y="556" width="390" height="162" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="44.0" y="580.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="start">promotion-gate</text>
-<text x="44.0" y="599.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">ClusterWorkflow on the workflow plane:</text>
-<text x="44.0" y="615.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start" xml:space="preserve">1 pipeline edge    2 readiness</text>
-<text x="44.0" y="630.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">3 smoke: endpoints 2xx/3xx</text>
-<text x="44.0" y="646.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">4 observer: alerts + error rate</text>
-<text x="44.0" y="661.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">5 freeze windows</text>
-<text x="44.0" y="677.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">6 opens PR via its own GitHub App</text>
-<rect x="1016" y="506" width="170" height="110" rx="6" fill="#0f172a"/>
-<rect x="1016" y="506" width="170" height="110" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="1101.0" y="539.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent</text>
-<text x="1101.0" y="558.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">applies</text>
-<text x="1101.0" y="574.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">development</text>
-<text x="1101.0" y="589.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">+ staging</text>
-<rect x="1198" y="506" width="170" height="110" rx="6" fill="#0f172a"/>
-<rect x="1198" y="506" width="170" height="110" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1283.0" y="539.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno</text>
-<text x="1283.0" y="558.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">image verify:</text>
-<text x="1283.0" y="574.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Audit (report)</text>
-<text x="1283.0" y="589.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PSS baseline</text>
-<rect x="1016" y="686" width="170" height="58" rx="6" fill="#0f172a"/>
-<rect x="1016" y="686" width="170" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="1101.0" y="701.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent</text>
-<text x="1101.0" y="720.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">applies</text>
-<text x="1101.0" y="736.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">production</text>
-<rect x="1198" y="686" width="170" height="58" rx="6" fill="#0f172a"/>
-<rect x="1198" y="686" width="170" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1283.0" y="701.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno</text>
-<text x="1283.0" y="720.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Deny unsigned</text>
-<text x="1283.0" y="736.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">+ digest pinned</text>
-<text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">SDLC · from git push to production</text>
-<text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">build in-cluster (default) or on GitHub Actions → signed image → tag commit → Argo CD → OpenChoreo release → gated promotion → admission on the data plane</text>
-<rect x="584.0" y="453.5" width="79.3" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="588.0" y="466.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="start">autoDeploy</text>
-<rect x="584.0" y="649.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="588.0" y="662.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="start">gate ✓ + review</text>
-<rect x="725.9" y="510.5" width="236.2" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="844.0" y="523.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#22d3ee" text-anchor="middle">OpenChoreo → cluster-agent (wss)</text>
-<text x="28.0" y="862.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Legend</text>
-<rect x="28" y="878" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="28" y="878" width="22" height="13" rx="3" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.2"/>
-<text x="58.0" y="889.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">external / git</text>
-<rect x="298" y="878" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="298" y="878" width="22" height="13" rx="3" fill="#064e3b" fill-opacity="0.4" stroke="#34d399" stroke-width="1.2"/>
-<text x="328.0" y="889.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">GitOps &amp; lifecycle</text>
-<rect x="568" y="878" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="568" y="878" width="22" height="13" rx="3" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.2"/>
-<text x="598.0" y="889.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenChoreo</text>
-<rect x="838" y="878" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="838" y="878" width="22" height="13" rx="3" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.2"/>
-<text x="868.0" y="889.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">security &amp; secrets</text>
-<rect x="1108" y="878" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="1108" y="878" width="22" height="13" rx="3" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.2"/>
-<text x="1138.0" y="889.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">registry &amp; data</text>
-<rect x="28" y="900" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4"/>
-<text x="58.0" y="911.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">built (on main)</text>
-<rect x="298" y="900" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.55"/>
-<text x="328.0" y="911.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned (not on main)</text>
-<rect x="566" y="897" width="26" height="19" rx="6" fill="none" stroke="#7b8cab" stroke-width="1.4"/>
-<text x="598.0" y="911.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster / zone</text>
-<path d="M 834 907 L 860 907" stroke="#e2e8f0" stroke-width="1.8" marker-end="url(#ahe2e8f0)"/>
-<path class="fx" d="M 834 907 L 860 907" stroke="#ced5df" style="animation-delay:0s,0.00s"/>
-<text x="868.0" y="911.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">flow (animated)</text>
-<line x1="1104" y1="907" x2="1130" y2="907" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.55" marker-end="url(#ahe2e8f0)"/>
-<text x="1138.0" y="911.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned flow</text>
-<rect x="28" y="922" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.2"/>
-<rect class="pulse" x="25" y="919" width="28" height="19" rx="5" fill="none" stroke="#f8fafc" stroke-width="2"/>
-<text x="58.0" y="933.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">focus of this view</text>
-<line x1="294" y1="929" x2="320" y2="929" stroke="#94a3b8" stroke-width="1.8" marker-end="url(#ah94a3b8)"/>
-<text x="328.0" y="933.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">git / trigger</text>
-<line x1="564" y1="929" x2="590" y2="929" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#aha78bfa)"/>
-<text x="598.0" y="933.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">artifact</text>
-<line x1="834" y1="929" x2="860" y2="929" stroke="#34d399" stroke-width="1.8" marker-end="url(#ah34d399)"/>
-<text x="868.0" y="933.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">GitOps</text>
-<line x1="1104" y1="929" x2="1130" y2="929" stroke="#22d3ee" stroke-width="1.8" marker-end="url(#ah22d3ee)"/>
-<text x="1138.0" y="933.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenChoreo release</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="954" viewBox="0 0 960 954" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 12.40s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}21.3%{opacity:1}26.3%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fbbf24"/></marker></defs><rect width="960" height="954" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="938" rx="12" fill="none" stroke="#475569"/>
+<path d="M 208.0 130.0 L 272.0 130.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 688.0 148.0 L 752.0 148.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 272.0 166.0 L 208.0 166.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 120.0 188.0 L 120.0 252.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 208.0 292.0 L 272.0 292.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 360.0 332.0 L 360.0 396.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 448.0 436.0 L 512.0 436.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 600.0 332.0 L 600.0 396.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 688.0 436.0 L 752.0 436.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 840.0 332.0 L 840.0 396.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 840.0 476.0 L 840.0 540.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 208.0 130.0 L 272.0 130.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 688.0 148.0 L 752.0 148.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 272.0 166.0 L 208.0 166.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 120.0 188.0 L 120.0 252.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 208.0 292.0 L 272.0 292.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 360.0 332.0 L 360.0 396.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 448.0 436.0 L 512.0 436.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 600.0 332.0 L 600.0 396.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 688.0 436.0 L 752.0 436.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<path class="fx" d="M 840.0 332.0 L 840.0 396.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<path class="fx" d="M 840.0 476.0 L 840.0 540.0" stroke="#fde5a7" style="animation-delay:0s,8.80s"/>
+<rect x="32" y="108" width="176" height="80" rx="8" fill="#2b3444" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="120.0" y="134.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">app repo</text>
+<text class="s" x="120.0" y="154.4" font-size="13" fill="#cbd5e1" text-anchor="middle">code + deploy/</text>
+<text class="s" x="120.0" y="171.9" font-size="13" fill="#cbd5e1" text-anchor="middle">koorikla/hello-world</text>
+<rect x="272" y="108" width="416" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="480.0" y="134.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">build &amp; sign</text>
+<text class="s" x="480.0" y="154.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo workflow plane (or GitHub Actions)</text>
+<text class="s" x="480.0" y="171.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Trivy · SBOM · SLSA · cosign</text>
+<rect x="752" y="108" width="176" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
+<text class="s" x="840.0" y="134.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">registry</text>
+<text class="s" x="840.0" y="154.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Harbor · GHCR</text>
+<text class="s" x="840.0" y="171.9" font-size="13" fill="#cbd5e1" text-anchor="middle">signed image</text>
+<rect x="32" y="252" width="176" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="120.0" y="278.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Argo CD</text>
+<text class="s" x="120.0" y="298.4" font-size="13" fill="#cbd5e1" text-anchor="middle">tenant AppProject</text>
+<text class="s" x="120.0" y="315.9" font-size="13" fill="#cbd5e1" text-anchor="middle">per app repo</text>
+<rect x="272" y="252" width="176" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="360.0" y="278.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">ComponentRelease</text>
+<text class="s" x="360.0" y="298.4" font-size="13" fill="#cbd5e1" text-anchor="middle">immutable snapshot</text>
+<text class="s" x="360.0" y="315.9" font-size="13" fill="#cbd5e1" text-anchor="middle">of the Workload</text>
+<rect x="512" y="252" width="176" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="600.0" y="278.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">promotion gate</text>
+<text class="s" x="600.0" y="298.4" font-size="13" fill="#cbd5e1" text-anchor="middle">readiness · smoke ·</text>
+<text class="s" x="600.0" y="315.9" font-size="13" fill="#cbd5e1" text-anchor="middle">alerts · freezes</text>
+<rect x="752" y="252" width="176" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="840.0" y="278.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production gate</text>
+<text class="s" x="840.0" y="298.4" font-size="13" fill="#cbd5e1" text-anchor="middle">VAP: only Argo CD&#x27;s</text>
+<text class="s" x="840.0" y="315.9" font-size="13" fill="#cbd5e1" text-anchor="middle">gated app writes</text>
+<rect x="272" y="396" width="176" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="360.0" y="431.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">development</text>
+<text class="s" x="360.0" y="451.2" font-size="13" fill="#cbd5e1" text-anchor="middle">dev1 · auto</text>
+<rect x="512" y="396" width="176" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="600.0" y="431.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">staging</text>
+<text class="s" x="600.0" y="451.2" font-size="13" fill="#cbd5e1" text-anchor="middle">dev1 · PR</text>
+<rect x="752" y="396" width="176" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="840.0" y="422.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production</text>
+<text class="s" x="840.0" y="442.4" font-size="13" fill="#cbd5e1" text-anchor="middle">prod1 · gated PR</text>
+<text class="s" x="840.0" y="459.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ CODEOWNERS</text>
+<rect x="748" y="536" width="184" height="88" rx="11" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
+<rect x="752" y="540" width="176" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="2.2"/>
+<text class="s" x="840.0" y="566.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Kyverno</text>
+<text class="s" x="840.0" y="586.4" font-size="13" fill="#cbd5e1" text-anchor="middle">denies unsigned or</text>
+<text class="s" x="840.0" y="603.9" font-size="13" fill="#cbd5e1" text-anchor="middle">unpinned images</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">SDLC · from git push to production</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">One signed image, promoted through environments by pull requests; production is gated twice, at promotion and at admission.</text>
+<circle cx="235.0" cy="130.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="235.0" y="134.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="715.0" cy="148.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="715.0" y="152.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="245.0" cy="166.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="245.0" y="170.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="120.0" cy="215.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="120.0" y="219.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="235.0" cy="292.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="235.0" y="296.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="360.0" cy="359.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="360.0" y="363.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="475.0" cy="436.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="475.0" y="440.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="600.0" cy="359.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="600.0" y="363.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="715.0" cy="436.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="715.0" y="440.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<circle cx="840.0" cy="359.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="840.0" y="363.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<circle cx="840.0" cy="503.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="840.0" y="507.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<line x1="28" y1="640" x2="932" y2="640" stroke="#64748b" stroke-width="1.5"/>
+<circle cx="40.0" cy="657.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="662" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="60.0" y="662.0" font-size="13.5" fill="#cbd5e1">A push to main starts a build on the OpenChoreo workflow</text>
+<text class="s" x="60.0" y="681.0" font-size="13.5" fill="#cbd5e1">plane (or GitHub Actions)</text>
+<circle cx="40.0" cy="704.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="709" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="60.0" y="709.0" font-size="13.5" fill="#cbd5e1">The build scans, writes SBOM + SLSA provenance, signs with</text>
+<text class="s" x="60.0" y="728.0" font-size="13.5" fill="#cbd5e1">cosign and pushes</text>
+<circle cx="40.0" cy="751.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="756" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="60.0" y="756.0" font-size="13.5" fill="#cbd5e1">It commits the new image ref to deploy/ in the app repo</text>
+<circle cx="40.0" cy="779.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="784" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="60.0" y="784.0" font-size="13.5" fill="#cbd5e1">Argo CD syncs the app&#x27;s Component and Workload into</text>
+<text class="s" x="60.0" y="803.0" font-size="13.5" fill="#cbd5e1">OpenChoreo</text>
+<circle cx="40.0" cy="826.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="831" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="60.0" y="831.0" font-size="13.5" fill="#cbd5e1">OpenChoreo snapshots them as an immutable</text>
+<text class="s" x="60.0" y="850.0" font-size="13.5" fill="#cbd5e1">ComponentRelease</text>
+<circle cx="506.0" cy="657.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="662" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="526.0" y="662.0" font-size="13.5" fill="#cbd5e1">autoDeploy binds the release to development</text>
+<circle cx="506.0" cy="685.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="690" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="526.0" y="690.0" font-size="13.5" fill="#cbd5e1">The promotion gate checks the edge, then opens a PR for</text>
+<text class="s" x="526.0" y="709.0" font-size="13.5" fill="#cbd5e1">staging</text>
+<circle cx="506.0" cy="732.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="737" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="526.0" y="737.0" font-size="13.5" fill="#cbd5e1">Production needs the gate and CODEOWNERS; a</text>
+<text class="s" x="526.0" y="756.0" font-size="13.5" fill="#cbd5e1">ValidatingAdmissionPolicy lets only Argo CD write it</text>
+<circle cx="506.0" cy="779.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="784" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<text class="s" x="526.0" y="784.0" font-size="13.5" fill="#cbd5e1">On prod1 Kyverno denies unsigned or unpinned images</text>
+<rect x="28" y="894" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
+<text class="s" x="58.0" y="904.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
+<rect x="162.86294" y="894" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
+<text class="s" x="192.9" y="904.0" font-size="13" fill="#94a3b8">workload cluster</text>
+<rect x="318.40966000000003" y="894" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="1.3"/>
+<text class="s" x="348.4" y="904.0" font-size="13" fill="#94a3b8">security &amp; trust</text>
+<rect x="465.5368" y="894" width="20" height="13" rx="3" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.3"/>
+<text class="s" x="495.5" y="904.0" font-size="13" fill="#94a3b8">stateful data</text>
+<rect x="596.61024" y="894" width="20" height="13" rx="3" fill="#2b3444" stroke="#94a3b8" stroke-width="1.3"/>
+<text class="s" x="626.6" y="904.0" font-size="13" fill="#94a3b8">git, GitHub, outside</text>
+<path d="M 26 924 L 48 924" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 26 924 L 48 924" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<text class="s" x="58.0" y="928.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
+<rect x="241.05470000000003" y="915" width="26" height="19" rx="6" fill="none" stroke="#cbd5e1" stroke-opacity=".85" stroke-width="1.2"/>
+<rect x="244.05470000000003" y="918" width="20" height="13" rx="3" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+<text class="s" x="274.1" y="928.0" font-size="13" fill="#94a3b8">focus of this view</text>
 </svg>

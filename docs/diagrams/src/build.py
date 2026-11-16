@@ -9,6 +9,7 @@ and the steps that differ from docs/diagrams/README.md. Exits non-zero when ther
   --check     write nothing; also fail when a committed SVG differs from what this script generates
   --out DIR   write the SVGs to DIR instead of docs/diagrams/
   --png DIR   also render every SVG with rsvg-convert (the static frame) for visual review
+  --readme F  compare the step lists with F instead of docs/diagrams/README.md
 
 Status must match main: built = on main and on by default (or selected by the fleet file, like Cilium), opt-in = on
 main but off by default (catalog `default: false` or a values switch), planned = not on main (open PR or roadmap).
@@ -497,10 +498,11 @@ def main(argv):
     argv = [a for a in argv if a != "--check"]
     png_dir = opt("--png")
     out_dir = opt("--out") or OUT
+    readme = opt("--readme") or README
     names = argv or list(DIAGRAMS)
     docs = {}
-    if os.path.exists(README):
-        with open(README, encoding="utf-8") as f:
+    if os.path.exists(readme):
+        with open(readme, encoding="utf-8") as f:
             docs = readme_steps(f.read())
     bad = 0
     for n in names:

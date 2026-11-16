@@ -1,334 +1,140 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1380" viewBox="0 0 1400 1380" role="img" aria-label="Security · identity, secrets, supply chain, admission, runtime"><title>Security · identity, secrets, supply chain, admission, runtime</title><style>.fx{fill:none;stroke-width:3;stroke-linecap:round;stroke-dasharray:5 9;opacity:0;animation:fxdash .8s linear infinite,fxseq 11.40s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:.3}4%{opacity:1}17.4%{opacity:1}23.4%{opacity:.3}100%{opacity:.3}}.pulse{opacity:.35;animation:pulse 2.6s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:.15}50%{opacity:.9}}@media (prefers-reduced-motion:reduce){.fx,.pulse{animation:none}.fx{opacity:0}.pulse{opacity:.35}}</style><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern><marker id="aha78bfa" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#a78bfa"/></marker><marker id="ahe2e8f0" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#e2e8f0"/></marker><marker id="ahfb7185" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb7185"/></marker><marker id="ahfb923c" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb923c"/></marker></defs><rect width="1400" height="1380" rx="16" fill="#020617"/><rect width="1400" height="1380" rx="16" fill="url(#grid)"/><rect x="8" y="8" width="1384" height="1364" rx="14" fill="none" stroke="#1e293b" stroke-width="1"/>
-<rect x="16" y="110" width="260" height="248" rx="12" fill="#020617" stroke="none"/>
-<rect x="16" y="110" width="260" height="248" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="376" y="110" width="480" height="248" rx="12" fill="#020617" stroke="none"/>
-<rect x="376" y="110" width="480" height="248" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="1016" y="110" width="368" height="248" rx="12" fill="#020617" stroke="none"/>
-<rect x="1016" y="110" width="368" height="248" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="16" y="370" width="260" height="240" rx="12" fill="#020617" stroke="none"/>
-<rect x="16" y="370" width="260" height="240" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="376" y="370" width="480" height="240" rx="12" fill="#020617" stroke="none"/>
-<rect x="376" y="370" width="480" height="240" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="1016" y="370" width="368" height="240" rx="12" fill="#020617" stroke="none"/>
-<rect x="1016" y="370" width="368" height="240" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="16" y="622" width="260" height="212" rx="12" fill="#020617" stroke="none"/>
-<rect x="16" y="622" width="260" height="212" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="376" y="622" width="480" height="212" rx="12" fill="#020617" stroke="none"/>
-<rect x="376" y="622" width="480" height="212" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="1016" y="622" width="368" height="212" rx="12" fill="#020617" stroke="none"/>
-<rect x="1016" y="622" width="368" height="212" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="16" y="846" width="260" height="190" rx="12" fill="#020617" stroke="none"/>
-<rect x="16" y="846" width="260" height="190" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="376" y="846" width="480" height="190" rx="12" fill="#020617" stroke="none"/>
-<rect x="376" y="846" width="480" height="190" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="1016" y="846" width="368" height="190" rx="12" fill="#020617" stroke="none"/>
-<rect x="1016" y="846" width="368" height="190" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="16" y="1048" width="260" height="186" rx="12" fill="#020617" stroke="none"/>
-<rect x="16" y="1048" width="260" height="186" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="376" y="1048" width="480" height="186" rx="12" fill="#020617" stroke="none"/>
-<rect x="376" y="1048" width="480" height="186" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="1016" y="1048" width="368" height="186" rx="12" fill="#020617" stroke="none"/>
-<rect x="1016" y="1048" width="368" height="186" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<rect x="24" y="404" width="244" height="180" rx="12" fill="#020617" stroke="none"/>
-<rect x="24" y="404" width="244" height="180" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
-<text x="38.0" y="426.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#e2e8f0" text-anchor="start">secret backend</text>
-<rect class="pulse" x="387" y="209" width="226" height="68" rx="10" fill="none" stroke="#fb7185" stroke-width="2.5"/>
-<rect class="pulse" x="1027" y="655" width="346" height="172" rx="10" fill="none" stroke="#fb7185" stroke-width="2.5"/>
-<rect class="pulse" x="1027" y="935" width="346" height="92" rx="10" fill="none" stroke="#fb7185" stroke-width="2.5"/>
-<rect class="pulse" x="1027" y="1077" width="170" height="68" rx="10" fill="none" stroke="#fb7185" stroke-width="2.5"/>
-<path d="M 392.0 176.0 L 260.0 176.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" opacity="0.55" marker-end="url(#ahfb7185)"/>
-<path d="M 1032.0 176.0 L 840.0 176.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" opacity="0.55" marker-end="url(#ahfb7185)"/>
-<path d="M 608.0 243.0 L 624.0 243.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 840.0 243.0 L 1032.0 243.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1032.0 313.0 L 840.0 313.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1288.0 342.0 L 1288.0 351.0 L 500.0 351.0 L 500.0 342.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ahfb7185)"/>
-<path d="M 392.0 420.0 L 268.0 420.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1200.0 468.0 L 1200.0 597.0 L 146.0 597.0 L 146.0 584.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 146.0 732.0 L 146.0 764.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 616.0 732.0 L 616.0 764.0" fill="none" stroke="#a78bfa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#aha78bfa)"/>
-<path d="M 1032.0 793.0 L 840.0 793.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1200.0 660.0 L 1200.0 641.0 L 320.0 641.0 L 320.0 793.0 L 260.0 793.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1200.0 924.0 L 1200.0 940.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1032.0 1111.0 L 840.0 1111.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
-<path d="M 1112.0 1140.0 L 1112.0 1160.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1192.0 1189.0 L 1208.0 1189.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
-<path d="M 1032.0 1189.0 L 840.0 1189.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
-<path d="M 624.0 1189.0 L 608.0 1189.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
-<path class="fx" d="M 608.0 243.0 L 624.0 243.0" stroke="#fdbfc8" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 840.0 243.0 L 1032.0 243.0" stroke="#fdbfc8" style="animation-delay:0s,0.90s"/>
-<path class="fx" d="M 1032.0 313.0 L 840.0 313.0" stroke="#fdbfc8" style="animation-delay:0s,1.80s"/>
-<path class="fx" d="M 392.0 420.0 L 268.0 420.0" stroke="#fdbfc8" style="animation-delay:0s,2.70s"/>
-<path class="fx" d="M 1200.0 468.0 L 1200.0 597.0 L 146.0 597.0 L 146.0 584.0" stroke="#fdbfc8" style="animation-delay:0s,2.70s"/>
-<path class="fx" d="M 146.0 732.0 L 146.0 764.0" stroke="#d7cafc" style="animation-delay:0s,3.60s"/>
-<path class="fx" d="M 616.0 732.0 L 616.0 764.0" stroke="#d7cafc" style="animation-delay:0s,3.60s"/>
-<path class="fx" d="M 1032.0 793.0 L 840.0 793.0" stroke="#fdbfc8" style="animation-delay:0s,4.50s"/>
-<path class="fx" d="M 1200.0 660.0 L 1200.0 641.0 L 320.0 641.0 L 320.0 793.0 L 260.0 793.0" stroke="#fdbfc8" style="animation-delay:0s,4.50s"/>
-<path class="fx" d="M 1200.0 924.0 L 1200.0 940.0" stroke="#fdbfc8" style="animation-delay:0s,5.40s"/>
-<path class="fx" d="M 1032.0 1111.0 L 840.0 1111.0" stroke="#fdcda7" style="animation-delay:0s,6.30s"/>
-<path class="fx" d="M 1112.0 1140.0 L 1112.0 1160.0" stroke="#fdbfc8" style="animation-delay:0s,6.30s"/>
-<path class="fx" d="M 1192.0 1189.0 L 1208.0 1189.0" stroke="#fdbfc8" style="animation-delay:0s,7.20s"/>
-<path class="fx" d="M 1032.0 1189.0 L 840.0 1189.0" stroke="#fdcda7" style="animation-delay:0s,7.20s"/>
-<path class="fx" d="M 624.0 1189.0 L 608.0 1189.0" stroke="#fdcda7" style="animation-delay:0s,8.10s"/>
-<g opacity="0.55">
-<rect x="32" y="150" width="228" height="52" rx="6" fill="#0f172a"/>
-<rect x="32" y="150" width="228" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="146.0" y="169.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Okta / Google</text>
-<text x="146.0" y="189.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SSO via Thunder</text>
-<rect x="200.8" y="140" width="51.2" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
-<text x="226.4" y="150.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">planned</text>
-</g>
-<rect x="32" y="214" width="228" height="58" rx="6" fill="#0f172a"/>
-<rect x="32" y="214" width="228" height="58" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="146.0" y="229.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Apps</text>
-<text x="146.0" y="248.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Argo CD repo-creds (read)</text>
-<text x="146.0" y="264.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">promotion gate (PRs)</text>
-<rect x="32" y="284" width="228" height="58" rx="6" fill="#0f172a"/>
-<rect x="32" y="284" width="228" height="58" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="146.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions OIDC</text>
-<text x="146.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">job token → Fulcio cert</text>
-<text x="146.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(keyless signing)</text>
-<rect x="392" y="150" width="448" height="52" rx="6" fill="#0f172a"/>
-<rect x="392" y="150" width="448" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="616.0" y="169.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Thunder</text>
-<text x="616.0" y="189.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OIDC IdP · console, API, CLI, gate client</text>
-<rect x="392" y="214" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="214" width="216" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="500.0" y="229.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cert-manager</text>
-<text x="500.0" y="248.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">agent CA per cluster</text>
-<text x="500.0" y="264.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">gateway CA · keys stay</text>
-<rect x="624" y="214" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="624" y="214" width="216" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="732.0" y="228.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#f1f5f9" text-anchor="middle">ESO + ClusterResourceSet</text>
-<text x="732.0" y="248.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">templates cert + key</text>
-<text x="732.0" y="263.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">into CRS payload</text>
-<rect x="392" y="284" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="284" width="216" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="500.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenBao</text>
-<text x="500.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh CA per group</text>
-<text x="500.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keys never exported</text>
-<rect x="554.7" y="274" width="45.3" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
-<text x="577.3" y="284.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">opt-in</text>
-<rect x="624" y="284" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="624" y="284" width="216" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="732.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-gateway</text>
-<text x="732.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">client CA = that</text>
-<text x="732.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cluster&#x27;s agent CA</text>
-<g opacity="0.55">
-<rect x="1032" y="150" width="336" height="52" rx="6" fill="#0f172a"/>
-<rect x="1032" y="150" width="336" height="52" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
-<text x="1200.0" y="169.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kube-apiserver OIDC</text>
-<text x="1200.0" y="189.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">trusts the Thunder issuer</text>
-<rect x="1308.8" y="140" width="51.2" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
-<text x="1334.4" y="150.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">planned</text>
-</g>
-<rect x="1032" y="214" width="336" height="58" rx="6" fill="#0f172a"/>
-<rect x="1032" y="214" width="336" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1200.0" y="229.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent-tls</text>
-<text x="1200.0" y="248.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">own cert + key (CN = cluster)</text>
-<text x="1200.0" y="264.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">+ public gateway CA</text>
-<rect x="1032" y="284" width="160" height="58" rx="6" fill="#0f172a"/>
-<rect x="1032" y="284" width="160" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="1112.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent</text>
-<text x="1112.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">dials out</text>
-<text x="1112.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">wss + mTLS</text>
-<rect x="1208" y="284" width="160" height="58" rx="6" fill="#0f172a"/>
-<rect x="1208" y="284" width="160" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
-<text x="1288.0" y="299.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ztunnel</text>
-<text x="1288.0" y="318.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SPIFFE mTLS</text>
-<text x="1288.0" y="334.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh: istio-csr</text>
-<rect x="36" y="436" width="220" height="44" rx="6" fill="#0f172a"/>
-<rect x="36" y="436" width="220" height="44" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="146.0" y="452.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">kubernetes (mgmt ns)</text>
-<text x="146.0" y="471.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">local stand-in</text>
-<rect x="36" y="486" width="220" height="44" rx="6" fill="#0f172a"/>
-<rect x="36" y="486" width="220" height="44" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
-<text x="146.0" y="502.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">AWS Secrets Manager</text>
-<text x="146.0" y="521.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
-<rect x="36" y="536" width="220" height="44" rx="6" fill="#0f172a"/>
-<rect x="36" y="536" width="220" height="44" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
-<text x="146.0" y="552.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">Vault</text>
-<text x="146.0" y="571.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">rendered only</text>
-<rect x="392" y="404" width="448" height="64" rx="6" fill="#0f172a"/>
-<rect x="392" y="404" width="448" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="616.0" y="422.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ClusterSecretStore platform</text>
-<text x="616.0" y="441.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">namespace-scoped (spec.conditions): argocd,</text>
-<text x="616.0" y="457.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">fleet, thunder, harbor, workflows-default, …</text>
-<rect x="392" y="482" width="448" height="64" rx="6" fill="#0f172a"/>
-<rect x="392" y="482" width="448" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="616.0" y="499.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">mgmt-fleet · mgmt-openchoreo · mgmt-harbor</text>
-<text x="616.0" y="519.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">read-only in-cluster stores: kubeconfigs,</text>
-<text x="616.0" y="534.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">agent certs, public ca.crt only</text>
-<rect x="1032" y="404" width="336" height="64" rx="6" fill="#0f172a"/>
-<rect x="1032" y="404" width="336" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1200.0" y="422.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ClusterSecretStore default</text>
-<text x="1200.0" y="441.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">app + collector secrets</text>
-<text x="1200.0" y="457.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">same backend, scoped</text>
-<rect x="32" y="660" width="228" height="72" rx="6" fill="#0f172a"/>
-<rect x="32" y="660" width="228" height="72" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="146.0" y="674.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GitHub Actions</text>
-<text x="146.0" y="693.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci container.yaml</text>
-<text x="146.0" y="709.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Trivy · Syft SBOM · SLSA</text>
-<text x="146.0" y="724.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign keyless (Fulcio)</text>
-<rect x="32" y="764" width="228" height="58" rx="6" fill="#0f172a"/>
-<rect x="32" y="764" width="228" height="58" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="146.0" y="779.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">GHCR</text>
-<text x="146.0" y="798.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">image + signature +</text>
-<text x="146.0" y="814.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SBOM · SLSA · vuln</text>
-<rect x="392" y="660" width="448" height="72" rx="6" fill="#0f172a"/>
-<rect x="392" y="660" width="448" height="72" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="616.0" y="674.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC workflow plane</text>
-<text x="616.0" y="693.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Trivy · SPDX SBOM · SLSA provenance</text>
-<text x="616.0" y="709.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">cosign sign + attest: platform key</text>
-<text x="616.0" y="724.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(cosign-platform via ESO)</text>
-<rect x="392" y="764" width="448" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="764" width="448" height="58" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="616.0" y="779.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Harbor · apps</text>
-<text x="616.0" y="798.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">signed + scanned (Trivy on push)</text>
-<text x="616.0" y="814.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">registry CA public via ESO</text>
-<rect x="1032" y="660" width="336" height="162" rx="6" fill="#0f172a"/>
-<rect x="1032" y="660" width="336" height="162" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1200.0" y="695.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno ImageValidatingPolicy</text>
-<text x="1200.0" y="715.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ghcr.io/koorikla/*: keyless, the</text>
-<text x="1200.0" y="730.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">koorikla/ci workflow identity,</text>
-<text x="1200.0" y="746.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">repo + ref + trigger pinned</text>
-<text x="1200.0" y="761.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">SBOM · SLSA · vuln required</text>
-<text x="1200.0" y="777.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Harbor apps/*: platform key</text>
-<text x="1200.0" y="792.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">dev, staging Audit · prod Deny</text>
-<rect x="392" y="880" width="448" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="880" width="448" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="616.0" y="895.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno</text>
-<text x="616.0" y="914.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PSS baseline ValidatingPolicies (Audit)</text>
-<text x="616.0" y="930.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">platform namespaces excluded</text>
-<rect x="392" y="952" width="448" height="64" rx="6" fill="#0f172a"/>
-<rect x="392" y="952" width="448" height="64" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="616.0" y="970.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ValidatingAdmissionPolicy</text>
-<text x="616.0" y="989.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">gated ReleaseBindings (production): only</text>
-<text x="616.0" y="1005.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Argo CD&#x27;s gated Application may write</text>
-<rect x="1032" y="880" width="336" height="44" rx="6" fill="#0f172a"/>
-<rect x="1032" y="880" width="336" height="44" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
-<text x="1200.0" y="896.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kube-apiserver</text>
-<text x="1200.0" y="915.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">pod / controller create, update</text>
-<rect x="1032" y="940" width="336" height="82" rx="6" fill="#0f172a"/>
-<rect x="1032" y="940" width="336" height="82" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1200.0" y="959.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno</text>
-<text x="1200.0" y="978.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PSS baseline (Audit)</text>
-<text x="1200.0" y="994.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">trusted registries per env</text>
-<text x="1200.0" y="1009.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">ambient enrolment (mutate)</text>
-<rect x="392" y="1082" width="448" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="1082" width="448" height="58" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
-<text x="616.0" y="1097.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OC observability plane</text>
-<text x="616.0" y="1116.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Falco JSON stdout → Fluent Bit →</text>
-<text x="616.0" y="1132.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenSearch (alerts searchable)</text>
-<rect x="392" y="1160" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="392" y="1160" width="216" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
-<text x="500.0" y="1175.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">falco-response</text>
-<text x="500.0" y="1194.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">enrich → Event ·</text>
-<text x="500.0" y="1210.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">RCA, notify: opt-in</text>
-<rect x="624" y="1160" width="216" height="58" rx="6" fill="#0f172a"/>
-<rect x="624" y="1160" width="216" height="58" rx="6" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.5"/>
-<text x="732.0" y="1175.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">argo-events</text>
-<text x="732.0" y="1194.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">endpoint per cluster</text>
-<text x="732.0" y="1210.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Sensor ≥ Critical</text>
-<rect x="1032" y="1082" width="160" height="58" rx="6" fill="#0f172a"/>
-<rect x="1032" y="1082" width="160" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1112.0" y="1097.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Falco</text>
-<text x="1112.0" y="1116.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">modern_ebpf</text>
-<text x="1112.0" y="1132.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">dp-* rules</text>
-<rect x="1032" y="1160" width="160" height="58" rx="6" fill="#0f172a"/>
-<rect x="1032" y="1160" width="160" height="58" rx="6" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.5"/>
-<text x="1112.0" y="1175.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">falcosidekick</text>
-<text x="1112.0" y="1194.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">alert fan-out</text>
-<text x="1112.0" y="1210.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">own token (CRS)</text>
-<rect x="1208" y="1160" width="160" height="58" rx="6" fill="#0f172a"/>
-<rect x="1208" y="1160" width="160" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
-<text x="1288.0" y="1175.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Falco Talon</text>
-<text x="1288.0" y="1194.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">terminate · label</text>
-<text x="1288.0" y="1210.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(scoped, dp-*)</text>
-<text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">Security · identity, secrets, supply chain, admission, runtime</text>
-<text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">rows = concern, columns = trust zone · gutter labels name what crosses · arrow = initiator → target · CA private keys never leave mgmt</text>
-<text x="30.0" y="98.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">external</text>
-<text x="390.0" y="98.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">mgmt cluster · trust root</text>
-<text x="1030.0" y="98.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">workload cluster &lt;name&gt;</text>
-<text x="32.0" y="134.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">1 · identity &amp; trust</text>
-<rect x="268.5" y="167.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="326.0" y="180.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">OIDC federation</text>
-<rect x="885.7" y="167.5" width="100.7" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="180.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">trusts issuer</text>
-<rect x="875.0" y="234.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="247.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">cert + key (CRS)</text>
-<rect x="875.0" y="304.5" width="122.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="317.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">wss + mTLS (out)</text>
-<rect x="832.2" y="342.5" width="207.6" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="355.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">CSR via istio-csr, JWT (out)</text>
-<text x="32.0" y="394.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">2 · secrets</text>
-<rect x="268.5" y="411.5" width="115.0" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="326.0" y="424.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">reads flat keys</text>
-<rect x="465.8" y="588.5" width="300.3" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="616.0" y="601.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">reads app secrets directly (not via mgmt)</text>
-<text x="32.0" y="646.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">3 · supply chain</text>
-<rect x="152.0" y="740.5" width="100.7" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="156.0" y="753.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#a78bfa" text-anchor="start">sign + attest</text>
-<rect x="622.0" y="740.5" width="36.5" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="626.0" y="753.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#a78bfa" text-anchor="start">push</text>
-<rect x="864.3" y="784.5" width="143.5" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="797.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">verify platform key</text>
-<rect x="415.0" y="632.5" width="450.1" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="640.0" y="645.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb7185" text-anchor="middle">verify keyless signature + attestations at GHCR (not via mgmt)</text>
-<text x="32.0" y="870.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">4 · admission</text>
-<text x="32.0" y="896.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Pod Security baseline,</text>
-<text x="32.0" y="914.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Audit first (reports);</text>
-<text x="32.0" y="932.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">restricted is the target.</text>
-<text x="32.0" y="950.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Platform namespaces are</text>
-<text x="32.0" y="968.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">never touched.</text>
-<text x="32.0" y="1072.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#fb7185" text-anchor="start">5 · runtime</text>
-<text x="32.0" y="1098.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Falco detects on the node;</text>
-<text x="32.0" y="1116.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Talon responds in place;</text>
-<text x="32.0" y="1134.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">≥ Critical escalates to</text>
-<text x="32.0" y="1152.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">mgmt (argo-events).</text>
-<rect x="871.4" y="1102.5" width="129.2" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="1115.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb923c" text-anchor="middle">logs (Fluent Bit)</text>
-<rect x="867.8" y="1180.5" width="136.3" height="17.5" rx="3" fill="#020617" fill-opacity="0.92"/>
-<text x="936.0" y="1193.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#fb923c" text-anchor="middle">webhook ≥ Critical</text>
-<text x="28.0" y="1264.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Legend</text>
-<rect x="28" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="28" y="1280" width="22" height="13" rx="3" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.2"/>
-<text x="58.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">external / git</text>
-<rect x="254" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="254" y="1280" width="22" height="13" rx="3" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.2"/>
-<text x="284.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenChoreo</text>
-<rect x="480" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="480" y="1280" width="22" height="13" rx="3" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.2"/>
-<text x="510.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">security &amp; secrets</text>
-<rect x="706" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="706" y="1280" width="22" height="13" rx="3" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.2"/>
-<text x="736.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">networking</text>
-<rect x="932" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="932" y="1280" width="22" height="13" rx="3" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.2"/>
-<text x="962.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">registry &amp; data</text>
-<rect x="1158" y="1280" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="1158" y="1280" width="22" height="13" rx="3" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.2"/>
-<text x="1188.0" y="1291.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">telemetry &amp; events</text>
-<rect x="28" y="1302" width="22" height="13" rx="3" fill="#0f172a"/>
-<rect x="28" y="1302" width="22" height="13" rx="3" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.2"/>
-<text x="58.0" y="1313.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cloud / infra</text>
-<rect x="28" y="1324" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4"/>
-<text x="58.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">built (on main)</text>
-<rect x="254" y="1324" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.55"/>
-<text x="284.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned (not on main)</text>
-<rect x="478" y="1321" width="26" height="19" rx="6" fill="none" stroke="#7b8cab" stroke-width="1.4"/>
-<text x="510.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster / zone</text>
-<path d="M 702 1331 L 728 1331" stroke="#e2e8f0" stroke-width="1.8" marker-end="url(#ahe2e8f0)"/>
-<path class="fx" d="M 702 1331 L 728 1331" stroke="#ced5df" style="animation-delay:0s,0.00s"/>
-<text x="736.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">flow (animated)</text>
-<line x1="928" y1="1331" x2="954" y2="1331" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.55" marker-end="url(#ahe2e8f0)"/>
-<text x="962.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned flow</text>
-<rect x="1158" y="1324" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.2"/>
-<rect class="pulse" x="1155" y="1321" width="28" height="19" rx="5" fill="none" stroke="#f8fafc" stroke-width="2"/>
-<text x="1188.0" y="1335.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">focus of this view</text>
-<line x1="24" y1="1353" x2="50" y2="1353" stroke="#fb7185" stroke-width="1.8" marker-end="url(#ahfb7185)"/>
-<text x="58.0" y="1357.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">certs, secrets, verification</text>
-<line x1="250" y1="1353" x2="276" y2="1353" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#aha78bfa)"/>
-<text x="284.0" y="1357.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">artifact</text>
-<line x1="476" y1="1353" x2="502" y2="1353" stroke="#fb923c" stroke-width="1.8" marker-end="url(#ahfb923c)"/>
-<text x="510.0" y="1357.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">alerts, logs</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="911" viewBox="0 0 960 911" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 11.30s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}23.4%{opacity:1}28.4%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fbbf24"/></marker></defs><rect width="960" height="911" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="895" rx="12" fill="none" stroke="#475569"/>
+<path d="M 392.0 152.0 L 456.0 152.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 652.0 152.0 L 716.0 152.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 814.0 192.0 L 814.0 256.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 716.0 296.0 L 652.0 296.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 554.0 400.0 L 554.0 336.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 456.0 440.0 L 392.0 440.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 652.0 440.0 L 716.0 440.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 392.0 152.0 L 456.0 152.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 652.0 152.0 L 716.0 152.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 814.0 192.0 L 814.0 256.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 716.0 296.0 L 652.0 296.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 554.0 400.0 L 554.0 336.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 456.0 440.0 L 392.0 440.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 652.0 440.0 L 716.0 440.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<rect x="196" y="112" width="196" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="294.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">build &amp; scan</text>
+<text class="s" x="294.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">BuildKit · Trivy</text>
+<text class="s" x="294.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">SBOM + SLSA provenance</text>
+<rect x="456" y="112" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="554.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cosign</text>
+<text class="s" x="554.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">platform key (in-cluster)</text>
+<text class="s" x="554.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">or keyless (Fulcio)</text>
+<rect x="716" y="112" width="196" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
+<text class="s" x="814.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">registry</text>
+<text class="s" x="814.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Harbor · GHCR</text>
+<text class="s" x="814.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">image + signature + SBOM</text>
+<rect x="196" y="256" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="294.0" y="282.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production gate</text>
+<text class="s" x="294.0" y="302.4" font-size="13" fill="#cbd5e1" text-anchor="middle">ValidatingAdmissionPolicy:</text>
+<text class="s" x="294.0" y="319.9" font-size="13" fill="#cbd5e1" text-anchor="middle">only Argo CD writes prod</text>
+<rect x="456" y="256" width="196" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="554.0" y="282.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">app pods</text>
+<text class="s" x="554.0" y="302.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo dp-*</text>
+<text class="s" x="554.0" y="319.9" font-size="13" fill="#cbd5e1" text-anchor="middle">namespaces</text>
+<rect x="712" y="252" width="204" height="88" rx="11" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
+<rect x="716" y="256" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="2.2"/>
+<text class="s" x="814.0" y="282.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Kyverno</text>
+<text class="s" x="814.0" y="302.4" font-size="13" fill="#cbd5e1" text-anchor="middle">image verification</text>
+<text class="s" x="814.0" y="319.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ Pod Security baseline</text>
+<rect x="196" y="400" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="294.0" y="426.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Falco Talon</text>
+<text class="s" x="294.0" y="446.4" font-size="13" fill="#cbd5e1" text-anchor="middle">terminate or label</text>
+<text class="s" x="294.0" y="463.9" font-size="13" fill="#cbd5e1" text-anchor="middle">the pod (dp-* only)</text>
+<rect x="456" y="400" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="554.0" y="426.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Falco</text>
+<text class="s" x="554.0" y="446.4" font-size="13" fill="#cbd5e1" text-anchor="middle">modern eBPF</text>
+<text class="s" x="554.0" y="463.9" font-size="13" fill="#cbd5e1" text-anchor="middle">on every node</text>
+<rect x="716" y="400" width="196" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="814.0" y="426.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">falco-response</text>
+<text class="s" x="814.0" y="446.4" font-size="13" fill="#cbd5e1" text-anchor="middle">falcosidekick →</text>
+<text class="s" x="814.0" y="463.9" font-size="13" fill="#cbd5e1" text-anchor="middle">argo-events → workflow</text>
+<rect x="196" y="544" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="294.0" y="570.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Thunder</text>
+<text class="s" x="294.0" y="590.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OIDC: console, API,</text>
+<text class="s" x="294.0" y="607.9" font-size="13" fill="#cbd5e1" text-anchor="middle">CLI, promotion gate</text>
+<rect x="456" y="544" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="554.0" y="570.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">ESO</text>
+<text class="s" x="554.0" y="590.4" font-size="13" fill="#cbd5e1" text-anchor="middle">one secret backend,</text>
+<text class="s" x="554.0" y="607.9" font-size="13" fill="#cbd5e1" text-anchor="middle">namespace-scoped stores</text>
+<rect x="716" y="544" width="196" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
+<text class="s" x="814.0" y="570.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">PKI</text>
+<text class="s" x="814.0" y="590.4" font-size="13" fill="#cbd5e1" text-anchor="middle">cert-manager: agent CAs</text>
+<text class="s" x="814.0" y="607.9" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenBao: mesh CA</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">Security · from build to runtime</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Four layers, each a separate control: signed supply chain, admission, runtime detection and response, and the identity / secrets / keys</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#94a3b8">underneath.</text>
+<text class="s" x="32.0" y="134.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">SUPPLY CHAIN</text>
+<text class="s" x="32.0" y="156.0" font-size="13" fill="#94a3b8">every image is</text>
+<text class="s" x="32.0" y="174.0" font-size="13" fill="#94a3b8">signed + attested</text>
+<text class="s" x="32.0" y="278.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">ADMISSION</text>
+<text class="s" x="32.0" y="300.0" font-size="13" fill="#94a3b8">only verified</text>
+<text class="s" x="32.0" y="318.0" font-size="13" fill="#94a3b8">images start</text>
+<text class="s" x="32.0" y="422.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">RUNTIME</text>
+<text class="s" x="32.0" y="444.0" font-size="13" fill="#94a3b8">detect, respond,</text>
+<text class="s" x="32.0" y="462.0" font-size="13" fill="#94a3b8">escalate</text>
+<text class="s" x="32.0" y="566.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">FOUNDATIONS</text>
+<text class="s" x="32.0" y="588.0" font-size="13" fill="#94a3b8">identity, secrets,</text>
+<text class="s" x="32.0" y="606.0" font-size="13" fill="#94a3b8">keys (trust view)</text>
+<circle cx="215.0" cy="275.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="215.0" y="279.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="419.0" cy="152.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="419.0" y="156.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="679.0" cy="152.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="679.0" y="156.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="814.0" cy="219.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="814.0" y="223.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="689.0" cy="296.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="689.0" y="300.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="554.0" cy="373.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="554.0" y="377.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="429.0" cy="440.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="429.0" y="444.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="679.0" cy="440.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="679.0" y="444.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<line x1="28" y1="644" x2="932" y2="644" stroke="#64748b" stroke-width="1.5"/>
+<circle cx="40.0" cy="661.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="666" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="60.0" y="666.0" font-size="13.5" fill="#cbd5e1">The build scans (Trivy) and writes an SBOM and SLSA</text>
+<text class="s" x="60.0" y="685.0" font-size="13.5" fill="#cbd5e1">provenance</text>
+<circle cx="40.0" cy="708.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="713" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="60.0" y="713.0" font-size="13.5" fill="#cbd5e1">cosign signs and attests: platform key in-cluster, keyless</text>
+<text class="s" x="60.0" y="732.0" font-size="13.5" fill="#cbd5e1">(Fulcio) on GitHub</text>
+<circle cx="40.0" cy="755.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="760" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="60.0" y="760.0" font-size="13.5" fill="#cbd5e1">Kyverno verifies signature and attestations: Deny in production,</text>
+<text class="s" x="60.0" y="779.0" font-size="13.5" fill="#cbd5e1">Audit in dev and staging</text>
+<circle cx="40.0" cy="802.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40.0" y="807" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="60.0" y="807.0" font-size="13.5" fill="#cbd5e1">Only verified images and Pod Security baseline pods start</text>
+<circle cx="506.0" cy="661.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="666" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="526.0" y="666.0" font-size="13.5" fill="#cbd5e1">Production bindings: a ValidatingAdmissionPolicy admits only</text>
+<text class="s" x="526.0" y="685.0" font-size="13.5" fill="#cbd5e1">Argo CD&#x27;s gated app</text>
+<circle cx="506.0" cy="708.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="713" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="526.0" y="713.0" font-size="13.5" fill="#cbd5e1">Falco watches every node&#x27;s syscalls (modern eBPF)</text>
+<circle cx="506.0" cy="736.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="741" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="526.0" y="741.0" font-size="13.5" fill="#cbd5e1">Falco Talon responds in place: terminate or label the pod</text>
+<circle cx="506.0" cy="764.5" r="11" fill="#fbbf24"/>
+<text class="s" x="506.0" y="769" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="526.0" y="769.0" font-size="13.5" fill="#cbd5e1">≥ Critical escalates to mgmt: falcosidekick → argo-events →</text>
+<text class="s" x="526.0" y="788.0" font-size="13.5" fill="#cbd5e1">falco-response</text>
+<rect x="28" y="851" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
+<text class="s" x="58.0" y="861.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
+<rect x="162.86294" y="851" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
+<text class="s" x="192.9" y="861.0" font-size="13" fill="#94a3b8">workload cluster</text>
+<rect x="318.40966000000003" y="851" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="1.3"/>
+<text class="s" x="348.4" y="861.0" font-size="13" fill="#94a3b8">security &amp; trust</text>
+<rect x="465.5368" y="851" width="20" height="13" rx="3" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.3"/>
+<text class="s" x="495.5" y="861.0" font-size="13" fill="#94a3b8">stateful data</text>
+<path d="M 594.61024 857 L 616.61024 857" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 594.61024 857 L 616.61024 857" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<text class="s" x="626.6" y="861.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
+<rect x="25" y="872" width="26" height="19" rx="6" fill="none" stroke="#cbd5e1" stroke-opacity=".85" stroke-width="1.2"/>
+<rect x="28" y="875" width="20" height="13" rx="3" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+<text class="s" x="58.0" y="885.0" font-size="13" fill="#94a3b8">focus of this view</text>
 </svg>

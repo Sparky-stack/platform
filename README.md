@@ -12,17 +12,24 @@ Strimzi Kafka, KEDA).
 Why: one management cluster, one git repo and one file per cluster give every cluster the same addons, identities and
 policies, on any provider, without imperative steps after bootstrap.
 
-<img src="docs/diagrams/architecture.svg" alt="Architecture: git repos, mgmt cluster (Argo CD, Cluster API, ESO, cert-manager, OpenChoreo planes, Harbor, Kyverno, Falco, argo-events), workload clusters (data plane, kgateway, Istio ambient, Cilium, Kyverno, Falco, telemetry), cloud providers" width="100%">
+<img src="docs/diagrams/architecture.svg" alt="Architecture: git drives Argo CD on the mgmt cluster (Kyverno, Cluster API, secrets and PKI, Harbor, OpenChoreo); Cluster API creates the workload clusters, Argo CD pushes their addons, the cluster-agent dials out and applies app releases, Kyverno admits only signed images" width="100%">
 
 ### Diagrams
 
-Animated SVGs (motion stops with the OS "reduce motion" setting). Click a view for full size; all of them, plus
-[cluster lifecycle](docs/diagrams/cluster-lifecycle.svg), are explained in [docs/diagrams/](docs/diagrams/README.md).
+Animated SVGs: the numbered flow moves, and stops with the OS "reduce motion" setting. Click a view for full size;
+each step is written out in [docs/diagrams/](docs/diagrams/README.md).
 
 | | |
 |---|---|
-| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: identity & trust, secrets, supply chain, admission, runtime | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: kgateway, Istio ambient, Cilium / flannel, paths to mgmt |
-| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, OpenSearch, Prometheus, observer API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, GitOps hand-off, gated promotion |
+| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: supply chain, admission, runtime, foundations | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: a request in, the agents out |
+| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, stores, observer API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, promote, admit |
+
+Day-2 operations:
+
+| | |
+|---|---|
+| [<img src="docs/diagrams/cluster-lifecycle.svg" alt="Cluster lifecycle view" width="100%">](docs/diagrams/cluster-lifecycle.svg)<br>**Cluster lifecycle**: add, upgrade, remove = edit one file | [<img src="docs/diagrams/trust.svg" alt="Trust and certificates view" width="100%">](docs/diagrams/trust.svg)<br>**Trust & certificates**: agent CAs, OpenBao mesh CA, rotation |
+| [<img src="docs/diagrams/backup.svg" alt="Backup and restore view" width="100%">](docs/diagrams/backup.svg)<br>**Backup & restore**: what is stateful where, restore order | [<img src="docs/diagrams/upgrade.svg" alt="Upgrade flow view" width="100%">](docs/diagrams/upgrade.svg)<br>**Upgrades**: Renovate → CI → Argo CD → verify |
 
 ## Quick start (local)
 
@@ -62,7 +69,7 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [docs/ai-agents.md](docs/ai-agents.md) | OpenChoreo RCA and FinOps agents, agentgateway, OpenCost (switched off) |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task), hosts, portable scripts, image architecture audit |
-| [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC, cluster lifecycle |
+| [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC; day-2: cluster lifecycle, trust & certificates, backup & restore, upgrades; the visual system |
 
 Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app),
 [koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows and build scripts).
