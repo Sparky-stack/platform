@@ -78,6 +78,22 @@ kyverno:
       resources:
         requests: { cpu: 50m, memory: 128Mi }
         limits: { memory: 384Mi }
+      # Image verification cache (#136, docs/supply-chain.md "Admission latency"). A keyless verification costs ~5 s
+      # (Kyverno 1.20 refreshes the Sigstore TUF metadata and walks the image's registry referrers on every call); a
+      # cached one ~0. Kyverno caches only SUCCESSFUL verifications, only of digest references (repo@sha256:...), keyed
+      # by digest + the attestor's full definition (identity, extensions, Rekor) + the attestation type: a tag, a failed
+      # verification, another policy identity or another digest is always verified again. Set explicitly (not chart
+      # defaults) so the trade-off is reviewed here:
+      #   TTL 24h       an image verified in staging (same attestors, so the same cache entries) is still cached when
+      #                 its production promotion is approved that day. The TTL also bounds how long a Sigstore
+      #                 trust-root change (revoked Fulcio/Rekor key) takes to reach digests verified before it; deleting
+      #                 the admission controller pod flushes the cache (in-memory, per replica).
+      #   max 32 MiB    entries are charged their attestation payloads, ~1 MiB per image (the SPDX SBOM dominates):
+      #                 ~30 images per replica; the default 10 MiB evicts after ~10.
+      extraArgs:
+        imageVerifyCacheEnabled: true
+        imageVerifyCacheTTLDuration: 24h
+        imageVerifyCacheMaxSize: "33554432"   # bytes, quoted: helm renders a bare number as 3.3554432e+07
   backgroundController:
     replicas: 1
     image: { tag: "v1.20.0@sha256:c72df38320a48fc9de10f9d23d087a117853bb08207b7f60f6d1e8457fb3ddb7" }
