@@ -5,3 +5,9 @@
 promotionGate:
   smoke:
     http: false
+
+# TEMPORARY (#115): production leaves the pipeline while its Environment moves from prod1 to dev1. OpenChoreo blocks
+# deleting an Environment a DeploymentPipeline references, and dataPlaneRef is immutable. Reverted once production is
+# Ready on dev1.
+deploymentPipeline:
+  environments: [development, staging]
