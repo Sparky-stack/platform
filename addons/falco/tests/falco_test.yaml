@@ -63,6 +63,23 @@ tests:
           content: { secretKey: webhookToken, remoteRef: { key: falco-webhook, property: token } }
       - notContains: { path: spec.data, content: { secretKey: slackUrl }, any: true }
 
+  - it: local installation - rules skip containers without k8s metadata (other clusters' pods on the shared kernel)
+    template: charts/falco/templates/rules-configmap.yaml
+    values: [../../../installations/local/addons/falco/values.yaml]
+    asserts:
+      - matchRegex: { path: 'data["zz-local-unattributed.yaml"]', pattern: 'condition: \(container and not k8s.ns.name exists\)' }
+      - matchRegex: { path: 'data["zz-local-unattributed.yaml"]', pattern: '- rule: Drop and execute new binary in container\n\s+condition: and not local_unattributed_container\n\s+override:\n\s+condition: append' }
+      - matchRegex: { path: 'data["zz-local-unattributed.yaml"]', pattern: '- rule: Contact K8S API Server From Container\n\s+condition: and not local_unattributed_container\n\s+override:\n\s+condition: append' }
+      - matchRegex: { path: 'data["zz-local-unattributed.yaml"]', pattern: '- rule: Platform write below etc\n\s+condition: and not local_unattributed_container\n\s+override:\n\s+condition: append' }
+      # the platform rules stay as they are; only appends, never a replaced condition or a disabled rule
+      - matchRegex: { path: 'data["platform-rules.yaml"]', pattern: 'rule: Platform crypto miner indicators' }
+      - notMatchRegex: { path: 'data["zz-local-unattributed.yaml"]', pattern: 'enabled: false|condition: replace|override:\n\s+condition: replace' }
+  - it: other installations keep every rule on unattributed containers (no local exception without the overlay)
+    template: charts/falco/templates/rules-configmap.yaml
+    asserts:
+      - notExists: { path: 'data["zz-local-unattributed.yaml"]' }
+      - notMatchRegex: { path: 'data["platform-rules.yaml"]', pattern: 'k8s.ns.name exists' }
+
   - it: CAPD node containers (kindest/node) are excepted from "Drop and execute new binary in container" (escalation storm)
     template: charts/falco/templates/rules-configmap.yaml
     asserts:
