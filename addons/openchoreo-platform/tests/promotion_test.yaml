@@ -75,6 +75,7 @@ tests:
       - notContains: { path: spec.actions, content: projectreleasebinding:update }
       - notContains: { path: spec.actions, content: projectreleasebinding:delete }
       - contains: { path: spec.actions, content: alerts:view }
+      - notContains: { path: spec.actions, content: metrics:view }   # the 5xx rate comes from Prometheus (#104)
 
   - it: promotion-gate is a generic ClusterWorkflow running in the enforced workflow namespace
     template: templates/promotion-gate.yaml
@@ -146,6 +147,22 @@ tests:
     asserts:
       - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: API_URL, value: "http://api.openchoreo.example.com:8080" } }
       - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: OBSERVE, value: "false" } }
+
+  - it: the 5xx rate is read from the observability-plane Prometheus (kgateway Envoy series, not the observer; #104)
+    template: templates/promotion-gate.yaml
+    asserts:
+      - contains:
+          path: "spec.runTemplate.spec.templates[0].script.env"
+          content: { name: PROMETHEUS_URL, value: "http://openchoreo-observability-prometheus.openchoreo-observability-plane:9091" }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: MAX_ERROR_RATE, value: "0.05" } }
+      - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'envoy_cluster_upstream_rq\{envoy_cluster_name=~' }
+      - notMatchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: '/api/v1/metrics/query' }
+
+  - it: requires the Prometheus URL
+    template: templates/promotion-gate.yaml
+    set: { promotionGate.prometheusURL: "" }
+    asserts:
+      - failedTemplate: { errorMessage: "promotionGate.prometheusURL is required" }
 
   - it: passes the shared freeze windows and gated environments to the gate base64-encoded (never JSON-looking)
     template: templates/promotion-gate.yaml

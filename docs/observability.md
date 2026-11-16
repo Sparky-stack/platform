@@ -89,7 +89,8 @@ The literals in the addon values are checked against `openchoreo.controlPlane.ho
 | Pod CPU/memory | Prometheus agent: kubelet/cAdvisor + kube-state-metrics with `openchoreo.dev/*` pod labels | remote write -> Prometheus | Metrics, RuntimeHealthCard |
 | Traces | apps (OTLP SDK) / OBI -> OTel Collector (k8s_attributes: all pod labels, cluster name) | OTLP/HTTP -> receiver -> OpenSearch `otel-traces-*` | Traces |
 | OTLP metrics | apps / OBI / falcosidekick -> OTel Collector | remote write -> Prometheus | (PromQL) |
-| HTTP request metrics | Cilium Hubble L7 (`hubble_http_*`, Cilium data planes only) -> Prometheus agent (ServiceMonitor `hubble-http`) | remote write -> Prometheus | Metrics (HTTP), promotion gate error rate |
+| Gateway HTTP response codes | kgateway Envoy `gateway-default` in `openchoreo-data-plane` (`envoy_cluster_upstream_rq`) -> Prometheus agent (PodMonitor `kgateway-http`) | remote write -> Prometheus | promotion gate 5xx rate (PromQL) |
+| HTTP request metrics | Cilium Hubble L7 (`hubble_http_*`, Cilium data planes only; none today) -> Prometheus agent (ServiceMonitor `hubble-http`) | remote write -> Prometheus | Metrics (HTTP) |
 | Falco alerts | Falco JSON on stdout -> Fluent Bit; falcosidekick -> collector (CloudEvents) | OpenSearch `container-logs-*` (ns falco); Datadog overlay | logs |
 
 Apps send OTLP to the node-local collector: `OTEL_EXPORTER_OTLP_ENDPOINT=http://telemetry-collector.telemetry.svc.cluster.local:4318`
@@ -231,7 +232,18 @@ http/dns/kafka with L7 visibility) off and use Istio for mTLS, authorization and
 
 ## HTTP metrics
 
-The observer's `metric: http` (Backstage HTTP charts, the promotion gate's error-rate check) is served by the
+**Gateway response codes (promotion gate).** Every data plane's kgateway Envoy (`gateway-default`, namespace
+`openchoreo-data-plane`) terminates north-south HTTP, independent of the CNI and of Istio ambient mTLS. Addon telemetry
+PodMonitor `kgateway-http` (`gatewayMetrics`) scrapes its pods on port `http-monitoring` (:9091) `/metrics` (the path
+the pods advertise) and keeps only `envoy_cluster_upstream_rq`: one counter per upstream cluster x response code,
+`envoy_cluster_name="kube_<namespace>_<service>_<port>"` (e.g. `kube_dp-default-demo-staging-ba410b48_hello-world_8080`),
+`envoy_response_code`, plus the pod labels `openchoreo_dev_plane_id` and `gateway_networking_k8s_io_gateway_name`. Envoy
+creates a code's series on its first response with that code, so the count stays at backends x codes seen. The
+promotion gate queries these series directly in Prometheus, not through the observer ([promotion.md](promotion.md),
+[#104](https://github.com/koorikla/platform/issues/104)). They cover gateway traffic only (external endpoints), not east-west
+calls inside the mesh.
+
+**Observer `metric: http`.** The observer's `metric: http` (Backstage HTTP charts) is served by the
 observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble series:
 `hubble_http_requests_total{reporter="server"}` (`status` 1xx-3xx ok, 4xx/5xx unsuccessful) and
 `hubble_http_request_duration_seconds`, joined to kube-state-metrics' `kube_pod_labels` on

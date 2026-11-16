@@ -1,0 +1,28 @@
+{{- /* kgateway Envoy upstream response codes for the promotion gate: values.yaml `gatewayMetrics` (#104). */ -}}
+{{- if .Values.gatewayMetrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kgateway-http
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kgateway-http
+    app.kubernetes.io/part-of: telemetry
+spec:
+  namespaceSelector:
+    matchNames: [openchoreo-data-plane]
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-class-name: kgateway
+  podTargetLabels:
+    - openchoreo.dev/plane-id
+    - gateway.networking.k8s.io/gateway-name
+  podMetricsEndpoints:
+    - port: http-monitoring
+      path: /metrics
+      scheme: http
+      metricRelabelings:
+        - action: keep
+          sourceLabels: [__name__]
+          regex: {{ .Values.gatewayMetrics.keep | quote }}
+{{- end }}

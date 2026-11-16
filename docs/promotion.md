@@ -104,9 +104,13 @@ with its Thunder token, never to the Kubernetes API). The run namespace is defau
 `build-runs-default-deny` of addon openchoreo-workflow-plane: DNS, API server for the executor, public 80/443, which
 covers `api.github.com`). The gate pod carries `promotionGate.podLabels` (`platform.koorikla.io/egress: openchoreo`),
 which opts it into NetworkPolicy `platform-workflows-openchoreo`: egress to the control-plane Gateway pods (port 8080:
-`api.<host>`, `thunder.<host>`, rewritten there by coredns-local) and the observability Gateway pods
-(`openchoreo.observability.httpPort`: `observer.<host>`). Build ClusterWorkflows never set the label and their
-parameters cannot (`hack/tests/test_gitops_contracts.sh` check 10 keeps both addons' labels equal).
+`api.<host>`, `thunder.<host>`, rewritten there by coredns-local), the observability Gateway pods
+(`openchoreo.observability.httpPort`: `observer.<host>`) and the observability Prometheus pod (port 9090 behind
+Service `openchoreo-observability-prometheus:9091`). On the receiving side NetworkPolicy
+`prometheus-platform-workflows` (addon openchoreo-observability-plane, `prometheusIngress`) admits exactly those pods
+from `workflows-<org namespace>` to that port; upstream's `observability-plane-ingress` allows same-namespace traffic
+only. Build ClusterWorkflows never set the label and their parameters cannot (`hack/tests/test_gitops_contracts.sh`
+check 10 keeps the three addons' labels, the Prometheus selector and port equal).
 
 **Credentials.** A per-run ExternalSecret against `${workflowplane.secretStore}` (`ClusterSecretStore/workflows`,
 scoped by `namespaceRegexes` to `workflows-*` and by `resourceNames` to `workflowStore.keys`; never the full
@@ -135,11 +139,21 @@ For one component and one edge (default staging → next environment) the gate c
    it, its rollout must have started after the last spec change and succeeded.
 3. **smoke**: `GET` on every external endpoint of the source binding (`status.endpoints[].externalURLs`) answers
    2xx/3xx (5 tries with backoff).
-4. **observability** (observer API, Thunder client credentials):
-   - `POST /api/v1alpha1/alerts/query`: no alert fired for the component in the source environment during the last
-     `observe.windowMinutes` (15).
-   - `POST /api/v1/metrics/query` (`metric: http`): unsuccessful/total requests ≤ `observe.maxErrorRate` (5%).
-     No traffic is reported, not failed.
+4. **observability**:
+   - observer API (Thunder client credentials), `POST /api/v1alpha1/alerts/query`: no alert fired for the component in
+     the source environment during the last `observe.windowMinutes` (15).
+   - **HTTP 5xx rate** from the observability-plane Prometheus (`promotionGate.prometheusURL`, plain PromQL, no
+     token). Source: the data plane's kgateway Envoy, which terminates all north-south HTTP, so it works with any CNI
+     and with Istio ambient mTLS ([observability.md](observability.md#http-metrics), [#104](https://github.com/koorikla/platform/issues/104)).
+     The gate resolves the source environment's namespace(s) from `kube_pod_labels` (`openchoreo.dev/namespace`,
+     `project`, `component`, `environment` pod labels, over the window), then compares
+     `sum(increase(envoy_cluster_upstream_rq{envoy_cluster_name=~"kube_<ns>_<component>_[0-9]+",envoy_response_code=~"5.."}[15m]))`
+     with the same sum over all response codes (Envoy's upstream cluster of the component's Service is
+     `kube_<namespace>_<service>_<port>`; the Service is named after the component). Above `observe.maxErrorRate` (5%)
+     fails; no requests in the window is reported (`no traffic`), not failed; no pods of the component in Prometheus
+     fails. The log and the PR evidence show the counts (`5xx rate 0.0200 (2 of 100 requests in 15m)`). It counts
+     only traffic through the gateway (external endpoints), not east-west calls, and `increase()` misses the
+     first scrape interval (30s) of a response code the gateway pod has never returned before.
 5. **freeze**: no `promotion.freezeWindows` entry is active for the target environment (IANA time zones, DST-aware).
 6. **promote**:
    - opens or updates the PR `promote(<component>): <release> to <env>` (branch `promote/<component>-<env>`) through
@@ -205,8 +219,8 @@ push main ─► CI (koorikla/ci: build, sign, SBOM, SLSA, vuln) ─► bump wor
   └► Argo CD syncs Workload ─► OpenChoreo cuts ComponentRelease hello-world-<hash> ─► binds development (autoDeploy)
 developer: PR "staging: releaseName hello-world-<hash>" (review by the team) ─► merge ─► staging rollout
   └► rollout succeeded ─► Argo Events ─► WorkflowRun gate-hello-world-<id> (promotion-gate)
-       pipeline ✓ readiness ✓ smoke ✓ observer ✓ freeze ✓ ─► PR "promote(hello-world): hello-world-<hash> to production"
-                                                             + status openchoreo/promotion-gate=success
+       pipeline ✓ readiness ✓ smoke ✓ alerts + 5xx ✓ freeze ✓ ─► PR "promote(hello-world): hello-world-<hash> to production"
+                                                                 + status openchoreo/promotion-gate=success
 release manager (CODEOWNERS) approves ─► merge ─► Argo CD syncs demo-hello-world-production (not in a freeze)
   └► VAP: argocd-application-controller for Application demo-hello-world-production ✓ ─► OpenChoreo renders for production's cluster
        └► Kyverno there (dev1 locally, prod1 in the multicluster profile): signature + SBOM + SLSA + vuln + digest ✓ ─► pods run
@@ -269,7 +283,8 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
   no-op when production already runs the release, otherwise it updates the same PR.
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
-  over the control-plane Gateway; locally these are plain HTTP on the docker network. Every other installation must
+  over the control-plane Gateway; locally these are plain HTTP on the docker network. `prometheusURL` is the
+  in-cluster Service (no credentials sent; the observability plane runs on mgmt with the workflow plane). Every other installation must
   set `promotionGate.tokenURL` / `apiURL` / `observerURL` to `https://` endpoints (HTTPS listener on the Gateway).
 - argo-events renders the promotion-gate Sensor only once the Argo Workflows CRDs exist (`workflowPlane: auto`,
   addon openchoreo-workflow-plane). The Argo Workflows controller watches all namespaces (`workflowNamespaces: []`);
