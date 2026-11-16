@@ -99,7 +99,7 @@ run nofleet cmd_down FAKE_LEFTOVERS=prod1
 assert_eq "$RC" 0 "nofleet: rc"
 assert_eq "$(count ' scale ')" 0 "nofleet: nothing to freeze"
 assert_eq "$(count "$DELETE")" 0 "nofleet: no Cluster delete"
-assert_eq "$(count '^docker rm -f id-prod1-0 id-prod1-1$')" 1 "nofleet: prod1 leftover (from installations/local/clusters) removed"
+assert_eq "$(count '^docker rm -f id-prod1-0 id-prod1-1$')" 1 "nofleet: prod1 leftover (from installations/local/clusters, prod1.yaml.disabled) removed"
 assert_eq "$(count '^k3d cluster delete platform-mgmt')" 1 "nofleet: k3d mgmt deleted"
 
 # --- only the local installation ---------------------------------------------------------------------------------
