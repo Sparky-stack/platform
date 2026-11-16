@@ -19,6 +19,29 @@ def utc(*a):
     return dt.datetime(*a, tzinfo=dt.timezone.utc)
 
 
+class JsonEnv(unittest.TestCase):
+    def setUp(self):
+        self._env = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._env)
+
+    def test_decodes_base64_json(self):
+        os.environ["FREEZE_WINDOWS_B64"] = base64.b64encode(json.dumps(WINDOW).encode()).decode()
+        self.assertEqual(gate.json_env("FREEZE_WINDOWS", []), WINDOW)
+
+    def test_unset_gives_default(self):
+        os.environ.pop("GATED_TARGETS_B64", None)
+        self.assertIsNone(gate.json_env("GATED_TARGETS", None))
+
+    def test_plain_json_is_rejected(self):
+        # the old JSON-looking form must not be accepted silently
+        os.environ["GATED_TARGETS_B64"] = '["production"]'
+        with self.assertRaises(ValueError):
+            gate.json_env("GATED_TARGETS", None)
+
+
 class Freeze(unittest.TestCase):
     def test_inside_weekend_window(self):
         # Fri 2026-11-13 16:30 Tallinn (EET, UTC+2) = 14:30 UTC

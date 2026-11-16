@@ -38,6 +38,12 @@ def env(name, default=""):
     return os.environ.get(name, default).strip()
 
 
+def json_env(name, default):
+    """JSON value from env <name>_B64 (base64: the WorkflowRun renderer would turn a JSON-looking string into a list)."""
+    raw = env(name + "_B64")
+    return json.loads(base64.b64decode(raw, validate=True)) if raw else default
+
+
 def secret(name):
     """Secret value from SECRETS_DIR/<name> (mounted Secret volume); env var fallback for local runs and tests."""
     path = os.path.join(env("SECRETS_DIR", "/var/run/secrets/promotion-gate"), name)
@@ -372,7 +378,8 @@ def main():
         target = targets[0]
     if target not in targets:
         raise GateFailed("pipeline %s has no promotion path %s -> %s" % (pipeline_name, source, target))
-    if env("GATED_TARGETS") and target not in json.loads(env("GATED_TARGETS")):
+    gated = json_env("GATED_TARGETS", None)
+    if gated is not None and target not in gated:
         log("  %s is not a gated target: nothing to do" % target)
         return
     log("  pipeline  %s: %s -> %s" % (pipeline_name, source, target))
@@ -420,7 +427,7 @@ def main():
         evidence.append("observer: no alerts in %sm, %s" % (env("OBSERVE_WINDOW_MINUTES", "15"), result))
 
     # 5. freeze
-    frozen = active_freeze(json.loads(env("FREEZE_WINDOWS", "[]") or "[]"), target, dt.datetime.now(dt.timezone.utc))
+    frozen = active_freeze(json_env("FREEZE_WINDOWS", []), target, dt.datetime.now(dt.timezone.utc))
     if frozen:
         raise GateFailed("freeze window active for %s: %s - %s %s" % (target, frozen["start"], frozen["end"],
                                                                       frozen.get("timeZone", "UTC")))
