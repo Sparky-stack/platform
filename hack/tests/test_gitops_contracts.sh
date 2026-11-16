@@ -230,4 +230,18 @@ printf 'kind: ClusterWorkflow\nmetadata: {name: bad}\nspec:\n  runTemplate:\n   
   > "$TMP/json-env-negative.yaml"
 assert_eq "$(yq "$json_env" "$TMP/json-env-negative.yaml")" "bad/L" "check 13 flags a JSON-looking env value (negative case)"
 
+# 14. Every run without a pod token (automountServiceAccountToken: false) names an executor ServiceAccount whose token
+#     Secret <sa>.service-account-token the workflow plane renders in the run namespace: Argo mounts the executor token
+#     from that Secret, and without it every run pod hangs in Init (FailedMount) until its deadline.
+token_sa=$(yq '.runExecutorToken.serviceAccount' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")
+helm template openchoreo-workflow-plane "$ROOT/addons/openchoreo-workflow-plane" --namespace openchoreo-workflow-plane \
+  -s templates/cluster-workflow-templates.yaml -s templates/run-executor-token.yaml > "$TMP/workflow-plane.yaml"
+assert_eq "$(yq 'select(.kind == "Secret" and .type == "kubernetes.io/service-account-token") | .metadata.name' \
+  "$TMP/workflow-plane.yaml")" "$token_sa.service-account-token" "workflow plane renders the executor token Secret"
+# shellcheck disable=SC2016  # yq expression, not shell
+executors='[(select(.kind == "ClusterWorkflowTemplate") | .spec), (select(.kind == "ClusterWorkflow") | .spec.runTemplate.spec)][]
+  | select(.automountServiceAccountToken == false) | (.executor.serviceAccountName // "<none>")'
+assert_eq "$(yq "$executors" "$TMP/workflow-plane.yaml" "$TMP/openchoreo-platform.yaml" | grep -v '^---$' | sort -u)" \
+  "$token_sa" "every token-less ClusterWorkflow(Template) uses the executor ServiceAccount with a rendered token"
+
 finish
