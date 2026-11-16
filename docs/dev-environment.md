@@ -169,6 +169,56 @@ elsewhere:
 
 Not yet proven with a full `task up` on these hosts: [#60](https://github.com/koorikla/platform/issues/60).
 
+## Local profiles
+
+One installation (`installations/local`), two profiles. The fleet files are the switch: a file in
+`installations/local/clusters/` is a cluster, and a `*.yaml.disabled` file is not (conventions invariant 7).
+
+| Profile | Fleet files | Workload clusters | Host RAM (`docker stats`, reference host) |
+|---|---|---|---|
+| lean (default) | `dev1.yaml`, `prod1.yaml.disabled` | `dev1`: development, staging, production | mgmt ~@MGMT@ GiB + dev1 ~@DEV1@ GiB = **~@LEAN@ GiB** |
+| multicluster | `dev1.yaml`, `prod1.yaml` | `dev1`: development, staging; `prod1`: production | + prod1 ~@PROD1@ GiB = **~@MULTI@ GiB** |
+
+Measured on 2026-11-16 with the same stack before and after prod1 was removed (#115): @MEASURED@
+
+Switch to multicluster: rename the file and move `production` to it (an environment lives on exactly one enabled
+cluster; `hack/tests/test_local_profiles.sh` checks both profiles):
+
+```sh
+git mv installations/local/clusters/prod1.yaml.disabled installations/local/clusters/prod1.yaml
+yq -i '.openchoreo.dataPlane.environments -= ["production"]' installations/local/clusters/dev1.yaml
+```
+
+Optionally also `examples.eastwest.enabled: true` in `installation.yaml` (the cross-cluster example needs two mesh
+members). Back to lean is the reverse. Commit, PR, merge: the `fleet` ApplicationSet creates or deletes prod1 (the CAPI
+Cluster is deleted gracefully; CAPD removes its containers).
+
+Before the first `task up` those two lines are the whole switch. **On a running stack** `production` already exists as
+an OpenChoreo `Environment`, whose `dataPlaneRef` is immutable, so it is deleted and created again on the other
+cluster. OpenChoreo refuses to delete an Environment that `DeploymentPipeline default` references, and cleans its
+namespaces through the old cluster's agent, so the old cluster must still run. Two merges:
+1. Move `production` between the fleet files (to dev1 for lean: `prod1.yaml` keeps `environments: []` and stays
+   enabled) and drop it from the pipeline in `installations/local/addons/openchoreo-platform/values.yaml`
+   (`deploymentPipeline: {environments: [development, staging]}`). Wait until the production ReleaseBinding is Ready
+   on its new cluster (`kubectl -n default get releasebinding`).
+2. Restore the pipeline (delete that override) and, for lean, rename `prod1.yaml` back to `prod1.yaml.disabled` with
+   `environments: [production]`.
+
+Lean was reached this way on the reference host (#115); the multicluster direction is render-checked only (VERIFY).
+
+What keeps working on one cluster:
+- OpenChoreo isolates environments by namespace (`dp-<org>-<project>-<env>-<hash>`) and by host
+  (`<env>-<org>.dev1.apps.localhost`).
+- Promotion gates, freeze windows and git-only production bindings work on Environment names
+  ([promotion.md](promotion.md)).
+- Kyverno image verification selects cell namespaces by their `openchoreo.dev/environment` label: production is Deny
+  on whichever cluster hosts it (the contract test renders the policies for every cluster and compares them).
+- The mesh group `local` has one member; OpenBao's mesh reconcile configures just `dev1`.
+
+What it gives up: the cluster boundary between production and the rest (one API server, etcd, node and kernel), the
+flannel path (prod1 is the flannel cluster), and the cluster-level `environment` label (`development` on dev1, which
+picks addon `env-<environment>.yaml` overlays) also covers production's namespaces.
+
 ## Local stack load and the mgmt datastore
 
 Measured on the 20-core / 31 GiB reference host with mgmt + dev1 (3 servers) + prod1

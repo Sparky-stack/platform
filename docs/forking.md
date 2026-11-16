@@ -217,7 +217,7 @@ What happens, roughly (8-CPU / 16 GB Linux host; a warm image cache is faster; o
 |---|---|
 | 0-2 | k3d cluster `platform-mgmt` (docker network `kind`, ports `127.0.0.1:8080/8443/9443/11080/11085/8200`), `platform-secrets` seeded, Argo CD installed, root Application applied |
 | 2-10 | Argo CD syncs the catalog onto mgmt: cert-manager, ESO + stores, CAPI operator + providers, Gateway API, kgateway, Thunder, OpenChoreo control plane, observability plane |
-| 5-20 | CAPD creates `dev1` and `prod1` (kindest/node containers), their kubeconfigs become Argo CD cluster secrets, addons land on them, the OpenChoreo data planes connect |
+| 5-20 | CAPD creates `dev1` (kindest/node containers; `prod1` too in the multicluster profile), its kubeconfig becomes an Argo CD cluster secret, addons land on it, the OpenChoreo data plane connects |
 | 15-30 | tenant `demo`: hello-world released to `development` |
 
 Watch it with `task ui` (Argo CD on http://localhost:8081, user `admin`; it prints the command that reads the password,
@@ -252,7 +252,7 @@ installations have no `down`: delete cluster files from git and let CAPI clean u
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Pods `Pending`/`OOMKilled`, CAPD nodes never `Ready`, Docker Desktop becomes unresponsive | not enough resources for k3d + two CAPD clusters | give the Docker VM ≥ 8 CPUs / 16 GB (Docker Desktop *Settings → Resources*; Colima `colima start --cpu 8 --memory 16`); `bootstrap.sh` also wants ≥ 15 GB free disk. Short on memory: delete `installations/local/clusters/prod1.yaml` in your fork |
+| Pods `Pending`/`OOMKilled`, CAPD nodes never `Ready`, Docker Desktop becomes unresponsive | not enough resources for k3d + the CAPD cluster(s) | give the Docker VM ≥ 8 CPUs / 16 GB (Docker Desktop *Settings → Resources*; Colima `colima start --cpu 8 --memory 16`); `bootstrap.sh` also wants ≥ 15 GB free disk. The default profile runs one CAPD cluster; the multicluster profile (`prod1.yaml`) needs ~3.5 GB more (docs/dev-environment.md "Local profiles") |
 | `k3d cluster create` fails with `port is already allocated` / `address already in use` | something else holds `127.0.0.1:8080`, `8443`, `9443`, `11080`, `11085` or `8200` (or `8081` for `task ui`) | `lsof -nP -iTCP:8080 -sTCP:LISTEN` (Windows: `netstat -ano \| findstr :8080`) and stop it. Remapping is not a quick fix: the same port numbers are baked into the OIDC issuer and gateway URLs that pods and browsers share (docs/openchoreo.md "Local networking"). `task ui` alone: `kubectl -n argocd port-forward svc/argocd-server 18081:80` |
 | `too many open files`, kubelet / k3s crash-loops, `failed to create fsnotify watcher` | inotify limits, multiplied by many k3s nodes on one kernel | Linux: `sudo sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=512` (persist in `/etc/sysctl.d/`); Docker Desktop / Colima: raise them inside the VM (docs/dev-environment.md "Host differences") |
 | `ImagePullBackOff` / `401 Unauthorized` from `ghcr.io`, or new CAPD nodes stuck before `Ready` | private image without `platform-ghcr`, a token without `read:packages`, or `nodeRegistryAuth` on with no `platform-ghcr` at all | make the package public (*Package settings → Change visibility*; new GHCR packages start private) and set `secrets.nodeRegistryAuth.enabled: false`, or export `GHCR_USER`/`GHCR_TOKEN` and `task secrets` (existing nodes keep their `registries.yaml`: recreate the cluster) |

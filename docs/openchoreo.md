@@ -186,9 +186,14 @@ openchoreo:
     environments: [development, staging]
 ```
 
-Every environment must be listed in exactly one cluster file (two clusters claiming one Environment = Argo conflict),
-and every environment of `DeploymentPipeline default` (addon `openchoreo-platform`) needs a cluster. An Environment's
-`dataPlaneRef` is immutable: to move it, remove it from one file, sync, then add it to the other.
+Every environment must be listed in exactly one enabled cluster file (two clusters claiming one Environment = Argo
+conflict), and every environment of `DeploymentPipeline default` (addon `openchoreo-platform`) and of `promotion`
+needs a cluster (`hack/tests/test_local_profiles.sh`, also for each installation's `*.yaml.disabled` switch). One
+cluster may host every environment: OpenChoreo puts each in its own namespaces, and per-environment policy follows
+the namespace's `openchoreo.dev/environment` label (docs/dev-environment.md "Local profiles"). An Environment's
+`dataPlaneRef` is immutable: to move it, remove it from one file and from `DeploymentPipeline default` (OpenChoreo
+will not delete a referenced Environment), sync, then add it back to the pipeline (docs/dev-environment.md "Local
+profiles" has the two-merge procedure).
 
 ## Tenants
 

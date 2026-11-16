@@ -207,8 +207,8 @@ developer: PR "staging: releaseName hello-world-<hash>" (review by the team) ─
        pipeline ✓ readiness ✓ smoke ✓ observer ✓ freeze ✓ ─► PR "promote(hello-world): hello-world-<hash> to production"
                                                              + status openchoreo/promotion-gate=success
 release manager (CODEOWNERS) approves ─► merge ─► Argo CD syncs demo-hello-world-production (not in a freeze)
-  └► VAP: argocd-application-controller for Application demo-hello-world-production ✓ ─► OpenChoreo renders for prod1
-       └► Kyverno on prod1: signature + SBOM + SLSA + vuln + digest ✓ ─► pods run
+  └► VAP: argocd-application-controller for Application demo-hello-world-production ✓ ─► OpenChoreo renders for production's cluster
+       └► Kyverno there (dev1 locally, prod1 in the multicluster profile): signature + SBOM + SLSA + vuln + digest ✓ ─► pods run
 ```
 
 ### Driving it

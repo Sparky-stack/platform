@@ -1,6 +1,7 @@
 # Multicluster profile (docs/dev-environment.md "Local profiles"): disabled by default to save ~3.4 GiB host RAM.
 # Switch on: rename this file to prod1.yaml and remove `production` from dev1.yaml's environments (the Environment's
 # dataPlaneRef is immutable: production must be on exactly one enabled cluster; hack/tests/test_local_profiles.sh).
+# On a running stack the move takes two merges (pipeline): docs/dev-environment.md "Local profiles".
 name: prod1
 provider: docker
 region: local
