@@ -535,9 +535,9 @@ class Diagram:
         period = n * self.slot + 2.4  # one pass over every step, then a short rest
         on = min(2.2 * self.slot / period * 100, 60)  # each step stays bright for ~2 slots
         return (
-            ".fx{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:1 11;opacity:0;"
+            ".fx{fill:none;stroke-width:3;stroke-linecap:round;stroke-dasharray:5 9;opacity:0;"
             f"animation:fxdash .8s linear infinite,fxseq {period:.2f}s linear infinite both}}"
-            "@keyframes fxdash{to{stroke-dashoffset:-12}}"
+            "@keyframes fxdash{to{stroke-dashoffset:-14}}"
             f"@keyframes fxseq{{0%{{opacity:.3}}4%{{opacity:1}}{on:.1f}%{{opacity:1}}{on + 6:.1f}%{{opacity:.3}}"
             "100%{opacity:.3}}"
             ".pulse{opacity:.35;animation:pulse 2.6s ease-in-out infinite}"
