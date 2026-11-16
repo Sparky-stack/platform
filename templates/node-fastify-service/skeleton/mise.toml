@@ -1,0 +1,4 @@
+# Pinned toolchain for local work (`mise install`); the image uses distroless Node.js 26.
+[tools]
+node = "26.13.1"
+pnpm = "12.21.0"
