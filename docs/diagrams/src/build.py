@@ -339,9 +339,9 @@ def security() -> Diagram:
     d.box(ML, 1082, MW, 58, "data", "OC observability plane", ["Falco JSON stdout → Fluent Bit →",
                                                                "OpenSearch (alerts searchable)"])
     d.box(ML, 1160, MH, 58, "platform", "falco-response", ["enrich → Event ·", "RCA, notify: opt-in"])
-    d.box(MR, 1160, MH, 58, "bus", "argo-events", ["webhook EventSource", "Sensor ≥ Critical"])
+    d.box(MR, 1160, MH, 58, "bus", "argo-events", ["endpoint per cluster", "Sensor ≥ Critical"])
     d.box(WL, 1082, WH, 58, "security", "Falco", ["modern_ebpf", "dp-* rules"], focus=True)
-    d.box(WL, 1160, WH, 58, "bus", "falcosidekick", ["alert fan-out", "falco-webhook"])
+    d.box(WL, 1160, WH, 58, "bus", "falcosidekick", ["alert fan-out", "own token (CRS)"])
     d.box(WR, 1160, WH, 58, "security", "Falco Talon", ["terminate · label", "(scoped, dp-*)"])
     d.arrow([(WL, 1111), (ML + MW, 1111)], OR, label="logs (Fluent Bit)", label_pos=(GR, 1115), aid="flog",
             step=7)
