@@ -282,6 +282,12 @@ observability-metrics-prometheus:
         image:
           tag: v0.94.1
           sha: 06b52bd4dbe3ed6dd5905aadaf8b9987d9da4c31d37bb86deaadae68cee2d26b
+      # platform: upstream limits 40m CPU / 60Mi. Throttled at 40m on the busy mgmt cluster the operator answers its
+      # 1 s /healthz liveness probe too late, the kubelet kills it (exit 0 "Shutting down") -> CrashLoopBackOff.
+      # Same startup-safe ceiling as addon telemetry (a null CPU limit renders as 0, which the API rejects).
+      resources:
+        requests: { cpu: 20m, memory: 64Mi }
+        limits: { cpu: 500m, memory: 256Mi }
       admissionWebhooks:
         certManager:
           enabled: true          # platform: cert-manager issues the webhook cert (no Helm hook Jobs under Argo)
