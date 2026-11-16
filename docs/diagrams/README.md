@@ -36,16 +36,19 @@ one idea per diagram, read top-left to bottom-right, the numbered flow carries t
   colour is a plane: teal mgmt cluster, sky workload cluster, rose security & trust, violet stateful data, slate git /
   GitHub / outside. Neutral grey arrows are secondary relations. Text contrast is at least 4.5:1 (checked).
 - **Shapes**: boxes are components (at most 12 per diagram; zones, legend and key do not count). A second outline
-  marks the focus of a view (Kyverno where admission is the point). Zones are clusters or columns, labelled in caps.
+  marks the focus of a view (Kyverno where admission is the point). Zones are clusters, labelled in caps.
   Dashed + `OPT-IN` chip = on `main`, off by default; dimmed + `PLANNED` chip = not on `main`.
-- **Numbered steps**: amber badges on the flow; the key under every diagram and the lists below are the same text
-  (`build.py` fails when they differ). Arrows follow what moves (config, data, requests, certificates); who opens the
-  connection is said in the step text where it matters ("dials out").
+- **Numbered steps**: an amber disc on an arrow is a step of the flow; an amber ring inside a box is a step that
+  happens at that component (a restore, a rotation, a removal). Every step number appears once: a step that reaches
+  several boxes forks or joins at a dot. Arrows that carry a number keep 80 px of shaft so the disc never hides the
+  direction. The key under every diagram and the lists below are the same text (`build.py` fails when they differ).
+  Arrows follow what moves (config, data, requests, certificates); who opens the connection is said in the step text
+  where it matters ("dials out"). Grey arrows are secondary relations, named in the legend.
 - **Motion** only on the numbered flow: a light particle runs along each step's arrow, in step order, then rests.
   `@media (prefers-reduced-motion: reduce)` stops it. Every animated element is an overlay with static opacity 0,
   so a static frame (rsvg-convert, PDF, reduced motion) is the complete diagram.
 - **Phone**: GitHub scales the image to the screen; the step lists below are the phone-friendly text, and tapping
-  the image opens it full size (at 2x zoom on a 390 px phone every label is at least 10 px).
+  the image opens it full size (at 2x zoom on a 390 px phone every box label and step is at least 10 px).
 - **Legend**: generated from what the diagram uses, so it never lists a colour or style that is not on the canvas.
 
 ## Steps
@@ -68,10 +71,9 @@ The numbered flow of each diagram, word for word.
 2. cosign signs and attests: platform key in-cluster, keyless (Fulcio) on GitHub
 3. Kyverno verifies signature and attestations: Deny in production, Audit in dev and staging
 4. Only verified images and Pod Security baseline pods start
-5. Production bindings: a ValidatingAdmissionPolicy admits only Argo CD's gated app
-6. Falco watches every node's syscalls (modern eBPF)
-7. Falco Talon responds in place: terminate or label the pod
-8. ≥ Critical escalates to mgmt: falcosidekick → argo-events → falco-response
+5. Falco sees every pod's syscalls (modern eBPF on each node)
+6. Falco Talon responds in place: terminate or label the pod
+7. ≥ Critical escalates to mgmt: falcosidekick → argo-events → falco-response
 
 ### Network ([network.svg](network.svg))
 
@@ -82,15 +84,15 @@ The numbered flow of each diagram, word for word.
 5. Packets travel on the CNI: Cilium (eBPF) or flannel, chosen per cluster
 6. The cluster-agent dials out to mgmt on :8443 (TLS passthrough, SNI)
 7. cluster-gateway accepts only that cluster's client certificate
-8. Collectors ship logs, metrics and traces through the observability Gateway
+8. Collectors ship logs, metrics and traces through the observability plane's Gateway
 
 ### Observability ([observability.svg](observability.svg))
 
 1. Fluent Bit tails container logs, Falco alerts included, into OpenSearch
 2. Apps send OTLP to the OTel Collector on their node: traces and k8s events to OpenSearch, metrics to Prometheus
 3. The Prometheus agent scrapes cAdvisor and kube-state-metrics and remote-writes
-4. The observer API reads every store (Thunder auth)
-5. Backstage, the promotion gate and the opt-in AI agents query it
+4. Both stores feed the observer API, one query API behind Thunder auth
+5. It serves Backstage, the promotion gate and the opt-in AI agents
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
@@ -100,7 +102,7 @@ The numbered flow of each diagram, word for word.
 4. Argo CD syncs the app's Component and Workload into OpenChoreo
 5. OpenChoreo snapshots them as an immutable ComponentRelease
 6. autoDeploy binds the release to development
-7. The promotion gate checks the edge, then opens a PR for staging
+7. The promotion gate checks the edge (readiness, smoke, alerts, freezes) and opens a PR for staging
 8. Production needs the gate and CODEOWNERS; a ValidatingAdmissionPolicy lets only Argo CD write it
 9. On prod1 Kyverno denies unsigned or unpinned images
 
@@ -110,22 +112,24 @@ The numbered flow of each diagram, word for word.
 2. `charts/cluster` renders the CAPI Cluster, its ExternalSecrets and the agent PKI on mgmt
 3. Cluster API creates the machines and installs k3s
 4. ESO turns CAPI's kubeconfig into an Argo CD cluster secret with the fleet labels
-5. Addon ApplicationSets select the cluster by label; Argo CD pushes the addons
-6. A ClusterResourceSet delivers the agent's cert; the CA key never leaves mgmt
-7. The cluster-agent dials out; the gateway accepts only that cluster's CA
-8. Upgrade: bump `kubernetesVersion` in the fleet file; CAPI replaces nodes one at a time
+5. Addon ApplicationSets select the cluster by its labels
+6. Argo CD pushes every selected addon to the new cluster
+7. A ClusterResourceSet delivers the agent's cert; the CA key never leaves mgmt
+8. The cluster-agent dials out; the gateway accepts only that cluster's CA
 9. Remove: delete the file; Argo CD prunes, CAPI deletes the cluster, its CA goes with it
+10. Upgrade: bump `kubernetesVersion` in the fleet file; CAPI replaces nodes one at a time
 
 ### Trust & certificates ([trust.svg](trust.svg))
 
-1. cert-manager issues each cluster's agent cert (CN=`<name>`) from that cluster's own CA
+1. cert-manager issues each cluster's agent cert (`CN=<name>`) from that cluster's own CA
 2. ESO and a ClusterResourceSet copy cert, key and the public gateway CA to the cluster
 3. The agent dials out with mTLS; cluster-gateway accepts only that cluster's CA
-4. Public roots only: the group root and OpenBao's CA reach every member the same way
-5. istio-csr logs in with a projected token (its own JWT mount) and gets certs signed by the group intermediate
-6. ztunnel and gateways get 24h workload certs, istiod 48h, renewed at half-life
-7. Rotation: certs renew 30 days before expiry; restart the agent to load them (#50)
-8. Root rotation is planned: new root beside the old one, trust bundle, switch, drop (#71)
+4. OpenBao publishes each group root; its keys stay inside OpenBao
+5. ESO and a ClusterResourceSet deliver the root and OpenBao's CA to every member
+6. istio-csr logs in with a projected token (its own JWT mount) and gets certs signed by the group intermediate
+7. ztunnel and gateways get 24h workload certs, istiod 48h, renewed at half-life
+8. Rotation: certs renew 30 days before expiry; restart the agent to load them (#50)
+9. Root rotation is planned: new root beside the old one, trust bundle, switch, drop (#71)
 
 ### Backup & restore ([backup.svg](backup.svg))
 

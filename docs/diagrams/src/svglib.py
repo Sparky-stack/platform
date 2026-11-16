@@ -32,7 +32,7 @@ BASE = "#111827"     # opaque under-fill of every box (tint goes on top)
 INK = "#f1f5f9"      # titles
 INK2 = "#cbd5e1"     # box detail lines, key text
 MUTED = "#94a3b8"    # lede, legend, arrow labels
-LINE = "#64748b"     # structural arrows
+LINE = "#8b9ab0"     # structural arrows
 HAIR = "#475569"     # card frame, divider
 ACCENT = "#fbbf24"   # the ONE accent: numbered flow (arrows, badges, motion)
 
@@ -45,7 +45,7 @@ PLANES = {
     "external": ("#94a3b8", "git, GitHub, outside"),
 }
 TINT = 0.20        # box fill = plane colour at this opacity over BASE
-ZONE_TINT = 0.075
+ZONE_TINT = 0.10
 
 STATUSES = ("built", "optin", "planned")
 TAGS = {"optin": "OPT-IN", "planned": "PLANNED"}
@@ -130,6 +130,7 @@ class Diagram:
         self.colors: set[str] = set()
         self.steps: dict[int, str] = {}       # step -> key text
         self.badges: set[int] = set()         # step numbers drawn in the diagram
+        self.badge_count: dict[int, int] = {}
         self.fx_steps: set[int] = set()
         self.planes_used: set[str] = set()
         self.status_used: set[str] = set()
@@ -137,6 +138,9 @@ class Diagram:
         self.has_zone = False
         self.has_line = False
         self.has_focus = False
+        self.focus_color = None
+        self.emph: list[tuple] = []          # (outer x, y, w, h, inner rect) of emphasised boxes
+        self.node_badges = False
         self.line_label = "other relation"
         self._final = False
         # bookkeeping for check()
@@ -150,6 +154,8 @@ class Diagram:
         self.ends: list[tuple[str, tuple, tuple]] = []
         self.arrow_labels: dict[str, list[tuple]] = {}
         self.flow_arrows: dict[str, list[tuple]] = {}      # numbered-flow arrows: id -> points
+        self.flow_step: dict[str, int] = {}
+        self.flow_head: dict[str, bool] = {}
         self.arrow_badges: dict[str, list[tuple]] = {}     # arrow id -> [(x, y, r)] of its badges
         self.titles: list[str] = []
         self.required: list[str] = []
@@ -207,6 +213,8 @@ class Diagram:
             out.append(f'<rect x="{x - 4}" y="{y - 4}" width="{w + 8}" height="{h + 8}" rx="11" fill="none" '
                        f'stroke="{color}" stroke-opacity=".85" stroke-width="1.4"/>')
             self.has_focus = True
+            self.focus_color = self.focus_color or color
+            self.emph.append((x - 4, y - 4, w + 8, h + 8, (x, y, w, h)))
         sw = 2.2 if emphasis else 1.5
         out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="8" fill="{fill}" stroke="{color}" '
                    f'stroke-width="{sw}"{dash}/>')
@@ -214,7 +222,7 @@ class Diagram:
         lh = line_size + 4.5
         span = 0.72 * title_size + (len(lines) * lh + 2 if lines else 0)
         ty = y + h / 2 - span / 2 + 0.72 * title_size
-        cx = x + w / 2
+        cx = x + w / 2 + (16 if step is not None else 0)   # a node badge takes the top-left corner
         self._text(cx, ty, title, title_size, INK, weight=600, anchor="middle", container=rect, layer=out, bg=fill)
         yy = ty + 2
         for ln in lines:
@@ -235,8 +243,8 @@ class Diagram:
         if status == "planned":
             out = [f'<g opacity="{PLANNED_OPACITY}">'] + out + ["</g>"]
         self.l_boxes += out
-        if step is not None:            # step at a component: badge inside the top-left corner
-            self.badge(x + 19, y + 19, step, owner=rect)
+        if step is not None:            # step at a component: ring badge inside the top-left corner
+            self.badge(x + 21, y + 21, step, owner=rect, ring=True)
         self.r_boxes.append((name or title, rect))
         self.titles.append(title)
         self.statuses[name or title] = status
@@ -263,12 +271,31 @@ class Diagram:
         self.layout.append({"kind": "zone", "name": label, "rect": (x, y, w, h)})
         self.bottom = max(self.bottom, y + h + 7 * stacked)
 
+    def _snap(self, p, q):
+        """An arrow end on the inner outline of an emphasised box moves out to its focus ring."""
+        x, y = p
+        for ox, oy, ow, oh, (bx, by, bw, bh) in self.emph:
+            if bx - 1 <= x <= bx + bw + 1 and by - 1 <= y <= by + bh + 1:
+                if abs(y - by) < 1 and q[1] < y:
+                    return (x, oy)
+                if abs(y - by - bh) < 1 and q[1] > y:
+                    return (x, oy + oh)
+                if abs(x - bx) < 1 and q[0] < x:
+                    return (ox, y)
+                if abs(x - bx - bw) < 1 and q[0] > x:
+                    return (ox + ow, y)
+        return p
+
+    def junction(self, x, y):
+        """Dot where a numbered flow forks or joins."""
+        self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.6" fill="{ACCENT}"/>')
+
     def _marker(self, color):
         self.colors.add(color)
         return f"url(#ah{color.lstrip('#')})"
 
     def arrow(self, pts, step=None, status="built", label=None, label_pos=None, label_anchor="middle", aid=None,
-              both=False, badge=True, badge_at=None, loose=False):
+              both=False, badge=True, badge_at=None, loose=False, head=True):
         """Arrow pts[0] -> pts[-1] (orthogonal polyline). With `step` it is part of the numbered flow: accent colour,
         animated overlay, badge (on the longest segment at `badge_at`, or at `badge=(x, y)`). Without, a neutral structural line.
         status: built (solid) | optin (dashed) | planned (dimmed dashed). loose=True: endpoints need not be on a box.
@@ -277,6 +304,9 @@ class Diagram:
         if status != "built":
             self.status_used.add(status)
         aid = aid or f"a{len(self.segs)}"
+        pts = [tuple(p) for p in pts]
+        pts[0] = self._snap(pts[0], pts[1])
+        pts[-1] = self._snap(pts[-1], pts[-2])
         color = ACCENT if step is not None else LINE
         self.has_line = self.has_line or step is None
         width = 2.2 if step is not None else 1.5
@@ -284,14 +314,17 @@ class Diagram:
         dash = ' stroke-dasharray="6 4"' if status != "built" else ""
         dim = f' opacity="{PLANNED_OPACITY}"' if status == "planned" else ""
         ms = f' marker-start="{self._marker(color)}"' if both else ""
+        me = f' marker-end="{self._marker(color)}"' if head else ""
         self.l_arrows.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{width}" '
-                             f'stroke-linejoin="round"{dash}{dim} marker-end="{self._marker(color)}"{ms}/>')
+                             f'stroke-linejoin="round"{dash}{dim}{me}{ms}/>')
         if step is not None and status != "planned":
             self._fx(d, step)
         for p1, p2 in zip(pts, pts[1:]):
             self.segs.append((aid, p1, p2))
         if step is not None:
             self.flow_arrows[aid] = [tuple(p) for p in pts]
+            self.flow_step[aid] = step
+            self.flow_head[aid] = head
         if not loose:
             self.ends.append((aid, pts[0], pts[-1]))
         if label:
@@ -305,7 +338,7 @@ class Diagram:
             (ax, ay), (bx, by) = segs[i]
             seg = abs(bx - ax) + abs(by - ay)
             # centre of the segment minus the arrowhead, so the shaft shows on both sides
-            f = badge_at if badge_at is not None else ((seg - (10 if i == len(segs) - 1 else 0)) / 2) / seg
+            f = badge_at if badge_at is not None else 0.5
             self.badge(ax + (bx - ax) * f, ay + (by - ay) * f, step, owner=None, arrow=aid)
         self.layout.append({"kind": "arrow", "id": aid, "points": [tuple(p) for p in pts], "step": step})
         return aid
@@ -326,12 +359,21 @@ class Diagram:
         if owner:
             self.arrow_labels.setdefault(owner, []).append(self.r_text[-1][1])
 
-    def badge(self, x, y, n, owner=None, arrow=None, r=12):
-        """Numbered step marker (accent disc, dark numeral)."""
+    def badge(self, x, y, n, owner=None, arrow=None, r=12, ring=False):
+        """Numbered step marker: accent disc on a flow arrow; accent ring = a step that happens at a component."""
         self.badges.add(n)
-        self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" stroke-width="2"/>')
-        self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="13" font-weight="700" '
-                          f'fill="{BG}" text-anchor="middle">{n}</text>')
+        self.badge_count[n] = self.badge_count.get(n, 0) + 1
+        if ring:
+            self.node_badges = True
+            self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r - 1}" fill="{BG}" stroke="{ACCENT}" '
+                              f'stroke-width="2.2"/>')
+            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="13" font-weight="700" '
+                              f'fill="{ACCENT}" text-anchor="middle">{n}</text>')
+        else:
+            self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" '
+                              f'stroke-width="2"/>')
+            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="13" font-weight="700" '
+                              f'fill="{BG}" text-anchor="middle">{n}</text>')
         rect = (x - r, y - r, 2 * r, 2 * r)
         self.r_badges.append((n, rect, owner))
         if arrow:
@@ -354,22 +396,26 @@ class Diagram:
         y = self.bottom + 34
         self.l_top.append(f'<line x1="28" y1="{y - 14}" x2="{W - 28}" y2="{y - 14}" stroke="{LINE}" stroke-width="1.5"/>')
         y0 = y
-        # numbered key: two columns, column-major
+        # numbered key: two columns, column-major, rows aligned across the columns
         items = sorted(self.steps.items())
         colw = (W - 56 - 28) / 2
         half = (len(items) + 1) // 2
-        cols = [items[:half], items[half:]]
-        bottoms = []
-        for c, col in enumerate(cols):
-            cx, cy = 28 + c * (colw + 28), y + 8
-            for n, s in col:
-                lines = wrap(s, 13.5, colw - 34)
+        left, right = items[:half], items[half:]
+        cy = y + 14
+        bottoms = [cy]
+        for i in range(half):
+            pair = [left[i]] + ([right[i]] if i < len(right) else [])
+            heights = []
+            for c, (n, st) in enumerate(pair):
+                cx = 28 + c * (colw + 28)
+                lines = wrap(st, 13.5, colw - 34)
                 self.l_top.append(f'<circle cx="{cx + 12}" cy="{cy - 4.5}" r="11" fill="{ACCENT}"/>')
                 self.l_top.append(f'<text class="s" x="{cx + 12}" y="{cy}" font-size="13" font-weight="700" '
                                   f'fill="{BG}" text-anchor="middle">{n}</text>')
-                for i, ln in enumerate(lines):
-                    self._text(cx + 32, cy + i * 19, ln, 13.5, INK2, layer=self.l_top)
-                cy += len(lines) * 19 + 9
+                for k, ln in enumerate(lines):
+                    self._text(cx + 32, cy + k * 19, ln, 13.5, INK2, layer=self.l_top)
+                heights.append(len(lines) * 19)
+            cy += max(heights) + 10
             bottoms.append(cy)
         y = max(bottoms) + 10 if items else y
         if items:
@@ -386,10 +432,10 @@ class Diagram:
         for s in ("optin", "planned"):
             if s in self.status_used:
                 entries.append((s, {"optin": "opt-in (off by default)", "planned": "planned (not on main)"}[s]))
+        if self.node_badges:
+            entries.append(("node", "step at a component"))
         if self.has_focus:
             entries.append(("focus", "focus of this view"))
-        if self.has_zone:
-            entries.append(("zone", "cluster / zone"))
         x, ly = 28, y + 16
         for t, lab in entries:
             wlab = tw(lab, 13)
@@ -412,10 +458,14 @@ class Diagram:
                 self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" fill="none" '
                                   f'stroke="{INK2}" stroke-width="1.3" stroke-dasharray="4 3"{op}/>')
             elif t == "focus":
+                fc = self.focus_color
                 self.l_top.append(f'<rect x="{x - 3}" y="{ly - 13}" width="26" height="19" rx="6" fill="none" '
-                                  f'stroke="{INK2}" stroke-opacity=".85" stroke-width="1.2"/>')
-                self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" fill="none" '
-                                  f'stroke="{INK2}" stroke-width="2"/>')
+                                  f'stroke="{fc}" stroke-opacity=".85" stroke-width="1.4"/>')
+                self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
+                                  f'fill="{mix(fc, BASE, TINT)}" stroke="{fc}" stroke-width="2"/>')
+            elif t == "node":
+                self.l_top.append(f'<circle cx="{x + 10}" cy="{ly - 4}" r="9" fill="{BG}" stroke="{ACCENT}" '
+                                  f'stroke-width="2"/>')
             elif t == "zone":
                 self.l_top.append(f'<rect x="{x - 2}" y="{ly - 12}" width="24" height="17" rx="5" fill="none" '
                                   f'stroke="{MUTED}" stroke-width="1.3"/>')
@@ -471,6 +521,12 @@ class Diagram:
         """Layout checks on the registered geometry + output checks on the rendered SVG string."""
         self._finalize()
         issues = []
+
+        def touches(p, other):
+            pts = self.flow_arrows[other]
+            return any(self._seg_hits(p, p, (min(a[0], b[0]) - .6, min(a[1], b[1]) - .6,
+                                              abs(b[0] - a[0]) + 1.2, abs(b[1] - a[1]) + 1.2), shrink=0)
+                       for a, b in zip(pts, pts[1:]))
         n_boxes = len(self.r_boxes)
         if n_boxes > MAX_BOXES:
             issues.append(f"{n_boxes} boxes > {MAX_BOXES}: split the diagram")
@@ -506,7 +562,7 @@ class Diagram:
                     issues.append(f"text {s!r} overlaps box {nb!r}")
         for n, r, owner in self.r_badges:
             for s, tr, *_r in self.r_text:
-                if self._ov(r, tr, pad=-1):
+                if self._ov(r, tr, pad=-6 if owner else -1):
                     issues.append(f"badge {n} overlaps text {s!r}")
             for nb, b in self.r_boxes:
                 if b != owner and self._ov(r, b, pad=1):
@@ -541,9 +597,12 @@ class Diagram:
             for nb, b in self.r_boxes:
                 if self._seg_hits(p1, p2, b, shrink=2.5):
                     issues.append(f"arrow {aid} passes through box {nb!r}")
-        rects = [b for _, b in self.r_boxes] + [g for _, g in self.r_groups]
+        rects = [b for _, b in self.r_boxes] + [g for _, g in self.r_groups] + [e[:4] for e in self.emph]
         for aid, p0, p1 in self.ends:
             for which, p in (("start", p0), ("end", p1)):
+                if aid in self.flow_arrows and any(o != aid and self.flow_step[o] == self.flow_step[aid]
+                                                   and touches(p, o) for o in self.flow_arrows):
+                    continue
                 if not any(self._on_edge(p, r) for r in rects):
                     issues.append(f"arrow {aid} {which} {p} is not on a box or zone edge")
         for pn, pr in self.r_panels:
@@ -556,15 +615,36 @@ class Diagram:
         # numbered steps: consecutive from 1, every badge has a key entry and every entry a badge
         if self.steps and sorted(self.steps) != list(range(1, len(self.steps) + 1)):
             issues.append(f"key steps are not 1..n: {sorted(self.steps)}")
+        for n, k in sorted(self.badge_count.items()):
+            if k > 1:
+                issues.append(f"step {n} has {k} badges (one per step: fork or join the arrows instead)")
         for n in sorted(self.badges - set(self.steps)):
             issues.append(f"badge {n} has no key entry")
         for n in sorted(set(self.steps) - self.badges):
             issues.append(f"key step {n} has no badge in the diagram")
         # numbered flow: every accent arrow carries its badge, with visible shaft on both sides of it
+        def _unused_touches(p, other):
+            pts = self.flow_arrows[other]
+            return any(self._seg_hits(p, p, (min(a[0], b[0]) - .6, min(a[1], b[1]) - .6,
+                                              abs(b[0] - a[0]) + 1.2, abs(b[1] - a[1]) + 1.2), shrink=0)
+                       for a, b in zip(pts, pts[1:]))
+
+        def linked(aid):    # arrows of the same step sharing a junction with this one
+            st, pts = self.flow_step[aid], self.flow_arrows[aid]
+            return [o for o in self.flow_arrows if o != aid and self.flow_step[o] == st
+                    and (touches(pts[0], o) or touches(pts[-1], o)
+                         or any(touches(q, aid) for q in (self.flow_arrows[o][0], self.flow_arrows[o][-1])))]
+
         for aid, pts in self.flow_arrows.items():
             bs = self.arrow_badges.get(aid, [])
-            if not bs:
-                issues.append(f"flow arrow {aid} has no badge (every numbered arrow shows its number)")
+            group, todo = {aid}, [aid]
+            while todo:
+                for o in linked(todo.pop()):
+                    if o not in group:
+                        group.add(o)
+                        todo.append(o)
+            if not any(self.arrow_badges.get(o) for o in group):
+                issues.append(f"flow arrow {aid} has no badge (every numbered flow shows its number)")
             for bx, by, r in bs:
                 segs = list(zip(pts, pts[1:]))
                 for i, ((x1, y1), (x2, y2)) in enumerate(segs):
@@ -573,8 +653,8 @@ class Diagram:
                         continue
                     d_start = abs(bx - x1) + abs(by - y1)
                     d_end = abs(x2 - bx) + abs(y2 - by)
-                    need_end = r + (18 if i == len(segs) - 1 else 6)   # room for the arrowhead
-                    need_start = r + (10 if i == 0 else 4)
+                    need_end = r + (22 if i == len(segs) - 1 and self.flow_head.get(aid, True) else 6)
+                    need_start = r + (14 if i == 0 else 4)
                     if (i == 0 and d_start < need_start) or d_end < need_end:
                         issues.append(f"badge on flow arrow {aid} hides the shaft or arrowhead "
                                       f"(segment {i}: {d_start:.0f}/{d_end:.0f} px either side)")
@@ -669,7 +749,7 @@ class Diagram:
             f"<style>{self.css()}</style>"
             f"<defs>{markers}</defs>"
             f'<rect width="{self.w}" height="{self.h}" rx="16" fill="{BG}"/>'
-            f'<rect x="8" y="8" width="{self.w - 16}" height="{self.h - 16}" rx="12" fill="none" stroke="{HAIR}"/>'
+            f'<rect x="8" y="8" width="{self.w - 16}" height="{self.h - 16}" rx="12" fill="none" stroke="{LINE}" stroke-opacity=".8"/>'
         )
         body = "\n".join(self.l_zones + self.l_arrows + self.l_fx + self.l_boxes + self.l_top)
         return head + "\n" + body + "\n</svg>\n"
