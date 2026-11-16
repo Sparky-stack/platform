@@ -9,17 +9,16 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    and the Argo CD cluster secret. ApplicationSets select on labels; nothing hardcodes a cluster name.
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
-   `ClusterResourceSet` payloads templated by ESO.
-   Proposed exception, PENDING USER APPROVAL (docs/multicluster.md "Trust"): on opt-in mesh members only, Secret
-   `istio-system/cacerts` holds that cluster's own Istio intermediate key (never a root key), and only while peers cannot
-   read Secrets (ClusterRole `platform-istio-reader`), each `mesh.group` has its own root, and intermediates live <=14d.
-   Tracked replacement that removes it: istio-csr on members + an external signer reachable from them (OpenBao PKI /
-   AWS Private CA).
+   `ClusterResourceSet` payloads templated by ESO. The Istio mesh CA is OpenBao on mgmt (keys generated inside OpenBao,
+   never exported); mesh members obtain certificates through istio-csr (docs/multicluster.md "Mesh CA (OpenBao)").
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
    `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`. Only exception: read-only stores
    that publish a **public CA certificate** (`ca.crt`) and nothing else: `mgmt-openchoreo` (cluster-gateway CA;
    namespace conditions), `mgmt-harbor` (registry CA; name-scoped GET of `harbor/harbor-ca-bundle`; `fleet`,
-   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle).
+   `workflows-*`) and the namespaced `harbor/harbor-ca-source` (copies the registry CA cert into that bundle);
+   `mgmt-openbao` (OpenBao CA + mesh group roots; name-scoped GET of `openbao/openbao-ca-bundle`; `fleet`) and the
+   namespaced `openbao/openbao-ca-source` and `openbao/openbao-pki-public` (fill that bundle; the latter reads only
+   `pki-mesh-*-root/cert/ca` from OpenBao).
    No secret value is ever committed. Secret keys are flat names (table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.
@@ -40,8 +39,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
 | `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` from `mesh.group`) |
-| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` (docs/multicluster.md) |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
+| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
@@ -54,8 +53,8 @@ The label keys are an API between CAPI clusters, cluster secrets and Application
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |
-| Mesh PKI / remote secrets (opt-in) | ns `cert-manager`: root `mesh-root-<group>` (+ ClusterIssuer); ns `fleet`: `<name>-mesh-ca`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-cacerts`, `<name>-mesh-remote-secret` |
-| On mesh members, ns `istio-system` | Secret `cacerts`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
+| Mesh CA / remote secrets (opt-in) | ns `openbao`: OpenBao mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`, role `<name>`, auth `mesh-<name>`, policy `mesh-member-<name>`; ns `fleet`: `<name>-mesh-openbao`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-trust`, `<name>-mesh-remote-secret` |
+| On mesh members, ns `istio-system` | Secrets `openbao-ca`, `mesh-root-ca` (public), Issuer `openbao-mesh`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
 | Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>` |
 
@@ -76,6 +75,7 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `cosign-platform` | `cosign.key`, `cosign.pub`, `cosign.password` | in-cluster build signing; `cosign.pub` goes into `kyverno-policies` `imageVerification.platformKey.publicKey` | [build-plane.md](build-plane.md#signing) |
 | `falco-webhook` | `url`, `token` | falcosidekick escalation -> addon argo-events (also seeded to workload clusters) | [observability.md](observability.md#falco-response) |
 | `promotion-gate` | `client-secret` | ClusterWorkflow `promotion-gate` (Thunder client `openchoreo-promotion-gate`) | [promotion.md](promotion.md#configuration-reference) |
+| `openbao-unseal` | `key` (64 hex characters, generated by `make secrets`) | static auto-unseal key of the mesh CA (addon openbao; local only, KMS seal in production) | [multicluster.md](multicluster.md#unseal) |
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the promotion gate's own GitHub App | [promotion.md](promotion.md#configuration-reference) |
 
 Workload-cluster keys (store `default`): `openchoreo-observability`, `falco-webhook`, optional `datadog`, `falco-slack`.

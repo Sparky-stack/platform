@@ -12,9 +12,10 @@ Everything is declarative. Three settings turn it on, and adding a third cluster
 # installations/<inst>/installation.yaml
 mgmt:
   addons:
-    mesh-root-ca: true          # mesh root CAs + PKI admission guards on mgmt
+    openbao: true               # the mesh CA (OpenBao PKI) + reader-cert admission guards on mgmt
 mesh:
-  groups: [local]               # one root CA per group
+  groups: [local]               # one root + one intermediate per group, keys generated inside OpenBao
+  ca: { host: openbao.openchoreo.localhost, port: 8200 }   # where members reach OpenBao (TLS passthrough)
 examples:
   eastwest: { enabled: true }   # optional demo (examples/eastwest)
 
@@ -34,7 +35,7 @@ mesh:
 | Primary-remote (one istiod for several clusters) | not supported in ambient | no (every member runs its own istiod) |
 | Ambient + sidecars in one multicluster mesh | not recommended upstream | no (ambient only) |
 | Service scope `istio.io/global` label (default `serviceScopeConfigs`) | part of ambient multicluster | yes |
-| `PILOT_DISABLE_SELF_SIGNED_CA` | stable flag | yes, on members |
+| External CA via istio-csr (`ENABLE_CA_SERVER=false`, `caAddress`) | supported integration (cert-manager istio-csr, ztunnel node authorisation via `--ca-trusted-node-accounts`) | yes, on members |
 | Gateway API `Gateway` v1 + `infrastructure.parametersRef` | GA (standard channel, v1.5.1 installed) | yes |
 | `security.istio.io/v1` `AuthorizationPolicy` | GA | yes |
 
@@ -66,7 +67,8 @@ selects or reads those labels; no template names a cluster.
 |---|---|
 | `mesh.platform.koorikla.io/group: <group>` | catalog `clusterLabelParameters` → istio-ambient `global.meshID`; CRS selector of the peers' remote secrets |
 | `mesh.platform.koorikla.io/network: <name>` | istio-ambient `global.network` (ztunnel `NETWORK`); istio-eastwest Gateway label |
-| `addons.platform.koorikla.io/istio-eastwest: "true"` (`"false"` without a group) | selects addon `istio-eastwest` and the example; istiod env `AMBIENT_ENABLE_MULTI_NETWORK`, `AMBIENT_ENABLE_BAGGAGE`, `PILOT_DISABLE_SELF_SIGNED_CA` |
+| `addons.platform.koorikla.io/istio-eastwest: "true"` (`"false"` without a group) | selects addon `istio-eastwest` and the example; istiod env `AMBIENT_ENABLE_MULTI_NETWORK`, `AMBIENT_ENABLE_BAGGAGE` |
+| `addons.platform.koorikla.io/istio-csr: "true"` (`"false"` without a group) | selects addon `istio-csr`; istio-ambient layers `values/mesh-member.yaml` on clusters with a group label (istiod CA off) |
 
 `global.multiCluster.clusterName` = cluster name on **every** cluster (catalog `clusterNameParameters`), so istiod and
 ztunnel always agree on the cluster ID. Clusters outside the mesh keep network and meshID empty: ztunnel and istiod
@@ -80,77 +82,148 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 
 | Where | What | Owner |
 |---|---|---|
-| mgmt, `cert-manager` | per group: `Issuer mesh-root-selfsigned` → `Certificate mesh-root-<group>` → `ClusterIssuer mesh-root-<group>`; ValidatingAdmissionPolicies `platform-mesh-*` | addon `mesh-root-ca` (mgmt, opt-in) |
-| mgmt, `fleet` | `Certificate <name>-mesh-ca` (intermediate); `ExternalSecret` + `ClusterResourceSet <name>-mesh` (cacerts, network label) | `charts/cluster` `templates/mesh-pki.yaml`, `mesh-crs.yaml` |
+| mgmt, `openbao` | OpenBao (StatefulSet, raft, TLS), Gateway + TLSRoute `openbao`, reconcile Job/CronJob `mesh-reconcile`, ExternalSecrets `openbao-unseal`, `mesh-clients`, `openbao-ca-bundle`, ClusterSecretStore `mgmt-openbao`; ValidatingAdmissionPolicies `platform-mesh-*` (reader certs) | addon `openbao` (mgmt, opt-in) |
+| mgmt, OpenBao | per group: mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`; per member: role `<name>` in its group's intermediate, policy `mesh-member-<name>`, JWT auth mount `auth/mesh-<name>` | `addons/openbao/files/mesh-reconcile.sh` |
+| mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label) | `charts/cluster` `templates/mesh-openbao.yaml`, `mesh-trust.yaml` |
 | mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/mesh-remote-secret.yaml` |
+| member, `istio-system` | istio-csr, `Issuer openbao-mesh` (cert-manager Vault issuer), ServiceAccount `istio-csr-openbao`, `Certificate istiod`; ValidatingAdmissionPolicies `platform-mesh-ca-*`; issuer-discovery binding for unauthenticated clients | addon `istio-csr` |
 | member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRole`/`ClusterRoleBinding`/`Role`/`RoleBinding platform-istio-reader` | addon `istio-eastwest` |
-| member, `istio-system` | istiod/ztunnel multicluster values | addon `istio-ambient` (catalog parameters) |
-| member, `istio-system` | `Secret cacerts`, label on the namespace, `Secret istio-remote-secret-<peer>` per peer | CAPI ClusterResourceSets (from mgmt) |
+| member, `istio-system` | istiod/ztunnel multicluster values, istiod CA off (`values/mesh-member.yaml`) | addon `istio-ambient` (catalog parameters) |
+| member, `istio-system` | `Secret openbao-ca`, `Secret mesh-root-ca` (public certificates), label on the namespace, `Secret istio-remote-secret-<peer>` per peer | CAPI ClusterResourceSets (from mgmt) |
 | member, `eastwest-demo` | example | `examples/eastwest` via ApplicationSet `example-eastwest` |
 
-## Trust: one root per mesh group on mgmt, a short-lived intermediate per cluster
-Every member of a group must chain to the same root so that a dev1 workload certificate verifies in prod1.
+## Mesh CA (OpenBao)
+Every member of a group must chain to the same root so that a dev1 workload certificate verifies in prod1. The CA is
+OpenBao's PKI engine on mgmt; **no CA private key exists on any workload cluster** ([conventions.md](conventions.md)
+invariant 4) and none is ever exported from OpenBao.
 
-- **Roots, one per group**: installation.yaml lists the groups (`mesh.groups: [local]`); addon `mesh-root-ca` on mgmt
-  renders, per group, a cert-manager self-signed CA `mesh-root-<group>` (RSA 4096, 10y, `rotationPolicy: Never`) and
-  a `ClusterIssuer mesh-root-<group>`. A fleet file's `mesh.group` must be listed (charts/cluster fails otherwise).
-  **Root keys never leave mgmt** and live in cert-manager's cluster resource namespace (`cert-manager`), which no
-  ClusterSecretStore reaches (`mgmt-fleet` reads only `fleet`; contract test). A group is therefore a cryptographic
-  boundary, not just a discovery boundary: a key stolen from a member of group A cannot mint an identity that group B
-  accepts. All groups still use the trust domain `cluster.local` (per-environment trust domains: "Next steps").
+```
+member (istio-system)                                          mgmt (openbao)
+ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault Issuer openbao-mesh
+                                                                 | JWT login: projected token of SA istio-csr-openbao,
+                                                                 |   audience vault://istio-system/openbao-mesh
+                                                                 v   (TLS passthrough via kgateway, mesh.ca.host:port)
+                                                    auth/mesh-<name> --policy mesh-member-<name>-->
+                                                    pki-mesh-<group>-int/sign/<name>  (intermediate key inside OpenBao)
+                                                    pki-mesh-<group>-root             (root key inside OpenBao)
+```
+
+- **One root and one intermediate per group**: installation.yaml lists the groups (`mesh.groups`). The reconcile
+  creates `pki-mesh-<group>-root` (`root/generate/internal`, EC P-384, 10y) and `pki-mesh-<group>-int`
+  (`intermediate/generate/internal`, EC P-256, signed by the root with `max_path_length=0`). `internal` means OpenBao
+  generates the key and never returns it; no policy grants `generate/exported`, key import or `sys/raw`. A fleet file's
+  `mesh.group` must be listed (charts/cluster fails otherwise). A group is a cryptographic boundary: a member of group A
+  can only reach group A's intermediate, so it cannot obtain an identity that group B accepts. All groups still use the
+  trust domain `cluster.local` (per-environment trust domains:
+  [#71](https://github.com/koorikla/platform/issues/71)).
 - **Groups follow trust levels.** Clusters of different environments or trust levels never share a group. `local`
-  (dev1 + prod1 on one laptop) is the deliberate exception for the demo; real installations use e.g. `dev` and
-  `prod` groups, so a development cluster's intermediate is worthless in production.
-- **Intermediate**: `Certificate <name>-mesh-ca` in `fleet` (isCA, RSA 4096, **14 days, renewed after 7**; usages cert
-  sign, crl sign, digital signature), issued by `ClusterIssuer mesh-root-<group>`. 14 days still survives a week-long
-  mgmt outage. ESO (store `mgmt-fleet`) templates it into a ClusterResourceSet payload: `Secret istio-system/cacerts`
-  of type `kubernetes.io/tls` (`tls.crt` = intermediate, `tls.key`, `ca.crt` = group root; istiod 1.32 reads this
-  format as a plugged-in CA and builds the chain from `tls.crt` + `ca.crt`). The same payload sets the namespace label
-  `topology.istio.io/network=<name>`. CRS strategy `Reconcile` re-applies a renewal; istiod watches its `cacerts`
-  files and reloads a renewed intermediate without a restart (**VERIFY** on the first renewal; the root does not
-  change, so trust is never interrupted).
-- **No silent fallback**: on members istiod runs with `PILOT_DISABLE_SELF_SIGNED_CA=true`. Without `cacerts` it
-  refuses to start and Kubernetes restarts it until the CRS has delivered the CA. It never mints a private root that
-  would split the mesh.
-- **No revocation.** Istio checks no CRL or OCSP. A leaked intermediate stays valid until its `notAfter` (at most
-  14 days), whatever happens on mgmt: `rotationPolicy: Always` gives the *next* certificate a new key but does not
-  invalidate the old one, and deleting the fleet file only stops renewal. The only faster cut is rotating the group's
-  root (below). Same for the 7-day reader client certs: Kubernetes cannot revoke client certificates.
+  (dev1 + prod1 on one laptop) is the deliberate exception for the demo; real installations use e.g. `dev` and `prod`.
+- **One role per member**, `pki-mesh-<group>-int/roles/<name>`: URI SANs `spiffe://cluster.local/ns/*/sa/*` only, DNS
+  names only `istiod.istio-system.svc` and `cert-manager-istio-csr.istio-system.svc` (istiod's and istio-csr's serving
+  certs), no IP SANs, no wildcards, no subdomains, no CA certificates, `ttl` 24h, `max_ttl` 48h, `no_store` (nothing
+  to revoke: see below).
+- **Per-member authentication without static tokens.** `auth/mesh-<name>` is a JWT auth mount that verifies tokens
+  against that member's own API server keys (`<server>/openid/v1/jwks`, TLS pinned to the member's cluster CA). Its
+  only role accepts subject `system:serviceaccount:istio-system:istio-csr-openbao` and audience
+  `vault://istio-system/openbao-mesh` (cert-manager requests exactly this audience for a Vault issuer's
+  `serviceAccountRef`), and issues a 10-minute batch token with one policy: `create`/`update` on
+  `pki-mesh-<group>-int/sign/<name>`. A member's token is useless at another member's mount (other keys) and its
+  policy reaches no other role, mount or path. On the member, only cert-manager's controller may mint that
+  ServiceAccount's tokens (`Role` on `serviceaccounts/token`, `resourceNames`); the addon also binds
+  `system:service-account-issuer-discovery` for unauthenticated clients so OpenBao can fetch the public JWKS.
+- **Member inputs come from the fleet file, declaratively.** charts/cluster renders `ExternalSecret
+  <name>-mesh-openbao` in `fleet`: it reads the CAPI kubeconfig and keeps only the API server URL and the cluster CA
+  certificate (both public), labelled `mesh.platform.koorikla.io/openbao-client`. Addon openbao's `ExternalSecret
+  mesh-clients` collects all of them by label (store `mgmt-fleet`) into one file set; the reconcile turns each into
+  `auth/mesh-<name>` + role + policy. A new member is configured within one ESO refresh plus the 5-minute CronJob; a
+  removed member's auth mount and policy are deleted on the next run (an empty input set prunes nothing, so an ESO
+  outage cannot wipe the mesh).
+- **Public trust delivery.** OpenBao publishes each group root (`pki-mesh-<group>-root/cert/ca`, read by ESO with
+  OpenBao role `mesh-ca-read`) into `openbao/openbao-ca-bundle` together with OpenBao's TLS CA certificate. Store
+  `mgmt-openbao` may GET only that Secret (name-scoped RBAC, namespace `fleet`). `ClusterResourceSet <name>-mesh-trust`
+  delivers `istio-system/openbao-ca` (verifies OpenBao's listener) and `istio-system/mesh-root-ca` (istio-csr pins it
+  as its root; cert-manager's `ca.crt` must match it) plus the namespace label `topology.istio.io/network=<name>`.
+  Contract tests assert that no ClusterResourceSet payload or workload-cluster ExternalSecret reads a CA private key.
+- **istiod has no CA on members** (`values/mesh-member.yaml`: `ENABLE_CA_SERVER=false`, `caAddress` = istio-csr).
+  istio-csr answers ztunnel's and gateways' CSRs (ztunnel is a trusted node account, as ambient requires) and issues
+  istiod's serving certificate (`Certificate istiod`, 48h, renewed after 24h). istiod decides once at start whether it
+  has serving certs, so the pod mounts `Secret istiod-tls` and `ConfigMap istio-ca-root-cert` as non-optional volumes
+  and stays in `ContainerCreating` until istio-csr has both: no silent fallback to a self-signed root.
 
-### Admission guards on mgmt
-cert-manager's internal approver approves every CertificateRequest, and a CA issuer signs whatever it is asked. Two
-signers here are sensitive: the `<name>-client-ca` Issuers (the k3s client CA of a workload cluster, whose API server
-accepts anything they sign, `O=system:masters` included) and the mesh root ClusterIssuers (referencable from any
-namespace). Addon `mesh-root-ca` ships ValidatingAdmissionPolicies (`admissionregistration.k8s.io/v1`, Deny) that
-admit exactly what charts/cluster renders:
+### Configuration as code, no root token
+OpenBao's [self-initialisation](https://openbao.org/docs/configuration/self-init/) (`initialize` blocks in the
+server config, `addons/openbao/values.yaml`) runs once on the first start: it enables the file audit device to stdout,
+the Kubernetes auth method for mgmt ServiceAccounts, the policy `platform-mesh-config` and its role, then **revokes
+its own root token**. No root token or recovery key is ever stored. Everything after that is applied by
+`files/mesh-reconcile.sh` (Argo CD PostSync Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI), which logs in
+with a projected, audience-bound token of ServiceAccount `openbao/openbao-mesh-config` (15-minute OpenBao token, no
+Kubernetes API access). `platform-mesh-config` covers only the mesh: `pki-mesh-*` mounts, their roles and
+`root/generate/internal` / `intermediate/*`, `auth/mesh-*`, policies `mesh-*`. It cannot read or change itself,
+`platform-*` policies, `sys/raw`, seal or generate-root, and it cannot export a key.
+
+Chosen over the alternatives: a Terraform/OpenTofu provider needs state and a runner outside GitOps; the young
+OpenBao config operators (CR per mount/role/policy) are not yet widely used and would add a privileged controller
+holding a broad token. The script is ~150 lines, tested against a fake CLI (`hack/tests/test_openbao_reconcile.sh`,
+part of `task test`) and against the real pinned image (`task test:openbao`, docker).
+
+### Unseal
+Locally OpenBao uses the **static seal** (`seal "static"`, AES-256-GCM key from the secret backend): `make secrets`
+seeds `openbao-unseal` once in the `platform` store, ESO mounts it, and OpenBao unseals itself on every start. This
+is auto-unseal with the key next to the data, acceptable for a laptop only. **Production**: replace the stanza with a
+cloud KMS seal (`seal "awskms"` with IRSA / Pod Identity, no static keys) or `seal "transit"` against a separate
+OpenBao, and run 3 raft replicas: [#31](https://github.com/koorikla/platform/issues/31).
+
+### When OpenBao is down
+Running workloads keep working; nothing new gets an identity:
+
+| | Effect while OpenBao (or the path to it) is down |
+|---|---|
+| existing pods, ztunnel, gateways | keep their certificates; ztunnel renews at half-life, so a workload certificate (24h) lasts >= 12h after the last renewal |
+| istiod | keeps serving with its 48h cert (renewed after 24h): >= 24h |
+| new pods / restarted ztunnel | get no certificate until OpenBao is back (traffic from them fails closed) |
+| reconcile, new members | wait; the CronJob retries every 5m |
+
+So the outage budget is about 12 hours for workloads. TTLs are a trade-off between that budget and exposure: Istio
+checks no CRL or OCSP, so a leaked workload certificate is valid until `notAfter` (<= 24h, istiod's <= 48h). A
+compromised member is cut off at once by deleting its auth mount (remove `mesh.group` from the fleet file); its
+issued certificates expire within a day. The 7-day reader client certs (remote secrets) cannot be revoked either.
+
+### Bootstrapping order
+1. mgmt: `make secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals; the PostSync Job
+   creates the group mounts. `openbao-ca-bundle` is filled once the roots exist (ESO retries).
+2. A member's fleet file gets `mesh.group`: charts/cluster labels the Cluster and renders `<name>-mesh-openbao`; the
+   next reconcile creates `auth/mesh-<name>`, role and policy; `<name>-mesh-trust` delivers the public certificates.
+3. On the member, cert-manager (catalog default) and addon istio-csr come up; the Vault issuer turns Ready once
+   OpenBao accepts its login; istio-csr issues istiod's cert. istiod (gated) starts, then ztunnel (sync wave 1).
+
+### Admission guards
+cert-manager's internal approver approves every CertificateRequest, and a CA issuer signs whatever it is asked.
+
+On mgmt, the `<name>-client-ca` Issuers (the k3s client CA of a workload cluster, whose API server accepts anything they
+sign, `O=system:masters` included) are guarded by addon openbao's ValidatingAdmissionPolicies
+(`admissionregistration.k8s.io/v1`, Deny):
 
 | Policy | Admits |
 |---|---|
 | `platform-mesh-reader-certificates` | Certificates for a `*-client-ca` issuer: in `fleet`, `CN=platform:istio-reader`, no subject (no O/OU = no groups), no SANs, not a CA, usages client auth + digital signature, duration set and <= 168h |
-| `platform-mesh-intermediate-certificates` | Certificates for a `mesh-root-*` ClusterIssuer: `fleet/<x>-mesh-ca` only, applied by Argo CD's application controller (git is the only path), isCA, CA usages, no SANs, duration <= 336h |
-| `platform-mesh-certificaterequests` | CertificateRequests for either: created by cert-manager's controller only (so they come from an admitted Certificate; CEL cannot parse the CSR), in `fleet`, same isCA/usages/duration profile |
-| `platform-mesh-issuers` | a `<x>-cca` Secret may back only `Issuer fleet/<x>-client-ca`; a mesh root Secret only its own ClusterIssuer; no issuer may wrap a `<x>-mesh-ca` intermediate |
+| `platform-mesh-certificaterequests` | CertificateRequests for them: created by cert-manager's controller only (so they come from an admitted Certificate; CEL cannot parse the CSR), in `fleet`, same profile |
+| `platform-mesh-issuers` | a `<x>-cca` Secret may back only `Issuer fleet/<x>-client-ca` |
 
-`hack/tests/test_mesh_admission.sh` evaluates the CEL offline with the kyverno CLI (pinned in mise.toml): the rendered
-Certificates/Issuers of every mesh member pass, and the negative cases (system:masters, other CNs, sub-CAs, long
-durations, SANs, other namespaces, hand-made requests, rogue issuers, non-Argo intermediates) are denied.
+On members, OpenBao's role already limits *what* can be signed (SPIFFE IDs of the trust domain). Addon istio-csr limits
+*who* may ask: `platform-mesh-ca-requests` admits CertificateRequests for `Issuer istio-system/openbao-mesh` only from
+istio-csr's or cert-manager's ServiceAccount and never as a CA; `platform-mesh-ca-certificates` admits only the chart's
+`Certificate istio-system/istiod` for that issuer. Without them anyone allowed to create CertificateRequests in
+`istio-system` could mint any SPIFFE identity of the mesh.
 
-### The invariant-4 question (pending user approval)
-istiod is the workload CA, so it needs a CA *private key*: the member's intermediate key sits in its `istio-system/
-cacerts`. AGENTS.md invariant 4 says CA private keys never leave mgmt; the proposed exception is worded as narrowly as
-possible and is **pending the user's decision**:
-- only `istio-system/cacerts` on opt-in mesh members, holding that cluster's own intermediate (never a root key);
-- only while peers cannot read Secrets (`platform-istio-reader`, "Reader RBAC" below), each group has its own root,
-  intermediates live <= 14 days, and the admission guards above are in place.
+`hack/tests/test_mesh_admission.sh` evaluates the CEL offline with the kyverno CLI: the rendered objects pass, the
+negative cases (system:masters, other CNs, sub-CAs, long durations, SANs, other namespaces, hand-made requests, rogue
+issuers, workload ServiceAccounts) are denied.
 
-**Tracked replacement (removes the exception)**: istio-csr on each member, with istiod's CA turned off, forwarding CSRs
-to a signer on mgmt that the workload clusters can reach: OpenBao/Vault PKI with per-cluster Kubernetes auth, or AWS
-Private CA on AWS. Then no CA key sits on a workload cluster. Moving there changes only the delivery (`cacerts` ->
-istio-csr issuer config); the rest of this document stays valid. Backlog: README roadmap.
-
-Root rotation (also the emergency answer to a leaked intermediate) is a planned procedure, not a renewal: add the new
-root next to the old one in every member's `ca.crt` (a trust bundle), re-issue the group's intermediates from the new
-root, then drop the old one.
+### Root and intermediate rotation
+Planned procedure, not a renewal (the intermediate lives 5 years inside OpenBao; the issued certificates are what is
+short-lived): generate a new root next to the old one, publish both in `mesh-root-ca` (a trust bundle), switch the
+intermediate to the new root, then drop the old root. Tracked with the other follow-ups in
+[#71](https://github.com/koorikla/platform/issues/71).
 
 ## Discovery: declarative remote secrets
 Each istiod watches the other members' API servers (Services, EndpointSlices, Pods, Namespaces) through a remote
@@ -182,8 +255,8 @@ Kubernetes can't revoke client certificates, hence the 7-day lifetime.
 ### Reader RBAC: what a peer may read
 Upstream's `istio-reader-clusterrole-istio-system` (istiod chart) grants cluster-wide get/list/watch on `secrets` and
 `configmaps`, create/delete on MCS `serviceexports` and create on `tokenreviews`/`subjectaccessreviews`. Bound to the
-reader user, every peer could read this cluster's `istio-system/cacerts` (intermediate CA key), the OpenChoreo agent
-identity and every tenant Secret. So the reader is bound to the platform's own roles instead (addon `istio-eastwest`
+reader user, every peer could read this cluster's istio-csr and istiod serving keys, the OpenChoreo agent identity and
+every tenant Secret. So the reader is bound to the platform's own roles instead (addon `istio-eastwest`
 `templates/reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
 
 | istiod 1.32.0 source | Remote reads | Granted |
@@ -209,16 +282,13 @@ the CAPA API ELB, on Hetzner the API load balancer.
 
 ### Removing a member (decommissioning)
 CRS never deletes what it applied, and Istio checks no revocation, so decommissioning is explicit:
-1. Remove `mesh.group` from the fleet file (or delete the fleet file). The Certificates `<name>-mesh-ca` /
-   `<name>-mesh-reader`, Issuer `<name>-client-ca`, ExternalSecrets and ClusterResourceSets go with the cluster
-   chart, so nothing is renewed any more.
+1. Remove `mesh.group` from the fleet file (or delete the fleet file). `<name>-mesh-openbao` goes with the cluster
+   chart, and the next reconcile deletes `auth/mesh-<name>` and policy `mesh-member-<name>`: the member can no longer
+   get certificates. Its issued certificates expire within 24h (istiod's 48h).
 2. On every remaining member delete `istio-system/istio-remote-secret-<gone>` (CRS leaves it behind; istiod logs a
    failing remote cluster until then). Its reader cert stops authenticating within 7 days in any case.
-3. On mgmt delete the leftover Secrets `fleet/<gone>-mesh-ca` and `fleet/<gone>-mesh-reader` (cert-manager does not
-   delete a Certificate's Secret with it).
-4. A leaked intermediate stays valid until its `notAfter` (<= 14 days). If the gone cluster may have been compromised,
-   rotate the group's root (above) instead of waiting.
-**VERIFY** whether istiod drops the gone cluster's endpoints at once (it should: the remote watch fails).
+3. On mgmt delete the leftover Secret `fleet/<gone>-mesh-reader` (cert-manager does not delete a Certificate's Secret
+   with it).
 
 ## Example (`examples/eastwest`)
 The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
@@ -270,52 +340,26 @@ encryption.
 | example (echo + 2 callers, only where enabled) | 15m | 24Mi |
 
 ## Turning it on for running clusters (dev1, prod1)
-Adding `mesh.group` to live clusters is handled entirely by Argo CD and CAPI; there is no manual step. Order of events:
-1. The Cluster labels change. ESO refreshes the Argo CD cluster secret (1m), and the istio-ambient Application
-   re-renders: istiod gets the new env (multi-network, no self-signed CA), ztunnel the new network/cluster ID and the
-   pod annotation `mesh.platform.koorikla.io/group`.
-2. In parallel, mgmt issues the intermediate and the CRS delivers `cacerts`. The new istiod pod starts only once
-   `cacerts` exists (`PILOT_DISABLE_SELF_SIGNED_CA`). Its log shows `Using kubernetes.io/tls secret type for signing
-   ca files`. The old istiod keeps serving until then.
+Adding `mesh.group` to live clusters is handled entirely by Argo CD, ESO, CAPI and the reconcile; there is no manual
+step. Order of events:
+1. The Cluster labels change. ESO refreshes the Argo CD cluster secret (1m); the istio-ambient Application re-renders
+   (istiod: multi-network, CA off, gated on `istiod-tls`; ztunnel: new network/cluster ID/CA address and the pod
+   annotation `mesh.platform.koorikla.io/group`) and addon istio-csr is selected.
+2. In parallel, the reconcile configures `auth/mesh-<name>` and the CRS delivers the public certificates. The new
+   istiod pod starts only once istio-csr has issued `istiod-tls`; the old istiod keeps serving until then.
 3. ztunnel's DaemonSet carries `argocd.argoproj.io/sync-wave: "1"` (addons/istio-ambient/values.yaml), so Argo CD
-   applies it only after the wave-0 resources, istiod included, are Healthy - i.e. after istiod runs on the plugged-in
-   CA. The ztunnel rollout (its pod template changed in step 1) is the restart: the new pods fetch workload
-   certificates chained to the group root, so in-mesh mTLS (OpenChoreo cell namespaces too) never mixes roots. Leaving
-   or changing a group changes the pod annotation, so that rollout happens as well.
-   Caveat: if `cacerts` takes longer than istiod's `progressDeadlineSeconds` (600s), the sync fails and Argo retries
-   (limit 10, backoff up to 5m); ztunnel stays on the old config until istiod is Healthy. Watch
-   `kubectl -n argocd get application istio-ambient-<cluster>`; nothing needs to be run by hand.
-Fresh clusters get `cacerts` before istiod first starts, so the same ordering simply delays ztunnel until istiod is up.
+   applies it only after the wave-0 resources, istiod included, are Healthy. The ztunnel rollout is the restart: the
+   new pods fetch workload certificates from istio-csr, chained to the group root, so in-mesh mTLS never mixes roots.
+   Leaving or changing a group changes the pod annotation, so that rollout happens as well.
+   If istiod is not Healthy within `progressDeadlineSeconds` (600s) the sync fails and Argo retries (limit 10, backoff
+   up to 5m); ztunnel stays on the old config meanwhile. Watch `kubectl -n argocd get application
+   istio-ambient-<cluster>`.
 
-## Next steps (deferred)
-- **Per-environment trust domains + name constraints.** All groups use `cluster.local`, so
-  `cluster.local/ns/eastwest-demo/sa/client` from dev1 and from prod1 look the same to an AuthorizationPolicy.
-  Next: a trust domain per environment/group (`meshConfig.trustDomain`, peers via `trustDomainAliases`) and URI name
-  constraints on each intermediate (cert-manager `nameConstraints`, behind the `NameConstraints` feature gate).
-  Deferred because it changes every principal in existing policies, and whether ztunnel enforces URI name
-  constraints is unverified (**VERIFY** before relying on it). Per-group roots already stop cross-group forgery.
-- **Baggage at the north-south edge.** `AMBIENT_ENABLE_BAGGAGE` carries peer metadata (cluster, namespace, workload)
-  across networks. kgateway (north-south) should strip `baggage` on egress and on requests from outside, so internal
-  topology never leaks and outside callers cannot inject metadata. Deferred to the kgateway policy work (needs a
-  route/listener policy on the data-plane Gateway; not part of the mesh addons).
-- **Peer API 6443 on CAPA/CAPH.** Restrict the control-plane load balancers to the peers' egress IPs
-  (`AWSCluster.spec.controlPlaneLoadBalancer.ingressRules`, CAPH firewall) - ClusterClass variables, separate change.
-- **Image signatures.** The example images are digest-pinned but unsigned and the repo has no ImageValidatingPolicy
-  yet: repo-wide supply-chain gap (README roadmap).
-- **istio-csr + external signer** to retire the invariant-4 exception ("Trust").
+Fresh clusters follow the same order; ztunnel simply waits until istiod is up.
 
-## VERIFY on the first live run
-`grep -rn VERIFY docs/multicluster.md addons/istio-eastwest addons/mesh-root-ca addons/istio-ambient charts/cluster/templates/mesh-*`
-- `istio-east-west` GatewayClass appears with `AMBIENT_ENABLE_MULTI_NETWORK`, and `parametersRef` sizing applies to
-  the generated Deployment.
-- cert-manager CA issuer accepts the CAPI secret `<name>-cca` (type `cluster.x-k8s.io/secret`, keys `tls.crt`/`tls.key`).
-- Peers sync with `platform-istio-reader` only (`istioctl remote-clusters`: synced; no `forbidden` in istiod logs).
-- The `platform-mesh-*` admission policies admit Argo CD's Certificates and cert-manager's CertificateRequests
-  (`kubectl get validatingadmissionpolicy`; Certificates Ready), and deny a hand-made reader cert with a subject.
-- ztunnel rolls only after istiod is Healthy (Argo sync wave 1) when a running cluster joins.
-- ESO v2 template output: the JSON kubeconfig (checked offline with ESO's function map) is accepted by istiod.
-- CRS `Reconcile` adds the network label to an existing `istio-system` Namespace.
-- istiod reloads a renewed `cacerts` without a restart.
-- Cross-cluster calls through klipper servicelb on both CNIs; `istioctl ztunnel-config workloads` shows prod1's echo
-  with network `prod1` on dev1.
-- AWS NLB and SG behaviour, Hetzner LB location annotation.
+## Follow-ups and open checks
+Deferred work (per-environment trust domains + URI name constraints, root rotation runbook, baggage stripping at the
+north-south edge, peer API 6443 restrictions on CAPA/CAPH): [#71](https://github.com/koorikla/platform/issues/71).
+Production unseal and HA: [#31](https://github.com/koorikla/platform/issues/31). Values inferred but not yet confirmed
+live (`grep -rn VERIFY docs/multicluster.md addons/openbao addons/istio-csr addons/istio-eastwest addons/istio-ambient
+charts/cluster/templates/mesh-*`): [#72](https://github.com/koorikla/platform/issues/72).

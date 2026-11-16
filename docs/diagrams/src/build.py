@@ -211,14 +211,14 @@ def cluster_lifecycle() -> Diagram:
 
 # ------------------------------------------------------------------------------------------- trust model
 def trust_model() -> Diagram:
-    W, H = 1200, 1200
+    W, H = 1200, 1300
     d = Diagram(W, H, "Trust model · what crosses which boundary",
                 "rows = concern, columns = trust zone · gutter labels name exactly what crosses · "
                 "arrow = initiator → target")
     EXZ, MZ, WZ = (16, 240), (400, 360), (920, 264)
     for x, label in ((EXZ[0], "external"), (MZ[0], "mgmt cluster · trust root"), (WZ[0], "workload cluster <name>")):
         d.text(x + 14, 112, label, 12.5, "#e2e8f0", weight=700)
-    bands = [(124, 230), (370, 230), (622, 154), (798, 254)]
+    bands = [(124, 230), (370, 230), (622, 154), (798, 254), (1068, 104)]
     for y, h in bands:
         for zx, zw in (EXZ, MZ, WZ):
             d.group(zx, y, zw, h, "", "zone")
@@ -287,7 +287,18 @@ def trust_model() -> Diagram:
     d.arrow([(MX, 1018), (EX + EW, 1018)], RO, planned=True, label="App token (ESO)", label_pos=(GL, 1022),
             aid="app")
 
-    d.legend(28, 1102, ["external", "gitops", "security", "platform", "data", "cloud"], cols=6, col_w=190,
+    # --- mesh CA (opt-in multicluster)
+    d.text(32, 1094, "mesh CA · opt-in", 12.5, RO, weight=700)
+    for i, t in enumerate(["CA keys generated inside", "OpenBao, never exported;", "no CA key on members."]):
+        d.text(32, 1122 + i * 18, t, 11.5, "#cbd5e1")
+    d.box(MX, 1084, MW, 72, "security", "OpenBao · mesh CA",
+          ["pki-mesh-<group>-root / -int", "auth/mesh-<name>: own role only"])
+    d.box(WX, 1084, WW, 72, "security", "istio-csr",
+          ["Vault Issuer, projected", "SA token · istiod CA off"])
+    d.arrow([(WX, 1104), (MX + MW, 1104)], RO, label="CSR · JWT login (out)", label_pos=(GR, 1100), aid="csr")
+    d.arrow([(MX + MW, 1140), (WX, 1140)], RO, label="group root, public (CRS)", label_pos=(GR, 1136), aid="root")
+
+    d.legend(28, 1202, ["external", "gitops", "security", "platform", "data", "cloud"], cols=6, col_w=190,
              flows=[("certs, secrets, mTLS", RO, False), ("artifact", VI, False)])
     return d
 
