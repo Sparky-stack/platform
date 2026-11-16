@@ -43,6 +43,28 @@ arch_exception() {
   done
 }
 
+# Images from rendered manifests: every `image:` string, plus images operators receive by name through env vars and
+# ConfigMap keys containing IMAGE (e.g. Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG
+# POSTGRES_IMAGE_NAME, the Barman Cloud plugin's SIDECAR_IMAGE): those pods are created by the operator, not rendered.
+extract_images() {
+  local in
+  in=$(cat)
+  printf '%s\n' "$in" | yq -N '.. | select(tag == "!!map" and has("image")) | .image | select(tag == "!!str")' 2>/dev/null \
+    | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  printf '%s\n' "$in" | yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
+      | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
+    (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' 2>/dev/null \
+    | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
+}
+
+# enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do; with
+# OPT_IN=1 an opt-in addon counts as on unless the cluster sets it to "false". Reads the catalog file CATALOG.
+enabled() {
+  local def toggle=$2
+  def=$(yq ".addons[\"$1\"].default" "$CATALOG")   # no // : yq treats false as empty (opt-in addons would count as on)
+  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]] || (( ${OPT_IN:-0} )); }
+}
+
 # Sourced (hack/tests/test_image_audit.sh): only the functions above.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
 
@@ -80,11 +102,6 @@ INV="$TMP/inventory.tsv"   # <image>\t<source>
 
 add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 
-# Images from rendered manifests: every `image:` string, plus `repository`/`tag` pairs some CRs use.
-extract_images() {
-  yq -N '.. | select(tag == "!!map" and has("image")) | .image | select(tag == "!!str")' 2>/dev/null \
-    | tr -d '\r' | grep -E '^[a-z0-9]' || true
-}
 
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
@@ -113,12 +130,6 @@ render() {
   fi
 }
 
-# enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do.
-enabled() {
-  local def toggle=$2
-  def=$(yq ".addons[\"$1\"].default" "$CATALOG")   # no // : yq treats false as empty (opt-in addons would count as on)
-  [[ "$toggle" != "false" ]] && { [[ "$def" != "false" ]] || [[ "$toggle" == "true" ]] || (( OPT_IN )); }
-}
 
 echo "==> Building chart dependencies" >&2
 ./hack/deps.sh >&2

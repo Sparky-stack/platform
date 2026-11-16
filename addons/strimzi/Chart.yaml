@@ -1,0 +1,9 @@
+apiVersion: v2
+name: strimzi
+description: Strimzi cluster operator - Apache Kafka (KRaft) clusters, topics and users as Kubernetes resources on workload clusters (opt-in)
+type: application
+version: 0.1.0
+dependencies:
+  - name: strimzi-kafka-operator
+    version: 1.3.1
+    repository: oci://quay.io/strimzi-helm

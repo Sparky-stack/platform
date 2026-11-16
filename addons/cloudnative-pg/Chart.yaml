@@ -1,0 +1,13 @@
+apiVersion: v2
+name: cloudnative-pg
+description: CloudNativePG operator - PostgreSQL clusters as Kubernetes resources on workload clusters, with the optional Barman Cloud plugin for backups to object storage (opt-in)
+type: application
+version: 0.1.0
+dependencies:
+  - name: cloudnative-pg
+    version: 0.29.1
+    repository: oci://ghcr.io/cloudnative-pg/charts
+  - name: plugin-barman-cloud
+    version: 0.9.0
+    repository: oci://ghcr.io/cloudnative-pg/charts
+    condition: plugin-barman-cloud.enabled

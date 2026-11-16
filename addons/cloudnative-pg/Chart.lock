@@ -1,0 +1,9 @@
+dependencies:
+- name: cloudnative-pg
+  repository: oci://ghcr.io/cloudnative-pg/charts
+  version: 0.29.1
+- name: plugin-barman-cloud
+  repository: oci://ghcr.io/cloudnative-pg/charts
+  version: 0.9.0
+digest: sha256:38d3a90fcd957a19e1f8d2abf79d079ff4194c994572c7f86f8eae68f4b9af33
+generated: "2026-11-16T05:48:30.027450821+02:00"
