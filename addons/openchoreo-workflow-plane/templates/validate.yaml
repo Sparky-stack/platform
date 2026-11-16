@@ -15,3 +15,6 @@
 {{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $wp.clusterAgent.tls.serverCAConfigMap) }}
 {{- fail "agentServerCA.configMapName must equal openchoreo-workflow-plane.clusterAgent.tls.serverCAConfigMap" }}
 {{- end }}
+{{- if or (not .Values.clusterWorkflowPlane.secretStore) (eq .Values.clusterWorkflowPlane.secretStore "platform") }}
+{{- fail "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }}
+{{- end }}

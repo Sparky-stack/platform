@@ -6,9 +6,22 @@ that every rendered ExternalSecret using it is in that list.
 {{- define "secret-stores.platformConditions" -}}
 {{- $ns := .Values.platformStore.namespaces | default list -}}
 {{- if not $ns }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
+{{- range $ns -}}
+{{- if hasPrefix "workflows-" (toString .) }}{{ fail (printf "platformStore.namespaces must not include workflow run namespace %q: use ClusterSecretStore workflows (key-scoped)" .) }}{{ end -}}
+{{- end -}}
 conditions:
   - namespaces:
       {{- toYaml $ns | nindent 6 }}
+{{- end -}}
+{{- define "secret-stores.workflowConditions" -}}
+{{- $re := (.Values.workflowStore).namespaceRegexes | default list -}}
+{{- if not $re }}{{ fail "workflowStore.namespaceRegexes must restrict ClusterSecretStore workflows to workflow run namespaces" }}{{ end -}}
+{{- range $re -}}
+{{- if not (hasPrefix "^workflows-" (toString .)) }}{{ fail (printf "workflowStore.namespaceRegexes entry %q must start with ^workflows-" .) }}{{ end -}}
+{{- end -}}
+conditions:
+  - namespaceRegexes:
+      {{- toYaml $re | nindent 6 }}
 {{- end -}}
 {{- $backend := .Values.secrets.backend | default "kubernetes" -}}
 {{- if eq .Values.role "mgmt" -}}
@@ -277,6 +290,140 @@ spec:
         username: '{{ "{{" }} .username {{ "}} " | trim }}'
         password: '{{ "{{" }} .token {{ "}} " | trim }}'
         {{- end }}
+{{- /*
+ClusterSecretStore `workflows` (mgmt): the only store ClusterWorkflowPlane `default` (${workflowplane.secretStore})
+points at. Restricted by namespaceRegexes to `workflows-*` run namespaces and, on the kubernetes backend, by a
+name-scoped GET Role (resourceNames = workflowStore.keys) with SelfSubjectRulesReview create so ESO validates the store
+without list/watch or access to any other Secret in platform-secrets (AGENTS.md invariant 5).
+*/ -}}
+{{- $wfKeys := (.Values.workflowStore).keys | default list }}
+{{- if not $wfKeys }}{{ fail "workflowStore.keys must list the secret keys ClusterSecretStore workflows may read" }}{{ end }}
+{{- if and (eq (toString ((.Values.registry).type | default "harbor")) "external") ((.Values.registry.external).credentialsKey) }}
+{{- $wfKeys = append (without $wfKeys "harbor") .Values.registry.external.credentialsKey | uniq }}
+{{- end }}
+{{- $ws := .Values.secrets.workflowStore | default dict }}
+---
+{{- if eq $backend "kubernetes" }}
+{{- $platformNs := .Values.secrets.kubernetes.namespace | default "platform-secrets" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-workflows
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-workflows
+  namespace: {{ $platformNs | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      {{- toYaml $wfKeys | nindent 6 }}
+    verbs: ["get"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["selfsubjectrulesreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-workflows
+  namespace: {{ $platformNs | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: eso-workflows
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-workflows
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: workflows
+spec:
+  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $platformNs | quote }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ .Release.Namespace }}
+      auth:
+        serviceAccount:
+          name: eso-workflows
+          namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "aws" }}
+{{- $wfAwsRole := ($ws.aws).role | default "" }}
+{{- if and $wfAwsRole (eq $wfAwsRole (.Values.secrets.aws.role | default "")) }}
+{{- fail "ClusterSecretStore workflows on AWS Secrets Manager needs secrets.workflowStore.aws.role: an IAM role that reads only workflowStore.keys, distinct from secrets.aws.role (store platform's)" }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-aws-workflows
+  namespace: {{ .Release.Namespace }}
+  {{- if $wfAwsRole }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $wfAwsRole | quote }}
+  {{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: workflows
+spec:
+  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.secrets.aws.region | quote }}
+      {{- if .Values.secrets.aws.prefix }}
+      prefix: {{ .Values.secrets.aws.prefix | quote }}
+      {{- end }}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: eso-aws-workflows
+            namespace: {{ .Release.Namespace }}
+{{- else if eq $backend "vault" }}
+{{- $wfVaultRole := ($ws.vault).role | default "" }}
+{{- if or (not $wfVaultRole) (eq $wfVaultRole (.Values.secrets.vault.auth.kubernetes.role | default "")) }}
+{{- fail "ClusterSecretStore workflows on Vault needs secrets.workflowStore.vault.role: a kubernetes-auth role whose policy reads only workflowStore.keys, distinct from secrets.vault.auth.kubernetes.role (store platform's)" }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-vault-workflows
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: workflows
+spec:
+  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
+  provider:
+    vault:
+      server: {{ .Values.secrets.vault.server | quote }}
+      path: {{ ($ws.vault).path | default .Values.secrets.vault.path | default "platform" | quote }}
+      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
+      auth:
+        kubernetes:
+          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
+          role: {{ $wfVaultRole | quote }}
+          serviceAccountRef:
+            name: eso-vault-workflows
+            namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- else -}}
 {{- if eq $backend "kubernetes" -}}
 {{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}

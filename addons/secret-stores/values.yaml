@@ -34,6 +34,22 @@ secrets:
       path: ""                 # default: secrets.vault.path
       role: ""                 # kubernetes-auth role whose policy reads only the DNS key; must differ from
                                # secrets.vault.auth.kubernetes.role (render fails if empty or equal)
+  # ClusterSecretStore `workflows` on mgmt (ClusterWorkflowPlane `default` secretStoreRef): dedicated identity whose
+  # policy reads only workflowStore.keys (never the full `platform` store's role).
+  workflowStore:
+    aws:
+      role: ""                 # IAM role (IRSA) allowed to read only workflowStore.keys; must differ from secrets.aws.role
+    vault:
+      path: ""                 # default: secrets.vault.path
+      role: external-secrets-workflows   # kubernetes-auth role whose policy reads only workflowStore.keys; must differ
+                                         # from secrets.vault.auth.kubernetes.role (render fails if empty or equal)
+
+# installation.yaml (valuesObject): registry.type selects the registry push key ClusterSecretStore `workflows` may read
+# on the kubernetes backend (harbor -> workflowStore.keys entry `harbor`; external -> registry.external.credentialsKey).
+registry:
+  type: harbor
+  external:
+    credentialsKey: platform-ghcr
 
 # installation.yaml (valuesObject): dns.provider cloudflare puts the Cloudflare token behind store `dns` on workload clusters.
 dns:
@@ -60,11 +76,22 @@ platformStore:
     - argo-events                      # falco-webhook (+ falco-notify when on) (addon argo-events)
     - harbor                           # harbor-platform: admin, robot and component secrets (addon harbor)
     - openbao                          # openbao-unseal: static auto-unseal key of the mesh CA (addon openbao)
-    - workflows-default                # per-run ExternalSecrets of ClusterWorkflows (addon openchoreo-platform), rendered by
-                                       # OpenChoreo into workflows-<openchoreo.orgNamespace>: builds (git, registry, cosign),
-                                       # promotion-gate (promotion-gate, promotion-gate-github)
     - external-dns                     # external-dns-cloudflare when opted in on mgmt with Cloudflare (addon external-dns)
     - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
+
+# ClusterSecretStore `workflows` on mgmt (ClusterWorkflowPlane `default` secretStoreRef): per-run ExternalSecrets of
+# build and promotion-gate ClusterWorkflows in `workflows-<openchoreo.orgNamespace>`. Restricted by namespaceRegexes to
+# `workflows-*` and, on the kubernetes backend, by Role resourceNames to only the keys those workflows read (never the
+# full `platform` store: AGENTS.md invariant 5; hack/tests/test_secret_store_scope.sh).
+workflowStore:
+  namespaceRegexes:
+    - "^workflows-.+$"
+  keys:
+    - platform-github-build            # build clone + GitOps push (addon openchoreo-platform buildWorkflows.secrets.git)
+    - cosign-platform                  # build signing key (addon openchoreo-platform buildWorkflows.secrets.cosign)
+    - harbor                           # Harbor builder robot when registry.type is harbor (buildWorkflows.secrets.harbor.key)
+    - promotion-gate                   # Thunder client secret (addon openchoreo-platform promotionGate.clientSecret.key)
+    - promotion-gate-github            # gate GitHub App (addon openchoreo-platform promotionGate.github.key)
 
 repoCreds:
   name: platform-repo-creds

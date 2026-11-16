@@ -288,7 +288,7 @@ def security() -> Diagram:
     d.box(36, 486, 220, 44, "cloud", "AWS Secrets Manager", ["rendered only"], title_size=12.5, sub_size=11)
     d.box(36, 536, 220, 44, "cloud", "Vault", ["rendered only"], title_size=12.5, sub_size=11)
     d.box(ML, 404, MW, 64, "security", "ClusterSecretStore platform",
-          ["namespace-scoped (spec.conditions): argocd,", "fleet, thunder, harbor, workflows-default, …"])
+          ["namespace-scoped (spec.conditions): argocd,", "fleet, thunder, harbor, …; store workflows: key-scoped"])
     d.box(ML, 482, MW, 64, "security", "mgmt-fleet · mgmt-openchoreo · mgmt-harbor",
           ["read-only in-cluster stores: kubeconfigs,", "agent certs, public ca.crt only"], title_size=12.5)
     d.box(WL, 404, WW, 64, "security", "ClusterSecretStore default", ["app + collector secrets", "same backend, scoped"])

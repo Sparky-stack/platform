@@ -22,6 +22,11 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    Second exception, for a credential tenants must not reach: on workload clusters the external-dns Cloudflare token
    comes from `ClusterSecretStore/dns` (only while `dns.provider: cloudflare`; conditions: namespace `external-dns`
    only; its own backend location and identity that `default`, the tenants' `secretStoreRef`, cannot read).
+   Third exception, for workflow run namespaces shared with tenant build steps: on mgmt `ClusterWorkflowPlane default`
+   points at `ClusterSecretStore/workflows` (conditions: `workflows-*` only; on the kubernetes backend a name-scoped
+   `get` Role in `platform-secrets` limited by `resourceNames` to `workflowStore.keys` — `platform-github-build`,
+   `cosign-platform`, `harbor` or `registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`; on
+   AWS/Vault a dedicated identity), so `workflows-*` never reads the full `platform` store.
    No secret value is ever committed. Secret keys are flat names (see table below).
 6. Addons are wrapper charts in `addons/<addon>/` (upstream chart as dependency + optional extra templates). Config
    overlays (`installations/*/addons/`) contain only values, never templates.

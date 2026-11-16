@@ -307,10 +307,10 @@ assert_match "$pvc_lua" 'Pending' "argocd-cm PVC health customization handles Pe
 svc_type=$(yq 'select(.kind == "Service" and .metadata.name == "argocd-server") | .spec.type' "$TMP/argocd.yaml")
 assert_eq "$svc_type" "ClusterIP" "argocd-server Service stays ClusterIP"
 
-# 7. secret-stores creates platform, mgmt-fleet, mgmt-openchoreo on mgmt and default on workload
+# 7. secret-stores creates platform, workflows, mgmt-fleet, mgmt-openchoreo on mgmt and default on workload
 helm template secret-stores "$ROOT/addons/secret-stores" --namespace external-secrets \
   --values "$ROOT/addons/secret-stores/values/role-mgmt.yaml" > "$TMP/ss-mgmt.yaml"
-for s in platform mgmt-fleet mgmt-openchoreo; do
+for s in platform workflows mgmt-fleet mgmt-openchoreo; do
   found=$(yq "select(.kind == \"ClusterSecretStore\" and .metadata.name == \"$s\") | .metadata.name" "$TMP/ss-mgmt.yaml")
   assert_eq "$found" "$s" "mgmt secret-stores creates ClusterSecretStore $s"
 done

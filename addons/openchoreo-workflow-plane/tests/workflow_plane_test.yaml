@@ -10,7 +10,7 @@ release:
   name: openchoreo-workflow-plane
   namespace: openchoreo-workflow-plane
 tests:
-  - it: registers ClusterWorkflowPlane default trusting only the agent's own cert, store platform
+  - it: registers ClusterWorkflowPlane default trusting only the agent's own cert, store workflows
     template: templates/cluster-workflow-plane.yaml
     asserts:
       - isKind: { of: ClusterWorkflowPlane }
@@ -19,7 +19,7 @@ tests:
       - equal:
           path: spec.clusterAgent.clientCA.secretKeyRef
           value: { name: cluster-agent-tls, namespace: openchoreo-workflow-plane, key: ca.crt }
-      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.secretStoreRef.name, value: workflows }
       - equal: { path: spec.observabilityPlaneRef, value: { kind: ClusterObservabilityPlane, name: default } }
 
   - it: no observabilityPlaneRef without the observability plane
@@ -233,3 +233,9 @@ tests:
     set: { openchoreo-workflow-plane.clusterAgent.tls.caSecretName: cluster-gateway-ca }
     asserts:
       - failedTemplate: { errorPattern: "no control-plane CA key is copied" }
+
+  - it: refuses to point the workflow plane at the full platform secret store
+    template: templates/validate.yaml
+    set: { clusterWorkflowPlane.secretStore: platform }
+    asserts:
+      - failedTemplate: { errorPattern: "never the full platform store" }
