@@ -169,6 +169,64 @@ elsewhere:
 
 Not yet proven with a full `task up` on these hosts: [#60](https://github.com/koorikla/platform/issues/60).
 
+## Local profiles
+
+One installation (`installations/local`), two profiles. The fleet files are the switch: a file in
+`installations/local/clusters/` is a cluster, and a `*.yaml.disabled` file is not (conventions invariant 7).
+
+| Profile | Fleet files | Workload clusters | Host RAM (`docker stats`, reference host) |
+|---|---|---|---|
+| lean (default) | `dev1.yaml`, `prod1.yaml.disabled` | `dev1`: development, staging, production | mgmt ~7.8 GiB + dev1 ~4.2 GiB = **~12 GiB** |
+| multicluster | `dev1.yaml`, `prod1.yaml` | `dev1`: development, staging; `prod1`: production | + prod1 ~3.4 GiB = **~15.4 GiB** |
+
+Measured on 2026-11-16 with the same stack before and after prod1 was removed (#115): dev1 grew from 3.8 to 4.1-4.2 GiB
+when it took production over; prod1, running with no environment, held 3.3-3.6 GiB (+ 18 MiB for its load
+balancer container); mgmt 7.6-8.4 GiB in both. Single-server CAPD nodes (`controlPlane.replicas: 1`).
+
+Switch to multicluster: rename the file and move `production` to it (an environment lives on exactly one enabled
+cluster; `hack/tests/test_local_profiles.sh` checks both profiles):
+
+```sh
+git mv installations/local/clusters/prod1.yaml.disabled installations/local/clusters/prod1.yaml
+yq -i '.openchoreo.dataPlane.environments -= ["production"]' installations/local/clusters/dev1.yaml
+```
+
+Optionally also `examples.eastwest.enabled: true` in `installation.yaml` (the cross-cluster example needs two mesh
+members). Back to lean is the reverse. Commit, PR, merge: the `fleet` ApplicationSet creates or deletes prod1 (the CAPI
+Cluster is deleted gracefully; CAPD removes its containers).
+
+Before the first `task up` those two lines are the whole switch. **On a running stack** `production` already exists as
+an OpenChoreo `Environment`, whose `dataPlaneRef` is immutable, so it is deleted and created again on the other
+cluster. OpenChoreo refuses to delete an Environment that `DeploymentPipeline default` references, its finalizer
+deletes the environment's ReleaseBindings as OpenChoreo's controller (which the git-only gate denies for production,
+[promotion.md](promotion.md)), and it cleans the namespaces through the old cluster's agent, so the old cluster must
+still run. Two merges:
+1. Move `production` between the fleet files (to dev1 for lean: `prod1.yaml` keeps `environments: []` and stays
+   enabled) and add two temporary overrides to `installations/local/addons/openchoreo-platform/values.yaml`:
+   `deploymentPipeline: {environments: [development, staging]}` and `promotion.gitOnly.deleters` plus
+   `system:serviceaccount:openchoreo-control-plane:controller-manager` (DELETE only). Wait until the production
+   ReleaseBinding is Ready on its new cluster (`kubectl -n default get releasebinding`). Argo CD recreates the binding
+   while the Environment is still missing, and OpenChoreo 1.3.3 does not retry an `EnvironmentNotFound` binding: if it
+   stays there after `kubectl -n default get environments` lists production again, delete the
+   `openchoreo-control-plane` controller-manager pod (its restart reconciles every binding).
+2. Remove both overrides and, for lean, rename `prod1.yaml` back to `prod1.yaml.disabled` with
+   `environments: [production]`.
+
+Lean was reached this way on the reference host (#115); the multicluster direction is render-checked only (VERIFY).
+
+What keeps working on one cluster:
+- OpenChoreo isolates environments by namespace (`dp-<org>-<project>-<env>-<hash>`) and by host
+  (`<env>-<org>.dev1.apps.localhost`).
+- Promotion gates, freeze windows and git-only production bindings work on Environment names
+  ([promotion.md](promotion.md)).
+- Kyverno image verification selects cell namespaces by their `openchoreo.dev/environment` label: production is Deny
+  on whichever cluster hosts it (the contract test renders the policies for every cluster and compares them).
+- The mesh group `local` has one member; OpenBao's mesh reconcile configures just `dev1`.
+
+What it gives up: the cluster boundary between production and the rest (one API server, etcd, node and kernel), the
+flannel path (prod1 is the flannel cluster), and the cluster-level `environment` label (`development` on dev1, which
+picks addon `env-<environment>.yaml` overlays) also covers production's namespaces.
+
 ## Local stack load and the mgmt datastore
 
 Measured on the 20-core / 31 GiB reference host with mgmt + dev1 (3 servers) + prod1
@@ -187,49 +245,10 @@ restart also restarts all mgmt pods (containerd runs inside k3s: `SandboxChanged
 list and the Kyverno background scan, and the I/O burst pushes the CAPD clusters' etcd over their lease deadlines.
 Embedded etcd compacts incrementally and never exits on a slow compaction; the conversion copies only the current keys.
 
-**Converting a running mgmt to embedded etcd** (data-preserving; needs a maintenance window of ~15 min; Linux paths,
-on Git Bash prefix `MSYS_NO_PATHCONV=1`). k3s converts a single SQLite server to etcd when it starts once with
-`cluster-init` ([k3s docs](https://docs.k3s.io/datastore/ha-embedded#existing-single-node-clusters)); afterwards the etcd
-files on disk select etcd by themselves. The same container is stopped and started, never recreated: its
-`/var/lib/rancher/k3s` is an anonymous volume that a recreated node would not get back.
-
-```sh
-C=k3d-platform-mgmt-server-0
-IMG=$(yq -r .image bootstrap/k3d-mgmt.yaml)                         # same k3s image: has tar and sh
-VOL=$(docker inspect "$C" -f '{{range .Mounts}}{{if eq .Destination "/var/lib/rancher/k3s"}}{{.Name}}{{end}}{{end}}')
-BK="$HOME/platform-mgmt-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK"  # needs ~2x (server/ + storage/) free, ~12 GB
-# 1. stop cleanly (k3s checkpoints the SQLite WAL); CAPD clusters keep running, Argo CD pauses with mgmt
-docker stop -t 120 "$C"
-# 2. back up the datastore, server identity (token, TLS, credentials) and the local-path PV data; agent/ (images) is
-#    re-pullable and not needed
-docker run --rm -v "$VOL":/k3s:ro -v "$BK":/backup --entrypoint tar "$IMG" -C /k3s -cf /backup/k3s.tar server storage
-tar -tf "$BK/k3s.tar" server/db/state.db server/db/state.db-wal server/token >/dev/null && echo backup-ok
-# 3. one start with cluster-init (k3s config file in the container layer; survives stop/start)
-printf 'cluster-init: true\n' > "$BK/config.yaml"
-docker cp "$BK/config.yaml" "$C":/etc/rancher/k3s/config.yaml
-docker start "$C"
-docker logs -f --since 2m "$C" 2>&1 | grep -iE 'migrat|sqlite|etcd.*(ready|started)|fatal'   # Ctrl-C once ready
-# 4. verify: etcd/ exists and state.db was renamed state.db.migrated (k3s renames it only after a complete copy)
-docker exec "$C" ls /var/lib/rancher/k3s/server/db
-kubectl --context k3d-platform-mgmt get nodes                       # ROLES control-plane,etcd
-kubectl --context k3d-platform-mgmt get applications -n argocd      # Synced/Healthy again within minutes
-kubectl --context k3d-platform-mgmt get pvc -A; kubectl --context k3d-platform-mgmt get clusters -n fleet
-docker exec "$C" k3s etcd-snapshot save --name post-migration       # first snapshot (default: every 12 h, keep 5)
-```
-
-If step 4 shows no `state.db.migrated`, or anything is missing, roll back: k3s would otherwise keep using a partial etcd.
-Writes made after the conversion are lost on rollback (Git re-applies them; PV data is not in the datastore).
-
-```sh
-docker stop -t 120 "$C"
-docker run --rm -v "$VOL":/k3s -v "$BK":/backup --entrypoint sh "$IMG" -c \
-  'rm -rf /k3s/server/db && tar -C /k3s -xf /backup/k3s.tar server/db'
-printf '{}\n' > "$BK/empty.yaml"; docker cp "$BK/empty.yaml" "$C":/etc/rancher/k3s/config.yaml
-docker start "$C"
-```
-
-New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to server:0
-([#76](https://github.com/koorikla/platform/issues/76)). The conversion above is only for a mgmt created before that.
+New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to `server:0`
+([#76](https://github.com/koorikla/platform/issues/76)). To convert an older SQLite mgmt cluster in place without
+losing state (and for `etcd` snapshot and rollback commands), follow
+[runbooks/backup-restore.md](runbooks/backup-restore.md#legacy-sqlite-kine-to-embedded-etcd-conversion).
 
 **Leader election on slow disks.** etcd alone does not stop the restarts: k3s runs kube-controller-manager, scheduler and
 cloud-controller-manager in-process and exits when one misses its lease renewal (`"leaderelection lost"`). The clean

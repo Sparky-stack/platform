@@ -1,6 +1,6 @@
 # Full platform demo
 
-The scripted demo of the whole platform on the local stack (k3d mgmt + CAPD `dev1` / `prod1`): about 30 minutes, for
+The scripted demo of the whole platform on the local stack (k3d mgmt + CAPD `dev1`, the lean profile of docs/dev-environment.md "Local profiles"): about 30 minutes, for
 the team and for management. It follows the storyline of the tracking issue
 [#98](https://github.com/koorikla/platform/issues/98). Every step lists what to show, the commands and URLs, the expected
 output, talking points, and a fallback. A step whose feature is not on `main` yet is marked **pending #NN**.
@@ -17,9 +17,9 @@ task demo:check            # make demo-check; or: bash hack/demo-check.sh
 STEP CHECK                                          RESULT       DETAIL
 ---- ---------------------------------------------- ------------ ------
 1    Argo CD apps Synced/Healthy                    PASS         51/51 Synced/Healthy
-2    CAPI clusters Provisioned                      PASS         dev1, prod1 Provisioned/Available
+2    CAPI clusters Provisioned                      PASS         dev1 Provisioned/Available
 ...
-5    hello-world 200 in production                  PENDING #54  404 http://production-default.prod1.apps.localhost:19080/hello-world-http/ (node 172.18.0.6)
+5    hello-world 200 in production                  PENDING #54  404 http://production-default.dev1.apps.localhost:19080/hello-world-http/ (node 172.18.0.7)
 ...
 24 PASS, 0 FAIL, 5 PENDING
 ```
@@ -53,8 +53,8 @@ Also prepare:
 - Browser tabs: Argo CD (`task ui`, http://localhost:8081), the OpenChoreo console http://openchoreo.localhost:8080
   (user `admin@openchoreo.dev`, password: docs/forking.md "4. Boot"), Harbor https://harbor.openchoreo.localhost:9443, the
   promotion pull requests of koorikla/hello-world.
-- Terminal with kubeconfigs for the workload clusters: `task kubeconfig CLUSTER=dev1` and `CLUSTER=prod1` (files
-  `dev1.kubeconfig`, `prod1.kubeconfig`, gitignored).
+- Terminal with the workload cluster's kubeconfig: `task kubeconfig CLUSTER=dev1` (file `dev1.kubeconfig`, gitignored;
+  in the multicluster profile also `CLUSTER=prod1`).
 - Font size up, notifications off. Close the terminal that shows `task secrets` output.
 
 ## Timeline
@@ -68,7 +68,7 @@ Also prepare:
 | 5 | Deploy and promote | 5 | development/staging live; production pending #54 |
 | 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait pending #48 |
 | 7 | Runtime security | 3 | live |
-| 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1/prod1; #19); per-tenant stores pending #96 |
+| 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1; #19); per-tenant stores pending #96 |
 | 9 | App with a database | 2 | pending #91 |
 
 ## 1. Clean bootstrap
@@ -80,8 +80,8 @@ task up            # recorded beforehand: ~25 min; show the recording or the end
 task status        # CAPI clusters, Argo CD apps, ClusterDataPlanes
 ```
 
-Expected: `task status` lists `dev1` and `prod1` `Provisioned`, every Application `Synced Healthy` (51 at the time of
-writing), ClusterDataPlanes `dev1` and `prod1`. Argo CD UI: the `root` app fanning out to mgmt addons, the `fleet`
+Expected: `task status` lists `dev1` `Provisioned`, every Application `Synced Healthy`, ClusterDataPlane `dev1` (hosting
+development, staging and production, one namespace each). Argo CD UI: the `root` app fanning out to mgmt addons, the `fleet`
 ApplicationSet and per-cluster addons.
 
 Talking points:
@@ -93,25 +93,26 @@ Fallback: do not run `task up` live (too long). Show `task status` and Argo CD o
 
 ## 2. Add a cluster by adding a file
 
-Show: a cluster is one YAML file. Open `installations/local/clusters/prod1.yaml` next to `dev1.yaml`.
+Show: a cluster is one YAML file. Open `installations/local/clusters/dev1.yaml` next to `prod1.yaml.disabled` (the
+multicluster profile: renaming it to `prod1.yaml` and moving `production` to it creates prod1).
 
 ```bash
 kubectl --context k3d-platform-mgmt get clusters -n fleet
 kubectl --context k3d-platform-mgmt get clusterdataplanes
-kubectl --context k3d-platform-mgmt get applications -n argocd | grep -E 'prod1|dev1'
+kubectl --context k3d-platform-mgmt get applications -n argocd | grep dev1
 helm template cluster-prod-euc1 charts/cluster --namespace fleet \
   --values installations/aws-example/installation.yaml --values installations/aws-example/clusters/prod-euc1.yaml \
   | grep -E '^kind:|classRef' -A1 | head -20
 ```
 
-Expected: `dev1` and `prod1` `Provisioned`, `AVAILABLE True`; both ClusterDataPlanes exist (the check shows `1 agent
-connected` each); per-cluster addon apps (`cilium-dev1`, `falco-prod1`, ...); the AWS file renders a CAPI `Cluster`
+Expected: `dev1` `Provisioned`, `AVAILABLE True`; its ClusterDataPlane exists (the check shows `1 agent connected`);
+per-cluster addon apps (`cilium-dev1`, `falco-dev1`, ...); the AWS file renders a CAPI `Cluster`
 with class `k3s-aws`.
 
 Talking points:
 - File -> `fleet` ApplicationSet -> CAPI Cluster -> Argo CD cluster secret -> addons by label -> OpenChoreo data plane
   (docs/providers.md "Adding a cluster").
-- CNI is fixed at birth: `dev1` runs Cilium, `prod1` flannel; the label picks the addon set
+- CNI is fixed at birth: `dev1` runs Cilium, `prod1` (multicluster profile) flannel; the label picks the addon set
   (docs/networking.md "CNI is fixed when the cluster is created").
 - The same contract renders for AWS (CAPA) and Hetzner (CAPH) today; EKS, GKE, AKS and Talos/vSphere ClusterClasses are
   **pending #87, #88, #89, #90**.
@@ -158,16 +159,16 @@ cosign verify "$IMAGE" \
 `<workflowRef>` is `imageVerification.github.workflowRef` in `addons/kyverno-policies/values.yaml`. Expected:
 `The following checks were performed ...`, `The code-signing certificate was verified ...`.
 
-The live deny, in the production cell namespace on `prod1` (production is where signatures are enforced; development
-and staging only report):
+The live deny, in the production cell namespace on `dev1` (production is where signatures are enforced; development
+and staging, on the same cluster, only report: the policies select namespaces by their environment label):
 
 ```bash
-NS=$(kubectl --kubeconfig prod1.kubeconfig get ns -l openchoreo.dev/environment=production,openchoreo.dev/managed-by=renderedrelease-controller -o name | head -1 | cut -d/ -f2)
-kubectl --kubeconfig prod1.kubeconfig get imagevalidatingpolicies,validatingpolicies
-kubectl --kubeconfig prod1.kubeconfig -n "$NS" run signed --image="$IMAGE" --dry-run=server
-kubectl --kubeconfig prod1.kubeconfig -n "$NS" run unsigned \
+NS=$(kubectl --kubeconfig dev1.kubeconfig get ns -l openchoreo.dev/environment=production,openchoreo.dev/managed-by=renderedrelease-controller -o name | head -1 | cut -d/ -f2)
+kubectl --kubeconfig dev1.kubeconfig get imagevalidatingpolicies,validatingpolicies
+kubectl --kubeconfig dev1.kubeconfig -n "$NS" run signed --image="$IMAGE" --dry-run=server
+kubectl --kubeconfig dev1.kubeconfig -n "$NS" run unsigned \
   --image=ghcr.io/koorikla/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7 --dry-run=server
-kubectl --kubeconfig prod1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
+kubectl --kubeconfig dev1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
 ```
 
 Expected: policies `READY true`; `pod/signed created (server dry run)`; the unsigned digest is denied by
@@ -192,11 +193,9 @@ Show: development -> staging -> production, with gates in front of production.
 
 ```bash
 NODE_DEV=$(kubectl --context k3d-platform-mgmt get machines -n fleet -l cluster.x-k8s.io/cluster-name=dev1 -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-NODE_PROD=$(kubectl --context k3d-platform-mgmt get machines -n fleet -l cluster.x-k8s.io/cluster-name=prod1 -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-for env in development staging; do
+for env in development staging production; do
   curl -s --resolve "$env-default.dev1.apps.localhost:19080:$NODE_DEV" "http://$env-default.dev1.apps.localhost:19080/hello-world-http/"; echo
 done
-curl -s --resolve "production-default.prod1.apps.localhost:19080:$NODE_PROD" http://production-default.prod1.apps.localhost:19080/hello-world-http/
 kubectl --context k3d-platform-mgmt get releasebindings,workflowruns -n default
 ```
 
@@ -228,7 +227,7 @@ kubectl --context k3d-platform-mgmt get --raw \
   '/api/v1/namespaces/openchoreo-observability-plane/services/prometheus-operated:9090/proxy/api/v1/query?query=count%20by%20(k8s_cluster_name)(%7Bk8s_cluster_name!%3D%22%22%7D)'
 ```
 
-Expected: series for `dev1` and `prod1`; hello-world pods in the Metrics view.
+Expected: series for `dev1` (and `prod1` in the multicluster profile); hello-world pods in the Metrics view.
 
 Talking points:
 - One observability plane on mgmt; data planes ship logs (Fluent Bit), metrics (Prometheus agent, remote write) and

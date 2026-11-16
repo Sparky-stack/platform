@@ -78,7 +78,8 @@ ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist lon
   `kubectl -n thunder annotate pvc <name> platform.koorikla.io/delete-protection-`, then delete. Verify the policy:
   `kubectl -n thunder delete pvc thunder-database-pvc --dry-run=server` must answer Forbidden.
   `hack/tests/test_pvc_hooks.sh` holds every addon to this: a hook PVC is `hook-failed` only, annotated, and covered
-  by such a policy in its render.
+  by such a policy in its render. PVC rebind and recovery: [runbooks/backup-restore.md](runbooks/backup-restore.md#4-thunder-pvc-recovery-live-verified);
+  intentional delete: [runbooks/break-glass.md](runbooks/break-glass.md#intentional-deletion-of-a-delete-protected-pvc).
 
 ## Trust model
 
@@ -185,9 +186,14 @@ openchoreo:
     environments: [development, staging]
 ```
 
-Every environment must be listed in exactly one cluster file (two clusters claiming one Environment = Argo conflict),
-and every environment of `DeploymentPipeline default` (addon `openchoreo-platform`) needs a cluster. An Environment's
-`dataPlaneRef` is immutable: to move it, remove it from one file, sync, then add it to the other.
+Every environment must be listed in exactly one enabled cluster file (two clusters claiming one Environment = Argo
+conflict), and every environment of `DeploymentPipeline default` (addon `openchoreo-platform`) and of `promotion`
+needs a cluster (`hack/tests/test_local_profiles.sh`, also for each installation's `*.yaml.disabled` switch). One
+cluster may host every environment: OpenChoreo puts each in its own namespaces, and per-environment policy follows
+the namespace's `openchoreo.dev/environment` label (docs/dev-environment.md "Local profiles"). An Environment's
+`dataPlaneRef` is immutable: to move it, remove it from one file and from `DeploymentPipeline default` (OpenChoreo
+will not delete a referenced Environment), sync, then add it back to the pipeline; a gated environment also needs the
+controller as a temporary binding deleter (docs/dev-environment.md "Local profiles" has the two-merge procedure).
 
 ## Tenants
 

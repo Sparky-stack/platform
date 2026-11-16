@@ -156,6 +156,8 @@ tests:
   # --- examples (templates/appset-examples.yaml, AppProject examples) ----------------------------------------------
   - it: renders ApplicationSet example-eastwest only when the installation enables it, in AppProject examples
     template: appset-examples.yaml
+    set:
+      examples.eastwest.enabled: true   # local: multicluster profile only (docs/dev-environment.md "Local profiles")
     asserts:
       - hasDocuments: { count: 1 }
       - equal: { path: metadata.name, value: example-eastwest }
@@ -203,6 +205,7 @@ tests:
   - it: requires a label selector for an enabled example
     template: appset-examples.yaml
     set:
+      examples.eastwest.enabled: true
       examples.eastwest.selector: null
     asserts:
       - failedTemplate: { errorMessage: "examples.eastwest.selector is required" }
