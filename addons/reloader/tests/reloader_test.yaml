@@ -1,0 +1,102 @@
+suite: reloader scoped RBAC, GitOps strategy, and Pod Security restricted
+templates:
+  - templates/validate.yaml
+  - charts/reloader/templates/deployment.yaml
+  - charts/reloader/templates/role.yaml
+  - charts/reloader/templates/rolebinding.yaml
+  - charts/reloader/templates/clusterrole.yaml
+  - charts/reloader/templates/clusterrolebinding.yaml
+  - charts/reloader/templates/secret.yaml
+  - charts/reloader/templates/service.yaml
+release:
+  name: reloader
+  namespace: reloader
+tests:
+  - it: runs digest-pinned Reloader with scoped namespaces, annotation strategy, and PSS restricted
+    template: charts/reloader/templates/deployment.yaml
+    asserts:
+      - equal: { path: metadata.name, value: reloader }
+      - equal: { path: metadata.namespace, value: reloader }
+      - matchRegex:
+          path: "spec.template.spec.containers[0].image"
+          pattern: '^ghcr\.io/stakater/reloader:v1\.4\.24@sha256:[0-9a-f]{64}$'
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --namespaces=openchoreo-data-plane,reloader
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --reload-strategy=annotations
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --ignored-workload-types=jobs,cronjobs
+      - equal: { path: spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: "spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation", value: false }
+      - equal: { path: "spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem", value: true }
+      - equal: { path: "spec.template.spec.containers[0].securityContext.capabilities.drop", value: [ALL] }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: tmp-volume, emptyDir: {} }
+
+  - it: grants namespaced Roles only in openchoreo-data-plane and reloader (no ClusterRole, Secret, or Service)
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: charts/reloader/templates/clusterrole.yaml
+      - hasDocuments: { count: 0 }
+        template: charts/reloader/templates/clusterrolebinding.yaml
+      - hasDocuments: { count: 0 }
+        template: charts/reloader/templates/secret.yaml
+      - hasDocuments: { count: 0 }
+        template: charts/reloader/templates/service.yaml
+      - isKind: { of: Role }
+        template: charts/reloader/templates/role.yaml
+        documentIndex: 0
+      - equal: { path: metadata.name, value: reloader-role }
+        template: charts/reloader/templates/role.yaml
+        documentIndex: 0
+      - equal: { path: metadata.namespace, value: openchoreo-data-plane }
+        template: charts/reloader/templates/role.yaml
+        documentIndex: 0
+      - isKind: { of: RoleBinding }
+        template: charts/reloader/templates/rolebinding.yaml
+        documentIndex: 0
+      - equal: { path: metadata.name, value: reloader-role-binding }
+        template: charts/reloader/templates/rolebinding.yaml
+        documentIndex: 0
+      - equal: { path: metadata.namespace, value: openchoreo-data-plane }
+        template: charts/reloader/templates/rolebinding.yaml
+        documentIndex: 0
+      - equal:
+          path: subjects
+          value: [{ kind: ServiceAccount, name: reloader, namespace: reloader }]
+        template: charts/reloader/templates/rolebinding.yaml
+        documentIndex: 0
+
+  - it: fails when watchGlobally is enabled
+    template: templates/validate.yaml
+    set:
+      reloader.reloader.watchGlobally: true
+      reloader.reloader.namespaces: []
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when watched namespaces are empty
+    template: templates/validate.yaml
+    set:
+      reloader.reloader.namespaces: []
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when reloadStrategy is not annotations
+    template: templates/validate.yaml
+    set:
+      reloader.reloader.reloadStrategy: env-vars
+    asserts:
+      - failedTemplate: {}
+
+  - it: fails when Pod Security restricted settings are weakened
+    template: templates/validate.yaml
+    set:
+      reloader.reloader.deployment.containerSecurityContext.allowPrivilegeEscalation: true
+    asserts:
+      - failedTemplate: {}

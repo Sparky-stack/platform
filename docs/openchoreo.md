@@ -18,6 +18,7 @@ cluster-agent (never through Argo CD). Design background: [architecture.md](arch
 | mgmt | `charts/cluster` (per cluster) | fleet (+ cluster-scoped, org ns) | agent CA + client cert, CRS, `ClusterDataPlane <name>`, `Environment`s |
 | mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
 | workload | `openchoreo-data-plane` | openchoreo-data-plane | cluster-agent + Gateway `gateway-default` (app ingress) |
+| workload | `reloader` | reloader | Stakater Reloader (scoped to `openchoreo-data-plane`): rolls `cluster-agent` on cert / gateway CA renewal |
 | mgmt + workload (docker) | `coredns-local` | kube-system | resolves `*.openchoreo.localhost` (mgmt: to the control-plane Gateway; workload: to mgmt) |
 
 The workload clusters also need `cert-manager`, `external-secrets` and ClusterSecretStore `default` (secret-stores
@@ -95,8 +96,8 @@ mgmt, ns openchoreo-control-plane (chart)                                       
   Secret cluster-gateway-ca (gateway CA, 10y)                                         │ <name>-openchoreo-agent
    └ ca.crt only ─► ExternalSecret (store mgmt-openchoreo) ─► Secret fleet/openchoreo-gateway-ca ─┤ (Reconcile)
                                                                                       ▼
-                                              Secret cluster-agent-tls (tls.crt, tls.key, ca.crt)
-                                              ConfigMap cluster-gateway-ca (ca.crt)
+                                              Secret cluster-agent-tls (tls.crt, tls.key, ca.crt) ─┐
+                                              ConfigMap cluster-gateway-ca (ca.crt) ───────────────┴─► Reloader rolls cluster-agent
 ```
 
 - **Per-cluster CA.** Each cluster's agent cert is signed by its own CA on mgmt; `ClusterDataPlane <name>` trusts only
@@ -108,10 +109,10 @@ mgmt, ns openchoreo-control-plane (chart)                                       
   templates the payloads from cert-manager's Secrets via read-only in-cluster stores; no scripts.
 - The data-plane chart still renders its own self-signed Certificate (no knob): it goes to the unused Secret
   `cluster-agent-selfsigned-unused`. `caSecretName` is empty: no CA Secret is ever needed on a data plane.
-- **Rotation.** cert-manager renews the client cert 30 days before expiry; ESO (≤1h) and the CRS (Reconcile) update
-  `cluster-agent-tls`. The 1.3.3 agent reads its cert once at start, so restart it after a renewal:
-  `kubectl -n openchoreo-data-plane rollout restart deploy/cluster-agent-dataplane`
-  ([#50](https://github.com/koorikla/platform/issues/50)). The same applies to the gateway CA (10y).
+- **Rotation.** cert-manager renews the client cert 30 days before expiry; ESO (≤1h) and the CRS (`Reconcile`) update
+  `cluster-agent-tls`. Because the 1.3.3 agent reads its client cert and gateway CA once at start, addon `reloader`
+  (scoped to `openchoreo-data-plane`, `reloadStrategy: annotations` so Argo CD sees no drift) watches both objects and
+  rolls `deploy/cluster-agent-dataplane` automatically on change; the same applies to the gateway CA (10y).
 - The upstream cluster-gateway has cluster-wide `get/list secrets` (to read every plane's client CA): it can read
   `fleet/<name>-agent-ca` including the CA key. It runs on mgmt, so this does not widen the workload-cluster boundary.
 

@@ -1,0 +1,40 @@
+# Stakater Reloader on workload clusters (catalog: namespace reloader, roles [workload], default true).
+# Watches only the namespaces listed in `reloader.reloader.namespaces` (no ClusterRole: cannot read tenant `dp-*`,
+# `external-dns` or `kube-system` Secrets) and rolls annotated Deployments when a referenced Secret or ConfigMap
+# changes - in particular `openchoreo-data-plane/cluster-agent-dataplane` when CAPI ClusterResourceSet updates
+# `cluster-agent-tls` or `cluster-gateway-ca` (docs/openchoreo.md "Trust model").
+#
+# Meets Pod Security `restricted`; namespace `reloader` is not in Kyverno's `platformNamespaces`, so the Pod Security
+# policies report on it like any workload.
+
+reloader:
+  fullnameOverride: reloader
+  image:
+    repository: ghcr.io/stakater/reloader
+    tag: v1.4.24@sha256:3ab43d3eb96c59798644bf826b0444a846c0197d22ab4b6c101c4da3e1d6ef23   # index: amd64, arm64, arm/v7
+  reloader:
+    watchGlobally: false              # scoped Role + RoleBinding per watched namespace; no ClusterRole
+    namespaces:
+      - openchoreo-data-plane
+    # Patch pod-template annotation `reloader.stakater.com/last-reloaded-from` (FieldManager: Reloader) rather than
+    # injecting STAKATER_* env vars into containers[].env, so Argo CD ServerSideApply / server-side diff sees no drift.
+    reloadStrategy: annotations
+    ignoreJobs: true
+    ignoreCronJobs: true
+    readOnlyRootFileSystem: true
+    deployment:
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { cpu: 100m, memory: 128Mi }
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true

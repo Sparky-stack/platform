@@ -4,7 +4,7 @@ openchoreo-data-plane/cluster-gateway-ca (the data plane chart mounts it as clus
 verify the gateway). Only key ca.crt of Secret cluster-gateway-ca is read; the CA's tls.key never leaves this namespace.
 Lives in `fleet` next to the per-cluster payloads; every `<name>-openchoreo-agent` ClusterResourceSet lists it
 (charts/cluster templates/openchoreo-crs.yaml). Rotation (CA renews 30d before its 10y expiry): ESO refreshes within
-refreshInterval, the CRS (strategy Reconcile) re-applies it; agents read the CA at start (restart them).
+refreshInterval, the CRS (strategy Reconcile) re-applies it, and addon reloader rolls the data-plane agent.
 */ -}}
 {{- if .Values.gatewayCA.enabled }}
 apiVersion: external-secrets.io/v1
