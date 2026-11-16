@@ -41,6 +41,10 @@ task missing-in-block
 ```
 EOF
 echo '[vendored](nope.md)' > "$fx/addons/a/charts/dep/README.md"
+mkdir -p "$fx/templates/t/skeleton"
+cat > "$fx/templates/t/skeleton/README.md" <<'EOF'
+`hack/in-the-new-repo.sh` [rel](docs/in-the-new-repo.md)
+EOF
 out=$(py "$ROOT/hack/check-docs.py" "$fx" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "broken fixture fails"
 assert_match "$out" "link target docs/nope.md does not exist" "missing link target"
@@ -53,6 +57,7 @@ assert_match "$out" 'task nope. is not a Taskfile task' "unknown task"
 assert_match "$out" 'make nope. is not a Makefile target' "unknown make target"
 assert_match "$out" 'task missing-in-block. is not a Taskfile task' "unknown task in a code block"
 assert_eq "$(grep -c 'charts/dep' <<<"$out" || true)" 0 "vendored chart docs are skipped"
+assert_eq "$(grep -c 'templates/t/skeleton' <<<"$out" || true)" 0 "project-template skeleton docs are skipped"
 assert_eq "$(grep -c 'FAIL' <<<"$out")" 9 "exactly the planted problems"
 
 out=$(py "$ROOT/hack/check-docs.py" 2>&1) && rc=0 || rc=$?
