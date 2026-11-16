@@ -86,7 +86,8 @@ Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` an
 1. Seed `openchoreo-ai` properties `rca-llm-api-key` (placeholder with the gateway) and `rca-oauth-client-secret`.
 2. `addons/thunder/values.yaml` (or the installation overlay): `bootstrapSecret.aiAgentClients: [rca]`. That one list
    syncs the client secret into `thunder-bootstrap` and switches on script 53 (`files/ai-agent-clients/`, rendered by
-   `templates/ai-agent-clients.yaml` into the setup Job's `bootstrap/ai-agent-clients/`); nothing to uncomment. An
+   `templates/ai-agent-clients.yaml` into subdirectory `ai-agent-clients` of the setup Job's bootstrap directory);
+   nothing to uncomment. An
    unlisted agent has no file there at all: Thunder's bootstrap fails the whole import on an empty or comment-only
    document.
 3. `addons/openchoreo-observability-plane/values.yaml` (or the installation overlay):

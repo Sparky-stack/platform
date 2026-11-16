@@ -18,14 +18,19 @@
 # from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there. VERIFY live.
 #
 # Argo CD runs every Helm hook of this chart as a PreSync hook, on EVERY sync (Helm: install only):
-#   - PVCs database/certs/secrets (weight -15): hook-delete-policy hook-failed below, so a successful sync never deletes
-#     them (Argo's default BeforeHookCreation would wipe the sqlite DB and the generated keys each sync). local-path is
-#     WaitForFirstConsumer, so they stay Pending until the setup Job mounts them: Argo CD needs a PVC health override
-#     (Pending = Healthy) or the PreSync phase never finishes (argo-cd addon, see docs/openchoreo.md).
+#   - VAP thunder-pvc-delete-protection (ours, weight -30, templates/pvc-delete-protection.yaml): denies deleting the
+#     PVCs below, so a failed sync can no longer make Argo CD delete them (it did, with hook-failed, when the setup Job
+#     failed after PR #5).
+#   - PVCs database/certs/secrets (weight -15, hardcoded hooks upstream): hook-delete-policy hook-failed below, so a
+#     successful sync never deletes them (Argo's default BeforeHookCreation would wipe the sqlite DB and the generated
+#     keys each sync), plus the delete-protection annotation. local-path is WaitForFirstConsumer, so they stay Pending
+#     until the setup Job mounts them: Argo CD needs a PVC health override (Pending = Healthy) or the PreSync phase
+#     never finishes (argo-cd addon, see docs/openchoreo.md).
 #   - ExternalSecret thunder-bootstrap (ours, weight -20) before the Job; ServiceAccount/ConfigMaps (-10);
 #     setup Job (-5): starts a throw-away Thunder on localhost:8090 against the same sqlite PVC and imports the bundle
-#     below (upserts by id: re-runs are safe). RISK: the setup pod carries the Deployment's selector labels (no knob),
-#     so thunder-service routes to it for ~1 min per sync.
+#     below (upserts by id: re-runs are safe; every document must be a mapping, hack/tests/test_thunder_bootstrap.sh).
+#     Replaced on every sync (setup.preserveJob). RISK: the setup pod carries the Deployment's selector labels (no
+#     knob), so thunder-service routes to it for ~1 min per sync.
 # Footprint: one pod 100m/50Mi requests (upstream), setup Job the same while it runs, 3 small PVCs on local-path.
 
 bootstrapSecret:
@@ -67,18 +72,23 @@ thunderid:
     hostnames:
       - thunder.openchoreo.localhost
 
-  # platform: keep the PVCs across successful syncs (see header)
+  # platform: keep the PVCs across successful syncs (hook-failed, see header) and make them undeletable, also by Argo CD
+  # after a failed sync (delete-protection: templates/pvc-delete-protection.yaml). Never drop hook-failed: without an
+  # explicit policy Argo CD deletes a hook before every sync (BeforeHookCreation). hack/tests/test_pvc_hooks.sh.
   persistence:
     annotations:
       helm.sh/hook-delete-policy: hook-failed
+      platform.koorikla.io/delete-protection: enabled
   certs:
     persistence:
       annotations:
         helm.sh/hook-delete-policy: hook-failed
+        platform.koorikla.io/delete-protection: enabled
   secrets:
     persistence:
       annotations:
         helm.sh/hook-delete-policy: hook-failed
+        platform.koorikla.io/delete-protection: enabled
 
   configuration:
     server:
