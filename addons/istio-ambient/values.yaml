@@ -23,7 +23,8 @@ base: {}
 istiod:
   profile: ambient
   # PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER is deliberately NOT set: "false" crashes istiod 1.32.0 as soon as it
-  # has a remote secret (nil *CredentialsController.HasSynced in multicluster.Cluster.Run, SIGSEGV seen live).
+  # has a remote secret (nil *CredentialsController.HasSynced in multicluster.Cluster.Run, SIGSEGV seen live). Fixed
+  # upstream on master by istio/istio#62295, not in any release yet: set it once on a 1.32 backport or 1.33.
   # Consequence for the peers' reader RBAC: docs/multicluster.md "Reader RBAC" (addon istio-eastwest reader.*).
   pilot:
     autoscaleEnabled: false

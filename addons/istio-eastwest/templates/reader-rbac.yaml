@@ -17,7 +17,8 @@ cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
                                             (primary-remote), but istiod 1.32.0 WAITS for this informer before it
                                             serves the peer: forbidden -> the peer times out after
                                             PILOT_REMOTE_CLUSTER_TIMEOUT (30s) and is left out of the mesh.
-                                            The opt-out PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false SIGSEGVs.
+                                            The opt-out PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false SIGSEGVs
+                                            1.32.0 (fixed on master, istio/istio#62295; no release yet).
                                             Not granted by default; reader.remoteCredentialsSecrets (below) is the
                                             explicit, separate grant (docs/multicluster.md "Reader RBAC").
   tokenreviews/SARs/serviceexports          primary-remote proxy auth / ENABLE_MCS_AUTO_EXPORT (off): not used.

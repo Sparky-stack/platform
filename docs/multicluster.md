@@ -321,13 +321,18 @@ every tenant Secret. So the reader is bound to the platform's own roles instead 
 | `serviceexports` writes, tokenreviews, SARs | `ENABLE_MCS_AUTO_EXPORT` (off), primary-remote proxy auth | none |
 
 #### The remote Secret informer (istiod 1.32.0): no knob keeps Secrets out and the peer in
-Read from the 1.32.0 source (also unchanged in 1.31.4 and on `release-1.32`/`master` as of this PR):
+Read from the 1.32.0 source (also unchanged in 1.31.4 and on `release-1.32`; `master` has the fix, see the exit
+below):
 1. `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` (added by istio/istio#59874 for exactly this RBAC) makes the
    component constructor in `pilot/pkg/credentials/kube/multicluster.go` return a nil `*CredentialsController` for
    each remote cluster. `Component.clusterAdded` (`pkg/kube/multicluster/component.go`) returns it as the handler's
    syncer, and `Cluster.Run` (`pkg/kube/multicluster/cluster.go`) calls `kube.WaitForCacheSync(..., h.HasSynced)` on
    it: `CredentialsController.HasSynced` dereferences `s.secrets` on a nil receiver, istiod SIGSEGVs as soon as it
-   has a remote secret (seen on the live boot). The flag is unusable until upstream makes it nil-safe.
+   has a remote secret (seen on the live boot). The flag is unusable on 1.32.0. Upstream fixed this in
+   istio/istio#62295 ("fix nil pointer panic when remote credentials controller is disabled": nil-safe `HasSynced`
+   and `Close`), **merged to `master` on 2026-11-03 but not backported**: its `cherrypick/release-1.31` and
+   `cherrypick/release-1.32` labels were refused by the bot (added by a non-org member), and no 1.32.1 or 1.33 tag
+   exists yet.
 2. With the controller on (the default) and Secrets forbidden, its `kclient.NewFiltered[*v1.Secret]` informer is
    started on the peer's client before `c.Client.RunAndWait(c.stop)`, which waits on every started informer
    (`informerFactory.WaitForCacheSync`); a reflector whose list is forbidden never syncs. After
@@ -348,8 +353,11 @@ So the choice is per installation (`installations/<inst>/addons/istio-eastwest/v
   of the member (OpenChoreo agent identity, istio-csr/istiod serving keys, tenant Secrets) - on top of what a group
   peer can already do (mint any workload identity of the trust domain). Use only where all members of a group sit
   at one trust level.
-- Exit: once upstream makes `CredentialsController.HasSynced`/`Close` nil-safe (or skips nil components in
-  `Cluster.Run`), set `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` in istio-ambient and drop the opt-in.
+- Exit plan: get istio/istio#62295 into a release, either a 1.32 patch (an istio org member comments
+  `/cherrypick release-1.32` on the PR) or 1.33 (branched from `master`, which already contains it). On that version
+  set `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` in istio-ambient, remove `reader.remoteCredentialsSecrets` and
+  its ClusterRole, and update the negative unittest that forbids the flag. Rejected: building our own istiod with the
+  two nil checks (a forked control-plane image to sign and maintain).
 
 Unittests pin the rules and assert the negatives (default: no Secret rule; opt-in: list/watch only, separate
 objects; istio-ambient never sets the flag). **VERIFY** on the live run: no istiod restart/SIGSEGV; with the default,
@@ -453,7 +461,7 @@ Fresh clusters follow the same order; ztunnel simply waits until istiod is up.
 Deferred work (per-environment trust domains + URI name constraints, root rotation runbook, baggage stripping at the
 north-south edge, peer API 6443 restrictions on CAPA/CAPH): [#71](https://github.com/koorikla/platform/issues/71).
 Production unseal and HA: [#31](https://github.com/koorikla/platform/issues/31). istiod's nil-unsafe
-`PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false` (upstream fix needed before the Secret opt-in can go; "Reader
-RBAC"). Values inferred but not yet confirmed
+`PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false`: fixed upstream on `master` (istio/istio#62295), not yet in a
+release; the Secret opt-in goes with a 1.32 backport or 1.33 ("Reader RBAC"). Values inferred but not yet confirmed
 live (`grep -rn VERIFY docs/multicluster.md addons/openbao addons/istio-csr addons/istio-eastwest addons/istio-ambient
 charts/cluster/templates/mesh-*`): [#72](https://github.com/koorikla/platform/issues/72).
