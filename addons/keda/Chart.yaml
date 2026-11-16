@@ -1,0 +1,9 @@
+apiVersion: v2
+name: keda
+description: KEDA - event-driven autoscaling (ScaledObject / ScaledJob) for workloads on workload clusters (opt-in)
+type: application
+version: 0.1.0
+dependencies:
+  - name: keda
+    version: 2.21.0
+    repository: https://kedacore.github.io/charts
