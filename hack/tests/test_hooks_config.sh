@@ -149,6 +149,14 @@ if command -v gitleaks >/dev/null 2>&1; then
   git -C "$repo" add allowed.yaml
   if (cd "$repo" && bash hack/hooks.sh gitleaks allowed.yaml >/dev/null 2>&1); then rc=0; else rc=1; fi
   assert_eq "$rc" "0" "gitleaks:allow line passes"
+  if command -v mise >/dev/null 2>&1; then
+    # A commit touching mise.toml: the temp copy holds an untrusted mise.toml; a mise shim run there fails.
+    cp "$ROOT/mise.toml" "$repo/mise.toml"
+    git -C "$repo" add mise.toml
+    out=$(cd "$repo" && MISE_TRUSTED_CONFIG_PATHS="$repo" bash hack/hooks.sh gitleaks mise.toml 2>&1) && rc=0 || rc=$?
+    assert_eq "$rc" "0" "gitleaks hook passes on a staged mise.toml ($out)"
+    git -C "$repo" rm -q --cached mise.toml; rm -f "$repo/mise.toml"
+  fi
 else
   echo "  SKIP gitleaks checks: gitleaks not on PATH (mise install)"
 fi

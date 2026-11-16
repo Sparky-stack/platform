@@ -1,0 +1,28 @@
+# ReleaseBinding for `production` (a gated environment: synced by its own Argo CD Application, freeze windows apply).
+#
+# PROMOTION = a reviewed PR (CODEOWNERS + required status openchoreo/promotion-gate) that sets spec.releaseName to the
+# ComponentRelease currently running in staging. Until it is set, this binding stays pending. Production admits only
+# digest-pinned, signed images (CI pins them).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: ${{ values.name }}-production
+spec:
+  owner:
+    projectName: ${{ values.project }}
+    componentName: ${{ values.name }}
+  environment: production
+  componentTypeEnvironmentConfigs:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  workloadOverrides:
+    container:
+      env:
+        - key: GREETING
+          value: hello from production

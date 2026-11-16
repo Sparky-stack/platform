@@ -1,0 +1,178 @@
+# Golden-path template (docs/project-templates.md). Every template in templates/ shares parameters and steps except
+# `fetch-stack` and the metadata (hack/tests/test_project_templates.sh enforces it).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: java-quarkus-service
+  title: Java service (Quarkus)
+  description: Recommended Java path - Quarkus REST service (health, metrics) on distroless Java 25, CI via koorikla/ci, deployed by OpenChoreo.
+  tags: [golden-path, java, quarkus, service, recommended]
+  annotations:
+    platform.koorikla.io/stack: java
+    platform.koorikla.io/ci-workflow: java.yaml
+spec:
+  owner: group:default/openchoreo-users
+  type: service
+  parameters:
+    - title: Service
+      required: [name, owner, project]
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Repository, OpenChoreo Component and image name (lowercase letters, digits, dashes)
+          pattern: '^[a-z]([-a-z0-9]{0,38}[a-z0-9])?$'
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          default: A golden-path service
+          maxLength: 200
+        owner:
+          title: Owner
+          type: string
+          description: Team that owns the service in the catalog
+          default: group:default/openchoreo-users
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+        project:
+          title: Tenant (OpenChoreo project)
+          type: string
+          description: The project the Component belongs to (installations/<installation>/tenants/<project>.yaml)
+          pattern: '^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$'
+        newTenant:
+          title: Onboard a new tenant
+          type: boolean
+          default: false
+          description: The platform PR also adds the tenant file. Leave off for an existing project; the PR then asks the reviewer to add the app to it.
+        installation:
+          title: Installation
+          type: string
+          default: local
+          enum: [local, aws-example, hetzner-example]
+    - title: Repository
+      required: [repoOwner, codeowners, visibility]
+      properties:
+        repoOwner:
+          title: GitHub owner
+          type: string
+          description: Owner the platform write GitHub App (platform-github-app) is installed on
+          default: koorikla
+          enum: [koorikla]
+        visibility:
+          title: Visibility
+          type: string
+          default: public
+          enum: [public, private]
+        codeowners:
+          title: Code owners
+          type: string
+          description: GitHub users or teams for CODEOWNERS, space separated
+          default: '@koorikla'
+          pattern: '^@[A-Za-z0-9][-A-Za-z0-9]*(/[-A-Za-z0-9_.]+)?( @[A-Za-z0-9][-A-Za-z0-9]*(/[-A-Za-z0-9_.]+)?)*$'
+  steps:
+    - id: fetch-base
+      name: Shared golden-path files
+      action: fetch:template
+      input:
+        url: ../_shared/skeleton
+        values: &values
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          project: ${{ parameters.project }}
+          repoOwner: ${{ parameters.repoOwner }}
+          imageOwner: ${{ parameters.repoOwner | lower }}
+          codeowners: ${{ parameters.codeowners }}
+          stack: java
+    - id: fetch-stack
+      name: Java Quarkus skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values: *values
+        # GitHub Actions expressions (${{ github.* }}) are not template placeholders
+        copyWithoutTemplating:
+          - .github/workflows/*
+    - id: publish
+      name: Create the repository
+      action: publish:github
+      input:
+        # No token input: the GitHub integration authenticates as the platform write GitHub App (platform-github-app,
+        # docs/forking.md credentials (c)). Repository settings and rulesets are NOT set here: they are declared in
+        # the governance record below and reconciled by Crossplane (koorikla/platform#100).
+        repoUrl: github.com?owner=${{ parameters.repoOwner }}&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+        repoVisibility: ${{ parameters.visibility }}
+        defaultBranch: main
+        protectDefaultBranch: false
+        gitCommitMessage: 'feat: scaffold ${{ parameters.name }} from the java-quarkus-service golden path'
+    - id: fetch-platform-repo
+      name: Governance record
+      action: fetch:template:file
+      input:
+        url: ../_platform/github-repository.yaml
+        targetPath: ./platform/installations/${{ parameters.installation }}/repos/${{ parameters.name }}.yaml
+        values:
+          name: ${{ parameters.name }}
+          project: ${{ parameters.project }}
+          installation: ${{ parameters.installation }}
+          repoOwner: ${{ parameters.repoOwner }}
+          visibility: ${{ parameters.visibility }}
+          codeowners: ${{ parameters.codeowners }}
+          stack: java
+    - id: fetch-platform-tenant
+      name: Tenant file
+      if: ${{ parameters.newTenant }}
+      action: fetch:template:file
+      input:
+        url: ../_platform/tenant.yaml
+        targetPath: ./platform/installations/${{ parameters.installation }}/tenants/${{ parameters.project }}.yaml
+        values:
+          name: ${{ parameters.name }}
+          project: ${{ parameters.project }}
+          installation: ${{ parameters.installation }}
+          repoOwner: ${{ parameters.repoOwner }}
+    - id: platform-pr
+      name: Platform pull request
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=koorikla&repo=platform
+        sourcePath: ./platform
+        branchName: scaffold/${{ parameters.name }}
+        title: 'feat(tenants): onboard ${{ parameters.repoOwner }}/${{ parameters.name }} (java-quarkus-service)'
+        description: |
+          Scaffolded by the Backstage `java-quarkus-service` golden path: https://github.com/${{ parameters.repoOwner }}/${{ parameters.name }}
+
+          - `installations/${{ parameters.installation }}/repos/${{ parameters.name }}.yaml`: governance record (#100); Crossplane applies settings, ruleset and permissions.
+          {%- if parameters.newTenant %}
+          - `installations/${{ parameters.installation }}/tenants/${{ parameters.project }}.yaml`: new tenant `${{ parameters.project }}` with this app.
+          {%- else %}
+          - **Before merging**, add the app to `installations/${{ parameters.installation }}/tenants/${{ parameters.project }}.yaml`:
+
+            ```yaml
+              - name: ${{ parameters.name }}
+                repoURL: https://github.com/${{ parameters.repoOwner }}/${{ parameters.name }}.git
+            ```
+          {%- endif %}
+
+          - Before the first **production** promotion: add `${{ parameters.repoOwner }}/${{ parameters.name }}` to `imageVerification.github.repositories` of addon kyverno-policies (installation overlay), so its signed images are admitted there.
+
+          Merging lets Argo CD sync the tenant: OpenChoreo picks up `deploy/openchoreo/` of the new repo and deploys the first image CI builds to development.
+    - id: register
+      name: Register in the catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Platform pull request
+        url: ${{ steps['platform-pr'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
