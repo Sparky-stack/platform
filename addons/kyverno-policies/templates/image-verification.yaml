@@ -24,10 +24,11 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- /* sources: [{prefixes, attestors: [name], attestations: [name]}] */ -}}
 {{- $sources := list }}
 {{- $keyless := list }}
-{{- $ghSubjects := list }}
 {{- if $iv.github.enabled }}
 {{- /* Keyless identity: the reusable workflow pinned by commit SHA (a tag or branch ref is mutable). workflowRef is the
-current pin; transitionWorkflowRefs keeps the previous one trusted while app repos move to the new pin (at most two). */ -}}
+current pin; transitionWorkflowRefs keeps the previous one trusted while app repos move to the new pin (at most two).
+Kyverno 1.20 verifies only ONE identity per attestor ("multiple identities are not supported"), so every trusted commit
+renders its own attestors (name suffix -<sha7> for transition commits) and the validations accept any of them. */ -}}
 {{- if not (regexMatch "^https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml$" ($iv.github.workflow | default "")) }}{{ fail (printf "imageVerification.github.workflow %q must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" ($iv.github.workflow | default "")) }}{{ end }}
 {{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
 {{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
@@ -36,19 +37,22 @@ current pin; transitionWorkflowRefs keeps the previous one trusted while app rep
 {{- end }}
 {{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
 {{- if ne (len $wfRefs) (len (uniq $wfRefs)) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
-{{- range $wfRefs }}{{ $ghSubjects = append $ghSubjects (printf "%s@%s" $iv.github.workflow .) }}{{ end }}
 {{- $triggers := $iv.github.triggers | default list }}
 {{- range $repo := $iv.github.repositories }}
 {{- range $ref := $iv.github.refs }}
 {{- range $trigger := $triggers }}
 {{- $n := printf "gh-%s-%s" ($repo | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) ($ref | trimPrefix "refs/" | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) }}
 {{- if gt (len $triggers) 1 }}{{ $n = printf "%s-%s" $n ($trigger | replace "_" "-" | lower) }}{{ end }}
-{{- $keyless = append $keyless (dict "name" ($n | trunc 60 | trimSuffix "-") "repo" $repo "ref" $ref "trigger" $trigger) }}
+{{- range $i, $wf := $wfRefs }}
+{{- $name := ternary ($n | trunc 60 | trimSuffix "-") (printf "%s-%s" ($n | trunc 52 | trimSuffix "-") (substr 0 7 $wf)) (eq $i 0) }}
+{{- $keyless = append $keyless (dict "name" $name "repo" $repo "ref" $ref "trigger" $trigger "subject" (printf "%s@%s" $iv.github.workflow $wf)) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
 {{- if not $keyless }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
 {{- $names := list }}{{ range $keyless }}{{ $names = append $names .name }}{{ end }}
+{{- if ne (len $names) (len (uniq $names)) }}{{ fail (printf "imageVerification.github: attestor names collide after truncation to 60 characters: %s" (join ", " $names)) }}{{ end }}
 {{- $sources = append $sources (dict "prefixes" $iv.github.prefixes "attestors" $names "attestations" $iv.github.attestations) }}
 {{- end }}
 {{- /* Platform key: images the workflow plane pushed to <registry.host>/<registry.appsProject>/ (installation.yaml).
@@ -134,10 +138,8 @@ spec:
       cosign:
         keyless:
           identities:
-            {{- range $ghSubjects }}
             - issuer: {{ $iv.github.issuer }}
-              subject: {{ . }}
-            {{- end }}
+              subject: {{ .subject }}
           additionalExtensions:
             githubWorkflowRepository: {{ .repo }}
             githubWorkflowRef: {{ .ref }}

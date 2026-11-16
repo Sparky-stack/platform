@@ -31,3 +31,19 @@ spec:
   initContainers:
     # Signed by koorikla/ci's own pipeline (githubWorkflowRepository koorikla/ci), not an allowed app repository.
     - { name: init, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: prod-signed-current-pin, namespace: dp-default-demo-production-1 }
+spec:
+  containers:
+    # Built by koorikla/hello-world main through koorikla/ci go.yaml@a31c234 (= workflowRef): admitted in production.
+    - { name: app, image: "ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede064440d2b16c96189876a46d7ddd5cc8b3818d4bedfd6aa553042c86" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: prod-signed-previous-pin, namespace: dp-default-demo-production-1 }
+spec:
+  containers:
+    # Built through koorikla/ci go.yaml@de39b1d (the previous pin): admitted only while transitionWorkflowRefs lists it.
+    - { name: app, image: "ghcr.io/koorikla/hello-world:df72ab8@sha256:889643d395abe5afdae94db0f9790b5c0f922532eefc94d32a691927f87d7988" }
