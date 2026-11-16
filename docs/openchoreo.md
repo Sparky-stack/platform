@@ -78,7 +78,8 @@ ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist lon
   `kubectl -n thunder annotate pvc <name> platform.koorikla.io/delete-protection-`, then delete. Verify the policy:
   `kubectl -n thunder delete pvc thunder-database-pvc --dry-run=server` must answer Forbidden.
   `hack/tests/test_pvc_hooks.sh` holds every addon to this: a hook PVC is `hook-failed` only, annotated, and covered
-  by such a policy in its render.
+  by such a policy in its render. PVC rebind and recovery: [runbooks/backup-restore.md](runbooks/backup-restore.md#4-thunder-pvc-recovery-live-verified);
+  intentional delete: [runbooks/break-glass.md](runbooks/break-glass.md#intentional-deletion-of-a-delete-protected-pvc).
 
 ## Trust model
 

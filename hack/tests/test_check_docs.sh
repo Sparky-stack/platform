@@ -60,6 +60,44 @@ assert_eq "$(grep -c 'charts/dep' <<<"$out" || true)" 0 "vendored chart docs are
 assert_eq "$(grep -c 'templates/t/skeleton' <<<"$out" || true)" 0 "project-template skeleton docs are skipped"
 assert_eq "$(grep -c 'FAIL' <<<"$out")" 9 "exactly the planted problems"
 
+cp -R "$TMP/good" "$TMP/ops"
+mkdir -p "$TMP/ops/docs/runbooks"
+printf '# Operations\n[ok](runbooks/ok.md)\n' > "$TMP/ops/docs/operations.md"
+cat > "$TMP/ops/docs/runbooks/ok.md" <<'EOF'
+# Ok
+## When to use
+## Symptoms
+## Steps
+```bash
+kubectl --context k3d-platform-mgmt get nodes
+```
+## Verify
+## Rollback
+## Related links
+- [Operations](../operations.md)
+EOF
+out=$(py "$ROOT/hack/check-docs.py" "$TMP/ops" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "clean runbook fixture passes ($out)"
+
+cat > "$TMP/ops/docs/runbooks/orphan.md" <<'EOF'
+# Orphan
+## When to use
+## Symptoms
+## Steps
+```bash
+kubectl get pods
+kubectl --context koorikla get nodes
+```
+## Verify
+## Related links
+EOF
+out=$(py "$ROOT/hack/check-docs.py" "$TMP/ops" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "broken runbook fixture fails"
+assert_match "$out" 'runbook missing section "rollback"' "missing runbook section"
+assert_match "$out" 'must pass --context or --kubeconfig' "bare kubectl in runbook"
+assert_match "$out" 'forbidden kube context .koorikla.' "homelab context rejected"
+assert_match "$out" 'runbook docs/runbooks/orphan.md is not linked' "unindexed runbook rejected"
+
 out=$(py "$ROOT/hack/check-docs.py" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 0 "repo docs resolve ($out)"
 
