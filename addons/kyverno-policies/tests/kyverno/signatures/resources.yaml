@@ -45,5 +45,5 @@ kind: Pod
 metadata: { name: prod-signed-previous-pin, namespace: dp-default-demo-production-1 }
 spec:
   containers:
-    # Built through koorikla/ci go.yaml@de39b1d (the previous pin): admitted only while transitionWorkflowRefs lists it.
+    # Built through koorikla/ci go.yaml@de39b1d (the previous pin): denied once transitionWorkflowRefs no longer lists it.
     - { name: app, image: "ghcr.io/koorikla/hello-world:df72ab8@sha256:889643d395abe5afdae94db0f9790b5c0f922532eefc94d32a691927f87d7988" }
