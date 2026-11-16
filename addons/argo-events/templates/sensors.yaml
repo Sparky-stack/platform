@@ -15,6 +15,7 @@ Both need the workflow plane (Argo Workflows CRDs + controller, see _helpers.tpl
 {{- $stop := false }}
 {{- range $order }}{{ if not $stop }}{{ $prios = append $prios . }}{{ end }}{{ if eq . $min }}{{ $stop = true }}{{ end }}{{ end }}
 {{- $anchored := list }}{{ range $prios }}{{ $anchored = append $anchored (printf "^%s$" .) }}{{ end }}
+{{- $clusters := include "ae.falcoClusters" . | fromJsonArray }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -57,10 +58,13 @@ spec:
     container:
       resources: {{- toYaml .Values.podResources | nindent 8 }}
       securityContext: {{- toYaml $sc | nindent 8 }}
+  # One dependency + trigger per cluster: the endpoint (event falco-<cluster>) authenticated the sender, so the trigger
+  # hands its cluster to the Workflow as a literal argument; the payload's own `cluster` field is only cross-checked.
   dependencies:
-    - name: falco
+    {{- range $c := $clusters }}
+    - name: {{ printf "falco_%s" ($c | replace "-" "_") }}   # condition expressions read '-' as minus
       eventSourceName: platform
-      eventName: falco
+      eventName: {{ printf "falco-%s" $c }}
       filters:
         data:
           - path: body.priority
@@ -69,10 +73,14 @@ spec:
           - path: body.uuid
             type: string
             value: ["^[0-9a-fA-F-]{8,64}$"]
+    {{- end }}
   triggers:
-    - rateLimit: {{- toYaml .Values.falco.response.rateLimit | nindent 8 }}
+    {{- range $c := $clusters }}
+    {{- $dep := printf "falco_%s" ($c | replace "-" "_") }}
+    - rateLimit: {{- toYaml $.Values.falco.response.rateLimit | nindent 8 }}
       template:
-        name: falco-response
+        name: {{ printf "falco-response-%s" $c }}
+        conditions: {{ $dep }}
         k8s:
           operation: create
           source:
@@ -81,9 +89,10 @@ spec:
               kind: Workflow
               metadata:
                 name: falco-response-placeholder   # replaced: falco-<event uuid>
-                namespace: {{ .Release.Namespace }}
+                namespace: {{ $.Release.Namespace }}
                 labels:
                   platform.koorikla.io/trigger: falco
+                  platform.koorikla.io/cluster: {{ $c | quote }}
               spec:
                 workflowTemplateRef:
                   name: falco-response
@@ -91,18 +100,21 @@ spec:
                   parameters:
                     - name: event
                       value: "{}"
+                    - name: cluster
+                      value: {{ $c | quote }}
           parameters:
             - src:
-                dependencyName: falco
+                dependencyName: {{ $dep }}
                 dataTemplate: {{ `'falco-{{ .Input.body.uuid | lower | trunc 50 }}'` }}
               dest: metadata.name
             - src:
-                dependencyName: falco
+                dependencyName: {{ $dep }}
                 dataKey: body
               dest: spec.arguments.parameters.0.value
       retryStrategy:
         steps: 3
         duration: 2s
+    {{- end }}
 {{- end }}
 {{- if and .Values.promotionGate.enabled $wf }}
 {{- $ns := .Values.openchoreo.orgNamespace }}

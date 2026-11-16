@@ -2,9 +2,12 @@
 # Falco escalation response (addon argo-events, WorkflowTemplate falco-response; docs/observability.md "Falco response").
 #
 # Steps (argv[1]):
-#   enrich  event (env EVENT, falcosidekick JSON) -> context JSON on stdout: org namespace, project, component,
-#           environment, data plane, workload, from OpenChoreo control-plane objects on mgmt (RenderedRelease status
-#           lists every resource it applied to a data plane; Environment -> ClusterDataPlane). Read-only RBAC.
+#   enrich  event (env EVENT, falcosidekick JSON) + the cluster it came from (env CLUSTER: the Sensor trigger of the
+#           per-cluster webhook endpoint whose token authenticated the sender) -> context JSON on stdout: cluster, org
+#           namespace, project, component, environment, data plane, workload, from OpenChoreo control-plane objects on
+#           mgmt (RenderedRelease status lists every resource it applied to a data plane; Environment ->
+#           ClusterDataPlane). Read-only RBAC. Skips events whose `cluster` field (falcosidekick customfield) or whose
+#           namespace's data plane is another cluster: a cluster can only escalate about its own workloads.
 #   record  Kubernetes Event on the OpenChoreo Component (org namespace) so the escalation is visible next to it.
 #   rca     POST the OpenChoreo RCA agent's analyze endpoint (only when the agent is enabled).
 #   notify  POST a compact JSON notification to NOTIFY_URL (only when configured).
@@ -66,17 +69,24 @@ def match_workload(renderedreleases, namespace, pod):
     return best[0], best[1]
 
 
-def enrich(event):
+def enrich(event, cluster=""):
     fields = event.get("output_fields") or {}
     ns, pod = fields.get("k8s.ns.name") or "", fields.get("k8s.pod.name") or ""
+    claimed = fields.get("cluster") or ""
     ctx = {
-        "uuid": event.get("uuid", ""), "rule": event.get("rule", ""), "priority": event.get("priority", ""),
+        "cluster": cluster, "uuid": event.get("uuid", ""), "rule": event.get("rule", ""), "priority": event.get("priority", ""),
         "time": event.get("time", ""), "output": event.get("output", ""), "hostname": event.get("hostname", ""),
         "tags": event.get("tags") or [], "dataPlaneNamespace": ns, "pod": pod,
         "container": fields.get("container.name", ""), "image": fields.get("container.image.repository", ""),
         "process": fields.get("proc.cmdline") or fields.get("proc.name") or "",
         "namespace": "", "project": "", "component": "", "environment": "", "dataPlane": "", "workload": "",
     }
+    if not cluster:
+        ctx["skipped"] = "no authenticated cluster (Workflow parameter cluster is empty)"
+        return ctx
+    if claimed and claimed != cluster:
+        ctx["skipped"] = "event names cluster %s but arrived on the endpoint of cluster %s" % (claimed, cluster)
+        return ctx
     if not severe_enough(ctx["priority"], env("MINIMUM_PRIORITY", "critical")):
         ctx["skipped"] = "priority below %s" % env("MINIMUM_PRIORITY", "critical")
         return ctx
@@ -95,6 +105,10 @@ def enrich(event):
             ctx["dataPlane"] = ((envobj.get("spec") or {}).get("dataPlaneRef") or {}).get("name", "")
         except urllib.error.HTTPError:
             pass
+        # ClusterDataPlane name == cluster name (docs/conventions.md invariant 1)
+        if ctx["dataPlane"] and ctx["dataPlane"] != cluster:
+            ctx["skipped"] = "namespace %s runs on data plane %s, but the event came from cluster %s" % (
+                ns, ctx["dataPlane"], cluster)
     return ctx
 
 
@@ -112,8 +126,9 @@ def record(ctx):
         "action": "Escalated", "reason": "FalcoCritical", "type": "Warning",
         "regarding": {"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Component", "namespace": ctx["namespace"],
                       "name": ctx["component"]},
-        "note": ("%s (%s) env=%s pod=%s/%s: %s" % (ctx["rule"], ctx["priority"], ctx["environment"],
-                                                   ctx["dataPlaneNamespace"], ctx["pod"], ctx["output"]))[:1024],
+        "note": ("%s (%s) cluster=%s env=%s pod=%s/%s: %s" % (
+            ctx["rule"], ctx["priority"], ctx.get("cluster", ""), ctx["environment"], ctx["dataPlaneNamespace"],
+            ctx["pod"], ctx["output"]))[:1024],
     }
     try:
         kube("POST", "/apis/events.k8s.io/v1/namespaces/%s/events" % ctx["namespace"], body)
@@ -132,7 +147,8 @@ def rca(ctx):
         "environment": ctx["environment"],
         "alert": {"id": "falco-%s" % ctx["uuid"], "value": 1, "timestamp": ctx["time"],
                   "rule": {"name": ctx["rule"], "description": ctx["output"][:500], "severity": "critical"}},
-        "meta": {"source": "falco", "pod": ctx["pod"], "dataPlaneNamespace": ctx["dataPlaneNamespace"],
+        "meta": {"source": "falco", "cluster": ctx.get("cluster", ""),
+                 "pod": ctx["pod"], "dataPlaneNamespace": ctx["dataPlaneNamespace"],
                  "dataPlane": ctx["dataPlane"], "tags": ctx["tags"], "process": ctx["process"]},
     }
     status, text = post(env("RCA_URL"), body)
@@ -148,7 +164,7 @@ def notify(ctx):
 def main():
     step = sys.argv[1]
     if step == "enrich":
-        print(json.dumps(enrich(json.loads(env("EVENT") or "{}"))))
+        print(json.dumps(enrich(json.loads(env("EVENT") or "{}"), env("CLUSTER"))))
         return
     ctx = json.loads(env("CONTEXT") or "{}")
     if ctx.get("skipped"):

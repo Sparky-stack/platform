@@ -42,12 +42,21 @@ addons: {}                    # <addon>: true|false -> label addons.platform.koo
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
   name: local
+# Falco escalation identity (templates/falco-escalation-crs.yaml): this cluster's own webhook URL + token, derived on
+# mgmt from the platform store key and delivered into namespace falco by a ClusterResourceSet. Skipped when the
+# cluster file sets addons.falco: false.
+falcoEscalation:
+  enabled: true
+  remoteKey: falco-webhook     # platform store key: url (base, e.g. http://events.<host>:8080/falco), token
+  namespace: falco             # == addon falco's namespace (charts/platform catalog)
+
 secrets:
   backend: kubernetes
   workloadKubernetes:
     namespace: openchoreo-secrets   # read by the workload ClusterSecretStore `default` (local backend)
   workloadSeed:
     keys: [openchoreo-observability]   # local backend only: copied from mgmt `platform` into each workload cluster
+                                       # (never falco-webhook: clusters get only their own token, falcoEscalation)
   # Node registry auth: k3s registries.yaml on every node, from platform store key `key` (username, token).
   # templates/capi-registries.yaml + ClusterClass variable registryAuth. Disable for public-images-only installations.
   nodeRegistryAuth:

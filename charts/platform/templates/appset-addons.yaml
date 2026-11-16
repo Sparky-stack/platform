@@ -17,27 +17,30 @@ metadata:
   namespace: argocd
 spec:
   goTemplate: true
+  {{- /* fleetParameters: the cluster generator above, matrixed with a flat list of every platform cluster (Argo CD
+  cluster secrets labelled platform.koorikla.io/name), so one Application can see the whole fleet (e.g. argo-events: one
+  Falco endpoint per cluster). The flat list is a single element {clusters: [...]}: one Application per cluster still. */}}
+  {{- $fleet := $cfg.fleetParameters | default list }}
   generators:
-    - clusters:
-        selector:
-          matchExpressions:
-            - key: platform.koorikla.io/role
-              operator: In
-              values: {{ $cfg.roles | toJson }}
-            {{- if $cfg.providers }}
-            - key: platform.koorikla.io/provider
-              operator: In
-              values: {{ $cfg.providers | toJson }}
-            {{- end }}
-            {{- if hasKey $cfg "default" | ternary $cfg.default true }}
-            - key: {{ printf "addons.platform.koorikla.io/%s" $addon | quote }}
-              operator: NotIn
-              values: ["false"]
-            {{- else }}
-            - key: {{ printf "addons.platform.koorikla.io/%s" $addon | quote }}
-              operator: In
-              values: ["true"]
-            {{- end }}
+    {{- if $fleet }}
+    - matrix:
+        generators:
+    {{- end }}
+    {{- $in := ternary 10 4 (not (empty $fleet)) }}
+    {{- $sel := dict "matchExpressions" (list (dict "key" "platform.koorikla.io/role" "operator" "In" "values" $cfg.roles)) }}
+    {{- if $cfg.providers }}
+    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" "platform.koorikla.io/provider" "operator" "In" "values" $cfg.providers)) }}
+    {{- end }}
+    {{- if hasKey $cfg "default" | ternary $cfg.default true }}
+    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" (printf "addons.platform.koorikla.io/%s" $addon) "operator" "NotIn" "values" (list "false"))) }}
+    {{- else }}
+    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" (printf "addons.platform.koorikla.io/%s" $addon) "operator" "In" "values" (list "true"))) }}
+    {{- end }}
+    {{- $gens := list (dict "clusters" (dict "selector" $sel)) }}
+    {{- if $fleet }}
+    {{- $gens = append $gens (dict "clusters" (dict "flatList" true "selector" (dict "matchExpressions" (list (dict "key" "platform.koorikla.io/name" "operator" "Exists"))))) }}
+    {{- end }}
+    {{- toYaml $gens | nindent $in }}
   template:
     metadata:
       name: '{{ $addon }}-{{ "{{" }} .name {{ "}} " | trim }}'
@@ -73,12 +76,28 @@ spec:
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
             - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
-          {{- if or $cfg.clusterNameParameters $cfg.clusterIdParameters $cfg.installationParameters $cfg.clusterServerParameters $cfg.clusterLabelParameters }}
+          {{- if or $cfg.clusterNameParameters $cfg.clusterNameFormats $cfg.clusterIdParameters $cfg.installationParameters $cfg.clusterServerParameters $cfg.clusterLabelParameters $fleet }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
               value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
               forceString: true
+            {{- end }}
+            {{- /* clusterNameFormats: <param>: <printf format with one %s> -> the cluster name inside a fixed text (e.g.
+            falcosidekick customfields "cluster:%s"); a string, never a typed value. */}}
+            {{- range $p, $f := $cfg.clusterNameFormats }}
+            {{- $bare := replace "%%" "" $f }}
+            {{- if or (ne (len (splitList "%" $bare)) 2) (not (contains "%s" $bare)) }}
+            {{- fail (printf "addons.%s.clusterNameFormats.%s: %q must contain exactly one %%s" $addon $p $f) }}
+            {{- end }}
+            - name: {{ $p | quote }}
+              value: {{ printf $f (printf "%s index .metadata.labels \"platform.koorikla.io/name\" %s" "{{" "}}") | squote }}
+              forceString: true
+            {{- end }}
+            {{- /* fleetParameters: [<param>] -> {name1,name2,...} (helm list) of every platform cluster, sorted. */}}
+            {{- range $p := $fleet }}
+            - name: {{ $p | quote }}
+              value: {{ `'{{ $n := list }}{{ range .clusters }}{{ $n = append $n (index .metadata.labels "platform.koorikla.io/name") }}{{ end }}{{ printf "{%s}" (join "," (sortAlpha $n)) }}'` }}
             {{- end }}
             {{- /* clusterIdParameters: <installation>-<cluster>, unique when several installations share something
             external (e.g. external-dns TXT owner in a shared zone). */}}
