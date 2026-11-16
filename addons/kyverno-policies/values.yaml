@@ -95,7 +95,9 @@ imageVerification:
   failurePolicy:
     Audit: Ignore
     Deny: Fail
-  timeoutSeconds: 20               # webhook timeout (registry + Rekor/TUF lookups), max 30
+  # Webhook timeout, max 30: one image = signature + 3 attestations, each a keyless verification of ~4-5 s on the
+  # local clusters (TUF trusted root + registry referrers), so 20 s left no headroom (#128).
+  timeoutSeconds: 30
   # Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
   cellNamespaceSelector:
     matchLabels:
@@ -119,7 +121,7 @@ imageVerification:
     # Moving the pin without breaking admission: images already running were signed at the previous commit. Keep that
     # commit here (40-hex, at most one: workflowRef + this list <= 2) until every allowed repository's production image
     # is rebuilt at workflowRef, then empty it (docs/supply-chain.md "Moving the workflow pin"). Not tracked by Renovate.
-    transitionWorkflowRefs: ["de39b1d4162e18e275c7be7e86384d22cc4e070b"]
+    transitionWorkflowRefs: []
     repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
     refs: [refs/heads/main]                # extension githubWorkflowRef
     # extension githubWorkflowTrigger: only builds of merged code. pull_request_target / workflow_run run on the main

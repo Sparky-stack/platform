@@ -34,9 +34,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
     until each allowed repository's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
     per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (suffix
-    `-<sha7>` for the transition commit) and the validations accept any of them. Steps: (1) move `workflowRef`, put
-    the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote their rebuilt images; (3) empty
-    `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
+    `-<sha7>` for the transition commit) and the validations accept any of them. Every attestor runs, so a second
+    commit doubles the verifications per image and production admission can exceed the webhook timeout: keep the
+    window short and dry-run in production first ([#136](https://github.com/koorikla/platform/issues/136)).
+    Steps: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
+    their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
     `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
     ([#128](https://github.com/koorikla/platform/issues/128));
   - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
@@ -62,7 +64,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **Trusted sources**: `openchoreo-trusted-registries-*` requires every container, init and ephemeral image to match a
   trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`).
 - **Failure policy**: production `Fail` (a Kyverno outage pauses production rollouts, never platform namespaces).
-  Audit `Ignore`. Webhook timeout 20 s (registry + Rekor/TUF lookups).
+  Audit `Ignore`. Webhook timeout 30 s, the maximum (registry + Rekor/TUF lookups, ~4-5 s per verification).
 
 Evidence (Kyverno CLI v1.20.0 against the real image
 `ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
@@ -72,8 +74,8 @@ Evidence (Kyverno CLI v1.20.0 against the real image
     `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
   - the tag-only reference fails in production.
   - `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
-    in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d`, passes only while
-    `transitionWorkflowRefs` lists `de39b1d`.
+    in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d` (the previous pin), fails since
+    `transitionWorkflowRefs` is empty again.
   - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
     koorikla/ci's own pipeline) fails in production.
 - Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
