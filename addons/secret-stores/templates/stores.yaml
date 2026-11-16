@@ -159,6 +159,7 @@ spec:
     - namespaces:
         - fleet
         - argocd
+        - openbao     # addon openbao mesh-clients: members' public auth inputs (fleet/<name>-mesh-openbao, find by label)
   provider:
     kubernetes:
       remoteNamespace: fleet

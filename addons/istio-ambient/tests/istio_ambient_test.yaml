@@ -100,3 +100,140 @@ tests:
     asserts:
       - isKind:
           of: DaemonSet
+
+  # --- multicluster wiring (docs/multicluster.md): what the chart does with the catalog's label parameters ---------
+  - it: "ztunnel rolls after istiod: Argo CD sync wave 1 on the DaemonSet (no imperative restart when a cluster joins)"
+    template: charts/ztunnel/templates/daemonset.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+
+  - it: "istiod stays in the default wave (0), so Argo waits for it to be Healthy before ztunnel"
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+
+  - it: "non-member (catalog defaults: network/meshID empty, flags false) - no NETWORK on ztunnel, no meshId"
+    set:
+      global: { network: "", meshID: "", multiCluster: { clusterName: prod-euc1 } }
+      istiod:
+        env: { AMBIENT_ENABLE_MULTI_NETWORK: "false", AMBIENT_ENABLE_BAGGAGE: "false" }
+      ztunnel:
+        podAnnotations: { mesh.platform.koorikla.io/group: "" }
+    asserts:
+      - notMatchRegex: { path: 'spec.template.spec.containers[0].env[*].name', pattern: '^NETWORK$' }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ISTIO_META_CLUSTER_ID, value: prod-euc1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - equal: { path: 'spec.template.metadata.annotations["mesh.platform.koorikla.io/group"]', value: "" }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_MULTI_NETWORK, value: "false" }
+        template: charts/istiod/templates/deployment.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ENABLE_CA_SERVER, value: "false" }
+        template: charts/istiod/templates/deployment.yaml
+      - notMatchRegex: { path: 'spec.template.spec.volumes[*].name', pattern: 'gate$' }
+        template: charts/istiod/templates/deployment.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CA_ADDRESS, value: cert-manager-istio-csr.istio-system.svc:443 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - notMatchRegex: { path: data.mesh, pattern: 'meshId' }
+        template: charts/istiod/templates/configmap.yaml
+        documentSelector: { path: metadata.name, value: istio }
+
+  - it: "member (labels from mesh.group + values/mesh-member.yaml) - NETWORK, cluster ID, group annotation, meshId, multi-network istiod"
+    values: [../values/mesh-member.yaml]
+    set:
+      global: { network: dev1, meshID: local, multiCluster: { clusterName: dev1 } }
+      istiod:
+        env: { AMBIENT_ENABLE_MULTI_NETWORK: "true", AMBIENT_ENABLE_BAGGAGE: "true" }
+      ztunnel:
+        podAnnotations: { mesh.platform.koorikla.io/group: local }
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: NETWORK, value: dev1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ISTIO_META_CLUSTER_ID, value: dev1 }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - equal: { path: 'spec.template.metadata.annotations["mesh.platform.koorikla.io/group"]', value: local }
+        template: charts/ztunnel/templates/daemonset.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_MULTI_NETWORK, value: "true" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: AMBIENT_ENABLE_BAGGAGE, value: "true" }
+        template: charts/istiod/templates/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CLUSTER_ID, value: dev1 }
+        template: charts/istiod/templates/deployment.yaml
+      - matchRegex: { path: data.mesh, pattern: 'meshId: local' }
+        template: charts/istiod/templates/configmap.yaml
+        documentSelector: { path: metadata.name, value: istio }
+
+  - it: "negative: never sets PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER (\"false\" SIGSEGVs istiod 1.32.0 with remote secrets)"
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER, value: "false" }
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER, value: "true" }
+
+  # --- mesh CA (values/mesh-member.yaml): no CA in istiod, certificates from istio-csr -> OpenBao on mgmt ---------
+  - it: "member: istiod runs no CA (ENABLE_CA_SERVER=false) and hands proxies istio-csr's address"
+    values: [../values/mesh-member.yaml]
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: ENABLE_CA_SERVER, value: "false" }
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: PILOT_DISABLE_SELF_SIGNED_CA, value: "true" }
+
+  - it: "member: proxies istiod generates (east-west gateway, waypoints) get CA_ADDR = istio-csr"
+    values: [../values/mesh-member.yaml]
+    template: charts/istiod/templates/istiod-injector-configmap.yaml
+    asserts:
+      - matchRegex: { path: data.values, pattern: '"caAddress": "cert-manager-istio-csr.istio-system.svc:443"' }
+
+  - it: "member: ztunnel requests workload certificates from istio-csr"
+    values: [../values/mesh-member.yaml]
+    template: charts/ztunnel/templates/daemonset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CA_ADDRESS, value: cert-manager-istio-csr.istio-system.svc:443 }
+
+  - it: "member: istiod fails closed - non-optional mounts of istiod-tls and istio-ca-root-cert gate its start"
+    values: [../values/mesh-member.yaml]
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: istiod-tls-gate, secret: { secretName: istiod-tls } }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: root-cert-gate, configMap: { name: istio-ca-root-cert } }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: istiod-tls-gate, mountPath: /var/run/secrets/platform/istiod-tls-gate, readOnly: true }
+      - notMatchRegex: { path: 'spec.template.spec.volumes[?(@.name == "istiod-tls-gate")].secret.optional', pattern: 'true' }
+
+  - it: "member: no plugged-in CA material is expected (no cacerts gate, istiod reads the istio-csr cert)"
+    values: [../values/mesh-member.yaml]
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - notMatchRegex: { path: 'spec.template.spec.volumes[*].name', pattern: '^cacerts-gate$' }

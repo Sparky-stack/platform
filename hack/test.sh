@@ -53,6 +53,19 @@ server_param_args() {
     if [[ "$part" == "port" ]]; then printf '%s\n' --set "${p}=${v}"; else printf '%s\n' --set-string "${p}=${v}"; fi
   done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
 }
+# Catalog clusterLabelParameters (<helm param>: {label, default}), mirrored from appset-addons.yaml. Prints helm args
+# for the given addon from a file holding the cluster's labels as a YAML map (missing/empty file -> the defaults).
+label_param_args() {
+  local addon="$1" labels="$2" p key def v
+  while IFS=$'\t' read -r p key def; do
+    [[ -n "$p" ]] || continue
+    v=""
+    if [[ -s "$labels" ]]; then v=$(yq -r ".[\"$key\"] // \"\"" "$labels"); fi
+    [[ -n "$v" ]] || v="$def"
+    printf '%s\n' --set-string "${p}=${v}"
+  done < <(yq -r ".addons[\"$addon\"].clusterLabelParameters // {} | to_entries[] | [.key, .value.label, (.value.default // \"\")] | @tsv" charts/platform/values.yaml | tr -d '\r')
+}
+NO_LABELS=/dev/null                          # standalone renders: no cluster labels -> catalog defaults
 SAMPLE_SERVER=https://192.0.2.10:6443        # stands in for a workload cluster's CAPI API endpoint (TEST-NET-1)
 # Opt-in mgmt addons (catalog default false) rendered with every installation's values even where not switched on, so
 # a values change cannot break them unnoticed. external-dns has its own suite (hack/tests/test_external_dns.sh: it
@@ -82,6 +95,9 @@ for dir in charts/* addons/*; do
     echo "==> helm lint $dir"
     lint_sets=()
     read_lines lint_sets server_param_args "$(basename "$dir")" "$SAMPLE_SERVER"
+    lp_args=()
+    read_lines lp_args label_param_args "$(basename "$dir")" "$NO_LABELS"
+    lint_sets+=(${lp_args[@]+"${lp_args[@]}"})
     helm lint "$dir" ${lint_sets[@]+"${lint_sets[@]}"} >/dev/null
   fi
 done
@@ -134,6 +150,9 @@ for dir in addons/*; do
   sp_args=()
   read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
   standalone_sets+=(${sp_args[@]+"${sp_args[@]}"})
+  lp_args=()
+  read_lines lp_args label_param_args "$addon" "$NO_LABELS"
+  standalone_sets+=(${lp_args[@]+"${lp_args[@]}"})
 
   helm template "$(yq ".addons[\"$addon\"].releaseName // \"$addon\"" charts/platform/values.yaml)" "$dir" --namespace "$ns" \
     ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
@@ -164,8 +183,11 @@ for dir in addons/*; do
       elif [[ -z "$providers_filter" ]] || echo "$providers_filter" | grep -qx "$m_prov"; then
         # Same layering and precedence as the ApplicationSet (hack/lib/addons.sh), parameters from its render above.
         vargs=()
+        yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels' "$TMP/platform-$inst.yaml" \
+          > "$TMP/labels-$inst-mgmt.yaml"   # mgmt's cluster labels (catalog clusterLabelParameters, label-selected files)
         read_lines vargs addon_helm_args "$addon" "$inst_dir" "$TMP/platform-$inst.yaml" mgmt "$m_name" "$m_prov" \
-          "$m_env" "$(yq '.mgmt.region // "local"' "$inst_dir/installation.yaml")" "$m_cni" "$MGMT_SERVER"
+          "$m_env" "$(yq '.mgmt.region // "local"' "$inst_dir/installation.yaml")" "$m_cni" "$MGMT_SERVER" \
+          "$TMP/labels-$inst-mgmt.yaml"
         helm template "$(addon_release_name "$TMP/platform-$inst.yaml" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
           > "$TMP/addon-$addon-$inst-mgmt.yaml"
         check_kubeconform "addons/$addon ($inst/mgmt)$forced" "$TMP/addon-$addon-$inst-mgmt.yaml"
@@ -182,6 +204,9 @@ for dir in addons/*; do
           continue
         fi
         c_cni=$(yq '.cni // "cilium"' "$cf")
+        # the cluster's labels as charts/cluster renders them (step 4): mesh group/network, derived addon toggles
+        yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$inst-$c_name.yaml" > "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null \
+          || : > "$TMP/labels-$inst-$c_name.yaml"
         # addon labels as rendered by charts/cluster (step 4), e.g. addons.platform.koorikla.io/cilium derives from cni
         c_toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" "$TMP/cluster-$inst-$c_name.yaml" 2>/dev/null || true)
         [[ -n "$c_toggle" && "$c_toggle" != "null" ]] || c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
@@ -191,12 +216,60 @@ for dir in addons/*; do
         fi
         vargs=()
         read_lines vargs addon_helm_args "$addon" "$inst_dir" "$TMP/platform-$inst.yaml" workload "$c_name" "$c_prov" \
-          "$c_env" "$(yq '.region // "local"' "$cf")" "$c_cni" "$SAMPLE_SERVER"
+          "$c_env" "$(yq '.region // "local"' "$cf")" "$c_cni" "$SAMPLE_SERVER" "$TMP/labels-$inst-$c_name.yaml"
         helm template "$(addon_release_name "$TMP/platform-$inst.yaml" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
           > "$TMP/addon-$addon-$inst-$c_name.yaml"
         check_kubeconform "addons/$addon ($inst/$c_name)" "$TMP/addon-$addon-$inst-$c_name.yaml"
       done
     fi
+  done
+done
+
+# 5b. Examples (examples/*): standalone + per installation on the clusters the example's selector matches, layered like
+# charts/platform templates/appset-examples.yaml
+echo "==> Testing examples/*"
+# selector_matches <selector-json> <labels-file>: matchLabels + matchExpressions (In, NotIn, Exists, DoesNotExist)
+selector_matches() {
+  yq -o=json '.' "$2" | py -c '
+import json, sys
+sel = json.loads(sys.argv[1]); lab = json.load(sys.stdin) or {}
+ok = all(lab.get(k) == v for k, v in (sel.get("matchLabels") or {}).items())
+for e in sel.get("matchExpressions") or []:
+    k, op, vals = e["key"], e["operator"], e.get("values") or []
+    ok = ok and {"In": k in lab and lab[k] in vals, "NotIn": lab.get(k) not in vals,
+                 "Exists": k in lab, "DoesNotExist": k not in lab}[op]
+sys.exit(0 if ok else 1)' "$1"
+}
+for dir in examples/*; do
+  [[ -f "$dir/Chart.yaml" ]] || continue
+  ex=$(basename "$dir")
+  helm lint "$dir" >/dev/null
+  helm template "$ex" "$dir" > "$TMP/example-$ex-standalone.yaml"
+  check_kubeconform "examples/$ex (standalone)" "$TMP/example-$ex-standalone.yaml"
+  for inst_dir in installations/*; do
+    [[ -f "$inst_dir/installation.yaml" ]] || continue
+    inst=$(basename "$inst_dir")
+    # effective examples config = charts/platform defaults < installation.yaml
+    # shellcheck disable=SC2016  # $i is a yq variable
+    yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' charts/platform/values.yaml "$inst_dir/installation.yaml" > "$TMP/examples-$inst.json"
+    enabled=$(yq -p=json ".[\"$ex\"].enabled" "$TMP/examples-$inst.json")
+    [[ "$enabled" == "true" ]] || { echo "  SKIP examples/$ex ($inst): not enabled"; continue; }
+    sel=$(yq -p=json -o=json -I=0 ".[\"$ex\"].selector" "$TMP/examples-$inst.json")
+    ns=$(yq -p=json ".[\"$ex\"].namespace // \"$ex\"" "$TMP/examples-$inst.json")
+    for cf in "$inst_dir"/clusters/*.yaml; do
+      [[ -f "$cf" ]] || continue
+      c_name=$(yq '.name' "$cf")
+      if ! selector_matches "$sel" "$TMP/labels-$inst-$c_name.yaml"; then
+        echo "  SKIP examples/$ex ($inst/$c_name): selector does not match"
+        continue
+      fi
+      vargs=(--values "$dir/values.yaml")
+      for vf in "$inst_dir/examples/$ex/values.yaml" "$inst_dir/examples/$ex/cluster-$c_name.yaml"; do
+        [[ -f "$vf" ]] && vargs+=(--values "$vf")
+      done
+      helm template "$ex" "$dir" --namespace "$ns" "${vargs[@]}" --set-string "cluster.name=$c_name" > "$TMP/example-$ex-$inst-$c_name.yaml"
+      check_kubeconform "examples/$ex ($inst/$c_name)" "$TMP/example-$ex-$inst-$c_name.yaml"
+    done
   done
 done
 
@@ -207,7 +280,7 @@ check_kubeconform "bootstrap/root-app.yaml" bootstrap/root-app.yaml
 # 7. helm unittest where tests/ exists (after helm dependency build above)
 passed=0
 failed=0
-for dir in charts/* addons/*; do
+for dir in charts/* addons/* examples/*; do
   [[ -d "$dir/tests" ]] || continue
   selected "$dir" || continue
   if [[ "$dir" == "charts/cluster" && ! -f "$dir/templates/capi-cluster.yaml" ]]; then

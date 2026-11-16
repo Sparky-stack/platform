@@ -13,7 +13,8 @@ mgmt:
   provider: docker
   region: local
   environment: mgmt
-  addons: {}                                  # addons.platform.koorikla.io/<addon> overrides for mgmt
+  addons:                                     # addons.platform.koorikla.io/<addon> overrides for mgmt
+    openbao: true                             # Istio mesh CA (OpenBao: one root + intermediate per mesh.groups entry)
 
 secrets:
   backend: kubernetes                         # kubernetes | aws | vault
@@ -89,3 +90,19 @@ promotion:
       end: "Mon 08:00"
       timeZone: Europe/Tallinn
       environments: [production]
+
+# Istio mesh (docs/multicluster.md). groups: one root + intermediate CA per group, generated inside OpenBao on mgmt
+# (addon openbao); a fleet file's mesh.group must be listed. A group is a cryptographic boundary: clusters of different
+# environments / trust levels never share one - `local` is the exception on purpose (dev1 + prod1 on one laptop).
+# ca: where members reach OpenBao (kgateway TLS passthrough on mgmt). port == k3d published port
+# (bootstrap/k3d-mgmt.yaml); the host resolves to the k3d serverlb on CAPD members (coredns-local).
+mesh:
+  groups: [local]
+  ca:
+    host: openbao.openchoreo.localhost
+    port: 8200
+
+# Examples (examples/<name>, applied by Argo CD to matching clusters; docs/multicluster.md "Example").
+examples:
+  eastwest:
+    enabled: true                              # echo on prod1, callers on dev1 (installations/local/examples/eastwest/)

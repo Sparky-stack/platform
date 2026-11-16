@@ -1,0 +1,3 @@
+# dev1 only calls: every successful answer ("hello from prod1") crossed both east-west gateways.
+echo:
+  enabled: false

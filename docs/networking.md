@@ -11,6 +11,7 @@ Cilium or Istio.
 | Gateway API CRDs (standard channel) | Gateway API v1.5.1 | `gateway-api-crds` | all |
 | North-south ingress (`GatewayClass kgateway`, OpenChoreo's `gateway-default`) | kgateway | `kgateway` | all |
 | East-west mTLS, L4 authz, optional L7 waypoints | Istio ambient (base, istiod, istio-cni, ztunnel) | `istio-ambient` (`istio-system`) | workload |
+| Cluster-to-cluster (multi-network ambient, east-west gateways, mesh CA in OpenBao) | Istio ambient multicluster | `istio-eastwest` + `istio-csr`, mesh CA `openbao` on mgmt (opt-in, docs/multicluster.md) | fleet files with `mesh.group` |
 | Admission: PSS baseline audit, ambient enrollment | Kyverno + policies | `kyverno`, `kyverno-policies` (`kyverno`) | all (enrollment: workload) |
 | Runtime detection / response | Falco + Talon | `falco` | all (docs/observability.md) |
 

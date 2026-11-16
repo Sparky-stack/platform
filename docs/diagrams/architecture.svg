@@ -124,15 +124,13 @@
 <text x="341.0" y="525.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Falco</text>
 <text x="341.0" y="544.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">modern_ebpf</text>
 <text x="341.0" y="560.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">+ falcosidekick</text>
-<g opacity="0.55">
 <rect x="440" y="510" width="170" height="58" rx="6" fill="#0f172a"/>
 <rect x="440" y="510" width="170" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="525.0" y="525.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenBao</text>
-<text x="525.0" y="544.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh CA · secret</text>
-<text x="525.0" y="560.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">backend (PR #4)</text>
-<rect x="550.8" y="500" width="51.2" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
-<text x="576.4" y="510.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">planned</text>
-</g>
+<text x="525.0" y="544.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh CA per group</text>
+<text x="525.0" y="560.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">keys never exported</text>
+<rect x="556.7" y="500" width="45.3" height="14" rx="7" fill="#020617" stroke="#fb7185" stroke-width="1"/>
+<text x="579.3" y="510.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#fb7185" text-anchor="middle">opt-in</text>
 <rect x="624" y="510" width="170" height="58" rx="6" fill="#0f172a"/>
 <rect x="624" y="510" width="170" height="58" rx="6" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.5"/>
 <text x="709.0" y="525.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">argo-events</text>
@@ -197,15 +195,13 @@
 <text x="968.0" y="708.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">per cluster</text>
 <rect x="1010.7" y="648" width="45.3" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
 <text x="1033.3" y="658.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">opt-in</text>
-<g opacity="0.55">
 <rect x="1080" y="658" width="192" height="58" rx="6" fill="#0f172a"/>
 <rect x="1080" y="658" width="192" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="1176.0" y="673.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">east-west gateway</text>
 <text x="1176.0" y="692.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Istio multicluster</text>
-<text x="1176.0" y="708.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR #4</text>
-<rect x="1212.8" y="648" width="51.2" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
-<text x="1238.4" y="658.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">planned</text>
-</g>
+<text x="1176.0" y="708.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh.group</text>
+<rect x="1218.7" y="648" width="45.3" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
+<text x="1241.3" y="658.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">opt-in</text>
 <rect x="856" y="752" width="136" height="52" rx="6" fill="#0f172a"/>
 <rect x="856" y="752" width="136" height="52" rx="6" fill="#78350f" fill-opacity="0.3" stroke="#fbbf24" stroke-width="1.5"/>
 <text x="924.0" y="771.7" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="600" fill="#f1f5f9" text-anchor="middle">docker · CAPD</text>

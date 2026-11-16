@@ -1,0 +1,125 @@
+{{- /*
+Public trust material for this mesh member, delivered into istio-system like the OpenChoreo agent identity
+(openchoreo-agent-crs): ExternalSecret <name>-mesh-trust (store mgmt-openbao: name-scoped GET of
+openbao/openbao-ca-bundle, PUBLIC certificates only) templates a ClusterResourceSet payload:
+  Namespace istio-system, labelled topology.istio.io/network=<name>: ambient istiod reads its cluster's network from
+    this label (and a peer's network from the peer's label, via the remote secret).
+  Secret openbao-ca     ca.crt = OpenBao's CA: addon istio-csr's Vault Issuer verifies OpenBao's listener with it.
+  Secret mesh-root-ca   root-cert.pem = this group's root CA certificate (generated inside OpenBao, key never exported):
+                        istio-csr pins it (rootCAFile) and publishes it as istio-ca-root-cert.
+ConfigMap <name>-mesh-oidc (rendered here, no ESO, no OpenBao: applied as soon as the cluster's API is up, so it is in
+place before the mesh reconcile on mgmt configures this member):
+  ClusterRoleBinding platform-oidc-discovery: ClusterRole system:service-account-issuer-discovery (GET on
+    /.well-known/openid-configuration and /openid/v1/jwks only) for system:unauthenticated. OpenBao (addon openbao,
+    auth/mesh-<name>) verifies this cluster's ServiceAccount tokens offline with these PUBLIC signing keys, fetched
+    without any credential and pinned to the cluster CA. Upstream's documented way for an external relying party
+    ("Service account issuer discovery"); the alternatives put a credential for every member on mgmt (TokenReview, or
+    reading the JWKS with the CAPI admin kubeconfig into static jwt_validation_pubkeys) - OpenBao's JWT auth has no
+    authenticated JWKS fetch. The JWKS holds public keys only; issuing a token still needs the signing key.
+  ClusterResourceSet <name>-mesh-trust applies both to exactly this Cluster (ConfigMap first; CAPI applies each listed
+  resource that exists, so the binding does not wait for ESO). Strategy Reconcile: re-applied on change.
+No private key of any kind is in this payload (contract test): the member's certificates are signed in OpenBao on mgmt
+(addon openbao) through istio-csr + cert-manager's Vault Issuer with per-member JWT auth (addon istio-csr).
+*/ -}}
+{{- if include "mesh.group" . }}
+{{- $name := .Values.name }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-mesh-trust
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: mgmt-openbao
+  target:
+    name: {{ $name }}-mesh-trust
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: addons.cluster.x-k8s.io/resource-set
+      metadata:
+        labels:
+          {{- include "mesh.labels" . | nindent 10 }}
+      data:
+        mesh-trust.yaml: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: istio-system
+            labels:
+              topology.istio.io/network: {{ $name }}
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: openbao-ca
+            namespace: istio-system
+            labels:
+              app.kubernetes.io/part-of: istio-mesh
+          type: Opaque
+          data:
+            ca.crt: {{`{{ .openbaoca | b64enc }}`}}
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: mesh-root-ca
+            namespace: istio-system
+            labels:
+              app.kubernetes.io/part-of: istio-mesh
+              mesh.platform.koorikla.io/group: {{ include "mesh.group" . }}
+          type: Opaque
+          data:
+            root-cert.pem: {{`{{ .root | b64enc }}`}}
+  data:
+    - secretKey: openbaoca
+      remoteRef: { key: openbao-ca-bundle, property: ca.crt }
+    - secretKey: root
+      remoteRef: { key: openbao-ca-bundle, property: {{ include "mesh.rootKey" . }} }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-mesh-oidc
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+data:
+  oidc-discovery.yaml: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: platform-oidc-discovery
+      labels:
+        app.kubernetes.io/part-of: istio-mesh
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: system:service-account-issuer-discovery
+    subjects:
+      - apiGroup: rbac.authorization.k8s.io
+        kind: Group
+        name: system:unauthenticated
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: {{ $name }}-mesh-trust
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      platform.koorikla.io/name: {{ $name }}
+  resources:
+    - kind: ConfigMap
+      name: {{ $name }}-mesh-oidc
+    - kind: Secret
+      name: {{ $name }}-mesh-trust
+{{- end }}

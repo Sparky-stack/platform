@@ -1,0 +1,136 @@
+{{- /*
+Peers' istiods discover this cluster's endpoints as user platform:istio-reader: a 7-day client cert that mgmt's
+cert-manager issues from this cluster's k3s client CA (charts/cluster mesh-remote-secret.yaml) and ships to the peers
+as their istio-remote-secret-<this cluster>. No ServiceAccount token is minted, so nothing long-lived exists to leak.
+
+The user is bound to ClusterRole platform-istio-reader, NOT to the istiod chart's istio-reader-clusterrole-istio-system:
+upstream's role also grants cluster-wide get/list/watch on secrets and configmaps, create/delete on MCS serviceexports
+and create on tokenreviews/subjectaccessreviews. With it every peer could read every Secret of this cluster (the
+OpenChoreo agent identity, istiod's serving key, every tenant Secret). What a peer istiod 1.32 (ambient multi-primary, multi-network) reads from a remote
+cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
+  pkg/kube/multicluster/cluster.go          namespaces, pods, services, nodes, endpointslices, gateways (Gateway API)
+  serviceregistry/kube/controller           the same + endpoints, MCS serviceimports, CRDs (delayed informers)
+  PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY workloadentries (default on)
+  remote mesh watcher (multicluster.go)     ConfigMap istio-system/istio only (trust domain), field selector by name
+  credentials controller                    Secrets (list/watch, cluster-wide; istiod's field selector skips helm
+                                            releases and SA tokens, RBAC cannot) - data only used for gateways served by a remote istiod
+                                            (primary-remote), but istiod 1.32.0 WAITS for this informer before it
+                                            serves the peer: forbidden -> the peer times out after
+                                            PILOT_REMOTE_CLUSTER_TIMEOUT (30s) and is left out of the mesh.
+                                            The opt-out PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false SIGSEGVs
+                                            1.32.0 (fixed on master, istio/istio#62295; no release yet).
+                                            Not granted by default; reader.remoteCredentialsSecrets (below) is the
+                                            explicit, separate grant (docs/multicluster.md "Reader RBAC").
+  tokenreviews/SARs/serviceexports          primary-remote proxy auth / ENABLE_MCS_AUTO_EXPORT (off): not used.
+*/ -}}
+{{- if .Values.reader.enabled }}
+{{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-istio-reader
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [services, endpoints, pods, namespaces, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways]
+    verbs: [get, list, watch]
+  # Istio config (ServiceEntry, WorkloadEntry, AuthorizationPolicy, Telemetry, ...): no credentials in these groups.
+  - apiGroups: [networking.istio.io, security.istio.io, telemetry.istio.io, extensions.istio.io]
+    resources: ["*"]
+    verbs: [get, list, watch]
+  - apiGroups: [multicluster.x-k8s.io]
+    resources: [serviceimports]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-istio-reader
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-istio-reader
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ .Values.reader.user }}    # = charts/cluster templates/mesh-helpers.yaml "mesh.readerUser" (contract test)
+{{- if .Values.reader.remoteCredentialsSecrets }}
+{{- if ne .Values.cluster.provider "docker" }}
+{{- fail (printf "istio-eastwest (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}
+{{- end }}
+---
+# OPT-IN (reader.remoteCredentialsSecrets, an installation decision, docker/local only - the render fails elsewhere):
+# lets istiod 1.32.0's remote credentials informer sync so the peer is served. list/watch: LIST returns every Secret's
+# full .data, so this is read access to every Secret of this cluster (including ServiceAccount-token Secrets: the
+# informer's field selector that skips helm releases and SA tokens is istiod's own choice, not RBAC - a stolen reader
+# certificate can list them all). Separate objects so the grant is visible and removable on its own.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-istio-reader-secrets
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-istio-reader-secrets
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-istio-reader-secrets
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ .Values.reader.user }}
+{{- end }}
+---
+# The peer's per-cluster mesh watcher reads this cluster's MeshConfig (trust domain): exactly one ConfigMap. RBAC
+# resourceNames also authorise its list/watch because istiod lists with fieldSelector metadata.name=istio.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: platform-istio-reader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [istio]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: platform-istio-reader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: platform-istio-reader
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ .Values.reader.user }}
+{{- end }}
