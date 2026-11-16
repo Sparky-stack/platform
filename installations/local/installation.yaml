@@ -93,7 +93,8 @@ promotion:
 
 # Istio mesh (docs/multicluster.md). groups: one root + intermediate CA per group, generated inside OpenBao on mgmt
 # (addon openbao); a fleet file's mesh.group must be listed. A group is a cryptographic boundary: clusters of different
-# environments / trust levels never share one - `local` is the exception on purpose (dev1 + prod1 on one laptop).
+# environments / trust levels never share one - `local` is the exception on purpose (one laptop: dev1 alone in the lean
+# profile, dev1 + prod1 in the multicluster profile, docs/dev-environment.md "Local profiles").
 # ca: where members reach OpenBao (kgateway TLS passthrough on mgmt). port == k3d published port
 # (bootstrap/k3d-mgmt.yaml); the host resolves to the k3d serverlb on CAPD members (coredns-local).
 mesh:
@@ -105,4 +106,6 @@ mesh:
 # Examples (examples/<name>, applied by Argo CD to matching clusters; docs/multicluster.md "Example").
 examples:
   eastwest:
-    enabled: true                              # echo on prod1, callers on dev1 (installations/local/examples/eastwest/)
+    # Multicluster profile only (needs two mesh members): echo on prod1, callers on dev1
+    # (installations/local/examples/eastwest/). Off in the lean profile, where dev1 is the only member.
+    enabled: false

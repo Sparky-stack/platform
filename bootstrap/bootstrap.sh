@@ -628,9 +628,10 @@ cmd_down() {
     kubectl --context "$CTX" delete clusters.cluster.x-k8s.io -n fleet --all --wait=true \
       --timeout="${DOWN_TIMEOUT:-5m}" || warn "CAPI cluster deletion did not finish within ${DOWN_TIMEOUT:-5m}"
   fi
-  # Leftovers of the clusters mgmt listed plus the installation's fleet files (mgmt may already be unreachable).
+  # Leftovers of the clusters mgmt listed plus the installation's fleet files (mgmt may already be unreachable),
+  # disabled ones included (a profile switch, docs/dev-environment.md "Local profiles", may have left containers).
   local f
-  for f in "installations/$INST/clusters/"*.yaml; do
+  for f in "installations/$INST/clusters/"*.yaml "installations/$INST/clusters/"*.yaml.disabled; do
     [[ -f "$f" ]] && clusters+=("$(yq '.name' "$f")")
   done
   (( ${#clusters[@]} > 0 )) && remove_capd_leftovers "${clusters[@]}"
