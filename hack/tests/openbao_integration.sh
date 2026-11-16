@@ -44,7 +44,8 @@ s = re.sub(r"\n\s*retry_join \{.*?\n\s*\}", "", s, flags=re.S)       # single no
 s = s.replace("service_registration \"kubernetes\" {}", "")          # no Kubernetes API here
 s = s.replace("storage \"raft\" {", "storage \"raft\" {\n  node_id = \"it-0\"")
 print(s)' > "$W/config.hcl"
-cat >> "$W/config.hcl" <<'EOF'
+IT_PW=$(openssl rand -hex 16)   # throwaway login for the disposable container
+cat >> "$W/config.hcl" <<EOF
 initialize "zz-integration-test-only" {
   request "userpass" {
     operation = "update"
@@ -54,7 +55,7 @@ initialize "zz-integration-test-only" {
   request "reconciler" {
     operation = "update"
     path      = "auth/userpass/users/reconciler"
-    data      = { password = "it-only", token_policies = ["platform-mesh-config"], token_no_default_policy = true }
+    data      = { password = "$IT_PW", token_policies = ["platform-mesh-config"], token_no_default_policy = true }
   }
 }
 EOF
@@ -119,12 +120,13 @@ assert_eq "$(bao_in 'bao read sys/mounts >/dev/null 2>&1 && echo open || echo de
 # --- reconcile with the Job's rendered environment (scoped login) ---------------------------------------------------
 helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local}' \
   -s templates/reconcile.yaml | yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].env[] | select(.name != "BAO_ADDR" and .name != "BAO_CACERT" and .name != "INPUT_DIR") | "export " + .name + "=\"" + .value + "\""' > "$W/env.sh"
+printf '%s' "$IT_PW" > "$W/it-pw"
 for c in 1 2; do
   printf 'local' > "$W/inputs/c$c.group"; printf 'https://jwks:844%s' "$((c + 2))" > "$W/inputs/c$c.server"; cp "$W/tls/ca.crt" "$W/inputs/c$c.ca"
 done
 chmod -R a+rX "$W"
 # shellcheck disable=SC2016  # runs inside the container
-RECONCILE='. /w/env.sh; export INPUT_DIR=/w/inputs BAO_TOKEN=$(bao write -field=token auth/userpass/login/reconciler password=it-only); sh /scripts/mesh-reconcile.sh'
+RECONCILE='. /w/env.sh; export INPUT_DIR=/w/inputs BAO_TOKEN=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw); sh /scripts/mesh-reconcile.sh'
 rc=0; out=$(bao_in "$RECONCILE" 2>&1) || rc=$?
 assert_eq "$rc" 0 "reconcile runs with the scoped policy only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
 assert_match "$out" 'done: c1:local c2:local' "both members configured"
