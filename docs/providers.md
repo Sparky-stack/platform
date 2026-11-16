@@ -1,8 +1,9 @@
 # Cluster API providers
 
 How workload clusters are built: Cluster API (CAPI) with the **k3s** bootstrap + control plane provider on one of three
-infrastructure providers. Docker (CAPD) is the tested local path; AWS (CAPA) and Hetzner (CAPH) are rendered and
-schema-checked only. Design context: [architecture.md](architecture.md); names and labels: [conventions.md](conventions.md).
+infrastructure providers. Docker (CAPD) is the booted local path; AWS (CAPA) and Hetzner (CAPH) are rendered and
+schema-checked only ([#26](https://github.com/koorikla/platform/issues/26)). Design: [architecture.md](architecture.md);
+names and labels: [conventions.md](conventions.md).
 
 ## What runs where
 
@@ -11,7 +12,7 @@ schema-checked only. Design context: [architecture.md](architecture.md); names a
 | Operator | `addons/capi-operator` | cluster-api-operator chart 0.30.0 (needs cert-manager, its own addon) |
 | Providers | `addons/capi-providers` | operator CRs: core, k3s bootstrap + control plane, `docker` \| `aws` \| `hetzner` per `installation.yaml` `capi.providers` |
 | Classes | `addons/clusterclasses` | namespace `fleet`, ClusterClasses `k3s-docker` (if CAPD), `k3s-aws`, `k3s-hetzner` (if enabled) + their templates |
-| Clusters | `charts/cluster` (`templates/capi-*.yaml`) | one topology `Cluster` per fleet file + its node registry auth secret |
+| Clusters | `charts/cluster` (`templates/capi-*.yaml`) | one topology `Cluster` per fleet file + its node registry config secret |
 | Cloud CCMs | `addons/aws-ccm`, `addons/hcloud-ccm` | AWS / Hetzner cloud-controller-manager on workload clusters of that provider |
 
 ### Versions
@@ -29,8 +30,8 @@ schema-checked only. Design context: [architecture.md](architecture.md); names a
 Core 1.13 accepts v1beta1-contract providers (`GetCompatibleVersions`: v1beta2 is "temporarily compatible" with v1beta1).
 k3s is not in clusterctl's built-in provider list, so its operator CRs carry
 `fetchConfig.url: https://github.com/k3s-io/cluster-api-k3s/releases/<version>/{bootstrap,control-plane}-components.yaml`.
-cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line that is supported by every other piece
-and still well inside k3s' maintained window - **VERIFY** on the first boot, then bump `kubernetesVersion` per fleet file.
+cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line every other piece supports
+(open checks: [#56](https://github.com/koorikla/platform/issues/56)).
 
 ### Feature gates
 - `ClusterTopology` is alpha and **off by default** in core 1.13 -> set to `true` on the CoreProvider (and on CAPD,
@@ -42,24 +43,26 @@ and still well inside k3s' maintained window - **VERIFY** on the first boot, the
 ## Adding a cluster
 
 One file: `installations/<inst>/clusters/<name>.yaml` (schema and defaults: `charts/cluster/values.yaml`). The `fleet`
-ApplicationSet renders `charts/cluster` with `installation.yaml` + this file. The chart fails rendering (so Argo shows
-the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider`, a provider that the
-installation does not enable, a cloud provider without `region`, non-boolean `addons.*`, workers without `name`, an
-even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
-aws/hetzner (see "Control plane size and rollouts").
+ApplicationSet renders `charts/cluster` with `installation.yaml` + this file. The chart fails rendering (so Argo CD
+shows the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider`, a provider
+that the installation does not enable, a cloud provider without `region`, non-boolean `addons.*`, workers without
+`name`, an even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
+aws/hetzner (see "Control plane size and rollouts"; an environment enum is [#24](https://github.com/koorikla/platform/issues/24)).
 
 | Fleet file | Becomes |
 |---|---|
 | `name` | `Cluster/<name>` in `fleet` (DNS label, max 32 chars - it prefixes machine/LB names) |
 | `provider` | `topology.classRef.name: k3s-<provider>` |
 | `kubernetesVersion` | `topology.version` (k3s release, `vX.Y.Z+k3sN`) |
+| `cni` | ClusterClass variable `cni` + labels ([networking.md](networking.md#cni-is-fixed-when-the-cluster-is-created)) |
 | `controlPlane.replicas` | k3s servers = embedded etcd voters: odd (1, 3, 5); >= 3 for production on aws/hetzner |
 | `controlPlane.machineType` | variable `controlPlaneMachineType` (aws, hetzner; ignored on docker) |
 | `workers[]` `{name, replicas, machineType, failureDomain}` | machineDeployments of class `default-worker`; `machineType` -> per-MD override of `workerMachineType` |
 | `region` | label; variable `region` (aws, hetzner) |
 | `providerSpec.*` | ClusterClass variables as-is, last (can override generated ones) |
 | `secrets.nodeRegistryAuth.enabled` (installation) | variable `registryAuth` + `ExternalSecret/<name>-registries` |
-| `environment`, `addons`, `addonsRevision` | labels / annotation (conventions.md) |
+| `openchoreo.dataPlane` | ClusterDataPlane + Environments ([openchoreo.md](openchoreo.md#adding-a-data-plane)) |
+| `environment`, `addons`, `addonsRevision` | labels / annotation ([conventions.md](conventions.md#labels-and-annotations)) |
 
 ClusterClass variables:
 
@@ -77,24 +80,24 @@ ClusterClass variables:
 | | `image` | ubuntu-24.04 | |
 | | `controlPlaneMachineType`, `workerMachineType` | cpx31 | |
 
-Removing the file deletes the cluster (Argo prune -> CAPI deletes machines and cloud resources).
+Removing the file deletes the cluster (Argo CD prune -> CAPI deletes machines and cloud resources).
 
 ### Template changes roll clusters
 Machine templates are immutable, and CAPI changes a ClusterClass template by "new template + new reference". The
 clusterclasses chart suffixes every template name with a hash of its spec, so a spec change in git renders a new name,
-the ClusterClass follows, the topology controller rolls every cluster of that class (control plane first), and Argo
+the ClusterClass follows, the topology controller rolls every cluster of that class (control plane first), and Argo CD
 prunes the old template. Expect a rolling replacement of nodes after any edit to a template spec; a change to a
 ClusterClass variable value in a fleet file rolls only that cluster.
 
 ### Control plane size and rollouts
 k3s servers are the cluster's etcd: cluster-api-k3s v0.5.0 always starts the first server with `cluster-init: true`
 (`pkg/k3s/config.go`), `IsEtcdEmbedded()` is hard-wired to `true` ("TODO ... other k3s database options",
-`bootstrap/api/v1beta2/kthreesconfig_types.go`) and the control plane controller requires an `EtcdMemberHealthy`
-machine condition before every scale step. A control plane rollout (any change to the control plane templates or
-variables, a k3s upgrade, `rollout.after`) replaces servers one at a time, scale-up first: there is no
+`cluster-api-k3s/bootstrap/api/v1beta2/kthreesconfig_types.go`) and the control plane controller requires an
+`EtcdMemberHealthy` machine condition before every scale step. A control plane rollout (any change to the control plane
+templates or variables, a k3s upgrade, `rollout.after`) replaces servers one at a time, scale-up first: there is no
 `rolloutStrategy`/`maxSurge` field on `KThreesControlPlane` v1beta2 and no in-place update support.
 
-What a rollout does to etcd (`controlplane/controllers/scale.go`, `machine_controller.go`,
+What a rollout does to etcd (cluster-api-k3s `controlplane/controllers/scale.go`, `machine_controller.go`,
 `pkg/k3s/workload_cluster_etcd.go`):
 1. A new server joins (k3s adds it as a learner and promotes it once caught up).
 2. KCP picks the outdated machine, forwards etcd leadership away from it, puts the `pre-terminate.delete.hook` on it
@@ -110,15 +113,14 @@ With **1 server** step 3 is always a 2 -> 1 member removal. etcd: "It is unsafe 
 cluster" (runtime reconfiguration guide), and k3s has open reports of exactly this ending with the last member
 pre-voting forever for a member that is gone (k3s#12908, k3s#13498). Rancher works around it by delaying the removal in
 the 2-node case (rancher#51780). CAPI documents the same single-replica edge case for kubeadm KCP as won't-fix
-(cluster-api#11772). On dev1 the second rollout of a day ended like that: KCP reported "etcd remove etcd member
-succeeded", the old container was deleted, the new server kept pre-voting for a member that no longer existed, and
-the API was gone; the cluster had to be recreated.
+(cluster-api#11772). It happened on dev1: KCP reported the member removal as successful, the new server kept
+pre-voting for the removed member, the API was gone, and the cluster had to be recreated.
 
 With **3 servers** a rollout goes 3 -> 4 -> 3 voters and never shrinks below 3, so a removal never starts from 2 voters
 and a slow or failed step leaves quorum intact (KCP's preflight ignores learner state, so the removal may start while
-the newest server is still a learner: 3 voters -> 2 + learner, still a removal from 3). KCP also remediates an
-unhealthy server only from 3 up (`remediation.go`: "the number of current replicas is less or equal to 1. Skipping
-remediation").
+the newest server is still a learner: 3 voters -> 2 + learner, still a removal from 3; upstream report:
+[#23](https://github.com/koorikla/platform/issues/23)). KCP also remediates an unhealthy server only from 3 up
+(`remediation.go`: "the number of current replicas is less or equal to 1. Skipping remediation").
 
 | Option | Rollout safety | Cost / limits | Verdict |
 |---|---|---|---|
@@ -142,36 +144,39 @@ docker exec <survivor> journalctl -u k3s --no-pager > dev1-k3s.log   # evidence 
 docker exec <survivor> sh -c 'systemctl stop k3s; k3s server --cluster-reset; systemctl start k3s'
 ```
 `--cluster-reset` makes the local member the only one of a new etcd cluster with the existing data (k3s "Managing etcd"
-docs); the old server is normally gone already, and KCP finishes the scale-down. **VERIFY** on the next occurrence.
+docs); the old server is normally gone already, and KCP finishes the scale-down. Not yet exercised
+([#56](https://github.com/koorikla/platform/issues/56)).
 
-### Node registry auth (private GHCR)
-`charts/cluster/templates/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) from the
-`platform` store key `platform-ghcr` (`username`, `token`) into a k3s `registries.yaml`:
-`configs."ghcr.io".auth.{username,password}`. Each class adds `files[].contentFrom.secret` on control plane and workers
-(with Harbor also `registry-ca.crt` from the same Secret). cluster-api-k3s v0.5.0 resolves it once, when it renders the
-Machine's bootstrap data, and its controller watches only `KThreesConfig`s
-(`bootstrap/controllers/kthreesconfig_controller.go` `SetupWithManager`; the manager cache is unfiltered, so a
-`cluster.x-k8s.io/cluster-name` label on the Secret would change nothing): a KThreesConfig reconciled before the Secret
-exists fails with `failed to resolve file source: secret not found` and is retried only on controller-runtime backoff
-(up to ~16 min) or the 10 min resync. Seen live: the ExternalSecret waited 10 min for the Harbor CA, ESO's own backoff
-added 6, and the new server sat unbootstrapped until someone touched its KThreesConfig. The ExternalSecret is therefore
-sync wave -1 and the Cluster wave 0: Argo creates or changes the Cluster only once the Secret is Ready (Argo CD's
-built-in ExternalSecret health check); until then the cluster app's sync fails and is retried without limit on the
-latest revision (fleet ApplicationSet `retry.limit: -1`, `refresh: true`, every 5 min at most).
+### Node registry config
+`charts/cluster/templates/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) into a k3s
+`registries.yaml`: GHCR auth from `platform` store key `platform-ghcr` (`username`, `token`) and, with Harbor, the
+Harbor mirrors, robot auth and `registry-ca.crt` ([build-plane.md](build-plane.md#node-pulls-mirrors-with-fallback)).
+Each class adds `files[].contentFrom.secret` on control plane and workers.
+
+cluster-api-k3s v0.5.0 resolves that Secret once, when it renders the Machine's bootstrap data, and its controller
+watches only `KThreesConfig`s (`cluster-api-k3s/bootstrap/controllers/kthreesconfig_controller.go`
+`SetupWithManager`): a KThreesConfig reconciled before the Secret exists fails with
+`failed to resolve file source: secret not found` and is retried only on controller-runtime backoff (up to ~16 min) or
+the 10 min resync, so a new server can sit unbootstrapped for a long time. The ExternalSecret is therefore sync wave -1
+and the Cluster wave 0: Argo CD creates or changes the Cluster only once the Secret is Ready (Argo CD's built-in
+ExternalSecret health check); until then the cluster app's sync fails and is retried without limit on the latest
+revision (fleet ApplicationSet `retry.limit: -1`). Break-glass when that ExternalSecret errors:
+[#25](https://github.com/koorikla/platform/issues/25).
+
 `hack/tests/test_bootstrap_file_sources.sh` checks, for every installation and cluster, that each contentFrom Secret a
-class enables is rendered as such an ExternalSecret with the referenced key, in an earlier wave. Caveat: bootstrap data
-is rendered once per Machine, so a rotated token only reaches new nodes - roll the machines (CAPI `rollout.after` on the
-topology control plane / machine deployments) or use a long-lived read-only token. **VERIFY**
+class enables is rendered as such an ExternalSecret with the referenced key, in an earlier wave. Bootstrap data is
+rendered once per Machine, so a rotated token reaches only new nodes: roll the machines (CAPI `rollout.after`) or use a
+long-lived read-only token.
 
-## Docker (CAPD) - local, tested path
+## Docker (CAPD) - local
 
-- Prerequisites: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind`, docker.sock mounted (bootstrap/).
-  `installation.yaml`: `capi.providers.docker: true`. No secrets beyond `platform-ghcr` (node registry auth).
-- Nodes are `kindest/node` containers; the bootstrap runs `curl get.k3s.io | sh` with the topology version. Lessons
-  carried over from the predecessor lab: `preK3sCommands` wait until get.k3s.io answers (kindest DNS is not ready when
-  CAPD starts the bootstrap, and a failed download "succeeds"), and workers get a `k3s-agent` `Type=exec` drop-in
-  (with `Type=notify` the agent waits for CAPD to clear the uninitialized taint, which CAPD only does after the
-  bootstrap returns: ~5 min deadlock). traefik is disabled on every class (kgateway is the ingress).
+- Prerequisites: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind`, docker.sock mounted (`bootstrap/`).
+  `installation.yaml`: `capi.providers.docker: true`. No secrets beyond `platform-ghcr` (only with node registry auth).
+- Nodes are `kindest/node` containers; the bootstrap runs `curl get.k3s.io | sh` with the topology version.
+  `preK3sCommands` wait until get.k3s.io answers (kindest DNS is not ready when CAPD starts the bootstrap, and a failed
+  download "succeeds"), and workers get a `k3s-agent` `Type=exec` drop-in (with `Type=notify` the agent waits for CAPD
+  to clear the uninitialized taint, which CAPD only does after the bootstrap returns: ~5 min deadlock). traefik is
+  disabled on every class (kgateway is the ingress).
 - Node identity: kubelet `--cloud-provider=external` + k3s CCM disabled (provider defaults); CAPD acts as the cloud
   provider: sets the Node's `providerID` and removes `node.cloudprovider.kubernetes.io/uninitialized`.
   klipper servicelb stays on, so `Service type=LoadBalancer` gets the node IP on the `kind` network.
@@ -181,16 +186,16 @@ CAPD runs an haproxy load balancer container `<name>-lb` on network `kind` and s
 `DockerCluster.spec.controlPlaneEndpoint.host` to **that container's IP on `kind`**, port 6443
 (`dockercluster_backend.go`: host = LB container IPv4, only if empty). The k3s control plane provider writes the
 kubeconfig for `https://<lb-ip>:6443` and adds the same address to the k3s TLS SANs. The LB also publishes 6443 on a
-random host port on `0.0.0.0`, which nothing here uses.
+random host port on `0.0.0.0`, which `task kubeconfig` uses on hosts that cannot route to container IPs.
 
 - mgmt pods (CAPI controllers, Argo CD, ESO) run on the k3d node container, which is attached to `kind`: they reach the
-  LB IP directly. This is what makes the Argo cluster secret built from `<name>-kubeconfig` work unmodified.
-- The Linux host reaches container IPs on `kind` directly, so `clusterctl get kubeconfig dev1` works as-is from the
-  host. On macOS / Docker Desktop it does not (rewrite the server to `127.0.0.1:<published port>` for host use).
-- Caveat: the endpoint is recorded once. If Docker re-addresses the LB container (e.g. the network is recreated after a
-  host reboot), the stored endpoint goes stale; recreate the cluster. **VERIFY** behaviour across a Docker restart.
+  LB IP directly. This is what makes the Argo CD cluster secret built from `<name>-kubeconfig` work unmodified.
+- The Linux host reaches container IPs on `kind` directly. On macOS / Docker Desktop it does not: use
+  `task kubeconfig CLUSTER=<name>` ([dev-environment.md](dev-environment.md#host-differences-docker-desktop-and-friends)).
+- The endpoint is recorded once. If Docker re-addresses the LB container (e.g. the network is recreated after a host
+  reboot), the stored endpoint goes stale; recreate the cluster.
 
-## AWS (CAPA) - rendered only, untested
+## AWS (CAPA) - rendered only
 
 Prerequisites (once per account):
 1. `clusterawsadm bootstrap iam create-cloudformation-stack` (creates the instance profiles
@@ -199,7 +204,7 @@ Prerequisites (once per account):
 2. Secret key `capi-aws` in the installation's `platform` store with property `AWS_B64ENCODED_CREDENTIALS`
    (`clusterawsadm bootstrap credentials encode-as-profile`). The capi-providers addon turns it into
    `capa-system/capa-variables`, the InfrastructureProvider's `configSecret`. On an EKS mgmt with IRSA/Pod Identity set
-   `infrastructure.aws.credentialsFromStore: false` (empty credentials, CAPA uses its pod identity - **VERIFY**).
+   `infrastructure.aws.credentialsFromStore: false` (empty credentials, CAPA uses its pod identity).
 3. `installation.yaml`: `capi.providers.aws: true`; catalog entry `aws-ccm` (below).
 
 Class `k3s-aws`: plain Ubuntu AMI (variable `ami`, no CAPA image lookup - those are kubeadm images), k3s installed at
@@ -216,10 +221,10 @@ EC2 private DNS name the AWS CCM expects. `addons/aws-ccm` (Argo CD, as soon as 
 `Service type=LoadBalancer`. Its nodeSelector is overridden to `node-role.kubernetes.io/control-plane: "true"` (k3s'
 label value; the chart default `""` never matches on k3s).
 
-CSI (optional): aws-ebs-csi-driver as another workload addon with `providers: [aws]` (node instance profile needs the
-EBS policy). Not included.
+CSI is not included (aws-ebs-csi-driver would be another workload addon with `providers: [aws]`; the node instance
+profile needs the EBS policy).
 
-## Hetzner Cloud (CAPH) - rendered only, untested
+## Hetzner Cloud (CAPH) - rendered only
 
 Prerequisites:
 1. Hetzner Cloud project + API token (read/write) as key `capi-hetzner`, property `hcloud`, in the `platform` store
@@ -230,10 +235,10 @@ Prerequisites:
 
 Class `k3s-hetzner`: control plane behind a CAPH load balancer (`lb11`), private hcloud network (`networkZone`),
 spread placement groups for control plane and workers, Ubuntu 24.04 image, k3s installed at boot, servicelb and traefik
-disabled. Pod network per fleet file `cni` (k3s config drop-in `/etc/rancher/k3s/config.yaml.d/10-cni.yaml`,
-docs/networking.md): cilium (default) = Cilium VXLAN overlay with Cilium WireGuard; flannel = k3s flannel backend
-`wireguard-native`. Either way pod traffic between nodes is encrypted and does not depend on hcloud routes (a Hetzner
-firewall would need udp/8472 + udp/51871 + tcp/4240 + tcp/4244, resp. udp/51820, between nodes). **VERIFY**
+disabled. Pod network per fleet file `cni` ([networking.md](networking.md#cni-is-fixed-when-the-cluster-is-created)):
+cilium (default) = Cilium VXLAN overlay with Cilium WireGuard; flannel = k3s flannel backend `wireguard-native`. Either
+way pod traffic between nodes is encrypted and does not depend on hcloud routes (a Hetzner firewall would need
+udp/8472 + udp/51871 + tcp/4240 + tcp/4244, resp. udp/51820, between nodes).
 
 Node identity / providerID: kubelet `--cloud-provider=external`, k3s CCM disabled. CAPH names servers after the
 Machine, the node name is the hostname, and the hcloud CCM matches them by name and sets `providerID hcloud://<id>`
@@ -242,8 +247,8 @@ Machine, the node name is the hostname, and the hcloud CCM matches them by name 
 answers (`reconcileWorkloadClusterSecrets`), and that is the hcloud CCM chart's default secret. `addons/hcloud-ccm`
 runs with `networking.enabled: false` (no route controller; the overlay CNI does pod networking).
 
-CSI (optional): hcloud-csi as another workload addon with `providers: [hetzner]`, reading the same `kube-system/hcloud`
-secret. Not included.
+CSI is not included (hcloud-csi would be another workload addon with `providers: [hetzner]`, reading the same
+`kube-system/hcloud` secret).
 
 ## Catalog entries (charts/platform/values.yaml)
 
@@ -254,13 +259,10 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
 
 ## Argo CD notes
 - Provider CRs, ClusterClasses, templates and ExternalSecrets carry `SkipDryRunOnMissingResource=true`: their CRDs are
-  installed by the operator/ESO in the same sync wave cascade; Argo retries until they exist.
+  installed by the operator/ESO in the same sync wave cascade; Argo CD retries until they exist.
 - The cluster-api-operator CRDs are ~228 KB each, close to the 256 KB client-side-apply annotation limit: sync
   `capi-operator` with `ServerSideApply=true`. CAPI webhooks default many Cluster/ClusterClass fields: use server-side
   diff (or ignoreDifferences) for the `cluster-*` and `clusterclasses` Applications.
 
-## Untested / VERIFY
-`grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm charts/cluster installations/*-example docs/providers.md`.
-Highlights: k3s v1.35.10+k3s1 + kindest/node v1.35.8 on CAPD; registry-token rotation; everything AWS and Hetzner
-(ELB type, CNI overlays, CCM wiring, empty CAPA credentials with pod identity, ESO vs CAPH on the `hetzner` secret
-labels, AMI IDs, example domains and secret-store shapes).
+Open checks: CAPD [#56](https://github.com/koorikla/platform/issues/56); AWS and Hetzner
+[#26](https://github.com/koorikla/platform/issues/26) (`grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm charts/cluster installations/*-example`).

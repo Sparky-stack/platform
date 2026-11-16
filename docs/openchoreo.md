@@ -93,8 +93,8 @@ mgmt, ns openchoreo-control-plane (chart)                                       
   `cluster-agent-selfsigned-unused`. `caSecretName` is empty: no CA Secret is ever needed on a data plane.
 - **Rotation.** cert-manager renews the client cert 30 days before expiry; ESO (≤1h) and the CRS (Reconcile) update
   `cluster-agent-tls`. The 1.3.3 agent reads its cert once at start, so restart it after a renewal:
-  `kubectl -n openchoreo-data-plane rollout restart deploy/cluster-agent-dataplane`. (A Reloader-style restart can be
-  added later.) The same applies to the gateway CA (10y).
+  `kubectl -n openchoreo-data-plane rollout restart deploy/cluster-agent-dataplane`
+  ([#50](https://github.com/koorikla/platform/issues/50)). The same applies to the gateway CA (10y).
 - The upstream cluster-gateway has cluster-wide `get/list secrets` (to read every plane's client CA): it can read
   `fleet/<name>-agent-ca` including the CA key. It runs on mgmt, so this does not widen the workload-cluster boundary.
 
@@ -128,7 +128,9 @@ Nothing else on mgmt may bind hostPort 8080/8443 (e.g. Argo CD server must stay 
 The installation key `openchoreo.controlPlane.clusterGatewayURL` is the source of truth; the control-plane and
 data-plane addons fail to render if their literal values drift from it or from `openchoreo.controlPlane.host`.
 
-**App traffic.** Each data plane's Gateway listens on HTTP **19080** (LoadBalancer -> klipper hostPort on every CAPD
+### App traffic
+
+Each data plane's Gateway listens on HTTP **19080** (LoadBalancer -> klipper hostPort on every CAPD
 node container). `ClusterDataPlane <name>` advertises `gatewayHost:19080` (cluster file `openchoreo.dataPlane`), and
 the component types route `http://<env>-<org namespace>.<gatewayHost>:19080/<component>-<endpoint>/...`. CAPD nodes
 publish no host ports, but the Linux host reaches container IPs directly:
@@ -223,7 +225,7 @@ spec:
   autoDeploy: true                # each Workload change -> new ComponentRelease, bound to the first environment
 ```
 
-`deploy/openchoreo/workload.yaml` (CI bumps only `image`)
+`deploy/openchoreo/workload.yaml` (builds change only `image` and `source.commit`)
 ```yaml
 apiVersion: openchoreo.dev/v1alpha1
 kind: Workload
@@ -271,7 +273,8 @@ spec:
    `componentTypeEnvironmentConfigs`).
 3. Promote by commit: set `releaseName` in `release-bindings/staging.yaml` to the release now running in development
    (`kubectl -n default get component hello-world -o jsonpath='{.status.latestRelease.name}'`, or the console), then the
-   same for production after staging. Rollback = revert the commit. Git is the source of truth for staging/production:
+   same for production after staging; production changes go through the gates in [promotion.md](promotion.md).
+   Rollback = revert the commit. Git is the source of truth for staging/production:
    a promotion clicked in the console on a git-owned binding is reverted by Argo's self-heal.
 4. OpenChoreo renders each binding against its Environment's ClusterDataPlane and the cluster-agent applies the
    Deployment/Service/HTTPRoute in the project namespace on that data plane.
@@ -285,22 +288,6 @@ whitelist for that reason.
 Secrets: declare an OpenChoreo `SecretReference` (remote key in the data plane's `default` store) and reference it
 from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
 
-## Adding the workflow and observability planes
-
-Same pattern as the data plane: a plane chart as a wrapper addon on the clusters that host it, its agent identity from
-a per-cluster CA delivered by CRS, and a `Cluster*Plane` registered on mgmt.
-
-- **Workflow plane**: done, see [build-plane.md](build-plane.md) (co-located with the control plane like the
-  observability plane: in-cluster agent with its self-signed cert, `ClusterWorkflowPlane default`).
-- **Observability plane**: done, see [observability.md](observability.md).
-
-## Known limitations and VERIFY
-
-`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*` lists
-inferred values. Main ones: Docker DNS resolution of `k3d-platform-mgmt-serverlb` from CAPD pods; Thunder resolving
-`{{ .VAR }}` placeholders from the setup Job's env; agent restart after cert renewal; Backstage with workflows and
-observability features off.
-
 ## Known issue: re-created data plane clusters
 
 When a workload cluster is re-created under the same name (new CAPD/cloud cluster, new agent connection), OpenChoreo's
@@ -311,4 +298,7 @@ not connected yet) for a long backoff, so app namespaces and workloads do not re
 kubectl -n <namespace> annotate renderedrelease --all platform.koorikla.io/kick="$(date +%s)" --overwrite
 ```
 
-Seen with OpenChoreo 1.3.3; candidate upstream report (requeue on agent reconnect).
+Seen with OpenChoreo 1.3.3 ([#51](https://github.com/koorikla/platform/issues/51)).
+
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*`):
+[#52](https://github.com/koorikla/platform/issues/52).
