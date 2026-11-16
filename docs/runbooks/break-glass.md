@@ -44,11 +44,11 @@ Unfreeze as soon as the state matches Git:
 $K -n argocd scale statefulset/argocd-application-controller deploy/argocd-applicationset-controller --replicas=1
 ```
 
-### Emergency production promotion or freeze-window override `(not yet verified live)`
+### Emergency production promotion or freeze-window override
 
-`ValidatingAdmissionPolicy/openchoreo-gated-bindings-from-git` rejects imperative `kubectl` and UI/API edits to `production` `ReleaseBinding`s unless they come from `system:serviceaccount:argocd:argocd-application-controller` tracking `<project>-<component>-production` ([promotion.md](../promotion.md#2-git-is-the-only-path-to-gated-bindings-native)). Keep Git in the loop even during emergencies:
+`ValidatingAdmissionPolicy/openchoreo-gated-bindings-from-git` rejects imperative `kubectl` and UI/API edits to `production` `ReleaseBinding`s unless they come from `system:serviceaccount:argocd:argocd-application-controller` tracking `<project>-<component>-production` ([promotion.md](../promotion.md#2-git-is-the-only-path-to-gated-bindings-native)). Keep Git in the loop even during emergencies `(not yet verified live)`:
 
-1. **Active freeze window**: open and merge an emergency PR adjusting `promotion.freezeWindows` in `installations/<inst>/installation.yaml` ([promotion.md](../promotion.md#4-change-freeze-windows-sync-windows--gate-check)). Argo CD updates the `AppProject` sync window and syncs the waiting `<project>-<component>-production` `Application`.
+1. **Active freeze window**: open and merge an emergency PR adjusting `promotion.freezeWindows` in `installations/<inst>/installation.yaml` ([promotion.md](../promotion.md#5-freeze-window-optional)). Argo CD updates the `AppProject` sync window and syncs the waiting `<project>-<component>-production` `Application`.
 2. **`promotion-gate` or GitHub App outage**: merge a PR updating `deploy/openchoreo/release-bindings/production.yaml` to a signed `@sha256:...` `ComponentRelease` using the documented GitHub branch-ruleset break-glass role ([promotion.md](../promotion.md#1-manual-approval-pattern)). Because Argo CD applies the merged file through `<project>-<component>-production`, admission succeeds without opening `promotion.gitOnly.breakGlassGroups`.
 3. **Control-plane API emergency (`breakGlassGroups`)**: only if Argo CD itself cannot reconcile and a `ReleaseBinding` must be edited directly, set `promotion.gitOnly.breakGlassGroups: ["<admin-group>"]` in `installations/<inst>/addons/openchoreo-platform/values.yaml` via PR, apply the fix, and revert `breakGlassGroups` to `[]` immediately.
 
@@ -81,9 +81,9 @@ $K -n thunder annotate pvc thunder-database-pvc platform.koorikla.io/delete-prot
 $K -n thunder delete pvc thunder-database-pvc
 ```
 
-### Single-server etcd quorum loss `(not yet verified live)`
+### Single-server etcd quorum loss
 
-For local or `dev` clusters with `controlPlane.replicas: 1` where the `2 -> 1` `etcd` member removal lost quorum ([#56](https://github.com/koorikla/platform/issues/56); the new server already holds promoted voter data):
+For local or `dev` clusters with `controlPlane.replicas: 1` where the `2 -> 1` `etcd` member removal lost quorum ([#56](https://github.com/koorikla/platform/issues/56), `(not yet verified live)`; the new server already holds promoted voter data):
 
 ```bash
 # 1. Identify the newest control-plane Machine (on CAPD, container name == Machine name) and save logs first
@@ -96,9 +96,9 @@ docker exec "$SURVIVOR" journalctl -u k3s --no-pager > "${SURVIVOR}-k3s.log"
 docker exec "$SURVIVOR" sh -c 'systemctl stop k3s; k3s server --cluster-reset; systemctl start k3s'
 ```
 
-### OpenBao local re-initialization `(not yet verified live)`
+### OpenBao local re-initialization
 
-On a local installation (`seal "static"`), if `openbao-unseal` was lost and `data-openbao-0` can no longer be decrypted, re-initialize OpenBao from scratch (invalidates the previous mesh root CA; workload pods roll onto the new root):
+On a local installation (`seal "static"`), if `openbao-unseal` was lost and `data-openbao-0` can no longer be decrypted, re-initialize OpenBao from scratch (`(not yet verified live)`; invalidates the previous mesh root CA so workload pods roll onto the new root):
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
