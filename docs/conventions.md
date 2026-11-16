@@ -66,7 +66,7 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | Key | Properties | Used by | Doc |
 |---|---|---|---|
 | `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) | [forking.md](forking.md#3-credentials) |
-| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access; reserved, no consumer yet | [forking.md](forking.md#3-credentials) |
+| `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access: Backstage scaffolder repo creation + platform PRs (opt-in, addon openchoreo-control-plane `scaffolder.githubApp`) | [project-templates.md](project-templates.md#repository-creation) |
 | `platform-github-build` | `username`, `token` | in-cluster builds: clone + GitOps hand-off push, only to `buildWorkflows.git.allowedRepositoryPrefixes` | [build-plane.md](build-plane.md#secrets-clustersecretstore-platform) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io`; Harbor GHCR proxy cache | [providers.md](providers.md#node-registry-config) |
 | `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA | [providers.md](providers.md#aws-capa---rendered-only) |
@@ -92,6 +92,7 @@ charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app 
 addons/<addon>/                 wrapper charts (+ values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, one doc per area, diagrams
+templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each
 hack/                           tests and helper scripts (task test); hack/lib/portable.sh
 mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
 ```
@@ -103,6 +104,8 @@ Adding things:
   `values/provider-*.yaml`, `values/cni-*.yaml`), registered in the catalog in `charts/platform/values.yaml`
   ([architecture.md](architecture.md#addons-catalog--labels-gitops-bridge-style)).
 - **Tenant**: `installations/<inst>/tenants/<project>.yaml` ([openchoreo.md](openchoreo.md#tenants)).
+- **Project template**: `templates/<name>/` + an entry in `templates/catalog-info.yaml`
+  ([project-templates.md](project-templates.md#adding-a-template)).
 
 ## Tooling
 - OS/arch-agnostic ([dev-environment.md](dev-environment.md)): tools only via `mise.toml` (aqua backends;

@@ -51,6 +51,7 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [AGENTS.md](AGENTS.md) | working rules for AI agents and contributors (CLAUDE.md and GEMINI.md point to it) |
 | [docs/providers.md](docs/providers.md) | Cluster API: k3s on CAPD, CAPA, CAPH; adding a cluster; control plane sizing |
 | [docs/openchoreo.md](docs/openchoreo.md) | OpenChoreo planes, plane trust, local networking, tenants, app repo contract |
+| [docs/project-templates.md](docs/project-templates.md) | golden-path project templates (Backstage scaffolder): Go, Python, Node.js, Rust, Java, Docker |
 | [docs/build-plane.md](docs/build-plane.md) | in-cluster builds (OpenChoreo workflow plane) and the Harbor registry |
 | [docs/promotion.md](docs/promotion.md) | development -> staging -> production gates |
 | [docs/supply-chain.md](docs/supply-chain.md) | signatures, attestations, admission, git and chart verification |
