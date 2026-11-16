@@ -226,8 +226,8 @@ printf '{}\n' > "$BK/empty.yaml"; docker cp "$BK/empty.yaml" "$C":/etc/rancher/k
 docker start "$C"
 ```
 
-New mgmt clusters: `bootstrap/k3d-mgmt.yaml` gets `--cluster-init` (server:0) once a throwaway k3d cluster with the same
-image has booted with it ([#76](https://github.com/koorikla/platform/issues/76)).
+New mgmt clusters run embedded etcd from the start: `bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to server:0
+([#76](https://github.com/koorikla/platform/issues/76)). The conversion above is only for a mgmt created before that.
 
 ## Windows notes
 
