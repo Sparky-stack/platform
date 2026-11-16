@@ -24,8 +24,16 @@ tests:
       - exists:
           path: spec.template.metadata.annotations["cilium.io/cilium-configmap-checksum"]
 
+  - it: is off by default (it broke traffic into ambient pods on dev1, #104)
+    template: templates/l7-visibility.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
   - it: renders a non-default-deny L7 visibility policy for OpenChoreo component pods
     template: templates/l7-visibility.yaml
+    set:
+      l7Visibility.enabled: true
     asserts:
       - isKind:
           of: CiliumClusterwideNetworkPolicy
@@ -57,6 +65,7 @@ tests:
   - it: lists every configured HTTP port (numbers become strings)
     template: templates/l7-visibility.yaml
     set:
+      l7Visibility.enabled: true
       l7Visibility.httpPorts: [8080, "3000"]
     asserts:
       - equal:
@@ -76,6 +85,7 @@ tests:
   - it: fails without ports (Cilium rejects L7 rules on port 0)
     template: templates/l7-visibility.yaml
     set:
+      l7Visibility.enabled: true
       l7Visibility.httpPorts: []
     asserts:
       - failedTemplate:

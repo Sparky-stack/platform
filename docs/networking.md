@@ -88,7 +88,8 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   the certgen CronJob, so Helm generates no random certs and Argo CD shows no diff. The chart's ServiceMonitors stay
   off (this CNI app syncs before the Prometheus Operator CRDs exist); addon telemetry scrapes `hubble-metrics` instead
   (docs/observability.md "HTTP metrics").
-- **L7 HTTP visibility** (`l7Visibility`, CiliumClusterwideNetworkPolicy `openchoreo-http-visibility`): an allow-all
+- **L7 HTTP visibility** (`l7Visibility`, CiliumClusterwideNetworkPolicy `openchoreo-http-visibility`), **off**: on dev1
+  the redirected connections into ambient pods hung at Cilium's proxy and cut the apps off ([#104](https://github.com/koorikla/platform/issues/104)). When on: an allow-all
   `http: [{}]` rule on port 8080 of every pod with an `openchoreo.dev/component` label, with `enableDefaultDeny: false`
   on both directions, so it never denies anything. Hubble only emits `hubble_http_*` for traffic Cilium's L7 proxy
   parses, and that takes an L7 rule. Only list ports that serve HTTP on every component pod: the proxy rejects other
