@@ -504,24 +504,34 @@ c_falco_cluster_name() {
 }
 
 # ---- step 8: zero trust ---------------------------------------------------------------------------------------------
-# VERIFY(#19): resource names below follow cert-manager + istio-csr defaults; confirm once the OpenBao addon lands.
+# Mesh members (clusters with addon istio-csr): cert-manager Issuer istio-system/openbao-mesh is a Vault issuer
+# pointing at OpenBao on mgmt, and istiod's serving Certificate is Ready and issued by it (addons/istio-csr). Workload
+# certificates follow the same issuer through istio-csr; no CA key is on the member.
 c_mesh_certs() {
-  local apps c out ok="" bad=""
+  local apps c iss crt ok="" bad="" skip=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-  printf '%s\n' "$apps" | grep -qE '^(openbao|istio-csr)-' || { echo "#19 OpenBao / istio-csr addon not installed"; return 2; }
+  printf '%s\n' "$apps" | grep -q '^openbao-' || { echo "#19 OpenBao addon not installed on mgmt"; return 2; }
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
-    out=$(kw "$c" get certificates.cert-manager.io -n istio-system \
-      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null)
-    if [[ -n "$out" ]] && ! printf '%s\n' "$out" | awk 'NF && $2 != "True" { exit 1 }'; then
-      bad="$bad${bad:+, }$c"
-    elif [[ -n "$out" ]]; then
-      ok="$ok${ok:+, }$c"
-    else
-      bad="$bad${bad:+, }$c(no istio-system Certificates)"
+    printf '%s\n' "$apps" | grep -qx "istio-csr-$c" || { skip="$skip${skip:+, }$c"; continue; }
+    iss=$(kw "$c" get issuers.cert-manager.io -n istio-system openbao-mesh \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{" "}{.spec.vault.server}' 2>/dev/null)
+    crt=$(kw "$c" get certificates.cert-manager.io -n istio-system istiod \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{" "}{.spec.issuerRef.name}{" "}{.status.notAfter}' 2>/dev/null)
+    # shellcheck disable=SC2086  # split into Ready, server
+    set -- $iss
+    if [[ "${1:-}" != True || -z "${2:-}" ]]; then
+      bad="$bad${bad:+, }$c(Issuer openbao-mesh Ready=${1:-missing})"; continue
     fi
+    # shellcheck disable=SC2086  # split into Ready, issuer, notAfter
+    set -- $crt
+    if [[ "${1:-}" != True || "${2:-}" != openbao-mesh ]]; then
+      bad="$bad${bad:+, }$c(Certificate istiod Ready=${1:-missing} issuer=${2:-?})"; continue
+    fi
+    ok="$ok${ok:+, }$c(istiod until ${3:-?})"
   done
-  [[ -z "$bad" ]] || { echo "mesh certificates not Ready on: $bad"; return 1; }
-  echo "istio-system Certificates Ready on: $ok"
+  [[ -z "$bad" ]] || { echo "not issued by OpenBao: $bad${ok:+; ok: $ok}"; return 1; }
+  [[ -n "$ok" ]] || { echo "no mesh member (addon istio-csr) among: ${CLUSTERS[*]:-none}"; return 1; }
+  echo "OpenBao-issued: $ok${skip:+; not mesh members: $skip}"
 }
 
 c_secret_stores() {

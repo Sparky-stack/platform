@@ -45,7 +45,8 @@ case "\$a" in
     if [[ "\$body" == *"$UNSIGNED"* ]]; then k=apply-unsigned; else k=apply-signed; fi ;;
   *" get --raw "*k8s_cluster_name*) k=prom-clusters ;;
   *" get --raw "*kube_pod_labels*) k=prom-app ;;
-  *" get applications.argoproj.io "*) k=apps ;;
+  *" get applications.argoproj.io "*sync.status*) k=apps ;;
+  *" get applications.argoproj.io "*) [[ -f "\$FIX/\$t.apps" ]] && awk '{ print \$1 }' "\$FIX/\$t.apps"; exit 0 ;;
   *" get clusters.cluster.x-k8s.io "*'{.metadata.name}{"\\n"}'*) k=cluster-names ;;
   *" get clusters.cluster.x-k8s.io "*) k=clusters ;;
   *" get clusterdataplanes.openchoreo.dev "*" -o jsonpath={.spec.gateway"*)
@@ -67,7 +68,8 @@ case "\$a" in
   *" get deployment -n falco falco-falcosidekick "*) k=sidekick-fields ;;
   *" get sensors.argoproj.io "*) k=sensor ;;
   *" get workflowtemplates.argoproj.io "*) k=falco-response ;;
-  *" get certificates.cert-manager.io "*) k=mesh-certs ;;
+  *" get issuers.cert-manager.io "*) k=mesh-issuer ;;
+  *" get certificates.cert-manager.io "*) k=mesh-cert ;;
   *" get clustersecretstores.external-secrets.io "*) k=stores ;;
   *" get compositeresourcedefinitions"*) k=xrds ;;
   *) echo "stub: unhandled kubectl \$*" >&2; exit 97 ;;
@@ -217,20 +219,38 @@ assert_eq "$(result_of 'Falco running (prod1)')" PASS "green: falco prod1"
 assert_eq "$(result_of 'Falco escalation path on mgmt')" PASS "green: escalation"
 assert_eq "$(result_of 'cluster name in Falco events')" PASS "green: cluster name (exact list item)"
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" "PENDING #19" "green: OpenBao addon absent -> PENDING #19"
-assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao / istio-csr addon not installed" "green: pending detail without the issue prefix"
+assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao addon not installed on mgmt" "green: pending detail without the issue prefix"
 assert_eq "$(result_of 'ClusterSecretStores Ready (mgmt)')" PASS "green: stores mgmt"
 assert_eq "$(result_of 'PostgreSQL claim API')" "PENDING #91" "green: no XRD -> PENDING #91"
 assert_match "$OUT" $'\n27 PASS, 0 FAIL, 2 PENDING$' "green: summary"
 
 # OpenBao addon and PostgreSQL XRD present: the checks run instead of PENDING.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
-printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
-printf 'istiod True\n' > "$FIX/dev1.mesh-certs"
-printf 'istiod False\n' > "$FIX/prod1.mesh-certs"
+printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\nistio-csr-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/dev1.mesh-issuer"
+printf 'True openbao-mesh 2026-11-18T10:00:00Z' > "$FIX/dev1.mesh-cert"
+printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/prod1.mesh-issuer"
+printf 'False openbao-mesh' > "$FIX/prod1.mesh-cert"
 printf 'postgresqls.platform.koorikla.io True\nkafkas.platform.koorikla.io True\n' > "$FIX/k3d-platform-mgmt.xrds"
 run addons
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "addons: a not-Ready mesh certificate fails"
-assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "mesh certificates not Ready on: prod1" "addons: names the cluster"
+assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "not issued by OpenBao: prod1(Certificate istiod Ready=False issuer=openbao-mesh); ok: dev1(istiod until 2026-11-18T10:00:00Z)" "addons: names the cluster"
+assert_match "$CALLS" "prod1.kubeconfig --request-timeout=20s get issuers.cert-manager.io -n istio-system openbao-mesh " "addons: reads the member's OpenBao Issuer"
+# All members issued by OpenBao; a cluster without istio-csr is not a mesh member (listed, not failed).
+printf 'True openbao-mesh 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
+printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+run addons-ok
+assert_eq "$(result_of 'OpenBao-issued mesh certificates')" PASS "addons-ok: member certs from OpenBao"
+assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao-issued: prod1(istiod until 2026-11-18T11:00:00Z); not mesh members: dev1" "addons-ok: detail"
+# Negative: istiod signed by another issuer (e.g. Istio's self-signed CA) is not OpenBao-issued.
+printf 'True istio-selfsigned 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
+run addons-other-issuer
+assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "negative: istiod from another issuer fails"
+# Negative: the Issuer is not a Vault (OpenBao) issuer.
+printf 'True openbao-mesh 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
+printf 'True' > "$FIX/prod1.mesh-issuer"
+run addons-not-vault
+assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "negative: Issuer without a vault server fails"
 assert_eq "$(result_of 'PostgreSQL claim API')" PASS "addons: XRD Established"
 assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD Established: postgresqls.platform.koorikla.io" "addons: only postgres XRDs"
 assert_eq "$RC" 1 "addons: a FAIL exits 1"
