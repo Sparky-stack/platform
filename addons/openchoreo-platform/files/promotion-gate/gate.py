@@ -5,8 +5,9 @@
 #   1. pipeline   the edge exists in the project's DeploymentPipeline (1.3.3 does not enforce it server-side)
 #   2. readiness  the source ReleaseBinding is Ready, its rollout succeeded, it runs the release being promoted
 #   3. smoke      HTTP GET on every external endpoint of the source binding answers 2xx/3xx
-#   4. observe    observer API: no alert fired for the component in the source environment during the window, HTTP
-#                 error rate below the threshold
+#   4. observe    observer API: no alert fired for the component in the source environment during the window;
+#                 observability Prometheus: HTTP 5xx share of the gateway's requests to the component (kgateway Envoy
+#                 envoy_cluster_upstream_rq) at or below the threshold
 #   5. freeze     no freeze window is active for the target environment
 #   6. promote    opens (or updates) a pull request in the app repo that sets spec.releaseName of the target
 #                 environment's ReleaseBinding, and sets the commit status the branch protection requires.
@@ -216,12 +217,12 @@ def smoke(urls, path, attempts=5):
             raise GateFailed("smoke test failed: %s (%s)" % (url, last))
 
 
-def observe(tok, scope, window_minutes, max_error_rate):
+def observe_alerts(tok, scope, window_minutes):
+    """Observer API: no alert fired for the component in the source environment during the window."""
     end = dt.datetime.now(dt.timezone.utc)
     start = end - dt.timedelta(minutes=window_minutes)
     times = {"startTime": start.isoformat().replace("+00:00", "Z"), "endTime": end.isoformat().replace("+00:00", "Z")}
-    base = env("OBSERVER_URL").rstrip("/")
-    alerts = http("POST", base + "/api/v1alpha1/alerts/query", token=tok,
+    alerts = http("POST", env("OBSERVER_URL").rstrip("/") + "/api/v1alpha1/alerts/query", token=tok,
                   body=dict(times, limit=20, searchScope=scope))
     fired = alerts.get("total", len(alerts.get("alerts") or []))
     if fired:
@@ -229,18 +230,78 @@ def observe(tok, scope, window_minutes, max_error_rate):
                         for a in alerts.get("alerts") or []})
         raise GateFailed("%d alert(s) fired in the last %dm: %s" % (fired, window_minutes, ", ".join(names)))
     log("  observe   no alerts in the last %dm" % window_minutes)
-    metrics = http("POST", base + "/api/v1/metrics/query", token=tok,
-                   body=dict(times, metric="http", step="1m", searchScope=scope))
-    total = sum(p.get("value") or 0 for p in metrics.get("requestCount") or [])
-    failed = sum(p.get("value") or 0 for p in metrics.get("unsuccessfulRequestCount") or [])
-    if total <= 0:
-        log("  observe   no HTTP traffic recorded (error rate not evaluated)")
-        return "no traffic"
+
+
+# HTTP error rate from the data plane's kgateway Envoy (addon telemetry PodMonitor kgateway-http -> remote write ->
+# observability-plane Prometheus). The observer's `metric: http` reads Cilium Hubble L7 series only, which do not exist
+# with Istio ambient (#104). Envoy names the upstream cluster of a backend kube_<namespace>_<service>_<port>; the
+# OpenChoreo Service of a component is named after it, the environment namespace comes from kube_pod_labels.
+DNS_LABEL = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?")
+
+
+def promql(query):
+    """Instant query against PROMETHEUS_URL -> result vector."""
+    url = env("PROMETHEUS_URL").rstrip("/") + "/api/v1/query?" + urllib.parse.urlencode({"query": query})
+    resp = http("GET", url)
+    if resp.get("status") != "success":
+        raise GateFailed("Prometheus query failed: %s" % resp.get("error", resp))
+    return (resp.get("data") or {}).get("result") or []
+
+
+def scalar(result):
+    """Sum of an instant vector's values (empty vector = 0)."""
+    return sum(float(r["value"][1]) for r in result)
+
+
+def environment_namespaces(scope, window_minutes):
+    """Data-plane namespaces the component's pods ran in, in the source environment, during the window."""
+    for key in ("namespace", "project", "component", "environment"):
+        if not DNS_LABEL.fullmatch(scope[key]):
+            raise GateFailed("%s %r is not a DNS-1123 label" % (key, scope[key]))
+    selector = ('label_openchoreo_dev_namespace="%s",label_openchoreo_dev_project="%s",'
+                'label_openchoreo_dev_component="%s",label_openchoreo_dev_environment="%s"'
+                % (scope["namespace"], scope["project"], scope["component"], scope["environment"]))
+    result = promql("max by (namespace) (max_over_time(kube_pod_labels{%s}[%dm]))" % (selector, window_minutes))
+    found = sorted({r["metric"].get("namespace", "") for r in result})
+    bad = [n for n in found if not DNS_LABEL.fullmatch(n)]
+    if bad or not found:
+        raise GateFailed("no pods of %s/%s in %s in Prometheus kube_pod_labels for the last %dm%s"
+                         % (scope["project"], scope["component"], scope["environment"], window_minutes,
+                            " (bad namespace %s)" % bad if bad else ""))
+    return found
+
+
+def error_rate_queries(namespaces, component, window_minutes):
+    """(5xx query, total query): requests the gateway sent to the component's Service in those namespaces."""
+    cluster = "kube_(%s)_%s_[0-9]+" % ("|".join(namespaces), component)
+    series = 'envoy_cluster_upstream_rq{envoy_cluster_name=~"%s"%%s}' % cluster
+    total = "sum(increase(%s[%dm]))" % (series % "", window_minutes)
+    failed = "sum(increase(%s[%dm]))" % (series % ',envoy_response_code=~"5.."', window_minutes)
+    return failed, total
+
+
+def observe_error_rate(scope, window_minutes, max_error_rate):
+    """5xx share of the component's requests through the data-plane gateway in the source environment."""
+    namespaces = environment_namespaces(scope, window_minutes)
+    failed_q, total_q = error_rate_queries(namespaces, scope["component"], window_minutes)
+    total = scalar(promql(total_q))
+    if total < 0.5:   # increase() extrapolates: below half a request there was no request
+        log("  observe   no HTTP traffic through the gateway to %s in %s in the last %dm (error rate not evaluated)"
+            % (scope["component"], ", ".join(namespaces), window_minutes))
+        return "no traffic in %dm" % window_minutes
+    failed = scalar(promql(failed_q))
     rate = failed / total
-    log("  observe   HTTP error rate %.4f (%d/%d), max %.4f" % (rate, failed, total, max_error_rate))
+    log("  observe   HTTP 5xx rate %.4f (%d of %d requests in %dm, %s), max %.4f"
+        % (rate, round(failed), round(total), window_minutes, ", ".join(namespaces), max_error_rate))
     if rate > max_error_rate:
-        raise GateFailed("HTTP error rate %.4f above %.4f" % (rate, max_error_rate))
-    return "error rate %.4f" % rate
+        raise GateFailed("HTTP 5xx rate %.4f (%d of %d requests in %dm) above %.4f"
+                         % (rate, round(failed), round(total), window_minutes, max_error_rate))
+    return "5xx rate %.4f (%d of %d requests in %dm)" % (rate, round(failed), round(total), window_minutes)
+
+
+def observe(tok, scope, window_minutes, max_error_rate):
+    observe_alerts(tok, scope, window_minutes)
+    return observe_error_rate(scope, window_minutes, max_error_rate)
 
 
 # --- GitHub App token -------------------------------------------------------------------------------------------------
@@ -459,7 +520,7 @@ def main():
     if env("OBSERVE", "true") == "true":
         scope = {"namespace": ns, "project": project, "component": component, "environment": source}
         result = observe(tok, scope, int(env("OBSERVE_WINDOW_MINUTES", "15")), float(env("MAX_ERROR_RATE", "0.05")))
-        evidence.append("observer: no alerts in %sm, %s" % (env("OBSERVE_WINDOW_MINUTES", "15"), result))
+        evidence.append("observe: no alerts in %sm, gateway %s" % (env("OBSERVE_WINDOW_MINUTES", "15"), result))
 
     # 5. freeze
     frozen = active_freeze(json_env("FREEZE_WINDOWS", []), target, dt.datetime.now(dt.timezone.utc))
