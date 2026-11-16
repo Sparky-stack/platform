@@ -123,6 +123,7 @@ for c in 1 2; do
   printf 'local' > "$W/inputs/c$c.group"; printf 'https://jwks:844%s' "$((c + 2))" > "$W/inputs/c$c.server"; cp "$W/tls/ca.crt" "$W/inputs/c$c.ca"
 done
 chmod -R a+rX "$W"
+# shellcheck disable=SC2016  # runs inside the container
 RECONCILE='. /w/env.sh; export INPUT_DIR=/w/inputs BAO_TOKEN=$(bao write -field=token auth/userpass/login/reconciler password=it-only); sh /scripts/mesh-reconcile.sh'
 rc=0; out=$(bao_in "$RECONCILE" 2>&1) || rc=$?
 assert_eq "$rc" 0 "reconcile runs with the scoped policy only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2

@@ -76,7 +76,7 @@ pki:
   workloadTTL: 24h
   workloadMaxTTL: 48h
   rootTTL: 87600h                  # 10y; root rotation is a planned procedure (trust bundle), docs/multicluster.md
-  intermediateTTL: 43800h          # 5y; key never leaves OpenBao. Renewal before expiry: docs/multicluster.md (VERIFY)
+  intermediateTTL: 43800h          # 5y; key never leaves OpenBao; rotation: docs/multicluster.md "Root and intermediate rotation"
   keyType: ec
   rootKeyBits: 384
   intermediateKeyBits: 256

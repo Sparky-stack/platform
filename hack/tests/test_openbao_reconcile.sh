@@ -132,7 +132,7 @@ assert_eq "$(pol mesh-ca-read | grep -c 'capabilities = \["read"\]')" 2 "mesh-ca
 for bad in Bad_Name ghost plain noca; do
   assert_eq "$([[ -e "$S/auth/mesh-$bad" ]] && echo mounted || echo skipped)" skipped "negative: input '$bad' skipped"
 done
-assert_eq "$(ls "$S/auth" | tr '\n' ' ')" "mesh-dev1 mesh-prod1 " "exactly the valid members have an auth mount"
+assert_eq "$(cd "$S/auth" && printf '%s ' *)" "mesh-dev1 mesh-prod1 " "exactly the valid members have an auth mount"
 
 # idempotent: a second run creates nothing new
 : > "$S/calls"; run

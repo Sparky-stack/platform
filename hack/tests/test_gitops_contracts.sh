@@ -79,8 +79,11 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
   assert_eq "$(iss .spec.vault.auth.kubernetes.mountPath)" "/v1/auth/mesh-dev1" "Vault Issuer logs in at auth/mesh-<cluster>"
   assert_eq "$(iss .spec.vault.path)" "pki-mesh-contract-int/sign/dev1" "Vault Issuer signs at pki-mesh-<group>-int/sign/<cluster>"
   RS="$ROOT/addons/openbao/files/mesh-reconcile.sh"
+  # shellcheck disable=SC2016  # literal script text ($c, $g, $int) matched in mesh-reconcile.sh
   assert_match "$(cat "$RS")" 'auth enable -path="mesh-\$c"' "the reconcile creates auth/mesh-<cluster>"
+  # shellcheck disable=SC2016
   assert_match "$(cat "$RS")" 'int="pki-mesh-\$g-int"' "the reconcile names the group intermediate pki-mesh-<group>-int"
+  # shellcheck disable=SC2016
   assert_match "$(cat "$RS")" 'write "\$int/roles/\$c"' "the reconcile creates role <cluster> in that mount"
   assert_eq "$(iss .spec.vault.server)" "https://$(yq '.mesh.ca.host' "$ROOT/installations/local/installation.yaml"):$(yq '.mesh.ca.port' "$ROOT/installations/local/installation.yaml")" \
     "Vault Issuer dials installation.yaml mesh.ca"
@@ -127,12 +130,14 @@ fi
 #   an ExternalSecret reads from a CA Secret (<x>-ca, <x>-cca, ca/root/intermediate-named keys) - must be empty for
 #   every CRS payload; client identities (<x>-agent-tls, <x>-mesh-reader) are the only private keys a payload carries.
 ca_key_refs() {
+  # shellcheck disable=SC2016  # yq variables ($n), not shell
   yq -N 'select(.kind == "ExternalSecret") | .metadata.name as $n | .spec.data[]?
     | select((.remoteRef.property // "") | test("(^|\\.)key$|^tls\\.key$"))
     | select(.remoteRef.key | test("(-ca|-cca|root|intermediate|cacerts)$|^pki-"))
     | $n + " " + .remoteRef.key + "/" + .remoteRef.property' "$1" 2>/dev/null | grep -v '^$' || true
 }
 crs_key_refs() {   # private keys read by CRS payload ExternalSecrets that are not a cluster's own client identity
+  # shellcheck disable=SC2016  # yq variables ($n), not shell
   yq -N 'select(.kind == "ExternalSecret" and .spec.target.template.type == "addons.cluster.x-k8s.io/resource-set")
     | .metadata.name as $n | .spec.data[]? | select((.remoteRef.property // "") | test("key"))
     | select(.remoteRef.key | test("-(agent-tls|mesh-reader)$") | not)
