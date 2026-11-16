@@ -82,6 +82,10 @@ promotionGate:
   apiURL: ""                         # http://api.<host>:8080
   tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
   observerURL: ""                    # http://observer.<host>:<httpPort>
+  # Observability-plane Prometheus (in-cluster on mgmt; NetworkPolicies: openchoreo-workflow-plane
+  # runNetworkPolicy.platformWorkflows egress, openchoreo-observability-plane prometheusIngress). The gate's 5xx rate
+  # reads the data-plane kgateway Envoy series there (addon telemetry gatewayMetrics; docs/promotion.md).
+  prometheusURL: http://openchoreo-observability-prometheus.openchoreo-observability-plane:9091
   controlPlanePort: 8080             # control-plane Gateway HTTP listener (addon openchoreo-control-plane)
   # Thunder client (client_credentials) the gate authenticates as (addon thunder bootstrap script 70, same store key);
   # role binding in templates/promotion-authz.yaml. Secret from the workflow plane's secret store, key `promotion-gate`,
@@ -104,7 +108,7 @@ promotionGate:
   observe:
     enabled: true
     windowMinutes: 15
-    maxErrorRate: 0.05
+    maxErrorRate: 0.05               # 5xx share of the gateway's requests to the component in the source environment
 # --- in-cluster builds (docs/build-plane.md) ---------------------------------------------------------------------
 # Image registry: installation.yaml `registry` (defaults for standalone renders). harbor: push to
 # <host>/<appsProject>/<project>/<component> as robot `builder`; external: push to <external.repository>/<component>.

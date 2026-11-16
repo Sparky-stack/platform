@@ -5,6 +5,7 @@ templates:
   - templates/agent-server-ca.yaml
   - templates/secrets.yaml
   - templates/opensearch-tlsroute.yaml
+  - templates/prometheus-network-policy.yaml
 tests:
   - it: registers ClusterObservabilityPlane default trusting the in-namespace agent cert
     template: templates/cluster-observability-plane.yaml
@@ -167,3 +168,42 @@ tests:
       openchoreo-observability-plane.rca.http.hostnames: [rca.evil.example]
     asserts:
       - failedTemplate: { errorMessage: "openchoreo-observability-plane.rca.http.hostnames[0] must be rca-agent.openchoreo.localhost" }
+
+  - it: opens Prometheus HTTP query port only to platform-workflow pods in workflows-<orgNamespace>
+    template: templates/prometheus-network-policy.yaml
+    asserts:
+      - isKind: { of: NetworkPolicy }
+      - equal: { path: metadata.name, value: prometheus-platform-workflows }
+      - equal: { path: metadata.namespace, value: NAMESPACE }
+      - equal:
+          path: spec.podSelector
+          value: { matchLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability } }
+      - equal: { path: spec.policyTypes, value: [Ingress] }
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: workflows-default } }
+                  podSelector: { matchLabels: { platform.koorikla.io/egress: openchoreo } }
+              ports:
+                - { protocol: TCP, port: 9090 }
+
+  - it: Prometheus workflow ingress follows openchoreo.orgNamespace
+    template: templates/prometheus-network-policy.yaml
+    set: { openchoreo.orgNamespace: acme }
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: workflows-acme
+
+  - it: no Prometheus workflow ingress without the workflow plane
+    template: templates/prometheus-network-policy.yaml
+    set: { openchoreo.workflowPlane.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: refuses empty fromPodLabels on Prometheus workflow ingress (would expose Prometheus to tenant build pods)
+    template: templates/prometheus-network-policy.yaml
+    set: { prometheusIngress.fromPodLabels: null }
+    asserts:
+      - failedTemplate: { errorPattern: "fromPodLabels must not be empty" }

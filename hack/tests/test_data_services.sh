@@ -69,7 +69,9 @@ for cf in "$INST_DIR"/clusters/*.yaml; do
   labels=$(cluster_labels "$TMP/cluster-$c.yaml")
   assert_match "$labels" '"platform.koorikla.io/role":"workload"' "local/$c: cluster secret labels rendered"
   for a in $ADDONS; do
-    assert_eq "$(selected "$TMP/platform.yaml" "$a" "$labels")" no "local/$c: addon-$a generates no Application by default"
+    # off unless the fleet file opts in (dev1 opts in to cloudnative-pg for PostgreSQL as a service, #107)
+    want=no; [[ "$(yq ".addons[\"$a\"] // false" "$cf")" == true ]] && want=yes
+    assert_eq "$(selected "$TMP/platform.yaml" "$a" "$labels")" "$want" "local/$c: addon-$a Application only when the fleet file opts in ($want)"
   done
 done
 

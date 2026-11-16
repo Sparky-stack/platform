@@ -3,6 +3,7 @@ import base64
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -244,6 +245,123 @@ class Secrets(unittest.TestCase):
             os.environ.pop("SECRETS_DIR", None)
             os.environ.pop("CLIENT_SECRET", None)
             shutil.rmtree(d)
+
+
+SCOPE = {"namespace": "default", "project": "demo", "component": "hello-world", "environment": "staging"}
+STAGING_NS = "dp-default-demo-staging-ba410b48"
+
+
+def vector(*values, **labels):
+    return [{"metric": dict(labels), "value": [1763400000.0, str(v)]} for v in values]
+
+
+class FakePrometheus:
+    """Stand-in for gate.promql: answers kube_pod_labels and the two envoy_cluster_upstream_rq sums."""
+
+    def __init__(self, namespaces=(STAGING_NS,), total=(), failed=()):
+        self.namespaces, self.total, self.failed, self.queries = namespaces, total, failed, []
+
+    def __call__(self, query):
+        self.queries.append(query)
+        if query.startswith("max by (namespace)"):
+            return [{"metric": {"namespace": n}, "value": [0, "1"]} for n in self.namespaces]
+        if "envoy_response_code" in query:
+            return vector(*self.failed)
+        return vector(*self.total)
+
+
+class ErrorRate(unittest.TestCase):
+    def setUp(self):
+        self.real = gate.promql
+        self.logs = []
+        self.real_log = gate.log
+        gate.log = self.logs.append
+
+    def tearDown(self):
+        gate.promql = self.real
+        gate.log = self.real_log
+
+    def run_gate(self, prom, max_rate=0.05):
+        gate.promql = prom
+        return gate.observe_error_rate(SCOPE, 15, max_rate)
+
+    def test_queries_match_the_kgateway_envoy_cluster_of_the_component_service(self):
+        failed, total = gate.error_rate_queries([STAGING_NS], "hello-world", 15)
+        self.assertEqual(total, 'sum(increase(envoy_cluster_upstream_rq{envoy_cluster_name=~'
+                                '"kube_(dp-default-demo-staging-ba410b48)_hello-world_[0-9]+"}[15m]))')
+        self.assertEqual(failed, 'sum(increase(envoy_cluster_upstream_rq{envoy_cluster_name=~'
+                                 '"kube_(dp-default-demo-staging-ba410b48)_hello-world_[0-9]+",'
+                                 'envoy_response_code=~"5.."}[15m]))')
+        # PromQL regexes are fully anchored: the pattern is exactly this component's Service, not hello-world-api's
+        pattern = re.search(r'=~"([^"]+)"', total).group(1)
+        self.assertTrue(re.fullmatch(pattern, "kube_dp-default-demo-staging-ba410b48_hello-world_8080"))
+        self.assertFalse(re.fullmatch(pattern, "kube_dp-default-demo-staging-ba410b48_hello-world-api_8080"))
+        self.assertFalse(re.fullmatch(pattern, "kube_dp-default-demo-development-ad621210_hello-world_8080"))
+
+    def test_namespace_lookup_is_scoped_to_org_project_component_environment(self):
+        prom = FakePrometheus(total=(0,))
+        self.run_gate(prom)
+        self.assertEqual(prom.queries[0], 'max by (namespace) (max_over_time(kube_pod_labels{'
+                                          'label_openchoreo_dev_namespace="default",label_openchoreo_dev_project="demo",'
+                                          'label_openchoreo_dev_component="hello-world",'
+                                          'label_openchoreo_dev_environment="staging"}[15m]))')
+
+    def test_healthy(self):
+        result = self.run_gate(FakePrometheus(total=(100.0,), failed=(2.0,)))
+        self.assertEqual(result, "5xx rate 0.0200 (2 of 100 requests in 15m)")
+        self.assertIn("(2 of 100 requests in 15m, %s)" % STAGING_NS, self.logs[-1])
+
+    def test_counts_are_logged_as_request_counts_not_truncated_rates(self):
+        self.run_gate(FakePrometheus(total=(51.7,), failed=(0.6,)), max_rate=0.5)
+        self.assertIn("(1 of 52 requests", self.logs[-1])
+
+    def test_over_threshold_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, r"5xx rate 0\.2400 \(24 of 100 requests in 15m\) above 0\.0500"):
+            self.run_gate(FakePrometheus(total=(76.0, 24.0), failed=(24.0,)))
+
+    def test_exactly_at_threshold_passes(self):
+        self.assertIn("0.0500", self.run_gate(FakePrometheus(total=(100.0,), failed=(5.0,))))
+
+    def test_no_traffic_is_reported_not_failed(self):
+        for total in ((), (0.0,), (0.3,)):
+            prom = FakePrometheus(total=total, failed=())
+            self.assertEqual(self.run_gate(prom), "no traffic in 15m")
+            self.assertFalse(any("envoy_response_code" in q for q in prom.queries))
+
+    def test_no_5xx_series_is_zero_errors(self):
+        self.assertEqual(self.run_gate(FakePrometheus(total=(40.0,), failed=())), "5xx rate 0.0000 (0 of 40 requests in 15m)")
+
+    def test_environment_moved_between_namespaces_in_the_window_counts_both(self):
+        prom = FakePrometheus(namespaces=("dp-a-1", "dp-b-2"), total=(10.0,))
+        self.run_gate(prom)
+        self.assertIn('"kube_(dp-a-1|dp-b-2)_hello-world_[0-9]+"', prom.queries[1])
+
+    def test_no_pods_in_prometheus_fails(self):
+        with self.assertRaisesRegex(gate.GateFailed, "no pods of demo/hello-world in staging"):
+            self.run_gate(FakePrometheus(namespaces=(), total=(10.0,)))
+
+    def test_non_dns_label_input_or_namespace_is_rejected(self):
+        gate.promql = FakePrometheus(total=(1.0,))
+        with self.assertRaisesRegex(gate.GateFailed, "not a DNS-1123 label"):
+            gate.observe_error_rate(dict(SCOPE, component='x"}or vector(1)'), 15, 0.05)
+        with self.assertRaisesRegex(gate.GateFailed, "bad namespace"):
+            self.run_gate(FakePrometheus(namespaces=("a|.*",), total=(1.0,)))
+
+    def test_promql_parses_the_api_envelope(self):
+        real_http = gate.http
+        calls = []
+        os.environ["PROMETHEUS_URL"] = "http://prom:9091/"
+        try:
+            gate.http = lambda method, url, **kw: calls.append((method, url)) or {
+                "status": "success", "data": {"resultType": "vector", "result": vector(3, 4)}}
+            self.assertEqual(gate.scalar(self.real('sum(x{a="b"})')), 7.0)
+            self.assertEqual(calls, [("GET", "http://prom:9091/api/v1/query?query=sum%28x%7Ba%3D%22b%22%7D%29")])
+            gate.http = lambda method, url, **kw: {"status": "error", "error": "parse error"}
+            with self.assertRaisesRegex(gate.GateFailed, "parse error"):
+                self.real("bad(")
+        finally:
+            gate.http = real_http
+            os.environ.pop("PROMETHEUS_URL", None)
 
 
 if __name__ == "__main__":

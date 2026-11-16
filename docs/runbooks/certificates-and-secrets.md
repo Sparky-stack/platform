@@ -1,5 +1,7 @@
 # Runbook: Certificates and secrets rotation
 
+<img src="../diagrams/trust.svg" alt="Trust and certificates: per-cluster agent CAs from cert-manager, the OpenBao mesh CA, delivery and rotation" width="100%">
+
 ## When to use
 
 Use this runbook to inspect certificate expiry, rotate cert-manager CAs or leaf certificates, manage the OpenBao Istio mesh CA, rotate OpenChoreo data-plane agent certificates, update GitHub App keys or PATs, rotate the `cosign-platform` build signing key, or refresh External Secrets Operator (ESO) secrets ([conventions.md](../conventions.md#secret-keys)).
