@@ -132,7 +132,10 @@ tests:
       - matchRegex: { path: "spec.validations[0].expression", pattern: 'argocd-application-controller"\] && variables.gatedApp\)' }
       - equal: { path: "spec.variables[1].expression", value: "request.operation == 'DELETE' ? oldObject : object" }
       - matchRegex: { path: "spec.variables[2].expression", pattern: "argocd.argoproj.io/tracking-id" }
-      - matchRegex: { path: "spec.variables[3].expression", pattern: "startsWith\\(variables.binding.spec.owner.projectName \\+ '-'\\).*endsWith\\('-' \\+ variables.binding.spec.environment\\)" }
+      # app-to-component: the writer must be exactly the gated Application <project>-<component>-<environment>
+      - matchRegex: { path: "spec.variables[3].expression", pattern: "has\\(variables.binding.spec.owner.componentName\\)" }
+      - matchRegex: { path: "spec.variables[3].expression", pattern: "\\? variables.binding.spec.owner.projectName \\+ '-' \\+ variables.binding.spec.owner.componentName \\+ '-' \\+ variables.binding.spec.environment : ''$" }
+      - equal: { path: "spec.variables[4]", value: { name: gatedApp, expression: "variables.componentApp != '' && variables.trackingApp == variables.componentApp" } }
 
   - it: binding denies (not audits)
     template: templates/promotion-git-only.yaml

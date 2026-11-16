@@ -6,6 +6,8 @@
 project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
 description: ""
 apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
+                            # name == the app repo's one Component name (gated bindings are admitted only from
+                            # Application <project>-<component>-<env>, addon openchoreo-platform promotion-git-only.yaml)
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:

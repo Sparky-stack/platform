@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Kyverno CLI tests of rendered admission policies:
 #   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
-#                              bindings from the gated Argo CD Application pass; from openchoreo-api, from the app's
-#                              main Application, another tenant's Application or without tracking-id are denied;
-#                              staging is out of scope
+#                              bindings from the component's gated Argo CD Application pass; from openchoreo-api, from
+#                              the app's main Application, another tenant's Application, another app's gated
+#                              Application (either direction) or without tracking-id are denied; staging is out of scope
 #   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
 #                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
 #                              cluster scope, spec overrides and extra arguments are denied
@@ -52,7 +52,7 @@ cp_chart="$ROOT/addons/openchoreo-control-plane"
 helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
 helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
 # who:resources:expected  (staging bindings are out of scope and not counted)
-for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' argocd:smuggled:'pass: 0, fail: 3'; do
+for c in argocd:resources:'pass: 1, fail: 0' api:resources:'pass: 0, fail: 1' argocd:smuggled:'pass: 0, fail: 5'; do
   who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
   out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
     --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)

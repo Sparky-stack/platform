@@ -64,13 +64,18 @@ Application excludes that file.
   - Only `system:serviceaccount:argocd:argocd-application-controller` may create, update or delete a production
     ReleaseBinding, **and only for the gated Application**: Argo CD writes for every Application with that one
     identity, so the binding's `argocd.argoproj.io/tracking-id` annotation (set by the controller on every apply,
-    `<application>:<group>/<kind>:<namespace>/<name>`; a manifest cannot override it) must name
-    `<spec.owner.projectName>-<app>-<spec.environment>` (`oldObject` on DELETE). A production binding smuggled into
-    any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs through the main Application
-    `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on `production.yaml` cannot be
-    skipped. `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
-    projects named `<other project>-…` (their gated Applications would look like the other project's). Matching the
-    component too: [#14](https://github.com/koorikla/platform/issues/14).
+    `<application>:<group>/<kind>:<namespace>/<name>`; a manifest cannot override it) must be exactly
+    `<spec.owner.projectName>-<spec.owner.componentName>-<spec.environment>` (`oldObject` on DELETE): the gated
+    Application of the app whose tenant-file name is the component (app name == Component name,
+    [openchoreo.md](openchoreo.md#app-repo-contract)).
+    - A production binding smuggled into any other file of the app repo (say `deploy/openchoreo/hotfix.yaml`) syncs
+      through the main Application `<project>-<app>` and is denied, so the freeze window and the CODEOWNERS rule on
+      `production.yaml` cannot be skipped.
+    - Another app's gated Application cannot write this component's binding either. Developers control their
+      Workload's `spec.source.repository`, so a gate run could open its PR in another repo, but merging there promotes
+      nothing: only the repo the tenant file names for the app feeds `<project>-<component>-production`.
+    - `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
+      projects named `<other project>-…` (their gated Applications would look like the other project's).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
   - The garbage collector may delete. Consequence: deleting the Component (console / openchoreo-api, which
     developers may do for their components) cascades to its production binding. Deleting a production component is
