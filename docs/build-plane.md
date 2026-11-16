@@ -116,7 +116,10 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
 - **No ServiceAccount token in run containers**: both ClusterWorkflowTemplates (and the ClusterWorkflows' run
   templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
   init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
-  digest that `sign` signs).
+  digest that `sign` signs). Argo mounts that executor token from the Secret `workflow-sa.service-account-token`, which
+  addon openchoreo-workflow-plane renders in the run namespace with the ServiceAccount (`runExecutorToken`; Kubernetes
+  no longer creates token Secrets and OpenChoreo creates only the ServiceAccount and its Role). Without it every run pod
+  hangs in `Init` (`FailedMount`).
 - **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon
   also renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor
   Gateway proxy pods (port 9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check
