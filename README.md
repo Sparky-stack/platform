@@ -11,7 +11,17 @@ external-dns (Route 53 / Cloudflare) and OpenChoreo's RCA and FinOps AI agents.
 Why: one management cluster, one git repo and one file per cluster give every cluster the same addons, identities and
 policies, on any provider, without imperative steps after bootstrap.
 
-<img src="docs/diagrams/overview.svg" alt="Architecture overview: repos, management cluster, workload clusters" width="100%">
+<img src="docs/diagrams/architecture.svg" alt="Architecture: git repos, mgmt cluster (Argo CD, Cluster API, ESO, cert-manager, OpenChoreo planes, Harbor, Kyverno, Falco, argo-events), workload clusters (data plane, kgateway, Istio ambient, Cilium, Kyverno, Falco, telemetry), cloud providers" width="100%">
+
+### Diagrams
+
+Animated SVGs (motion stops with the OS "reduce motion" setting). Click a view for full size; all of them, plus
+[cluster lifecycle](docs/diagrams/cluster-lifecycle.svg), are explained in [docs/diagrams/](docs/diagrams/README.md).
+
+| | |
+|---|---|
+| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: identity & trust, secrets, supply chain, admission, runtime | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: kgateway, Istio ambient, Cilium / flannel, paths to mgmt |
+| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, OpenSearch, Prometheus, observer API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, GitOps hand-off, gated promotion |
 
 ## Quick start (local)
 
@@ -49,14 +59,14 @@ Offline validation, required before every push: `task lint` and `task test`.
 | [docs/ai-agents.md](docs/ai-agents.md) | OpenChoreo RCA and FinOps agents, agentgateway, OpenCost (switched off) |
 | [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
 | [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task), hosts, portable scripts, image architecture audit |
-| [docs/diagrams/](docs/diagrams/README.md) | overview, cluster lifecycle, trust model, delivery, runtime security |
+| [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC, cluster lifecycle |
 
 Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app),
 [koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows and build scripts).
 
 ## Status
 
-Solid boxes in the diagrams are built; dashed ones are planned.
+Diagram boxes: solid = built on `main`, dashed = opt-in (on `main`, off by default), dimmed with a "planned" tag = not on `main` yet.
 
 | State | What |
 |---|---|
