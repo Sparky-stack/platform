@@ -143,6 +143,8 @@ cilium:
 # - Sees plaintext only: north-south traffic from the out-of-mesh gateway (Istio PERMISSIVE, docs/networking.md).
 #   HBONE mTLS between ambient pods goes to 15008 and stays opaque. Once the gateway joins the mesh with STRICT
 #   mTLS (#53), Hubble is blind and HTTP metrics need another source (Istio waypoint, OBI).
+# OFF: on dev1 (Istio ambient, embedded Envoy) the redirected connections hang at the proxy (SYN to-proxy, no reply),
+# which took every component's 8080 down; see #104 before re-enabling.
 l7Visibility:
-  enabled: true
+  enabled: false
   httpPorts: ["8080"]

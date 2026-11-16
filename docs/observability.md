@@ -168,7 +168,8 @@ observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble s
 `hubble_http_request_duration_seconds`, joined to kube-state-metrics' `kube_pod_labels` on
 `(destination_namespace, destination_pod)`. Three pieces make them exist ([#104](https://github.com/koorikla/platform/issues/104)):
 
-1. addon cilium: L7 visibility policy on the component pods' HTTP port (docs/networking.md), and `httpV2`
+1. addon cilium: L7 visibility policy on the component pods' HTTP port (docs/networking.md; **off**, it broke traffic
+   into ambient pods, so today there are no `hubble_http_*` series), and `httpV2`
    `labelsContext` with `source_pod`/`destination_pod` (without them the join matches nothing).
 2. addon telemetry: ServiceMonitor `hubble-http` on `kube-system/hubble-metrics`, keeping only `hubble_http_*`.
 3. The agent's remote write to the observability plane, as for every other metric.
