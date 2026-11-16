@@ -1,6 +1,6 @@
 {{- /*
 Admission pin for the Falco response (docs/observability.md "Falco response"): every Workflow created in this
-namespace runs WorkflowTemplate falco-response, with nothing but its `event` argument. The Sensor falco-escalation
+namespace runs WorkflowTemplate falco-response, with nothing but its `event` and `cluster` arguments. The Sensor falco-escalation
 (RBAC: create workflows here) can therefore not start an inline Workflow, another (Cluster)WorkflowTemplate, another
 ServiceAccount or a pod spec patch, even if its pod or token is compromised; the WorkflowTemplate itself is git-owned.
 A native ValidatingAdmissionPolicy instead of Argo Workflows' `templateReferencing: Strict`: that controller setting
@@ -40,8 +40,9 @@ spec:
         !has(object.spec.arguments)
         || (object.spec.arguments.all(k, k == 'parameters')
             && (!has(object.spec.arguments.parameters)
-                || object.spec.arguments.parameters.all(p, p.all(k, k in ['name', 'value']) && p.name == 'event')))
-      message: Workflows in {{ $ns }} take only the parameter `event` (falcosidekick JSON)
+                || object.spec.arguments.parameters.all(p, p.all(k, k in ['name', 'value'])
+                     && p.name in ['event', 'cluster'])))
+      message: Workflows in {{ $ns }} take only the parameters `event` (falcosidekick JSON) and `cluster`
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

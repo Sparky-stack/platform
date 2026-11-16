@@ -4,6 +4,8 @@ templates:
   - charts/falco/templates/configmap.yaml
   - charts/falco/templates/rules-configmap.yaml
   - charts/falco-talon/templates/configmap.yaml
+  - charts/falco/charts/falcosidekick/templates/deployment.yaml
+  - charts/falco/charts/falcosidekick/templates/secrets.yaml
 tests:
   - it: falco.yaml uses modern_ebpf and sends to falcosidekick
     template: charts/falco/templates/configmap.yaml
@@ -26,42 +28,69 @@ tests:
       - matchRegex:
           path: data["rules.yaml"]
           pattern: '- Platform shell in app container\n\s+dry_run: false\n\s+actions:\n\s+- action: Platform label suspicious\n\s+# - action'
-  - it: no output secret unless escalation or slack is enabled
+  - it: workload clusters render no escalation secret and never read the store key (mgmt delivers their token)
     template: templates/outputs-secret.yaml
     set:
+      cluster.name: dev1
+    asserts:
+      - hasDocuments: { count: 0 }
+  - it: no output secret on mgmt either when escalation and slack are off
+    template: templates/outputs-secret.yaml
+    values: [../values/role-mgmt.yaml]
+    set:
+      cluster.name: mgmt
       escalation.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
-  - it: escalation webhook (on by default) from store key falco-webhook with a bearer header, critical and above
-    template: templates/outputs-secret.yaml
-    asserts:
-      - equal: { path: spec.secretStoreRef.name, value: default }
-      - equal: { path: spec.target.template.data.WEBHOOK_MINIMUMPRIORITY, value: critical }
-      - equal: { path: spec.target.template.data.WEBHOOK_CUSTOMHEADERS, value: "Authorization:Bearer {{ .webhookToken }}" }
-      - contains:
-          path: spec.data
-          content: { secretKey: webhookUrl, remoteRef: { key: falco-webhook, property: url } }
-  - it: mgmt reads outputs from the platform store and runs no Talon
+  - it: mgmt escalation - its own endpoint and derived token from store platform key falco-webhook, no slack
     template: templates/outputs-secret.yaml
     values: [../values/role-mgmt.yaml]
     set:
-      slack.enabled: true
-    asserts:
-      - equal: { path: spec.secretStoreRef.name, value: platform }
-  - it: mgmt escalation (default on, no slack) - store platform, webhook url + token from falco-webhook
-    template: templates/outputs-secret.yaml
-    values: [../values/role-mgmt.yaml]
+      cluster.name: mgmt
     asserts:
       - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: falcosidekick-escalation }
       - equal: { path: spec.secretStoreRef.name, value: platform }
-      - equal: { path: spec.target.template.data.WEBHOOK_MINIMUMPRIORITY, value: critical }
-      - contains:
+      - equal: { path: spec.target.template.data.WEBHOOK_ADDRESS, value: '{{ printf "%s/%s" (.url | trimSuffix "/") "mgmt" }}' }
+      - equal: { path: spec.target.template.data.WEBHOOK_CUSTOMHEADERS, value: 'Authorization:Bearer {{ printf "%s:%s" "mgmt" .token | sha256sum }}' }
+      - equal:
           path: spec.data
-          content: { secretKey: webhookUrl, remoteRef: { key: falco-webhook, property: url } }
+          value:
+            - { secretKey: url, remoteRef: { key: falco-webhook, property: url } }
+            - { secretKey: token, remoteRef: { key: falco-webhook, property: token } }
+  - it: mgmt reads slack from the platform store, in its own secret
+    template: templates/outputs-secret.yaml
+    values: [../values/role-mgmt.yaml]
+    set:
+      cluster.name: mgmt
+      slack.enabled: true
+    documentSelector: { path: metadata.name, value: falcosidekick-outputs }
+    asserts:
+      - equal: { path: spec.secretStoreRef.name, value: platform }
+      - equal: { path: spec.data, value: [{ secretKey: slackUrl, remoteRef: { key: falco-slack, property: webhook-url } }] }
+  - it: sidekick reads the webhook from Secret falcosidekick-escalation (optional) and escalates critical and above
+    template: charts/falco/charts/falcosidekick/templates/deployment.yaml
+    set:
+      cluster.name: dev1
+    asserts:
       - contains:
-          path: spec.data
-          content: { secretKey: webhookToken, remoteRef: { key: falco-webhook, property: token } }
-      - notContains: { path: spec.data, content: { secretKey: slackUrl }, any: true }
+          path: spec.template.spec.containers[0].env
+          content: { name: WEBHOOK_CUSTOMHEADERS, valueFrom: { secretKeyRef: { name: falcosidekick-escalation, key: WEBHOOK_CUSTOMHEADERS, optional: true } } }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: WEBHOOK_ADDRESS, valueFrom: { secretKeyRef: { name: falcosidekick-escalation, key: WEBHOOK_ADDRESS, optional: true } } }
+  - it: every event names its cluster (customfields from the ApplicationSet parameter)
+    template: charts/falco/charts/falcosidekick/templates/deployment.yaml
+    set:
+      falco.falcosidekick.config.customfields: cluster:dev1
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CUSTOMFIELDS, value: cluster:dev1 }
+  - it: webhook minimum priority is critical
+    template: charts/falco/charts/falcosidekick/templates/secrets.yaml
+    asserts:
+      - equal: { path: data.WEBHOOK_MINIMUMPRIORITY, value: Y3JpdGljYWw= }
 
   - it: local installation - rules skip containers without k8s metadata (other clusters' pods on the shared kernel)
     template: charts/falco/templates/rules-configmap.yaml

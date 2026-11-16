@@ -13,3 +13,5 @@ spec:
     parameters:
       - name: event
         value: '{"uuid":"4e1a2b3c-0000-4000-8000-000000000001","priority":"Critical"}'
+      - name: cluster
+        value: dev1

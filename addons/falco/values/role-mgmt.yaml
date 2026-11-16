@@ -1,7 +1,9 @@
 # mgmt: no OpenChoreo app namespaces (no Talon) and no telemetry collector (addon telemetry is workload-only): Falco's
 # JSON alerts stay on stdout (kubectl logs / a future mgmt log shipper); escalation/slack use ClusterSecretStore
-# `platform`. Escalation from mgmt itself is in-cluster to the event endpoint.
+# `platform`. Escalation from mgmt itself is in-cluster to the event endpoint (POST <url>/<mgmt name>, mgmt's token).
 secretStore: platform
+escalation:
+  store: platform
 falco:
   falcosidekick:
     config:

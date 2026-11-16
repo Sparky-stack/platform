@@ -129,6 +129,8 @@ spec:
   arguments:
     parameters:
       - name: event                           # falcosidekick JSON (Sensor falco-escalation)
+      - name: cluster                         # the cluster whose endpoint (token) the event arrived on
+        value: ""                             # empty = unauthenticated: enrich skips the event
   securityContext:
     runAsNonRoot: true
     runAsUser: 65532
@@ -171,6 +173,7 @@ spec:
         source: {{ printf $run "enrich" | quote }}
         env:
           - { name: EVENT, value: {{ `"{{workflow.parameters.event}}"` }} }
+          - { name: CLUSTER, value: {{ `"{{workflow.parameters.cluster}}"` }} }
           - { name: ORG_NAMESPACE, value: {{ $ns | quote }} }
           - { name: MINIMUM_PRIORITY, value: {{ .Values.falco.minimumPriority | quote }} }
         resources: {{- toYaml $r.resources | nindent 10 }}
