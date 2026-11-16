@@ -127,16 +127,14 @@
 <text x="1020.0" y="266.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">reads logs, metrics,</text>
 <text x="1020.0" y="282.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">traces, alerts</text>
 <text x="1020.0" y="297.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(Thunder auth)</text>
-<g opacity="0.55">
 <rect x="940" y="380" width="160" height="138" rx="6" fill="#0f172a"/>
 <rect x="940" y="380" width="160" height="138" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6,4"/>
 <text x="1020.0" y="427.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">agentgateway</text>
 <text x="1020.0" y="446.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">LLM + MCP</text>
 <text x="1020.0" y="462.4" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">gateway</text>
-<text x="1020.0" y="477.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">PR #5</text>
-<rect x="1040.8" y="370" width="51.2" height="14" rx="7" fill="#020617" stroke="#22d3ee" stroke-width="1"/>
-<text x="1066.4" y="380.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#22d3ee" text-anchor="middle">planned</text>
-</g>
+<text x="1020.0" y="477.9" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mgmt</text>
+<rect x="1046.7" y="370" width="45.3" height="14" rx="7" fill="#020617" stroke="#22d3ee" stroke-width="1"/>
+<text x="1069.3" y="380.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#22d3ee" text-anchor="middle">opt-in</text>
 <rect x="940" y="540" width="160" height="58" rx="6" fill="#0f172a"/>
 <rect x="940" y="540" width="160" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
 <text x="1020.0" y="555.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">falco-response</text>

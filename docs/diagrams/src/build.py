@@ -95,7 +95,7 @@ def architecture() -> Diagram:
           name="Kyverno (workload)")
     d.box(A, Y[6], KW, BH, "security", "ESO", ["ClusterSecretStore", "default"], name="ESO (workload)")
     d.box(B, Y[6], KW, BH, "bus", "OBI", ["eBPF L7 RED", "metrics"], status="optin")
-    d.box(A, Y[7], KW, BH, "network", "external-dns", ["Route 53 · Cloudflare", "PR #5"], status="planned")
+    d.box(A, Y[7], KW, BH, "network", "external-dns", ["Route 53 · Cloudflare", "per cluster"], status="optin")
     d.box(B, Y[7], KW, BH, "network", "east-west gateway", ["Istio multicluster", "PR #4"], status="planned")
     for i, (t, s) in enumerate([("docker · CAPD", ("tested locally", "#6ee7b7")), ("AWS · CAPA", "rendered only"),
                                 ("Hetzner · CAPH", "rendered only")]):
@@ -375,8 +375,8 @@ def network() -> Diagram:
     d.group(16, 160, 840, 574, "workload cluster · dev1, prod1", "zone")
     d.group(896, 160, 408, 384, "mgmt cluster", "zone")
 
-    d.box(C1, R["A"], CW, BH, "network", "external-dns", ["HTTPRoute → DNS records", "Route 53 · Cloudflare · PR #5"],
-          status="planned")
+    d.box(C1, R["A"], CW, BH, "network", "external-dns", ["HTTPRoute → DNS records", "Route 53 · Cloudflare"],
+          status="optin")
     d.box(C2, R["A"], CW, BH, "network", "kgateway", ["GatewayClass kgateway", "Gateway API v1 · HTTPRoute"],
           focus=True)
     d.box(C3, R["A"], CW, BH, "network", "east-west gateway", ["istio-east-west · mTLS", "dev1 ↔ prod1 · PR #4"],
@@ -479,7 +479,7 @@ def observability() -> Diagram:
     d.box(A, Y[5], AW, BH, "bus", "argo-events", ["webhook EventSource", "Sensor ≥ Critical"])
     d.box(B, Y[1], BW, 98, "platform", "observer API", ["reads logs, metrics,", "traces, alerts", "(Thunder auth)"],
           focus=True)
-    d.box(B, Y[3], BW, 138, "platform", "agentgateway", ["LLM + MCP", "gateway", "PR #5"], status="planned")
+    d.box(B, Y[3], BW, 138, "platform", "agentgateway", ["LLM + MCP", "gateway", "mgmt"], status="optin")
     d.box(B, Y[5], BW, BH, "platform", "falco-response", ["workflow: enrich", "→ Event"])
     d.box(C, Y[0], CW, BH, "platform", "Backstage", ["runtime logs,", "metrics views"])
     d.box(C, 270, CW, BH, "platform", "promotion gate", ["alerts + error", "rate per edge"])
