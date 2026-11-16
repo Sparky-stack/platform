@@ -446,10 +446,90 @@ def network() -> Diagram:
     return d
 
 
+# ----------------------------------------------------------------------------------------- observability
+def observability() -> Diagram:
+    W, H = 1320, 940
+    d = Diagram(W, H, "Observability · telemetry from data planes to the observability plane",
+                "collectors on every workload cluster ship to OpenChoreo's observability plane on mgmt · "
+                "observer API serves Backstage, the promotion gate and (opt-in) AI agents")
+    Y = [140 + 80 * i for i in range(6)]
+    BH = 58
+    yc = lambda r: Y[r] + BH / 2  # noqa: E731
+    d.group(16, 104, 524, 510, "workload cluster · addon telemetry", "zone")
+    d.group(640, 104, 664, 510, "mgmt cluster · OpenChoreo observability plane", "zone")
+    S, SW, K, KW = 32, 200, 292, 232
+    d.box(S, Y[0], SW, BH, "platform", "app pods", ["OTLP SDK", "traces · metrics"])
+    d.box(S, Y[1], SW, BH, "bus", "OBI", ["eBPF L7 RED", "→ OTLP"], status="optin")
+    d.box(S, Y[2], SW, BH, "external", "container logs", ["/var/log/pods ·", "incl. Falco JSON"])
+    d.box(S, Y[3], SW, BH, "external", "k8s events", ["kube-apiserver"])
+    d.box(S, Y[4], SW, BH, "external", "cAdvisor + KSM", ["pod + object", "metrics"])
+    d.box(S, Y[5], SW, BH, "security", "Falco", ["modern_ebpf alerts"])
+    d.box(K, Y[0], KW, 138, "bus", "OTel Collector",
+          ["DaemonSet · fan-out point", "k8sattributes", "traces → OpenSearch", "metrics → Prometheus",
+           "Datadog exporter: opt-in"], focus=True)
+    d.box(K, Y[2], KW, BH, "bus", "Fluent Bit", ["DaemonSet · OpenChoreo", "log schema"])
+    d.box(K, Y[3], KW, BH, "bus", "k8s events collector", ["OTel (OpenChoreo build)"])
+    d.box(K, Y[4], KW, BH, "bus", "Prometheus agent", ["cAdvisor + KSM scrape", "OpenChoreo labels"])
+    d.box(K, Y[5], KW, BH, "bus", "falcosidekick", ["fan-out · webhook", "≥ Critical"])
+
+    A, AW, B, BW, C, CW = 680, 220, 940, 160, 1124, 164
+    d.box(A, Y[0], AW, 298, "data", "OpenSearch",
+          ["logs", "k8s events", "traces", "", "ingest: TLS passthrough", "basic auth via ESO"], focus=True)
+    d.box(A, Y[4], AW, BH, "data", "Prometheus", ["remote write", "receiver"])
+    d.box(A, Y[5], AW, BH, "bus", "argo-events", ["webhook EventSource", "Sensor ≥ Critical"])
+    d.box(B, Y[1], BW, 98, "platform", "observer API", ["reads logs, metrics,", "traces, alerts", "(Thunder auth)"],
+          focus=True)
+    d.box(B, Y[3], BW, 138, "platform", "agentgateway", ["LLM + MCP", "gateway", "PR #5"], status="planned")
+    d.box(B, Y[5], BW, BH, "platform", "falco-response", ["workflow: enrich", "→ Event"])
+    d.box(C, Y[0], CW, BH, "platform", "Backstage", ["runtime logs,", "metrics views"])
+    d.box(C, 270, CW, BH, "platform", "promotion gate", ["alerts + error", "rate per edge"])
+    d.box(C, Y[3], CW, BH, "platform", "FinOps agent", ["OpenCost + LLM", "off by default"], status="optin")
+    d.box(C, Y[4], CW, BH, "platform", "RCA agent", ["root cause (LLM)", "off by default"], status="optin")
+
+    # collection
+    d.arrow([(S + SW, yc(0)), (K, yc(0))], OR, aid="app", step=0)
+    d.arrow([(S + SW, yc(1)), (K, yc(1))], OR, status="optin", aid="obi")
+    d.arrow([(K + KW, yc(0)), (A, yc(0))], OR, label="OTLP traces", label_pos=(602, yc(0) + 4), aid="tr", step=1)
+    d.arrow([(K + KW, yc(1)), (600, yc(1)), (600, yc(4) - 14), (A, yc(4) - 14)], OR, aid="met", step=1)
+    d.arrow([(S + SW, yc(2)), (K, yc(2))], OR, aid="logs-in", step=2)
+    d.arrow([(K + KW, yc(2)), (A, yc(2))], OR, label="logs", label_pos=(562, yc(2) + 4), aid="logs", step=2)
+    d.arrow([(S + SW, yc(3)), (K, yc(3))], OR, aid="ev-in", step=3)
+    d.arrow([(K + KW, yc(3)), (A, yc(3))], OR, label="events", label_pos=(562, yc(3) + 4), aid="ev", step=3)
+    d.arrow([(S + SW, yc(4)), (K, yc(4))], OR, aid="scrape", step=4)
+    d.arrow([(K + KW, yc(4) + 14), (A, yc(4) + 14)], OR, aid="rw", step=4)
+    d.arrow([(S + SW, yc(5)), (K, yc(5))], OR, aid="falco", step=5)
+    d.arrow([(K + KW, yc(5)), (A, yc(5))], OR, label="webhook", label_pos=(562, yc(5) + 4), aid="esc", step=5)
+    # consumption
+    d.arrow([(B, yc(1) + 20), (A + AW, yc(1) + 20)], CY, aid="q-os", step=6)
+    d.arrow([(B, 300), (920, 300), (920, yc(4)), (A + AW, yc(4))], CY, aid="q-prom", step=6)
+    d.arrow([(C + CW / 2, Y[0] + BH), (C + CW / 2, 240), (B + BW, 240)], CY, aid="bs", step=7)
+    d.arrow([(C, 299), (B + BW, 299)], CY, aid="gate", step=7)
+    d.arrow([(A + AW, yc(5)), (B, yc(5))], OR, aid="wf", step=8)
+    d.arrow([(C, yc(3)), (B + BW, yc(3))], CY, status="planned", aid="finops")
+    d.arrow([(C, yc(4)), (B + BW, yc(4))], CY, status="planned", aid="rca")
+    d.arrow([(1020, Y[3]), (1020, Y[1] + 98)], CY, status="planned", label="MCP", label_pos=(1030, 349),
+            label_anchor="start", aid="mcp")
+    d.arrow([(B + BW, yc(5)), (C + CW / 2, yc(5)), (C + CW / 2, Y[4] + BH)], CY, status="optin", aid="wf-rca")
+
+    d.require("OTel Collector", "Fluent Bit", "k8s events collector", "Prometheus agent", "OBI", "OpenSearch",
+              "Prometheus", "observer API", "Backstage", "Falco", "falcosidekick", "argo-events", "RCA agent",
+              "FinOps agent", "agentgateway")
+    d.legend(28, 650, ["external", "platform", "security", "bus", "data"], cols=5, col_w=252, focus=True)
+    d.flowkey(28, 762, [(1, "apps (and OBI, opt-in) send OTLP to the node-local OTel Collector → traces to OpenSearch, "
+                           "metrics to Prometheus"),
+                        (2, "Fluent Bit tails container logs (Falco's JSON alerts included) → OpenSearch"),
+                        (3, "k8s events collector → OpenSearch · Prometheus agent remote-writes pod metrics"),
+                        (4, "falcosidekick ≥ Critical → argo-events → falco-response (RCA step only when enabled)"),
+                        (5, "observer API reads the stores for Backstage, the promotion gate and the AI agents")],
+              [OR, OR, OR, OR, CY], title="Flows · animated in this order (orange: collection, cyan: consumption)")
+    return d
+
+
 DIAGRAMS = {
     "architecture": architecture,
     "security": security,
     "network": network,
+    "observability": observability,
     "cluster-lifecycle": cluster_lifecycle,
 }
 
