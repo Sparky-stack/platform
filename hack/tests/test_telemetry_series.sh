@@ -64,4 +64,40 @@ assert_eq "$(yq -r 'length' "$TMP/rules.json")" 2 "kubelet /metrics: two drop ru
 while read -r want got name; do
   assert_eq "$got" "$want" "kubelet /metrics: $name"
 done <<<"$verdicts"
+
+# Data-plane kgateway Envoy (#104): PodMonitor kgateway-http keeps only envoy_cluster_upstream_rq (not _total/_xx/_time).
+yq -o json -I0 'select(.kind == "PodMonitor" and .metadata.name == "kgateway-http")
+  | .spec.podMetricsEndpoints[0].metricRelabelings // []' "$out" > "$TMP/gw-rules.json"
+[[ -s "$TMP/gw-rules.json" ]] || echo '[]' > "$TMP/gw-rules.json"
+assert_eq "$(yq -r 'length' "$TMP/gw-rules.json")" 1 "kgateway-http: one keep rule"
+cat > "$TMP/gw-samples.txt" <<'EOF'
+keep envoy_cluster_upstream_rq
+drop envoy_cluster_upstream_rq_total
+drop envoy_cluster_upstream_rq_xx
+drop envoy_cluster_upstream_rq_time_bucket
+drop envoy_cluster_upstream_rq_completed
+drop envoy_http_downstream_rq_total
+EOF
+gw_verdicts=$(py - "$TMP/gw-rules.json" "$TMP/gw-samples.txt" <<'PY'
+import json, re, sys
+rules = json.load(open(sys.argv[1]))
+for line in open(sys.argv[2]):
+    want, name = line.split()
+    labels = {"__name__": name}
+    verdict = "keep"
+    for r in rules:
+        value = r.get("separator", ";").join(labels.get(l, "") for l in r["sourceLabels"])
+        act = r.get("action", "replace")
+        if act == "drop" and re.fullmatch(r["regex"], value):
+            verdict = "drop"
+            break
+        if act == "keep" and not re.fullmatch(r["regex"], value):
+            verdict = "drop"
+            break
+    print("%s %s %s" % (want, verdict, name))
+PY
+)
+while read -r want got name; do
+  assert_eq "$got" "$want" "kgateway-http /metrics: $name"
+done <<<"$gw_verdicts"
 finish

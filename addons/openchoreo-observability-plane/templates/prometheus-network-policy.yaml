@@ -1,0 +1,31 @@
+{{- /*
+Ingress to Prometheus from platform-authored workflows (promotion-gate in workflows-<orgNamespace>, addon
+openchoreo-platform; #104): the upstream chart's observability-plane-ingress selects every pod in this namespace and
+allows only same-namespace ingress, so without an additive rule here the gate's PromQL query to
+openchoreo-observability-prometheus:9091 (-> pod http-web :9090) is dropped. Tenant build pods never carry fromPodLabels.
+*/ -}}
+{{- $pi := .Values.prometheusIngress }}
+{{- $wp := (.Values.openchoreo).workflowPlane | default dict }}
+{{- if and $pi.enabled $wp.enabled }}
+{{- if not $pi.fromPodLabels }}{{ fail "prometheusIngress.fromPodLabels must not be empty (it would open Prometheus to tenant build pods)" }}{{ end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-platform-workflows
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels: {{ toJson $pi.podLabels }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ printf "workflows-%s" (required "openchoreo.orgNamespace is required" .Values.openchoreo.orgNamespace) }}
+          podSelector:
+            matchLabels: {{ toJson $pi.fromPodLabels }}
+      ports:
+        {{- range $pi.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+{{- end }}

@@ -39,8 +39,19 @@ openchoreo:
     enabled: true
     httpPort: 11080           # obs-plane Gateway HTTP listener == k3d published port
     tlsPort: 11085            # obs-plane Gateway TLS passthrough listener (OpenSearch) == k3d published port
+  workflowPlane:
+    enabled: true
 
 # --- platform glue (templates/) -------------------------------------------------------------------------------------
+# Additive NetworkPolicy opening Prometheus (:9091 Service -> :9090 pod http-web) to platform-authored workflow pods in
+# workflows-<orgNamespace> (promotion-gate; #104). Upstream's observability-plane-ingress blocks cross-namespace ingress
+# to every pod except gateway-default and opentelemetry-collector.
+prometheusIngress:
+  enabled: true
+  podLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability }
+  fromPodLabels: { platform.koorikla.io/egress: openchoreo }   # == openchoreo-platform promotionGate.podLabels
+  ports: [9090]             # pod port http-web: NetworkPolicy matches after the Service DNAT (:9091 -> :9090)
+
 # ClusterObservabilityPlane `default` (cluster-scoped, on mgmt). Its agent identity: the chart's self-signed client cert
 # (Secret cluster-agent-tls in this namespace, CN = planeID); the plane trusts exactly that certificate (ca.crt of a
 # self-signed cert == the cert). Same cluster as the cluster-gateway, so nothing leaves mgmt.

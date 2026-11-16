@@ -4,7 +4,8 @@ a component). The run renders into the workflow plane (namespace workflows-<org 
 injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Like the build
 ClusterWorkflows the step gets no ServiceAccount token (only Argo's executor does). The run namespace is default-deny
 (addon openchoreo-workflow-plane, NetworkPolicy build-runs-default-deny: DNS, public 80/443 incl. GitHub); podLabels
-opt the gate pod into NetworkPolicy platform-workflows-openchoreo (OpenChoreo API, Thunder, observer).
+opt the gate pod into NetworkPolicy platform-workflows-openchoreo (OpenChoreo API, Thunder, observer, observability
+Prometheus for the 5xx rate of the data-plane gateway's requests to the component).
 Credentials: a per-run ExternalSecret against the workflow plane's ClusterSecretStore (owned by the run, deleted with
 it after ttlAfterCompletion; fetched once, never refreshed), mounted read-only as files into the one gate pod (pod
 deleted on completion). GitHub: the gate's own App (store key promotionGate.github.key); the gate mints a token for
@@ -31,8 +32,8 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     openchoreo.dev/display-name: Promotion gate
     openchoreo.dev/description: >-
-      Verifies a release in its source environment (pipeline path, readiness, HTTP smoke test, observer alerts and
-      error rate, freeze windows) and opens the promotion pull request for the target environment's ReleaseBinding.
+      Verifies a release in its source environment (pipeline path, readiness, HTTP smoke test, observer alerts,
+      gateway 5xx rate, freeze windows) and opens the promotion pull request for the target environment's ReleaseBinding.
 spec:
   workflowPlaneRef:
     kind: ClusterWorkflowPlane
@@ -162,6 +163,7 @@ spec:
               - { name: API_URL, value: {{ $apiURL | quote }} }
               - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
               - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
+              - { name: PROMETHEUS_URL, value: {{ required "promotionGate.prometheusURL is required" $g.prometheusURL | quote }} }
               - { name: CLIENT_ID, value: {{ $g.clientID | quote }} }
               - { name: SECRETS_DIR, value: /var/run/secrets/promotion-gate }
               - { name: GITHUB_OWNER_URL, value: {{ $githubOwner | quote }} }

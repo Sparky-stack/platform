@@ -102,7 +102,6 @@ spec:
     - componentrelease:view
     - releasebinding:view
     - alerts:view
-    - metrics:view
     - logs:view
 ---
 apiVersion: openchoreo.dev/v1alpha1
