@@ -36,3 +36,25 @@ openchoreo.controlPlane.host and openchoreo.controlPlane.clusterGatewayURL (whic
 {{- if ne (toString $obsEnabled) (toString $cp.backstage.features.observability.enabled) }}
 {{- fail (printf "openchoreo-control-plane.backstage.features.observability.enabled (%v) must equal openchoreo.observability.enabled (%v)" $cp.backstage.features.observability.enabled $obsEnabled) }}
 {{- end }}
+{{- /*
+Scaffolder GitHub App (docs/project-templates.md "Repository creation"): the wrapper's ExternalSecret and the
+subchart's GitHub integration + env must be switched on together; one without the other either breaks Backstage's
+startup (config references unset env) or leaves an unused credential.
+*/ -}}
+{{- $app := .Values.scaffolder.githubApp }}
+{{- $gh := dig "appConfig" "integrations" "github" list $cp.backstage }}
+{{- $hasApp := false }}
+{{- range $gh }}{{ if .apps }}{{ $hasApp = true }}{{ end }}{{ end }}
+{{- $envFromSecret := list }}
+{{- range (concat ($cp.backstage.env | default list) ($cp.backstage.extraEnv | default list)) }}
+{{- if eq (dig "valueFrom" "secretKeyRef" "name" "" .) $app.secretName }}{{ $envFromSecret = append $envFromSecret .name }}{{ end }}
+{{- end }}
+{{- if and $app.enabled (not $hasApp) }}
+{{- fail "scaffolder.githubApp.enabled needs openchoreo-control-plane.backstage.appConfig.integrations.github[].apps (docs/project-templates.md)" }}
+{{- end }}
+{{- if and $hasApp (not $app.enabled) }}
+{{- fail "openchoreo-control-plane.backstage.appConfig.integrations.github[].apps is set but scaffolder.githubApp.enabled is false (no credentials Secret)" }}
+{{- end }}
+{{- if and $app.enabled (or (not (has "GITHUB_APP_ID" $envFromSecret)) (not (has "GITHUB_APP_PRIVATE_KEY" $envFromSecret))) }}
+{{- fail (printf "scaffolder.githubApp.enabled needs openchoreo-control-plane.backstage.extraEnv GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY from Secret %s" $app.secretName) }}
+{{- end }}

@@ -1,0 +1,4 @@
+# Pinned toolchain for local work (`mise install`); the image builds with Maven 3.9 on Temurin 25.
+[tools]
+java = "temurin-25"
+maven = "3.9.16"

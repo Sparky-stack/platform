@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check the repo's Markdown for references that do not resolve (task lint).
 
-Checked in every *.md outside .git and vendored chart dependencies:
+Checked in every *.md outside .git, vendored chart dependencies and project-template skeletons (templates/*/skeleton:
+the docs of the repositories they become; hack/tests/test_project_templates.sh renders and checks them):
   - relative links and <img src>/<a href> targets exist; `#anchors` match a heading of the target file;
   - `doc.md "Section"` cross-references (in prose or code spans) match a heading of that doc;
   - repo paths in code spans (`addons/...`, `charts/...`, `hack/...`, `docs/...`, `installations/...`,
@@ -28,7 +29,8 @@ def md_files():
     for d, dirs, files in os.walk(ROOT):
         rel = os.path.relpath(d, ROOT)
         parts = [] if rel == "." else rel.split(os.sep)
-        if ".git" in parts or "node_modules" in parts or (len(parts) >= 3 and parts[0] == "addons" and parts[2] == "charts"):
+        if ".git" in parts or "node_modules" in parts or (len(parts) >= 3 and parts[0] == "addons" and parts[2] == "charts") \
+                or (len(parts) >= 3 and parts[0] == "templates" and parts[2] == "skeleton"):
             dirs[:] = []
             continue
         dirs.sort()

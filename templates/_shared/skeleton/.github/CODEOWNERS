@@ -1,0 +1,4 @@
+# Code owners review every change (the repo ruleset requires one code-owner approval; Crossplane reconciles it from
+# koorikla/platform installations/<inst>/repos/, not from here). Production promotions are changes to
+# deploy/openchoreo/release-bindings/production.yaml.
+* ${{ values.codeowners }}

@@ -1,0 +1,7 @@
+# Tenant = one OpenChoreo Project + its app repos (schema: charts/tenant/values.yaml). Onboarded by the Backstage
+# scaffolder (docs/project-templates.md); each app repo owns its OpenChoreo manifests under deploy/openchoreo.
+project: ${{ values.project }}
+description: OpenChoreo project ${{ values.project }}
+apps:
+  - name: ${{ values.name }}
+    repoURL: https://github.com/${{ values.repoOwner }}/${{ values.name }}.git

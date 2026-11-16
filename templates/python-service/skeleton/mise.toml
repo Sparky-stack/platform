@@ -1,0 +1,4 @@
+# Pinned toolchain for local work (`mise install`); the image uses the distroless runtime's Python (3.13).
+[tools]
+python = "3.13"
+uv = "0.13.8"
