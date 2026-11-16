@@ -48,7 +48,7 @@ def architecture() -> Diagram:
                 "workload clusters (dev1, prod1) run the apps.")
     c, g, w = COLS4, GUT4, CW4
     d.box(c[1], 88, w, 56, "external", "git", ["platform + app repos"])
-    R1 = 248
+    R1 = 264
     R2 = R1 + PITCH
     d.zone(16, 184, 928, R2 + H + 24 - 184, "mgmt cluster", "mgmt")
     d.box(c[0], R1, w, H, "security", "Kyverno", ["admission policy", "Pod Security"])
@@ -63,23 +63,22 @@ def architecture() -> Diagram:
     d.zone(16, ZT, 921, 152, "workload clusters", "workload", stacked=1)
     R3 = ZT + 48
     d.box(c[0], R3, w, H, "workload", "addons", ["kgateway · Istio", "Cilium · Falco · OTel"])
-    d.box(c[1], R3, w, H, "security", "Kyverno", ["signed images only", "Pod Security"], name="Kyverno (workload)",
+    d.box(c[1], R3, w, H, "workload", "app workloads", ["dp-* namespaces"])
+    d.box(c[2], R3, w, H, "security", "Kyverno", ["signed images only", "Pod Security"], name="Kyverno (workload)",
           emphasis=True)
-    d.box(c[2], R3, w, H, "workload", "app workloads", ["dp-* namespaces"])
     d.box(c[3], R3, w, H, "workload", "cluster-agent", ["OpenChoreo", "data plane"])
 
     xg = c[1] + w / 2
-    d.arrow([(xg, 144), (xg, R1)], step=1, badge=(xg, R1 - 36))
+    d.arrow([(xg, 144), (xg, R1)], step=1)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=2)
-    x3 = c[2] + w / 2
-    d.arrow([(x3, R1 + H), (x3, ZT)], step=3, badge=(x3, CH))
+    x3 = c[2] + w - 40
+    d.arrow([(x3, R1 + H), (x3, CH), (g[2], CH), (g[2], ZT)], step=3)
     x4 = c[1] + 50
-    d.arrow([(x4, R1 + H), (x4, CH), (g[0], CH), (g[0], ymid(R3)), (c[0] + w, ymid(R3))], step=4,
-            badge=((x4 + g[0]) / 2, CH))
+    d.arrow([(x4, R1 + H), (x4, CH), (g[0], CH), (g[0], ymid(R3)), (c[0] + w, ymid(R3))], step=4)
     xa = c[3] + w / 2
     d.arrow([(xa, R2 + H), (xa, R3)], step=5, badge=(xa, CH))
     d.arrow([(c[3], ymid(R3)), (c[2] + w, ymid(R3))], step=6)
-    d.arrow([(c[1] + w, ymid(R3)), (c[2], ymid(R3))], step=7)
+    d.arrow([(c[2], ymid(R3)), (c[1] + w, ymid(R3))], step=7)
 
     d.require("git", "Argo CD", "Cluster API", "secrets & PKI", "Harbor", "OpenChoreo", "Kyverno",
               "Kyverno (workload)", "cluster-agent", "app workloads")
@@ -87,9 +86,9 @@ def architecture() -> Diagram:
           "Each fleet file becomes a Cluster API cluster on mgmt",
           "Cluster API creates the k3s cluster on docker, AWS or Hetzner",
           "Argo CD pushes the addons to every cluster whose labels match",
-          "OpenChoreo sends app releases to the cluster-agent, which dials out to mgmt (mTLS)",
-          "The agent applies them as app workloads in dp-* namespaces",
-          "Kyverno admits only signed images and Pod Security baseline pods")
+          "OpenChoreo sends app releases down the connection the cluster-agent dials out (mTLS)",
+          "The agent applies them; every pod passes Kyverno admission first",
+          "Kyverno admits only signed images and Pod Security baseline pods into dp-* namespaces")
     return d
 
 
@@ -144,18 +143,18 @@ def network() -> Diagram:
     d = Diagram("Network · a request in, the agents out",
                 "kgateway for north-south, Istio ambient for identity and mTLS, Cilium or flannel underneath; "
                 "agents and collectors dial out to mgmt.")
-    C = [32, 256, 480]
+    C = [40, 264, 488]
     BW = 144
-    WX, WW = 720, 200
-    R = [248, 248 + PITCH, 248 + 2 * PITCH, 248 + 3 * PITCH]
+    WX, WW = 728, 192
+    R = [264, 264 + PITCH, 264 + 2 * PITCH, 264 + 3 * PITCH]
     d.box(C[1] + BW / 2 - 100, 88, 200, 56, "external", "client", ["HTTPS to the app URL"])
-    d.zone(16, 184, 624, R[3] + H + 24 - 184, "workload cluster", "workload")
-    d.zone(704, 184, 232, R[2] + H + 24 - 184, "mgmt cluster", "mgmt")
+    d.zone(16, 184, 632, R[3] + H + 24 - 184, "workload cluster", "workload")
+    d.zone(712, 184, 224, R[2] + H + 24 - 184, "mgmt cluster", "mgmt")
     d.box(C[1], R[0], BW, H, "workload", "kgateway", ["Gateway API", "HTTPRoute"])
     d.box(C[2], R[0], BW, H, "workload", "agents", ["cluster-agent, OTel,", "Fluent Bit"])
-    d.box(C[0], R[1], BW, H, "security", "Kyverno", ["enrols dp-* in", "Istio ambient"], emphasis=True)
+    d.box(C[0], R[1], BW, H, "security", "Kyverno", ["enrols dp-* in", "Istio ambient"], emphasis=True,
+          step=1)
     d.box(C[1], R[1], BW, H, "workload", "app pods", ["dp-* namespaces", "(waypoint: opt-in)"])
-    d.box(C[2], R[1], BW, H, "workload", "east-west", ["gateway to the", "mesh group's peers"], status="optin")
     d.box(C[0], R[2], C[2] + BW - C[0], H, "workload", "ztunnel · Istio ambient",
           ["per node · HBONE mTLS between every pod pair", "SPIFFE identity · no sidecars"])
     d.box(C[0], R[3], C[2] + BW - C[0], H, "workload", "Cilium or flannel",
@@ -164,23 +163,19 @@ def network() -> Diagram:
     d.box(WX, R[1], WW, H, "mgmt", "cluster-gateway", ["checks the agent's", "client certificate"])
     d.box(WX, R[2], WW, H, "data", "observability plane", ["own Gateway →", "OpenSearch, Prometheus"])
     xc = C[1] + BW / 2
-    d.arrow([(xc, 144), (xc, R[0])], step=1, badge=(xc, R[0] - 36))
-    d.arrow([(xc, R[0] + H), (xc, R[1])], step=2)
-    d.arrow([(C[0] + BW, ymid(R[1])), (C[1], ymid(R[1]))], step=3)
+    d.arrow([(xc, 144), (xc, R[0])], step=2)
+    d.arrow([(xc, R[0] + H), (xc, R[1])], step=3)
     d.arrow([(xc, R[1] + H), (xc, R[2])], step=4)
     d.arrow([(xc, R[2] + H), (xc, R[3])], step=5)
-    xe = C[2] + BW / 2
-    d.arrow([(xe, R[2]), (xe, R[1] + H)], status="optin")
-    xz = 672                                   # badge column between the zones
+    xz = 680                                   # badge column between the zones
     d.arrow([(C[2] + BW, ymid(R[0]) - 14), (WX, ymid(R[0]) - 14)], step=6, badge=(xz, ymid(R[0]) - 14))
     d.arrow([(WX + WW / 2, R[0] + H), (WX + WW / 2, R[1])], step=7)
     d.arrow([(C[2] + BW, ymid(R[0]) + 18), (xz, ymid(R[0]) + 18), (xz, ymid(R[2])), (WX, ymid(R[2]))], step=8)
-    d.line_label = "opt-in path"
-    d.require("kgateway", "Kyverno", "ztunnel · Istio ambient", "Cilium or flannel", "east-west",
-              "mgmt Gateway", "cluster-gateway", "agents")
-    d.key("A client calls the app URL; kgateway (Gateway API) takes it",
+    d.require("kgateway", "Kyverno", "ztunnel · Istio ambient", "Cilium or flannel", "mgmt Gateway", "cluster-gateway",
+              "agents")
+    d.key("Kyverno enrols every OpenChoreo dp-* namespace in Istio ambient (before any traffic)",
+          "A client calls the app URL; kgateway (Gateway API) takes it",
           "An HTTPRoute sends it to the app Service (through a waypoint if opted in)",
-          "Kyverno enrols every OpenChoreo dp-* namespace in Istio ambient",
           "Every pod-to-pod hop rides ztunnel's HBONE mTLS with SPIFFE identities",
           "Packets travel on the CNI: Cilium (eBPF) or flannel, chosen per cluster",
           "The cluster-agent dials out to mgmt on :8443 (TLS passthrough, SNI)",
@@ -271,10 +266,12 @@ def sdlc() -> Diagram:
     d.arrow([(c[0] + w, ymid(R[2])), (c[1], ymid(R[2]))], step=7)
     d.arrow([(c[1] + w, ymid(R[2])), (c[2], ymid(R[2]))], step=8)
     d.arrow([(c[2] + w, ymid(R[2])), (c[3], ymid(R[2]))], step=9)
-    d.arrow([(c[2] + 50, R[1] + H), (c[2] + 50, ch), (c[1] + w / 2, ch), (c[1] + w / 2, R[2])])
-    d.arrow([(c[2] + w - 40, R[1] + H), (c[2] + w - 40, R[2])])
-    d.arrow([(c[3] + 40, R[1] + H), (c[3] + 40, ch + 16), (c[2] + w - 16, ch + 16), (c[2] + w - 16, R[2])])
-    d.line_label = "gate on that edge"
+    gy = ch + 18                               # the promotion gate sits on edges 7 and 8 (lines end at their badges)
+    d.arrow([(c[2] + 40, R[1] + H), (c[2] + 40, gy), (g[0], gy), (g[0], ymid(R[2]) - 15)], loose=True)
+    d.arrow([(g[1], gy), (g[1], ymid(R[2]) - 15)], loose=True)
+    d.junction(g[1], gy, flow=False)
+    d.arrow([(c[3] + w / 2, R[1] + H), (c[3] + w / 2, gy), (c[2] + w - 30, gy), (c[2] + w - 30, R[2])])
+    d.line_label = "gate: on an edge, or on production writes"
     d.require("app repo", "build & sign", "registry", "Argo CD", "release", "promotion gate",
               "production gate", "development", "staging", "production", "Kyverno (prod1)")
     d.key("A push to main starts a build on the OpenChoreo workflow plane (or GitHub Actions)",

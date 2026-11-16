@@ -61,9 +61,9 @@ The numbered flow of each diagram, word for word.
 2. Each fleet file becomes a Cluster API cluster on mgmt
 3. Cluster API creates the k3s cluster on docker, AWS or Hetzner
 4. Argo CD pushes the addons to every cluster whose labels match
-5. OpenChoreo sends app releases to the cluster-agent, which dials out to mgmt (mTLS)
-6. The agent applies them as app workloads in `dp-*` namespaces
-7. Kyverno admits only signed images and Pod Security baseline pods
+5. OpenChoreo sends app releases down the connection the cluster-agent dials out (mTLS)
+6. The agent applies them; every pod passes Kyverno admission first
+7. Kyverno admits only signed images and Pod Security baseline pods into `dp-*` namespaces
 
 ### Security ([security.svg](security.svg))
 
@@ -77,9 +77,9 @@ The numbered flow of each diagram, word for word.
 
 ### Network ([network.svg](network.svg))
 
-1. A client calls the app URL; kgateway (Gateway API) takes it
-2. An HTTPRoute sends it to the app Service (through a waypoint if opted in)
-3. Kyverno enrols every OpenChoreo `dp-*` namespace in Istio ambient
+1. Kyverno enrols every OpenChoreo `dp-*` namespace in Istio ambient (before any traffic)
+2. A client calls the app URL; kgateway (Gateway API) takes it
+3. An HTTPRoute sends it to the app Service (through a waypoint if opted in)
 4. Every pod-to-pod hop rides ztunnel's HBONE mTLS with SPIFFE identities
 5. Packets travel on the CNI: Cilium (eBPF) or flannel, chosen per cluster
 6. The cluster-agent dials out to mgmt on :8443 (TLS passthrough, SNI)

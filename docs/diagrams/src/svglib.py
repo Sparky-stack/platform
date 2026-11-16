@@ -286,9 +286,9 @@ class Diagram:
                     return (ox + ow, y)
         return p
 
-    def junction(self, x, y):
-        """Dot where a numbered flow forks or joins."""
-        self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.6" fill="{ACCENT}"/>')
+    def junction(self, x, y, flow=True):
+        """Dot where an arrow forks or joins (accent on the numbered flow, grey otherwise)."""
+        self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.6" fill="{ACCENT if flow else LINE}"/>')
 
     def _marker(self, color):
         self.colors.add(color)
@@ -623,12 +623,6 @@ class Diagram:
         for n in sorted(set(self.steps) - self.badges):
             issues.append(f"key step {n} has no badge in the diagram")
         # numbered flow: every accent arrow carries its badge, with visible shaft on both sides of it
-        def _unused_touches(p, other):
-            pts = self.flow_arrows[other]
-            return any(self._seg_hits(p, p, (min(a[0], b[0]) - .6, min(a[1], b[1]) - .6,
-                                              abs(b[0] - a[0]) + 1.2, abs(b[1] - a[1]) + 1.2), shrink=0)
-                       for a, b in zip(pts, pts[1:]))
-
         def linked(aid):    # arrows of the same step sharing a junction with this one
             st, pts = self.flow_step[aid], self.flow_arrows[aid]
             return [o for o in self.flow_arrows if o != aid and self.flow_step[o] == st

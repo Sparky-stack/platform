@@ -56,6 +56,7 @@ a = d.box(40, 440, 120, 60, "mgmt", "src")
 b = d.box(400, 440, 120, 60, "mgmt", "dst")
 d.arrow([(160, 470), (400, 470)], step=1, badge=False)
 d.badge(300, 600, 2)
+d.badge(340, 600, 2)
 d.key("one", "two", "three")
 d.text(40, 700, "tiny", 10)
 for i in d.check():
@@ -67,6 +68,7 @@ assert_match "$out" "15 boxes > 12" "more than 12 boxes is reported"
 assert_match "$out" "flow arrow a0 has no badge" "numbered arrow without its badge is reported"
 assert_match "$out" "key step 3 has no badge" "key entry without a badge is reported"
 assert_match "$out" "text below 13 px" "type floor is enforced"
+assert_match "$out" "step 2 has 2 badges" "a step number drawn twice is reported"
 
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
