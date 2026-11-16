@@ -7,6 +7,7 @@
 # The same script runs against a real OpenBao in hack/tests/openbao_integration.sh (opt-in, docker).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+source "$ROOT/hack/lib/portable.sh"
 
 echo "== test_openbao_reconcile =="
 cd "$ROOT"
@@ -184,7 +185,7 @@ assert_eq "$(grep -c 'platform-mesh-bootstrap' "$S/calls" || true)" 0 "CronJob: 
 assert_eq "$(grep -cE '/generate/|sign-intermediate|set-signed|secrets ' "$S/calls" || true)" 0 "CronJob: no CA operation"
 assert_match "$(cat "$TMP/termination")" '^done: configured=\[dev1 prod1\] failed=\[down1\]' "the summary is the termination message (pod status)"
 # a new group without CA: the CronJob cannot create it; its members fail (reported), the rest are configured
-sed -i 's/^MESH_GROUPS=.*/MESH_GROUPS=local prod new/' "$TMP/cronenv"; member new1 new
+sed_inplace 's/^MESH_GROUPS=.*/MESH_GROUPS=local prod new/' "$TMP/cronenv"; member new1 new
 rc=0; run "$TMP/cronenv" || rc=$?
 assert_match "$(cat "$TMP/out")" 'group new: no intermediate CA yet' "CronJob: a group without CA is reported"
 assert_match "$(cat "$TMP/out")" 'failed=\[down1 new1\]' "CronJob: its members fail, the others are configured"
@@ -207,7 +208,7 @@ rm -f "$IN"/*; member Bad_Name local
 rc=0; run || rc=$?
 assert_eq "$rc" 1 "only invalid member inputs: reconcile exits non-zero"
 assert_match "$(cat "$TMP/out")" 'every member input is invalid: Bad_Name' "only invalid member inputs: named"
-rc=0; ( sed -i 's/^MESH_GROUPS=.*/MESH_GROUPS=Bad_Group/' "$TMP/env"; run ) || rc=$?
+rc=0; ( sed_inplace 's/^MESH_GROUPS=.*/MESH_GROUPS=Bad_Group/' "$TMP/env"; run ) || rc=$?
 assert_eq "$rc" 1 "negative: a mesh group that is not a DNS label fails the run"
 render_env
 
