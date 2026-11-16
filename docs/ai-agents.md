@@ -85,8 +85,10 @@ Without the gateway, set `rca.llm.baseUrl: ""` / `finOpsAgent.llmBaseUrl: ""` an
 
 1. Seed `openchoreo-ai` properties `rca-llm-api-key` (placeholder with the gateway) and `rca-oauth-client-secret`.
 2. `addons/thunder/values.yaml` (or the installation overlay): `bootstrapSecret.aiAgentClients: [rca]`. That one list
-   syncs the client secret into `thunder-bootstrap` and switches on script 53 (`files/ai-agent-clients/`, mounted by
-   `templates/ai-agent-clients.yaml`); nothing to uncomment.
+   syncs the client secret into `thunder-bootstrap` and switches on script 53 (`files/ai-agent-clients/`, rendered by
+   `templates/ai-agent-clients.yaml` into the setup Job's `bootstrap/ai-agent-clients/`); nothing to uncomment. An
+   unlisted agent has no file there at all: Thunder's bootstrap fails the whole import on an empty or comment-only
+   document.
 3. `addons/openchoreo-observability-plane/values.yaml` (or the installation overlay):
    `openchoreo-observability-plane.rca.enabled: true` and `rca.llm.modelName` (e.g. `gpt-5.2`).
 
@@ -108,6 +110,8 @@ outside the installation's control-plane host.
   Thunder scripts 53/60, secret and setup-Job env all follow `bootstrapSecret.aiAgentClients`, match upstream ids and
   the agents' client IDs; switched on, the agents' base URLs hit the
   agentgateway Gateway, the observer/FinOps URLs hit `finops-opencost` Services, all images are digest-pinned.
+- `hack/tests/test_thunder_bootstrap.sh`: rebuilds the bootstrap directory the setup Job sees (agents off, one, both,
+  every installation) and parses it the way Thunder does: every document a mapping with `resource_type`.
 - helm-unittest: `addons/agentgateway`, `addons/openchoreo-observability-plane` (agent Secrets, plane URLs, guards),
   `addons/thunder` (agent client secrets).
 

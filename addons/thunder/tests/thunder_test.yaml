@@ -100,26 +100,54 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: 'bootstrapSecret.aiAgentClients: "portal-assistant" is not one of rca, finops' }
 
-  - it: AI agent client scripts are empty documents while no agent is listed
+  # Regression (thunder-setup outage after PR #5): an unlisted agent was a comment-only file, which Thunder's bootstrap
+  # rejects ("document N root must be a YAML mapping"). Off must mean no key, hence no file.
+  - it: no AI agent client file while no agent is listed (README only)
     template: templates/ai-agent-clients.yaml
     asserts:
       - equal: { path: 'metadata.annotations["helm.sh/hook-weight"]', value: "-10" }
-      - notMatchRegex: { path: 'data["53-rca-agent-client.yaml"]', pattern: resource_type }
-      - notMatchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: resource_type }
+      - exists: { path: data.README }
+      - notExists: { path: 'data["53-rca-agent-client.yaml"]' }
+      - notExists: { path: 'data["60-finops-agent-client.yaml"]' }
 
   - it: listing an agent switches on exactly its Thunder client, secret from the env (never inline)
     template: templates/ai-agent-clients.yaml
     set:
       bootstrapSecret.aiAgentClients: [finops]
     asserts:
+      - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: '(?m)^resource_type: application$' }
       - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: 'clientId: openchoreo-finops-agent' }
       - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: 'clientSecret: "\{\{ \.FINOPS_AGENT_CLIENT_SECRET \}\}"' }
-      - notMatchRegex: { path: 'data["53-rca-agent-client.yaml"]', pattern: resource_type }
+      - notExists: { path: 'data["53-rca-agent-client.yaml"]' }
 
-  - it: setup Job mounts both scripts and reads the agent secrets as optional env
+  - it: both agents listed render both clients
+    template: templates/ai-agent-clients.yaml
+    set:
+      bootstrapSecret.aiAgentClients: [rca, finops]
+    asserts:
+      - matchRegex: { path: 'data["53-rca-agent-client.yaml"]', pattern: 'clientId: openchoreo-rca-agent' }
+      - matchRegex: { path: 'data["60-finops-agent-client.yaml"]', pattern: 'clientId: openchoreo-finops-agent' }
+      - matchRegex: { path: data.README, pattern: 'finops, rca' }
+
+  - it: setup Job projects the agent clients into a bootstrap subdirectory, optional per key, and reads their secrets as optional env
     template: charts/thunderid/templates/setup-job.yaml
     asserts:
       - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ai-agent-clients
+            configMap:
+              name: thunder-ai-agent-clients
+              optional: true
+              items:
+                - { key: README, path: ai-agent-clients/README }
+                - { key: 53-rca-agent-client.yaml, path: ai-agent-clients/53-rca-agent-client.yaml }
+                - { key: 60-finops-agent-client.yaml, path: ai-agent-clients/60-finops-agent-client.yaml }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/ai-agent-clients, subPath: ai-agent-clients, readOnly: true }
+      # never again a per-file subPath mount of a key that may be absent or a placeholder
+      - notContains:
           path: spec.template.spec.containers[0].volumeMounts
           content: { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/53-rca-agent-client.yaml, subPath: 53-rca-agent-client.yaml, readOnly: true }
       - contains:

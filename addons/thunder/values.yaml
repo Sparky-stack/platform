@@ -121,15 +121,22 @@ thunderid:
       - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret, optional: true }
       - { name: FINOPS_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: finops-agent-client-secret, optional: true }
     # Scripts 53 / 60 (AI agent OAuth clients) from ConfigMap thunder-ai-agent-clients (templates/ai-agent-clients.yaml),
-    # derived from bootstrapSecret.aiAgentClients: a listed agent's file is the upstream client, an unlisted one a
-    # comment-only document the bootstrap skips. Fixed subPath mounts next to the shipped bundle.
+    # derived from bootstrapSecret.aiAgentClients: a listed agent's key is the upstream client, an unlisted agent has
+    # NO key. Thunder's bootstrap reads every *.yaml below /opt/thunderid/bootstrap (recursively) and fails on an empty
+    # or comment-only document, so an unlisted agent must be no file at all, not a placeholder file: the items are
+    # optional (a missing key = no file) and land in directory ai-agent-clients/, mounted by subPath so only the real
+    # files appear (no ConfigMap ..data metadata). README (always present, not *.yaml) keeps the directory.
     extraVolumes:
       - name: ai-agent-clients
         configMap:
           name: thunder-ai-agent-clients
+          optional: true      # = per-key: a key missing from the ConfigMap is skipped instead of failing the pod
+          items:
+            - { key: README, path: ai-agent-clients/README }
+            - { key: 53-rca-agent-client.yaml, path: ai-agent-clients/53-rca-agent-client.yaml }
+            - { key: 60-finops-agent-client.yaml, path: ai-agent-clients/60-finops-agent-client.yaml }
     extraVolumeMounts:
-      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/53-rca-agent-client.yaml, subPath: 53-rca-agent-client.yaml, readOnly: true }
-      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/60-finops-agent-client.yaml, subPath: 60-finops-agent-client.yaml, readOnly: true }
+      - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/ai-agent-clients, subPath: ai-agent-clients, readOnly: true }
 
   # Declarative documents imported by the setup Job on top of ThunderID's shipped defaults; upserted by fixed id
   # (01900000-0000-7000-8001-* block, clear of ThunderID's own). Upstream 48, 49, 51, 54 verbatim except the client

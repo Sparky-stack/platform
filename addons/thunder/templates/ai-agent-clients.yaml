@@ -1,11 +1,18 @@
 {{- /*
 ConfigMap thunder-ai-agent-clients: Thunder bootstrap scripts 53 (RCA agent) and 60 (FinOps agent), mounted into the
-setup Job by values setup.extraVolumes / extraVolumeMounts. Derived from bootstrapSecret.aiAgentClients, the same list
-that adds the client secrets to Secret thunder-bootstrap (templates/bootstrap-secret.yaml): a listed agent gets the
-upstream client (files/ai-agent-clients/), an unlisted one a comment-only document. Thunder's bootstrap skips empty
-documents (importer parser: no content -> continue) and only resolves `{{ .VAR }}` placeholders that are present, so
-an unlisted agent needs neither its secret nor its env var (secretEnv entries are optional). One switch, no comments
-to toggle (AGENTS.md invariant 7). PreSync hook below the setup Job's weight (-5), like upstream's bootstrap ConfigMap.
+setup Job as directory /opt/thunderid/bootstrap/ai-agent-clients/ (values setup.extraVolumes / extraVolumeMounts).
+Derived from bootstrapSecret.aiAgentClients, the same list that adds the client secrets to Secret thunder-bootstrap
+(templates/bootstrap-secret.yaml): a listed agent gets its upstream client file (files/ai-agent-clients/), an unlisted
+one NO key at all. One switch, no comments to toggle (AGENTS.md invariant 7).
+
+No placeholder for an unlisted agent: Thunder's bootstrap (1.0.1 internal/system/bootstrap/orchestrator.go loadBundle)
+walks the bootstrap directory recursively, joins every *.yaml/*.yml/*.json file with `---`, and the importer
+(internal/system/importer/parser.go) rejects a document whose root is not a mapping. An empty or comment-only file is
+such a document: "document N root must be a YAML mapping" fails the setup Job. The volume maps each key below
+ai-agent-clients/ with optional `items`, so a missing key is no file; README (not *.yaml, never read by the bootstrap)
+keeps the directory present either way. An unlisted agent needs neither its secret nor its env var (secretEnv entries
+are optional). hack/tests/test_thunder_bootstrap.sh parses the rendered bundle the way Thunder does.
+PreSync hook below the setup Job's weight (-5), like upstream's bootstrap ConfigMap.
 */ -}}
 {{- $on := .Values.bootstrapSecret.aiAgentClients | default list }}
 {{- $scripts := dict "rca" "53-rca-agent-client.yaml" "finops" "60-finops-agent-client.yaml" }}
@@ -26,12 +33,13 @@ metadata:
     helm.sh/hook-weight: "-10"
     helm.sh/hook-delete-policy: before-hook-creation
 data:
+  README: |
+    OAuth clients of the OpenChoreo AI agents (docs/ai-agents.md), from bootstrapSecret.aiAgentClients:
+    {{ if $on }}{{ $on | sortAlpha | join ", " }}{{ else }}none listed{{ end }}. An unlisted agent has no file here.
   {{- range $agent := keys $scripts | sortAlpha }}
+  {{- if has $agent $on }}
   {{- $file := index $scripts $agent }}
   {{ $file }}: |
-    {{- if has $agent $on }}
     {{- $.Files.Get (printf "files/ai-agent-clients/%s" $file) | trim | nindent 4 }}
-    {{- else }}
-    # {{ $agent }} agent client off: bootstrapSecret.aiAgentClients does not list {{ $agent }} (docs/ai-agents.md)
-    {{- end }}
+  {{- end }}
   {{- end }}
