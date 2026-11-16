@@ -1,0 +1,60 @@
+suite: falco escalation identity (per-cluster token -> ClusterResourceSet, #47)
+templates:
+  - templates/falco-escalation-crs.yaml
+set:
+  name: dev1
+tests:
+  - it: templates the CRS payload from the platform store key, deriving this cluster's token and endpoint
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: metadata.name, value: dev1-falco-escalation }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: url, remoteRef: { key: falco-webhook, property: url } }
+            - { secretKey: token, remoteRef: { key: falco-webhook, property: token } }
+      - matchRegex:
+          path: spec.target.template.data["falco-escalation.yaml"]
+          pattern: 'name: falcosidekick-escalation\n\s+namespace: falco\n'
+      - matchRegex:
+          path: spec.target.template.data["falco-escalation.yaml"]
+          pattern: 'WEBHOOK_ADDRESS: \{\{ printf "%s/%s" \(\.url \| trimSuffix "/"\) "dev1" \| b64enc \}\}'
+      - matchRegex:
+          path: spec.target.template.data["falco-escalation.yaml"]
+          pattern: 'WEBHOOK_CUSTOMHEADERS: \{\{ printf "Authorization:Bearer %s" \(printf "%s:%s" "dev1" \.token \| sha256sum\) \| b64enc \}\}'
+
+  - it: the store's token itself is never written into the payload (only the derived hash)
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - notMatchRegex:
+          path: spec.target.template.data["falco-escalation.yaml"]
+          pattern: '\.token \| b64enc|\{\{ \.token \}\}'
+
+  - it: CAPI applies it to exactly this cluster, re-applied on change
+    documentSelector: { path: kind, value: ClusterResourceSet }
+    asserts:
+      - equal: { path: metadata.name, value: dev1-falco-escalation }
+      - equal: { path: spec.strategy, value: Reconcile }
+      - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
+      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-falco-escalation }] }
+
+  - it: nothing when the cluster opts out of addon falco
+    set:
+      addons: { falco: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: nothing when switched off
+    set:
+      falcoEscalation.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: opting in explicitly keeps it
+    set:
+      addons: { falco: true }
+    asserts:
+      - hasDocuments: { count: 2 }
