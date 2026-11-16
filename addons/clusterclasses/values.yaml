@@ -20,6 +20,14 @@ k3s:
   disableComponents: [traefik]
   # Cloud classes also drop klipper servicelb: the cloud CCM (addons/aws-ccm, addons/hcloud-ccm) provides LoadBalancers.
   cloudDisableComponents: [traefik, servicelb]
+  # CAPD only: leader election of the embedded kube-controller-manager and kube-scheduler. k3s exits when a renewal
+  # misses its deadline, and on a local host under I/O pressure etcd fsyncs/reads take 5-8 s (#82: prod1 restarted 20x
+  # in 10 h). Upstream 15s/10s/2s; 60s/40s/10s rides out such stalls. Cloud classes keep the upstream failover times.
+  # bootstrap/k3d-mgmt.yaml passes the same values to the mgmt k3s.
+  dockerLeaderElectionArgs:
+    - leader-elect-lease-duration=60s
+    - leader-elect-renew-deadline=40s
+    - leader-elect-retry-period=10s
 
 docker:
   # Node OS only - k3s itself is installed at boot (curl get.k3s.io, version = topology.version). kindest/node is a

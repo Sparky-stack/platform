@@ -140,6 +140,25 @@ done
 yq 'del(.ports[] | select(.port | test(":9443:9443$")))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noharbor.yaml"
 assert_eq "$(k3d_publishes "$TMP/k3d-noharbor.yaml" 9443)" no "contract catches a k3d config without the registry port"
 
+# 8b. Leader election: the k3d mgmt k3s gets the CAPD ClusterClass values (k3s.dockerLeaderElectionArgs) for every
+#     embedded controller, or a slow etcd fsync restarts mgmt k3s ("leaderelection lost", #82). Negative check below.
+k3d_le_missing() {   # k3d_le_missing <k3d file> -> the --kube-<component>-arg=<value> flags it lacks
+  local comp v miss=""
+  for comp in kube-controller-manager kube-scheduler kube-cloud-controller-manager; do
+    while IFS= read -r v; do
+      [[ -n "$v" ]] || continue
+      FLAG="--$comp-arg=$v" yq -e '[.options.k3s.extraArgs[] | select(.arg == strenv(FLAG))] | length > 0' "$1" >/dev/null 2>&1 \
+        || miss="$miss --$comp-arg=$v"
+    done < <(yq '.k3s.dockerLeaderElectionArgs[]' "$ROOT/addons/clusterclasses/values.yaml")
+  done
+  printf '%s' "$miss"
+}
+assert_eq "$(yq '.k3s.dockerLeaderElectionArgs | length' "$ROOT/addons/clusterclasses/values.yaml")" 3 \
+  "clusterclasses k3s.dockerLeaderElectionArgs sets lease duration, renew deadline and retry period"
+assert_eq "$(k3d_le_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-mgmt.yaml passes the CAPD leader election to every embedded controller"
+yq 'del(.options.k3s.extraArgs[] | select(.arg == "--kube-scheduler-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-nole.yaml"
+assert_match "$(k3d_le_missing "$TMP/k3d-nole.yaml")" "kube-scheduler-arg=leader-elect-lease-duration" "contract catches a k3d config without the scheduler leader election"
+
 # 9b. external-dns is NOT a Kyverno-excluded platform namespace either: the chart defaults meet Pod Security restricted.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
   assert_eq "$(grep -cE '^ *- external-dns( |$)' "$ROOT/$f" || true)" 0 "external-dns not excluded from Kyverno ($f)"

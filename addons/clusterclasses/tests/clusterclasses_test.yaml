@@ -71,6 +71,25 @@ tests:
           path: "spec.template.spec.kthreesConfigSpec.preK3sCommands[0]"
           pattern: "until curl .*https://get.k3s.io"
 
+  - it: k3s-docker control plane rides out slow etcd fsyncs (longer leader election, #82)
+    template: templates/k3s-docker.yaml
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeControllerManagerArgs
+          value: [leader-elect-lease-duration=60s, leader-elect-renew-deadline=40s, leader-elect-retry-period=10s]
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeSchedulerArgs
+          value: [leader-elect-lease-duration=60s, leader-elect-renew-deadline=40s, leader-elect-retry-period=10s]
+
+  - it: cloud classes keep the upstream leader election (fast controller failover)
+    template: templates/k3s-aws.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - notExists: { path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeControllerManagerArgs }
+      - notExists: { path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeSchedulerArgs }
+
   - it: k3s-docker workers run k3s-agent as Type=exec (CAPD bootstrap deadlock)
     template: templates/k3s-docker.yaml
     documentSelector: { path: kind, value: KThreesConfigTemplate }
