@@ -78,6 +78,10 @@ AWF_VER=v4.0.8
 for crd in workflows workflowtemplates; do
   fetch_crd "argo-workflows-${AWF_VER}-${crd}" "https://raw.githubusercontent.com/argoproj/argo-workflows/${AWF_VER}/manifests/base/crds/full/argoproj.io_${crd}.yaml"
 done
+# Cilium CRDs: registered by the cilium-operator at runtime, not shipped in the chart (addon cilium renders a
+# CiliumClusterwideNetworkPolicy, templates/l7-visibility.yaml). Version = the addon's chart dependency.
+CILIUM_VER=v$(yq '.dependencies[] | select(.name == "cilium") | .version' addons/cilium/Chart.yaml)
+fetch_crd "cilium-${CILIUM_VER}-ccnp" "https://raw.githubusercontent.com/cilium/cilium/${CILIUM_VER}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml"
 fetch_crd "prometheus-servicemonitor" "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
 
 crd_files=()
