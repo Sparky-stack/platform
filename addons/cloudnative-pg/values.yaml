@@ -54,6 +54,17 @@ cloudnative-pg:
   monitoring:
     podMonitorEnabled: true         # needs addon telemetry (prometheus-operator CRDs) on the same cluster
 
+# ClusterImageCatalog "postgresql-standard": the PostgreSQL image per major version for Clusters that reference the
+# catalog (spec.imageCatalogRef) instead of an image - every PostgreSQL XR of addon crossplane (docs/data-services.md
+# "PostgreSQL as a service"). Same "standard" flavour as POSTGRES_IMAGE_NAME; multi-arch, pinned by digest.
+imageCatalog:
+  enabled: true
+  name: postgresql-standard
+  images:
+    "16": ghcr.io/cloudnative-pg/postgresql:16.16-standard-trixie@sha256:0848a2f80eb48d9bff76857ce988a6053b4120e7ecbdc4414e24cb1cd2df0754
+    "17": ghcr.io/cloudnative-pg/postgresql:17.12-standard-trixie@sha256:b6d31545fc2c500cc56af2cff91bbc37408deff6815b84446da0a2c9a54b3d1c
+    "18": ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:de572898499fab9406f0da51929da562f96f3be40ca79fafea8ec1a8d5b42065
+
 # Barman Cloud plugin (CNPG-I): WAL archiving + base backups to S3 / GCS / Azure Blob through ObjectStore resources,
 # replacing the deprecated in-tree spec.backup.barmanObjectStore. Off by default (nothing to back up to locally); turn on
 # per installation/cluster overlay together with an object store reachable through workload identity
