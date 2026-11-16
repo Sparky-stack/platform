@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1060" viewBox="0 0 1320 1060" role="img" aria-label="Network · north-south, mesh, CNI and the links to mgmt"><title>Network · north-south, mesh, CNI and the links to mgmt</title><style>.fx{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:1 11;opacity:0;animation:fxdash .8s linear infinite,fxseq 11.40s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-12}}@keyframes fxseq{0%{opacity:.3}4%{opacity:1}17.4%{opacity:1}23.4%{opacity:.3}100%{opacity:.3}}.pulse{opacity:.35;animation:pulse 2.6s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:.15}50%{opacity:.9}}@media (prefers-reduced-motion:reduce){.fx,.pulse{animation:none}.fx{opacity:0}.pulse{opacity:.35}}</style><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern><marker id="ah60a5fa" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#60a5fa"/></marker><marker id="ahe2e8f0" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#e2e8f0"/></marker><marker id="ahfb7185" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb7185"/></marker><marker id="ahfb923c" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,4 L0,8 z" fill="#fb923c"/></marker></defs><rect width="1320" height="1060" rx="16" fill="#020617"/><rect width="1320" height="1060" rx="16" fill="url(#grid)"/><rect x="8" y="8" width="1304" height="1044" rx="14" fill="none" stroke="#1e293b" stroke-width="1"/>
+<rect x="16" y="160" width="840" height="574" rx="12" fill="#020617" stroke="none"/>
+<rect x="16" y="160" width="840" height="574" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<text x="30.0" y="182.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">workload cluster · dev1, prod1</text>
+<rect x="896" y="160" width="408" height="384" rx="12" fill="#020617" stroke="none"/>
+<rect x="896" y="160" width="408" height="384" rx="12" fill="#0f172a" fill-opacity="0.10" stroke="#7b8cab" stroke-opacity="0.75" stroke-width="1.2"/>
+<text x="910.0" y="182.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#e2e8f0" text-anchor="start">mgmt cluster</text>
+<rect class="pulse" x="307" y="195" width="250" height="68" rx="10" fill="none" stroke="#60a5fa" stroke-width="2.5"/>
+<rect class="pulse" x="27" y="375" width="530" height="68" rx="10" fill="none" stroke="#60a5fa" stroke-width="2.5"/>
+<rect class="pulse" x="27" y="465" width="530" height="68" rx="10" fill="none" stroke="#60a5fa" stroke-width="2.5"/>
+<path d="M 432.0 136.0 L 432.0 200.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 432.0 258.0 L 432.0 290.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 340.0 258.0 L 340.0 274.0 L 152.0 274.0 L 152.0 290.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ah60a5fa)"/>
+<path d="M 272.0 319.0 L 312.0 319.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="6,4" marker-end="url(#ah60a5fa)"/>
+<path d="M 592.0 319.0 L 552.0 319.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 432.0 348.0 L 432.0 380.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 592.0 409.0 L 552.0 409.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 292.0 438.0 L 292.0 470.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 592.0 599.0 L 552.0 599.0" fill="none" stroke="#60a5fa" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah60a5fa)"/>
+<path d="M 832.0 599.0 L 866.0 599.0 L 866.0 229.0 L 912.0 229.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 1100.0 258.0 L 1100.0 290.0" fill="none" stroke="#fb7185" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb7185)"/>
+<path d="M 832.0 689.0 L 886.0 689.0 L 886.0 409.0 L 912.0 409.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
+<path d="M 1002.0 438.0 L 1002.0 470.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
+<path d="M 1198.0 438.0 L 1198.0 470.0" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ahfb923c)"/>
+<path class="fx" d="M 432.0 136.0 L 432.0 200.0" stroke="#b7d6fc" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 432.0 258.0 L 432.0 290.0" stroke="#b7d6fc" style="animation-delay:0s,0.90s"/>
+<path class="fx" d="M 592.0 319.0 L 552.0 319.0" stroke="#fdbfc8" style="animation-delay:0s,1.80s"/>
+<path class="fx" d="M 432.0 348.0 L 432.0 380.0" stroke="#b7d6fc" style="animation-delay:0s,2.70s"/>
+<path class="fx" d="M 592.0 409.0 L 552.0 409.0" stroke="#b7d6fc" style="animation-delay:0s,2.70s"/>
+<path class="fx" d="M 292.0 438.0 L 292.0 470.0" stroke="#b7d6fc" style="animation-delay:0s,3.60s"/>
+<path class="fx" d="M 592.0 599.0 L 552.0 599.0" stroke="#b7d6fc" style="animation-delay:0s,4.50s"/>
+<path class="fx" d="M 832.0 599.0 L 866.0 599.0 L 866.0 229.0 L 912.0 229.0" stroke="#fdbfc8" style="animation-delay:0s,5.40s"/>
+<path class="fx" d="M 1100.0 258.0 L 1100.0 290.0" stroke="#fdbfc8" style="animation-delay:0s,6.30s"/>
+<path class="fx" d="M 832.0 689.0 L 886.0 689.0 L 886.0 409.0 L 912.0 409.0" stroke="#fdcda7" style="animation-delay:0s,7.20s"/>
+<path class="fx" d="M 1002.0 438.0 L 1002.0 470.0" stroke="#fdcda7" style="animation-delay:0s,8.10s"/>
+<path class="fx" d="M 1198.0 438.0 L 1198.0 470.0" stroke="#fdcda7" style="animation-delay:0s,8.10s"/>
+<rect x="312" y="92" width="240" height="44" rx="6" fill="#0f172a"/>
+<rect x="312" y="92" width="240" height="44" rx="6" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="432.0" y="108.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">client</text>
+<text x="432.0" y="127.2" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="400" fill="#cbd5e1" text-anchor="middle">HTTPS to the app URL</text>
+<g opacity="0.55">
+<rect x="32" y="200" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="32" y="200" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="152.0" y="215.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">external-dns</text>
+<text x="152.0" y="234.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">HTTPRoute → DNS records</text>
+<text x="152.0" y="250.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Route 53 · Cloudflare · PR #5</text>
+<rect x="212.8" y="190" width="51.2" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
+<text x="238.4" y="200.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">planned</text>
+</g>
+<rect x="312" y="200" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="312" y="200" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="432.0" y="215.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">kgateway</text>
+<text x="432.0" y="234.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">GatewayClass kgateway</text>
+<text x="432.0" y="250.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Gateway API v1 · HTTPRoute</text>
+<g opacity="0.55">
+<rect x="592" y="200" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="200" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="712.0" y="215.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">east-west gateway</text>
+<text x="712.0" y="234.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">istio-east-west · mTLS</text>
+<text x="712.0" y="250.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">dev1 ↔ prod1 · PR #4</text>
+<rect x="772.8" y="190" width="51.2" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
+<text x="798.4" y="200.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">planned</text>
+</g>
+<rect x="32" y="290" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="32" y="290" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="152.0" y="305.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">waypoint</text>
+<text x="152.0" y="324.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">per-namespace L7 authz</text>
+<text x="152.0" y="340.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Istio ambient</text>
+<rect x="218.7" y="280" width="45.3" height="14" rx="7" fill="#020617" stroke="#60a5fa" stroke-width="1"/>
+<text x="241.3" y="290.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="700" fill="#60a5fa" text-anchor="middle">opt-in</text>
+<rect x="312" y="290" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="312" y="290" width="240" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
+<text x="432.0" y="305.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">app pods · dp-* ns</text>
+<text x="432.0" y="324.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">istio.io/dataplane-mode</text>
+<text x="432.0" y="340.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">= ambient</text>
+<rect x="592" y="290" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="290" width="240" height="58" rx="6" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.5"/>
+<text x="712.0" y="305.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Kyverno</text>
+<text x="712.0" y="324.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">MutatingPolicy: enrols</text>
+<text x="712.0" y="340.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo dp-* namespaces</text>
+<rect x="32" y="380" width="520" height="58" rx="6" fill="#0f172a"/>
+<rect x="32" y="380" width="520" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="292.0" y="395.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">ztunnel · Istio ambient</text>
+<text x="292.0" y="414.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">per node · L4 mTLS (HBONE) · SPIFFE identity</text>
+<text x="292.0" y="430.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">no sidecars · istio-cni redirects pod traffic</text>
+<rect x="592" y="380" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="380" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="712.0" y="395.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">istiod</text>
+<text x="712.0" y="414.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">mesh CA · xDS config</text>
+<text x="712.0" y="430.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">(OpenBao CA: planned)</text>
+<rect x="32" y="470" width="520" height="58" rx="6" fill="#0f172a"/>
+<rect x="32" y="470" width="520" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="292.0" y="485.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Cilium</text>
+<text x="292.0" y="504.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">eBPF CNI · kube-proxy replacement · WireGuard</text>
+<text x="292.0" y="520.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">NetworkPolicy · Hubble flows · fleet cni: cilium</text>
+<rect x="592" y="470" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="470" width="240" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="712.0" y="485.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">flannel</text>
+<text x="712.0" y="504.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">k3s default · cni: flannel</text>
+<text x="712.0" y="520.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">prod1 · mgmt</text>
+<rect x="32" y="570" width="520" height="58" rx="6" fill="#0f172a"/>
+<rect x="32" y="570" width="520" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="292.0" y="585.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">CoreDNS · coredns-local</text>
+<text x="292.0" y="604.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">*.openchoreo.localhost → mgmt Gateway (rewrite)</text>
+<text x="292.0" y="620.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">docker provider: same URLs for pods + browsers</text>
+<rect x="592" y="570" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="570" width="240" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
+<text x="712.0" y="585.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-agent</text>
+<text x="712.0" y="604.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OpenChoreo data plane</text>
+<text x="712.0" y="620.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">wss + mTLS, outbound</text>
+<rect x="592" y="660" width="240" height="58" rx="6" fill="#0f172a"/>
+<rect x="592" y="660" width="240" height="58" rx="6" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.5"/>
+<text x="712.0" y="675.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">telemetry</text>
+<text x="712.0" y="694.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">Fluent Bit · events ·</text>
+<text x="712.0" y="710.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">OTel · Prometheus agent</text>
+<rect x="912" y="200" width="376" height="58" rx="6" fill="#0f172a"/>
+<rect x="912" y="200" width="376" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="1100.0" y="215.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">control-plane Gateway</text>
+<text x="1100.0" y="234.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">kgateway · TLS passthrough :8443 (SNI)</text>
+<text x="1100.0" y="250.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">HTTP :8080 · console, API, Thunder</text>
+<rect x="912" y="290" width="376" height="58" rx="6" fill="#0f172a"/>
+<rect x="912" y="290" width="376" height="58" rx="6" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.5"/>
+<text x="1100.0" y="305.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">cluster-gateway</text>
+<text x="1100.0" y="324.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">checks the client cert against</text>
+<text x="1100.0" y="340.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">the ClusterDataPlane CA</text>
+<rect x="912" y="380" width="376" height="58" rx="6" fill="#0f172a"/>
+<rect x="912" y="380" width="376" height="58" rx="6" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="1100.0" y="395.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">observability Gateway</text>
+<text x="1100.0" y="414.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">TLSRoute passthrough :11085 (OpenSearch)</text>
+<text x="1100.0" y="430.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">HTTP :11080 · OTLP, remote write</text>
+<rect x="912" y="470" width="180" height="58" rx="6" fill="#0f172a"/>
+<rect x="912" y="470" width="180" height="58" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
+<text x="1002.0" y="485.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">OpenSearch</text>
+<text x="1002.0" y="504.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">logs · events ·</text>
+<text x="1002.0" y="520.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">traces</text>
+<rect x="1108" y="470" width="180" height="58" rx="6" fill="#0f172a"/>
+<rect x="1108" y="470" width="180" height="58" rx="6" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.5"/>
+<text x="1198.0" y="485.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="middle">Prometheus</text>
+<text x="1198.0" y="504.6" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">metrics</text>
+<text x="1198.0" y="520.1" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="middle">remote write</text>
+<rect x="896" y="572" width="408" height="162" rx="6" fill="#0f172a"/>
+<rect x="896" y="572" width="408" height="162" rx="6" fill="#0f172a" fill-opacity="0.9" stroke="#334155" stroke-width="1.5"/>
+<text x="908.0" y="596.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f1f5f9" text-anchor="start">division of labour</text>
+<text x="908.0" y="615.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Cilium: packets, NetworkPolicy, Hubble</text>
+<text x="908.0" y="631.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Istio ambient: workload identity + mTLS</text>
+<text x="908.0" y="646.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">kgateway: north-south only (Gateway API)</text>
+<text x="908.0" y="662.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">Kyverno: admission + ambient enrolment</text>
+<text x="908.0" y="677.5" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">CoreDNS: local names → mgmt Gateways</text>
+<text x="908.0" y="693.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">mgmt keeps flannel; no Cilium/Istio there</text>
+<text x="28.0" y="40.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f1f5f9" text-anchor="start">Network · north-south, mesh, CNI and the links to mgmt</text>
+<text x="28.0" y="62.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start">kgateway (Gateway API) for ingress · Istio ambient for identity + mTLS · Cilium or flannel underneath · agents and collectors dial out to mgmt through TLS passthrough</text>
+<text x="32.0" y="552.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#93c5fd" text-anchor="start">CNI is fixed at cluster birth (fleet file key cni): Cilium or flannel, never both</text>
+<circle cx="432" cy="168" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="432.0" y="172.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">1</text>
+<circle cx="432" cy="274" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="432.0" y="278.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">2</text>
+<circle cx="572" cy="319.0" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="572.0" y="323.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">3</text>
+<circle cx="432" cy="364" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="432.0" y="368.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">4</text>
+<circle cx="292" cy="454" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="292.0" y="458.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">5</text>
+<circle cx="572" cy="599.0" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="572.0" y="603.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">6</text>
+<circle cx="866" cy="480" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="866.0" y="484.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">7</text>
+<circle cx="1100" cy="274" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="1100.0" y="278.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">8</text>
+<circle cx="886" cy="620" r="9" fill="#020617" stroke="#fb923c" stroke-width="1.5"/>
+<text x="886.0" y="624.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb923c" text-anchor="middle">9</text>
+<circle cx="1002" cy="454" r="9" fill="#020617" stroke="#fb923c" stroke-width="1.5"/>
+<text x="1002.0" y="458.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb923c" text-anchor="middle">10</text>
+<text x="28.0" y="772.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Legend</text>
+<rect x="28" y="788" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="28" y="788" width="22" height="13" rx="3" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.2"/>
+<text x="58.0" y="799.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">external / git</text>
+<rect x="280" y="788" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="280" y="788" width="22" height="13" rx="3" fill="#1e3a8a" fill-opacity="0.4" stroke="#60a5fa" stroke-width="1.2"/>
+<text x="310.0" y="799.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">networking</text>
+<rect x="532" y="788" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="532" y="788" width="22" height="13" rx="3" fill="#083344" fill-opacity="0.4" stroke="#22d3ee" stroke-width="1.2"/>
+<text x="562.0" y="799.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">OpenChoreo</text>
+<rect x="784" y="788" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="784" y="788" width="22" height="13" rx="3" fill="#881337" fill-opacity="0.4" stroke="#fb7185" stroke-width="1.2"/>
+<text x="814.0" y="799.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">security &amp; secrets</text>
+<rect x="1036" y="788" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="1036" y="788" width="22" height="13" rx="3" fill="#4c1d95" fill-opacity="0.4" stroke="#a78bfa" stroke-width="1.2"/>
+<text x="1066.0" y="799.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">registry &amp; data</text>
+<rect x="28" y="810" width="22" height="13" rx="3" fill="#0f172a"/>
+<rect x="28" y="810" width="22" height="13" rx="3" fill="#fb923c" fill-opacity="0.18" stroke="#fb923c" stroke-width="1.2"/>
+<text x="58.0" y="821.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">telemetry &amp; events</text>
+<rect x="28" y="832" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4"/>
+<text x="58.0" y="843.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">built (on main)</text>
+<rect x="280" y="832" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4" stroke-dasharray="4,3"/>
+<text x="310.0" y="843.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">opt-in (off by default)</text>
+<rect x="532" y="832" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.55"/>
+<text x="562.0" y="843.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned (not on main)</text>
+<rect x="782" y="829" width="26" height="19" rx="6" fill="none" stroke="#7b8cab" stroke-width="1.4"/>
+<text x="814.0" y="843.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster / zone</text>
+<path d="M 1032 839 L 1058 839" stroke="#e2e8f0" stroke-width="1.8" marker-end="url(#ahe2e8f0)"/>
+<path class="fx" d="M 1032 839 L 1058 839" stroke="#ced5df" style="animation-delay:0s,0.00s"/>
+<text x="1066.0" y="843.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">flow (animated)</text>
+<line x1="24" y1="861" x2="50" y2="861" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#ahe2e8f0)"/>
+<text x="58.0" y="865.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">opt-in flow</text>
+<line x1="276" y1="861" x2="302" y2="861" stroke="#e2e8f0" stroke-width="1.8" stroke-dasharray="4,3" opacity="0.55" marker-end="url(#ahe2e8f0)"/>
+<text x="310.0" y="865.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">planned flow</text>
+<rect x="532" y="854" width="22" height="13" rx="3" fill="none" stroke="#f8fafc" stroke-width="1.2"/>
+<rect class="pulse" x="529" y="851" width="28" height="19" rx="5" fill="none" stroke="#f8fafc" stroke-width="2"/>
+<text x="562.0" y="865.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="400" fill="#cbd5e1" text-anchor="start">focus of this view</text>
+<text x="28.0" y="892.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#f1f5f9" text-anchor="start">Flows · animated in this order</text>
+<circle cx="37" cy="910" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="37.0" y="914.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">1</text>
+<text x="54.0" y="914.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">client → kgateway (Gateway API listener)</text>
+<circle cx="37" cy="932" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="37.0" y="936.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">2</text>
+<text x="54.0" y="936.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">HTTPRoute → app Service (via waypoint if opted in)</text>
+<circle cx="37" cy="954" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="37.0" y="958.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">3</text>
+<text x="54.0" y="958.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">Kyverno labels new dp-* namespaces ambient</text>
+<circle cx="37" cy="976" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="37.0" y="980.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">4</text>
+<text x="54.0" y="980.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">every pod hop: ztunnel HBONE mTLS (istiod certs)</text>
+<circle cx="37" cy="998" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="37.0" y="1002.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">5</text>
+<text x="54.0" y="1002.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">packets ride the CNI (Cilium eBPF or flannel)</text>
+<circle cx="669" cy="910" r="9" fill="#020617" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="669.0" y="914.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#60a5fa" text-anchor="middle">6</text>
+<text x="686.0" y="914.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">agent resolves *.openchoreo.localhost (CoreDNS rewrite)</text>
+<circle cx="669" cy="932" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="669.0" y="936.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">7</text>
+<text x="686.0" y="936.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">cluster-agent → control-plane Gateway :8443, wss + mTLS</text>
+<circle cx="669" cy="954" r="9" fill="#020617" stroke="#fb7185" stroke-width="1.5"/>
+<text x="669.0" y="958.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb7185" text-anchor="middle">8</text>
+<text x="686.0" y="958.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">TLS passthrough (SNI) → cluster-gateway verifies the cert</text>
+<circle cx="669" cy="976" r="9" fill="#020617" stroke="#fb923c" stroke-width="1.5"/>
+<text x="669.0" y="980.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb923c" text-anchor="middle">9</text>
+<text x="686.0" y="980.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">collectors → observability Gateway (TLS passthrough / HTTP)</text>
+<circle cx="669" cy="998" r="9" fill="#020617" stroke="#fb923c" stroke-width="1.5"/>
+<text x="669.0" y="1002.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#fb923c" text-anchor="middle">10</text>
+<text x="686.0" y="1002.0" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="400" fill="#cbd5e1" text-anchor="start">→ OpenSearch (logs, events, traces) · Prometheus</text>
+</svg>

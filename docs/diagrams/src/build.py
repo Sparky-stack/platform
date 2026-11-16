@@ -361,9 +361,95 @@ def security() -> Diagram:
     return d
 
 
+# ----------------------------------------------------------------------------------------------- network
+def network() -> Diagram:
+    W, H = 1320, 1060
+    d = Diagram(W, H, "Network · north-south, mesh, CNI and the links to mgmt",
+                "kgateway (Gateway API) for ingress · Istio ambient for identity + mTLS · Cilium or flannel "
+                "underneath · agents and collectors dial out to mgmt through TLS passthrough")
+    BH = 58
+    R = {"A": 200, "B": 290, "C": 380, "D": 470, "E": 570, "F": 660}
+    yc = lambda r: R[r] + BH / 2  # noqa: E731
+    C1, C2, C3, CW = 32, 312, 592, 240
+    d.box(C2, 92, CW, 44, "external", "client", ["HTTPS to the app URL"], sub_size=11)
+    d.group(16, 160, 840, 574, "workload cluster · dev1, prod1", "zone")
+    d.group(896, 160, 408, 384, "mgmt cluster", "zone")
+
+    d.box(C1, R["A"], CW, BH, "network", "external-dns", ["HTTPRoute → DNS records", "Route 53 · Cloudflare · PR #5"],
+          status="planned")
+    d.box(C2, R["A"], CW, BH, "network", "kgateway", ["GatewayClass kgateway", "Gateway API v1 · HTTPRoute"],
+          focus=True)
+    d.box(C3, R["A"], CW, BH, "network", "east-west gateway", ["istio-east-west · mTLS", "dev1 ↔ prod1 · PR #4"],
+          status="planned")
+    d.box(C1, R["B"], CW, BH, "network", "waypoint", ["per-namespace L7 authz", "Istio ambient"], status="optin")
+    d.box(C2, R["B"], CW, BH, "platform", "app pods · dp-* ns", ["istio.io/dataplane-mode", "= ambient"])
+    d.box(C3, R["B"], CW, BH, "security", "Kyverno", ["MutatingPolicy: enrols", "OpenChoreo dp-* namespaces"])
+    d.box(C1, R["C"], 520, BH, "network", "ztunnel · Istio ambient",
+          ["per node · L4 mTLS (HBONE) · SPIFFE identity", "no sidecars · istio-cni redirects pod traffic"],
+          focus=True)
+    d.box(C3, R["C"], CW, BH, "network", "istiod", ["mesh CA · xDS config", "(OpenBao CA: planned)"])
+    d.box(C1, R["D"], 520, BH, "network", "Cilium",
+          ["eBPF CNI · kube-proxy replacement · WireGuard", "NetworkPolicy · Hubble flows · fleet cni: cilium"],
+          focus=True)
+    d.box(C3, R["D"], CW, BH, "network", "flannel", ["k3s default · cni: flannel", "prod1 · mgmt"])
+    d.text(C1, 552, "CNI is fixed at cluster birth (fleet file key cni): Cilium or flannel, never both", 11.5, "#93c5fd")
+    d.box(C1, R["E"], 520, BH, "network", "CoreDNS · coredns-local",
+          ["*.openchoreo.localhost → mgmt Gateway (rewrite)", "docker provider: same URLs for pods + browsers"])
+    d.box(C3, R["E"], CW, BH, "platform", "cluster-agent", ["OpenChoreo data plane", "wss + mTLS, outbound"])
+    d.box(C3, R["F"], CW, BH, "bus", "telemetry", ["Fluent Bit · events ·", "OTel · Prometheus agent"])
+
+    MX, MW = 912, 376
+    d.box(MX, R["A"], MW, BH, "network", "control-plane Gateway",
+          ["kgateway · TLS passthrough :8443 (SNI)", "HTTP :8080 · console, API, Thunder"], name="kgateway (mgmt)")
+    d.box(MX, R["B"], MW, BH, "platform", "cluster-gateway", ["checks the client cert against", "the ClusterDataPlane CA"])
+    d.box(MX, R["C"], MW, BH, "network", "observability Gateway",
+          ["TLSRoute passthrough :11085 (OpenSearch)", "HTTP :11080 · OTLP, remote write"])
+    d.box(MX, R["D"], 180, BH, "data", "OpenSearch", ["logs · events ·", "traces"])
+    d.box(1108, R["D"], 180, BH, "data", "Prometheus", ["metrics", "remote write"])
+    d.box(896, 572, 408, 162, "note", "division of labour",
+          ["Cilium: packets, NetworkPolicy, Hubble", "Istio ambient: workload identity + mTLS",
+           "kgateway: north-south only (Gateway API)", "Kyverno: admission + ambient enrolment",
+           "CoreDNS: local names → mgmt Gateways", "mgmt keeps flannel; no Cilium/Istio there"],
+          align="start", sub_size=11.5)
+
+    d.arrow([(432, 136), (432, R["A"])], BL, badge=1, badge_pos=(432, 168), aid="client", step=0)
+    d.arrow([(432, R["A"] + BH), (432, R["B"])], BL, badge=2, badge_pos=(432, 274), aid="route", step=1)
+    d.arrow([(340, R["A"] + BH), (340, 274), (152, 274), (152, R["B"])], BL, status="optin", aid="wp1")
+    d.arrow([(C1 + CW, yc("B")), (C2, yc("B"))], BL, status="optin", aid="wp2")
+    d.arrow([(C3, yc("B")), (C2 + CW, yc("B"))], RO, badge=3, badge_pos=(572, yc("B")), aid="enrol", step=2)
+    d.arrow([(432, R["B"] + BH), (432, R["C"])], BL, badge=4, badge_pos=(432, 364), aid="hbone", step=3)
+    d.arrow([(C3, yc("C")), (552, yc("C"))], BL, aid="xds", step=3)
+    d.arrow([(292, R["C"] + BH), (292, R["D"])], BL, badge=5, badge_pos=(292, 454), aid="ebpf", step=4)
+    d.arrow([(C3, yc("E")), (552, yc("E"))], BL, badge=6, badge_pos=(572, yc("E")), aid="dns", step=5)
+    d.arrow([(C3 + CW, yc("E")), (866, yc("E")), (866, yc("A")), (MX, yc("A"))], RO, badge=7,
+            badge_pos=(866, 480), aid="wss", step=6)
+    d.arrow([(1100, R["A"] + BH), (1100, R["B"])], RO, badge=8, badge_pos=(1100, 274), aid="tlsroute", step=7)
+    d.arrow([(C3 + CW, yc("F")), (886, yc("F")), (886, yc("C")), (MX, yc("C"))], OR, badge=9,
+            badge_pos=(886, 620), aid="otel", step=8)
+    d.arrow([(1002, R["C"] + BH), (1002, R["D"])], OR, badge=10, badge_pos=(1002, 454), aid="os", step=9)
+    d.arrow([(1198, R["C"] + BH), (1198, R["D"])], OR, aid="prom", step=9)
+
+    d.require("kgateway", "kgateway (mgmt)", "ztunnel · Istio ambient", "waypoint", "Kyverno", "Cilium", "flannel",
+              "cluster-agent", "cluster-gateway", "observability Gateway", "east-west gateway", "external-dns",
+              "CoreDNS · coredns-local", "istiod")
+    d.legend(28, 772, ["external", "network", "platform", "security", "data", "bus"], cols=5, col_w=252, focus=True)
+    e1 = [(1, "client → kgateway (Gateway API listener)"), (2, "HTTPRoute → app Service (via waypoint if opted in)"),
+          (3, "Kyverno labels new dp-* namespaces ambient"), (4, "every pod hop: ztunnel HBONE mTLS (istiod certs)"),
+          (5, "packets ride the CNI (Cilium eBPF or flannel)")]
+    e2 = [(6, "agent resolves *.openchoreo.localhost (CoreDNS rewrite)"),
+          (7, "cluster-agent → control-plane Gateway :8443, wss + mTLS"),
+          (8, "TLS passthrough (SNI) → cluster-gateway verifies the cert"),
+          (9, "collectors → observability Gateway (TLS passthrough / HTTP)"),
+          (10, "→ OpenSearch (logs, events, traces) · Prometheus")]
+    d.flowkey(28, 892, e1, [BL, BL, RO, BL, BL], title="Flows · animated in this order")
+    d.flowkey(660, 892, e2, [BL, RO, RO, OR, OR], title=None)
+    return d
+
+
 DIAGRAMS = {
     "architecture": architecture,
     "security": security,
+    "network": network,
     "cluster-lifecycle": cluster_lifecycle,
 }
 
