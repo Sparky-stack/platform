@@ -131,7 +131,9 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code cannot plant tool config
   (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
 - Per-run Secrets are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` for each run (owned by the
-  run, deleted with it): git credentials, registry push credentials, registry CA (public), cosign key.
+  run, deleted with it): git credentials, registry push credentials and the cosign key via `ClusterSecretStore/workflows`
+  (scoped to `workflows-*` and `workflowStore.keys`, never the full `platform` store), plus the registry CA (public,
+  via `ClusterSecretStore/mgmt-harbor`).
 - Signing: see "Signing" below.
 
 ### Signing
@@ -284,7 +286,11 @@ audited for architectures by `task images:audit` but not digest-pinned here.
 `task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the
 toolbox image (Docker, no host install; password only through the environment, key files removed on any exit), and
 seeds `platform-github-build` from `PLATFORM_GITHUB_BUILD_TOKEN` (local fallback: the `gh` CLI token, with a warning;
-Argo CD's read-only `platform-github` is never reused).
+Argo CD's read-only `platform-github` is never reused). Build and promotion-gate runs in `workflows-*` read their
+keys through `ClusterSecretStore/workflows` (`ClusterWorkflowPlane default` `secretStoreRef`), whose ServiceAccount
+`eso-workflows` has a name-scoped `get` Role in `platform-secrets` for `workflowStore.keys` only (`platform-github-build`,
+`cosign-platform`, `harbor` or `registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`);
+`workflows-*` cannot use `ClusterSecretStore/platform`.
 
 ## Ports and DNS (local)
 
@@ -317,7 +323,6 @@ Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build
 ([#33](https://github.com/koorikla/platform/issues/33)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
 ([#35](https://github.com/koorikla/platform/issues/35)), admission for Harbor-built images
-([#15](https://github.com/koorikla/platform/issues/15), [#36](https://github.com/koorikla/platform/issues/36)), a
-dedicated store for build runs ([#29](https://github.com/koorikla/platform/issues/29)). BuildKit pulls base images
+([#15](https://github.com/koorikla/platform/issues/15), [#36](https://github.com/koorikla/platform/issues/36)). BuildKit pulls base images
 directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
 [#40](https://github.com/koorikla/platform/issues/40).
