@@ -123,7 +123,10 @@ falco:
     resources:
       requests: { cpu: 10m, memory: 32Mi }
       limits: { memory: 96Mi }
-    ttlSecondsAfterFinished: 86400
+    ttlSecondsAfterFinished: 21600          # 6h: keeps failures inspectable without piling up Workflows
+    # Escalation budget: at most this many falco-response Workflows per minute (Sensor trigger rateLimit). A burst of
+    # CRITICAL alerts (e.g. a noisy rule on a new node) must not flood mgmt with Workflows; events above the budget wait.
+    rateLimit: { unit: Minute, requestsPerUnit: 6 }
     # OpenChoreo RCA agent (observability plane, rca.enabled - off in this platform until an LLM endpoint exists).
     rca:
       enabled: false

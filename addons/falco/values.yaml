@@ -84,6 +84,17 @@ falco:
       - macro: platform_app_namespace
         condition: (k8s.ns.name startswith "dp-")
 
+      # CAPD (provider docker): each workload-cluster node IS a container (kindest/node image), so the node's own
+      # processes (CNI installers copying binaries, mount, kubelet helpers) match upstream container rules such as
+      # "Drop and execute new binary in container" at CRITICAL - an escalation storm on every new node. Only the node
+      # image itself is excepted; containers started inside the node keep their own image and stay covered.
+      - macro: platform_capd_node_container
+        condition: (container.image.repository endswith "kindest/node")
+      - rule: Drop and execute new binary in container
+        condition: and not platform_capd_node_container
+        override:
+          condition: append
+
       - rule: Platform shell in app container
         desc: An interactive or scripted shell started inside a container of an OpenChoreo app namespace.
         condition: >

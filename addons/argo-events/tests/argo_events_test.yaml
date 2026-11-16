@@ -276,3 +276,9 @@ tests:
       - notMatchRegex:
           path: spec.templates[?(@.name == "enrich")].script.source
           pattern: "MISSING"
+
+  - it: the Falco escalation trigger is rate limited (a CRITICAL burst must not flood mgmt with Workflows)
+    template: templates/sensors.yaml
+    documentSelector: { path: metadata.name, value: falco-escalation }
+    asserts:
+      - equal: { path: "spec.triggers[0].rateLimit", value: { unit: Minute, requestsPerUnit: 6 } }
