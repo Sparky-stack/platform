@@ -215,4 +215,19 @@ assert_eq "$(D="$deleter" yq 'select(.kind == "ClusterAuthzRole" and .metadata.n
 assert_eq "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$tenant_values")" \
   "$(yq -o=json -I=0 '.promotion.restrictedGroups' "$ocp_values")" "promotion.restrictedGroups: charts/tenant == openchoreo-platform"
 
+# 13. No literal env value in a ClusterWorkflow run template looks like a JSON list or map: OpenChoreo's WorkflowRun
+#     renderer decodes such a string into a list/map, and Argo's workflow controller panics on the resulting
+#     non-string env value (CrashLoopBackOff, no run of any workflow proceeds). Pass JSON base64-encoded instead.
+# shellcheck disable=SC2016  # yq expression, not shell
+json_env='select(.kind == "ClusterWorkflow") | .metadata.name as $w | .spec.runTemplate.spec.templates[]
+  | (.script, .container) | select(.) | .env[]? | select((.value | tag) == "!!str" and (.value | test("^\\s*[\\[{]")))
+  | $w + "/" + .name'
+helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
+  --values "$ROOT/installations/local/installation.yaml" > "$TMP/openchoreo-platform.yaml"
+assert_eq "$(yq "$json_env" "$TMP/openchoreo-platform.yaml" | grep -v '^---$' || true)" "" \
+  "ClusterWorkflow env values are never JSON-looking (rendered as lists/maps by OpenChoreo)"
+printf 'kind: ClusterWorkflow\nmetadata: {name: bad}\nspec:\n  runTemplate:\n    spec:\n      templates:\n        - script:\n            env: [{name: L, value: '"'"'["production"]'"'"'}]\n' \
+  > "$TMP/json-env-negative.yaml"
+assert_eq "$(yq "$json_env" "$TMP/json-env-negative.yaml")" "bad/L" "check 13 flags a JSON-looking env value (negative case)"
+
 finish
