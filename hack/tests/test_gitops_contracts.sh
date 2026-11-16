@@ -144,28 +144,46 @@ fi
 #   ca_key_refs <render>: "<ExternalSecret> <remote key>/<property>" for every private-key property (tls.key, *.key, key)
 #   an ExternalSecret reads from a CA Secret (<x>-ca, <x>-cca, ca/root/intermediate-named keys) - must be empty for
 #   every CRS payload; client identities (<x>-agent-tls, <x>-mesh-reader) are the only private keys a payload carries.
+#   Both also cover spec.dataFrom: extract of a CA Secret pulls every property including the key ("<key>/*"), and any
+#   find (by name regexp, path or tags) can match a CA Secret, so a find in these ExternalSecrets is always reported.
+CA_KEY_RE='(-ca|-cca|root|intermediate|cacerts)$|^pki-'
 ca_key_refs() {
   # shellcheck disable=SC2016  # yq variables ($n), not shell
-  yq -N 'select(.kind == "ExternalSecret") | .metadata.name as $n | .spec.data[]?
-    | select((.remoteRef.property // "") | test("(^|\\.)key$|^tls\\.key$"))
-    | select(.remoteRef.key | test("(-ca|-cca|root|intermediate|cacerts)$|^pki-"))
-    | $n + " " + .remoteRef.key + "/" + .remoteRef.property' "$1" 2>/dev/null | grep -v '^$' || true
+  yq -N 'select(.kind == "ExternalSecret") | .metadata.name as $n | (
+      (.spec.data[]?
+        | select((.remoteRef.property // "") | test("(^|\\.)key$|^tls\\.key$"))
+        | select(.remoteRef.key | test("'"$CA_KEY_RE"'"))
+        | $n + " " + .remoteRef.key + "/" + .remoteRef.property),
+      (.spec.dataFrom[]? | select(.extract) | select(.extract.key | test("'"$CA_KEY_RE"'"))
+        | $n + " " + .extract.key + "/" + (.extract.property // "*")),
+      (.spec.dataFrom[]? | select(.find) | $n + " find:" + (.find | tojson(0))))' "$1" 2>/dev/null | grep -v '^$' || true
 }
 crs_key_refs() {   # private keys read by CRS payload ExternalSecrets that are not a cluster's own client identity
   # shellcheck disable=SC2016  # yq variables ($n), not shell
   yq -N 'select(.kind == "ExternalSecret" and .spec.target.template.type == "addons.cluster.x-k8s.io/resource-set")
-    | .metadata.name as $n | .spec.data[]? | select((.remoteRef.property // "") | test("key"))
-    | select(.remoteRef.key | test("-(agent-tls|mesh-reader)$") | not)
-    | $n + " " + .remoteRef.key + "/" + .remoteRef.property' "$1" 2>/dev/null | grep -v '^$' || true
+    | .metadata.name as $n | (
+      (.spec.data[]? | select((.remoteRef.property // "") | test("key"))
+        | select(.remoteRef.key | test("-(agent-tls|mesh-reader)$") | not)
+        | $n + " " + .remoteRef.key + "/" + .remoteRef.property),
+      (.spec.dataFrom[]? | select(.extract)
+        | select(.extract.key | test("-(agent-tls|mesh-reader)$") | not)
+        | select((.extract.key | test("'"$CA_KEY_RE"'|tls|key")) or ((.extract.property // "") | test("key")))
+        | $n + " " + .extract.key + "/" + (.extract.property // "*")),
+      (.spec.dataFrom[]? | select(.find) | $n + " find:" + (.find | tojson(0))))' "$1" 2>/dev/null | grep -v '^$' || true
+}
+render_fail() {   # a render that fails is a contract failure, never a skipped check
+  FAIL=$((FAIL + 1)); printf '  FAIL: %s does not render: %s\n' "$1" "$(head -c 300 "$2")" >&2
 }
 for inst_dir in "$ROOT"/installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   for cf in "$inst_dir"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue
     c=$(yq '.name' "$cf")
-    helm template "cluster-$c" "$ROOT/charts/cluster" --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" \
-      > "$TMP/inv4-$c.yaml" 2>/dev/null || continue
     lbl="$(basename "$inst_dir")/$c"
+    if ! helm template "cluster-$c" "$ROOT/charts/cluster" --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" \
+      > "$TMP/inv4-$c.yaml" 2> "$TMP/inv4-$c.err"; then
+      render_fail "$lbl (charts/cluster)" "$TMP/inv4-$c.err"; continue
+    fi
     assert_eq "$(ca_key_refs "$TMP/inv4-$c.yaml")" "" "$lbl: no ExternalSecret reads a CA private key"
     assert_eq "$(crs_key_refs "$TMP/inv4-$c.yaml")" "" "$lbl: CRS payloads carry only the cluster's own client keys"
     payloads=$(yq 'select(.kind == "ExternalSecret" and .spec.target.template.type == "addons.cluster.x-k8s.io/resource-set") | .spec.target.template.data[]' "$TMP/inv4-$c.yaml")
@@ -175,14 +193,31 @@ done
 for addon_dir in "$ROOT"/addons/*; do   # workload-role addons: their ExternalSecrets never read a key of any kind from a CA
   a=$(basename "$addon_dir")
   yq -e ".addons[\"$a\"].roles[] | select(. == \"workload\")" "$PV" >/dev/null 2>&1 || continue
-  helm template "$a" "$addon_dir" --namespace x --set-string cluster.role=workload --set-string mesh.group=contract \
-    --set-string cluster.name=dev1 > "$TMP/wl-$a.yaml" 2>/dev/null || continue
+  # the per-cluster parameters the addon ApplicationSet passes (clusterServerParameters, planeID == cluster name)
+  if ! helm template "$a" "$addon_dir" --namespace x --set-string cluster.role=workload --set-string mesh.group=contract \
+    --set-string cluster.name=dev1 --set-string cilium.k8sServiceHost=dev1.example.test \
+    --set-string openchoreo-data-plane.clusterAgent.planeID=dev1 > "$TMP/wl-$a.yaml" 2> "$TMP/wl-$a.err"; then
+    render_fail "workload addon $a" "$TMP/wl-$a.err"; continue
+  fi
   assert_eq "$(ca_key_refs "$TMP/wl-$a.yaml")" "" "workload addon $a: no ExternalSecret reads a CA private key"
 done
-# negative: the checks catch the old design (an intermediate key delivered as cacerts) and a CA key read
+# negative: the checks catch the old design (an intermediate key delivered as cacerts) and a CA key read - through
+# spec.data, through dataFrom.extract (whole CA Secret) and through dataFrom.find
 printf 'apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata: { name: dev1-mesh-cacerts }\nspec:\n  target:\n    template:\n      type: addons.cluster.x-k8s.io/resource-set\n      data: { x.yaml: "kind: Secret\\nmetadata: { name: cacerts }" }\n  data:\n    - { secretKey: k, remoteRef: { key: dev1-mesh-ca, property: tls.key } }\n' > "$TMP/bad-crs.yaml"
 assert_eq "$(ca_key_refs "$TMP/bad-crs.yaml")" "dev1-mesh-cacerts dev1-mesh-ca/tls.key" "negative: contract catches a CA key read"
 assert_eq "$(crs_key_refs "$TMP/bad-crs.yaml")" "dev1-mesh-cacerts dev1-mesh-ca/tls.key" "negative: contract catches a CA key in a CRS payload"
+printf 'apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata: { name: dev1-x }\nspec:\n  target:\n    template:\n      type: addons.cluster.x-k8s.io/resource-set\n  dataFrom:\n    - { extract: { key: dev1-mesh-ca } }\n' > "$TMP/bad-extract.yaml"
+assert_eq "$(ca_key_refs "$TMP/bad-extract.yaml")" "dev1-x dev1-mesh-ca/*" "negative: contract catches dataFrom.extract of a CA Secret"
+assert_eq "$(crs_key_refs "$TMP/bad-extract.yaml")" "dev1-x dev1-mesh-ca/*" "negative: contract catches dataFrom.extract of a CA Secret in a CRS payload"
+printf 'apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata: { name: dev1-y }\nspec:\n  target:\n    template:\n      type: addons.cluster.x-k8s.io/resource-set\n  dataFrom:\n    - { find: { name: { regexp: "^dev1-.*" } } }\n' > "$TMP/bad-find.yaml"
+assert_eq "$(ca_key_refs "$TMP/bad-find.yaml")" 'dev1-y find:{"name":{"regexp":"^dev1-.*"}}' "negative: contract reports dataFrom.find (may match a CA Secret)"
+assert_eq "$(crs_key_refs "$TMP/bad-find.yaml")" 'dev1-y find:{"name":{"regexp":"^dev1-.*"}}' "negative: contract reports dataFrom.find in a CRS payload"
+printf 'apiVersion: external-secrets.io/v1\nkind: ExternalSecret\nmetadata: { name: dev1-seed-ok }\nspec:\n  target:\n    template:\n      type: addons.cluster.x-k8s.io/resource-set\n  dataFrom:\n    - { extract: { key: falco-webhook } }\n    - { extract: { key: dev1-mesh-reader } }\n' > "$TMP/ok-extract.yaml"
+assert_eq "$(crs_key_refs "$TMP/ok-extract.yaml")$(ca_key_refs "$TMP/ok-extract.yaml")" "" "positive control: credential seeds and the cluster's own client identity pass"
+# negative: a cluster that fails to render is a failure, not a skip
+fails_before=$FAIL
+render_fail "negative-control" <(echo "simulated render error") 2>/dev/null
+assert_eq "$((FAIL - fails_before))" 1 "negative: a render failure counts as a contract failure"; FAIL=$fails_before
 
 # 2b4. OpenBao's member endpoint is published on the local k3d load balancer (loopback on the host), else CAPD members
 #      cannot reach the mesh CA through the serverlb (coredns-local).

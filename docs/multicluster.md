@@ -170,7 +170,9 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   `mgmt-openbao` may GET only that Secret (name-scoped RBAC, namespace `fleet`). `ClusterResourceSet <name>-mesh-trust`
   delivers `istio-system/openbao-ca` (verifies OpenBao's listener) and `istio-system/mesh-root-ca` (istio-csr pins it
   as its root; cert-manager's `ca.crt` must match it) plus the namespace label `topology.istio.io/network=<name>`.
-  Contract tests assert that no ClusterResourceSet payload or workload-cluster ExternalSecret reads a CA private key.
+  Contract tests assert that no ClusterResourceSet payload or workload-cluster ExternalSecret reads a CA private key
+  (`spec.data`, `dataFrom.extract` of a CA Secret, any `dataFrom.find`), for every cluster of every installation; a
+  cluster or workload addon that does not render fails the test instead of being skipped.
 - **istiod has no CA on members** (`values/mesh-member.yaml`: `ENABLE_CA_SERVER=false`, `caAddress` = istio-csr).
   istio-csr answers ztunnel's and gateways' CSRs (ztunnel is a trusted node account, as ambient requires) and issues
   istiod's serving certificate (`Certificate istiod`, 48h, renewed after 24h). istiod decides once at start whether it
