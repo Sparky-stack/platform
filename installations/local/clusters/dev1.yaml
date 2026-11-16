@@ -26,4 +26,7 @@ openchoreo:
 mesh:
   group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD
-addons: {}
+# PostgreSQL as a service (docs/data-services.md): Crossplane + the cnpg Composition, live test of #107.
+addons:
+  cloudnative-pg: true
+  crossplane: true
