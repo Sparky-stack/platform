@@ -60,6 +60,10 @@ Application excludes that file.
   condition `resource.environment in ["default/production"]` for `releasebinding:create|update|delete`.
   - Developers keep full control of development and staging through the console, `occ` and MCP.
   - Production is rejected with a clear authz error, also for AI agents using MCP.
+  - `component:delete` is denied too, for every gated app's Component: `charts/tenant` renders an `AuthzRoleBinding`
+    `<project>-promotion-deny-component-delete-<group>` (effect `deny`, scope project + component) on the
+    `ClusterAuthzRole promotion-component-deleter` of addon openchoreo-platform. Apps with `promotionGates: false`
+    keep it.
 - **ValidatingAdmissionPolicy** `openchoreo-gated-bindings-from-git` (Kubernetes GA, no Kyverno needed on mgmt):
   - Only `system:serviceaccount:argocd:argocd-application-controller` may create, update or delete a production
     ReleaseBinding, **and only for the gated Application**: Argo CD writes for every Application with that one
@@ -77,10 +81,9 @@ Application excludes that file.
     - `charts/tenant` rejects app names that end in `-<gated environment>`, and a contract test rejects tenant
       projects named `<other project>-…` (their gated Applications would look like the other project's).
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
-  - The garbage collector may delete. Consequence: deleting the Component (console / openchoreo-api, which
-    developers may do for their components) cascades to its production binding. Deleting a production component is
-    an offboarding decision; restricting `component:delete` for gated projects:
-    [#55](https://github.com/koorikla/platform/issues/55).
+  - The garbage collector may delete: deleting the Component cascades to its production binding. So the restricted
+    groups may not delete gated Components either (next bullet); offboarding is removing the app from the tenant file
+    (reviewed), and Argo CD deletes its objects.
   - Everyone else is denied: openchoreo-api acting for any user, kubectl, scripts.
   - Break glass: `promotion.gitOnly.breakGlassGroups` (empty by default).
 
@@ -176,7 +179,7 @@ platform renders for it:
 - Applications `demo-hello-world` (everything except `release-bindings/production.yaml`) and
   `demo-hello-world-production`;
 - the AppProject `tenant-demo` sync window;
-- the authz deny and the VAP.
+- the authz denies (production bindings, deleting `hello-world`) and the VAP.
 
 App repo changes (koorikla/hello-world, outside this repo):
 

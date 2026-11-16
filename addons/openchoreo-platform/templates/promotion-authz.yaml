@@ -4,6 +4,10 @@ DeploymentPipeline (removed in 1.0); its ABAC conditions on resource.environment
 change a binding in an environment through console, openchoreo-api, occ and MCP:
   ClusterAuthzRole promotion-release-binding-writer   releasebinding create/update/delete
   ClusterAuthzRoleBinding promotion-deny-<group>      effect deny for each restricted group, condition: gated envs
+  ClusterAuthzRole promotion-component-deleter        component:delete; charts/tenant denies it to the restricted
+                                                      groups for every gated app's Component (AuthzRoleBinding
+                                                      <project>-promotion-deny-component-delete-<group>): deleting
+                                                      a Component cascades to its gated bindings
 An explicit deny wins over the upstream `developer` role's allow (per entitlement value; a user who is also in an
 approver group is allowed through that group). Git stays the source of truth for gated environments: Argo CD applies the
 merged PR through the Kubernetes API (not subject to OpenChoreo authz) and self-heal reverts out-of-band edits.
@@ -26,6 +30,17 @@ spec:
     - releasebinding:create
     - releasebinding:update
     - releasebinding:delete
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRole
+metadata:
+  name: promotion-component-deleter
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  description: Delete Components (denied per gated Component by charts/tenant; offboarding goes through git)
+  actions:
+    - component:delete
 {{- range $group := .Values.promotion.restrictedGroups }}
 ---
 apiVersion: openchoreo.dev/v1alpha1

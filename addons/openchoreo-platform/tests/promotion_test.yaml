@@ -33,6 +33,13 @@ tests:
     asserts:
       - hasDocuments: { count: 2 }   # only the gate client's role + binding
 
+  - it: component deletion role for the per-tenant deny (charts/tenant authz.yaml)
+    template: templates/promotion-authz.yaml
+    documentSelector: { path: metadata.name, value: promotion-component-deleter }
+    asserts:
+      - isKind: { of: ClusterAuthzRole }
+      - equal: { path: spec.actions, value: [component:delete] }
+
   - it: the gate client is read-only plus observer queries
     template: templates/promotion-authz.yaml
     documentSelector: { path: metadata.name, value: promotion-gate }
