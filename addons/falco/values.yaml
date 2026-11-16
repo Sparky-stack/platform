@@ -7,7 +7,8 @@
 #   falcosidekick      talon       -> Falco Talon (actions on OpenChoreo app namespaces dp-*)
 #                      cloudevents -> telemetry collector logs pipeline (Datadog overlay fans it out)
 #                      otlp.metrics-> telemetry collector metrics pipeline (alert counters -> Prometheus on mgmt)
-#                      webhook     -> escalation endpoint on mgmt (addon argo-events, POST /falco, >= critical)
+#                      webhook     -> escalation endpoint on mgmt (addon argo-events, POST /falco/<cluster> with the
+#                                     cluster's own token, >= critical); every event carries output_fields.cluster
 #                      slack       -> OFF until `slack.enabled`
 #   Falco Talon        crypto miner -> label + terminate (enabled); shell in app container -> label only
 #
@@ -22,14 +23,17 @@ cluster:
   environment: development
 
 # --- platform glue (templates/) -------------------------------------------------------------------------------------
-# Optional falcosidekick outputs from the cluster's secret store (mgmt: `platform`, workload: `default`; set per role).
-# Each renders into Secret falcosidekick-outputs, which sidekick reads through optional secretKeyRef env vars
-# (falco.falcosidekick.config.extraEnv), so a disabled output simply has no env var.
-secretStore: default
+# falcosidekick outputs with credentials (templates/outputs-secret.yaml), read through optional secretKeyRef env vars
+# (falco.falcosidekick.config.extraEnv), so an output without its Secret simply has no env var.
+secretStore: default             # slack (mgmt: `platform`, set per role)
+# Escalation -> addon argo-events on mgmt, POST <url>/<cluster> with this cluster's own token (docs/observability.md
+# "Falco response"). Secret falcosidekick-escalation: store "" = delivered by mgmt (workload clusters: charts/cluster
+# ClusterResourceSet <cluster>-falco-escalation; the store key falco-webhook never reaches the cluster); mgmt
+# (values/role-mgmt.yaml) renders it from store `platform`, key remoteKey (url, token).
 escalation:
-  enabled: true                  # falco-webhook: properties url, token -> addon argo-events on mgmt (docs/observability.md "Falco response")
+  enabled: true
+  store: ""
   remoteKey: falco-webhook
-  minimumPriority: critical
 slack:
   enabled: false                 # falco-slack: property webhook-url
   remoteKey: falco-slack
@@ -150,6 +154,11 @@ falco:
     webui:
       enabled: false
     config:
+      # Every event names its cluster (output_fields.cluster): set per cluster by the addon ApplicationSet (catalog
+      # clusterNameFormats "cluster:%s"); falco-response cross-checks it against the endpoint the event arrived on.
+      customfields: ""
+      webhook:
+        minimumpriority: critical      # escalation (address + token: Secret falcosidekick-escalation, extraEnv below)
       # Talon: every event; Talon itself only acts on the platform rule names (rulesOverride below).
       talon:
         address: http://falco-talon:2803
@@ -164,14 +173,12 @@ falco:
           protocol: grpc
           checkcert: false
           minimumpriority: notice
-      # webhook / slack: set from Secret falcosidekick-outputs (templates/outputs-secret.yaml) when enabled:
+      # webhook: Secret falcosidekick-escalation; slack: Secret falcosidekick-outputs (templates/outputs-secret.yaml)
       extraEnv:
         - name: WEBHOOK_ADDRESS
-          valueFrom: { secretKeyRef: { name: falcosidekick-outputs, key: WEBHOOK_ADDRESS, optional: true } }
+          valueFrom: { secretKeyRef: { name: falcosidekick-escalation, key: WEBHOOK_ADDRESS, optional: true } }
         - name: WEBHOOK_CUSTOMHEADERS
-          valueFrom: { secretKeyRef: { name: falcosidekick-outputs, key: WEBHOOK_CUSTOMHEADERS, optional: true } }
-        - name: WEBHOOK_MINIMUMPRIORITY
-          valueFrom: { secretKeyRef: { name: falcosidekick-outputs, key: WEBHOOK_MINIMUMPRIORITY, optional: true } }
+          valueFrom: { secretKeyRef: { name: falcosidekick-escalation, key: WEBHOOK_CUSTOMHEADERS, optional: true } }
         - name: SLACK_WEBHOOKURL
           valueFrom: { secretKeyRef: { name: falcosidekick-outputs, key: SLACK_WEBHOOKURL, optional: true } }
         - name: SLACK_MINIMUMPRIORITY

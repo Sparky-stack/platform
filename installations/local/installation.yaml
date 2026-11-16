@@ -21,7 +21,7 @@ secrets:
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
   workloadSeed:                               # local backend: copied from mgmt `platform` into each workload cluster
-    keys: [openchoreo-observability, falco-webhook]
+    keys: [openchoreo-observability]          # falco-webhook stays on mgmt (per-cluster tokens: charts/cluster falcoEscalation)
   # No k3s registries.yaml / platform-ghcr: every image this installation pulls from ghcr.io is public (koorikla/
   # hello-world, koorikla/ci-toolbox: anonymous pull checked 2026-11). Private images: true + GHCR_* (docs/forking.md).
   nodeRegistryAuth:
