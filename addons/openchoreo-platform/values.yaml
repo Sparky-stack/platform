@@ -1,5 +1,5 @@
 # OpenChoreo platform-team resources in the control plane (mgmt). Everything here is an OpenChoreo CR except the org
-# namespace label, so the Application fails with "no matches for kind ..." until addon openchoreo-control-plane has
+# namespace label and the auto-build trigger (Argo Workflows + ESO objects in workflows-<org ns>, templates/auto-build.yaml), so the Application fails with "no matches for kind ..." until addon openchoreo-control-plane has
 # installed the CRDs; its retries cover that (CRDs come from the control-plane chart's crds/, installed with it).
 # CRs carry SkipDryRunOnMissingResource so the namespace label still applies on the first attempts.
 #
@@ -19,6 +19,9 @@ openchoreo:
   observability:
     enabled: true
     httpPort: 11080
+  workflowPlane:
+    enabled: true
+    autoBuild: poll                           # poll | webhook | none (templates/auto-build.yaml)
 
 # DeploymentPipeline `default`: promotion order. Every Project created from a tenant file references it (charts/tenant),
 # and charts/tenant renders one ProjectReleaseBinding per environment listed here (keep both lists in sync).
@@ -191,6 +194,41 @@ buildWorkflows:
       checkImage: ""
       checkSetup: ""
       checkEnv: {}
+
+# Auto-build (docs/build-plane.md "Auto-build"): build every Component with spec.autoBuild: true on each new commit of
+# its build branch. OpenChoreo 1.3.3 only offers a webhook into openchoreo-api (random run names, so a redelivered
+# push builds twice) and no polling. The trigger is installation.yaml openchoreo.workflowPlane.autoBuild:
+#   poll     CronWorkflow auto-build-poll on pollSchedule: no inbound traffic (local k3d, private clusters)
+#   webhook  GitHub App push webhook -> Argo Events (addon argo-events, HMAC-checked) -> a Workflow from the same
+#            WorkflowTemplate for the pushed repository; the CronWorkflow still runs on resyncSchedule as a safety net
+#   none     nothing (builds only from Backstage / occ / kubectl)
+# Either way one WorkflowTemplate `auto-build` (files/auto-build/auto_build.py) creates WorkflowRun
+# <component>-<sha[:12]> once per commit. Rendered into the run namespace workflows-<org ns> (the scoped secret store
+# `workflows` serves only workflows-* namespaces); egress = that namespace's default-deny NetworkPolicy (DNS, API
+# server, public 443).
+autoBuild:
+  workflowTemplate: auto-build               # == addon argo-events autoBuild.workflowTemplate (Sensor target)
+  pollSchedule: "* * * * *"                  # trigger poll (cron, UTC); GitHub cost: one conditional request per
+                                             # repo/branch, 304s are free; a pass that overlaps the next is skipped
+  resyncSchedule: "*/30 * * * *"             # trigger webhook: reconcile missed deliveries ("" = off)
+  maxRunsPerPass: 5                          # WorkflowRuns one pass may create (the rest wait for the next pass)
+  staleRunSeconds: 7200                      # an unfinished auto-build run older than this no longer blocks the next
+  minRateRemaining: 100                      # pause the pass when the token's GitHub rate limit falls below this
+  stateConfigMap: auto-build-state           # cache only (ETags, last handled head); losing it never rebuilds
+  secretStore: workflows                     # == addon openchoreo-workflow-plane clusterWorkflowPlane.secretStore
+  # GitHub: ESO's GithubAccessToken generator mints an installation token of this App (store key with githubAppID,
+  # githubAppInstallationID, githubAppPrivateKey; must be in addon secret-stores workflowStore.keys) restricted to
+  # `permissions`, rotated every tokenRefreshInterval (tokens expire after 1h). The poll pod mounts only that token.
+  # Default: the platform's existing App (the promotion gate's, installed on the app repos); a dedicated read-only
+  # App works the same way.
+  github:
+    key: promotion-gate-github
+    permissions: { contents: read }
+    tokenRefreshInterval: 30m
+  image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 96Mi }
 
 # Generic (non-component) workflow: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
 helmChartWorkflow:

@@ -1,0 +1,61 @@
+# Workflows a compromised auto-build Sensor could try to create in the run namespace: all denied.
+# 1. Inline templates, no template reference.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: inline, namespace: workflows-default }
+spec:
+  entrypoint: main
+  templates:
+    - name: main
+      container: { image: docker.io/library/alpine:3, command: [sh, -c, "cat /var/run/secrets/kubernetes.io/serviceaccount/token"] }
+---
+# 2. Another WorkflowTemplate.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: other-template, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: something-else }
+---
+# 3. The build ClusterWorkflowTemplate.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: cluster-scope, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: koorikla-build, clusterScope: true }
+---
+# 4. The right template with another ServiceAccount.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: other-sa, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: auto-build }
+  serviceAccountName: workflow-sa
+---
+# 5. The right template with a pod spec patch.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: pod-patch, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: auto-build }
+  podSpecPatch: '{"containers":[{"name":"main","image":"docker.io/library/alpine:3"}]}'
+---
+# 6. The right template with an extra parameter.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: extra-param, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: auto-build }
+  arguments:
+    parameters:
+      - { name: repository, value: https://github.com/koorikla/hello-world.git }
+      - { name: image, value: docker.io/library/alpine:3 }
+---
+# 7. Artifacts instead of parameters.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: artifacts, namespace: workflows-default }
+spec:
+  workflowTemplateRef: { name: auto-build }
+  arguments:
+    artifacts:
+      - { name: x, raw: { data: "y" } }

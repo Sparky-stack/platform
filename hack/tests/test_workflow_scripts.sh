@@ -2,6 +2,8 @@
 # Workflow scripts (stdlib Python run by Argo Workflows): unit tests of their pure functions and template guards.
 #   addons/openchoreo-platform/files/promotion-gate/gate.py  freeze windows incl. DST, releaseName edit, endpoints, pipeline
 #   addons/argo-events/files/falco_response.py               priority filter, pod -> OpenChoreo component mapping
+#   addons/openchoreo-platform/files/auto-build/auto_build.py one WorkflowRun per commit, GitOps hand-off not rebuilt,
+#                                                             restarts/lost cache/redelivery never build twice (#164)
 #   addons/argo-events WorkflowTemplate falco-response        the Falco event (tenant-controlled text) and what enrich
 #                                                             derives from it reach steps only as env, never as code
 set -euo pipefail
@@ -51,6 +53,15 @@ else
   echo "$out" >&2
   assert_eq failed ok "falco_response.py unit tests"
 fi
+if out=$(cd "$ROOT/addons/openchoreo-platform/files/auto-build" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_auto_build 2>&1); then
+  assert_eq ok ok "auto_build.py unit tests"
+else
+  echo "$out" >&2
+  assert_eq failed ok "auto_build.py unit tests"
+fi
+# shellcheck disable=SC2016  # literal template marker
+hits=$(grep -c -e '{{' "$ROOT/addons/openchoreo-platform/files/auto-build/auto_build.py" || true)
+assert_eq "$hits" "0" "auto_build.py contains no Argo template markers"
 # The ClusterWorkflow embeds gate.py in a CEL template (and Argo templates it again).
 # shellcheck disable=SC2016  # literal template markers
 hits=$(grep -c -e '\${' -e '{{' "$dir/gate.py" || true)

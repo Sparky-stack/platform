@@ -153,9 +153,19 @@ Fallback: show the existing `hello-world` component and its repo (koorikla/hello
 Show: hello-world is built in-cluster (OpenChoreo workflow plane -> Harbor, signed with the platform key); only signed
 images with an SBOM and a vulnerability scan run in production; an unsigned one is denied live.
 
-The build: Backstage -> hello-world -> **Build** (or the WorkflowRun below), then follow the run: checkout, check,
-scan-fs, build (rootless BuildKit, linux/amd64 + linux/arm64), scan-image, sbom, sign, gitops (commits the digest ref
-into `deploy/openchoreo/workload.yaml`; Argo CD + autoDeploy roll it out to development). About 5 minutes.
+The build starts by itself: merge any code or docs change to hello-world `main` (it sets `autoBuild: true`) and within
+about a minute the auto-build poll (local installation: nothing is exposed to GitHub; docs/build-plane.md "Auto-build")
+creates WorkflowRun `hello-world-<sha[:12]>`. Follow it: checkout, check, scan-fs, build (rootless BuildKit,
+linux/amd64 + linux/arm64), scan-image, sbom, sign, gitops (commits the digest ref into
+`deploy/openchoreo/workload.yaml`; Argo CD + autoDeploy roll it out to development). About 6 minutes.
+
+```bash
+kubectl --context k3d-platform-mgmt get workflowruns -n default -l platform.koorikla.io/trigger=auto-build -w
+kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workflows.argoproj.io/cron-workflow=auto-build-poll
+```
+
+The hand-off commit and promotion merges start no build (they only touch `deploy/`), and a pass without a new commit
+creates nothing. On demand instead: Backstage -> hello-world -> **Build**, or the WorkflowRun below.
 
 ```bash
 kubectl --context k3d-platform-mgmt create -f - <<'EOF'
@@ -175,8 +185,7 @@ EOF
 kubectl --context k3d-platform-mgmt get workflowruns -n default -w
 ```
 
-The checkout step skips a head commit that only touches `deploy/` (the hand-off's own commit, loop guard): push a code
-or docs change first, or the run ends after checkout.
+A manual run of a head commit that only touches `deploy/` ends after checkout (the hand-off's own commit, loop guard).
 
 Verify the image the Workload deploys (platform key, Harbor CA, pull-only robot; `task demo:check` row "latest image
 signed" does the same):
@@ -214,6 +223,8 @@ pipeline is denied the same way (`image (harbor.openchoreo.localhost:9443/apps/)
 Talking points:
 - One pipeline for every stack, CI-provider-agnostic: the workflow plane runs the same koorikla/ci scripts as the
   GitHub path; Git stays the source of truth (the build commits the digest ref, Argo CD deploys it).
+- Push-to-deploy without inbound traffic: locally a poll (GitHub App token, read-only, one build per commit), in cloud
+  installations a signed GitHub webhook into the same trigger.
 - Kyverno checks signature + SBOM + vuln attestations and a digest reference at admission; the GitHub path
   (keyless, SLSA provenance too) stays available per Component (`IMAGE_BUILDER=github-actions` in hello-world).
 - The signing key never leaves mgmt; workload clusters get only `cosign.pub`.

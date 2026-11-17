@@ -13,6 +13,7 @@ Wrapper chart for `argo-events` (`2.4.28` / `v1.9.11`) on `mgmt`. Runs the platf
 
 - `falco.{enabled,clusters,tokenSecret,route,response}`: authenticates per-cluster `falcosidekick` webhooks (`fleetParameters` injects `falco.clusters` from Argo CD cluster secrets) and runs `falco-response`.
 - `promotionGate.{enabled,sourceEnvironments,workflow}`: triggers `ClusterWorkflow/promotion-gate` when `staging` bindings roll out.
+- `autoBuildWebhook.{secret,route,rateLimit}`: only with installation `openchoreo.workflowPlane.autoBuild: webhook` (cloud): GitHub App push webhook (HMAC-checked `EventSource/github`, `Sensor/auto-build`) starting `WorkflowTemplate/auto-build` of addon openchoreo-platform; admission-pinned.
 - `workflowPlane`: `auto` (renders `Sensor`s and `WorkflowTemplate`s when Argo Workflows CRDs and `openchoreo.workflowPlane.enabled` are active).
 
 ## Day-2 notes
@@ -23,3 +24,4 @@ Wrapper chart for `argo-events` (`2.4.28` / `v1.9.11`) on `mgmt`. Runs the platf
 
 - [Observability: Falco](../../docs/observability.md#falco)
 - [Promotion gates](../../docs/promotion.md)
+- [Build plane: auto-build](../../docs/build-plane.md#auto-build-poll-or-webhook)

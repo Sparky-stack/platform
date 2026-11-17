@@ -1,0 +1,126 @@
+suite: openchoreo-platform - auto-build trigger (poll CronWorkflow / webhook WorkflowTemplate, #164)
+templates:
+  - templates/auto-build.yaml
+tests:
+  - it: poll (default) runs one reconcile pass per minute, never overlapping
+    documentSelector: { path: kind, value: CronWorkflow }
+    asserts:
+      - equal: { path: metadata.name, value: auto-build-poll }
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal: { path: spec.schedules, value: ["* * * * *"] }
+      - equal: { path: spec.concurrencyPolicy, value: Forbid }
+      - equal: { path: spec.workflowSpec, value: { workflowTemplateRef: { name: auto-build } } }
+      - equal: { path: 'spec.workflowMetadata.labels["platform.koorikla.io/trigger"]', value: poll }
+
+  - it: webhook keeps a resync poll as a safety net for missed deliveries
+    set: { openchoreo.workflowPlane.autoBuild: webhook }
+    documentSelector: { path: kind, value: CronWorkflow }
+    asserts:
+      - equal: { path: spec.schedules, value: ["*/30 * * * *"] }
+      - equal: { path: 'spec.workflowMetadata.labels["platform.koorikla.io/trigger"]', value: webhook }
+
+  - it: webhook without resync renders the WorkflowTemplate (Sensor target) but no CronWorkflow
+    set: { openchoreo.workflowPlane.autoBuild: webhook, autoBuild.resyncSchedule: "" }
+    asserts:
+      - hasDocuments: { count: 11 }
+
+  - it: the WorkflowTemplate is the one shared build trigger for both modes
+    set: { openchoreo.workflowPlane.autoBuild: webhook }
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - equal: { path: metadata.name, value: auto-build }
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal: { path: spec.serviceAccountName, value: auto-build }
+      - equal: { path: spec.arguments.parameters, value: [{ name: repository, value: "" }] }
+      - equal: { path: spec.synchronization.mutexes, value: [{ name: auto-build }] }
+      - equal: { path: spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: 'spec.templates[0].script.securityContext.readOnlyRootFilesystem', value: true }
+      - equal: { path: 'spec.templates[0].script.securityContext.capabilities.drop', value: [ALL] }
+      - matchRegex: { path: 'spec.templates[0].script.image', pattern: "@sha256:[0-9a-f]{64}$" }
+      - equal: { path: 'spec.volumes[0].secret.secretName', value: auto-build-github-token }
+      - contains:
+          path: 'spec.templates[0].script.env'
+          content: { name: REPOSITORY, value: "{{workflow.parameters.repository}}" }
+      - contains:
+          path: 'spec.templates[0].script.env'
+          content: { name: ALLOWED_PREFIXES, value: "https://github.com/koorikla/" }
+      - contains: { path: 'spec.templates[0].script.env', content: { name: ORG_NAMESPACE, value: default } }
+      - notMatchRegex: { path: 'spec.templates[0].script.source', pattern: "workflow\\.parameters" }   # input only as env
+      - matchRegex: { path: 'spec.templates[0].script.source', pattern: "class Reconciler" }
+
+  - it: none renders nothing
+    set: { openchoreo.workflowPlane.autoBuild: none }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no workflow plane, no trigger
+    set: { openchoreo.workflowPlane.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no build workflows, no trigger
+    set: { buildWorkflows.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: rejects an unknown trigger
+    set: { openchoreo.workflowPlane.autoBuild: always }
+    asserts:
+      - failedTemplate: { errorPattern: 'openchoreo.workflowPlane.autoBuild: "always" is not poll, webhook or none' }
+
+  - it: GitHub access is an ESO-minted, read-only installation token of the platform App
+    documentSelector: { path: kind, value: GithubAccessToken }
+    asserts:
+      - equal: { path: spec.permissions, value: { contents: read } }
+      - equal: { path: spec.appIDRef, value: { name: auto-build-github-app, key: app-id } }
+      - equal: { path: spec.installIDRef, value: { name: auto-build-github-app, key: installation-id } }
+      - equal: { path: spec.auth.privateKey.secretRef, value: { name: auto-build-github-app, key: private-key } }
+
+  - it: the App credentials come from the scoped ClusterSecretStore workflows
+    documentSelector: { path: metadata.name, value: auto-build-github-app }
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: workflows } }
+      - equal: { path: 'spec.data[2].remoteRef', value: { key: promotion-gate-github, property: githubAppPrivateKey } }
+
+  - it: the token Secret is re-minted by the generator before the token expires (1h)
+    documentSelector: { path: metadata.name, value: auto-build-github-token }
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: spec.refreshInterval, value: 30m }
+      - equal: { path: 'spec.dataFrom[0].sourceRef.generatorRef.kind', value: GithubAccessToken }
+
+  - it: refuses an unrestricted token
+    set: { autoBuild.github.permissions: null }
+    asserts:
+      - failedTemplate: { errorPattern: "autoBuild.github.permissions is required" }
+
+  - it: org-namespace RBAC is read + create only (no update, patch or delete of tenant objects)
+    documentSelector: { path: 'rules[0].resources[0]', value: components }
+    asserts:
+      - isKind: { of: Role }
+      - equal: { path: metadata.namespace, value: default }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [openchoreo.dev], resources: [components], verbs: [list] }
+            - { apiGroups: [openchoreo.dev], resources: [workflows], verbs: [get] }
+            - { apiGroups: [openchoreo.dev], resources: [workflowruns], verbs: [get, list, create] }
+
+  - it: run-namespace RBAC writes only the cache ConfigMap (by name) and Argo task results
+    documentSelector: { path: 'rules[0].resources[0]', value: configmaps }
+    asserts:
+      - isKind: { of: Role }
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [""], resources: [configmaps], verbs: [create] }
+            - { apiGroups: [""], resources: [configmaps], resourceNames: [auto-build-state], verbs: [get, update] }
+            - { apiGroups: [argoproj.io], resources: [workflowtaskresults], verbs: [create, patch] }
+
+  - it: follows the org namespace
+    set: { openchoreo.orgNamespace: acme }
+    documentSelector: { path: kind, value: CronWorkflow }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-acme }

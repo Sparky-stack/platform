@@ -1,0 +1,6 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: UserInfo
+metadata: { name: auto-build-sensor }
+userInfo:
+  username: system:serviceaccount:argo-events:auto-build-sensor
+  groups: [system:serviceaccounts, system:serviceaccounts:argo-events]
