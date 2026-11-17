@@ -1,4 +1,6 @@
 {{- /*
+UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only); kept as a reference for real infrastructure.
+The developer-facing platform does not depend on it (docs/portability.md).
 GKE on CAPG (managed control plane). Rendered when capi.providers.gcp. UNTESTED (no GCP account): rendered and
 schema-checked against CAPG v1.13.1's CRDs only (docs/providers.md "GKE (CAPG) - rendered only").
 Unlike the k3s classes there are no machines to bootstrap: GCPManagedControlPlane is the GKE cluster (Google runs the

@@ -1,4 +1,6 @@
 {{- /*
+UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only); kept as a reference for real infrastructure.
+The developer-facing platform does not depend on it (docs/portability.md).
 k3s on CAPH (Hetzner Cloud). Rendered when capi.providers.hetzner. UNTESTED (no credentials): rendered + schema-checked.
 Node identity: kubelet --cloud-provider=external, k3s' embedded CCM off. The hcloud cloud-controller-manager
 (addons/hcloud-ccm, Argo CD, catalog providers: [hetzner]) matches Node name == server name (CAPH names servers after
