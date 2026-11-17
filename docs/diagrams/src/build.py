@@ -477,6 +477,7 @@ def upgrade() -> Diagram:
             badge=(c[0] + w / 2 + 80, y1))
     d.legend_label("workload", "workload clusters")
     d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters", "Maintainer")
+    d.stages("Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
           "GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and "
           "arm; a maintainer reviews and merges it into main",

@@ -106,6 +106,34 @@ assert_match "$out" "runs along the border of zone" "arrows hugging a zone borde
 assert_match "$out" "badge 3 is closer than 6 px to text 'note text'" "badge clearance from text is enforced"
 assert_match "$out" "text contrast .* 'dim note'" "low text contrast is reported"
 
+# 6. stages: one step must not reach two gated stages at once, and stages are reached in order
+out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from svglib import Diagram
+d = Diagram("t", "lede")
+d.box(40, 120, 140, 80, "mgmt", "Release")
+d.box(300, 120, 140, 80, "workload", "Dev")
+d.box(300, 260, 140, 80, "workload", "Staging")
+d.box(600, 260, 140, 80, "workload", "Production")
+d.box(600, 400, 140, 80, "workload", "Canary")
+d.arrow([(180, 160), (300, 160)], step=1)
+d.arrow([(110, 200), (110, 300), (300, 300)], step=2)
+d.arrow([(110, 230), (520, 230), (520, 290), (600, 290)], step=2, badge=False)
+d.junction(110, 230)
+d.arrow([(110, 260), (110, 440), (600, 440)], step=3)
+d.stages("Dev", "Staging", "Production")
+d.stages("Canary", "Dev")
+d.stages("Dev", "Nowhere")
+d.key("Release deploys to dev", "Release deploys to staging and production", "Release deploys to canary")
+for i in d.check():
+    print(i)
+EOF
+)
+assert_match "$out" "step 2 reaches stages 'Staging' and 'Production' at once" "a fork into two gated stages is reported"
+assert_match "$out" "stage 'Dev' is reached in step 1, before stage 'Canary' is done" "stages reached out of order are reported"
+assert_match "$out" "stage 'Nowhere' is not a box" "an unknown stage is reported"
+
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"
