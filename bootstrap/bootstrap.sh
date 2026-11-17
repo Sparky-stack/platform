@@ -87,7 +87,7 @@ ensure_k3d() {
   # (raise them there, see docs/dev-environment.md). Only the native Linux host can be checked from here.
   local watches
   watches=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)
-  if [[ "$HOST_OS" == linux && -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
+  if [[ "$(os_name)" == linux && -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
     warn "fs.inotify.max_user_watches=${watches} (< 524288 recommended for multi-cluster k3s/CAPD)"
   fi
   docker network inspect kind >/dev/null 2>&1 || {

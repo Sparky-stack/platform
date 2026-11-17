@@ -114,7 +114,7 @@ py() {
 open_url() {
   local url=$1
   [[ -n "${NO_BROWSER:-}" ]] && return 0
-  case "$HOST_OS" in
+  case "$(os_name)" in
     darwin) open "$url" >/dev/null 2>&1 ;;
     windows) cmd.exe //c start "" "$url" >/dev/null 2>&1 ;;
     linux)
