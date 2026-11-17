@@ -110,17 +110,18 @@ def security() -> Diagram:
     d.box(X[0], R1, BW, H, "workload", "Detection", ["watches every pod", "at runtime"])
     d.box(X[2], R1, BW, R2 + H - R1, "workload", "App pods", ["your services"])
     d.box(X[1], R2, BW, H, "workload", "Auto-response", ["stops or labels", "the pod"])
-    d.box(X[0], R3, BW, H, "mgmt", "Incident workflow", ["records the alert,", "runs the response"])
+    d.box(X[0], R3, BW, H, "mgmt", "Incident workflow", ["finds the app,", "records the incident"])
     d.arrow([(X[0] + BW, ymid(R0)), (X[1], ymid(R0))], step=2, badge_at=0.5)
     d.arrow([(X[2], ymid(R0)), (X[1] + BW, ymid(R0))], step=3, badge_at=0.5)     # Kyverno reads the registry
     xa = X[2] + BW / 2
     d.arrow([(xa, R0 + H), (xa, R1)], step=4)
-    d.arrow([(X[0] + BW, ymid(R1)), (X[2], ymid(R1))], step=5, badge_at=0.35)
-    x6 = X[0] + BW - 40
-    d.arrow([(x6, R1 + H), (x6, ymid(R2)), (X[1], ymid(R2))], step=6, badge=((x6 + X[1]) / 2, ymid(R2)),
-            label="every alert", label_pos=((x6 + X[1]) / 2, ymid(R2) - 22))
+    d.arrow([(X[0] + BW, ymid(R1) - 12), (X[2], ymid(R1) - 12)], step=5, badge_at=0.5)
+    x6 = X[0] + BW + 60                         # Detection's right side: every alert to Talon
+    y6 = R1 + H + 50
+    d.arrow([(X[0] + BW, R1 + H - 14), (x6, R1 + H - 14), (x6, ymid(R2)), (X[1], ymid(R2))], step=6,
+            badge=(x6, y6), label="every alert", label_pos=(x6 - 18, y6 + 5), label_anchor="end")
     d.arrow([(X[1] + BW, ymid(R2)), (X[2], ymid(R2))], step=7, badge_at=0.5)
-    x8 = X[0] + 40
+    x8 = X[0] + BW / 2                          # Detection's bottom: critical alerts to the management cluster
     y8 = R2 + H + 40
     d.arrow([(x8, R1 + H), (x8, R3)], step=8, badge=(x8, y8), label="critical alerts", label_pos=(x8 + 20, y8 + 5),
             label_anchor="start")
@@ -134,7 +135,8 @@ def security() -> Diagram:
           "Detection (Falco) watches what every pod does at runtime, on every node",
           "Detection sends every alert to Auto-response (Falco Talon)",
           "Auto-response stops or labels the offending pod when an alert matches one of its rules",
-          "Detection also escalates critical alerts to an incident workflow on the management cluster (Argo Events)")
+          "Detection also escalates critical alerts to an incident workflow on the management cluster (Argo Events), "
+          "which finds the affected app and records the incident on it")
     return d
 
 

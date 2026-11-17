@@ -77,7 +77,7 @@ The numbered flow of each diagram, word for word.
 5. Detection (Falco) watches what every pod does at runtime, on every node
 6. Detection sends every alert to Auto-response (Falco Talon)
 7. Auto-response stops or labels the offending pod when an alert matches one of its rules
-8. Detection also escalates critical alerts to an incident workflow on the management cluster (Argo Events)
+8. Detection also escalates critical alerts to an incident workflow on the management cluster (Argo Events), which finds the affected app and records the incident on it
 
 ### Network ([network.svg](network.svg))
 
