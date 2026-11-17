@@ -51,12 +51,12 @@ print("yes" if all(ok(e) for e in exprs) else "no")' "$exprs" "$3"
 cluster_labels() {
   yq -o=json -I=0 'select(.kind == "ExternalSecret" and (.metadata.name | test("-argocd-cluster$"))) | .spec.target.template.metadata.labels' "$1"
 }
-render_cluster() {   # render_cluster <cluster file> <out>
+render_local_cluster() {   # render_local_cluster <cluster file> <out>
   helm template "cluster-$(yq '.name' "$1")" charts/cluster --namespace fleet --values "$INST_FILE" --values "$1" > "$2"
 }
 
 # --- 1. opt-in contract ------------------------------------------------------------------------------------------------
-helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$TMP/platform.yaml"
+render_platform local "$TMP/platform.yaml"
 mgmt_labels=$(yq -o=json -I=0 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels' "$TMP/platform.yaml")
 for a in $ADDONS; do
   assert_eq "$(yq ".addons[\"$a\"].default" "$CATALOG")" false "catalog: $a is opt-in (default false)"
@@ -65,7 +65,7 @@ for a in $ADDONS; do
 done
 for cf in "$INST_DIR"/clusters/*.yaml; do
   c=$(yq '.name' "$cf")
-  render_cluster "$cf" "$TMP/cluster-$c.yaml"
+  render_cluster local "$c" "$TMP/cluster-$c.yaml"
   labels=$(cluster_labels "$TMP/cluster-$c.yaml")
   assert_match "$labels" '"platform.koorikla.io/role":"workload"' "local/$c: cluster secret labels rendered"
   for a in $ADDONS; do
@@ -77,7 +77,7 @@ done
 
 # --- 2. opt-in render (dev1 opts in to all three) ----------------------------------------------------------------------
 yq '.addons.keda = true | .addons.strimzi = true | .addons["cloudnative-pg"] = true' "$INST_DIR/clusters/dev1.yaml" > "$TMP/dev1-optin.yaml"
-render_cluster "$TMP/dev1-optin.yaml" "$TMP/cluster-dev1-optin.yaml"
+render_local_cluster "$TMP/dev1-optin.yaml" "$TMP/cluster-dev1-optin.yaml"
 labels=$(cluster_labels "$TMP/cluster-dev1-optin.yaml")
 c_prov=$(yq '.provider // "docker"' "$TMP/dev1-optin.yaml")
 c_env=$(yq '.environment // "development"' "$TMP/dev1-optin.yaml")
