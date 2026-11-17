@@ -34,8 +34,8 @@
 <text class="s" x="792.0" y="415.4" font-size="13" fill="#dde5ef" text-anchor="middle">your services</text>
 <rect x="384" y="440" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="480.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Auto-response</text>
-<text class="s" x="480.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">stops or labels</text>
-<text class="s" x="480.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">the pod</text>
+<text class="s" x="480.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">acts only when</text>
+<text class="s" x="480.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">a rule matches</text>
 <rect x="72" y="600" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="168.0" y="626.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Incident workflow</text>
 <text class="s" x="168.0" y="646.4" font-size="13" fill="#dde5ef" text-anchor="middle">finds the app,</text>
@@ -57,6 +57,8 @@
 <text class="s" x="306.0" y="415.0" font-size="13" fill="#aab6c8" text-anchor="end">every alert</text>
 <circle cx="324.0" cy="410.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="324.0" y="414.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<rect x="584.5" y="498.0" width="103.0" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="636.0" y="512.0" font-size="13" fill="#aab6c8" text-anchor="middle">on a rule match</text>
 <circle cx="636.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="636.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
 <rect x="184.0" y="551.0" width="84.6" height="20.0" rx="3" fill="#0b1120"/>
