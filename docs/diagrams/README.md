@@ -142,7 +142,8 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 3. Argo CD reads main for every cluster that follows it
 4. Argo CD syncs the dev clusters first, each app in a fixed order
 5. Dev clusters are verified: every app synced and healthy
-6. Argo CD syncs the prod clusters only after a maintainer's second pull request moves them to the verified commit
+6. A maintainer opens and merges a second pull request in GitHub that moves the prod clusters to the verified commit
+7. Argo CD syncs the prod clusters to that commit
 
 Kubernetes versions: a `kubernetesVersion` bump in a fleet file rolls through Cluster API instead, one server at a time, dev before prod (see the cluster lifecycle view).
 

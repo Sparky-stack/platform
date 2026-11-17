@@ -468,18 +468,24 @@ def upgrade() -> Diagram:
     d.arrow([(c[0] + w, ymid(R0)), (c[1], ymid(R0))], step=1, badge_at=0.4)
     d.arrow([(c[0] + w / 2, R1), (c[0] + w / 2, y0), (c[1] + 120, y0), (c[1] + 120, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
-    d.arrow([(c[0] + w / 2, R1 + H), (c[0] + w / 2, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=6,
-            badge=(c[0] + w / 2 + 80, y1), label="after a second pull request", label_pos=(c[0] + w / 2 + 104, y1 - 10), label_anchor="start")
+    d.box(c[3], R1, w, H, "external", "Maintainer", ["promotes", "prod"], step=6)
+    xm = c[3] + w / 2                           # the prod promotion is a pull request too
+    d.arrow([(xm, R1), (xm, ymid(R0)), (c[2] + w, ymid(R0))], label="second pull request",
+            label_pos=(xm - 10, R0 + H + 52), label_anchor="end")
+    d.line_label = "the maintainer's prod pull request"
+    d.arrow([(c[0] + w / 2, R1 + H), (c[0] + w / 2, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=7,
+            badge=(c[0] + w / 2 + 80, y1))
     d.legend_label("workload", "workload clusters")
-    d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters")
+    d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters", "Maintainer")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
           "GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and "
           "arm; a maintainer reviews and merges it into main",
           "Argo CD reads main for every cluster that follows it",
           "Argo CD syncs the dev clusters first, each app in a fixed order",
           "Dev clusters are verified: every app synced and healthy",
-          "Argo CD syncs the prod clusters only after a maintainer's second pull request moves them to the verified "
-          "commit")
+          "A maintainer opens and merges a second pull request in GitHub that moves the prod clusters to the verified "
+          "commit",
+          "Argo CD syncs the prod clusters to that commit")
     d.note("Kubernetes versions: a kubernetesVersion bump in a fleet file rolls through Cluster API instead, one "
            "server at a time, dev before prod (see the cluster lifecycle view).")
     return d
