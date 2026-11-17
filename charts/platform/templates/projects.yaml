@@ -61,6 +61,34 @@ spec:
       kind: ExternalSecret
     - group: openchoreo.dev
       kind: Environment
+---
+{{- /* previews: the PR preview Applications of ApplicationSets previews-<project> (charts/tenant templates/previews.yaml,
+docs/preview-environments.md). Only charts/preview of the platform repo, only the three OpenChoreo kinds one preview
+consists of, only the org namespace on mgmt. Rendered always (like examples): the Applications carry the resources
+finalizer and Argo CD can only delete them while their project exists. */}}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: previews
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: PR preview environments (OpenChoreo Environment + bindings per open pull request)
+{{- include "platform.sourceIntegrity" . }}
+  sourceRepos:
+    - {{ .Values.installation.repoURL | quote }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: {{ ((.Values.openchoreo).orgNamespace) | default "default" | quote }}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: openchoreo.dev
+      kind: Environment
+    - group: openchoreo.dev
+      kind: ProjectReleaseBinding
+    - group: openchoreo.dev
+      kind: ReleaseBinding
 {{- /* examples: the opt-in example charts (templates/appset-examples.yaml) on workload clusters. Only their own
 namespaces, only Namespace as a cluster-scoped kind, only the namespaced kinds listed in examplesProject.
 Rendered ALWAYS, with the namespaces of every example in the catalog (enabled or not), and created one sync wave

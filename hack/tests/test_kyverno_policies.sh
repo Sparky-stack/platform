@@ -162,6 +162,30 @@ xp="$ROOT/addons/crossplane"
       --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" > "$TMP/xp-$res-$who.out" 2>&1 || true
   done
 ) &
+# PR previews (templates/previews.yaml, #168): on mgmt the expiry stamp, the per-tenant cap (resource.List context) and
+# the TTL DeletingPolicy on Environments; on data planes the guardrails generated into preview cell namespaces.
+pvt="$addon/tests/kyverno/previews"
+(
+  helm show crds "$cp_chart" | yq 'select(.metadata.name == "environments.openchoreo.dev")' > "$TMP/env-crd.yaml"
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
+    -f "$addon/values/role-mgmt.yaml" > "$TMP/pv-mgmt.yaml"
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
+    > "$TMP/pv-workload.yaml"
+  for k in MutatingPolicy ValidatingPolicy DeletingPolicy; do
+    yq "select(.kind == \"$k\")" "$TMP/pv-mgmt.yaml" > "$TMP/pv-$k.yaml"
+  done
+  yq 'select(.kind == "GeneratingPolicy")' "$TMP/pv-workload.yaml" > "$TMP/pv-GeneratingPolicy.yaml"
+  sed "s/@IN_GRACE@/$(( $(date +%s) - 600 ))/" "$pvt/environments-ttl.yaml" > "$TMP/pv-environments-ttl.yaml"
+  crd=(--crd-paths "$TMP/env-crd.yaml")
+  "$KYVERNO" apply "$TMP/pv-MutatingPolicy.yaml" --resource "$pvt/environment-new.yaml" "${crd[@]}" > "$TMP/pv-stamp.out" 2>&1 || true
+  date +%s > "$TMP/pv-stamp.time"
+  for c in at-cap below-cap; do
+    "$KYVERNO" apply "$TMP/pv-ValidatingPolicy.yaml" --resource "$pvt/environment-new.yaml" \
+      --context-file "$pvt/context-$c.yaml" "${crd[@]}" > "$TMP/pv-cap-$c.out" 2>&1 || true
+  done
+  "$KYVERNO" apply "$TMP/pv-DeletingPolicy.yaml" --resource "$TMP/pv-environments-ttl.yaml" "${crd[@]}" > "$TMP/pv-ttl.out" 2>&1 || true
+  "$KYVERNO" apply "$TMP/pv-GeneratingPolicy.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails.out" 2>&1 || true
+) &
 wait
 
 for s in "${suites[@]}"; do
@@ -211,6 +235,27 @@ for c in raw-objects:tenant:'pass: 0, fail: 4, warn: 0, error: 0, skip: 0' \
   res=${c%%:*}; rest=${c#*:}; who=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/xp-$res-$who.out")
   assert_match "$out" "$want" "crossplane policies: $who applying tests/kyverno/$res.yaml -> $want"
+done
+
+# previews: stamp = now + 48h (unix seconds, within the test's clock window)
+out=$(cat "$TMP/pv-stamp.out")
+assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: platform-preview-expiry mutates a new preview Environment"
+stamp=$(printf '%s\n' "$out" | sed -n 's/.*platform.koorikla.io\/expires-at: "\([0-9]*\)".*/\1/p' | head -1)
+now=$(cat "$TMP/pv-stamp.time")
+assert_eq "$([[ -n "$stamp" ]] && (( stamp > now + 172800 - 120 && stamp <= now + 172800 )) && echo yes || echo "no ($stamp vs $now)")" yes \
+  "previews: expires-at = creation + 48h"
+assert_match "$(cat "$TMP/pv-cap-at-cap.out")" 'pass: 0, fail: 1, warn: 0, error: 0' "previews: a 3rd preview of tenant demo is denied (cap 2)"
+assert_match "$(cat "$TMP/pv-cap-at-cap.out")" 'tenant demo already runs 2 preview environment\(s\), the cap is 2' "previews: the cap denial names tenant and cap"
+assert_match "$(cat "$TMP/pv-cap-below-cap.out")" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: the 2nd preview passes; other tenants' previews and development do not count"
+out=$(cat "$TMP/pv-ttl.out")
+assert_match "$out" 'pass: 2, fail: 3, warn: 0, error: 0' "previews: platform-preview-ttl deletes 2 of 5 Environments"
+for keep in pr-2-fresh pr-4-in-grace development; do
+  assert_match "$out" "resource default/Environment/$keep failed" "previews: TTL keeps $keep"
+done
+out=$(cat "$TMP/pv-guardrails.out")
+assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: guardrails match only the preview cell namespace"
+for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolation'; do
+  assert_match "$out" "$k" "previews: preview cell namespace gets $k"
 done
 
 finish

@@ -1,0 +1,19 @@
+# platform-preview-guardrails: only the preview cell namespace gets quota, limits and the isolation policy; the staging
+# cell and a namespace that merely claims the preview label (not created by OpenChoreo) are not matched.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-pr-9-hello-world-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: pr-9-hello-world, openchoreo.dev/project: demo, platform.koorikla.io/preview: "true"}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-staging-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: staging, openchoreo.dev/project: demo}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: not-a-cell
+  labels: {platform.koorikla.io/preview: "true"}

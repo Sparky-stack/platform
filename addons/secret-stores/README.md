@@ -19,6 +19,7 @@ Every store and its identity (ServiceAccount, plus a reader Role on the kubernet
 - `dnsStore.namespaces` and `secrets.dnsStore`: isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only).
 - `secrets.tenantStores.enabled` + `tenantStores.*` (workload): per-tenant OpenBao `SecretStore/openbao-tenant` in every OpenChoreo cell namespace (Kyverno `GeneratingPolicy`), `ValidatingAdmissionPolicies` that allow tenant namespaces no other store, and `ClusterSecretStore/default` conditions that exclude them ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
 - `repoCreds.{auth,remoteKey}`: `token` (PAT) or `githubApp` credentials for Argo CD.
+- `previewToken.*` (with `installation.yaml` `previews.enabled`): pull-request-read installation token of the platform GitHub App for the preview ApplicationSets (`argocd/preview-github-token`).
 
 ## Day-2 notes
 

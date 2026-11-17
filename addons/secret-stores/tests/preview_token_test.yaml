@@ -1,0 +1,52 @@
+suite: secret-stores - GitHub token of the PR preview ApplicationSets
+templates:
+  - templates/preview-token.yaml
+set:
+  previews.enabled: true
+tests:
+  - it: renders nothing while previews are off (the default)
+    set:
+      previews.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: renders nothing on workload clusters
+    set:
+      role: workload
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: reads the platform GitHub App from store platform into argocd (ESO only)
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.namespace, value: argocd }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: app-id, remoteRef: { key: promotion-gate-github, property: githubAppID } }
+            - { secretKey: installation-id, remoteRef: { key: promotion-gate-github, property: githubAppInstallationID } }
+            - { secretKey: private-key, remoteRef: { key: promotion-gate-github, property: githubAppPrivateKey } }
+
+  - it: mints an installation token limited to reading pull requests
+    documentIndex: 1
+    asserts:
+      - isKind: { of: GithubAccessToken }
+      - equal: { path: spec.permissions, value: { pull_requests: read } }
+      - equal: { path: spec.auth.privateKey.secretRef, value: { name: preview-github-token-app, key: private-key } }
+
+  - it: writes only the token into Secret preview-github-token, labelled scm-creds for Argo CD's tokenRef
+    documentIndex: 2
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: spec.target.name, value: preview-github-token }
+      - equal: { path: spec.target.template.metadata.labels, value: { argocd.argoproj.io/secret-type: scm-creds } }
+      - equal: { path: "spec.dataFrom[0].sourceRef.generatorRef.name", value: preview-github-token }
+      - equal: { path: spec.refreshInterval, value: 30m }
+
+  - it: refuses an unrestricted token
+    set:
+      previewToken.permissions: null
+    asserts:
+      - failedTemplate: { errorMessage: "previewToken.permissions is required (least privilege: pull_requests: read)" }

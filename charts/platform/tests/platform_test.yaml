@@ -12,7 +12,7 @@ tests:
     template: projects.yaml
     asserts:
       - hasDocuments:
-          count: 3
+          count: 4
       - containsDocument:
           kind: AppProject
           apiVersion: argoproj.io/v1alpha1
@@ -192,11 +192,25 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
         template: appset-examples.yaml
-      - hasDocuments: { count: 3 }
+      - hasDocuments: { count: 4 }
         template: projects.yaml
       - equal: { path: spec.destinations, value: [{ server: "*", namespace: eastwest-demo }] }
         template: projects.yaml
         documentSelector: { path: metadata.name, value: examples }
+
+  - it: "AppProject previews: only charts/preview's three OpenChoreo kinds, the org namespace, the platform repo"
+    template: projects.yaml
+    documentSelector: { path: metadata.name, value: previews }
+    asserts:
+      - equal: { path: spec.sourceRepos, value: [https://github.com/koorikla/platform.git] }
+      - equal: { path: spec.destinations, value: [{ server: https://kubernetes.default.svc, namespace: default }] }
+      - equal: { path: spec.clusterResourceWhitelist, value: [] }
+      - equal:
+          path: spec.namespaceResourceWhitelist
+          value:
+            - { group: openchoreo.dev, kind: Environment }
+            - { group: openchoreo.dev, kind: ProjectReleaseBinding }
+            - { group: openchoreo.dev, kind: ReleaseBinding }
 
   - it: "AppProjects are created one wave before, and pruned after, the ApplicationSets that use them"
     template: projects.yaml

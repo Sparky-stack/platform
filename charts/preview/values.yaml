@@ -1,0 +1,20 @@
+# Rendered by the Applications of ApplicationSet previews-<project> (charts/tenant templates/previews.yaml), one per
+# open pull request of an opted-in component, with `valuesObject` from the pull request generator. Every value below
+# comes from that generator or from installation.yaml `previews`; nothing here is tenant-controlled.
+# docs/preview-environments.md.
+
+project: ""                # OpenChoreo Project (tenant file `project`)
+component: ""              # Component name (== tenant app name == the app repo's Component)
+pullRequest: ""            # pull request number
+commit: ""                 # PR head SHA (40 hex): the build the ReleaseBinding pins
+repository: ""             # owner/name of the app repo (annotation only)
+branch: ""                 # PR head branch (annotation only)
+# "true" when the PR carries the label previews.expiredLabel: the TTL ran out (the auto-build pass sets it). Renders
+# nothing, so Argo CD prunes the Environment and OpenChoreo's finalizers remove bindings and the cell namespace.
+expired: "false"
+
+# --- from installation.yaml ------------------------------------------------------------------------------------------
+openchoreo:
+  orgNamespace: default
+previews:
+  dataPlane: dev1          # ClusterDataPlane every preview lands on (the development tier)

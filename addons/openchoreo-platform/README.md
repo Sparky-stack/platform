@@ -16,6 +16,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 - `promotionGate.{enabled,smoke,observe,statusContext}`: HTTP smoke + 15-minute Prometheus 5xx SLO gate posting `openchoreo/promotion-gate` on PRs.
 - `buildWorkflows.{stacks,platforms,secrets}` and `helmChartWorkflow`: language stack build workflows (`go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow.
 - `autoBuild.{pollSchedule,resyncSchedule,github}`: builds Components with `autoBuild: true` once per new commit; trigger per installation `openchoreo.workflowPlane.autoBuild` (`poll` | `webhook` | `none`).
+- `autoBuild.previews.*` (with `installation.yaml` `previews.enabled`): the same pass builds PR heads, cuts the preview `ComponentRelease`, posts `openchoreo/preview` and expires previews ([preview environments](../../docs/preview-environments.md)).
 
 ## Day-2 notes
 
