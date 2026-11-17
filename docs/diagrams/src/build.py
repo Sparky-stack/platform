@@ -59,8 +59,7 @@ def architecture() -> Diagram:
     d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry,", "secrets, sign-in"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
-    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "workload clusters", "workload", label_at="tr")
-    d.box(c[0], R3, w, H, "workload", "k3s nodes", ["servers and", "workers"])
+    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "k3s workload clusters", "workload", label_at="tr")
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
     d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
     d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
@@ -69,7 +68,7 @@ def architecture() -> Diagram:
     d.arrow([(xa, R1 + H), (xa, R2)], step=2)
     xo = c[2] + 40
     d.arrow([(c[0] + w, R1 + 24), (xo, R1 + 24), (xo, R2)], step=3, badge=(xo, R1 + H + 40))
-    d.arrow([(xa, R2 + H), (xa, R3)], step=4, badge=(xa, CH))
+    d.arrow([(xa, R2 + H), (xa, Z2)], step=4, badge=(xa, CH))          # creates the cluster itself: the zone
     x5 = c[1] + w / 2
     d.arrow([(c[0] + w, R1 + 56), (x5, R1 + 56), (x5, R3)], step=5, badge=(x5, CH))
     yb = Z2 + 24                                # step 5 also installs the cluster-agent
@@ -80,16 +79,17 @@ def architecture() -> Diagram:
             label_anchor="start")
     d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=7, badge_at=0.4)
     yk = R3 + H + 36                            # step 8: Kyverno (an addon) admits the apps
-    d.arrow([(c[1] + w / 2, R3 + H), (c[1] + w / 2, yk), (c[3] + w / 2, yk), (c[3] + w / 2, R3 + H)], step=8)
+    d.arrow([(c[1] + w / 2, R3 + H), (c[1] + w / 2, yk), (c[3] + w / 2, yk), (c[3] + w / 2, R3 + H)], step=8,
+            badge=(c[3] + 24, yk))                    # disc 8 right of disc 7: admission follows the submit
     d.require("Git", "Argo CD", "Cluster API", "OpenChoreo", "cluster-agent", "Apps", "Addons", "Shared services")
     d.key("Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
           "Argo CD turns each fleet file into a cluster for Cluster API to build",
           "Argo CD hands each app's release to OpenChoreo",
-          "Cluster API creates the cluster's k3s nodes on docker, AWS or Hetzner",
+          "Cluster API creates each workload cluster's k3s nodes on docker, AWS or Hetzner",
           "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
           "The cluster-agent dials out to OpenChoreo and pulls the app releases",
-          "The agent deploys the apps",
-          "Kyverno, one of the addons, admits only apps with signed images and safe settings")
+          "The agent submits the apps to the cluster",
+          "Kyverno, one of the addons, admits only apps with signed images and safe settings before they start")
     return d
 
 
