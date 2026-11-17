@@ -109,7 +109,7 @@ applied() {
   local f hit=""
   for f in "$HLOG"/apply.*.yaml; do
     [[ -f "$f" ]] || continue
-    [[ "$(yq '.metadata.name' "$f")" == "$1" ]] && hit=$f
+    grep -q "^  name: $1$" "$f" && hit=$f
   done
   printf '%s' "$hit"
 }
