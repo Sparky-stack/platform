@@ -96,15 +96,14 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A push to the app repo starts a build on the OpenChoreo workflow plane, or GitHub Actions
+1. A push to the app repo starts a build on OpenChoreo's workflow plane on the management cluster
 2. Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to `deploy/`)
 3. Argo CD reads the `deploy/` folder of the app repo
 4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
 5. The release deploys to development automatically
-6. The promotion gate checks development: readiness, smoke tests, alerts, change freezes
-7. The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it
-8. The promotion gate opens the production pull request only after staging, with code-owner approval
-9. Kyverno admits into production only images signed in the registry and pinned by digest
+6. The promotion gate checks development (readiness, smoke tests, alerts, change freezes), then opens the promotion pull request in the app repo: staging first, production only with code-owner approval
+7. The release deploys to staging, then to production, as Argo CD applies each merged promotion
+8. Kyverno admits into production only images signed in the registry and pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 

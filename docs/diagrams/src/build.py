@@ -239,8 +239,8 @@ def observability() -> Diagram:
 # -------------------------------------------------------------------------------------------------- sdlc
 def sdlc() -> Diagram:
     d = Diagram("SDLC · from git push to production",
-                "One signed image, promoted through environments by pull requests; production is gated twice, "
-                "at promotion and at admission.")
+                "One signed image, promoted by pull requests in the app repo; production is gated twice, at "
+                "promotion and at admission.")
     c, w = COLS4, CW4
     R0 = 120
     R1 = R0 + PITCH
@@ -256,7 +256,7 @@ def sdlc() -> Diagram:
     d.box(c[3], R1, w, H, "mgmt", "Promotion gate", ["health checks,", "pull requests"])
     d.box(c[1], R2, w, H, "workload", "Staging", ["second", "environment"])
     d.box(c[2], R2, w, H, "workload", "Production", ["gated", "twice"])
-    d.box(c[3], R2, w, H, "workload", "Admission", ["Kyverno"], step=9, aka=("Kyverno",))
+    d.box(c[3], R2, w, H, "workload", "Admission", ["Kyverno"], step=8, aka=("Kyverno",))
     d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1, badge_at=0.4)
     d.arrow([(c[1], R0 + 58), (c[0] + w, R0 + 58)])
     d.line_label = "commits the new version; admits"
@@ -265,23 +265,29 @@ def sdlc() -> Diagram:
     d.arrow([(xa, R1), (xa, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=5, badge_at=0.4)
-    d.arrow([(c[3], ymid(R1)), (c[2] + w, ymid(R1))], step=6, badge_at=0.4)
-    d.arrow([(c[3] + 30, R1 + H), (c[3] + 30, ch1), (c[1] + w / 2, ch1), (c[1] + w / 2, R2)], step=7,
-            badge=(c[2] - 40, ch1))
-    d.arrow([(c[3] + 90, R1 + H), (c[3] + 90, ch2), (c[2] + 110, ch2), (c[2] + 110, R2)], step=8,
-            badge=(c[2] + w + 24, ch2))
+    d.arrow([(c[3], ymid(R1)), (c[2] + w, ymid(R1))], step=6, badge=(c[3] - 36, ymid(R1)))
+    yg = R0 + H + 40                            # step 6 also: the gate writes Git, it does not deploy
+    xg = c[3] - 13                              # branches off the check arrow, in the gutter
+    d.arrow([(xg, ymid(R1)), (xg, yg), (c[0] + w - 30, yg), (c[0] + w - 30, R0 + H)], step=6,
+            badge=False, label="pull request", label_pos=(c[2] + 40, yg - 8), label_anchor="start")
+    d.junction(xg, ymid(R1))
+    xr, xp = c[1] + w / 2, c[2] + w / 2         # step 7: the release reaches staging, then production
+    d.arrow([(xr, R1 + H), (xr, ch1)], step=7, head=False, badge=False)
+    d.arrow([(xr, ch1), (xr, R2)], step=7, badge=(xr, ch1 + 44))
+    d.arrow([(xr, ch1), (xp, ch1), (xp, R2)], step=7, badge=False)
+    d.junction(xr, ch1)
     d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))])
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "Release", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
-    d.key("A push to the app repo starts a build on the OpenChoreo workflow plane, or GitHub Actions",
+    d.key("A push to the app repo starts a build on OpenChoreo's workflow plane on the management cluster",
           "Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to "
           "deploy/)",
           "Argo CD reads the deploy/ folder of the app repo",
           "Argo CD applies it to OpenChoreo, which snapshots an immutable release",
           "The release deploys to development automatically",
-          "The promotion gate checks development: readiness, smoke tests, alerts, change freezes",
-          "The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it",
-          "The promotion gate opens the production pull request only after staging, with code-owner approval",
+          "The promotion gate checks development (readiness, smoke tests, alerts, change freezes), then opens the "
+          "promotion pull request in the app repo: staging first, production only with code-owner approval",
+          "The release deploys to staging, then to production, as Argo CD applies each merged promotion",
           "Kyverno admits into production only images signed in the registry and pinned by digest")
     return d
 
