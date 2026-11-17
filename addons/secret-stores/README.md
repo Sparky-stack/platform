@@ -2,7 +2,9 @@
 
 ## Purpose
 
-Renders External Secrets Operator `ClusterSecretStore`s, scoped reader RBAC, and Argo CD's `platform-repo-creds` `ExternalSecret`. Separates platform secrets (`platform`, `workflows`, `mgmt-harbor` on `mgmt`) from workload tenant (`default`) and Cloudflare DNS (`dns`) stores.
+Renders External Secrets Operator `ClusterSecretStore`s, scoped reader RBAC, and Argo CD's `platform-repo-creds` `ExternalSecret`. Separates platform secrets (`platform`, `workflows`, `mgmt-fleet`, `mgmt-openchoreo` on `mgmt`; `mgmt-harbor` lives in addon harbor) from workload tenant (`default`) and Cloudflare DNS (`dns`) stores.
+
+Every store and its identity (ServiceAccount, plus a reader Role on the kubernetes backend) comes from one helper, `secret-stores.store` (`templates/_helpers.tpl`); `templates/stores.yaml` only lists what differs per store.
 
 ## Where it runs
 
