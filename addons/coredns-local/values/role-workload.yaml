@@ -1,5 +1,5 @@
 # workload (CAPD): the cluster-agent dials wss://cluster-gateway.openchoreo.localhost:8443/ws. The mgmt k3d serverlb
 # container (on docker network `kind`, like the CAPD nodes) forwards 8443 to the mgmt nodes' klipper hostPort -> the
-# control-plane Gateway's TLS passthrough listener -> cluster-gateway. VERIFY name == `k3d-<mgmt cluster>-serverlb`.
+# control-plane Gateway's TLS passthrough listener -> cluster-gateway. Container name: `k3d-<mgmt cluster>-serverlb`.
 rewrite:
   target: k3d-platform-mgmt-serverlb
