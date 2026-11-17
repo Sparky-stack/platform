@@ -74,6 +74,9 @@ metadata:
 spec:
   validationActions: [Deny]
   failurePolicy: Fail                # only preview Environments are matched: an outage delays previews, nothing else
+  evaluation:
+    background:
+      enabled: false                 # an admission quota: no reports over existing previews (and no reports RBAC)
   matchConstraints:
     resourceRules:
       - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: [CREATE], resources: [environments] }
