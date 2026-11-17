@@ -350,7 +350,7 @@ tests:
     set:
       imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
     asserts:
-      - failedTemplate: { errorMessage: "imageVerification.platformKey.publicKey is set: installation registry.host is required (image prefix <host>/<appsProject>/)" }
+      - failedTemplate: { errorMessage: "imageVerification.platformKey (publicKey or registry.type harbor) is set: installation registry.host is required (image prefix <host>/<appsProject>/)" }
 
   - it: defaultAction "" checks only the listed environments
     template: templates/image-verification.yaml
@@ -392,6 +392,7 @@ tests:
     set:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
       imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+      imageVerification.platformKey.attestations: []
     asserts:
       - equal: { path: spec.matchImageReferences, value: [{ glob: "ghcr.io/koorikla/*" }] }
       - lengthEqual: { path: spec.attestors, count: 1 }
@@ -414,3 +415,78 @@ tests:
           value: >-
             variables.images.filter(image, ["harbor.openchoreo.localhost:9443/apps/"].exists(p, image.startsWith(p))).all(image,
             verifyAttestationSignatures(image, attestations["vuln"], [attestors["platform-key"]]) > 0)
+
+  # --- platform key from the cluster (charts/cluster image-verification-crs, #15) ------------------------------------
+  - it: registry.type harbor without publicKey trusts the platform registry with the key read from Kyverno's namespace
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+    asserts:
+      - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
+      - equal: { path: "spec.attestors[1]", value: { name: platform-key, cosign: { key: { expression: variables.platformPublicKey }, ctlog: { insecureIgnoreTlog: true, insecureIgnoreSCT: true } } } }
+      - equal:
+          path: "spec.variables[0]"
+          value: { name: platformPublicKey, expression: 'resource.Get("v1", "configmaps", "kyverno", "platform-image-verification").data["cosign.pub"]' }
+      - equal: { path: spec.credentials, value: { secrets: [platform-registry] } }
+
+  - it: the cluster key also trusts the registry prefix (trusted-registries)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+    asserts:
+      - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/","harbor.openchoreo.localhost:9443/apps/"]' }
+
+  - it: by default the platform source requires its signed SBOM (SPDX 2.3) and vuln attestations, not provenance
+    template: templates/image-verification.yaml
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+    asserts:
+      - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
+      - equal: { path: "spec.attestations[0].intoto.type", value: "https://spdx.dev/Document/v2.3" }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
+      - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-vuln-enforce }
+      - equal: { path: spec.matchImageReferences, value: [{ glob: "ghcr.io/koorikla/*" }] }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-provenance-enforce }
+      - notExists: { path: spec.credentials }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-provenance-enforce }
+
+  - it: an inline publicKey wins over the cluster key (no resource lookup, no pull secret)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+    asserts:
+      - equal: { path: "spec.attestors[1].cosign.key", value: { data: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n" } }
+      - notExists: { path: spec.credentials }
+      - equal: { path: "spec.variables[0].name", value: images }
+
+  - it: no cluster key for an external registry or without a ConfigMap name (the registry stays untrusted)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+    set:
+      registry: { type: external, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+    asserts:
+      - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/"]' }
+
+  - it: an empty cluster ConfigMap name disables the cluster key
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.cluster.configMap: ""
+    asserts:
+      - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/"]' }
+
+  - it: rejects a cluster key ConfigMap name that is no object name (it lands in a CEL string)
+    template: templates/image-verification.yaml
+    set:
+      registry: { type: harbor, host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.cluster.configMap: 'x").data["a'
+    asserts:
+      - failedTemplate:
+          errorPattern: 'imageVerification.platformKey.cluster.configMap .* is not a Kubernetes object name'

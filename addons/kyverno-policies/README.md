@@ -13,7 +13,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 
 - `kyverno-policies.{podSecurityStandard,validationFailureAction,vpolExclude}`: `baseline` in `Audit` mode (`failurePolicy: Ignore`), excluding `platformNamespaces`.
 - `ambientEnrollment.enabled`: `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient.
-- `imageVerification.{enabled,environments,github,platformKey,requireDigest}`: `Audit` in `development`/`staging` and `Deny` in `production`, verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures.
+- `imageVerification.{enabled,environments,github,platformKey,requireDigest}`: `Audit` in `development`/`staging` and `Deny` in `production`, verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures (key inline in `platformKey.publicKey` or, with Harbor, from ConfigMap `platform-image-verification` that `charts/cluster` delivers; `platformKey.cluster`).
 
 ## Day-2 notes
 

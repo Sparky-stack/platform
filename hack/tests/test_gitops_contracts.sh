@@ -579,4 +579,20 @@ executors='[(select(.kind == "ClusterWorkflowTemplate") | .spec), (select(.kind 
 assert_eq "$(yq "$executors" "$TMP/workflow-plane.yaml" "$TMP/openchoreo-platform.yaml" | grep -v '^---$' | sort -u)" \
   "$token_sa" "every token-less ClusterWorkflow(Template) uses the executor ServiceAccount with a rendered token"
 
+# 15. Harbor image verification on workload clusters (#15): the ConfigMap and pull Secret charts/cluster delivers into
+#     Kyverno's namespace are exactly what addon kyverno-policies reads (resource.Get, credentials.secrets) and addon
+#     kyverno mounts as registry CA (values/role-workload.yaml). A rename on one side alone would make Harbor images fail
+#     verification (denied in production) or Kyverno distrust Harbor's certificate.
+iv_ns=$(yq '.imageVerification.namespace' "$ROOT/charts/cluster/values.yaml")
+iv_cm=$(yq '.imageVerification.configMap' "$ROOT/charts/cluster/values.yaml")
+iv_ps=$(yq '.imageVerification.pullSecret' "$ROOT/charts/cluster/values.yaml")
+assert_eq "$(yq '.imageVerification.platformKey.cluster | [.namespace, .configMap, .pullSecret] | join(" ")' \
+  "$ROOT/addons/kyverno-policies/values.yaml")" "$iv_ns $iv_cm $iv_ps" \
+  "kyverno-policies reads the image-verification ConfigMap/pull Secret charts/cluster delivers"
+assert_eq "$(yq '.addons.kyverno.namespace' "$ROOT/charts/platform/values.yaml")" "$iv_ns" \
+  "image-verification material lands in addon kyverno's namespace"
+assert_eq "$(yq '[.kyverno.admissionController.extraVolumes[], .kyverno.reportsController.extraVolumes[]] | map(.configMap.name) | unique | join(" ")' \
+  "$ROOT/addons/kyverno/values/role-workload.yaml")" "$iv_cm" \
+  "Kyverno admission + reports controllers mount the registry CA from the delivered ConfigMap"
+
 finish

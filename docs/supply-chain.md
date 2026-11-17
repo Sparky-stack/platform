@@ -54,9 +54,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **Workflow-plane images**: prefix `<registry.host>/<registry.appsProject>/` from installation.yaml (locally
   `harbor.openchoreo.localhost:9443/apps/`; host, port and project pinned), cosign public key
   (`platformKey.publicKey`, not a secret), no tlog by default. Keyless would need an OIDC issuer that Fulcio trusts
-  ([#37](https://github.com/koorikla/platform/issues/37)). **Without a public key the registry is not a trusted source
-  at all**: its images fail `openchoreo-trusted-registries-*` (denied in production, reported elsewhere) instead of
-  skipping signature verification. A key without `registry.host` fails rendering. See "Wiring the key" below.
+  ([#37](https://github.com/koorikla/platform/issues/37)). The key is inline (`platformKey.publicKey`) or, with
+  `registry.type: harbor`, delivered from mgmt to each workload cluster and read at admission; required signed
+  attestations: SBOM (`https://spdx.dev/Document/v2.3`) and vuln. **Without a key source the registry is not a trusted
+  source at all**: its images fail `openchoreo-trusted-registries-*` (denied in production, reported elsewhere) instead
+  of skipping signature verification. A key without `registry.host` fails rendering. See "Wiring the key" below.
   `registry.type: external` installations push builds to `registry.external.repository`: trust it through
   `extraTrustedPrefixes` only together with a matching signature source.
 - **Digest pinning**: `requireDigest.Deny: true`. Production rejects tag-only references, development and staging only
@@ -153,21 +155,35 @@ needs no trust) would remove most of the per-call TUF time.
 
 ### Wiring the key
 
-The platform key is an installation value, not an ESO secret: `cosign.pub` of store key `cosign-platform` goes into
-`installations/<inst>/addons/kyverno-policies/values.yaml` as `imageVerification.platformKey.publicKey` (print it with
-`kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`). That suits
-long-lived installations with a stable key (or, better, a KMS key). `installations/local` leaves it empty on purpose:
-`task secrets` generates a fresh pair per mgmt cluster, so no committed key can match, and Harbor `apps/` images stay
-untrusted on local workload clusters (Audit reports them, production denies them).
+Two key sources for the workflow-plane prefix (addon kyverno-policies `imageVerification.platformKey`):
 
-Why not ESO: the local seed path (`secrets.workloadSeed`) copies whole keys, so it would ship the encrypted private key
-and its password to every workload cluster, and Kyverno 1.20 `ImageValidatingPolicy` takes a key inline (`data`), from
-KMS or from a CEL `expression`, not from a Secret reference. Verification from a workload cluster also needs what
-Kyverno does not have there yet: the registry host (coredns-local rewrites it on mgmt only), the mgmt-only Harbor CA,
-and pull credentials for the private `apps` project. All of it: [#15](https://github.com/koorikla/platform/issues/15).
+- **Inline** (`publicKey`): `cosign.pub` of store key `cosign-platform` in
+  `installations/<inst>/addons/kyverno-policies/values.yaml` (print it with
+  `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`). For
+  long-lived installations with a stable key (or, better, a KMS key, [#37](https://github.com/koorikla/platform/issues/37)).
+- **From mgmt, per workload cluster** (default with `registry.type: harbor` and no `publicKey`; `installations/local`):
+  `task secrets` generates a fresh pair per mgmt cluster, so no committed key could match. `charts/cluster`
+  (`templates/image-verification-crs.yaml`) builds an ESO-templated ClusterResourceSet payload on mgmt and CAPI applies
+  it to exactly that cluster (strategy Reconcile), into Kyverno's namespace:
 
-The workflow plane attests its SBOM with predicate `https://spdx.dev/Document/v2.3`, the type koorikla/ci's GitHub path
-emits (`attestationTypes.sbom`), and the Trivy scan as `https://cosign.sigstore.dev/attestation/vuln/v1`.
+  | Object | Content | Source on mgmt | Used by |
+  |---|---|---|---|
+  | ConfigMap `platform-image-verification` | `cosign.pub`, `ca.crt` (both public) | store `platform` key `cosign-platform` property `cosign.pub` only; store `mgmt-harbor` `harbor-ca-bundle` | the policies: attestor key `expression` from `resource.Get(...)`, read per admission; addon kyverno `values/role-workload.yaml`: `ca.crt` under `SSL_CERT_DIR` of the admission and reports controllers |
+  | Secret `platform-registry` (`kubernetes.io/dockerconfigjson`) | Harbor robot `robot$nodes` (pull only, the nodes' robot) | store `platform` key `harbor` property `nodes-secret` | the policies: `credentials.secrets` |
+
+  The ExternalSecret selects single properties, so the encrypted private key and its password are never read on the
+  way (the local seed path `secrets.workloadSeed` copies whole keys, which is why it is not used). Kyverno 1.20 takes a
+  key inline, from KMS or from a CEL expression, not from a Secret reference. The registry name resolves through
+  coredns-local's generic rule (k3d load balancer, port 9443). `SSL_CERT_DIR` adds the Harbor CA to Go's system bundle
+  instead of replacing it (the chart's `caCertificates` would), so public registries and Sigstore keep working. A
+  missing ConfigMap fails the policy's checks (denied in production), it never skips them. A re-bootstrapped mgmt key
+  is picked up without a policy change (verified results stay cached up to 24 h, addon kyverno); a re-issued Harbor CA
+  needs a Kyverno controller restart (Go reads the roots once; the CA lives 10 years).
+
+Required platform-key attestations (`platformKey.attestations`): `sbom` and `vuln`. The workflow plane attests its SBOM
+with predicate `https://spdx.dev/Document/v2.3`, the type koorikla/ci's GitHub path emits (`attestationTypes.sbom`), and
+the Trivy scan as `https://cosign.sigstore.dev/attestation/vuln/v1`. Provenance is BuildKit's unsigned SLSA attestation
+manifest, so it is not required for this source.
 
 ### Digest references (live impact of `requireDigest`)
 
