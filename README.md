@@ -12,7 +12,7 @@ through Crossplane v2 - CloudNativePG, RDS, Cloud SQL or Azure Flexible Server p
 Why: one management cluster, one git repo and one file per cluster give every cluster the same addons, identities and
 policies, on any provider, without imperative steps after bootstrap.
 
-<img src="docs/diagrams/architecture.svg" alt="Architecture: git drives Argo CD on the mgmt cluster (Kyverno, Cluster API, secrets and PKI, Harbor, OpenChoreo); Cluster API creates the workload clusters, Argo CD pushes their addons, the cluster-agent dials out and applies app releases, Kyverno admits only signed images" width="100%">
+<img src="docs/diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, hands app releases to OpenChoreo and clusters to Cluster API, which creates the workload clusters; Argo CD installs their addons and the cluster-agent, which dials out to OpenChoreo and deploys the apps; Kyverno admits only signed images" width="100%">
 
 ### Diagrams
 
@@ -21,15 +21,15 @@ each step is written out in [docs/diagrams/](docs/diagrams/README.md).
 
 | | |
 |---|---|
-| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: supply chain, admission, runtime, foundations | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: a request in, the agents out |
-| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, stores, observer API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, promote, admit |
+| [<img src="docs/diagrams/security.svg" alt="Security view" width="100%">](docs/diagrams/security.svg)<br>**Security**: supply chain, admission, runtime | [<img src="docs/diagrams/network.svg" alt="Network view" width="100%">](docs/diagrams/network.svg)<br>**Network**: a request in, its telemetry out |
+| [<img src="docs/diagrams/observability.svg" alt="Observability view" width="100%">](docs/diagrams/observability.svg)<br>**Observability**: collectors, stores, one query API | [<img src="docs/diagrams/sdlc.svg" alt="SDLC view" width="100%">](docs/diagrams/sdlc.svg)<br>**SDLC**: build, sign, promote, admit |
 
 Day-2 operations:
 
 | | |
 |---|---|
-| [<img src="docs/diagrams/cluster-lifecycle.svg" alt="Cluster lifecycle view" width="100%">](docs/diagrams/cluster-lifecycle.svg)<br>**Cluster lifecycle**: add, upgrade, remove = edit one file | [<img src="docs/diagrams/trust.svg" alt="Trust and certificates view" width="100%">](docs/diagrams/trust.svg)<br>**Trust & certificates**: agent CAs, OpenBao mesh CA, rotation |
-| [<img src="docs/diagrams/backup.svg" alt="Backup and restore view" width="100%">](docs/diagrams/backup.svg)<br>**Backup & restore**: what is stateful where, restore order | [<img src="docs/diagrams/upgrade.svg" alt="Upgrade flow view" width="100%">](docs/diagrams/upgrade.svg)<br>**Upgrades**: Renovate → CI → Argo CD → verify |
+| [<img src="docs/diagrams/cluster-lifecycle.svg" alt="Cluster lifecycle view" width="100%">](docs/diagrams/cluster-lifecycle.svg)<br>**Cluster lifecycle**: add, upgrade, remove = edit one file | [<img src="docs/diagrams/trust.svg" alt="Trust and certificates view" width="100%">](docs/diagrams/trust.svg)<br>**Trust & certificates**: agent CAs, OpenBao mesh CA, renewal |
+| [<img src="docs/diagrams/backup.svg" alt="Backup and restore view" width="100%">](docs/diagrams/backup.svg)<br>**Backup & restore**: the restore order | [<img src="docs/diagrams/upgrade.svg" alt="Upgrade flow view" width="100%">](docs/diagrams/upgrade.svg)<br>**Upgrades**: Renovate → CI → merge → Argo CD, dev before prod |
 
 ## Quick start (local)
 

@@ -10,14 +10,14 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | Diagram | One idea | Owning doc |
 |---|---|---|
 | [architecture.svg](architecture.svg) | git → mgmt → workload clusters: where every part runs | [architecture.md](../architecture.md) |
-| [security.svg](security.svg) | four layers: supply chain, admission, runtime, foundations | [supply-chain.md](../supply-chain.md) |
-| [network.svg](network.svg) | a request in (kgateway, ambient, CNI), the agents out to mgmt | [networking.md](../networking.md) |
+| [security.svg](security.svg) | supply chain, admission, runtime detection and response | [supply-chain.md](../supply-chain.md) |
+| [network.svg](network.svg) | a request in (kgateway, mesh), its telemetry out to the management cluster | [networking.md](../networking.md) |
 | [observability.svg](observability.svg) | every signal lands in the observability plane | [observability.md](../observability.md) |
 | [sdlc.svg](sdlc.svg) | git push → signed image → environments → gated production | [promotion.md](../promotion.md) |
 | [cluster-lifecycle.svg](cluster-lifecycle.svg) | add, upgrade, remove a cluster by editing one file | [providers.md](../providers.md) |
 | [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [runbooks/certificates-and-secrets.md](../runbooks/certificates-and-secrets.md) |
 | [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
-| [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → Argo CD → verify | [runbooks/upgrades.md](../runbooks/upgrades.md) |
+| [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → merge → Argo CD, dev before prod | [runbooks/upgrades.md](../runbooks/upgrades.md) |
 
 `../images/hero.png` is the README banner, generated with Gemini's image model; it is abstract and has no text in it.
 
