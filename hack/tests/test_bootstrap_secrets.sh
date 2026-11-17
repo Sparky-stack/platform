@@ -32,6 +32,10 @@ cat > "$BIN/kubectl" <<'EOF'
 printf '%s\n' "kubectl $*" >> "$HLOG/calls"
 for a in "$@"; do [[ "$a" == koorikla ]] && { echo "REFUSED koorikla" >&2; exit 99; }; done
 args=" $* "
+if [[ -n "${FAKE_KUBE_ERR:-}" && "$args" == *" get "* ]]; then
+  printf '%s\n' "$FAKE_KUBE_ERR" >&2
+  exit 1
+fi
 case "$args" in
   *" apply "*" -f - "*)
     n=$(ls "$HLOG" | grep -c '^apply\.' || true)
@@ -44,12 +48,20 @@ case "$args" in
   *" get secret platform-repo-bootstrap "*)
     [[ "${FAKE_BOOTSTRAP_EXISTS:-}" == 1 ]]; exit $? ;;
   *" get secret platform-ghcr "*)
-    [[ -n "${FAKE_GHCR_YAML:-}" ]] || exit 1
-    cat "$FAKE_GHCR_YAML"; exit 0 ;;
-  *" get secret "*" -o yaml "*)   # an existing Secret for seed_generated_secret re-runs: $FAKE_SECRET_DIR/<name>.yaml
+    if [[ -n "${FAKE_GHCR_YAML:-}" ]]; then cat "$FAKE_GHCR_YAML"; exit 0; fi
+    [[ "$args" == *" --ignore-not-found "* ]] && exit 0
+    printf 'Error from server (NotFound): secrets "platform-ghcr" not found\n' >&2; exit 1 ;;
+  *" get secret "*)   # existing Secrets live at $FAKE_SECRET_DIR/<name>.yaml
     n=""; prev=""; for a in "$@"; do [[ "$prev" == secret ]] && n=$a; prev=$a; done
-    [[ -n "${FAKE_SECRET_DIR:-}" && -f "$FAKE_SECRET_DIR/$n.yaml" ]] || exit 1
-    cat "$FAKE_SECRET_DIR/$n.yaml"; exit 0 ;;
+    if [[ -n "${FAKE_SECRET_DIR:-}" && -f "$FAKE_SECRET_DIR/$n.yaml" ]]; then
+      case "$args" in
+        *" -o yaml "*) cat "$FAKE_SECRET_DIR/$n.yaml" ;;
+        *" -o name "*) printf 'secret/%s\n' "$n" ;;
+      esac
+      exit 0
+    fi
+    [[ "$args" == *" --ignore-not-found "* ]] && exit 0
+    printf 'Error from server (NotFound): secrets "%s" not found\n' "$n" >&2; exit 1 ;;
   *) exit 1 ;;
 esac
 EOF
@@ -303,22 +315,57 @@ assert_eq "$([[ $RC -ne 0 ]] && echo failed || echo ok)" failed "cosign: docker 
 assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed on failure (trap)"
 assert_eq "$(applied cosign-platform)" "" "cosign: nothing applied on failure"
 
-# --- generated secrets: re-runs keep every existing value, generate only the missing keys ----------------------------
+# --- generated secrets: (a) NotFound generates, (b) existing keeps value, (c) API/timeout error aborts ---------------
 # (a lost value here would rotate live credentials, e.g. the OpenBao static seal key = sealed data unreadable)
-mkdir -p "$TMP/existing"
+mkdir -p "$TMP/empty" "$TMP/existing"
+run seed_notfound "seed_generated_secret openbao-unseal key=@hex32" FAKE_SECRET_DIR="$TMP/empty"
+assert_eq "$RC" 0 "notfound: rc"
+assert_match "$(val openbao-unseal key)" '^[0-9a-f]{64}$' "notfound: OpenBao seal key generated"
+
 b64() { printf '%s' "$1" | base64 | tr -d '\r\n'; }
 printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: openchoreo-observability, namespace: platform-secrets }\ndata:\n  opensearch-username: %s\n  opensearch-password: %s\n' \
   "$(b64 custom-admin)" "$(b64 'Px9!FAKEKEEPPASS')" > "$TMP/existing/openchoreo-observability.yaml"
 printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: openbao-unseal, namespace: platform-secrets }\ndata:\n  key: %s\n' \
   "$(b64 FAKEKEEPUNSEAL)" > "$TMP/existing/openbao-unseal.yaml"
-run regen "seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong observer-client-secret; seed_generated_secret openbao-unseal key=@hex32" \
+printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: cosign-platform, namespace: platform-secrets }\ndata:\n  cosign.key: %s\n' \
+  "$(b64 FAKEKEEP_COSIGN)" > "$TMP/existing/cosign-platform.yaml"
+run regen "seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong observer-client-secret; seed_generated_secret openbao-unseal key=@hex32; seed_cosign_secret" \
   FAKE_SECRET_DIR="$TMP/existing"
 assert_eq "$RC" 0 "re-run: rc"
 assert_eq "$(val openchoreo-observability opensearch-username)" custom-admin "re-run: existing value wins over the fixed default"
 assert_eq "$(val openchoreo-observability opensearch-password)" 'Px9!FAKEKEEPPASS' "re-run: existing @strong value kept"
 assert_match "$(val openchoreo-observability observer-client-secret)" '^[A-Za-z0-9]{24}$' "re-run: missing key generated"
 assert_eq "$(val openbao-unseal key)" FAKEKEEPUNSEAL "re-run: OpenBao seal key kept"
+assert_eq "$(applied cosign-platform)" "" "re-run: existing cosign-platform not re-applied"
+assert_eq "$(grep -c '^docker ' "$HLOG/calls" || true)" 0 "re-run: existing cosign-platform does not run cosign"
 assert_eq "$(grep -c FAKEKEEP "$HLOG/out" || true)" 0 "re-run: no secret value in the output"
+
+# (c) Any non-NotFound kubectl failure (timeout, API down, RBAC) must abort without generating or applying anything.
+applies_count() {
+  local f n=0
+  for f in "$HLOG"/apply.*.yaml; do [[ -f "$f" ]] && n=$((n + 1)); done
+  printf '%s' "$n"
+}
+run seed_api_timeout "seed_generated_secret openbao-unseal key=@hex32" \
+  FAKE_SECRET_DIR="$TMP/existing" FAKE_KUBE_ERR="Unable to connect to the server: dial tcp 127.0.0.1:6443: i/o timeout"
+assert_eq "$([[ $RC -ne 0 ]] && echo aborted || echo ok)" aborted "api timeout: seed_generated_secret aborts"
+assert_eq "$(applies_count)" 0 "api timeout: nothing applied (OpenBao seal key untouched)"
+assert_eq "$(has "$OUT" 'ERROR:.*openbao-unseal')" yes "api timeout: clear error names the secret"
+assert_eq "$(grep -c FAKEKEEP "$HLOG/out" || true)" 0 "api timeout: no secret value in the output"
+
+run seed_api_rbac "seed_generated_secret openchoreo thunder-admin-password" \
+  FAKE_SECRET_DIR="$TMP/existing" FAKE_KUBE_ERR='Error from server (Forbidden): secrets "openchoreo" is forbidden'
+assert_eq "$([[ $RC -ne 0 ]] && echo aborted || echo ok)" aborted "api rbac: seed_generated_secret aborts"
+assert_eq "$(applies_count)" 0 "api rbac: nothing applied"
+assert_eq "$(has "$OUT" 'ERROR:.*openchoreo')" yes "api rbac: clear error names the secret"
+
+run cosign_api_timeout "seed_cosign_secret" \
+  FAKE_SECRET_DIR="$TMP/existing" FAKE_KUBE_ERR="Unable to connect to the server: dial tcp 127.0.0.1:6443: i/o timeout"
+assert_eq "$([[ $RC -ne 0 ]] && echo aborted || echo ok)" aborted "api timeout: seed_cosign_secret aborts"
+assert_eq "$(applies_count)" 0 "api timeout: cosign-platform nothing applied"
+assert_eq "$(grep -c '^docker ' "$HLOG/calls" || true)" 0 "api timeout: cosign keygen not started"
+assert_eq "$(has "$OUT" 'ERROR:.*cosign-platform')" yes "api timeout: clear error names cosign-platform"
+assert_eq "$(grep -c FAKEKEEP "$HLOG/out" || true)" 0 "api timeout: no cosign secret value in the output"
 
 # --- Argo CD bootstrap repo secret ----------------------------------------------------------------------------------
 B=seed_argocd_repo_secret
