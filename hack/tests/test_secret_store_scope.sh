@@ -18,8 +18,12 @@ cd "$ROOT"
 
 # wp_store <file>... -> ClusterWorkflowPlane.spec.secretStoreRef.name (default: workflows)
 wp_store() {
-  local s
-  s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "$@" 2>/dev/null | head -n1 || true)
+  local s=""
+  local -a wf_files=()
+  read_lines wf_files bash -c 'grep -l "ClusterWorkflowPlane" "$@" 2>/dev/null || true' _ "$@"
+  if [[ ${#wf_files[@]} -gt 0 ]]; then
+    s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "${wf_files[@]}" 2>/dev/null | head -n1 || true)
+  fi
   printf '%s\n' "${s:-workflows}"
 }
 # consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`. Includes the
@@ -28,18 +32,25 @@ wp_store() {
 consumers() {
   local wps
   wps=${WP_STORE:-$(wp_store "$@")}
-  yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
-    | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
-               .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
-               .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
-    | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
-  # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
-  ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
-    select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
-    | .spec.resources[]?.template | select(.kind == "ExternalSecret")
-    | select((.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) == "platform")
-    | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " ExternalSecret/"
-      + $k + ":" + $wf + ":" + .metadata.name' "$@" 2>/dev/null | grep -v '^$' || true
+  local -a es_files=() wf_files=()
+  read_lines es_files bash -c 'grep -lE "ExternalSecret|PushSecret" "$@" 2>/dev/null || true' _ "$@"
+  if [[ ${#es_files[@]} -gt 0 ]]; then
+    yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
+      | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
+                 .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
+                 .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
+      | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "${es_files[@]}" 2>/dev/null | grep -v '^$' || true
+  fi
+  read_lines wf_files bash -c 'grep -l "Workflow" "$@" 2>/dev/null || true' _ "$@"
+  if [[ ${#wf_files[@]} -gt 0 ]]; then
+    # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
+    ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
+      select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
+      | .spec.resources[]?.template | select(.kind == "ExternalSecret")
+      | select((.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) == "platform")
+      | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " ExternalSecret/"
+        + $k + ":" + $wf + ":" + .metadata.name' "${wf_files[@]}" 2>/dev/null | grep -v '^$' || true
+  fi
 }
 # allowed <secret-stores render> -> namespaces of store platform's conditions, one per line
 allowed() {
@@ -81,6 +92,9 @@ EOF
 # wf_es_records <wp_store> <file>... -> "<ns> <wf>/<es> <store> <dataFrom count> <keys csv>" per workflow ExternalSecret
 wf_es_records() {
   local wps=$1; shift
+  local -a wf_files=()
+  read_lines wf_files bash -c 'grep -l "Workflow" "$@" 2>/dev/null || true' _ "$@"
+  [[ ${#wf_files[@]} -gt 0 ]] || return 0
   # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
   ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
     select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
@@ -89,7 +103,7 @@ wf_es_records() {
       + $k + ":" + $wf + ":" + .metadata.name + " "
       + (.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) + " "
       + ((.spec.dataFrom // []) | length | tostring) + " "
-      + ([.spec.data[]?.remoteRef.key] | join(","))' "$@" 2>/dev/null | grep -v '^$' || true
+      + ([.spec.data[]?.remoteRef.key] | join(","))' "${wf_files[@]}" 2>/dev/null | grep -v '^$' || true
 }
 check_workflows() {   # check_workflows <label> <store render> <render>...
   local label=$1 store=$2; shift 2
@@ -163,7 +177,7 @@ helm template external-dns addons/external-dns --namespace "$(ns_of external-dns
   -f addons/external-dns/values/role-mgmt.yaml -f addons/external-dns/values/dns-cloudflare.yaml \
   --set dns.provider=cloudflare --set 'dns.domainFilters={example.com}' --set 'external-dns.domainFilters={example.com}' \
   --set-string external-dns.txtOwnerId=sample --show-only templates/secrets.yaml > "$TMP/external-dns-mgmt.yaml"
-helm template agentgateway addons/agentgateway --namespace "$(ns_of agentgateway)" > "$TMP/agentgateway-mgmt.yaml"
+render_standalone_addon agentgateway "$TMP/agentgateway-mgmt.yaml"
 helm template openchoreo-observability-plane addons/openchoreo-observability-plane \
   --namespace "$(ns_of openchoreo-observability-plane)" --show-only templates/secrets.yaml \
   --set openchoreo-observability-plane.rca.enabled=true --set openchoreo-observability-plane.rca.llm.modelName=m \
@@ -176,18 +190,17 @@ check "opt-in mgmt consumers (external-dns, agentgateway, AI agents)" "$RENDERED
 # es_reading <store> <file>... -> "<namespace> <name> <remote keys>" for every ExternalSecret using that store.
 es_reading() {
   local store=$1; shift
+  local -a es_files=()
+  read_lines es_files bash -c 'grep -l "ExternalSecret" "$@" 2>/dev/null || true' _ "$@"
+  [[ ${#es_files[@]} -gt 0 ]] || return 0
   S="$store" yq -N 'select(.kind == "ExternalSecret" and .spec.secretStoreRef.name == strenv(S))
-    | (.metadata.namespace // "<none>") + " " + .metadata.name + " " + ([.spec.data[]?.remoteRef.key] | join(","))' "$@" 2>/dev/null | grep -v '^$' || true
+    | (.metadata.namespace // "<none>") + " " + .metadata.name + " " + ([.spec.data[]?.remoteRef.key] | join(","))' "${es_files[@]}" 2>/dev/null | grep -v '^$' || true
 }
-# shellcheck source=../lib/portable.sh
-source hack/lib/portable.sh
-# shellcheck source=../lib/addons.sh
-source hack/lib/addons.sh
 dns_checked=0
 for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir") dnsp=$(yq '.dns.provider // "none"' "$inst_dir/installation.yaml")
-  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$TMP/platform-$inst.yaml"
+  render_platform "$inst" "$TMP/platform-$inst.yaml"
   for cf in "$inst_dir"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue
     c=$(yq '.name' "$cf") store="$RENDERED_DIR/addon-secret-stores-$inst-$c.yaml"
