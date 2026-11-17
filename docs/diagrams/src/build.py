@@ -413,24 +413,23 @@ def trust() -> Diagram:
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
-                "The restore order after losing the management cluster: first the state Git cannot recreate, from "
-                "copies kept off the host, then Argo CD rebuilds the rest from Git.")
-    SX, SW = 44, 136                           # left: the off-host copies the restores read
-    MZ = SX + SW + 16 + 72                     # middle: one restore per row, in order
-    OZ = 932 - 240                             # right: the secret backend and Git
-    ZR = OZ - 72
+                "After losing the management cluster, the operator first restores the state Git cannot recreate, "
+                "from copies kept off the host; then Argo CD rebuilds the rest from Git.")
+    SX, SW = 44, 136                           # left: the operator and the off-host copies
+    MZ = SX + SW + 88                          # middle: one restore per row, in order
+    OZ = 932 - 236                             # right: the secret backend, Git and object storage
+    ZR = OZ - 96
     MX, MW = MZ + 16, ZR - 16 - MZ - 16
     OX, OW = OZ + 16, 932 - 16 - OZ - 16
     R = [176 + i * (H + 40) for i in range(5)]
     zb = R[4] + H + 24
     RW = zb + 88                               # the workload cluster's row
     zw = RW + H + 24
-    d.zone(28, 128, SW + 32, zw - 128, "backups", "external")
     d.zone(MZ, 128, ZR - MZ, zb - 128, "management cluster", "mgmt")
     d.zone(MZ, zb + 40, ZR - MZ, zw - zb - 40, "workload cluster", "workload")
-    d.zone(OZ, R[2] - 48, 932 - OZ, zb - R[2] + 48, "outside the clusters", "external")
-    d.box(SX, R[0], SW, R[3] + H - R[0], "external", "Backup copies", ["etcd snapshots", "and volume", "copies"])
-    d.box(SX, RW, SW, H, "external", "Object storage", ["database", "backups"])
+    d.zone(OZ, R[2] - 48, 932 - OZ, zw - R[2] + 48, "outside the clusters", "external")
+    d.box(SX, R[0], SW, R[3] + H - R[0], "external", "Operator", ["runs the restore", "runbook"])
+    d.box(SX, R[4], SW, H, "external", "Backup copies", ["snapshots and", "volume copies"], context=True)
     d.box(MX, R[0], MW, H, "mgmt", "Cluster state (etcd)", ["clusters, access and CA keys:",
                                                              "a snapshot every 12 hours"], aka=("etcd",))
     d.box(MX, R[1], MW, H, "mgmt", "Thunder", ["users, sign-in clients,", "signing keys"])
@@ -441,26 +440,29 @@ def backup() -> Diagram:
           status="optin")
     d.box(OX, R[2], OW, H, "external", "Secret backend", ["AWS or Vault", "secret store"])
     d.box(OX, R[4], OW, H, "external", "Git", ["everything", "declarative"])
-    xl = (SX + SW + MZ) / 2                    # badge columns: between the copies and the cluster, and to the right
+    d.box(OX, RW, OW, H, "external", "Object storage", ["database", "backups"])
+    xl = (SX + SW + MZ) / 2                    # badge columns: left and right of the management cluster
     xz = (ZR + OZ) / 2
     for i, n in ((0, 1), (1, 2), (2, 3), (3, 5)):
-        d.arrow([(MX, ymid(R[i])), (SX + SW, ymid(R[i]))], step=n, badge=(xl, ymid(R[i])), label="restore",
-                label_pos=(xl, ymid(R[i]) + 32))
+        d.arrow([(SX + SW, ymid(R[i])), (MX, ymid(R[i]))], step=n, badge=(xl, ymid(R[i])))
+    xo = SX + SW / 2
+    d.arrow([(xo, R[3] + H), (xo, R[4])], label="reads", label_pos=(xo + 12, R[3] + H + 25), label_anchor="start")
+    d.line_label = "the operator reads the off-host copies"
     d.arrow([(MX + MW, ymid(R[2])), (OX, ymid(R[2]))], step=4, badge=(xz, ymid(R[2])),
             label="unseal key", label_pos=(xz, ymid(R[2]) + 32))
     d.arrow([(MX + MW, ymid(R[4])), (OX, ymid(R[4]))], step=6, badge=(xz, ymid(R[4])), label="re-sync",
             label_pos=(xz, ymid(R[4]) + 32))
-    d.arrow([(MX, ymid(RW)), (SX + SW, ymid(RW))], step=7, badge=(xl, ymid(RW)), label="restore",
-            label_pos=(xl, ymid(RW) + 32))
+    d.arrow([(MX + MW, ymid(RW)), (OX, ymid(RW))], step=7, badge=(xz, ymid(RW)), label="restore",
+            label_pos=(xz, ymid(RW) + 32))
     d.require("Git", "Secret backend", "Cluster state (etcd)", "OpenBao", "Thunder", "Harbor", "Databases",
-              "Backup copies", "Object storage")
-    d.key("Restore the management cluster's etcd from its latest snapshot in the backup copies: the workload "
+              "Backup copies", "Object storage", "Operator")
+    d.key("The operator restores the management cluster's etcd from its latest snapshot copy: the workload "
           "clusters' records and the CA keys come back",
-          "Restore Thunder's volumes from their copy: users, sign-in clients, signing keys",
-          "Restore OpenBao's volume copy (opt-in): secrets and the mesh CA keys",
+          "The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys",
+          "The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys",
           "OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local "
           "setup, re-create it with task secrets)",
-          "Harbor's images come back from their volume copy or from new builds",
+          "The operator restores Harbor's volume copy, or new builds push the images again",
           "Argo CD re-syncs everything else from Git",
           "The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too")
     d.note("Telemetry is not backed up: it starts empty.")

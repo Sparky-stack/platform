@@ -130,11 +130,11 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 
 ### Backup & restore ([backup.svg](backup.svg))
 
-1. Restore the management cluster's etcd from its latest snapshot in the backup copies: the workload clusters' records and the CA keys come back
-2. Restore Thunder's volumes from their copy: users, sign-in clients, signing keys
-3. Restore OpenBao's volume copy (opt-in): secrets and the mesh CA keys
+1. The operator restores the management cluster's etcd from its latest snapshot copy: the workload clusters' records and the CA keys come back
+2. The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys
+3. The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys
 4. OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
-5. Harbor's images come back from their volume copy or from new builds
+5. The operator restores Harbor's volume copy, or new builds push the images again
 6. Argo CD re-syncs everything else from Git
 7. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
 
