@@ -1,0 +1,103 @@
+suite: tenant - PR preview ApplicationSet
+templates:
+  - templates/previews.yaml
+set:
+  project: demo
+  apps:
+    - name: hello-world
+      repoURL: https://github.com/koorikla/hello-world.git
+    - name: other
+      repoURL: https://github.com/koorikla/other
+      path: ops/oc/
+      revision: v1.2.3
+  previews:
+    enabled: true
+    dataPlane: dev1
+    requeueAfterSeconds: 120
+    expiredLabel: preview-expired
+tests:
+  - it: renders nothing while previews are off (the default)
+    set:
+      previews.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: one matrix per app repo - the Component opt-in from the app repo x its open pull requests
+    asserts:
+      - isKind: { of: ApplicationSet }
+      - equal: { path: metadata.name, value: previews-demo }
+      - equal: { path: metadata.namespace, value: argocd }
+      - lengthEqual: { path: spec.generators, count: 2 }
+      - equal:
+          path: spec.generators[0].matrix.generators[0]
+          value:
+            git:
+              repoURL: https://github.com/koorikla/hello-world.git
+              revision: main
+              files: [{ path: deploy/openchoreo/*.yaml }]
+            selector:
+              matchLabels: { kind: Component, metadata.name: hello-world }
+              matchExpressions:
+                - { key: metadata.annotations.platform.koorikla.io/preview-environments, operator: In, values: [enabled] }
+      - equal:
+          path: spec.generators[0].matrix.generators[1].pullRequest
+          value:
+            github:
+              owner: koorikla
+              repo: hello-world
+              tokenRef: { secretName: preview-github-token, key: token }
+            requeueAfterSeconds: 120
+            values: { repository: koorikla/hello-world }
+      - equal: { path: "spec.generators[1].matrix.generators[0].git.files[0].path", value: ops/oc/*.yaml }
+      - equal: { path: "spec.generators[1].matrix.generators[0].git.revision", value: v1.2.3 }
+      - equal: { path: "spec.generators[1].matrix.generators[0].selector.matchLabels", value: { kind: Component, metadata.name: other } }
+      - equal: { path: "spec.generators[1].matrix.generators[1].pullRequest.github.repo", value: other }
+
+  - it: generates preview Applications in AppProject previews from charts/preview of the platform repo
+    asserts:
+      - equal: { path: spec.template.metadata.name, value: "preview-{{ .metadata.name }}-pr-{{ .number }}" }
+      - equal: { path: spec.template.spec.project, value: previews }
+      - equal: { path: spec.template.spec.source.path, value: charts/preview }
+      - equal: { path: spec.template.spec.source.repoURL, value: https://github.com/koorikla/platform.git }
+      - equal: { path: spec.template.spec.destination, value: { server: https://kubernetes.default.svc, namespace: default } }
+      - equal: { path: spec.template.metadata.finalizers, value: [resources-finalizer.argocd.argoproj.io] }
+      - equal: { path: spec.template.spec.syncPolicy.automated, value: { prune: true, selfHeal: true } }
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+      - equal:
+          path: spec.template.spec.source.helm.valuesObject
+          value:
+            project: demo
+            component: "{{ .metadata.name }}"
+            pullRequest: "{{ .number }}"
+            commit: "{{ .head_sha }}"
+            repository: "{{ .values.repository }}"
+            expired: '{{ has "preview-expired" .labels }}'
+            openchoreo: { orgNamespace: default }
+            previews: { dataPlane: dev1 }
+
+  - it: never renders free-text pull request fields (branch, title, author) into the template
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations
+          value: { platform.koorikla.io/repository: "{{ .values.repository }}", platform.koorikla.io/commit: "{{ .head_sha }}" }
+      - equal:
+          path: spec.template.metadata.labels
+          value:
+            platform.koorikla.io/tenant: demo
+            app.kubernetes.io/managed-by: Helm
+            platform.koorikla.io/preview: "true"
+            platform.koorikla.io/component: "{{ .metadata.name }}"
+            platform.koorikla.io/pull-request: "{{ .number }}"
+
+  - it: refuses app repos outside github.com
+    set:
+      apps:
+        - { name: x, repoURL: https://gitlab.com/acme/x.git }
+    asserts:
+      - failedTemplate: { errorMessage: 'apps[x].repoURL "https://gitlab.com/acme/x.git": previews need a https://github.com/<owner>/<repo> repository' }
+
+  - it: refuses an expiry label that could break the template expression
+    set:
+      previews.expiredLabel: 'x" .labels }}{{ "'
+    asserts:
+      - failedTemplate: { errorMessage: 'previews.expiredLabel "x\" .labels }}{{ \"": letters, digits, space, . _ - only' }

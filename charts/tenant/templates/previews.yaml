@@ -1,0 +1,111 @@
+{{- /*
+PR preview environments of this tenant (installation.yaml `previews`, docs/preview-environments.md).
+ApplicationSet previews-<project> (Argo CD on mgmt): per app repo of the tenant file, a matrix of
+  git files    <path>/*.yaml at the app's revision, selected to the one Component named like the app that carries the
+               annotation platform.koorikla.io/preview-environments: enabled (the per-component opt-in lives in the
+               app repo; no repository is listed anywhere else)
+  pullRequest  the repo's open pull requests (GitHub API with an installation token of the platform GitHub App, minted
+               by ESO into Secret previewToken.secretName: addon secret-stores), polled every requeueAfterSeconds
+-> one Application preview-<component>-pr-<n> (AppProject previews: only Environment / ProjectReleaseBinding /
+ReleaseBinding in the org namespace, only from the platform repo) rendering charts/preview for the PR head SHA.
+A PR that is closed or merged drops out of the generator: the ApplicationSet deletes its Application, the resources
+finalizer deletes the Environment, OpenChoreo's finalizers remove bindings and the cell namespace.
+Only generator values that cannot inject anything reach the template: number, head_sha, the label list (expiry) and
+the Component name, which the selector pins to the app name. Branch names and titles are never rendered.
+*/ -}}
+{{- $pv := .Values.previews | default dict }}
+{{- if and $pv.enabled .Values.apps }}
+{{- $p := include "tenant.project" . }}
+{{- $label := $pv.expiredLabel | default "preview-expired" }}
+{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" $label) }}{{ fail (printf "previews.expiredLabel %q: letters, digits, space, . _ - only" $label) }}{{ end }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: previews-{{ $p }}
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    {{- include "tenant.labels" . | nindent 4 }}
+    platform.koorikla.io/preview: "true"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    {{- range $app := include "tenant.apps" . | fromYamlArray }}
+    {{- $m := regexFind "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$" (trimSuffix ".git" (trimSuffix "/" $app.repoURL)) }}
+    {{- if not $m }}{{ fail (printf "apps[%s].repoURL %q: previews need a https://github.com/<owner>/<repo> repository" $app.name $app.repoURL) }}{{ end }}
+    {{- $parts := splitList "/" (trimPrefix "https://github.com/" $m) }}
+    - matrix:
+        generators:
+          - git:
+              repoURL: {{ $app.repoURL | quote }}
+              revision: {{ $app.revision | quote }}
+              files:
+                - path: {{ printf "%s/*.yaml" (trimSuffix "/" $app.path) | quote }}
+            selector:
+              matchLabels:
+                kind: Component
+                metadata.name: {{ $app.name }}
+              matchExpressions:
+                - key: {{ printf "metadata.annotations.%s" $.Values.previewOptIn.annotation }}
+                  operator: In
+                  values: [{{ $.Values.previewOptIn.value | quote }}]
+          - pullRequest:
+              github:
+                owner: {{ index $parts 0 | quote }}
+                repo: {{ index $parts 1 | quote }}
+                tokenRef:
+                  secretName: {{ $.Values.previewToken.secretName }}
+                  key: token
+              requeueAfterSeconds: {{ $pv.requeueAfterSeconds | default 1800 }}
+              values:
+                repository: {{ printf "%s/%s" (index $parts 0) (index $parts 1) | quote }}
+    {{- end }}
+  template:
+    metadata:
+      name: {{ `'preview-{{ .metadata.name }}-pr-{{ .number }}'` }}
+      labels:
+        {{- include "tenant.labels" . | nindent 8 }}
+        platform.koorikla.io/preview: "true"
+        platform.koorikla.io/component: {{ `'{{ .metadata.name }}'` }}
+        platform.koorikla.io/pull-request: {{ `'{{ .number }}'` }}
+      annotations:
+        platform.koorikla.io/repository: {{ `'{{ .values.repository }}'` }}
+        platform.koorikla.io/commit: {{ `'{{ .head_sha }}'` }}
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io   # PR closed -> Application deleted -> Environment deleted
+    spec:
+      project: {{ .Values.previewProject }}
+      source:
+        repoURL: {{ required "installation.repoURL is required (installation.yaml)" .Values.installation.repoURL | quote }}
+        targetRevision: {{ .Values.installation.revision | default "HEAD" | quote }}
+        path: charts/preview
+        helm:
+          valuesObject:
+            project: {{ $p }}
+            component: {{ `'{{ .metadata.name }}'` }}
+            pullRequest: {{ `'{{ .number }}'` }}
+            commit: {{ `'{{ .head_sha }}'` }}
+            repository: {{ `'{{ .values.repository }}'` }}
+            expired: {{ printf "'{{ has %q .labels }}'" $label }}
+            openchoreo:
+              orgNamespace: {{ .Values.openchoreo.orgNamespace }}
+            previews:
+              dataPlane: {{ required "previews.dataPlane is required (installation.yaml)" $pv.dataPlane }}
+      destination:
+        server: {{ .Values.argocd.server }}
+        namespace: {{ .Values.openchoreo.orgNamespace }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false
+        # Unlimited retries: a preview over the tenant cap (Kyverno denies the Environment) waits here and comes up
+        # within maxDuration once another preview of the tenant is gone.
+        retry:
+          limit: -1
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+{{- end }}
