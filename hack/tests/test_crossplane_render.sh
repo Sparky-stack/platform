@@ -34,15 +34,11 @@ kc() {   # kc <file> <label>
 PKG_RE='^xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
 
 # --- 1a. selection through the ApplicationSet for local dev1 ------------------------------------------------------------
-INST_DIR=installations/local
-helm template platform charts/platform --namespace argocd --values "$INST_DIR/installation.yaml" > "$TMP/platform.yaml"
+render_platform local "$TMP/platform.yaml"
 assert_eq "$(yq '.addons.crossplane.default' charts/platform/values.yaml)" false "catalog: crossplane is opt-in"
 assert_eq "$(yq -o=json -I=0 '.addons.crossplane.roles' charts/platform/values.yaml)" '["workload"]' "catalog: crossplane targets workload clusters"
-vargs=()
-read_lines vargs addon_helm_args crossplane "$INST_DIR" "$TMP/platform.yaml" workload dev1 docker development local cilium \
+render_layered_addon local crossplane "$TMP/dev1.yaml" "$TMP/platform.yaml" workload dev1 docker development local cilium \
   https://192.0.2.10:6443
-helm template "$(addon_release_name "$TMP/platform.yaml" crossplane)" "$ADDON" --namespace crossplane-system "${vargs[@]}" \
-  > "$TMP/dev1.yaml"
 assert_eq "$(yq -N 'select(.kind == "Composition") | .metadata.name' "$TMP/dev1.yaml")" postgresql-cnpg \
   "dev1 (provider docker): the only Composition is postgresql-cnpg"
 assert_eq "$(yq -N 'select(.kind == "CompositeResourceDefinition") | .spec.defaultCompositionRef.name' "$TMP/dev1.yaml")" \
@@ -76,9 +72,11 @@ assert_eq "$(yq -N 'select(.kind == "Namespace") | .metadata.labels["pod-securit
 # --- 1b. every backend's addon render ----------------------------------------------------------------------------------
 BACKENDS="cnpg aws-rds gcp-cloudsql azure-flexible"
 for b in $BACKENDS; do
-  vf=()
-  [[ "$b" == cnpg ]] || vf=(-f "$FIX/values-$b.yaml")
-  helm template crossplane "$ADDON" --namespace crossplane-system ${vf[@]+"${vf[@]}"} > "$TMP/addon-$b.yaml"
+  if [[ "$b" == cnpg ]]; then
+    render_standalone_addon crossplane "$TMP/addon-cnpg.yaml"
+  else
+    helm template crossplane "$ADDON" --namespace crossplane-system -f "$FIX/values-$b.yaml" > "$TMP/addon-$b.yaml"
+  fi
   kc "$TMP/addon-$b.yaml" "addon render ($b)"
   assert_eq "$(yq -N 'select(.kind == "Composition") | .metadata.name' "$TMP/addon-$b.yaml" | tr '\n' ' ')" \
     "postgresql-$b " "$b: exactly one Composition, postgresql-$b"
@@ -114,12 +112,30 @@ yq 'select(.kind == "Function")
   | .metadata.annotations["render.crossplane.io/runtime-docker-pull-policy"] = "IfNotPresent"' "$TMP/addon-cnpg.yaml" \
   > "$TMP/functions.yaml"
 
-# render <case> <composition> <xr> [observed]: composed resources -> $TMP/out-<case>.yaml, XR -> $TMP/xr-<case>.yaml
-render() {
+# render_bg <case> <composition> <xr> [observed]: run crossplane composition render in the background
+render_bg() {
   local c=$1 comp=$2 xr=$3 obs=${4:-} args=()
   [[ -n "$obs" ]] && args=(--observed-resources "$obs")
-  if ! crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
-    --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err"; then
+  crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
+    --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err" \
+    && : > "$TMP/render-$c.ok" &
+}
+render_bg cnpg-minimal "$TMP/composition-cnpg.yaml" "$FIX/xr-minimal.yaml"
+render_bg cnpg-production "$TMP/composition-cnpg.yaml" "$FIX/xr-production.yaml"
+render_bg cnpg-backup "$TMP/composition-cnpg-backup.yaml" "$FIX/xr-production.yaml"
+render_bg aws-minimal "$TMP/composition-aws-rds.yaml" "$FIX/xr-minimal.yaml"
+render_bg aws-production "$TMP/composition-aws-rds.yaml" "$FIX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg aws-aurora "$TMP/composition-aws-rds.yaml" "$FIX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg gcp-minimal "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-minimal.yaml"
+render_bg gcp-production "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
+render_bg azure-minimal "$TMP/composition-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
+render_bg azure-production "$TMP/composition-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
+wait
+
+# render <case> <composition> <xr> [observed]: composed resources -> $TMP/out-<case>.yaml, XR -> $TMP/xr-<case>.yaml
+render() {
+  local c=$1
+  if [[ ! -f "$TMP/render-$c.ok" ]]; then
     cat "$TMP/render-$c.err" >&2
     assert_eq failed ok "crossplane render $c"
     : > "$TMP/out-$c.yaml"; : > "$TMP/xr-$c.yaml"
