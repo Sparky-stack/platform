@@ -380,8 +380,11 @@ only Secrets, so the two CRS ConfigMaps (gateway CA, image verification; public 
 namespace `platform-delivery` and rebuilt as ConfigMaps on the cluster by ESO there: addon `secret-stores` adds the
 name-scoped `ClusterSecretStore/delivery`, addons `openchoreo-data-plane` and `kyverno` the ExternalSecrets
 (`values/provider-byo.yaml` each). The target namespaces come from their addons; a PushSecret retries until they exist.
-Deregistering (deleting the fleet file) deletes what was pushed (`deletionPolicy: Delete`): remove the fleet file
-**before** the cluster goes away, or the PushSecrets wait on their finalizer.
+`deletionPolicy: Delete` removes a pushed Secret when its PushSecret goes while the cluster stays registered (e.g.
+`addons.falco: false`). Deregistering (deleting the fleet file) does **not** reliably clean up, as with a CRS: Argo CD
+deletes the PushSecrets together with `<name>-kubeconfig` they authenticate with, and on byo1 the pushed Secrets
+stayed on the cluster. When handing a cluster back, delete namespaces `openchoreo-data-plane`, `platform-delivery`,
+`openchoreo-secrets` and the platform addons' namespaces on it, then the store key `byo-<name>`.
 
 Locally (RAM: about 2.5 GiB for a k3d server with the workload addons):
 
