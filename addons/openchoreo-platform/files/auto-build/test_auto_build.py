@@ -370,8 +370,9 @@ def argo_wf(image=PR_IMAGE):
     return {"status": {"nodes": nodes}}
 
 
-def binding(release="hello-world-pr-7-bbbbbbbbbbbb", ready_=True):
-    return {"metadata": {"name": "hello-world-pr-7", "generation": 2}, "spec": {"releaseName": release},
+def binding(release="hello-world-pr-7-bbbbbbbbbbbb", ready_=True, poked=True):
+    ann = {ab.RELEASE_ANNOTATION: release} if poked else {}
+    return {"metadata": {"name": "hello-world-pr-7", "generation": 2, "annotations": ann}, "spec": {"releaseName": release},
             "status": {"conditions": [{"type": "Ready", "status": "True" if ready_ else "False", "observedGeneration": 2}],
                        "endpoints": [{"name": "http", "externalURLs": {"http": {
                            "host": "pr-7-hello-world-default.dev1.apps.localhost", "path": "/hello-world-http",
@@ -388,6 +389,7 @@ class FakePreviewApi(FakeApi):
         self.statuses = []
         self.labels_added = []
         self.releases = []
+        self.pokes = []
 
     def preview_apps(self):
         return self.apps
@@ -415,6 +417,11 @@ class FakePreviewApi(FakeApi):
 
     def add_label(self, slug, number, label):
         self.labels_added.append((slug, number, label))
+
+    def poke_binding(self, name, release):
+        self.pokes.append((name, release))
+        b = self.objects.get(("releasebindings", name))
+        b.setdefault("metadata", {}).setdefault("annotations", {})[ab.RELEASE_ANNOTATION] = release
 
 
 def previews(api, state=None, **kw):
@@ -543,6 +550,17 @@ class PreviewReconcile(unittest.TestCase):
         self.assertEqual(url, "http://pr-7-hello-world-default.dev1.apps.localhost:19080/hello-world-http")
         self.assertIn("pr-7-hello-world", desc)
         self.assertEqual(api.created, [])
+
+    def test_new_release_pokes_the_binding_once_so_openchoreo_reconciles_it(self):
+        api = self.api(runs={"hello-world-pr7-bbbbbbbbbbbb": run_obj("hello-world-pr7-bbbbbbbbbbbb", done=True)},
+                       workflows={"hello-world-pr7-bbbbbbbbbbbb": argo_wf()},
+                       objects={("releasebindings", "hello-world-pr-7"): binding(ready_=False, poked=False)})
+        state = {}
+        previews(api, state)
+        self.assertEqual(api.pokes, [("hello-world-pr-7", "hello-world-pr-7-bbbbbbbbbbbb")])
+        previews(api, state)
+        self.assertEqual(len(api.pokes), 1)
+        self.assertEqual(len(api.releases), 1)
 
     def test_binding_not_ready_is_pending(self):
         api = self.api(objects={("componentreleases", "hello-world-pr-7-bbbbbbbbbbbb"): {"metadata": {}},

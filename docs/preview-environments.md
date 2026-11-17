@@ -32,7 +32,9 @@ PR closed/merged ──> Application deleted ──> Environment deleted ──>
   Pull requests from forks are never built.
 - **Release**: the pass cuts `ComponentRelease/<component>-pr-<n>-<sha12>` from the Component's latest release
   (`status.latestRelease`: the platform's ComponentType snapshot, traits, parameters) with the PR image and commit. A
-  change to `deploy/openchoreo/` in the PR is therefore not part of the preview (only the code is).
+  change to `deploy/openchoreo/` in the PR is therefore not part of the preview (only the code is). The pass then
+  annotates the ReleaseBinding (`platform.koorikla.io/release`): OpenChoreo 1.3.3 does not requeue a binding whose
+  release appears after it.
 - **URL**: OpenChoreo's own external route of the environment, `http://pr-<n>-<component>-<org ns>.<gateway host>/<endpoint path>`
   (locally `http://pr-7-hello-world-default.dev1.apps.localhost:19080/hello-world-http`, reachable like the other
   environments, [demo.md](demo.md) "5. Deploy and promote"), read from the ReleaseBinding's `status.endpoints` and

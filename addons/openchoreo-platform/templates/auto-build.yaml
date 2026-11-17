@@ -59,10 +59,14 @@ rules:
     resources: [workflowruns]
     verbs: [get, list, create]
   {{- if $pv.enabled }}
-  # PR previews: read the preview's Component, Environment and binding, cut its ComponentRelease
+  # PR previews: read the preview's Component and Environment, cut its ComponentRelease, and annotate the binding once
+  # per release (OpenChoreo 1.3.3 does not requeue a binding whose release appears later)
   - apiGroups: [openchoreo.dev]
-    resources: [components, environments, releasebindings]
+    resources: [components, environments]
     verbs: [get]
+  - apiGroups: [openchoreo.dev]
+    resources: [releasebindings]
+    verbs: [get, patch]
   - apiGroups: [openchoreo.dev]
     resources: [componentreleases]
     verbs: [get, create]

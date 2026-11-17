@@ -57,6 +57,7 @@ EXPIRES_LABEL = "platform.koorikla.io/expires-at"
 PR_LABEL = "platform.koorikla.io/pull-request"
 COMPONENT_LABEL = "platform.koorikla.io/component"
 REPOSITORY_ANNOTATION = "platform.koorikla.io/repository"
+RELEASE_ANNOTATION = "platform.koorikla.io/release"
 NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 NUMBER_RE = re.compile(r"^[1-9][0-9]{0,6}$")
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
@@ -541,8 +542,13 @@ class Previews:
                  "openchoreo.dev/project": comp["spec"]["owner"]["projectName"]}))
             log("%s: ComponentRelease %s <- %s" % (key, release, image))
             self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
-            return
         binding = self.api.get("releasebindings", binding_name)
+        if binding and ((binding.get("metadata") or {}).get("annotations") or {}).get(RELEASE_ANNOTATION) != release:
+            # OpenChoreo 1.3.3 does not requeue a binding whose ComponentRelease appears after it (ReleaseSynced stays
+            # ComponentReleaseNotFound): an annotation change makes it reconcile. Once per release.
+            self.api.poke_binding(binding_name, release)
+            log("%s: ReleaseBinding %s reconciles %s" % (key, binding_name, release))
+            return
         if ready(binding, release):
             url = endpoint_url(binding)
             self.status(key, slug, sha, "success", "Preview %s is up (until %s)" % (env_name, until), url)
@@ -572,7 +578,7 @@ def http(method, url, headers=None, body=None, context=None, timeout=20):
     hdrs = {"User-Agent": "koorikla-auto-build"}
     hdrs.update(headers or {})
     if data is not None:
-        hdrs["Content-Type"] = "application/json"
+        hdrs.setdefault("Content-Type", "application/json")
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
@@ -609,9 +615,10 @@ class Api:
         return token
 
     # Kubernetes
-    def kube(self, method, path, body=None, ok=(200, 201)):
+    def kube(self, method, path, body=None, ok=(200, 201), content_type="application/json"):
         status, _, raw = http(method, self.kube_url + path, body=body, context=self.kube_ctx,
-                              headers={"Authorization": "Bearer " + self.kube_token, "Accept": "application/json"})
+                              headers={"Authorization": "Bearer " + self.kube_token, "Accept": "application/json",
+                                       "Content-Type": content_type})
         if status not in ok:
             raise Failed("%s %s -> HTTP %d: %s" % (method, path, status, raw[:300].decode(errors="replace")))
         return status, (json.loads(raw) if raw else {})
@@ -658,6 +665,12 @@ class Api:
         status, body = self.kube("GET", "/apis/argoproj.io/v1alpha1/namespaces/%s/workflows/%s"
                                  % (self.state_namespace, urllib.parse.quote(name)), ok=(200, 404))
         return body if status == 200 else None
+
+    def poke_binding(self, name, release):
+        self.kube("PATCH", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/releasebindings/%s"
+                  % (self.namespace, urllib.parse.quote(name)),
+                  body={"metadata": {"annotations": {RELEASE_ANNOTATION: release}}},
+                  content_type="application/merge-patch+json")
 
     def create_release(self, release):
         self.kube("POST", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/componentreleases" % self.namespace,
