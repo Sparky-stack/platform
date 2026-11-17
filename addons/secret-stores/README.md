@@ -1,0 +1,27 @@
+# secret-stores
+
+## Purpose
+
+Renders External Secrets Operator `ClusterSecretStore`s, scoped reader RBAC, and Argo CD's `platform-repo-creds` `ExternalSecret`. Separates platform secrets (`platform`, `workflows`, `mgmt-harbor` on `mgmt`) from workload tenant (`default`) and Cloudflare DNS (`dns`) stores.
+
+## Where it runs
+
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: external-secrets`; layers `values/role-<role>.yaml`).
+- **Catalog label:** `addons.platform.koorikla.io/secret-stores` (`default: true`, opt-out with `"false"`).
+
+## Key values
+
+- `secrets.backend`: `kubernetes` (`platform-secrets` / `openchoreo-secrets`), `aws`, or `vault`.
+- `platformStore.namespaces`: explicit `mgmt` namespaces permitted to reference `ClusterSecretStore/platform`.
+- `workflowStore.{namespaceRegexes,keys}` and `secrets.workflowStore`: least-privilege `workflows` store for `workflows-*` build and promotion runs.
+- `dnsStore.namespaces` and `secrets.dnsStore`: isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only).
+- `repoCreds.{auth,remoteKey}`: `token` (PAT) or `githubApp` credentials for Argo CD.
+
+## Day-2 notes
+
+- Rotating GitHub App keys, PATs, and ESO-backed secrets: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#4-github-app-keys-and-registry-pats).
+
+## Links
+
+- [Architecture: Secrets](../../docs/architecture.md#secrets-one-store-name-pluggable-backends)
+- [Conventions: Secret keys](../../docs/conventions.md#secret-keys)

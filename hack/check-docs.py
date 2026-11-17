@@ -9,7 +9,8 @@ the docs of the repositories they become; hack/tests/test_project_templates.sh r
     `bootstrap/...`, `.github/...`, `.devcontainer/...`) exist, unless they hold a placeholder (<x>, *, {a,b}, $x, ...);
   - `task <name>` / `make <name>` in code spans and code blocks name a Taskfile task / Makefile target;
   - never `--context koorikla` / `use-context koorikla`; `docs/runbooks/*.md` are linked from `docs/operations.md`,
-    carry the standard headings, and pass `--context` or `--kubeconfig` on every `kubectl` block command.
+    carry the standard headings, and pass `--context` or `--kubeconfig` on every `kubectl` block command;
+  - every `addons/*` and `charts/*` directory carries a `README.md` (<= 40 lines) with the standard headings.
 
 Usage: check-docs.py [ROOT]   (default: the repo root). Exits 1 and lists every problem.
 """
@@ -28,6 +29,9 @@ CMD = re.compile(r"(?:^|[\s;&|(`])(task|make) ([a-z][a-z0-9:-]*)")
 FORBIDDEN_CTX = re.compile(r"(?:--context(?:=|\s+)|use-context\s+)['\"]?koorikla\b")
 KUBECTL_CMD = re.compile(r"(?:^|[;&|(`]\s*)kubectl\s+")
 RUNBOOK_SECTIONS = ("when to use", "symptoms", "steps", "verify", "rollback", "related links")
+CHART_README = re.compile(r"^(?:addons|charts)/[^/]+/README\.md$")
+CHART_README_SECTIONS = ("purpose", "where it runs", "key values", "day-2 notes", "links")
+CHART_README_MAX_LINES = 40
 
 
 def md_files():
@@ -104,6 +108,15 @@ def main():
     problems = []
     ops_links, runbooks = set(), []
     task_names, make_targets = tasks()
+    for group in ("addons", "charts"):
+        gdir = os.path.join(ROOT, group)
+        if os.path.isdir(gdir):
+            for entry in sorted(os.listdir(gdir)):
+                edir = os.path.join(gdir, entry)
+                if not entry.startswith(".") and os.path.isdir(edir):
+                    readme = os.path.join(edir, "README.md")
+                    if not os.path.isfile(readme):
+                        problems.append("%s: missing README.md" % os.path.relpath(readme, ROOT).replace("\\", "/"))
     for path in md_files():
         rel = os.path.relpath(path, ROOT)
         rel_posix = rel.replace("\\", "/")
@@ -117,6 +130,14 @@ def main():
         base = os.path.dirname(path)
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().split("\n")
+        if CHART_README.match(rel_posix):
+            htexts = set(headings(path)[0])
+            for sec in CHART_README_SECTIONS:
+                if sec not in htexts:
+                    problems.append('%s: README missing section "%s"' % (rel, sec))
+            nlines = len(lines) - (1 if lines and lines[-1] == "" else 0)
+            if nlines > CHART_README_MAX_LINES:
+                problems.append("%s: README is %d lines (max %d)" % (rel, nlines, CHART_README_MAX_LINES))
         fence = False
         for no, line in enumerate(lines, 1):
             where = "%s:%d" % (rel, no)
