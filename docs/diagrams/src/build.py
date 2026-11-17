@@ -245,67 +245,117 @@ def observability() -> Diagram:
 
 
 # -------------------------------------------------------------------------------------------------- sdlc
+SDLC_STEPS = (
+    "A developer merges reviewed code to main in the app repo",
+    "Build & sign polls main every minute and builds each new commit in-cluster, on the management cluster",
+    "Build & sign scans the image, signs it with the platform key and pushes it to Harbor",
+    "Build & sign commits the image digest to deploy/ on main; deploy/ changes never start a build",
+    "Argo CD reads the new digest on main and OpenChoreo cuts one immutable release",
+    "OpenChoreo deploys the new release to development automatically",
+    "The team merges a staging PR that picks the release running in development",
+    "Argo CD reads staging.yaml on main",
+    "OpenChoreo deploys the same release to staging",
+    "The promotion gate starts when the staging rollout succeeds and checks staging: readiness, smoke tests, alerts, "
+    "5xx error rate, freeze windows",
+    "The promotion gate opens a production PR with that release only if every check passes",
+    "A code owner approves and merges the production PR",
+    "Argo CD reads production.yaml on main, outside freeze windows",
+    "OpenChoreo submits the same release to production",
+    "Kyverno in every environment checks each image's signature, attestations and digest in Harbor against the "
+    "platform key: it warns in development and staging and blocks unverified pods in production",
+)
+
+
 def sdlc() -> Diagram:
+    """Swimlanes: actors are rows (build, app repo, Argo CD + OpenChoreo, workload, gate), environments are columns.
+    Every environment repeats one vertical pattern (a person merges on main, Argo CD reads it, OpenChoreo deploys it),
+    so the loop back through Argo CD and OpenChoreo is drawn once per environment instead of as a back-arrow."""
     d = Diagram("SDLC · from git push to production",
-                "One signed image: development deploys automatically, staging and production are promoted by pull "
-                "requests in the app repo. Production is gated twice, at promotion and at admission.")
-    c, w = [44, 272, 500, 728], 148
-    H0 = 100                                    # top row: room for three arrows between the repo and the build
-    R0 = 120
-    R1 = R0 + H0 + 80
-    R2 = R1 + PITCH
-    R3 = R2 + PITCH
-    xr = c[3] + w + 28                          # right channel: Kyverno to the registry
-    d.box(c[0], R0, w, H0, "external", "App repo", ["your code and", "deploy/ folder"])
-    d.box(c[1], R0, c[2] + w - c[1], H0, "mgmt", "Build & sign", ["builds, scans and signs every image"])
-    d.box(c[3], R0, w, H0, "mgmt", "Registry", ["signed", "images"])
-    d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
-    d.box(c[1], R1, w, H, "mgmt", "OpenChoreo", ["snapshots and", "deploys releases"])
-    d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
-    d.box(c[2], R2, w, H, "workload", "Staging", ["second", "environment"])
-    d.box(c[3], R2, w, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"])
-    d.box(c[2], R3, w, H, "workload", "Admission", ["checks every", "pod first"], aka=("Kyverno",))
-    d.box(c[3], R3, w, H, "workload", "Production", ["runs only", "admitted pods"])
-    d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1)
-    d.arrow([(c[2] + w, R0 + H0 / 2), (c[3], R0 + H0 / 2)], step=2)
-    d.arrow([(c[1], R0 + H0 - 16), (c[0] + w, R0 + H0 - 16)], step=3)       # the commit Argo CD then reads
-    xa = c[0] + w / 2
-    d.arrow([(xa, R1), (xa, R0 + H0)], step=4)
-    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5)
-    d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=6)
-    xs, xq = c[1] + 110, c[1] + 48             # the release reaches staging, and only later production
-    d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=7, badge=(c[1] + w + 40, ymid(R2)),
-            label="after the team's staging PR", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
-    d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))], step=8)
-    xg, yg = c[3] + w / 2, R0 + H0 + 40         # the gate's pull request: out of its top, back to the repo
-    pr = d.arrow([(xg, R2), (xg, yg), (c[0] + w - 22, yg), (c[0] + w - 22, R0 + H0)], step=9,
-                 badge=(xg, R2 - 34), label="production pull request", label_pos=(xg - 20, R2 - 29),
-                 label_anchor="end")
-    d.label(c[0] + w - 10, yg + 24, "once merged: back through 4 and 5", anchor="start", owner=pr)
-    d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=10, badge=(xq, ymid(R3) - 60),
-            label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
-    yb = R2 + H + 40                            # Kyverno checks the registry first: out of its top, up the right side
-    d.arrow([(c[2] + w - 30, R3), (c[2] + w - 30, yb), (xr, yb), (xr, R0 + H0 / 2 + 14),
-             (c[3] + w, R0 + H0 / 2 + 14)], step=11, badge=(c[2] + w + 40, yb), label="checks the signature",
-            label_pos=(c[3] + 8, yb + 26), label_anchor="start")
-    d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=12)
-    d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
-              "Staging", "Production", "Admission")
+                "Build once, in-cluster. Then every environment repeats one pattern: a person merges a change to main, "
+                "Argo CD reads it, OpenChoreo deploys the same signed release and Kyverno checks it against Harbor.",
+                reading="columns")
+    xb, cw, gap = 150, 196, 68                  # columns: development, staging, production
+    cx = [xb, xb + cw + gap, xb + 2 * (cw + gap)]
+    ax = [cx[0] + 150, cx[1] + 95, cx[2] + 36]  # each column's read + deploy arrows
+    BX, BW = 28, cx[2] + cw + 14 - 28           # lane bands; the right channel outside them carries step 15
+    PT, PB, G = 36, 14, 96                      # band padding (top: lane label), gap between neighbouring lanes' boxes
+    RB, HB = 104 + PT, 72                       # build (the lede is two lines)
+    RG, HG = RB + HB + G, 72                    # app repo
+    RP, HP = RG + HG + G, 72                    # Argo CD + OpenChoreo
+    RE, HE = RP + HP + G, 80                    # workload
+    RT, HT = RE + HE + G, 72                    # promotion gate
+
+    def band(y, h, label, plane, sub=()):
+        d.zone(BX, y - PT, BW, h + PT + PB, label, plane)
+        for i, s in enumerate(sub):
+            d.text(44, y - PT + 44 + i * 18, s)
+
+    band(RB, HB, "build", "mgmt", ("once per",  "commit"))
+    band(RG, HG, "app repo", "external", ("main branch",))
+    band(RP, HP, "platform", "mgmt", ("Argo CD +", "OpenChoreo"))
+    band(RE, HE, "workload", "workload", ("local default:", "one cluster, one", "namespace per", "environment"))
+    band(RT, HT, "gate", "mgmt", ("staging to", "production"))
+
+    d.box(cx[0], RB, cw, HB, "mgmt", "Build & sign", ["in-cluster: tests, scans,", "signs with platform key"])
+    d.box(cx[1], RB, cx[2] + cw - cx[1], HB, "mgmt", "Harbor",
+          ["image registry: one signed image,", "promoted unchanged to every environment"])
+    d.box(cx[0], RG, cw, HG, "external", "Main branch", ["your code, and the", "build's image digest"], step=1,
+          aka=("developer",))
+    d.box(cx[1], RG, cw, HG, "external", "Staging PR", ["merged to main", "by the team"], step=7, aka=("team",))
+    d.box(cx[2], RG, cw, HG, "external", "Production PR", ["opened by the gate,", "a code owner merges"], step=12,
+          aka=("code owner",))
+    d.box(cx[0], RP, cw, HP, "mgmt", "New release", ["Argo CD syncs,", "OpenChoreo cuts it"],
+          aka=("Argo CD reads the new digest", "OpenChoreo deploys the new release"))
+    d.box(cx[1], RP, cw, HP, "mgmt", "Promote to staging", ["Argo CD syncs,", "OpenChoreo deploys"],
+          aka=("Argo CD reads staging.yaml", "OpenChoreo deploys the same release to staging"))
+    d.box(cx[2], RP, cw, HP, "mgmt", "Promote to production", ["Argo CD syncs outside", "freeze windows"],
+          aka=("Argo CD reads production.yaml", "OpenChoreo submits the same release"))
+    d.box(cx[0], RE, cw, HE, "workload", "Development", ["every new release;", "Kyverno warns"])
+    d.box(cx[1], RE, cw, HE, "workload", "Staging", ["the same release;", "Kyverno warns"])
+    d.box(cx[2], RE, cw, HE, "workload", "Production", ["the same release;", "Kyverno blocks"])
+    xt = cx[1] + 52                             # the gate sits between staging and production
+    d.box(xt, RT, 200, HT, "mgmt", "Promotion gate", ["automated: readiness,", "smoke, alerts, 5xx, freeze"])
+
+    # build once, development column: Build & sign polls main, pushes to Harbor, commits the digest back
+    yb = RB + HB + 38
+    d.arrow([(ax[0] - 30, RB + HB), (ax[0] - 30, RG)], step=2, badge=(ax[0] - 30, yb), label="polls",
+            label_pos=(ax[0] - 50, yb + 5), label_anchor="end")
+    d.arrow([(cx[0] + cw, ymid(RB, HB)), (cx[1], ymid(RB, HB))], step=3, badge=(cx[0] + cw + 30, ymid(RB, HB)),
+            label="pushes", label_pos=(cx[0] + cw + 33, ymid(RB, HB) - 22))
+    d.arrow([(ax[0], RB + HB), (ax[0], RG)], step=4, badge=(ax[0], yb), label="commits the digest",
+            label_pos=(ax[0] + 20, yb + 5), label_anchor="start")
+    # one pattern per column: Argo CD reads the merge on main, OpenChoreo deploys it
+    for i, (s_read, s_deploy) in enumerate(((5, 6), (8, 9), (13, 14))):
+        x = ax[i]
+        y1, y2 = RG + HG + 40, RP + HP + 36
+        d.arrow([(x, RP), (x, RG + HG)], step=s_read, badge=(x, y1), label="reads",
+                label_pos=(x + 20, y1 + 5), label_anchor="start")
+        d.arrow([(x, RP + HP), (x, RE)], step=s_deploy, badge=(x, y2), label="deploys",
+                label_pos=(x + 20, y2 + 5), label_anchor="start")
+    # development -> staging: the team promotes the release it saw in development
+    xd = cx[0] + cw + 33
+    d.arrow([(cx[0] + cw, ymid(RE, HE)), (xd, ymid(RE, HE)), (xd, ymid(RG, HG)), (cx[1], ymid(RG, HG))])
+    d.line_label = "the release the team promotes"
+    # staging -> production: the gate checks staging, then opens the production PR
+    y9 = RE + HE + 40
+    x9 = ax[1] + 27
+    d.arrow([(x9, RT), (x9, RE + HE)], step=10, badge=(x9, y9), label="checks",
+            label_pos=(x9 + 20, y9 + 5), label_anchor="start")
+    xg = cx[1] + cw + 33
+    d.arrow([(xg, RT), (xg, ymid(RG, HG)), (cx[2], ymid(RG, HG))], step=11, badge=(xg, y9),
+            label="opens the PR", label_pos=(xg + 20, y9 + 5), label_anchor="start")
+    # Kyverno in every environment checks every image against Harbor: out of the workload lane, up the right side
+    xr = BX + BW + 24
+    d.arrow([(BX + BW, ymid(RE, HE)), (xr, ymid(RE, HE)), (xr, ymid(RB, HB)), (cx[2] + cw, ymid(RB, HB))],
+            step=15, badge=(xr, yb), label="verifies every image", label_pos=(xr - 20, yb + 5), label_anchor="end")
+    d.legend_label("workload", "workload cluster (local default: one cluster, one namespace per environment; "
+                               "multicluster: production on its own)")
+    d.require("Main branch", "Build & sign", "Harbor", "New release", "Promote to staging", "Promote to production",
+              "Staging PR", "Production PR", "Promotion gate", "Development", "Staging", "Production")
     d.stages("Development", "Staging", "Production")
-    d.key("A push to the app repo starts Build & sign on OpenChoreo's workflow plane on the management cluster",
-          "Build & sign scans and signs the image and pushes it to the registry",
-          "Build & sign commits the new image version to the deploy/ folder of the app repo",
-          "Argo CD reads the deploy/ folder of the app repo",
-          "Argo CD applies every merge to OpenChoreo, which snapshots an immutable release",
-          "OpenChoreo deploys the release to development automatically",
-          "OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo (back "
-          "through steps 4 and 5)",
-          "The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes",
-          "The promotion gate opens the production pull request in the app repo only if every check passes",
-          "OpenChoreo submits the release to production, through admission, only after a code owner approves and "
-          "merges that pull request",
-          "Kyverno checks each production pod's image signature and digest in the registry before the pod starts",
-          "Kyverno admits only verified pods into production")
+    d.key(*SDLC_STEPS)
+    d.note("Roll back by reverting the production PR. A failed scan, gate check or admission check stops the release "
+           "where it is.")
     return d
 
 

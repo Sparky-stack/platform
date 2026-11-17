@@ -97,18 +97,23 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A push to the app repo starts Build & sign on OpenChoreo's workflow plane on the management cluster
-2. Build & sign scans and signs the image and pushes it to the registry
-3. Build & sign commits the new image version to the `deploy/` folder of the app repo
-4. Argo CD reads the `deploy/` folder of the app repo
-5. Argo CD applies every merge to OpenChoreo, which snapshots an immutable release
-6. OpenChoreo deploys the release to development automatically
-7. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo (back through steps 4 and 5)
-8. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
-9. The promotion gate opens the production pull request in the app repo only if every check passes
-10. OpenChoreo submits the release to production, through admission, only after a code owner approves and merges that pull request
-11. Kyverno checks each production pod's image signature and digest in the registry before the pod starts
-12. Kyverno admits only verified pods into production
+1. A developer merges reviewed code to main in the app repo
+2. Build & sign polls main every minute and builds each new commit in-cluster, on the management cluster
+3. Build & sign scans the image, signs it with the platform key and pushes it to Harbor
+4. Build & sign commits the image digest to `deploy/` on main; `deploy/` changes never start a build
+5. Argo CD reads the new digest on main and OpenChoreo cuts one immutable release
+6. OpenChoreo deploys the new release to development automatically
+7. The team merges a staging PR that picks the release running in development
+8. Argo CD reads `staging.yaml` on main
+9. OpenChoreo deploys the same release to staging
+10. The promotion gate starts when the staging rollout succeeds and checks staging: readiness, smoke tests, alerts, 5xx error rate, freeze windows
+11. The promotion gate opens a production PR with that release only if every check passes
+12. A code owner approves and merges the production PR
+13. Argo CD reads `production.yaml` on main, outside freeze windows
+14. OpenChoreo submits the same release to production
+15. Kyverno in every environment checks each image's signature, attestations and digest in Harbor against the platform key: it warns in development and staging and blocks unverified pods in production
+
+Roll back by reverting the production PR. A failed scan, gate check or admission check stops the release where it is.
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
