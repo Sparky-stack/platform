@@ -1,137 +1,122 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="977" viewBox="0 0 960 977" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="977" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="961" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
-<path d="M 376.0 160.0 L 468.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 648.0 160.0 L 740.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 830.0 200.0 L 830.0 276.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 376.0 320.0 L 468.0 320.0" fill="none" stroke="#8b9ab0" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path d="M 736.0 320.0 L 648.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 558.0 360.0 L 558.0 440.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 468.0 480.0 L 376.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 648.0 480.0 L 740.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="998" viewBox="0 0 960 998" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="998" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="982" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<path d="M 376.0 160.0 L 468.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 648.0 160.0 L 740.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 830.0 280.0 L 830.0 200.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 740.0 320.0 L 648.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 260.0 440.0 L 260.0 400.0 L 520.0 400.0 L 520.0 360.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 376.0 480.0 L 468.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 300.0 520.0 L 300.0 560.0 L 830.0 560.0 L 830.0 520.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 376.0 160.0 L 468.0 160.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
 <path class="fx" d="M 648.0 160.0 L 740.0 160.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 830.0 200.0 L 830.0 276.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 736.0 320.0 L 648.0 320.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 558.0 360.0 L 558.0 440.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 468.0 480.0 L 376.0 480.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 648.0 480.0 L 740.0 480.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
-<rect x="196" y="120" width="180" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="286.0" y="146.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">build &amp; scan</text>
-<text class="s" x="286.0" y="166.4" font-size="13" fill="#cbd5e1" text-anchor="middle">BuildKit · Trivy</text>
-<text class="s" x="286.0" y="183.9" font-size="13" fill="#cbd5e1" text-anchor="middle">SBOM · provenance</text>
-<rect x="468" y="120" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="558.0" y="146.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cosign</text>
-<text class="s" x="558.0" y="166.4" font-size="13" fill="#cbd5e1" text-anchor="middle">platform key in-cluster</text>
-<text class="s" x="558.0" y="183.9" font-size="13" fill="#cbd5e1" text-anchor="middle">or keyless (Fulcio)</text>
-<rect x="740" y="120" width="180" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
-<text class="s" x="830.0" y="146.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">registry</text>
-<text class="s" x="830.0" y="166.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Harbor · GHCR</text>
-<text class="s" x="830.0" y="183.9" font-size="13" fill="#cbd5e1" text-anchor="middle">image + signature</text>
-<rect x="196" y="280" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="286.0" y="306.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production gate</text>
-<text class="s" x="286.0" y="326.4" font-size="13" fill="#cbd5e1" text-anchor="middle">VAP: only Argo CD&#x27;s</text>
-<text class="s" x="286.0" y="343.9" font-size="13" fill="#cbd5e1" text-anchor="middle">gated app writes prod</text>
-<rect x="468" y="280" width="180" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="558.0" y="306.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">app pods</text>
-<text class="s" x="558.0" y="326.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo dp-*</text>
-<text class="s" x="558.0" y="343.9" font-size="13" fill="#cbd5e1" text-anchor="middle">namespaces</text>
-<rect x="736" y="276" width="188" height="88" rx="11" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
-<rect x="740" y="280" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="2.2"/>
-<text class="s" x="830.0" y="306.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Kyverno</text>
-<text class="s" x="830.0" y="326.4" font-size="13" fill="#cbd5e1" text-anchor="middle">image verification</text>
-<text class="s" x="830.0" y="343.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ Pod Security</text>
-<rect x="196" y="440" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="286.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Falco Talon</text>
-<text class="s" x="286.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">terminate or label</text>
-<text class="s" x="286.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">the pod (dp-* only)</text>
-<rect x="468" y="440" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="558.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Falco</text>
-<text class="s" x="558.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">modern eBPF</text>
-<text class="s" x="558.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">on every node</text>
-<rect x="740" y="440" width="180" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="830.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">falco-response</text>
-<text class="s" x="830.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">via falcosidekick</text>
-<text class="s" x="830.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">and argo-events</text>
-<rect x="196" y="600" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="286.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Thunder</text>
-<text class="s" x="286.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OIDC: console, API,</text>
-<text class="s" x="286.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">CLI, promotion gate</text>
-<rect x="468" y="600" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="558.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">ESO</text>
-<text class="s" x="558.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">one secret backend,</text>
-<text class="s" x="558.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">scoped stores</text>
-<rect x="740" y="600" width="180" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="830.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">PKI</text>
-<text class="s" x="830.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">cert-manager: agent CAs</text>
-<text class="s" x="830.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenBao: mesh CA</text>
-<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">Security · from build to runtime</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Four layers, each its own control: a signed supply chain, admission, runtime detection and response, and the identity, secrets and keys</text>
-<text class="s" x="28.0" y="91.0" font-size="14" fill="#94a3b8">underneath.</text>
-<text class="s" x="32.0" y="144.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">SUPPLY CHAIN</text>
-<text class="s" x="32.0" y="166.0" font-size="13" fill="#94a3b8">every image is</text>
-<text class="s" x="32.0" y="184.0" font-size="13" fill="#94a3b8">signed + attested</text>
-<text class="s" x="32.0" y="304.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">ADMISSION</text>
-<text class="s" x="32.0" y="326.0" font-size="13" fill="#94a3b8">only verified</text>
-<text class="s" x="32.0" y="344.0" font-size="13" fill="#94a3b8">images start</text>
-<text class="s" x="32.0" y="464.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">RUNTIME</text>
-<text class="s" x="32.0" y="486.0" font-size="13" fill="#94a3b8">detect, respond,</text>
-<text class="s" x="32.0" y="504.0" font-size="13" fill="#94a3b8">escalate</text>
-<text class="s" x="32.0" y="624.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">FOUNDATIONS</text>
-<text class="s" x="32.0" y="646.0" font-size="13" fill="#94a3b8">identity, secrets,</text>
-<text class="s" x="32.0" y="664.0" font-size="13" fill="#94a3b8">keys (trust view)</text>
-<circle cx="422.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="422.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<circle cx="694.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="694.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="830.0" cy="238.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="830.0" y="242.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="692.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="692.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="558.0" cy="400.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="558.0" y="404.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<circle cx="422.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="422.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<circle cx="694.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="694.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<line x1="28" y1="700" x2="932" y2="700" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="723.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="728" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="60.0" y="728.0" font-size="13.5" fill="#cbd5e1">The build scans (Trivy) and writes an SBOM and SLSA</text>
-<text class="s" x="60.0" y="747.0" font-size="13.5" fill="#cbd5e1">provenance</text>
-<circle cx="506.0" cy="723.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="728" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="526.0" y="728.0" font-size="13.5" fill="#cbd5e1">Falco sees every pod&#x27;s syscalls (modern eBPF on each node)</text>
-<circle cx="40.0" cy="771.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="776" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="60.0" y="776.0" font-size="13.5" fill="#cbd5e1">cosign signs and attests: platform key in-cluster, keyless</text>
-<text class="s" x="60.0" y="795.0" font-size="13.5" fill="#cbd5e1">(Fulcio) on GitHub</text>
-<circle cx="506.0" cy="771.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="776" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="526.0" y="776.0" font-size="13.5" fill="#cbd5e1">Falco Talon responds in place: terminate or label the pod</text>
-<circle cx="40.0" cy="819.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="824" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="60.0" y="824.0" font-size="13.5" fill="#cbd5e1">Kyverno verifies signature and attestations: Deny in production,</text>
-<text class="s" x="60.0" y="843.0" font-size="13.5" fill="#cbd5e1">Audit in dev and staging</text>
-<circle cx="506.0" cy="819.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="824" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="526.0" y="824.0" font-size="13.5" fill="#cbd5e1">≥ Critical escalates to mgmt: falcosidekick → argo-events →</text>
-<text class="s" x="526.0" y="843.0" font-size="13.5" fill="#cbd5e1">falco-response</text>
-<circle cx="40.0" cy="867.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="872" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="60.0" y="872.0" font-size="13.5" fill="#cbd5e1">Only verified images and Pod Security baseline pods start</text>
-<rect x="28" y="917" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
-<text class="s" x="58.0" y="927.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
-<rect x="162.86294" y="917" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
-<text class="s" x="192.9" y="927.0" font-size="13" fill="#94a3b8">workload cluster</text>
-<rect x="318.40966000000003" y="917" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="1.3"/>
-<text class="s" x="348.4" y="927.0" font-size="13" fill="#94a3b8">security &amp; trust</text>
-<rect x="465.5368" y="917" width="20" height="13" rx="3" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.3"/>
-<text class="s" x="495.5" y="927.0" font-size="13" fill="#94a3b8">stateful data</text>
-<path d="M 594.61024 923 L 616.61024 923" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 594.61024 923 L 616.61024 923" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<text class="s" x="626.6" y="927.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
-<path d="M 26 947 L 48 947" stroke="#8b9ab0" stroke-width="1.5" marker-end="url(#ah8b9ab0)"/>
-<text class="s" x="58.0" y="951.0" font-size="13" fill="#94a3b8">production bindings only</text>
-<rect x="229.58974" y="938" width="26" height="19" rx="6" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
-<rect x="232.58974" y="941" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="2"/>
-<text class="s" x="262.6" y="951.0" font-size="13" fill="#94a3b8">focus of this view</text>
+<path class="fx" d="M 830.0 280.0 L 830.0 200.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 740.0 320.0 L 648.0 320.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 260.0 440.0 L 260.0 400.0 L 520.0 400.0 L 520.0 360.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 376.0 480.0 L 468.0 480.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 300.0 520.0 L 300.0 560.0 L 830.0 560.0 L 830.0 520.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<rect x="196" y="120" width="180" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="286.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build</text>
+<text class="s" x="286.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">builds and scans</text>
+<text class="s" x="286.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">every image</text>
+<rect x="468" y="120" width="180" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="558.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cosign</text>
+<text class="s" x="558.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">signs and</text>
+<text class="s" x="558.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">attests it</text>
+<rect x="740" y="120" width="180" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="830.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Registry</text>
+<text class="s" x="830.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">Harbor or GitHub,</text>
+<text class="s" x="830.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">image + signature</text>
+<rect x="196" y="280" width="180" height="80" rx="8" fill="#151d2c" stroke="#64748b" stroke-width="1.2"/>
+<text class="s" x="286.0" y="306.4" font-size="15" fill="#dde5ef" font-weight="600" text-anchor="middle">Production gate</text>
+<text class="s" x="286.0" y="326.4" font-size="13" fill="#aab6c8" text-anchor="middle">only Argo CD may</text>
+<text class="s" x="286.0" y="344.4" font-size="13" fill="#aab6c8" text-anchor="middle">write production</text>
+<rect x="468" y="280" width="180" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="558.0" y="315.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
+<text class="s" x="558.0" y="335.4" font-size="13" fill="#dde5ef" text-anchor="middle">your services</text>
+<rect x="740" y="280" width="180" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="830.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Kyverno</text>
+<text class="s" x="830.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">verifies before</text>
+<text class="s" x="830.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">a pod starts</text>
+<rect x="196" y="440" width="180" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="286.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Falco</text>
+<text class="s" x="286.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">watches system calls</text>
+<text class="s" x="286.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">on every node</text>
+<rect x="468" y="440" width="180" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="558.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Falco Talon</text>
+<text class="s" x="558.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">stops or labels</text>
+<text class="s" x="558.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">the pod</text>
+<rect x="740" y="440" width="180" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="830.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Response workflow</text>
+<text class="s" x="830.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">on mgmt, for</text>
+<text class="s" x="830.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">critical alerts</text>
+<rect x="196" y="624" width="180" height="80" rx="8" fill="#151d2c" stroke="#64748b" stroke-width="1.2"/>
+<text class="s" x="286.0" y="650.4" font-size="15" fill="#dde5ef" font-weight="600" text-anchor="middle">Thunder</text>
+<text class="s" x="286.0" y="670.4" font-size="13" fill="#aab6c8" text-anchor="middle">sign-in for console,</text>
+<text class="s" x="286.0" y="688.4" font-size="13" fill="#aab6c8" text-anchor="middle">API and CLI</text>
+<rect x="468" y="624" width="180" height="80" rx="8" fill="#151d2c" stroke="#64748b" stroke-width="1.2"/>
+<text class="s" x="558.0" y="650.4" font-size="15" fill="#dde5ef" font-weight="600" text-anchor="middle">External Secrets</text>
+<text class="s" x="558.0" y="670.4" font-size="13" fill="#aab6c8" text-anchor="middle">one secret backend,</text>
+<text class="s" x="558.0" y="688.4" font-size="13" fill="#aab6c8" text-anchor="middle">scoped stores</text>
+<rect x="740" y="624" width="180" height="80" rx="8" fill="#151d2c" stroke="#64748b" stroke-width="1.2"/>
+<text class="s" x="830.0" y="650.4" font-size="15" fill="#dde5ef" font-weight="600" text-anchor="middle">Certificates</text>
+<text class="s" x="830.0" y="670.4" font-size="13" fill="#aab6c8" text-anchor="middle">a CA per cluster,</text>
+<text class="s" x="830.0" y="688.4" font-size="13" fill="#aab6c8" text-anchor="middle">a mesh CA</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Security · from build to runtime</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A signed supply chain, admission that checks it, and runtime detection with a response; identity, secrets and keys underneath.</text>
+<text class="s" x="32.0" y="142.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">SUPPLY CHAIN</text>
+<text class="s" x="32.0" y="162.0" font-size="13" fill="#aab6c8">every image</text>
+<text class="s" x="32.0" y="180.0" font-size="13" fill="#aab6c8">is signed</text>
+<text class="s" x="32.0" y="302.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">ADMISSION</text>
+<text class="s" x="32.0" y="322.0" font-size="13" fill="#aab6c8">only verified</text>
+<text class="s" x="32.0" y="340.0" font-size="13" fill="#aab6c8">images start</text>
+<text class="s" x="32.0" y="462.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">RUNTIME</text>
+<text class="s" x="32.0" y="482.0" font-size="13" fill="#aab6c8">detect and</text>
+<text class="s" x="32.0" y="500.0" font-size="13" fill="#aab6c8">respond</text>
+<text class="s" x="32.0" y="646.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">FOUNDATIONS</text>
+<text class="s" x="32.0" y="666.0" font-size="13" fill="#aab6c8">identity, secrets,</text>
+<text class="s" x="32.0" y="684.0" font-size="13" fill="#aab6c8">keys</text>
+<circle cx="410.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="410.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="682.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="682.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="830.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="830.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="706.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="706.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="390.0" cy="400.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="390.0" y="404.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="410.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="410.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="565.0" cy="560.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="565.0" y="564.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<line x1="28" y1="726" x2="932" y2="726" stroke="#64748b" stroke-width="1.2"/>
+<circle cx="40" cy="749.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="754" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="754.0" font-size="13.5" fill="#dde5ef">The build scans the image (Trivy), writes an SBOM and SLSA provenance and hands it to cosign</text>
+<circle cx="40" cy="777.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="782" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="782.0" font-size="13.5" fill="#dde5ef">cosign signs and attests it (platform key in-cluster, keyless on GitHub) and stores both in the registry</text>
+<circle cx="40" cy="805.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="810" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="810.0" font-size="13.5" fill="#dde5ef">Kyverno checks the signature and attestations in the registry: Deny in production, Audit in dev and staging</text>
+<circle cx="40" cy="833.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="838" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="838.0" font-size="13.5" fill="#dde5ef">Kyverno admits only verified images with Pod Security baseline settings</text>
+<circle cx="40" cy="861.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="866" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="866.0" font-size="13.5" fill="#dde5ef">Falco watches every pod&#x27;s system calls (eBPF on each node)</text>
+<circle cx="40" cy="889.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="894" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="894.0" font-size="13.5" fill="#dde5ef">Falco alerts Falco Talon, which terminates or labels the pod in place</text>
+<circle cx="40" cy="917.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="922" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="922.0" font-size="13.5" fill="#dde5ef">Falco escalates critical alerts to mgmt: falcosidekick → argo-events → the response workflow</text>
+<rect x="28" y="962" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="972.0" font-size="13" fill="#aab6c8">mgmt cluster</text>
+<rect x="162.86294" y="962" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="192.9" y="972.0" font-size="13" fill="#aab6c8">workload cluster</text>
+<path d="M 316.40966000000003 968 L 352.40966000000003 968" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="330.40966000000003" cy="968" r="7" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="362.4" y="972.0" font-size="13" fill="#aab6c8">numbered step</text>
+<rect x="480.32226" y="962" width="20" height="13" rx="3" fill="#151d2c" stroke="#64748b" stroke-width="1.2"/>
+<text class="s" x="510.3" y="972.0" font-size="13" fill="#aab6c8">context, not a step</text>
 </svg>

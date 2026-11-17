@@ -1,140 +1,118 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="876" viewBox="0 0 960 876" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 12.40s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}21.3%{opacity:1}26.3%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="876" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="860" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
-<path d="M 200.0 134.0 L 280.0 134.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 680.0 152.0 L 760.0 152.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 280.0 170.0 L 200.0 170.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 120.0 192.0 L 120.0 272.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 200.0 312.0 L 280.0 312.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 330.0 352.0 L 330.0 392.0 L 120.0 392.0 L 120.0 432.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 200.0 472.0 L 280.0 472.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 440.0 472.0 L 520.0 472.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 680.0 472.0 L 756.0 472.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 560.0 352.0 L 560.0 410.0 L 240.0 410.0 L 240.0 457.0" fill="none" stroke="#8b9ab0" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path d="M 480.0 410.0 L 480.0 457.0" fill="none" stroke="#8b9ab0" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path d="M 840.0 352.0 L 840.0 410.0 L 650.0 410.0 L 650.0 432.0" fill="none" stroke="#8b9ab0" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path class="fx" d="M 200.0 134.0 L 280.0 134.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 680.0 152.0 L 760.0 152.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 280.0 170.0 L 200.0 170.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 120.0 192.0 L 120.0 272.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 200.0 312.0 L 280.0 312.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 330.0 352.0 L 330.0 392.0 L 120.0 392.0 L 120.0 432.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 200.0 472.0 L 280.0 472.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
-<path class="fx" d="M 440.0 472.0 L 520.0 472.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
-<path class="fx" d="M 680.0 472.0 L 756.0 472.0" stroke="#fde5a7" style="animation-delay:0s,8.80s"/>
-<rect x="40" y="112" width="160" height="80" rx="8" fill="#2b3444" stroke="#94a3b8" stroke-width="1.5"/>
-<text class="s" x="120.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">app repo</text>
-<text class="s" x="120.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">code + deploy/</text>
-<text class="s" x="120.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">koorikla/hello-world</text>
-<rect x="280" y="112" width="400" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="480.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">build &amp; sign</text>
-<text class="s" x="480.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo workflow plane (or GitHub Actions)</text>
-<text class="s" x="480.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Trivy · SBOM · SLSA · cosign</text>
-<rect x="760" y="112" width="160" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
-<text class="s" x="840.0" y="138.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">registry</text>
-<text class="s" x="840.0" y="158.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Harbor · GHCR</text>
-<text class="s" x="840.0" y="175.9" font-size="13" fill="#cbd5e1" text-anchor="middle">signed image</text>
-<rect x="40" y="272" width="160" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="120.0" y="298.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Argo CD</text>
-<text class="s" x="120.0" y="318.4" font-size="13" fill="#cbd5e1" text-anchor="middle">tenant AppProject</text>
-<text class="s" x="120.0" y="335.9" font-size="13" fill="#cbd5e1" text-anchor="middle">per app repo</text>
-<rect x="280" y="272" width="160" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="360.0" y="298.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">release</text>
-<text class="s" x="360.0" y="318.4" font-size="13" fill="#cbd5e1" text-anchor="middle">ComponentRelease:</text>
-<text class="s" x="360.0" y="335.9" font-size="13" fill="#cbd5e1" text-anchor="middle">immutable snapshot</text>
-<rect x="520" y="272" width="160" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="600.0" y="298.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">promotion gate</text>
-<text class="s" x="600.0" y="318.4" font-size="13" fill="#cbd5e1" text-anchor="middle">checks each edge,</text>
-<text class="s" x="600.0" y="335.9" font-size="13" fill="#cbd5e1" text-anchor="middle">opens the PR</text>
-<rect x="760" y="272" width="160" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="840.0" y="298.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production gate</text>
-<text class="s" x="840.0" y="318.4" font-size="13" fill="#cbd5e1" text-anchor="middle">VAP: only Argo CD</text>
-<text class="s" x="840.0" y="335.9" font-size="13" fill="#cbd5e1" text-anchor="middle">writes production</text>
-<rect x="40" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="120.0" y="467.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">development</text>
-<text class="s" x="120.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">auto-deploy</text>
-<rect x="280" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="360.0" y="467.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">staging</text>
-<text class="s" x="360.0" y="487.2" font-size="13" fill="#cbd5e1" text-anchor="middle">promotion PR</text>
-<rect x="520" y="432" width="160" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="600.0" y="458.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">production</text>
-<text class="s" x="600.0" y="478.4" font-size="13" fill="#cbd5e1" text-anchor="middle">gated PR</text>
-<text class="s" x="600.0" y="495.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ CODEOWNERS</text>
-<rect x="756" y="428" width="168" height="88" rx="11" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
-<rect x="760" y="432" width="160" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="2.2"/>
-<text class="s" x="840.0" y="458.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Kyverno</text>
-<text class="s" x="840.0" y="478.4" font-size="13" fill="#cbd5e1" text-anchor="middle">denies unsigned or</text>
-<text class="s" x="840.0" y="495.9" font-size="13" fill="#cbd5e1" text-anchor="middle">unpinned images</text>
-<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">SDLC · from git push to production</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">One signed image, promoted through environments by pull requests; production is gated twice, at promotion and at admission.</text>
-<circle cx="240.0" cy="134.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="240.0" y="138.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<circle cx="720.0" cy="152.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="720.0" y="156.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="240.0" cy="170.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="240.0" y="174.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="120.0" cy="232.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="120.0" y="236.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="240.0" cy="312.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="240.0" y="316.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<circle cx="225.0" cy="392.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="225.0" y="396.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<circle cx="240.0" cy="472.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="240.0" y="476.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<circle cx="480.0" cy="472.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="480.0" y="476.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<circle cx="718.0" cy="472.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="718.0" y="476.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
-<circle cx="480.0" cy="410.0" r="3.6" fill="#8b9ab0"/>
-<line x1="28" y1="532" x2="932" y2="532" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="555.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="560" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="60.0" y="560.0" font-size="13.5" fill="#cbd5e1">A push to main starts a build on the OpenChoreo workflow</text>
-<text class="s" x="60.0" y="579.0" font-size="13.5" fill="#cbd5e1">plane (or GitHub Actions)</text>
-<circle cx="506.0" cy="555.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="560" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="526.0" y="560.0" font-size="13.5" fill="#cbd5e1">autoDeploy binds the release to development</text>
-<circle cx="40.0" cy="603.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="608" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="60.0" y="608.0" font-size="13.5" fill="#cbd5e1">The build scans, writes SBOM + SLSA provenance, signs with</text>
-<text class="s" x="60.0" y="627.0" font-size="13.5" fill="#cbd5e1">cosign and pushes</text>
-<circle cx="506.0" cy="603.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="608" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="526.0" y="608.0" font-size="13.5" fill="#cbd5e1">The promotion gate checks the edge (readiness, smoke, alerts,</text>
-<text class="s" x="526.0" y="627.0" font-size="13.5" fill="#cbd5e1">freezes) and opens a PR for staging</text>
-<circle cx="40.0" cy="651.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="656" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="60.0" y="656.0" font-size="13.5" fill="#cbd5e1">It commits the new image ref to deploy/ in the app repo</text>
-<circle cx="506.0" cy="651.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="656" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<text class="s" x="526.0" y="656.0" font-size="13.5" fill="#cbd5e1">Production needs the gate and CODEOWNERS; a</text>
-<text class="s" x="526.0" y="675.0" font-size="13.5" fill="#cbd5e1">ValidatingAdmissionPolicy lets only Argo CD write it</text>
-<circle cx="40.0" cy="699.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="704" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="60.0" y="704.0" font-size="13.5" fill="#cbd5e1">Argo CD syncs the app&#x27;s Component and Workload into</text>
-<text class="s" x="60.0" y="723.0" font-size="13.5" fill="#cbd5e1">OpenChoreo</text>
-<circle cx="506.0" cy="699.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="704" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
-<text class="s" x="526.0" y="704.0" font-size="13.5" fill="#cbd5e1">In production Kyverno denies unsigned or unpinned images</text>
-<text class="s" x="526.0" y="723.0" font-size="13.5" fill="#cbd5e1">(Audit in dev and staging)</text>
-<circle cx="40.0" cy="747.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="752" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="60.0" y="752.0" font-size="13.5" fill="#cbd5e1">OpenChoreo snapshots them as an immutable</text>
-<text class="s" x="60.0" y="771.0" font-size="13.5" fill="#cbd5e1">ComponentRelease</text>
-<rect x="28" y="816" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
-<text class="s" x="58.0" y="826.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
-<rect x="162.86294" y="816" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
-<text class="s" x="192.9" y="826.0" font-size="13" fill="#94a3b8">workload cluster</text>
-<rect x="318.40966000000003" y="816" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="1.3"/>
-<text class="s" x="348.4" y="826.0" font-size="13" fill="#94a3b8">security &amp; trust</text>
-<rect x="465.5368" y="816" width="20" height="13" rx="3" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.3"/>
-<text class="s" x="495.5" y="826.0" font-size="13" fill="#94a3b8">stateful data</text>
-<rect x="596.61024" y="816" width="20" height="13" rx="3" fill="#2b3444" stroke="#94a3b8" stroke-width="1.3"/>
-<text class="s" x="626.6" y="826.0" font-size="13" fill="#94a3b8">git, GitHub, outside</text>
-<path d="M 26 846 L 48 846" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 26 846 L 48 846" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<text class="s" x="58.0" y="850.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
-<path d="M 242.05470000000003 846 L 264.0547 846" stroke="#8b9ab0" stroke-width="1.5" marker-end="url(#ah8b9ab0)"/>
-<text class="s" x="274.1" y="850.0" font-size="13" fill="#94a3b8">gate: on an edge, or on production writes</text>
-<rect x="547.53376" y="837" width="26" height="19" rx="6" fill="none" stroke="#fb7185" stroke-opacity=".85" stroke-width="1.4"/>
-<rect x="550.53376" y="840" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="2"/>
-<text class="s" x="580.5" y="850.0" font-size="13" fill="#94a3b8">focus of this view</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="877" viewBox="0 0 960 877" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 11.30s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}23.4%{opacity:1}28.4%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="877" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="861" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<path d="M 200.0 160.0 L 280.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 680.0 160.0 L 760.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 120.0 280.0 L 120.0 200.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 200.0 320.0 L 280.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 304.0 360.0 L 304.0 408.0 L 120.0 408.0 L 120.0 456.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 552.0 360.0 L 552.0 408.0 L 384.0 408.0 L 384.0 456.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 632.0 360.0 L 632.0 456.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 760.0 496.0 L 680.0 496.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 200.0 496.0 L 280.0 496.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path d="M 440.0 496.0 L 520.0 496.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path d="M 840.0 456.0 L 840.0 200.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path class="fx" d="M 200.0 160.0 L 280.0 160.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 680.0 160.0 L 760.0 160.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 120.0 280.0 L 120.0 200.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 200.0 320.0 L 280.0 320.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 304.0 360.0 L 304.0 408.0 L 120.0 408.0 L 120.0 456.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 552.0 360.0 L 552.0 408.0 L 384.0 408.0 L 384.0 456.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 632.0 360.0 L 632.0 456.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 760.0 496.0 L 680.0 496.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<rect x="40" y="120" width="160" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="120.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App repo</text>
+<text class="s" x="120.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">your code and its</text>
+<text class="s" x="120.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">deploy/ folder</text>
+<rect x="280" y="120" width="400" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="480.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build &amp; sign</text>
+<text class="s" x="480.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenChoreo workflow plane or GitHub Actions</text>
+<text class="s" x="480.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">scans, records what is inside, signs</text>
+<rect x="760" y="120" width="160" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="840.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Registry</text>
+<text class="s" x="840.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">Harbor or GitHub,</text>
+<text class="s" x="840.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">signed images</text>
+<rect x="40" y="280" width="160" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="120.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
+<text class="s" x="120.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">reads the</text>
+<text class="s" x="120.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">deploy/ folder</text>
+<rect x="280" y="280" width="160" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="360.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Release</text>
+<text class="s" x="360.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">an immutable</text>
+<text class="s" x="360.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">snapshot</text>
+<rect x="520" y="280" width="160" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="600.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Promotion gate</text>
+<text class="s" x="600.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks health,</text>
+<text class="s" x="600.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">opens the PR</text>
+<rect x="40" y="456" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="120.0" y="482.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Development</text>
+<text class="s" x="120.0" y="502.4" font-size="13" fill="#dde5ef" text-anchor="middle">deploys</text>
+<text class="s" x="120.0" y="520.4" font-size="13" fill="#dde5ef" text-anchor="middle">automatically</text>
+<rect x="280" y="456" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="360.0" y="482.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Staging</text>
+<text class="s" x="360.0" y="502.4" font-size="13" fill="#dde5ef" text-anchor="middle">after a</text>
+<text class="s" x="360.0" y="520.4" font-size="13" fill="#dde5ef" text-anchor="middle">promotion PR</text>
+<rect x="520" y="456" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="600.0" y="482.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Production</text>
+<text class="s" x="600.0" y="502.4" font-size="13" fill="#dde5ef" text-anchor="middle">gated PR,</text>
+<text class="s" x="600.0" y="520.4" font-size="13" fill="#dde5ef" text-anchor="middle">code owners</text>
+<rect x="760" y="456" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="840.0" y="482.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Kyverno</text>
+<text class="s" x="840.0" y="502.4" font-size="13" fill="#dde5ef" text-anchor="middle">signed, pinned</text>
+<text class="s" x="840.0" y="520.4" font-size="13" fill="#dde5ef" text-anchor="middle">images only</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">SDLC · from git push to production</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">One signed image, promoted through environments by pull requests; production is gated twice, at promotion and at admission.</text>
+<circle cx="232.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="232.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="712.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="712.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="120.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="120.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="232.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="232.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="212.0" cy="408.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="212.0" y="412.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="468.0" cy="408.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="468.0" y="412.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="632.0" cy="408.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="632.0" y="412.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="728.0" cy="496.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="728.0" y="500.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<rect x="772.8" y="311.0" width="134.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="840.0" y="325.0" font-size="13" fill="#aab6c8" text-anchor="middle">checks the signature</text>
+<line x1="28" y1="558" x2="932" y2="558" stroke="#64748b" stroke-width="1.2"/>
+<circle cx="40" cy="581.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="586" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="586.0" font-size="13.5" fill="#dde5ef">A push to the app repo starts a build on the OpenChoreo workflow plane (or GitHub Actions)</text>
+<circle cx="40" cy="609.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="614" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="614.0" font-size="13.5" fill="#dde5ef">Build &amp; sign scans the image (Trivy), writes SBOM and SLSA provenance, signs with cosign, pushes it and commits the new image ref to</text>
+<text class="s" x="62.0" y="633.0" font-size="13.5" fill="#dde5ef">deploy/</text>
+<circle cx="40" cy="656.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="661" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="661.0" font-size="13.5" fill="#dde5ef">Argo CD reads the app repo&#x27;s deploy/ folder (Component and Workload)</text>
+<circle cx="40" cy="684.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="689" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="689.0" font-size="13.5" fill="#dde5ef">Argo CD applies them to OpenChoreo, which snapshots an immutable release (ComponentRelease)</text>
+<circle cx="40" cy="712.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="717" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="717.0" font-size="13.5" fill="#dde5ef">The release deploys to development automatically (autoDeploy)</text>
+<circle cx="40" cy="740.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="745" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="745.0" font-size="13.5" fill="#dde5ef">The promotion gate checks development (readiness, smoke tests, alerts, freezes) and opens the PR to staging</text>
+<circle cx="40" cy="768.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="773" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="773.0" font-size="13.5" fill="#dde5ef">The promotion gate opens production only with CODEOWNERS approval; an admission policy lets only Argo CD write production</text>
+<circle cx="40" cy="796.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="801" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="62.0" y="801.0" font-size="13.5" fill="#dde5ef">Kyverno admits into production only signed images pinned by digest (Audit in development and staging)</text>
+<rect x="28" y="841" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="851.0" font-size="13" fill="#aab6c8">mgmt cluster</text>
+<rect x="162.86294" y="841" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="192.9" y="851.0" font-size="13" fill="#aab6c8">workload cluster</text>
+<rect x="318.40966000000003" y="841" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="348.4" y="851.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 491.12436 847 L 527.12436 847" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="505.12436" cy="847" r="7" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="537.1" y="851.0" font-size="13" fill="#aab6c8">numbered step</text>
+<path d="M 653.03696 847 L 675.03696 847" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
+<text class="s" x="685.0" y="851.0" font-size="13" fill="#aab6c8">promotion path, signature check</text>
 </svg>

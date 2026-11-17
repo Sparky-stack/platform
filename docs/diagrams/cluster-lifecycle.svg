@@ -1,146 +1,131 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1108" viewBox="0 0 960 1108" role="img" aria-label="Cluster lifecycle · add, upgrade, remove = edit one file"><title>Cluster lifecycle · add, upgrade, remove = edit one file</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 11.30s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}23.4%{opacity:1}28.4%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1108" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1092" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
-<rect x="16" y="192" width="688" height="552" rx="14" fill="#0e2430" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="32.0" y="216.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MGMT CLUSTER</text>
-<rect x="768" y="192" width="168" height="552" rx="14" fill="#102236" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="784.0" y="216.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD</text>
-<path d="M 182.0 144.0 L 182.0 280.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 192.0 480.0 L 256.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M 256.0 480.0 L 296.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 256.0 480.0 L 256.0 320.0 L 296.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 256.0 480.0 L 256.0 640.0 L 296.0 640.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 448.0 320.0 L 784.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 372.0 360.0 L 372.0 440.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 448.0 480.0 L 528.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 680.0 480.0 L 784.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 372.0 680.0 L 372.0 712.0 L 852.0 712.0 L 852.0 680.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 784.0 640.0 L 680.0 640.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 182.0 144.0 L 182.0 280.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 192.0 480.0 L 256.0 480.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 256.0 480.0 L 296.0 480.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 256.0 480.0 L 256.0 320.0 L 296.0 320.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 256.0 480.0 L 256.0 640.0 L 296.0 640.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 448.0 320.0 L 784.0 320.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 372.0 360.0 L 372.0 440.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 448.0 480.0 L 528.0 480.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 680.0 480.0 L 784.0 480.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 372.0 680.0 L 372.0 712.0 L 852.0 712.0 L 852.0 680.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
-<path class="fx" d="M 784.0 640.0 L 680.0 640.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
-<rect x="32" y="88" width="264" height="56" rx="8" fill="#2b3444" stroke="#94a3b8" stroke-width="1.5"/>
-<text class="s" x="180.0" y="111.6" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">fleet file</text>
-<text class="m" x="180.0" y="131.1" font-size="13" fill="#cbd5e1" text-anchor="middle">clusters/&lt;name&gt;.yaml</text>
-<rect x="32" y="280" width="160" height="400" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="112.0" y="423.2" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Argo CD</text>
-<text class="s" x="112.0" y="442.7" font-size="13" fill="#cbd5e1" text-anchor="middle">ApplicationSet fleet</text>
-<text class="s" x="112.0" y="460.2" font-size="13" fill="#cbd5e1" text-anchor="middle">→ cluster-&lt;name&gt;</text>
-<text class="s" x="112.0" y="477.7" font-size="13" fill="#cbd5e1" text-anchor="middle"></text>
-<text class="s" x="112.0" y="495.2" font-size="13" fill="#cbd5e1" text-anchor="middle">renders</text>
-<text class="s" x="112.0" y="512.7" font-size="13" fill="#cbd5e1" text-anchor="middle">charts/cluster:</text>
-<text class="s" x="112.0" y="530.2" font-size="13" fill="#cbd5e1" text-anchor="middle">Cluster, secrets,</text>
-<text class="s" x="112.0" y="547.7" font-size="13" fill="#cbd5e1" text-anchor="middle">agent PKI, CRS</text>
-<rect x="296" y="280" width="152" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="388.0" y="306.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Cluster API</text>
-<text class="s" x="388.0" y="326.4" font-size="13" fill="#cbd5e1" text-anchor="middle">ClusterClass</text>
-<text class="s" x="388.0" y="343.9" font-size="13" fill="#cbd5e1" text-anchor="middle">k3s-&lt;provider&gt;</text>
-<rect x="784" y="280" width="136" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="852.0" y="306.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">k3s nodes</text>
-<text class="s" x="852.0" y="326.4" font-size="13" fill="#cbd5e1" text-anchor="middle">control plane</text>
-<text class="s" x="852.0" y="343.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ workers</text>
-<rect x="296" y="440" width="152" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="372.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cluster secret</text>
-<text class="s" x="372.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">ESO: kubeconfig</text>
-<text class="s" x="372.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ fleet labels</text>
-<rect x="528" y="440" width="152" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="604.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">addon AppSets</text>
-<text class="s" x="604.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">select clusters</text>
-<text class="s" x="604.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">by label</text>
-<rect x="784" y="440" width="136" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="852.0" y="466.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">addons</text>
-<text class="s" x="852.0" y="486.4" font-size="13" fill="#cbd5e1" text-anchor="middle">Cilium, Istio,</text>
-<text class="s" x="852.0" y="503.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Kyverno, ESO, …</text>
-<rect x="296" y="600" width="152" height="80" rx="8" fill="#402a3a" stroke="#fb7185" stroke-width="1.5"/>
-<text class="s" x="372.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">agent identity</text>
-<text class="s" x="372.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">own CA on mgmt</text>
-<text class="s" x="372.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">cert CN=&lt;name&gt;</text>
-<rect x="528" y="600" width="152" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="604.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">data plane</text>
-<text class="s" x="604.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">ClusterDataPlane: the</text>
-<text class="s" x="604.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">gateway trusts its CA</text>
-<rect x="784" y="600" width="136" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="852.0" y="626.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">cluster-agent</text>
-<text class="s" x="852.0" y="646.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OpenChoreo</text>
-<text class="s" x="852.0" y="663.9" font-size="13" fill="#cbd5e1" text-anchor="middle">data plane</text>
-<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">Cluster lifecycle · add, upgrade, remove = edit one file</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">A fleet file becomes a CAPI cluster, an Argo CD cluster secret and an OpenChoreo data plane; deleting it removes all three.</text>
-<circle cx="77.7" cy="115.4" r="11" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
-<text class="s" x="77.7" y="120.0" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">9</text>
-<circle cx="320.1" cy="319.4" r="11" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
-<text class="s" x="320.1" y="324.0" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="middle">10</text>
-<circle cx="182.0" cy="212.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="182.0" y="216.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<circle cx="224.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="224.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="256.0" cy="480.0" r="3.6" fill="#fbbf24"/>
-<circle cx="736.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="736.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="372.0" cy="400.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="372.0" y="404.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="488.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="488.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<circle cx="736.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="736.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<circle cx="488.0" cy="712.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="488.0" y="716.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<circle cx="736.0" cy="640.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="736.0" y="644.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<line x1="28" y1="764" x2="932" y2="764" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="787.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="792" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="60.0" y="792.0" font-size="13.5" fill="#cbd5e1">Add clusters/&lt;name&gt;.yaml: ApplicationSet fleet creates</text>
-<text class="s" x="60.0" y="811.0" font-size="13.5" fill="#cbd5e1">Application cluster-&lt;name&gt;</text>
-<circle cx="506.0" cy="787.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="792" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="526.0" y="792.0" font-size="13.5" fill="#cbd5e1">Argo CD pushes every selected addon to the new cluster</text>
-<circle cx="40.0" cy="835.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="840" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="60.0" y="840.0" font-size="13.5" fill="#cbd5e1">charts/cluster renders the CAPI Cluster, its ExternalSecrets and</text>
-<text class="s" x="60.0" y="859.0" font-size="13.5" fill="#cbd5e1">the agent PKI on mgmt</text>
-<circle cx="506.0" cy="835.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="840" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="526.0" y="840.0" font-size="13.5" fill="#cbd5e1">A ClusterResourceSet delivers the agent&#x27;s cert; the CA key</text>
-<text class="s" x="526.0" y="859.0" font-size="13.5" fill="#cbd5e1">never leaves mgmt</text>
-<circle cx="40.0" cy="883.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="888" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="60.0" y="888.0" font-size="13.5" fill="#cbd5e1">Cluster API creates the machines and installs k3s</text>
-<circle cx="506.0" cy="883.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="888" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<text class="s" x="526.0" y="888.0" font-size="13.5" fill="#cbd5e1">The cluster-agent dials out; the gateway accepts only that</text>
-<text class="s" x="526.0" y="907.0" font-size="13.5" fill="#cbd5e1">cluster&#x27;s CA</text>
-<circle cx="40.0" cy="931.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="936" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="60.0" y="936.0" font-size="13.5" fill="#cbd5e1">ESO turns CAPI&#x27;s kubeconfig into an Argo CD cluster secret</text>
-<text class="s" x="60.0" y="955.0" font-size="13.5" fill="#cbd5e1">with the fleet labels</text>
-<circle cx="506.0" cy="931.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
-<text class="s" x="506.0" y="936" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">9</text>
-<text class="s" x="526.0" y="936.0" font-size="13.5" fill="#cbd5e1">Remove: delete the file; Argo CD prunes, CAPI deletes the</text>
-<text class="s" x="526.0" y="955.0" font-size="13.5" fill="#cbd5e1">cluster, its CA goes with it</text>
-<circle cx="40.0" cy="979.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="984" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="60.0" y="984.0" font-size="13.5" fill="#cbd5e1">Addon ApplicationSets select the cluster by its labels</text>
-<circle cx="506.0" cy="979.5" r="10" fill="#0b1120" stroke="#fbbf24" stroke-width="2.2"/>
-<text class="s" x="506.0" y="984" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="middle">10</text>
-<text class="s" x="526.0" y="984.0" font-size="13.5" fill="#cbd5e1">Upgrade: bump kubernetesVersion in the fleet file; CAPI</text>
-<text class="s" x="526.0" y="1003.0" font-size="13.5" fill="#cbd5e1">replaces nodes one at a time</text>
-<rect x="28" y="1048" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
-<text class="s" x="58.0" y="1058.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
-<rect x="162.86294" y="1048" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
-<text class="s" x="192.9" y="1058.0" font-size="13" fill="#94a3b8">workload cluster</text>
-<rect x="318.40966000000003" y="1048" width="20" height="13" rx="3" fill="#402a3a" stroke="#fb7185" stroke-width="1.3"/>
-<text class="s" x="348.4" y="1058.0" font-size="13" fill="#94a3b8">security &amp; trust</text>
-<rect x="465.5368" y="1048" width="20" height="13" rx="3" fill="#2b3444" stroke="#94a3b8" stroke-width="1.3"/>
-<text class="s" x="495.5" y="1058.0" font-size="13" fill="#94a3b8">git, GitHub, outside</text>
-<path d="M 636.72192 1054 L 658.72192 1054" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 636.72192 1054 L 658.72192 1054" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<text class="s" x="668.7" y="1058.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
-<circle cx="38" cy="1078" r="9" fill="#0b1120" stroke="#fbbf24" stroke-width="2"/>
-<text class="s" x="58.0" y="1082.0" font-size="13" fill="#94a3b8">step at a component</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1185" viewBox="0 0 960 1185" role="img" aria-label="Cluster lifecycle · add, upgrade, remove = edit one file"><title>Cluster lifecycle · add, upgrade, remove = edit one file</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 11.30s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}23.4%{opacity:1}28.4%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1185" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1169" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<rect x="16" y="200" width="644" height="616" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="644.0" y="224.0" font-size="13" fill="#2dd4bf" font-weight="700" text-anchor="end" letter-spacing="1.0">MGMT CLUSTER</text>
+<rect x="740" y="200" width="204" height="616" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="928.0" y="224.0" font-size="13" fill="#38bdf8" font-weight="700" text-anchor="end" letter-spacing="1.0">WORKLOAD CLUSTER</text>
+<path d="M 104.0 256.0 L 104.0 156.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 176.0 296.0 L 236.0 296.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M 236.0 296.0 L 276.0 296.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 236.0 296.0 L 236.0 448.0 L 276.0 448.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 236.0 448.0 L 236.0 600.0 L 276.0 600.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 236.0 600.0 L 236.0 752.0 L 500.0 752.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 420.0 296.0 L 764.0 296.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 348.0 336.0 L 348.0 408.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 420.0 448.0 L 500.0 448.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 644.0 448.0 L 764.0 448.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 420.0 600.0 L 764.0 600.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 844.0 640.0 L 844.0 752.0 L 644.0 752.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 104.0 256.0 L 104.0 156.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 176.0 296.0 L 236.0 296.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 236.0 296.0 L 276.0 296.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 236.0 296.0 L 236.0 448.0 L 276.0 448.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 236.0 448.0 L 236.0 600.0 L 276.0 600.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 236.0 600.0 L 236.0 752.0 L 500.0 752.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 420.0 296.0 L 764.0 296.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 348.0 336.0 L 348.0 408.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 420.0 448.0 L 500.0 448.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 644.0 448.0 L 764.0 448.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 420.0 600.0 L 764.0 600.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 844.0 640.0 L 844.0 752.0 L 644.0 752.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<rect x="32" y="100" width="240" height="56" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="152.0" y="123.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Fleet file</text>
+<text class="m" x="152.0" y="143.4" font-size="13" fill="#dde5ef" text-anchor="middle">clusters/dev1.yaml</text>
+<rect x="32" y="256" width="144" height="536" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="104.0" y="465.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
+<text class="s" x="104.0" y="485.4" font-size="13" fill="#dde5ef" text-anchor="middle">renders one chart</text>
+<text class="s" x="104.0" y="503.4" font-size="13" fill="#dde5ef" text-anchor="middle">per fleet file:</text>
+<text class="s" x="104.0" y="521.4" font-size="13" fill="#dde5ef" text-anchor="middle"></text>
+<text class="s" x="104.0" y="539.4" font-size="13" fill="#dde5ef" text-anchor="middle">the cluster,</text>
+<text class="s" x="104.0" y="557.4" font-size="13" fill="#dde5ef" text-anchor="middle">its secrets,</text>
+<text class="s" x="104.0" y="575.4" font-size="13" fill="#dde5ef" text-anchor="middle">its identity,</text>
+<text class="s" x="104.0" y="593.4" font-size="13" fill="#dde5ef" text-anchor="middle">its data plane</text>
+<rect x="276" y="256" width="144" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="348.0" y="282.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Cluster API</text>
+<text class="s" x="348.0" y="302.4" font-size="13" fill="#dde5ef" text-anchor="middle">creates and</text>
+<text class="s" x="348.0" y="320.4" font-size="13" fill="#dde5ef" text-anchor="middle">upgrades nodes</text>
+<rect x="764" y="256" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="844.0" y="282.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">k3s nodes</text>
+<text class="s" x="844.0" y="302.4" font-size="13" fill="#dde5ef" text-anchor="middle">servers +</text>
+<text class="s" x="844.0" y="320.4" font-size="13" fill="#dde5ef" text-anchor="middle">workers</text>
+<rect x="276" y="408" width="144" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="348.0" y="434.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Cluster secret</text>
+<text class="s" x="348.0" y="454.4" font-size="13" fill="#dde5ef" text-anchor="middle">access + labels</text>
+<text class="s" x="348.0" y="472.4" font-size="13" fill="#dde5ef" text-anchor="middle">for Argo CD</text>
+<rect x="500" y="408" width="144" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="572.0" y="434.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Addon sets</text>
+<text class="s" x="572.0" y="454.4" font-size="13" fill="#dde5ef" text-anchor="middle">pick clusters</text>
+<text class="s" x="572.0" y="472.4" font-size="13" fill="#dde5ef" text-anchor="middle">by label</text>
+<rect x="764" y="408" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="844.0" y="434.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Addons</text>
+<text class="s" x="844.0" y="454.4" font-size="13" fill="#dde5ef" text-anchor="middle">network, mesh,</text>
+<text class="s" x="844.0" y="472.4" font-size="13" fill="#dde5ef" text-anchor="middle">policy, …</text>
+<rect x="276" y="560" width="144" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="348.0" y="586.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Agent identity</text>
+<text class="s" x="348.0" y="606.4" font-size="13" fill="#dde5ef" text-anchor="middle">a CA of its own</text>
+<text class="s" x="348.0" y="624.4" font-size="13" fill="#dde5ef" text-anchor="middle">per cluster</text>
+<rect x="764" y="560" width="160" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="844.0" y="586.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cluster-agent</text>
+<text class="s" x="844.0" y="606.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenChoreo&#x27;s</text>
+<text class="s" x="844.0" y="624.4" font-size="13" fill="#dde5ef" text-anchor="middle">agent</text>
+<rect x="500" y="712" width="144" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="572.0" y="738.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Data plane</text>
+<text class="s" x="572.0" y="758.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenChoreo&#x27;s view</text>
+<text class="s" x="572.0" y="776.4" font-size="13" fill="#dde5ef" text-anchor="middle">of the cluster</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Cluster lifecycle · add, upgrade, remove = edit one file</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A fleet file becomes a Cluster API cluster, an Argo CD cluster secret and an OpenChoreo data plane; deleting it removes all three.</text>
+<circle cx="104.0" cy="226.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="104.0" y="230.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="206.0" cy="296.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="206.0" y="300.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="236.0" cy="296.0" r="3.6" fill="#fbbf24"/>
+<circle cx="236.0" cy="448.0" r="3.6" fill="#fbbf24"/>
+<circle cx="236.0" cy="600.0" r="3.6" fill="#fbbf24"/>
+<circle cx="700.0" cy="296.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="700.0" y="300.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="348.0" cy="366.2" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="348.0" y="370.8" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="452.0" cy="448.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="452.0" y="452.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="700.0" cy="448.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="700.0" y="452.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="700.0" cy="600.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="700.0" y="604.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="700.0" cy="752.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="700.0" y="756.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<line x1="28" y1="838" x2="932" y2="838" stroke="#64748b" stroke-width="1.2"/>
+<circle cx="40" cy="861.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="866" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="866.0" font-size="13.5" fill="#dde5ef">Argo CD reads clusters/&lt;name&gt;.yaml and creates Application cluster-&lt;name&gt; (ApplicationSet fleet)</text>
+<circle cx="40" cy="889.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="894" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="894.0" font-size="13.5" fill="#dde5ef">Argo CD renders charts/cluster: the Cluster API cluster, its secrets, the agent identity and the OpenChoreo data plane</text>
+<circle cx="40" cy="917.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="922" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="922.0" font-size="13.5" fill="#dde5ef">Cluster API creates the machines and installs k3s</text>
+<circle cx="40" cy="945.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="950" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="950.0" font-size="13.5" fill="#dde5ef">Cluster API&#x27;s kubeconfig becomes an Argo CD cluster secret with the fleet labels (ESO)</text>
+<circle cx="40" cy="973.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="978" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="978.0" font-size="13.5" fill="#dde5ef">The cluster secret&#x27;s labels select the addon sets (ApplicationSets) that apply</text>
+<circle cx="40" cy="1001.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1006" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="1006.0" font-size="13.5" fill="#dde5ef">The addon sets install every selected addon on the new cluster</text>
+<circle cx="40" cy="1029.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1034" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="1034.0" font-size="13.5" fill="#dde5ef">The agent identity (its certificate) is delivered to the cluster; the CA key never leaves mgmt</text>
+<circle cx="40" cy="1057.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1062" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="62.0" y="1062.0" font-size="13.5" fill="#dde5ef">The cluster-agent dials out; the data plane tells the gateway to accept only this cluster&#x27;s CA</text>
+<text class="s" x="28.0" y="1094.0" font-size="13.5" fill="#aab6c8">Upgrade: bump kubernetesVersion in the fleet file; Cluster API replaces the nodes one at a time. Remove: delete the file; Argo CD prunes,</text>
+<text class="s" x="28.0" y="1113.0" font-size="13.5" fill="#aab6c8">Cluster API deletes the cluster and its CA goes with it.</text>
+<rect x="28" y="1149" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="1159.0" font-size="13" fill="#aab6c8">mgmt cluster</text>
+<rect x="162.86294" y="1149" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="192.9" y="1159.0" font-size="13" fill="#aab6c8">workload cluster</text>
+<rect x="318.40966000000003" y="1149" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="348.4" y="1159.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 491.12436 1155 L 527.12436 1155" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="505.12436" cy="1155" r="7" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="537.1" y="1159.0" font-size="13" fill="#aab6c8">numbered step</text>
 </svg>
