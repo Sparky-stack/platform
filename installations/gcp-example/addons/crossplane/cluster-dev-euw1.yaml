@@ -1,0 +1,4 @@
+# dev-euw1: Cloud SQL private IP on the cluster's VPC (private services access configured on it). VERIFY
+postgresql:
+  gcp:
+    privateNetwork: projects/platform-example/global/networks/dev-euw1

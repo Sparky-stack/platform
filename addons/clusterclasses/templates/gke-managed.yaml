@@ -156,7 +156,8 @@ spec:
             - op: replace
               path: /spec/template/spec/network/name
               valueFrom:
-                template: {{`'{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}'`}}
+                # quoted: the rendered text is parsed as YAML (and so is the raw template, hack/tests/bootstrap_file_sources)
+                template: {{`'"{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}"'`}}
     - name: controlPlane
       definitions:
         - selector:
@@ -180,7 +181,7 @@ spec:
             - op: replace
               path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool
               valueFrom:
-                template: {{`'{{ .project }}.svc.id.goog'`}}
+                template: {{`'"{{ .project }}.svc.id.goog"'`}}
     - name: workers
       definitions:
         - selector:

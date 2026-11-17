@@ -346,9 +346,9 @@ tests:
     set: { capi.providers: { docker: false, gcp: true } }
     documentSelector: { path: kind, value: ClusterClass }
     asserts:
-      - equal: { path: "spec.patches[0].definitions[0].jsonPatches[2]", value: { op: replace, path: /spec/template/spec/network/name, valueFrom: { template: "{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}" } } }
+      - equal: { path: "spec.patches[0].definitions[0].jsonPatches[2]", value: { op: replace, path: /spec/template/spec/network/name, valueFrom: { template: '"{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}"' } } }
       - equal: { path: "spec.patches[1].definitions[0].jsonPatches[1]", value: { op: replace, path: /spec/template/spec/location, valueFrom: { variable: region } } }
-      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[3]", value: { op: replace, path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool, valueFrom: { template: "{{ .project }}.svc.id.goog" } } }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[3]", value: { op: replace, path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool, valueFrom: { template: '"{{ .project }}.svc.id.goog"' } } }
       - equal: { path: "spec.patches[3].enabledIf", value: "{{ if .workerNodeLocations }}true{{ end }}" }
 
   - it: gke-managed node pools take their size from the MachinePool (GKE autoscaler off), VPC-native control plane
