@@ -61,17 +61,23 @@ extract_images() {
   cat > "$f"
   {
     yq -N "$keys" "$f" 2>/dev/null || true
-    yq -N 'select(.kind == "ConfigMap") | .data[]? | select(tag == "!!str") | select(test("(?i)image: *[a-z0-9]"))
-      | @base64' "$f" 2>/dev/null | tr -d '\r' | while IFS= read -r b; do
-      if [[ -n "$b" ]]; then yq -n -N "\"$b\" | @base64d | from_yaml | $keys" 2>/dev/null || true; fi
-    done
+    if grep -q 'ConfigMap' "$f"; then
+      yq -N 'select(.kind == "ConfigMap") | .data[]? | select(tag == "!!str") | select(test("(?i)image: *[a-z0-9]"))
+        | @base64' "$f" 2>/dev/null | tr -d '\r' | while IFS= read -r b; do
+        if [[ -n "$b" ]]; then yq -n -N "\"$b\" | @base64d | from_yaml | $keys" 2>/dev/null || true; fi
+      done
+    fi
   } | tr -d '\r' | grep -E '^[a-z0-9]' || true
-  yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
-      | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
-    (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' "$f" 2>/dev/null \
-    | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
-  yq -N 'select(.apiVersion == "pkg.crossplane.io/*" and (.kind == "Function" or .kind == "Provider" or .kind == "Configuration"))
-      | .spec.package | select(tag == "!!str")' "$f" 2>/dev/null | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  if grep -q 'IMAGE' "$f"; then
+    yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
+        | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
+      (select(.kind == "ConfigMap") | .data // {} | to_entries[] | select(.key | test("IMAGE")) | .value)' "$f" 2>/dev/null \
+      | tr -d '\r' | sed -E 's/^[[:space:]]*([0-9][0-9.]*=)?//' | grep -E '^[a-z0-9.-]+(:[0-9]+)?/[^[:space:]$]+(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})$' || true
+  fi
+  if grep -q 'pkg.crossplane.io/' "$f"; then
+    yq -N 'select(.apiVersion == "pkg.crossplane.io/*" and (.kind == "Function" or .kind == "Provider" or .kind == "Configuration"))
+        | .spec.package | select(tag == "!!str")' "$f" 2>/dev/null | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  fi
   rm -f "$f"
 }
 
@@ -128,42 +134,72 @@ MGMT_SERVER=https://kubernetes.default.svc
 # render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels file>]: layered like the ApplicationSet
 # (hack/lib/addons.sh), installation parameters / value files from the charts/platform render of this installation.
 render() {
-  local addon=$1 name=$3 dir="addons/$1" ns
-  local -a vargs=()
-  ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
-  read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-}"
-  if ! helm template "$(addon_release_name "$PLATFORM_RENDER" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
-    > "$TMP/render.yaml" 2> "$TMP/render.err"; then
-    echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
-    return 0
+  local addon=$1 name=$3 dir="addons/$1" rf="$TMP/render.yaml" ns
+  if [[ -n "${RENDERED_DIR:-}" && -s "$RENDERED_DIR/addons-$INST-$name-$addon.yaml" ]]; then
+    rf="$RENDERED_DIR/addons-$INST-$name-$addon.yaml"
+  else
+    local -a vargs=()
+    ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
+    read_lines vargs addon_helm_args "$addon" "$INST_DIR" "$PLATFORM_RENDER" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-}"
+    if ! helm template "$(addon_release_name "$PLATFORM_RENDER" "$addon")" "$dir" --namespace "$ns" "${vargs[@]}" \
+      > "$rf" 2> "$TMP/render.err"; then
+      echo "WARN: helm template $addon ($name) failed: $(head -c 300 "$TMP/render.err")" >&2
+      return 0
+    fi
   fi
-  extract_images < "$TMP/render.yaml" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
+  extract_images < "$rf" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
   # Proxy image istiod uses for the Deployments it generates (east-west gateway, waypoints): not in any manifest,
   # resolved from the injector values like the Istio charts do: global.proxy.image verbatim when it contains "/" (a
   # full, digest-pinned reference), else global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless).
-  local inj
-  inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$TMP/render.yaml" 2>/dev/null || true)
-  if [[ -n "$inj" ]]; then
-    # shellcheck disable=SC2016  # $g/$v are yq variables
-    img=$(printf '%s' "$inj" | yq -p=json -oy -r '.global as $g | ($g.variant // "") as $v
-      | if ($g.proxy.image | test("/")) then $g.proxy.image
-        else $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end) end')
-    add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
+  if grep -q 'istio-sidecar-injector' "$rf"; then
+    local inj
+    inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$rf" 2>/dev/null || true)
+    if [[ -n "$inj" ]]; then
+      # shellcheck disable=SC2016  # $g/$v are yq variables
+      img=$(printf '%s' "$inj" | yq -p=json -oy -r '.global as $g | ($g.variant // "") as $v
+        | if ($g.proxy.image | test("/")) then $g.proxy.image
+          else $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end) end')
+      add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
+    fi
   fi
 }
 
 
-echo "==> Building chart dependencies" >&2
-./hack/deps.sh >&2
+if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
+  echo "==> Building chart dependencies" >&2
+  ./hack/deps.sh >&2
+fi
 
 echo "==> Rendering addons for installation $INST" >&2
-PLATFORM_RENDER="$TMP/platform.yaml"   # the ApplicationSets: installation parameters and value files as Argo CD gets them
-helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$PLATFORM_RENDER"
+if [[ -n "${RENDERED_DIR:-}" && -s "$RENDERED_DIR/platform-$INST.yaml" ]]; then
+  PLATFORM_RENDER="$RENDERED_DIR/platform-$INST.yaml"
+else
+  PLATFORM_RENDER="$TMP/platform.yaml"   # the ApplicationSets: installation parameters and value files as Argo CD gets them
+  helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$PLATFORM_RENDER"
+fi
+dns_prov=$(yq '.dns.provider // "none"' "$INST_FILE")
+m_prov=$(yq '.mgmt.provider // "docker"' "$INST_FILE")
+m_name=$(yq '.mgmt.name // "mgmt"' "$INST_FILE")
+m_env=$(yq '.mgmt.environment // "mgmt"' "$INST_FILE")
+m_reg=$(yq '.mgmt.region // "local"' "$INST_FILE")
+m_cni=$(yq '.mgmt.cni // "flannel"' "$INST_FILE")
+for cf in "$INST_DIR"/clusters/*.yaml; do
+  [[ -f "$cf" ]] || continue
+  c_name=$(yq '.name' "$cf")
+  if [[ -n "${RENDERED_DIR:-}" && -s "$RENDERED_DIR/cluster-$INST-$c_name.yaml" ]]; then
+    cp "$RENDERED_DIR/cluster-$INST-$c_name.yaml" "$TMP/cluster-$c_name.yaml"
+  else
+    helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
+      > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
+  fi
+  yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$c_name.yaml" \
+    > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
+done
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   addon=$(basename "$dir")
   # external-dns runs nothing without a DNS provider (and refuses to render): not part of this installation's images.
-  if [[ "$addon" == external-dns && "$(yq '.dns.provider // "none"' "$INST_FILE")" == none ]]; then
+  if [[ "$addon" == external-dns && "$dns_prov" == none ]]; then
     echo "  skip external-dns: installation dns.provider is none" >&2
     continue
   fi
@@ -171,12 +207,9 @@ for dir in addons/*; do
   [[ -n "$roles" ]] || roles=$'mgmt\nworkload'
   provs=$(yq ".addons[\"$addon\"].providers[]?" "$CATALOG" | tr -d '\r')
   if printf '%s\n' "$roles" | grep -qx mgmt; then
-    m_prov=$(yq '.mgmt.provider // "docker"' "$INST_FILE")
     if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" \
       && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$m_prov"; }; then
-      render "$addon" mgmt "$(yq '.mgmt.name // "mgmt"' "$INST_FILE")" "$m_prov" \
-        "$(yq '.mgmt.environment // "mgmt"' "$INST_FILE")" "$(yq '.mgmt.region // "local"' "$INST_FILE")" \
-        "$(yq '.mgmt.cni // "flannel"' "$INST_FILE")" "$MGMT_SERVER"
+      render "$addon" mgmt "$m_name" "$m_prov" "$m_env" "$m_reg" "$m_cni" "$MGMT_SERVER"
     fi
   fi
   if printf '%s\n' "$roles" | grep -qx workload; then
@@ -184,13 +217,6 @@ for dir in addons/*; do
       [[ -f "$cf" ]] || continue
       c_prov=$(yq '.provider // "docker"' "$cf")
       c_name=$(yq '.name' "$cf")
-      # Addon labels as charts/cluster renders them (some derive from facts, e.g. cilium from cni), else the file.
-      if [[ ! -f "$TMP/cluster-$c_name.yaml" ]]; then
-        helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
-          > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
-      fi
-      [[ -f "$TMP/labels-$c_name.yaml" ]] || yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$c_name.yaml" \
-        > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
       toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" \
         "$TMP/cluster-$c_name.yaml" 2>/dev/null || true)
       [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
