@@ -53,10 +53,12 @@ warn() { printf '\033[1;33m==> WARN:\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 load_inst() {
-  BACKEND=$(yq '.secrets.backend // "kubernetes"' "$INST_FILE")
-  REPO_URL=$(yq '.installation.repoURL // "https://github.com/koorikla/platform.git"' "$INST_FILE")
-  GITHUB_ORG=$(yq '.installation.githubOrg // ""' "$INST_FILE")
-  REVISION=$(yq '.installation.revision // "HEAD"' "$INST_FILE")
+  local -a _inst=()
+  read_lines _inst yq -r '(.secrets.backend // "kubernetes"), (.installation.repoURL // "https://github.com/koorikla/platform.git"), (.installation.githubOrg // ""), (.installation.revision // "HEAD")' "$INST_FILE"
+  BACKEND="${_inst[0]}"
+  REPO_URL="${_inst[1]}"
+  GITHUB_ORG="${_inst[2]}"
+  REVISION="${_inst[3]}"
   if [[ "$INST" == "local" ]]; then
     CTX="${KUBE_CTX:-k3d-platform-mgmt}"
   else
@@ -85,7 +87,7 @@ ensure_k3d() {
   # (raise them there, see docs/dev-environment.md). Only the native Linux host can be checked from here.
   local watches
   watches=$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)
-  if [[ "$(os_name)" == linux && -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
+  if [[ "$HOST_OS" == linux && -n "$watches" ]] && (( watches > 0 && watches < 524288 )); then
     warn "fs.inotify.max_user_watches=${watches} (< 524288 recommended for multi-cluster k3s/CAPD)"
   fi
   docker network inspect kind >/dev/null 2>&1 || {
@@ -123,9 +125,10 @@ ensure_namespace() {
 # value is ever a process argument (/proc/<pid>/cmdline, `ps`: readable by every local user). Works in Git Bash too
 # (no process substitution, no temp files).
 secret_manifest() {
-  local __sm_ns=$1 __sm_name=$2 __sm_spec __sm_key __sm_ref __sm_path __sm_val __sm_expr __sm_doc; shift 2
-  __sm_doc=$(NS=$__sm_ns NAME=$__sm_name yq -n \
-    '.apiVersion = "v1" | .kind = "Secret" | .metadata.name = strenv(NAME) | .metadata.namespace = strenv(NS) | .type = "Opaque"')
+  local __sm_ns=$1 __sm_name=$2 __sm_spec __sm_key __sm_ref __sm_val __sm_path __sm_expr __sm_i=0
+  local __sm_filter='.apiVersion = "v1" | .kind = "Secret" | .metadata.name = strenv(NAME) | .metadata.namespace = strenv(NS) | .type = "Opaque"'
+  local -a __sm_exports=("NS=$__sm_ns" "NAME=$__sm_name")
+  shift 2
   for __sm_spec in "$@"; do
     __sm_key=${__sm_spec%%=*}; __sm_ref=${__sm_spec#*=}; __sm_path=.data
     case "$__sm_key" in
@@ -133,14 +136,16 @@ secret_manifest() {
       annotation:*) __sm_path=.metadata.annotations; __sm_key=${__sm_key#annotation:} ;;
     esac
     if [[ "$__sm_ref" == @* ]]; then
-      __sm_val=${__sm_ref#@}; __sm_expr='load_str(strenv(V))'
+      __sm_val=${__sm_ref#@}; __sm_expr="load_str(strenv(V$__sm_i))"
     else
-      __sm_val=${!__sm_ref}; __sm_expr='strenv(V)'
+      __sm_val=${!__sm_ref}; __sm_expr="strenv(V$__sm_i)"
     fi
     [[ "$__sm_path" == .data ]] && __sm_expr="$__sm_expr | @base64"
-    __sm_doc=$(printf '%s\n' "$__sm_doc" | K=$__sm_key V=$__sm_val yq "${__sm_path}[strenv(K)] = (${__sm_expr})")
+    __sm_exports+=("K$__sm_i=$__sm_key" "V$__sm_i=$__sm_val")
+    __sm_filter="$__sm_filter | ${__sm_path}[strenv(K$__sm_i)] = (${__sm_expr})"
+    __sm_i=$((__sm_i + 1))
   done
-  printf '%s\n' "$__sm_doc"
+  ( export "${__sm_exports[@]}"; yq -n "$__sm_filter" )
 }
 
 # apply_secret <ns> <name> <spec>...: secret_manifest | kapply (create or replace; keys not passed are dropped).
@@ -260,12 +265,14 @@ rand_alnum() {
 # policies like OpenSearch 3 and Harbor; @<length> exact length; @hex32 = 32 random bytes in hex), keeps existing values
 # on re-runs.
 seed_generated_secret() {
-  local name=$1; shift
+  local name=$1 existing; shift
+  existing=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o yaml 2>/dev/null || true)
   local -a specs=() vals=()
   local spec k fixed val i=0
   for spec in "$@"; do
     k=${spec%%=*}; fixed=""; [[ "$spec" == *=* ]] && fixed=${spec#*=}
-    val=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o "jsonpath={.data['${k}']}" 2>/dev/null | b64dec 2>/dev/null || true)
+    val=""
+    [[ -n "$existing" ]] && val=$(printf '%s\n' "$existing" | K="$k" yq -r '.data[strenv(K)] // ""' 2>/dev/null | b64dec 2>/dev/null || true)
     if [[ -z "$val" ]]; then
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
