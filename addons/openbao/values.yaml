@@ -116,6 +116,32 @@ meshClients:
   secretName: mesh-clients
   label: mesh.platform.koorikla.io/openbao-client
 
+# Per-tenant secrets (installation.yaml secrets.tenantStores.enabled; docs/multicluster.md "Tenant secrets (OpenBao)"):
+# templates/tenant-secrets.yaml + files/tenant-reconcile.sh. Per tenant (charts/tenant renders the descriptor Secret
+# <tenant>-openbao-tenant and the ServiceAccount <tenant>-writer in inputsNamespace):
+#   kv-tenant-<tenant>                       KV v2 mount (never deleted by the reconcile: data outlives the tenant file)
+#   identity entity tenant-<tenant>          metadata tenant=<tenant>; the static templated policies tenant-read /
+#                                            tenant-write key on it
+#   auth/tenants-<cluster>/role/<tenant>     per mesh member (the clusters of meshClients): JWT login of ServiceAccount
+#                                            readerServiceAccount in exactly the tenant's namespaces, audience below
+# The SecretStore in each tenant namespace is rendered on the workload cluster by addon secret-stores (same names).
+tenantSecrets:
+  inputsNamespace: openbao-tenants   # descriptors (charts/tenant) + writer ServiceAccounts; == self-init role tenant-writer
+  label: openbao.platform.koorikla.io/tenant
+  secretName: tenant-clients
+  readerServiceAccount: openbao-tenant          # == addon secret-stores tenantStores.serviceAccount
+  audience: openbao-tenant-secrets              # == addon secret-stores tenantStores.audience
+  readerPolicy: tenant-read                     # self-init
+  tokenTTL: 10m
+  serviceAccount: openbao-tenant-config         # == self-init role platform-tenant-config
+  loginRole: platform-tenant-config
+  schedule: "*/5 * * * *"
+
+# installation.yaml secrets.tenantStores (default off).
+secrets:
+  tenantStores:
+    enabled: false
+
 # ValidatingAdmissionPolicies (admissionregistration.k8s.io/v1) on mgmt for the remote-secret reader certs:
 # cert-manager auto-approves every CertificateRequest and a CA issuer signs whatever it is asked, so without these
 # anyone who may create a Certificate in fleet could mint cluster-admin client certs from a <name>-client-ca issuer.
@@ -412,6 +438,118 @@ openbao:
                 token_no_default_policy          = true
                 token_ttl                        = "10m"
                 token_max_ttl                    = "10m"
+              }
+            }
+          }
+          # Tenant secrets (installation.yaml secrets.tenantStores; docs/multicluster.md "Tenant secrets (OpenBao)"):
+          #   tenant-read        templated: read (+ list metadata) of kv-tenant-<tenant>/ only, <tenant> = metadata of
+          #                      the caller's identity entity tenant-<tenant>; plus the token self-operations ESO needs.
+          #                      Workload-cluster SecretStores log in with it (auth/tenants-<cluster>, JWT).
+          #   tenant-write       templated: write kv-tenant-<tenant>/ (role tenant-writer, mgmt ServiceAccounts
+          #                      openbao-tenants/<tenant>-writer).
+          #   platform-tenant-config  SA openbao-tenant-config (CronJob tenant-reconcile): kv mounts kv-tenant-*
+          #                      (type kv only, never deleted), jwt auth tenants-* whose roles may carry only
+          #                      tenant-read, identity entities tenant-* (metadata only) and their aliases. It can read
+          #                      no secret, write no policy and touch neither the mesh nor the Kubernetes auth roles.
+          # Unresolvable templates (an entity without metadata.tenant, e.g. auto-created by a login whose alias the
+          # reconcile never bound) grant nothing.
+          initialize "tenant-policies" {
+            request "read" {
+              operation = "update"
+              path      = "sys/policies/acl/tenant-read"
+              data = {
+                policy = <<EOP
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/data/*" { capabilities = ["read"] }
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/metadata/*" { capabilities = ["read", "list"] }
+          path "auth/token/lookup-self" { capabilities = ["read"] }
+          path "auth/token/revoke-self" { capabilities = ["update"] }
+          EOP
+              }
+            }
+            request "write" {
+              operation = "update"
+              path      = "sys/policies/acl/tenant-write"
+              data = {
+                policy = <<EOP
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/data/*" { capabilities = ["create", "update", "patch", "read", "delete"] }
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/metadata/*" { capabilities = ["read", "list", "delete"] }
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/delete/*" { capabilities = ["update"] }
+          path "kv-tenant-{{ "{{identity.entity.metadata.tenant}}" }}/undelete/*" { capabilities = ["update"] }
+          path "auth/token/lookup-self" { capabilities = ["read"] }
+          path "auth/token/revoke-self" { capabilities = ["update"] }
+          EOP
+              }
+            }
+            request "config" {
+              operation = "update"
+              path      = "sys/policies/acl/platform-tenant-config"
+              data = {
+                policy = <<EOP
+          path "sys/auth" { capabilities = ["read"] }
+          path "sys/auth/kubernetes" { capabilities = ["read"] }
+          path "sys/auth/tenants-*" {
+            capabilities       = ["create", "read", "update", "delete", "sudo"]
+            allowed_parameters = { "*" = [], "type" = ["jwt"] }
+            denied_parameters  = { "plugin_name" = [] }
+          }
+          path "auth/tenants-*" {
+            capabilities       = ["create", "read", "update", "delete", "list"]
+            allowed_parameters = { "*" = [], "token_policies" = ["tenant-read"] }
+            denied_parameters  = { "policies" = [] }
+          }
+          path "sys/mounts/kv-tenant-*" {
+            capabilities       = ["create", "read", "update"]
+            allowed_parameters = { "*" = [], "type" = ["kv"] }
+            denied_parameters  = { "plugin_name" = [] }
+          }
+          path "identity/entity/name/tenant-*" {
+            capabilities       = ["create", "read", "update", "delete"]
+            allowed_parameters = { "metadata" = [] }
+          }
+          path "identity/entity-alias" {
+            capabilities       = ["create", "update"]
+            allowed_parameters = { "name" = [], "canonical_id" = [], "mount_accessor" = [] }
+          }
+          path "kv-tenant-*" { capabilities = ["deny"] }
+          path "sys/policies/*" { capabilities = ["deny"] }
+          path "sys/policy/*" { capabilities = ["deny"] }
+          path "auth/kubernetes/*" { capabilities = ["deny"] }
+          path "sys/auth/mesh-*" { capabilities = ["deny"] }
+          path "auth/mesh-*" { capabilities = ["deny"] }
+          path "sys/mounts/pki-*" { capabilities = ["deny"] }
+          path "pki-*" { capabilities = ["deny"] }
+          EOP
+              }
+            }
+          }
+          initialize "tenant-roles" {
+            request "config" {
+              operation = "update"
+              path      = "auth/kubernetes/role/platform-tenant-config"
+              data = {
+                bound_service_account_names      = ["openbao-tenant-config"]
+                bound_service_account_namespaces = ["openbao"]
+                audience                         = "openbao"
+                token_policies                   = ["platform-tenant-config"]
+                token_no_default_policy          = true
+                token_ttl                        = "15m"
+                token_max_ttl                    = "15m"
+              }
+            }
+            # Any ServiceAccount of openbao-tenants may log in; only <tenant>-writer, whose alias (name = namespace/SA)
+            # the reconcile binds to entity tenant-<tenant>, gets a path - every other login resolves to nothing.
+            request "writer" {
+              operation = "update"
+              path      = "auth/kubernetes/role/tenant-writer"
+              data = {
+                bound_service_account_names      = ["*"]
+                bound_service_account_namespaces = ["openbao-tenants"]
+                alias_name_source                = "serviceaccount_name"
+                audience                         = "openbao"
+                token_policies                   = ["tenant-write"]
+                token_no_default_policy          = true
+                token_ttl                        = "15m"
+                token_max_ttl                    = "15m"
               }
             }
           }
