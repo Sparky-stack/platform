@@ -28,8 +28,14 @@ manager:
 {{- end }}
 
 {{- $p := .Values.capi.providers | default dict }}
-{{- if not (or $p.docker $p.aws $p.hetzner) }}
-{{- fail "capi.providers: enable at least one infrastructure provider (docker, aws, hetzner)" }}
+{{- if not (or $p.docker $p.aws $p.hetzner $p.gcp) }}
+{{- fail "capi.providers: enable at least one infrastructure provider (docker, aws, hetzner, gcp)" }}
+{{- end }}
+{{- /* GKE node pools are MachinePools: core's MachinePool gate (default true in core 1.13) is stated explicitly while
+CAPG is on, so a listed featureGates map never drops it. */ -}}
+{{- $core := deepCopy .Values.core }}
+{{- if $p.gcp }}
+{{- $_ := set $core "featureGates" (merge (dict "MachinePool" true) ($core.featureGates | default dict)) }}
 {{- end }}
 {{ include "capi-providers.namespace" "capi-system" }}
 ---
@@ -42,7 +48,7 @@ metadata:
     {{- include "capi-providers.annotations" . | nindent 4 }}
 spec:
   version: {{ .Values.core.version }}
-  {{- include "capi-providers.manager" .Values.core | nindent 2 }}
+  {{- include "capi-providers.manager" $core | nindent 2 }}
 ---
 {{ include "capi-providers.namespace" "capi-k3s-bootstrap-system" }}
 ---
@@ -117,4 +123,56 @@ metadata:
     {{- include "capi-providers.annotations" . | nindent 4 }}
 spec:
   version: {{ .Values.infrastructure.hetzner.version }}
+{{- end }}
+
+{{- if $p.gcp }}
+{{- $gcp := .Values.infrastructure.gcp }}
+{{- $wif := .Values.capi.gcp | default dict }}
+---
+{{ include "capi-providers.namespace" "capg-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: gcp
+  namespace: capg-system
+  annotations:
+    {{- include "capi-providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ $gcp.version }}
+  configSecret:
+    name: {{ $gcp.configSecret }}
+    namespace: capg-system
+  {{- include "capi-providers.manager" $gcp | nindent 2 }}
+  deployment:
+    containers:
+      - name: manager
+        imageUrl: {{ $gcp.image }}
+  # Workload Identity Federation: the credential config (credentials.yaml) reads a projected token of the manager's
+  # ServiceAccount, audience = the WIF provider (its default allowed audience). Kubernetes rotates the token.
+  patches:
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+        name: capg-controller-manager
+        namespace: capg-system
+      patch: |
+        spec:
+          template:
+            spec:
+              containers:
+                - name: manager
+                  volumeMounts:
+                    - name: gcp-wif-token
+                      mountPath: {{ $gcp.tokenPath }}
+                      readOnly: true
+              volumes:
+                - name: gcp-wif-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          audience: {{ printf "https://iam.googleapis.com/%s" $wif.workloadIdentityProvider | quote }}
+                          expirationSeconds: 3600
 {{- end }}

@@ -1,0 +1,29 @@
+# Production data plane on GKE: two node pools in different zones of the regional cluster (Google runs the control
+# plane, replicated across the region's zones). Schema: charts/cluster/values.yaml.
+name: prod-euw1
+provider: gcp-gke
+region: europe-west1
+environment: production
+kubernetesVersion: v1.35.1                    # VERIFY (see dev-euw1.yaml)
+cni: gke
+workers:
+  - name: pool-b
+    replicas: 2                               # nodes per zone of the pool
+    machineType: e2-standard-8
+    failureDomain: europe-west1-b
+  - name: pool-c
+    replicas: 2
+    machineType: e2-standard-8
+    failureDomain: europe-west1-c
+providerSpec:
+  project: platform-example                   # VERIFY
+  releaseChannel: stable
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: apps.gcp.example.com
+    gatewayPort: 443
+    environments: [production]
+addonsRevision: HEAD                          # pin to a tag for production rings
+addons:
+  telemetry: false   # no observability plane in this installation

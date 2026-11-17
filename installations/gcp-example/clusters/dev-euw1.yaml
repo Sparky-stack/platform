@@ -1,0 +1,25 @@
+# Development + staging data plane on GKE (CAPG managed control plane, ClusterClass gke-managed). Schema:
+# charts/cluster/values.yaml, docs/providers.md "GKE (CAPG) - rendered only". No controlPlane: Google runs it.
+name: dev-euw1
+provider: gcp-gke
+region: europe-west1
+environment: development
+kubernetesVersion: v1.35.1                    # VERIFY: a version offered in the release channel (gcloud container get-server-config)
+cni: gke                                      # GKE VPC-native networking; Dataplane V2 is not reachable through CAPG v1.13.1
+workers:
+  - name: pool-0
+    replicas: 1                               # nodes per zone of the pool
+    machineType: e2-standard-4
+    failureDomain: europe-west1-b
+providerSpec:
+  project: platform-example                   # VERIFY: GCP project id
+  releaseChannel: regular
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: dev.apps.gcp.example.com
+    gatewayPort: 443
+    environments: [development, staging]
+addonsRevision: HEAD
+addons:
+  telemetry: false   # no observability plane in this installation

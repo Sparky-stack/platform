@@ -44,11 +44,11 @@ On the CAPI `Cluster` and the Argo CD cluster secret:
 |---|---|
 | `platform.koorikla.io/name` | cluster name |
 | `platform.koorikla.io/role` | `mgmt` \| `workload` |
-| `platform.koorikla.io/provider` | `docker` \| `aws` \| `hetzner` |
+| `platform.koorikla.io/provider` | `docker` \| `aws` \| `hetzner` \| `gcp-gke` |
 | `platform.koorikla.io/region` | free text (`local`, `eu-central-1`, `fsn1`) |
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
-| `platform.koorikla.io/cni` | `cilium` \| `flannel` — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
+| `platform.koorikla.io/cni` | `cilium` \| `flannel` (`gke` on `gcp-gke`) — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
 | `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
 | `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
@@ -63,7 +63,7 @@ only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements
 | Thing | Name |
 |---|---|
 | CAPI namespace on mgmt | `fleet` |
-| ClusterClasses (namespace `fleet`) | `k3s-docker`, `k3s-aws`, `k3s-hetzner` |
+| ClusterClasses (namespace `fleet`) | `k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed` |
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |

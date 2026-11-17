@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Creates namespace `fleet`, CAPI `ClusterClass`es (`k3s-docker`, `k3s-aws`, `k3s-hetzner`) with their bootstrap/machine templates, and the Hetzner token `ExternalSecret` (`fleet/hetzner`) for enabled `capi.providers`.
+Creates namespace `fleet`, CAPI `ClusterClass`es (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`) with their bootstrap/machine (or GKE managed) templates, and the Hetzner token `ExternalSecret` (`fleet/hetzner`) for enabled `capi.providers`.
 
 ## Where it runs
 
@@ -11,11 +11,12 @@ Creates namespace `fleet`, CAPI `ClusterClass`es (`k3s-docker`, `k3s-aws`, `k3s-
 
 ## Key values
 
-- `capi.providers.{docker,aws,hetzner}`: renders only the `ClusterClass`es enabled for the installation.
+- `capi.providers.{docker,aws,hetzner,gcp}`: renders only the `ClusterClass`es enabled for the installation.
 - `k3s.{disableComponents,cloudDisableComponents,dockerLeaderElectionArgs}`: disables `traefik` (and `servicelb` on cloud) and tunes CAPD lease renewal.
 - `docker.kindImage`: `kindest/node` container image pinned by multi-arch index digest.
 - `aws.{controlPlaneMachineType,workerMachineType,iamInstanceProfiles}`: EC2 defaults and IAM instance profiles.
 - `hetzner.{controlPlaneMachineType,workerMachineType,image,networkZone,loadBalancerType,secretName}`: Hetzner Cloud machine, LB, and secret defaults.
+- `gcp.{workerMachineType,releaseChannel}`: GKE node pool machine type and release channel defaults (`gke-managed`).
 
 ## Day-2 notes
 

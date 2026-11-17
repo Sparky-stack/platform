@@ -1,0 +1,9 @@
+# GKE (provider gcp-gke, cni gke): Istio's gke platform profile - the cni + ztunnel DaemonSets get ResourceQuotas for
+# priority class system-node-critical, which GKE admits outside kube-system only with such a quota. The profile leaves
+# cniBinDir to detection from the API server version ("-gke"), which `helm template` without a cluster cannot see:
+# pinned to GKE's CNI bin dir instead (COS and Ubuntu node images alike). VERIFY on the first GKE cluster.
+global:
+  platform: gke
+cni:
+  cni:
+    cniBinDir: /home/kubernetes/bin

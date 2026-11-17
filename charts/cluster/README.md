@@ -2,18 +2,18 @@
 
 ## Purpose
 
-Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
+Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`, or `gke-managed` for `gcp-gke`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
 
 ## Where it runs
 
 - **Target:** `mgmt` cluster (`fleet`, `argocd`, and `openchoreo.orgNamespace`), rendered by `ApplicationSet/fleet` as `Application/cluster-<name>`.
-- **Selection:** `provider: docker | aws | hetzner`, `role: workload` (stamped onto the CAPI `Cluster` and Argo CD cluster secret alongside `addons.platform.koorikla.io/<addon>`, `platform.koorikla.io/cni`, and `mesh.platform.koorikla.io/{group,network}`).
+- **Selection:** `provider: docker | aws | hetzner | gcp-gke`, `role: workload` (stamped onto the CAPI `Cluster` and Argo CD cluster secret alongside `addons.platform.koorikla.io/<addon>`, `platform.koorikla.io/cni`, and `mesh.platform.koorikla.io/{group,network}`).
 
 ## Key values
 
-- `name`, `provider`, `region`, `environment`, `kubernetesVersion`: cluster identity, `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`), and k3s version.
-- `cni`: `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`).
-- `controlPlane.{replicas,machineType}`, `workers[]`, `providerSpec`: server count (odd; `>= 3` for cloud production), node pools, and provider variables.
+- `name`, `provider`, `region`, `environment`, `kubernetesVersion`: cluster identity, `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`), and k3s (or GKE `vX.Y.Z`) version.
+- `cni`: `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`); `gke` only on `gcp-gke`.
+- `controlPlane.{replicas,machineType}`, `workers[]`, `providerSpec`: server count (odd; `>= 3` for cloud production; none on `gcp-gke`), node pools (GKE: MachinePools), and provider variables.
 - `openchoreo.dataPlane.{enabled,gatewayHost,gatewayPort,environments}`: registers the `ClusterDataPlane` and binds environments.
 - `addons`, `addonsRevision`, `mesh.group`: per-cluster addon overrides, Git revision pin, and opt-in Istio ambient mesh membership.
 

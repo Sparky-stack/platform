@@ -89,6 +89,33 @@ tests:
             hostPath:
               path: /var/lib/rancher/k3s/agent/etc/cni/net.d
 
+  - it: "provider gcp-gke (values/provider-gcp-gke.yaml) - istio-cni uses GKE's CNI bin dir"
+    template: charts/cni/templates/daemonset.yaml
+    values:
+      - ../values/provider-gcp-gke.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-bin-dir
+            hostPath:
+              path: /home/kubernetes/bin
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: cni-net-dir
+            hostPath:
+              path: /etc/cni/net.d
+
+  - it: "provider gcp-gke - ResourceQuotas admit the system-node-critical cni and ztunnel pods on GKE"
+    values:
+      - ../values/provider-gcp-gke.yaml
+    asserts:
+      - containsDocument: { kind: ResourceQuota, apiVersion: v1, name: istio-cni-resource-quota, namespace: istio-system }
+        template: charts/cni/templates/resourcequota.yaml
+      - containsDocument: { kind: ResourceQuota, apiVersion: v1, name: ztunnel, namespace: istio-system }
+        template: charts/ztunnel/templates/resourcequota.yaml
+
   - it: tolerates extra top-level installation.yaml keys
     template: charts/ztunnel/templates/daemonset.yaml
     set:
