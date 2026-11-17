@@ -207,11 +207,13 @@ for dir in addons/*; do
           continue
         fi
         c_cni=$(yq '.cni // "cilium"' "$cf")
-        # the cluster's labels as charts/cluster renders them (step 4): mesh group/network, derived addon toggles
-        yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$inst-$c_name.yaml" > "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null \
-          || : > "$TMP/labels-$inst-$c_name.yaml"
+        # the cluster's labels as charts/cluster renders them (step 4): mesh group/network, derived addon toggles. Taken
+        # from the Argo CD cluster secret's template (the ApplicationSets select on it; == the CAPI Cluster's labels, and
+        # the only copy for provider byo, which has no CAPI Cluster)
+        yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels | del(.["argocd.argoproj.io/secret-type"])' \
+          "$TMP/cluster-$inst-$c_name.yaml" > "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$inst-$c_name.yaml"
         # addon labels as rendered by charts/cluster (step 4), e.g. addons.platform.koorikla.io/cilium derives from cni
-        c_toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" "$TMP/cluster-$inst-$c_name.yaml" 2>/dev/null || true)
+        c_toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null || true)
         [[ -n "$c_toggle" && "$c_toggle" != "null" ]] || c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
         if [[ "$c_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$c_toggle" != "true" ]]; }; then
           echo "  SKIP addons/$addon ($inst/$c_name): disabled by label"

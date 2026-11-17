@@ -204,8 +204,9 @@ for cf in "$INST_DIR"/clusters/*.yaml; do
     helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
       > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
   fi
-  yq 'select(.kind == "Cluster") | .metadata.labels' "$TMP/cluster-$c_name.yaml" \
-    > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
+  # labels of the Argo CD cluster secret (== the CAPI Cluster's; the only copy for provider byo)
+  yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels | del(.["argocd.argoproj.io/secret-type"])' \
+    "$TMP/cluster-$c_name.yaml" > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
 done
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
@@ -229,8 +230,7 @@ for dir in addons/*; do
       [[ -f "$cf" ]] || continue
       c_prov=$(yq '.provider // "docker"' "$cf")
       c_name=$(yq '.name' "$cf")
-      toggle=$(yq "select(.kind == \"Cluster\") | .metadata.labels[\"addons.platform.koorikla.io/$addon\"]" \
-        "$TMP/cluster-$c_name.yaml" 2>/dev/null || true)
+      toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$TMP/labels-$c_name.yaml" 2>/dev/null || true)
       [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
       if enabled "$addon" "$toggle" && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
         render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \

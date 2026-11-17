@@ -1,5 +1,5 @@
 # Development + staging data plane on GKE (CAPG managed control plane, ClusterClass gke-managed). Schema:
-# charts/cluster/values.yaml, docs/providers.md "GKE (CAPG) - rendered only". No controlPlane: Google runs it.
+# charts/cluster/values.yaml, docs/providers.md "GKE (CAPG) - untested example". No controlPlane: Google runs it.
 name: dev-euw1
 provider: gcp-gke
 region: europe-west1

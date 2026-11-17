@@ -31,6 +31,16 @@ placement() {
   done
 }
 
+# registered <fleet file> <render> -> the cluster name if the render registers it: a CAPI Cluster, or for provider byo
+# (no CAPI object) the Argo CD cluster secret
+registered() {
+  if [[ "$(yq -r '.provider // "docker"' "$1")" == byo ]]; then
+    yq -r 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.name' "$2"
+  else
+    N="$(yq -r '.name' "$1")" yq -r 'select(.kind == "Cluster" and .metadata.name == strenv(N)) | .metadata.name' "$2"
+  fi
+}
+
 # required_envs <inst dir> -> environments the platform references (one per line, sorted)
 required_envs() {
   local inst_dir=$1 ov="$1/addons/openchoreo-platform/values.yaml" pipe
@@ -147,9 +157,9 @@ for inst_dir in installations/*; do
       out="$TMP/$inst-$profile-$n.yaml"
       if [[ "$profile" == default ]]; then
         render_cluster "$inst" "$n" "$out"
-        assert_eq "$(N="$n" yq -r 'select(.kind == "Cluster" and .metadata.name == strenv(N)) | .metadata.name' "$out")" "$n" "$tag: $n renders its CAPI Cluster"
+        assert_eq "$(registered "$cf" "$out")" "$n" "$tag: $n renders its registration"
       elif helm template "cluster-$n" charts/cluster --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" > "$out" 2> "$out.err"; then
-        assert_eq "$(N="$n" yq -r 'select(.kind == "Cluster" and .metadata.name == strenv(N)) | .metadata.name' "$out")" "$n" "$tag: $n renders its CAPI Cluster"
+        assert_eq "$(registered "$cf" "$out")" "$n" "$tag: $n renders its registration"
       else
         assert_eq "$(cat "$out.err")" "" "$tag: charts/cluster renders $n"
         continue

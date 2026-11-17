@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`, or `gke-managed` for `gcp-gke`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
+Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`, or `gke-managed` for `gcp-gke`; none for `byo`, an existing cluster registered from its kubeconfig, whose payloads go by `PushSecret` instead of `ClusterResourceSet`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
 
 ## Where it runs
 
 - **Target:** `mgmt` cluster (`fleet`, `argocd`, and `openchoreo.orgNamespace`), rendered by `ApplicationSet/fleet` as `Application/cluster-<name>`.
-- **Selection:** `provider: docker | aws | hetzner | gcp-gke`, `role: workload` (stamped onto the CAPI `Cluster` and Argo CD cluster secret alongside `addons.platform.koorikla.io/<addon>`, `platform.koorikla.io/cni`, and `mesh.platform.koorikla.io/{group,network}`).
+- **Selection:** `provider: docker | aws | hetzner | gcp-gke | byo`, `role: workload` (stamped onto the CAPI `Cluster` and Argo CD cluster secret alongside `addons.platform.koorikla.io/<addon>`, `platform.koorikla.io/cni`, and `mesh.platform.koorikla.io/{group,network}`).
 
 ## Key values
 
@@ -24,6 +24,7 @@ Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: 
 
 ## Links
 
-- [Cluster API providers: Adding a cluster](../../docs/providers.md#adding-a-cluster)
+- [Cluster API providers: Adding a cluster](../../docs/providers.md#adding-a-cluster), [Bring your own cluster](../../docs/providers.md#bring-your-own-cluster-byo)
+- [Portability](../../docs/portability.md)
 - [OpenChoreo: Trust model](../../docs/openchoreo.md#trust-model)
 - [Multicluster mesh](../../docs/multicluster.md)

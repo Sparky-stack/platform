@@ -26,6 +26,12 @@ openchoreo:
   controlPlane:
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
 
+# provider byo (values/provider-byo.yaml): ConfigMap cluster-gateway-ca from the Secret mgmt pushes into
+# platform-delivery, instead of the ClusterResourceSet (templates/byo-gateway-ca.yaml).
+byoDelivery:
+  enabled: false
+  store: delivery             # ClusterSecretStore of addon secret-stores (delivery.*)
+
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy
   security:

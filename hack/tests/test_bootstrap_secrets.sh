@@ -82,6 +82,7 @@ EOF
 cat > "$BIN/docker" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "docker $*" >> "$HLOG/calls"
+[[ "${1:-}" == inspect ]] && { printf '%s\n' "${FAKE_K3D_IP:-}"; exit 0; }   # seed_byo_kubeconfigs: node IP on kind
 printf '%s' "${MSYS_NO_PATHCONV:-}" > "$HLOG/cosign-noconv"
 [[ "${FAKE_DOCKER_FAIL:-}" == 1 ]] && { prev=""; for a in "$@"; do [[ "$prev" == -v ]] && printf '%s' "${a%:*}" > "$HLOG/cosign-dir"; prev=$a; done; exit 1; }
 prev=""
@@ -96,6 +97,13 @@ for a in "$@"; do
   prev=$a
 done
 printf '%s' "${#COSIGN_PASSWORD}" > "$HLOG/cosign-pass-len"
+EOF
+# Fake k3d (seed_byo_kubeconfigs): `k3d kubeconfig get <name>` answers only while FAKE_K3D_KUBECONFIG names a file.
+cat > "$BIN/k3d" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "k3d $*" >> "$HLOG/calls"
+[[ "$1 $2" == "kubeconfig get" && -n "${FAKE_K3D_KUBECONFIG:-}" ]] || exit 1
+cat "$FAKE_K3D_KUBECONFIG"
 EOF
 chmod +x "$BIN/"*
 
@@ -400,5 +408,27 @@ run repo_wait "wait_retire_repo_bootstrap" REPO_CREDS_WAIT=0 FAKE_BOOTSTRAP_EXIS
 assert_eq "$(has "$OUT" 'platform-repo-bootstrap kept')" yes "up: not Ready within REPO_CREDS_WAIT, kept with a hint"
 run repo_wait_ready "wait_retire_repo_bootstrap" REPO_CREDS_WAIT=0 FAKE_BOOTSTRAP_EXISTS=1 FAKE_REPO_CREDS_READY=1 FAKE_REPO_CREDS_URL="$ORG_URL"
 assert_eq "$(grep -c 'delete secret platform-repo-bootstrap' "$HLOG/calls" || true)" 1 "up: Ready, bootstrap secret deleted"
+
+# --- provider byo: platform store key byo-<name> (seed_byo_kubeconfigs) -----------------------------------------------
+BYOF="$R/installations/local/clusters/zz-byotest.yaml"
+printf 'name: byo-test\nprovider: byo\nenvironment: development\n' > "$BYOF"
+KC="$TMP/byo.kubeconfig"
+printf 'apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://0.0.0.0:41234\n    certificate-authority-data: Q0E=\nusers:\n- name: u\n  user:\n    token: FAKEKEEPBYOTOKEN\n' > "$KC"
+run byo_file "seed_byo_kubeconfigs" BYO_KUBECONFIG_BYO_TEST="$KC"
+assert_eq "$RC" 0 "byo file: rc"
+assert_eq "$(keys byo-byo-test)" kubeconfig "byo file: key byo-<name>, property kubeconfig"
+assert_eq "$(val byo-byo-test kubeconfig)" "$(cat "$KC")" "byo file: kubeconfig as given"
+assert_eq "$(has "$OUT" 'from .BYO_KUBECONFIG_BYO_TEST')" yes "byo file: names its source"
+run byo_k3d "seed_byo_kubeconfigs" FAKE_K3D_KUBECONFIG="$KC" FAKE_K3D_IP=172.18.0.99
+assert_eq "$(val byo-byo-test kubeconfig | yq -r '.clusters[0].cluster.server')" https://172.18.0.99:6443 "byo k3d: API server = node IP on network kind"
+assert_eq "$(val byo-byo-test kubeconfig | yq -r '.users[0].user.token')" FAKEKEEPBYOTOKEN "byo k3d: credentials kept"
+run byo_k3d_nonet "seed_byo_kubeconfigs" FAKE_K3D_KUBECONFIG="$KC" FAKE_K3D_IP=
+assert_eq "$RC" 1 "byo k3d off network kind: fails"
+assert_eq "$(has "$OUT" 'not on docker network kind')" yes "byo k3d off network kind: says why"
+run byo_none "seed_byo_kubeconfigs"
+assert_eq "$RC" 0 "byo unseeded: not fatal"
+assert_eq "$(applied byo-byo-test)" "" "byo unseeded: nothing applied"
+assert_eq "$(has "$OUT" 'byo-byo-test: no .BYO_KUBECONFIG_BYO_TEST and no k3d cluster byo-test')" yes "byo unseeded: warns"
+rm -f "$BYOF"
 
 finish

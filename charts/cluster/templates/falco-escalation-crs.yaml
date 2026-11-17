@@ -9,10 +9,45 @@ an ESO-templated ClusterResourceSet payload, built on mgmt, applied by CAPI to e
 The store's token never leaves mgmt; the cluster holds only its own token, which argo-events accepts only on its own
 endpoint, so it cannot post events for another cluster. Same expression as addon argo-events (ae.falcoToken) and addon
 falco on mgmt: hack/tests/test_falco_tokens.sh. Off when the cluster opts out of addon falco or falcoEscalation is off.
+provider byo: ExternalSecret <name>-falco-escalation renders the Secret itself (no payload) and PushSecret
+<name>-push-falco-escalation copies it to falco/falcosidekick-escalation (byo-access.yaml).
 */ -}}
 {{- if and .Values.falcoEscalation.enabled (ne (toString (dig "falco" "" (.Values.addons | default dict))) "false") }}
 {{- $name := required "name is required" .Values.name }}
 {{- $ns := .Values.falcoEscalation.namespace }}
+{{- if eq (toString .Values.provider) "byo" }}
+{{- /* byo: the same Secret, templated as a plain Secret in fleet and pushed (same expressions as the payload below;
+hack/tests/test_falco_tokens.sh and test_byo_delivery.sh evaluate both). */}}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-falco-escalation
+  namespace: fleet
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: {{ $name }}-falco-escalation
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: Opaque
+      data:   # gitleaks:allow: ESO template; the derived per-cluster token only
+        WEBHOOK_ADDRESS: '{{ printf "{{ printf \"%%s/%%s\" (.url | trimSuffix \"/\") %s }}" (quote $name) }}'
+        WEBHOOK_CUSTOMHEADERS: '{{ printf "{{ printf \"Authorization:Bearer %%s\" (printf \"%%s:%%s\" %s .token | sha256sum) }}" (quote $name) }}'
+  data:
+    - secretKey: url
+      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: url }
+    - secretKey: token
+      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: token }
+---
+{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-falco-escalation" $name) "source" (printf "%s-falco-escalation" $name)
+      "namespace" $ns "remoteName" "falcosidekick-escalation") }}
+{{- else }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -68,4 +103,5 @@ spec:
   resources:
     - kind: Secret
       name: {{ $name }}-falco-escalation
+{{- end }}
 {{- end }}

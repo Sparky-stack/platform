@@ -1,0 +1,3 @@
+# Every local cluster, byo k3d clusters included, sits on docker network `kind` next to k3d-platform-mgmt-serverlb:
+# resolve *.openchoreo.localhost there (addon values/provider-byo.yaml turns it off for byo elsewhere).
+enabled: true

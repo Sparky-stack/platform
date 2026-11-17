@@ -5,10 +5,43 @@ Delivery of the agent identity into the workload cluster, without scripts and wi
   ClusterResourceSet <name>-openchoreo-agent applies it, plus the shared openchoreo-gateway-ca payload (addon
   openchoreo-control-plane: ConfigMap cluster-gateway-ca, public CA cert only), to exactly this Cluster.
 Strategy Reconcile: CAPI re-applies a payload whenever its content changes (cert renewal, CA rotation).
+provider byo (no CAPI Cluster, so no CRS): the same two objects by PushSecret (byo-access.yaml byo.pushSecret):
+  PushSecret <name>-push-agent-tls   fleet/<name>-agent-tls (cert-manager: tls.crt, tls.key, ca.crt = this cluster's
+                                     agent CA cert, public) -> openchoreo-data-plane/cluster-agent-tls
+  ExternalSecret <name>-gateway-ca   ca.crt of the gateway CA (store mgmt-openchoreo, public cert only), pushed by
+  PushSecret <name>-push-gateway-ca  -> platform-delivery/cluster-gateway-ca; addon openchoreo-data-plane
+                                     (values/provider-byo.yaml) turns it into ConfigMap cluster-gateway-ca there, as
+                                     PushSecret writes only Secrets.
 */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
 {{- $name := include "openchoreo.name" . }}
 {{- $ns := include "openchoreo.fleetNamespace" . }}
+{{- if eq (toString .Values.provider) "byo" }}
+{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-agent-tls" $name) "source" (printf "%s-agent-tls" $name)
+      "namespace" "openchoreo-data-plane" "remoteName" "cluster-agent-tls" "labels" (dict "app.kubernetes.io/part-of" "openchoreo")) }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-gateway-ca
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openchoreo.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: mgmt-openchoreo      # read-only, ca.crt of openchoreo-control-plane/cluster-gateway-ca (invariant 5 exception)
+  target:
+    name: {{ $name }}-gateway-ca
+    creationPolicy: Owner
+  data:
+    - secretKey: ca.crt
+      remoteRef: { key: cluster-gateway-ca, property: ca.crt }
+---
+{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-gateway-ca" $name) "source" (printf "%s-gateway-ca" $name)
+      "namespace" "platform-delivery" "remoteName" "cluster-gateway-ca" "labels" (dict "app.kubernetes.io/part-of" "openchoreo")) }}
+{{- else }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -77,4 +110,5 @@ spec:
       name: {{ $name }}-openchoreo-agent
     - kind: Secret
       name: openchoreo-gateway-ca      # shared; addon openchoreo-control-plane templates/gateway-ca-crs.yaml
+{{- end }}
 {{- end }}
