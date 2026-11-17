@@ -45,12 +45,14 @@ sourceIntegrity:
 openchoreo:
   orgNamespace: default
   controlPlane:
+    host: openchoreo.localhost
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
   observability:
     enabled: false
   workflowPlane:
     enabled: false
 registry:
+  type: external
   host: ""
 dns:
   provider: none              # none | route53 | cloudflare (docs/dns.md)
