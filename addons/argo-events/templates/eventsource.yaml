@@ -23,7 +23,7 @@ spec:
     version: {{ .Values.eventBus.natsVersion | quote }}
     replicas: 1
     # Pod Security restricted (the namespace is externally reachable and stays in Kyverno/PSS scope); fsGroup lets the
-    # non-root NATS server write its JetStream store (emptyDir). VERIFY on first sync (nats + reloader + exporter).
+    # non-root NATS server write its JetStream store (emptyDir).
     securityContext: {{- toYaml (merge (dict "fsGroup" 65532) $podSc) | nindent 6 }}
     containerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.nats | nindent 8 }}
