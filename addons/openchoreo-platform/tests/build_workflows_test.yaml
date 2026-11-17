@@ -62,7 +62,8 @@ tests:
       - equal:
           path: 'spec.resources[?(@.id == "git-token")].template.spec.repositories'
           value: ["${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/') + 1, size(parameters.repository.url) - (parameters.repository.url.endsWith('.git') ? 4 : 0))}"]
-      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.permissions', value: { contents: write } }
+      # contents write only when this run commits the image ref (gitops.enabled; PR previews run without it)
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.permissions', value: { contents: "${parameters.gitops.enabled ? 'write' : 'read'}" } }
       - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.appIDRef', value: { name: build-github-app, key: app-id } }
       - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.installIDRef', value: { name: build-github-app, key: installation-id } }
       - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.auth.privateKey.secretRef', value: { name: build-github-app, key: private-key } }

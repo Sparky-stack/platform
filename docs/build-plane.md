@@ -165,7 +165,8 @@ promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
 No long-lived token. Every WorkflowRun renders an ESO `GithubAccessToken` generator `<run>-git` in `workflows-<org ns>`
 that mints an installation token of the platform GitHub App (store key `buildWorkflows.github.key`, default
 `promotion-gate-github`) for exactly one repository, the name of the run's `repository.url` (OpenChoreo CEL, `.git`
-removed), with `permissions` `contents: write` (helm-chart builds: `contents: read`). ExternalSecret `<run>-git` turns
+removed), with `permissions` `contents: write` (runs with `gitops.enabled: false`, e.g. PR previews, and helm-chart
+builds: `contents: read`). ExternalSecret `<run>-git` turns
 it into the basic-auth Secret the checkout and gitops pods mount (`x-access-token`), re-minted every
 `tokenRefreshInterval` (30 min; GitHub expires tokens after 1 h); both are deleted with the WorkflowRun. A build can
 therefore neither read nor push to another repository, even one the App is installed on.

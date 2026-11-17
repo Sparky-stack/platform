@@ -71,7 +71,8 @@ Per-run resources of a ClusterWorkflow: OpenChoreo renders them into workflows-<
   <run>-registry     dockerconfigjson          push/pull the registry      (harbor robot builder | external credentials)
   <run>-registry-ca  ca.crt                    registry CA public cert     (harbor only, store mgmt-harbor)
   <run>-cosign       cosign.key/password       platform signing key        (key buildWorkflows.secrets.cosign)
-Call: include "build.resources" (dict "root" $ "permissions" <map>).
+Call: include "build.resources" (dict "root" $ "permissions" <map> ["gitopsAware" true]). gitopsAware: a run with
+gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to write).
 */ -}}
 {{- define "build.resources" -}}
 {{- $root := .root }}
@@ -95,7 +96,14 @@ Call: include "build.resources" (dict "root" $ "permissions" <map>).
       appIDRef: { name: {{ $app }}, key: app-id }
       installIDRef: { name: {{ $app }}, key: installation-id }
       repositories: [{{ include "build.repoName" . | quote }}]
-      permissions: {{- toYaml $perms | nindent 8 }}
+      permissions:
+        {{- range $k, $v := $perms }}
+        {{- if and $.gitopsAware (hasKey $g.readPermissions $k) (ne (toString $v) (toString (get $g.readPermissions $k))) }}
+        {{ $k }}: {{ printf "${parameters.gitops.enabled ? '%s' : '%s'}" $v (get $g.readPermissions $k) | quote }}
+        {{- else }}
+        {{ $k }}: {{ $v | quote }}
+        {{- end }}
+        {{- end }}
       auth:
         privateKey:
           secretRef: { name: {{ $app }}, key: private-key }

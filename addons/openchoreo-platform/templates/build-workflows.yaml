@@ -208,6 +208,6 @@ spec:
           - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
           - { name: tlog-upload, value: {{ $b.signing.transparencyLog | toString | quote }} }
   resources:
-    {{- include "build.resources" (dict "root" $ "permissions" $b.github.permissions) | nindent 4 }}
+    {{- include "build.resources" (dict "root" $ "permissions" $b.github.permissions "gitopsAware" true) | nindent 4 }}
 {{- end }}
 {{- end }}

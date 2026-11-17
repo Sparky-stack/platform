@@ -154,7 +154,7 @@ buildWorkflows:
   # Git credentials: no long-lived token. Per WorkflowRun, ESO's GithubAccessToken generator mints an installation
   # token of the platform GitHub App restricted to the run's ONE repository (the repository name of the Component's
   # repository.url, rendered by OpenChoreo per run) and to `permissions` (component builds: clone + the GitOps commit;
-  # helm-chart builds: `readPermissions`, clone only). Re-minted every tokenRefreshInterval while the run lives
+  # runs with gitops.enabled false (PR previews) and helm-chart builds: `readPermissions`, clone only). Re-minted every tokenRefreshInterval while the run lives
   # (tokens expire after 1h); the GitOps commit goes through the GitHub API, so GitHub authors and signs it as the
   # App's bot. The App must be installed on the repository (the run fails at checkout with that message otherwise)
   # and needs Contents: Read and write. `key`: store key with githubAppID, githubAppInstallationID,
