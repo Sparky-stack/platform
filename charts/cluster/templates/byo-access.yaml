@@ -80,7 +80,9 @@ Secret in a ClusterResourceSet payload. Dict arguments:
   namespace   remote namespace (must exist: created by the addon that owns it; the PushSecret retries until then)
   remoteName  remote Secret name
   labels      labels of the remote Secret (dict; the source's labels and annotations are not copied)
-deletionPolicy Delete: deregistering the cluster (removing the fleet file) deletes what was pushed - CRS never deletes.
+deletionPolicy Delete: a payload switched off while the cluster stays registered is removed from it. Deregistering does
+not reliably clean up (Argo CD deletes the kubeconfig Secret with the PushSecrets): docs/providers.md "Bring your own
+cluster (byo)".
 */ -}}
 {{- define "byo.pushSecret" -}}
 apiVersion: external-secrets.io/v1alpha1
