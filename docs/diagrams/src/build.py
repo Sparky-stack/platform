@@ -255,7 +255,7 @@ def sdlc() -> Diagram:
     R1 = R0 + H0 + 80
     R2 = R1 + PITCH
     R3 = R2 + PITCH
-    xr = c[3] + w + 28                          # right channel: Kyverno up to the registry
+    xr = c[3] + w + 28                          # right channel: Kyverno to the registry
     d.box(c[0], R0, w, H0, "external", "App repo", ["your code and", "deploy/ folder"])
     d.box(c[1], R0, c[2] + w - c[1], H0, "mgmt", "Build & sign", ["builds, scans and signs every image"])
     d.box(c[3], R0, w, H0, "mgmt", "Registry", ["signed", "images"])
@@ -264,28 +264,31 @@ def sdlc() -> Diagram:
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[2], R2, w, H, "workload", "Staging", ["second", "environment"])
     d.box(c[3], R2, w, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"])
-    d.box(c[2], R3, w, H, "workload", "Production", ["runs only", "admitted pods"])
-    d.box(c[3], R3, w, H, "workload", "Admission", ["checks every", "pod first"], aka=("Kyverno",))
+    d.box(c[2], R3, w, H, "workload", "Admission", ["checks every", "pod first"], aka=("Kyverno",))
+    d.box(c[3], R3, w, H, "workload", "Production", ["runs only", "admitted pods"])
     d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1)
     d.arrow([(c[2] + w, R0 + H0 / 2), (c[3], R0 + H0 / 2)], step=2)
     d.arrow([(c[1], R0 + H0 - 16), (c[0] + w, R0 + H0 - 16)], step=3)       # the commit Argo CD then reads
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, R0 + H0)], step=4)
-    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5, label="all merges",
-            label_pos=((c[0] + w + c[1]) / 2, ymid(R1) + 30))
+    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=6)
     xs, xq = c[1] + 110, c[1] + 48             # the release reaches staging, and only later production
     d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=7, badge=(c[1] + w + 40, ymid(R2)),
             label="after the team's staging PR", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
     d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))], step=8)
     xg, yg = c[3] + w / 2, R0 + H0 + 40         # the gate's pull request: out of its top, back to the repo
-    d.arrow([(xg, R2), (xg, yg), (c[0] + w - 22, yg), (c[0] + w - 22, R0 + H0)], step=9, badge=(xg, R2 - 34),
-            label="production pull request", label_pos=(xg - 20, R2 - 29), label_anchor="end")
+    pr = d.arrow([(xg, R2), (xg, yg), (c[0] + w - 22, yg), (c[0] + w - 22, R0 + H0)], step=9,
+                 badge=(xg, R2 - 34), label="production pull request", label_pos=(xg - 20, R2 - 29),
+                 label_anchor="end")
+    d.label(c[0] + w - 10, yg + 24, "once merged: back through 4 and 5", anchor="start", owner=pr)
     d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=10, badge=(xq, ymid(R3) - 60),
             label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
-    d.arrow([(c[3] + w, R3 + 20), (xr, R3 + 20), (xr, R0 + H0 / 2 + 14), (c[3] + w, R0 + H0 / 2 + 14)], step=11,
-            badge=(xr, R3 - 14), label="checks the signature", label_pos=(xr - 18, R3 - 9), label_anchor="end")
-    d.arrow([(c[3], R3 + 56), (c[2] + w, R3 + 56)], step=12)
+    yb = R3 + H + 30                            # Kyverno checks the registry: under Production, up the right side
+    d.arrow([(c[2] + w / 2, R3 + H), (c[2] + w / 2, yb), (xr, yb), (xr, R0 + H0 / 2 + 14),
+             (c[3] + w, R0 + H0 / 2 + 14)], step=11, badge=(c[3] + 40, yb), label="checks the signature",
+            label_pos=(c[3] + 60, yb + 5), label_anchor="start")
+    d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=12)
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
     d.stages("Development", "Staging", "Production")
@@ -299,9 +302,9 @@ def sdlc() -> Diagram:
           "through steps 4 and 5)",
           "The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes",
           "The promotion gate opens the production pull request in the app repo only if every check passes",
-          "OpenChoreo submits the release to production only after a code owner approves and merges that pull "
-          "request (back through steps 4 and 5)",
-          "Before any pod starts, Kyverno checks its image's signature and digest in the registry",
+          "OpenChoreo submits the release to production, through admission, only after a code owner approves and "
+          "merges that pull request",
+          "Kyverno checks each production pod's image signature and digest in the registry before the pod starts",
           "Kyverno admits only verified pods into production")
     return d
 

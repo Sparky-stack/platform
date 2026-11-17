@@ -106,8 +106,8 @@ The numbered flow of each diagram, word for word.
 7. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo (back through steps 4 and 5)
 8. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
 9. The promotion gate opens the production pull request in the app repo only if every check passes
-10. OpenChoreo submits the release to production only after a code owner approves and merges that pull request (back through steps 4 and 5)
-11. Before any pod starts, Kyverno checks its image's signature and digest in the registry
+10. OpenChoreo submits the release to production, through admission, only after a code owner approves and merges that pull request
+11. Kyverno checks each production pod's image signature and digest in the registry before the pod starts
 12. Kyverno admits only verified pods into production
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
