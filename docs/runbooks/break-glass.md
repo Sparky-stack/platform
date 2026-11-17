@@ -117,16 +117,21 @@ Re-initialization wipes every OpenBao object. The mesh gets new group roots, so 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
 # 0. Freeze Argo CD (above): self-heal would otherwise scale openbao back up during the wipe.
-# 1. Ensure a valid static unseal key exists in platform-secrets and syncs to openbao
-task secrets
+# 1. The static unseal key exists in platform-secrets and openbao/openbao-unseal matches it (compares hashes, prints no
+#    value). Only if it is missing: `task secrets` (it also re-seeds platform-github/platform-ghcr from your env or gh).
+for ns in platform-secrets openbao; do $K -n $ns get secret openbao-unseal -o jsonpath='{.data.key}' | sha256sum | cut -c1-12; done
 $K -n openbao annotate externalsecret openbao-unseal force-sync="$(date +%s)" --overwrite
 
 # 2. Stop openbao-0, cold-copy its volume, wipe the PVC so self-initialization runs again, start openbao-0
 $K -n openbao scale statefulset/openbao --replicas=0
 $K -n openbao wait --for=delete pod/openbao-0 --timeout=120s
 PV=$($K -n openbao get pvc data-openbao-0 -o jsonpath='{.spec.volumeName}')
-BK="$HOME/openbao-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK"
-docker cp "k3d-platform-mgmt-server-0:$($K get pv "$PV" -o jsonpath='{.spec.hostPath.path}')/." "$BK/"
+SRC=$($K get pv "$PV" -o jsonpath='{.spec.local.path}')   # local-path PVs: .spec.local, not .spec.hostPath
+[ -n "$SRC" ] || { echo "no PV path: stop, do not delete the PVC"; exit 1; }
+BK="$HOME/openbao-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK" && chmod 700 "$BK"
+docker cp "k3d-platform-mgmt-server-0:$SRC" "$BK/"
+# the PV's reclaim policy is Delete: compare sizes/hashes of vault.db and raft/raft.db with the node copy before going on
+docker exec k3d-platform-mgmt-server-0 sh -c "cd $SRC && sha256sum vault.db raft/raft.db"; (cd "$BK/${SRC##*/}" && sha256sum vault.db raft/raft.db)
 $K -n openbao delete pvc data-openbao-0
 $K -n openbao scale statefulset/openbao --replicas=1
 $K -n openbao rollout status statefulset/openbao --timeout=180s
@@ -153,7 +158,14 @@ for c in $($K -n fleet get externalsecret -o name | sed -n 's#.*/\(.*\)-mesh-tru
   $M get secret mesh-root-ca -o jsonpath='{.data.root-cert\.pem}' | base64 -d | openssl x509 -noout -fingerprint -sha256
   $M rollout restart deploy/cert-manager-istio-csr && $M rollout status deploy/cert-manager-istio-csr --timeout=180s
   $M delete secret istiod-tls --ignore-not-found
+  # istio-csr rewrites the istio-ca-root-cert ConfigMaps a few seconds AFTER it is Ready. ztunnel and the gateways read
+  # the root at start: restarted earlier, they keep the old one (ztunnel: "invalid peer certificate: BadSignature", no
+  # workload certificate). Wait until istio-system's copy matches mesh-root-ca, then restart.
+  want=$($M get secret mesh-root-ca -o jsonpath='{.data.root-cert\.pem}' | base64 -d | openssl x509 -noout -fingerprint -sha256)
+  until [ "$($M get cm istio-ca-root-cert -o jsonpath='{.data.root-cert\.pem}' | openssl x509 -noout -fingerprint -sha256)" = "$want" ]; do sleep 5; done
   $M rollout restart deploy/istiod ds/ztunnel deploy/istio-eastwestgateway
+  $M rollout status ds/ztunnel --timeout=240s
+  $M logs ds/ztunnel --since=2m | grep -cE 'BadSignature|fetch failed'   # 0 after a minute
 done
 
 # 5. Tenant secrets (installation.yaml secrets.tenantStores): the policy reconciler first, then the tenants
