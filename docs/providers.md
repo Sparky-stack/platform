@@ -416,7 +416,6 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
   `capi-operator` with `ServerSideApply=true`. CAPI webhooks default many Cluster/ClusterClass fields: use server-side
   diff (or ignoreDifferences) for the `cluster-*` and `clusterclasses` Applications.
 
-Open checks: CAPD single-server `--cluster-reset` break-glass [#56](https://github.com/koorikla/platform/issues/56);
-AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
+Open checks: AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
 [#87](https://github.com/koorikla/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
 addons/clusterclasses addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).

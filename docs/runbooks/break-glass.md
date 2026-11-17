@@ -83,7 +83,9 @@ $K -n thunder delete pvc thunder-database-pvc
 
 ### Single-server etcd quorum loss
 
-For local or `dev` clusters with `controlPlane.replicas: 1` where the `2 -> 1` `etcd` member removal lost quorum ([#56](https://github.com/koorikla/platform/issues/56), `(not yet verified live)`; the new server already holds promoted voter data):
+For local or `dev` clusters with `controlPlane.replicas: 1` where the `2 -> 1` `etcd` member removal lost quorum (the new server already holds promoted voter data). Verified with k3s v1.35.10+k3s1 on a throwaway two-server reproduction with the cluster-api-k3s config files ([#56](https://github.com/koorikla/platform/issues/56)): data written before the loss survives and the API accepts writes again.
+
+The newest server joined through the load balancer, so cluster-api-k3s wrote `server: https://<endpoint>` into its `/etc/rancher/k3s/config.yaml`. k3s refuses `--cluster-reset` while that is set (`cannot perform cluster-reset while server URL is set`). Remove the line for the reset only and restore it afterwards. k3s then starts from the reset data and ignores `server:`. On the first (`cluster-init`) server the `sed` changes nothing.
 
 ```bash
 # 1. Identify the newest control-plane Machine (on CAPD, container name == Machine name) and save logs first
@@ -92,8 +94,15 @@ kubectl --context k3d-platform-mgmt -n fleet get machines \
 SURVIVOR=<newest-machine-name>
 docker exec "$SURVIVOR" journalctl -u k3s --no-pager > "${SURVIVOR}-k3s.log"
 
-# 2. Reset etcd membership to the surviving node
-docker exec "$SURVIVOR" sh -c 'systemctl stop k3s; k3s server --cluster-reset; systemctl start k3s'
+# 2. Reset etcd membership to the surviving node (server: removed for the reset, then restored)
+docker exec "$SURVIVOR" sh -c 'systemctl stop k3s &&
+  cp /etc/rancher/k3s/config.yaml /root/k3s-config.yaml.bak && sed -i "/^server:/d" /etc/rancher/k3s/config.yaml &&
+  k3s server --cluster-reset; cp /root/k3s-config.yaml.bak /etc/rancher/k3s/config.yaml; systemctl start k3s'
+# Expect "Managed etcd cluster membership has been reset, restart without --cluster-reset flag now"
+
+# 3. Verify the API answers (CAPD nodes have no kubectl symlink, use k3s kubectl)
+docker exec "$SURVIVOR" k3s kubectl get --raw /readyz
+docker exec "$SURVIVOR" k3s kubectl get nodes   # the dead server's Node goes when CAPI deletes its Machine
 ```
 
 ### OpenBao local re-initialization
