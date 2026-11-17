@@ -2,22 +2,46 @@
 
 <p align="center"><img src="docs/images/hero.png" alt="Clusters on several clouds, connected to one management hub" width="100%"></p>
 
-A cloud-agnostic Kubernetes platform. **Cluster API** creates and upgrades k3s clusters on Docker, AWS or Hetzner.
-**Argo CD** installs the platform addons on all of them from one catalog. **External Secrets Operator** delivers every
-credential. **OpenChoreo** is the developer platform on top: projects, components, environments, builds, promotion.
-Runtime: Cilium, Istio ambient, kgateway, Kyverno, Falco; telemetry goes to OpenChoreo's observability plane. Opt-in:
-external-dns (Route 53 / Cloudflare), OpenChoreo's RCA and FinOps AI agents, and data services (PostgreSQL as a service
-through Crossplane v2 - CloudNativePG, RDS, Cloud SQL or Azure Flexible Server per cluster -, Strimzi Kafka, KEDA).
+A cloud-agnostic Kubernetes developer platform reconciled from Git with zero imperative steps after bootstrap:
 
-Why: one management cluster, one git repo and one file per cluster give every cluster the same addons, identities and
-policies, on any provider, without imperative steps after bootstrap.
+- **Cluster API (CAPI)** provisions and upgrades k3s workload clusters locally on Docker (`k3d` + CAPD) and is ready for AWS (CAPA) and Hetzner Cloud (CAPH) from one file per cluster.
+- **Argo CD** pushes platform addons from a single label-driven catalog on the management cluster (`mgmt`) to every workload cluster.
+- **OpenChoreo** provides the developer platform on top: Golden-path Backstage templates, projects, environments, in-cluster BuildKit builds into Harbor, and gated GitOps promotion.
+- **External Secrets Operator (ESO)** delivers every credential and CA bundle from a pluggable secret backend (`kubernetes` locally, AWS Secrets Manager or Vault/OpenBao in the cloud).
 
 <img src="docs/diagrams/architecture.svg" alt="Architecture: git drives Argo CD on the mgmt cluster (Kyverno, Cluster API, secrets and PKI, Harbor, OpenChoreo); Cluster API creates the workload clusters, Argo CD pushes their addons, the cluster-agent dials out and applies app releases, Kyverno admits only signed images" width="100%">
 
-### Diagrams
+## Quick start
 
-Animated SVGs: the numbered flow moves, and stops with the OS "reduce motion" setting. Click a view for full size;
-each step is written out in [docs/diagrams/](docs/diagrams/README.md).
+Requires Docker and [mise](https://mise.jdx.dev) on Linux, macOS, or Windows (WSL2 or Git Bash, `amd64` / `arm64`; see [docs/dev-environment.md](docs/dev-environment.md)).
+
+```bash
+mise install      # install the pinned toolchain (`task doctor` verifies host prerequisites)
+task up           # boot k3d mgmt, seed local secrets, install Argo CD, and apply Application/root
+task status       # inspect CAPI clusters, Argo CD apps, and OpenChoreo ClusterDataPlanes
+task demo:check   # read-only pre-flight across every plane and workload cluster
+task down         # freeze Argo CD, delete CAPD workload clusters, then delete k3d mgmt
+```
+
+Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>` ([docs/forking.md](docs/forking.md)). Offline validation before pushing: `task lint` and `task test` (`task --list` lists every target).
+
+## 9-step demo storyline
+
+Full walkthrough (~30 minutes) and talking points: **[docs/demo.md](docs/demo.md)**.
+
+1. **Clean bootstrap**: `task up` brings up `mgmt` and reconciles the entire platform from `bootstrap/root-app.yaml`.
+2. **Add a cluster by adding a file**: commit `installations/<inst>/clusters/<name>.yaml`; CAPI boots the cluster, Argo CD installs its addons, and OpenChoreo connects its data-plane agent.
+3. **Developer self-service**: scaffold a new repository from a Backstage golden-path template under a tenant project.
+4. **Build and supply chain**: build multi-arch container images on the OpenChoreo workflow plane (or [koorikla/ci](https://github.com/koorikla/ci)), attach SBOM and SLSA provenance, and sign with Cosign.
+5. **Deploy and promote**: roll out [koorikla/hello-world](https://github.com/koorikla/hello-world) across `development -> staging -> production`, gated on `production` by automated HTTP + 5xx SLO checks and a reviewed Git PR.
+6. **Observe**: query logs, traces (OpenSearch), metrics (Prometheus), and Hubble network flows from `mgmt`.
+7. **Runtime security**: detect container anomalies with modern-eBPF Falco, quarantine or terminate pods with Talon, and escalate critical alerts to Argo Events.
+8. **Zero trust**: enforce sidecarless mTLS with Istio ambient (backed across clusters by OpenBao's mesh CA) and admission policy with Kyverno.
+9. **App with a database**: provision PostgreSQL through one Crossplane v2 API, backed by CloudNativePG locally/Hetzner or cloud-managed RDS, Cloud SQL, or Flexible Server.
+
+## Diagrams
+
+Animated SVGs pause automatically when the OS prefers reduced motion. Step-by-step walkthroughs: [docs/diagrams/](docs/diagrams/README.md).
 
 | | |
 |---|---|
@@ -29,63 +53,38 @@ Day-2 operations:
 | | |
 |---|---|
 | [<img src="docs/diagrams/cluster-lifecycle.svg" alt="Cluster lifecycle view" width="100%">](docs/diagrams/cluster-lifecycle.svg)<br>**Cluster lifecycle**: add, upgrade, remove = edit one file | [<img src="docs/diagrams/trust.svg" alt="Trust and certificates view" width="100%">](docs/diagrams/trust.svg)<br>**Trust & certificates**: agent CAs, OpenBao mesh CA, rotation |
-| [<img src="docs/diagrams/backup.svg" alt="Backup and restore view" width="100%">](docs/diagrams/backup.svg)<br>**Backup & restore**: what is stateful where, restore order | [<img src="docs/diagrams/upgrade.svg" alt="Upgrade flow view" width="100%">](docs/diagrams/upgrade.svg)<br>**Upgrades**: Renovate → CI → Argo CD → verify |
+| [<img src="docs/diagrams/backup.svg" alt="Backup and restore view" width="100%">](docs/diagrams/backup.svg)<br>**Backup & restore**: what is stateful where, restore order | [<img src="docs/diagrams/upgrade.svg" alt="Upgrade flow view" width="100%">](docs/diagrams/upgrade.svg)<br>**Upgrades**: Renovate -> CI -> Argo CD -> verify |
 
-## Quick start (local)
+## Repository map
 
-Needs Docker and [mise](https://mise.jdx.dev); `mise install` installs every other tool at the version pinned in
-[`mise.toml`](mise.toml). macOS, Linux and Windows (WSL2 or Git Bash), amd64 and arm64: [docs/dev-environment.md](docs/dev-environment.md).
-
-```bash
-mise install  # pinned toolchain (`task doctor` checks it)
-task up       # k3d mgmt cluster, seed secrets, Argo CD, root Application; Argo CD does the rest
-task status   # CAPI clusters, Argo CD apps, ClusterDataPlanes, how to read the Argo CD admin password
-task down     # freeze Argo CD, delete the CAPD workload clusters, then the k3d mgmt cluster
+```text
+bootstrap/              k3d mgmt config, bootstrap.sh (task up / down), local secret seeding, root-app.yaml
+charts/                 platform (root catalog + ApplicationSets), cluster (one workload cluster), tenant (one project)
+addons/                 38 platform and wrapper charts (each with its own README.md, Chart.yaml, and values.yaml)
+installations/          per-installation overlays, fleet files (clusters/*.yaml), and tenant files (tenants/*.yaml)
+templates/              Backstage golden-path scaffolder templates + app repo skeletons
+examples/               opt-in smoke workloads (such as cross-cluster Istio east-west)
+docs/                   concept guides, day-2 operations handbook (docs/operations.md), runbooks/, and diagrams/
+hack/                   portable tooling, linters, and offline contract tests (hack/tests/)
+mise.toml, Taskfile.yml pinned cross-platform CLI versions and Task entrypoints (Makefile shim)
 ```
-
-To run it from your own copy: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your fork URL>`
-([docs/forking.md](docs/forking.md): credentials, boot, troubleshooting). `task --list` shows every entrypoint;
-`make <target>` is a shim for `task <target>`.
-
-Offline validation, required before every push: `task lint` and `task test`.
 
 ## Documentation
 
-| Doc | Topic |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | design and decisions: push GitOps, one file per cluster, addon catalog, trust, secrets, installations, tenants |
-| [docs/conventions.md](docs/conventions.md) | contracts every change keeps: invariants, labels, names, secret keys, layout, current practice |
-| [AGENTS.md](AGENTS.md) | working rules for AI agents and contributors (CLAUDE.md and GEMINI.md point to it) |
-| [docs/providers.md](docs/providers.md) | Cluster API: k3s on CAPD, CAPA, CAPH; adding a cluster; control plane sizing |
-| [docs/openchoreo.md](docs/openchoreo.md) | OpenChoreo planes, plane trust, local networking, tenants, app repo contract |
-| [docs/project-templates.md](docs/project-templates.md) | golden-path project templates (Backstage scaffolder): Go, Python, Node.js, Rust, Java, Docker |
-| [docs/build-plane.md](docs/build-plane.md) | in-cluster builds (OpenChoreo workflow plane) and the Harbor registry |
-| [docs/promotion.md](docs/promotion.md) | development -> staging -> production gates |
-| [docs/supply-chain.md](docs/supply-chain.md) | signatures, attestations, admission, git and chart verification |
-| [docs/networking.md](docs/networking.md) | Cilium, Istio ambient, Gateway API, Kyverno |
-| [docs/multicluster.md](docs/multicluster.md) | opt-in Istio ambient multicluster: east-west gateways, remote secrets, mesh CA in OpenBao on mgmt |
-| [docs/observability.md](docs/observability.md) | observability plane, telemetry, Datadog, Falco and Falco response |
-| [docs/dns.md](docs/dns.md) | external-dns: DNS provider per installation, opt-in per cluster, credentials |
-| [docs/data-services.md](docs/data-services.md) | opt-in PostgreSQL as a service (Crossplane v2 XR: CloudNativePG / RDS / Cloud SQL / Azure Flexible Server), CloudNativePG (PostgreSQL + backups), Strimzi (Kafka, KRaft), KEDA; consuming them from OpenChoreo |
-| [docs/ai-agents.md](docs/ai-agents.md) | OpenChoreo RCA and FinOps agents, agentgateway, OpenCost (switched off) |
-| [docs/demo.md](docs/demo.md) | scripted full-platform demo (~30 min) and its read-only pre-flight `task demo:check` |
-| [docs/forking.md](docs/forking.md) | run it from your own fork: `set-repo`, least-privilege credentials, boot, troubleshooting |
-| [docs/dev-environment.md](docs/dev-environment.md) | toolchain (mise + Task), hosts, portable scripts, image architecture audit |
-| [docs/diagrams/](docs/diagrams/README.md) | architecture, security, network, observability, SDLC; day-2: cluster lifecycle, trust & certificates, backup & restore, upgrades; the visual system |
+- **Core design & contracts**: [Architecture](docs/architecture.md), [Conventions and contracts](docs/conventions.md), [AGENTS.md](AGENTS.md)
+- **Clusters & networking**: [Cluster API providers](docs/providers.md), [Networking and Kyverno](docs/networking.md), [Multicluster mesh & OpenBao CA](docs/multicluster.md), [External DNS](docs/dns.md)
+- **Developer platform & delivery**: [OpenChoreo](docs/openchoreo.md), [Golden-path templates](docs/project-templates.md), [Build plane & Harbor](docs/build-plane.md), [Promotion gates](docs/promotion.md), [Supply chain](docs/supply-chain.md)
+- **Observability, data & AI**: [Observability & Falco](docs/observability.md), [Data services (Crossplane, CNPG, Strimzi, KEDA)](docs/data-services.md), [AI agents](docs/ai-agents.md)
+- **Contributing & forks**: [Developer environment](docs/dev-environment.md), [Running from a fork](docs/forking.md)
 
-Related repos: [koorikla/hello-world](https://github.com/koorikla/hello-world) (example app),
-[koorikla/ci](https://github.com/koorikla/ci) (reusable CI workflows and build scripts).
+## Day-2 operations
 
-## Status
+Start at the **[Day-2 operations handbook](docs/operations.md)** for cluster access rules and triage entrypoints:
 
-Diagram boxes: solid = built on `main`, dashed = opt-in (on `main`, off by default), dimmed with a "planned" tag = not on `main` yet.
-
-| State | What |
-|---|---|
-| **Built, running locally** | k3d mgmt + CAPD cluster `dev1` (Cilium; development, staging and production as namespaces) from fleet files, `prod1` (flannel) as the multicluster profile ([docs/dev-environment.md](docs/dev-environment.md#local-profiles)); Argo CD push mode with the addon catalog; ESO stores; per-cluster OpenChoreo agent identity; OpenChoreo control plane, Thunder, Backstage, data planes; hello-world released to `development`; observability plane with workload telemetry; Falco + falcosidekick + Talon; Istio ambient with app namespaces enrolled by Kyverno; Kyverno Pod Security baseline (Audit) |
-| **Built, first live run pending** | workflow plane builds + Harbor ([#40](https://github.com/koorikla/platform/issues/40), [#17](https://github.com/koorikla/platform/issues/17)); promotion gates ([#10](https://github.com/koorikla/platform/issues/10), [#11](https://github.com/koorikla/platform/issues/11), [#54](https://github.com/koorikla/platform/issues/54)); per-environment image verification ([#15](https://github.com/koorikla/platform/issues/15), [#16](https://github.com/koorikla/platform/issues/16)); Falco escalation to Argo Events |
-| **Built, rendered only** | AWS (CAPA) and Hetzner (CAPH) installations, AWS Secrets Manager / Vault backends ([#26](https://github.com/koorikla/platform/issues/26)); Istio ambient multicluster between `dev1` and `prod1` (multicluster profile) with the mesh CA in OpenBao on mgmt ([#19](https://github.com/koorikla/platform/issues/19), [docs/multicluster.md](docs/multicluster.md)) |
-| **Opt-in** | OBI (eBPF RED metrics), Datadog exporter, Talon dry run per environment; external-dns (Route 53 / Cloudflare; live check [#21](https://github.com/koorikla/platform/issues/21)); OpenChoreo RCA and FinOps agents + agentgateway + OpenCost ([#22](https://github.com/koorikla/platform/issues/22)); data services PostgreSQL as a service (Crossplane v2; rendered offline, live check [#107](https://github.com/koorikla/platform/issues/107)), CloudNativePG, Strimzi (Kafka), KEDA ([docs/data-services.md](docs/data-services.md); OpenChoreo resource types [#70](https://github.com/koorikla/platform/issues/70)) |
-| **Planned** | argocd-agent managed mode ([#20](https://github.com/koorikla/platform/issues/20)); Crossplane v2 with gated package promotion ([#57](https://github.com/koorikla/platform/issues/57)); SSO ([#58](https://github.com/koorikla/platform/issues/58)); Backstage scaffolder ([#59](https://github.com/koorikla/platform/issues/59)); Istio multicluster east-west ([#18](https://github.com/koorikla/platform/issues/18)) |
-
-Backlog: [open issues](https://github.com/koorikla/platform/issues).
+- [Upgrades](docs/runbooks/upgrades.md): k3s, CAPI, `ClusterClass` rollouts, Renovate addon bumps, OpenChoreo, Istio, Kyverno
+- [Backup and restore](docs/runbooks/backup-restore.md): `mgmt` and workload `etcd`, OpenBao (`raft` + unseal key), Thunder PVCs, Harbor, CloudNativePG
+- [Certificates and secrets](docs/runbooks/certificates-and-secrets.md): cert-manager CAs, OpenBao mesh CA, OpenChoreo agent certs, GitHub Apps, Cosign, ESO
+- [Scaling and capacity](docs/runbooks/scaling-and-capacity.md): adding or decommissioning clusters, worker pools, `1` vs `3` server HA, local RAM profiles
+- [Incidents](docs/runbooks/incidents.md): stuck Argo apps, unreachable clusters, blocked promotion gates, Kyverno denials, Falco alerts, sealed OpenBao
+- [Observability first look](docs/runbooks/observability-first-look.md): 5-minute triage across Backstage, OpenSearch, Prometheus, and Hubble
+- [Break-glass](docs/runbooks/break-glass.md): freezing Argo CD `selfHeal`, emergency promotion overrides, `etcd` quorum recovery, OpenBao local reset
