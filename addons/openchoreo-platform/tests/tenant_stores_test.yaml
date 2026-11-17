@@ -1,0 +1,15 @@
+suite: openchoreo-platform - component types use the per-tenant SecretStore (#96)
+templates:
+  - templates/upstream-defaults.yaml
+tests:
+  - it: default - SecretReference ExternalSecrets use the data plane's ClusterSecretStore (upstream)
+    documentSelector: { path: metadata.name, value: service }
+    asserts:
+      - equal: { path: 'spec.resources[?(@.template.kind == "ExternalSecret")].template.spec.secretStoreRef', value: { name: "${dataplane.secretStore}", kind: ClusterSecretStore } }
+
+  - it: secrets.tenantStores.enabled - every component type's ExternalSecrets use the cell namespace's SecretStore
+    set: { secrets.tenantStores.enabled: true }
+    documentSelector: { path: kind, value: ClusterComponentType, matchMany: true }
+    asserts:
+      - equal: { path: 'spec.resources[?(@.template.kind == "ExternalSecret")].template.spec.secretStoreRef', value: { kind: SecretStore, name: openbao-tenant } }
+      - notMatchRegex: { path: 'spec.resources[?(@.template.kind == "ExternalSecret")].template.spec.secretStoreRef.kind', pattern: ClusterSecretStore }
