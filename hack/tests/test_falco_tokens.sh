@@ -5,7 +5,8 @@
 # engine ESO v2 uses) with a sample store key, and compared:
 #   receiver  addon argo-events  Secret falco-webhook key <cluster>       + EventSource endpoint /falco/<cluster>
 #   sender    addon falco (mgmt)  Secret falcosidekick-escalation         (store platform)
-#   sender    charts/cluster      CRS payload falcosidekick-escalation    (each workload cluster)
+#   sender    charts/cluster      CRS payload falcosidekick-escalation    (each workload cluster; provider byo: the
+#                                 pushed Secret <cluster>-falco-escalation)
 # Also: the store's token is never copied to workload clusters (workloadSeed) and never read by a workload's falco.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -59,10 +60,17 @@ for inst_dir in installations/*; do
       address=$(eso_eval "$(yq -r '.spec.target.template.data.WEBHOOK_ADDRESS' <<<"$fo")")
     else
       render_cluster "$inst" "$c" "$TMP/cluster-$inst-$c.yaml"
-      crs=$(yq -r 'select(.kind == "ExternalSecret" and (.spec.target.template.data | has("falco-escalation.yaml"))) | .spec.target.template.data["falco-escalation.yaml"]' "$TMP/cluster-$inst-$c.yaml")
-      # the payload is an ESO template, not YAML yet: take the value text after the key
-      header=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_CUSTOMHEADERS: //p' <<<"$crs")")")
-      address=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_ADDRESS: //p' <<<"$crs")")")
+      byo=$(C="$c" yq 'select(.kind == "ExternalSecret" and .metadata.name == strenv(C) + "-falco-escalation" and (.spec.target.template.data | has("WEBHOOK_ADDRESS")))' "$TMP/cluster-$inst-$c.yaml")
+      if [[ -n "$byo" ]]; then
+        # provider byo: the Secret itself, pushed as is (charts/cluster byo.pushSecret)
+        header=$(eso_eval "$(yq -r '.spec.target.template.data.WEBHOOK_CUSTOMHEADERS' <<<"$byo")")
+        address=$(eso_eval "$(yq -r '.spec.target.template.data.WEBHOOK_ADDRESS' <<<"$byo")")
+      else
+        crs=$(yq -r 'select(.kind == "ExternalSecret" and (.spec.target.template.data | has("falco-escalation.yaml"))) | .spec.target.template.data["falco-escalation.yaml"]' "$TMP/cluster-$inst-$c.yaml")
+        # the payload is an ESO template, not YAML yet: take the value text after the key
+        header=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_CUSTOMHEADERS: //p' <<<"$crs")")")
+        address=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_ADDRESS: //p' <<<"$crs")")")
+      fi
     fi
     assert_eq "$header" "Authorization:Bearer $want" "$inst/$c: sender's bearer token == the receiver's key $c"
     assert_eq "$address" "${URL%/}/$c" "$inst/$c: sender posts to its own endpoint"
