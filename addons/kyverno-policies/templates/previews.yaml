@@ -128,13 +128,26 @@ spec:
     - name: expired
       expression: 'int(time.now()) > variables.expiresAt + duration("{{ $g.ttlGrace }}").getSeconds()'
 ---
-# Kyverno's controllers: list Environments for the cap (admission), delete expired ones (cleanup).
+# Kyverno's controllers: list Environments for the cap (admission), policy readiness (reports), delete expired ones
+# (cleanup).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kyverno:admission-controller:preview-environments
   labels:
     rbac.kyverno.io/aggregate-to-admission-controller: "true"
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [environments]
+    verbs: [get, list, watch]
+---
+# The MutatingPolicy is only Ready (and the Argo CD app Healthy) once the reports controller may read its match kind.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:reports-controller:preview-environments
+  labels:
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
 rules:
   - apiGroups: [openchoreo.dev]
     resources: [environments]
