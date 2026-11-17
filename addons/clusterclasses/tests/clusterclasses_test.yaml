@@ -4,6 +4,7 @@ templates:
   - templates/k3s-docker.yaml
   - templates/k3s-aws.yaml
   - templates/k3s-hetzner.yaml
+  - templates/gke-managed.yaml
 tests:
   - it: creates namespace fleet
     template: templates/namespace.yaml
@@ -24,6 +25,11 @@ tests:
         template: templates/k3s-aws.yaml
       - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-hetzner, namespace: fleet, any: true }
         template: templates/k3s-hetzner.yaml
+
+  - it: renders gke-managed only when the installation enables CAPG
+    template: templates/gke-managed.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
 
   - it: skips k3s-docker when the installation disables CAPD
     template: templates/k3s-docker.yaml
@@ -288,3 +294,68 @@ tests:
       - matchRegex:
           path: 'spec.patches[?(@.name == "registryHostAlias")].definitions[1].jsonPatches[0].valueFrom.template'
           pattern: 'getent hosts \{\{ \.registryHostAliasTarget \}\}.*>> /etc/hosts'
+
+  # --- gke-managed (CAPG, managed control plane) -------------------------------------------------------------------
+  - it: gke-managed references CAPG v1beta1 managed templates and a MachinePool worker class (no machine templates)
+    template: templates/gke-managed.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: metadata.name, value: gke-managed }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: spec.infrastructure.templateRef.kind, value: GCPManagedClusterTemplate }
+      - equal: { path: spec.controlPlane.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: spec.controlPlane.templateRef.kind, value: GCPManagedControlPlaneTemplate }
+      - matchRegex: { path: spec.controlPlane.templateRef.name, pattern: "^gke-managed-control-plane-[0-9a-f]{8}$" }
+      - notExists: { path: spec.controlPlane.machineInfrastructure }
+      - notExists: { path: spec.workers.machineDeployments }
+      - equal: { path: "spec.workers.machinePools[0].class", value: default-worker }
+      - equal: { path: "spec.workers.machinePools[0].bootstrap.templateRef.apiVersion", value: bootstrap.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: "spec.workers.machinePools[0].bootstrap.templateRef.kind", value: GKEConfigTemplate }
+      - matchRegex: { path: "spec.workers.machinePools[0].bootstrap.templateRef.name", pattern: "^gke-managed-worker-[0-9a-f]{8}$" }
+      - equal: { path: "spec.workers.machinePools[0].infrastructure.templateRef.kind", value: GCPManagedMachinePoolTemplate }
+
+  - it: gke-managed renders every template it references, in namespace fleet
+    template: templates/gke-managed.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    asserts:
+      - hasDocuments: { count: 5 }
+      - containsDocument: { kind: GCPManagedClusterTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GCPManagedControlPlaneTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GCPManagedMachinePoolTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GKEConfigTemplate, apiVersion: bootstrap.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+
+  - it: gke-managed defines only GKE variables (none of the k3s classes' registryAuth / registryCA / cni)
+    template: templates/gke-managed.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - lengthEqual: { path: spec.variables, count: 6 }
+      - equal: { path: "spec.variables[0].name", value: project }
+      - equal: { path: "spec.variables[0].required", value: true }
+      - equal: { path: "spec.variables[1].name", value: region }
+      - equal: { path: "spec.variables[1].required", value: true }
+      - equal: { path: "spec.variables[3].schema.openAPIV3Schema.enum", value: [rapid, regular, stable, extended] }
+      - equal: { path: "spec.variables[4].schema.openAPIV3Schema.default", value: e2-standard-4 }
+      - notContains: { path: spec.variables, content: { name: cni }, any: true }
+      - notContains: { path: spec.variables, content: { name: registryAuth }, any: true }
+
+  - it: gke-managed patches project, region, network and GKE Workload Identity pool into the cluster templates
+    template: templates/gke-managed.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[0].definitions[0].jsonPatches[2]", value: { op: replace, path: /spec/template/spec/network/name, valueFrom: { template: "{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}" } } }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[1]", value: { op: replace, path: /spec/template/spec/location, valueFrom: { variable: region } } }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[3]", value: { op: replace, path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool, valueFrom: { template: "{{ .project }}.svc.id.goog" } } }
+      - equal: { path: "spec.patches[3].enabledIf", value: "{{ if .workerNodeLocations }}true{{ end }}" }
+
+  - it: gke-managed node pools take their size from the MachinePool (GKE autoscaler off), VPC-native control plane
+    template: templates/gke-managed.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    asserts:
+      - equal: { path: spec.template.spec.scaling.enableAutoscaling, value: false }
+        documentSelector: { path: kind, value: GCPManagedMachinePoolTemplate }
+      - equal: { path: spec.template.spec.clusterNetwork.useIPAliases, value: true }
+        documentSelector: { path: kind, value: GCPManagedControlPlaneTemplate }
