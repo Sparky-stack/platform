@@ -1,0 +1,7 @@
+# OpenChoreo's workflow-plane agent creating a build Workflow in the run namespace: not the Sensor, policy skipped.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: UserInfo
+metadata: { name: cluster-agent }
+userInfo:
+  username: system:serviceaccount:openchoreo-workflow-plane:cluster-agent-workflowplane
+  groups: [system:serviceaccounts, system:serviceaccounts:openchoreo-workflow-plane]

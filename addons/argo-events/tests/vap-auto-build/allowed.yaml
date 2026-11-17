@@ -1,0 +1,9 @@
+# The one Workflow shape the auto-build Sensor creates (addon argo-events templates/auto-build-webhook.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { generateName: auto-build-push-, name: auto-build-push-abcde, namespace: workflows-default, labels: { platform.koorikla.io/trigger: webhook } }
+spec:
+  workflowTemplateRef: { name: auto-build }
+  arguments:
+    parameters:
+      - { name: repository, value: https://github.com/koorikla/hello-world.git }

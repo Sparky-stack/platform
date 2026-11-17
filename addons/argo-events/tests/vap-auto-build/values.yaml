@@ -1,0 +1,5 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: workflows-default
+    labels: { kubernetes.io/metadata.name: workflows-default }
