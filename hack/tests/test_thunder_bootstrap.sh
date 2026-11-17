@@ -19,19 +19,20 @@ cd "$ROOT"
 # subPath of a missing key is an empty directory). Any other volume type mounted there fails the test.
 JOB='select(.kind == "Job" and .metadata.name == "thunder-setup") | .spec.template.spec'
 files() {
-  local render=$1 out=$2 vol mp sp rel cm entries path key dest
+  local render=$1 out=$2 sub="$TMP/th-sub.yaml" vol mp sp rel cm entries path key dest
   rm -rf "$out"; mkdir -p "$out"
+  yq 'select((.kind == "Job" and .metadata.name == "thunder-setup") or .kind == "ConfigMap")' "$render" > "$sub"
   while IFS=$'\t' read -r vol mp sp; do
     case "$mp" in /opt/thunderid/bootstrap | /opt/thunderid/bootstrap/*) ;; *) continue ;; esac
     rel=${mp#/opt/thunderid/bootstrap}; rel=${rel#/}
-    cm=$(V="$vol" yq -N "$JOB"' | .volumes[] | select(.name == strenv(V)) | .configMap.name // ""' "$render" | tr -d '\r')
+    cm=$(V="$vol" yq -N "$JOB"' | .volumes[] | select(.name == strenv(V)) | .configMap.name // ""' "$sub" | tr -d '\r')
     if [[ -z "$cm" ]]; then
       assert_eq "volume $vol" "a ConfigMap volume" "only ConfigMap volumes are mounted into the bootstrap directory"
       continue
     fi
-    entries=$(V="$vol" yq -N "$JOB"' | .volumes[] | select(.name == strenv(V)) | .configMap.items // [] | .[] | .path + "\t" + .key' "$render" | tr -d '\r')
+    entries=$(V="$vol" yq -N "$JOB"' | .volumes[] | select(.name == strenv(V)) | .configMap.items // [] | .[] | .path + "\t" + .key' "$sub" | tr -d '\r')
     if [[ -z "$entries" ]]; then
-      entries=$(C="$cm" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data | keys | .[] | . + "\t" + .' "$render" | tr -d '\r')
+      entries=$(C="$cm" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data | keys | .[] | . + "\t" + .' "$sub" | tr -d '\r')
     fi
     while IFS=$'\t' read -r path key; do
       [[ -n "$path" ]] || continue
@@ -40,11 +41,11 @@ files() {
       elif [[ "$path" == "$sp/"* ]]; then dest="$rel/${path#"$sp"/}"
       else continue; fi
       dest=${dest#/}
-      [[ "$(C="$cm" K="$key" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data | has(strenv(K))' "$render" | tr -d '\r')" == true ]] || continue
+      [[ "$(C="$cm" K="$key" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data | has(strenv(K))' "$sub" | tr -d '\r')" == true ]] || continue
       mkdir -p "$out/$(dirname "$dest")"
-      C="$cm" K="$key" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data[strenv(K)]' "$render" > "$out/$dest"
+      C="$cm" K="$key" yq -N 'select(.kind == "ConfigMap" and .metadata.name == strenv(C)) | .data[strenv(K)]' "$sub" > "$out/$dest"
     done <<< "$entries"
-  done < <(yq -N "$JOB"' | .containers[0].volumeMounts[] | .name + "\t" + .mountPath + "\t" + (.subPath // "")' "$render" | tr -d '\r')
+  done < <(yq -N "$JOB"' | .containers[0].volumeMounts[] | .name + "\t" + .mountPath + "\t" + (.subPath // "")' "$sub" | tr -d '\r')
 }
 
 # bundle <dir> -> loadBundle: every *.yaml/*.yml/*.json (recursive, sorted), joined with "\n---\n"
@@ -69,8 +70,8 @@ check() {
   assert_match "$(printf '%s\n' "$docs" | wc -l | tr -d ' ')" '^[1-9][0-9]*$' "$label: the bundle is not empty"
 }
 
-helm template thunder addons/thunder --namespace thunder > "$TMP/th.yaml"
-check "$TMP/th.yaml" "agents [] (default)"
+render_standalone_addon thunder "$TMP/th-default.yaml"
+check "$TMP/th-default.yaml" "agents [] (default)"
 for agents in "rca" "finops" "rca,finops"; do
   helm template thunder addons/thunder --namespace thunder --set "bootstrapSecret.aiAgentClients={$agents}" > "$TMP/th.yaml"
   check "$TMP/th.yaml" "agents [$agents]"
@@ -84,8 +85,7 @@ if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
 fi
 
 # Negative (mutation): the PR #5 placeholders - a comment-only and an empty file - are caught.
-helm template thunder addons/thunder --namespace thunder > "$TMP/th.yaml"
-files "$TMP/th.yaml" "$TMP/neg"
+files "$TMP/th-default.yaml" "$TMP/neg"
 assert_eq "$(cd "$TMP/neg" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" "./48-csp.yaml ./49-cors.yaml ./50-user-schema-and-users.yaml ./51-backstage-app.yaml ./54-cli-app.yaml ./59-openchoreo-observer-app.yaml ./70-openchoreo-promotion-gate-app.yaml ./ai-agent-clients/README " "agents off: the Job sees the platform scripts and the README, no agent file"
 mkdir -p "$TMP/neg/ai-agent-clients"
 printf '# rca agent client off\n' > "$TMP/neg/ai-agent-clients/53-rca-agent-client.yaml"
