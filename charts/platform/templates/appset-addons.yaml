@@ -1,8 +1,7 @@
 {{- $inst := .Values.installation -}}
 {{- $instValues := omit .Values "addons" -}}
-{{- $defaultRev := $inst.revision | default "HEAD" -}}
 {{- /* clusterServerParameters: <helm param>: <part of the Argo cluster secret's `server`> - goTemplate expressions
-evaluated by the ApplicationSet controller per cluster (sprig urlParse; VERIFY live). hack/test.sh mirrors them. */ -}}
+evaluated by the ApplicationSet controller per cluster (sprig urlParse). hack/test.sh mirrors them. */ -}}
 {{- $serverExpr := dict
   "url"  "{{ .server }}"
   "host" "{{ (urlParse .server).hostname }}"
@@ -43,25 +42,21 @@ spec:
     {{- toYaml $gens | nindent $in }}
   template:
     metadata:
-      name: '{{ $addon }}-{{ "{{" }} .name {{ "}} " | trim }}'
-      {{- if hasKey $cfg "syncWave" }}
-      annotations:
-        argocd.argoproj.io/sync-wave: {{ $cfg.syncWave | quote }}
-      {{- end }}
+      name: '{{ $addon }}-{{ "{{" }} .name {{ "}}" }}'
     spec:
       project: platform
       source:
         repoURL: {{ $inst.repoURL | quote }}
-        targetRevision: '{{ "{{" }} $r := index .metadata.annotations "platform.koorikla.io/addons-revision" {{ "}} " | trim }}{{ "{{" }} if and $r (ne $r "HEAD") {{ "}} " | trim }}{{ "{{" }} $r {{ "}} " | trim }}{{ "{{" }} else {{ "}} " | trim }}{{ $defaultRev }}{{ "{{" }} end {{ "}} " | trim }}'
+        targetRevision: {{ include "platform.addonsTargetRevision" $ }}
         path: {{ printf "addons/%s" $addon | quote }}
         helm:
           releaseName: {{ $cfg.releaseName | default $addon | quote }}
           ignoreMissingValueFiles: true
           valueFiles:
             - values.yaml
-            - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}.yaml'
-            - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}.yaml'
-            - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}.yaml'
+            - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}}" }}.yaml'
+            - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}}" }}.yaml'
+            - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}}" }}.yaml'
             {{- /* mesh members (fleet file mesh.group -> label mesh.platform.koorikla.io/group): values/mesh-member.yaml */}}
             - 'values/mesh-{{ "{{" }} if index .metadata.labels "mesh.platform.koorikla.io/group" {{ "}}" }}member{{ "{{" }} else {{ "}}" }}none{{ "{{" }} end {{ "}}" }}.yaml'
             {{- /* installationValueFiles: value files chosen by installation facts (e.g. external-dns'
@@ -74,13 +69,13 @@ spec:
             - {{ $path | quote }}
             {{- end }}
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
-            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}.yaml'
-            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}.yaml'
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}}" }}.yaml'
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}.yaml'
           {{- if or $cfg.clusterNameParameters $cfg.clusterNameFormats $cfg.clusterIdParameters $cfg.installationParameters $cfg.clusterServerParameters $cfg.clusterLabelParameters $fleet }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
-              value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+              value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
               forceString: true
             {{- end }}
             {{- /* clusterNameFormats: <param>: <printf format with one %s> -> the cluster name inside a fixed text (e.g.
@@ -103,7 +98,7 @@ spec:
             external (e.g. external-dns TXT owner in a shared zone). */}}
             {{- range $p := $cfg.clusterIdParameters }}
             - name: {{ $p | quote }}
-              value: '{{ required "installation.name is required" $inst.name }}-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
+              value: '{{ required "installation.name is required" $inst.name }}-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
               forceString: true
             {{- end }}
             {{- /* installationParameters: <helm param>: <template over installation values>, rendered here once per
@@ -142,15 +137,15 @@ spec:
           {{- end }}
           valuesObject:
             cluster:
-              name: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}} " | trim }}'
-              role: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}} " | trim }}'
-              provider: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}} " | trim }}'
-              region: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/region" {{ "}} " | trim }}'
-              environment: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}} " | trim }}'
-              cni: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}} " | trim }}'
+              name: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
+              role: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}}" }}'
+              provider: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}}" }}'
+              region: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/region" {{ "}}" }}'
+              environment: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}}" }}'
+              cni: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}}" }}'
             {{- toYaml $instValues | nindent 12 }}
       destination:
-        server: '{{ "{{" }} .server {{ "}} " | trim }}'
+        server: '{{ "{{" }} .server {{ "}}" }}'
         namespace: {{ $cfg.namespace | quote }}
       {{- if $cfg.ignoreDifferences }}
       ignoreDifferences:

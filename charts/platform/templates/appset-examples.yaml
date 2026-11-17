@@ -4,7 +4,6 @@ by Argo CD to the clusters matching examples.<name>.selector (labels only, never
 examples/<name>/values.yaml < installations/<inst>/examples/<name>/{values,cluster-<cluster>}.yaml < cluster.name.
 */ -}}
 {{- $inst := .Values.installation -}}
-{{- $defaultRev := $inst.revision | default "HEAD" -}}
 {{- range $ex, $cfg := (.Values.examples | default dict) }}
 {{- if $cfg.enabled }}
 ---
@@ -26,7 +25,7 @@ spec:
       project: examples              # templates/projects.yaml: the example namespaces only
       source:
         repoURL: {{ $inst.repoURL | quote }}
-        targetRevision: '{{ "{{" }} $r := index .metadata.annotations "platform.koorikla.io/addons-revision" {{ "}}" }}{{ "{{" }} if and $r (ne $r "HEAD") {{ "}}" }}{{ "{{" }} $r {{ "}}" }}{{ "{{" }} else {{ "}}" }}{{ $defaultRev }}{{ "{{" }} end {{ "}}" }}'
+        targetRevision: {{ include "platform.addonsTargetRevision" $ }}
         path: {{ printf "examples/%s" $ex | quote }}
         helm:
           releaseName: {{ $ex | quote }}
