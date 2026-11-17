@@ -159,7 +159,8 @@ For one component and one edge (default staging → next environment) the gate c
 5. **freeze**: no `promotion.freezeWindows` entry is active for the target environment (IANA time zones, DST-aware).
 6. **promote**:
    - opens or updates the PR `promote(<component>): <release> to <env>` (branch `promote/<component>-<env>`) through
-     the GitHub REST API, so GitHub signs the commit;
+     the GitHub REST API, so GitHub signs the commit. An open PR that already pins the release keeps its branch (a
+     reset would make GitHub close it); one for another release is replaced;
    - the PR body lists the evidence;
    - sets the commit status `openchoreo/promotion-gate` = success.
 
@@ -168,10 +169,13 @@ in the observer (`workflow` log scope).
 
 **Triggers.**
 - Automatic: addon `argo-events` watches ReleaseBindings in the org namespace. When `status.delivery.succeededAt` is
-  set for a binding in `promotionGate.sourceEnvironments` (default `staging`) and that rollout started at or after the
-  binding's `status.lastSpecUpdateTime` (right after a `releaseName` edit the binding still shows the previous
-  release's finished rollout), Sensor `promotion-gate` creates `WorkflowRun gate-<component>-<sha256(rolloutId)[:10]>`. The name is deterministic, so one rollout gives exactly one
-  run, and re-delivered events fail with AlreadyExists.
+  set for a binding in `promotionGate.sourceEnvironments` (default `staging`), its `Ready` condition observed the
+  binding's `metadata.generation` and that rollout started at or after the binding's `status.lastSpecUpdateTime`,
+  Sensor `promotion-gate` creates `WorkflowRun gate-<component>-<sha256(rolloutId)[:10]>`. The name is deterministic, so one rollout gives exactly one
+  run, and re-delivered events fail with AlreadyExists. Both status checks reject the previous release's finished
+  rollout, which a `releaseName` edit leaves behind twice: the spec-edit event itself carries the whole old status
+  (only the generation differs, [#155](https://github.com/koorikla/platform/issues/155)), and the controller's first
+  status write still carries the old delivery.
 - Manual: create a WorkflowRun (below).
 
 **Why a PR and not a direct binding update.** The gate only proves that the release is healthy. The approval stays
@@ -284,10 +288,7 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
   ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
-  no-op when production already runs the release, otherwise it updates the PR. The spec-edit event of a promotion still
-  carries the previous rollout's status, so a promotion more than 1 hour after the previous one starts a second run;
-  the later run resets the branch, GitHub closes the first PR and the gate opens a new one
-  ([#155](https://github.com/koorikla/platform/issues/155)).
+  no-op when production already runs the release, otherwise it updates the open PR.
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
   over the control-plane Gateway; locally these are plain HTTP on the docker network. `prometheusURL` is the
   in-cluster Service (no credentials sent; the observability plane runs on mgmt with the workflow plane). Every other installation must
