@@ -113,7 +113,7 @@ printf '<!-- hand edit -->\n' >> "$TMP/stale/network.svg"
 out=$(py "$B" --check --out "$TMP/stale" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a hand-edited SVG fails --check"
 assert_match "$out" "network.svg is not up to date" "stale SVG is named"
-sed 's/^1\. Argo CD reads git/1. Argo CD pulls git/' "$ROOT/docs/diagrams/README.md" > "$TMP/README.md"
+sed 's/^1\. Argo CD reads Git/1. Argo CD pulls Git/' "$ROOT/docs/diagrams/README.md" > "$TMP/README.md"
 out=$(py "$B" --check --readme "$TMP/README.md" architecture 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "README step drift fails --check"
 assert_match "$out" "steps differ from docs/diagrams/README.md" "step drift is named"
