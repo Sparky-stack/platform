@@ -1,0 +1,7 @@
+# gcp-example: OpenBao (Istio mesh CA, addon openbao) is opt-in (installation.yaml mgmt.addons.openbao). Outside docker its
+# Gateway needs gateway.loadBalancerSourceRanges - the render fails without it (docs/multicluster.md "Reachability per
+# provider"). 203.0.113.0/24 is a documentation range (RFC 5737): it fails closed until replaced with the mesh members'
+# egress CIDRs (the peers' Cloud NAT addresses).
+gateway:
+  loadBalancerSourceRanges:
+    - 203.0.113.0/24   # VERIFY: the mesh members' egress CIDRs
