@@ -429,7 +429,7 @@ def backup() -> Diagram:
     MX, MW = MZ + 16, ZR - 16 - MZ - 16
     OX, OW = OZ + 16, 932 - 16 - OZ - 16
     BY, BH = 120, 60                           # the backup copies, above the operator
-    R = [BY + BH + 80 + i * (H + 32) for i in range(5)]
+    R = [BY + BH + 80 + i * (H + 40) for i in range(5)]
     zb = R[4] + H + 24
     RW = zb + 40 + 72                          # the workload cluster's row: room between its label and the chip
     zw = RW + H + 24
