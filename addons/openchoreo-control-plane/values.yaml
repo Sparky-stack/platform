@@ -199,6 +199,6 @@ openchoreo-control-plane:
 
   gateway:
     httpPort: 8080          # == k3d published port, so in-cluster and browser URLs are identical
-    httpsPort: 8443         # TLS passthrough listener for cluster-gateway (no https listener: tls off). VERIFY klipper exposes it
+    httpsPort: 8443         # TLS passthrough listener for cluster-gateway (no https listener: tls off)
     tls:
       enabled: false
