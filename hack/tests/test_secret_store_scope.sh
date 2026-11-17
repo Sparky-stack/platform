@@ -15,6 +15,10 @@ if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
   exit 0
 fi
 cd "$ROOT"
+# shellcheck source=../lib/portable.sh
+source hack/lib/portable.sh
+# shellcheck source=../lib/addons.sh
+source hack/lib/addons.sh
 
 # wp_store <file>... -> ClusterWorkflowPlane.spec.secretStoreRef.name (default: workflows)
 wp_store() {
