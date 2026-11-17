@@ -108,9 +108,14 @@ metadata:
 ---
 {{- end }}
 {{- /* VERIFY: workload auth on the aws (IRSA / Pod Identity) and vault backends (stores default and dns) */}}
+{{- /* With per-tenant stores (templates/tenant-stores.yaml) tenant namespaces may not use store default at all. */}}
+{{- $defaultConds := list }}
+{{- if ((.Values.secrets).tenantStores).enabled }}
+{{- $defaultConds = list (dict "namespaceSelector" (dict "matchExpressions" (list (dict "key" .Values.tenantStores.tenantLabel "operator" "DoesNotExist")))) }}
+{{- end }}
 {{ include "secret-stores.store" (dict "root" . "backend" $backend "name" "default"
       "serviceAccount" (get (dict "kubernetes" "eso-workload-default" "aws" "eso-aws" "vault" "eso-vault") $backend)
-      "remoteNamespace" $wlNs) }}
+      "conditions" $defaultConds "remoteNamespace" $wlNs) }}
 {{- /*
 ClusterSecretStore `dns` (workload clusters, installation.yaml dns.provider cloudflare): the external-dns Cloudflare
 token, zone-wide DNS:Edit. The tenant store `default` is the ClusterDataPlane secretStoreRef, so anything it can read

@@ -12,6 +12,10 @@
 #   addons/crossplane           ValidatingPolicies (offline): tenants are denied raw CNPG / RDS / Cloud SQL objects in
 #                              their namespaces while Crossplane and platform namespaces pass; production PostgreSQL XRs
 #                              need highAvailability + backup, other environments are not matched
+#   addons/secret-stores        ValidatingAdmissionPolicies of the per-tenant stores (offline, #96): in a tenant namespace
+#                              only SecretStore openbao-tenant may be referenced (ClusterSecretStore default, another
+#                              store, a data[] sourceRef to a ClusterSecretStore and a ClusterGenerator are denied);
+#                              SecretStores there only from Kyverno's background controller
 # and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
@@ -113,6 +117,29 @@ wp_chart="$ROOT/addons/openchoreo-workflow-plane"
   done
 ) &
 
+# Native VAPs of addon secret-stores: tenant namespaces use only their own SecretStore (per-tenant OpenBao stores)
+ss="$ROOT/addons/secret-stores"
+eso="$ROOT/addons/external-secrets"
+[[ -d "$eso/charts" ]] || helm dependency build "$eso" >/dev/null
+(
+  helm template eso "$eso" --namespace external-secrets | yq 'select(.kind == "CustomResourceDefinition" and
+    (.metadata.name == "externalsecrets.external-secrets.io" or .metadata.name == "secretstores.external-secrets.io"))' \
+    > "$TMP/eso-crds.yaml"
+  helm template secret-stores "$ss" --namespace external-secrets -f "$ss/values/role-workload.yaml" \
+    --set secrets.tenantStores.enabled=true --set cluster.name=dev1 --set mesh.ca.host=openbao.example.test \
+    -s templates/tenant-stores.yaml > "$TMP/ss-tenant.yaml"
+  # one policy per run (the CLI applies every given VAP to every given resource; namespaceSelector and resource rules
+  # are pinned by the addon's helm-unittest)
+  for p in externalsecrets:platform-tenant-externalsecret-store secretstores:platform-tenant-secretstores-platform-owned; do
+    yq "select(.metadata.name == \"${p#*:}\")" "$TMP/ss-tenant.yaml" > "$TMP/ss-vap-${p%%:*}.yaml"
+  done
+  for c in tenant:externalsecrets tenant:secretstores kyverno:secretstores; do
+    who=${c%%:*}; res=${c#*:}
+    "$KYVERNO" apply "$TMP/ss-vap-$res.yaml" --resource "$ss/tests/vap/$res.yaml" --userinfo "$ss/tests/vap/$who.yaml" \
+      --values-file "$ss/tests/vap/values.yaml" --crd-paths "$TMP/eso-crds.yaml" > "$TMP/ss-$who-$res.out" 2>&1 || true
+  done
+) &
+
 # Kyverno ValidatingPolicies of addon crossplane: PostgreSQL only through the platform API
 xp="$ROOT/addons/crossplane"
 [[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
@@ -150,6 +177,13 @@ for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 13'; do
   res=${c%%:*}; want=${c#*:}
   out=$(cat "$TMP/ae-$res.out")
   assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
+done
+
+# who:resources:expected
+for c in tenant:externalsecrets:'pass: 2, fail: 4' tenant:secretstores:'pass: 0, fail: 1' kyverno:secretstores:'pass: 1, fail: 0'; do
+  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
+  out=$(cat "$TMP/ss-$who-$res.out")
+  assert_match "$out" "$want, warn: 0, error: 0" "secret-stores tenant VAPs: $who applying tests/vap/$res.yaml -> $want"
 done
 
 # resources:userinfo:expected
