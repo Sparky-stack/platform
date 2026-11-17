@@ -1,13 +1,13 @@
 # Build plane: OpenChoreo workflow plane + Harbor
 
 In-cluster builds are the **primary, CI-provider-agnostic build path**: a Component names a ClusterWorkflow, a
-WorkflowRun (Backstage "Build", `occ`, or an autoBuild webhook) runs it on the OpenChoreo workflow plane, the image
-lands in Harbor signed and scanned, and the new image ref is **committed to the app repo** so Argo CD deploys it. GitHub
-Actions ([koorikla/ci](https://github.com/koorikla/ci) reusable workflows) remain an optional path that runs the same
-scripts. Teams choose per Component.
+WorkflowRun (Backstage "Build", `occ`, or the platform's auto-build trigger on every push) runs it on the OpenChoreo
+workflow plane, the image lands in Harbor signed and scanned, and the new image ref is **committed to the app repo** so
+Argo CD deploys it. GitHub Actions ([koorikla/ci](https://github.com/koorikla/ci) reusable workflows) remain an
+optional path that runs the same scripts. Teams choose per Component.
 
 ```
-WorkflowRun (Backstage / occ / webhook)            mgmt
+WorkflowRun (Backstage / occ / auto-build)         mgmt
   └ ClusterWorkflow <stack> (control plane) ──► Argo Workflow in workflows-<org ns> (workflow plane, via cluster-agent)
        checkout ─┬ check (toolchain image + koorikla/ci scripts/<stack>/check.sh) ─┐
                  └ scan-fs (scan-fs.sh) ────────────────────────────────────────────┴ build (rootless BuildKit,
@@ -71,11 +71,78 @@ spec:
       # gitops: { workloadPath: deploy/openchoreo/workload.yaml }
 ```
 
-Trigger a build: Backstage → component → **Build** (WorkflowRun with live task status and logs), `occ`, or a
-`WorkflowRun` object. `autoBuild: true` additionally builds on every push once a GitHub webhook reaches openchoreo-api
-(webhook secret in Secret `openchoreo-control-plane/git-webhook-secrets`; GitHub cannot reach a laptop). OpenChoreo's webhook matcher treats appPath `.` as "every change", so the hand-off commit would re-trigger the
-build: `checkout` skips commits that only touch the GitOps directory (loop guard), and the commit message carries
-`[skip ci]` for the GitHub Actions path.
+Trigger a build: Backstage → component → **Build** (WorkflowRun with live task status and logs), `occ`, a
+`WorkflowRun` object, or a push to the build branch when the Component sets `autoBuild: true` ("Auto-build" below).
+OpenChoreo's matcher treats appPath `.` as "every change", so the hand-off commit would re-trigger the build:
+`checkout` skips commits that only touch the GitOps directory (loop guard), the auto-build trigger does not even start
+a run for them, and the commit message carries `[skip ci]` for the GitHub Actions path (in hello-world, GitHub Actions
+runs only the checks unless `IMAGE_BUILDER=github-actions`).
+
+### Auto-build (poll or webhook)
+
+`spec.autoBuild: true` (OpenChoreo's own flag) builds every new commit of the Component's build branch. OpenChoreo
+1.3.3 has no polling, only a webhook into openchoreo-api (`POST /api/v1alpha1/autobuild`, secret
+`openchoreo-control-plane/git-webhook-secrets`) whose runs get random names (a redelivered push builds twice), and a
+local k3d stack cannot receive webhooks at all. The platform therefore owns the trigger, selected per installation in
+`installation.yaml` `openchoreo.workflowPlane.autoBuild`:
+
+| Trigger | Installations | Push → build |
+|---|---|---|
+| `poll` | local | CronWorkflow `auto-build-poll`, every minute (`concurrencyPolicy: Forbid`); nothing exposed |
+| `webhook` | aws-example, hetzner-example | GitHub App webhook → `https://events.<host>/github` (control-plane Gateway, TLS listener) → Argo Events EventSource `github` (checks `X-Hub-Signature-256` with store key `github-webhook`, never calls GitHub) → Sensor `auto-build` → a Workflow for the pushed repository; the CronWorkflow still runs every 30 min to catch missed deliveries |
+| `none` | - | Backstage / `occ` / `kubectl` only |
+
+Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org ns>` (addon openchoreo-platform,
+`files/auto-build/auto_build.py`). One pass:
+
+1. Lists Components with `autoBuild: true` and reads repository URL, branch and commit parameter paths from their
+   ClusterWorkflow schema's `x-openchoreo-component-parameter-repository-*` markers (the ones OpenChoreo's webhook
+   matcher uses). Only github.com repositories under `buildWorkflows.git.allowedRepositoryPrefixes`.
+2. Reads the branch head (`GET /repos/<owner>/<repo>/commits/<branch>`), conditionally with the cached ETag.
+3. Stops if WorkflowRun `<component>-<sha[:12]>` exists, or while an earlier auto-build run of the component is still
+   running (no out-of-order image bumps; a run unfinished after 2 h no longer blocks).
+4. Reads `spec.source.commit` from the Workload file at the head commit: when every change since that commit is inside
+   the GitOps directory (the hand-off commit itself, promotion merges), there is nothing to build.
+5. Otherwise creates WorkflowRun `<component>-<sha[:12]>` (labels `openchoreo.dev/component`, `openchoreo.dev/project`,
+   `platform.koorikla.io/trigger: auto-build`; annotation `platform.koorikla.io/commit`) from the Component's workflow
+   with `repository.revision.commit` set to the head. From there it is an ordinary build: hand-off commit, Argo CD,
+   `autoDeploy` to development.
+
+**Idempotent per commit.** The run name is derived from the SHA (a second create is `AlreadyExists`), and "already
+built" is read from git (step 4), not from cluster state. ConfigMap `auto-build-state` (ETags, last handled head per
+Component) is only a cache: restarts, a lost cache, garbage-collected runs (`ttlAfterCompletion`) and redelivered or
+replayed webhooks never build a commit twice. A webhook payload only selects the repository; the head always comes from
+GitHub, so a forged push can at most cause one extra reconcile.
+
+**Credentials.** ESO's `GithubAccessToken` generator mints an installation token of the platform's GitHub App (store
+key `autoBuild.github.key`, default `promotion-gate-github`, through the scoped store `workflows`) restricted to
+`contents: read`, re-minted every 30 min (GitHub expires it after 1 h). The pass mounts only that token; the App key
+stays in a Secret that only ESO reads. No PAT.
+
+**Least privilege.** ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create`
+WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and
+Argo's task results. Network: the run namespace's default-deny policy (DNS, API server, public 443), no ingress. Webhook
+mode: the Sensor may only create Workflows in the run namespace, and ValidatingAdmissionPolicy
+`argo-events-auto-build-workflows` pins them to WorkflowTemplate `auto-build` with only the `repository` argument.
+
+**Rate limits.** Per pass one conditional request per repository and branch (a 304 does not count against GitHub's
+limit), two more (Workload file, compare) only when the head moved; a pass pauses when fewer than `minRateRemaining`
+requests are left and creates at most `maxRunsPerPass` runs. Values: addon openchoreo-platform `autoBuild`, addon
+argo-events `autoBuildWebhook`.
+
+Operate:
+
+```bash
+kubectl -n workflows-default get cronworkflow auto-build-poll
+kubectl -n workflows-default get workflows -l workflows.argoproj.io/cron-workflow=auto-build-poll
+kubectl -n workflows-default get cm auto-build-state -o jsonpath='{.data.state\.json}'
+kubectl -n default get workflowrun -l platform.koorikla.io/trigger=auto-build
+```
+
+Opt out per Component with `autoBuild: false`, per installation with `none`. Webhook setup (cloud): GitHub App
+settings → Webhook active, URL `https://events.<openchoreo.controlPlane.host>/github`, secret = store key
+`github-webhook` property `secret`, subscribe to Push. The webhook path renders and is tested offline; live
+verification: [#166](https://github.com/koorikla/platform/issues/166).
 
 ### GitOps hand-off
 
@@ -287,6 +354,7 @@ audited for architectures by `task images:audit` but not digest-pinned here.
 | `cosign-platform` | `cosign.key` (encrypted), `cosign.pub`, `cosign.password` | build signing; admission policies trust `cosign.pub` |
 | `platform-github-build` | `username`, `token` (fine-grained PAT, app repos only, Contents: Read and write) | clone + GitOps commit, sent only to the allowed repository prefixes |
 | `platform-ghcr` | `username`, `token` | Harbor GHCR proxy cache + replication; external registry type |
+| `github-webhook` | `secret` | auto-build trigger `webhook` only: HMAC secret of the GitHub App webhook (addon argo-events) |
 
 `task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the
 toolbox image (Docker, no host install; password only through the environment, key files removed on any exit), and
@@ -315,6 +383,7 @@ Names: `harbor.openchoreo.localhost`
 | Harbor PostgreSQL / Valkey / Trivy | 25m / 10m / 50m | 128Mi / 32Mi / 192Mi |
 | Harbor Gateway proxy (kgateway Envoy) | kgateway default | ~55Mi (measured after builds) |
 | Argo Workflows controller / cluster-agent | 25m / 10m | 64Mi / 64Mi |
+| Auto-build pass (`poll`: one pod a minute, a few seconds) | 10m | 32Mi (limit 96Mi) |
 | **Steady state total** | **~240m** | **~0.85 GiB** (budget: 1.5 GiB) |
 | Per build (peak, sequential steps) | 500m (BuildKit) | 768Mi BuildKit; checks 512Mi; scans 384Mi |
 

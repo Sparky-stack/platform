@@ -1,5 +1,5 @@
 # OpenChoreo platform-team resources in the control plane (mgmt). Everything here is an OpenChoreo CR except the org
-# namespace label, so the Application fails with "no matches for kind ..." until addon openchoreo-control-plane has
+# namespace label and the auto-build trigger (Argo Workflows + ESO objects in workflows-<org ns>, templates/auto-build.yaml), so the Application fails with "no matches for kind ..." until addon openchoreo-control-plane has
 # installed the CRDs; its retries cover that (CRDs come from the control-plane chart's crds/, installed with it).
 # CRs carry SkipDryRunOnMissingResource so the namespace label still applies on the first attempts.
 #
