@@ -166,8 +166,8 @@ KMS or from a CEL `expression`, not from a Secret reference. Verification from a
 Kyverno does not have there yet: the registry host (coredns-local rewrites it on mgmt only), the mgmt-only Harbor CA,
 and pull credentials for the private `apps` project. All of it: [#15](https://github.com/koorikla/platform/issues/15).
 
-`platformKey.attestations` stays `[]`: the workflow plane's SBOM attestation is `cosign attest --type spdxjson`
-(predicate `https://spdx.dev/Document`), not the `https://spdx.dev/Document/v2.3` that koorikla/ci's GitHub path emits.
+The workflow plane attests its SBOM with predicate `https://spdx.dev/Document/v2.3`, the type koorikla/ci's GitHub path
+emits (`attestationTypes.sbom`), and the Trivy scan as `https://cosign.sigstore.dev/attestation/vuln/v1`.
 
 ### Digest references (live impact of `requireDigest`)
 
@@ -228,5 +228,4 @@ sourceIntegrity:
   upstream charts and are pinned by digest (`hack/tests/test_image_pins.sh`), not verified at admission.
 
 Open checks: web-flow key ID ([#42](https://github.com/koorikla/platform/issues/42)), Kyverno egress and registry
-credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)), the rendered workflow-plane image
-host ([#40](https://github.com/koorikla/platform/issues/40)).
+credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)).
