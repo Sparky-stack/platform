@@ -158,7 +158,7 @@ def network() -> Diagram:
     gap = (Zb + Z2) / 2
     d.box(28, RA, 112, H, "external", "Client", ["opens the", "app URL"])
     d.zone(ZX, Z, 932 - ZX, Zb - Z, "workload cluster", "workload")
-    d.zone(X[2] - 16, RA - 44, BW + 32, H + 60, "service mesh", "workload")
+    d.zone(X[2] - 16, RA - 44, BW + 32, H + 70, "service mesh", "workload")
     d.zone(ZX, Z2, 932 - ZX, RD + H + 24 - Z2, "management cluster", "mgmt")
     d.box(X[0], RA, BW, H, "workload", "Ingress gateway", ["front door of", "the cluster"],
           aka=("kgateway",))
