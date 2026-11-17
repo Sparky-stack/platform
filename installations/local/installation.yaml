@@ -26,6 +26,11 @@ secrets:
   # hello-world, koorikla/ci-toolbox: anonymous pull checked 2026-11). Private images: true + GHCR_* (docs/forking.md).
   nodeRegistryAuth:
     enabled: false
+  # Per-tenant SecretStores backed by OpenBao on mgmt (docs/multicluster.md "Tenant secrets (OpenBao)"): every
+  # OpenChoreo cell namespace reads only kv-tenant-<project>; ClusterSecretStore default refuses tenant namespaces.
+  # Needs mgmt.addons.openbao and mesh members (OpenBao verifies the namespaces' ServiceAccount tokens per cluster).
+  tenantStores:
+    enabled: true
 
 # Image registry (docs/build-plane.md). harbor: addon harbor on mgmt is where in-cluster builds push (project
 # appsProject) and what nodes pull through (proxy caches + upstream fallback). external: builds push to
