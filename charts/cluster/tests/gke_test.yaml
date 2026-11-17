@@ -83,6 +83,12 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: 'cluster prod-euw1: cni "cilium" is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE''s VPC-native networking)' }
 
+  - it: rejects switching the cilium addon on (it follows cni, and gcp-gke has no Cilium)
+    template: templates/capi-registries.yaml
+    set: { addons.cilium: true }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: addons.cilium=true contradicts cni=gke (the cilium addon follows `cni`; drop addons.cilium)" }
+
   - it: rejects cni gke on the k3s providers
     values: [values/capi-hetzner.yaml]
     set: { cni: gke }

@@ -6,7 +6,7 @@ Wrapper chart for Istio Ambient (`1.32.0`: `base`, `istiod`, `cni`, `ztunnel`). 
 
 ## Where it runs
 
-- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel and `values/mesh-member.yaml` on mesh members).
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel, `values/provider-gcp-gke.yaml` on GKE and `values/mesh-member.yaml` on mesh members).
 - **Catalog label:** `addons.platform.koorikla.io/istio-ambient` (`default: true`, opt-out with `"false"`).
 
 ## Key values
@@ -14,7 +14,7 @@ Wrapper chart for Istio Ambient (`1.32.0`: `base`, `istiod`, `cni`, `ztunnel`). 
 - `istiod.profile`, `cni.profile`, `ztunnel.profile`: `ambient`, with distroless `1.32.0` images pinned by multi-arch index digest.
 - `global.{multiCluster.clusterName,meshID,network}`: populated from cluster name and `mesh.platform.koorikla.io/{group,network}` labels.
 - `istiod.env.ENABLE_CA_SERVER` (`values/mesh-member.yaml`): `"false"` on mesh members (`istio-csr` + OpenBao sign certs instead).
-- `global.platform` (`values/cni-flannel.yaml`): `k3s` so `istio-cni` chains into k3s's flannel CNI paths.
+- `global.platform` (`values/cni-flannel.yaml`): `k3s` so `istio-cni` chains into k3s's flannel CNI paths; `gke` on `gcp-gke` (`values/provider-gcp-gke.yaml`).
 
 ## Day-2 notes
 
