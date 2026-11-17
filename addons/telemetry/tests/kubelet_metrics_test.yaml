@@ -1,48 +1,52 @@
-suite: telemetry kubelet scrape - k3s control-plane families dropped (#83)
+suite: telemetry kubelet scrape - no kubelet /metrics endpoint, cAdvisor + probes only (#83)
 templates:
   - charts/observability-metrics-prometheus/charts/kube-prometheus-stack/templates/exporters/kubelet/servicemonitor.yaml
 set:
   cluster.name: dev1
 tests:
-  - it: the kubelet /metrics endpoint drops the embedded control-plane families and keeps the chart's bucket drop
+  - it: scrapes only /metrics/cadvisor and /metrics/probes (no kubelet /metrics, no /metrics/resource)
     asserts:
       - equal:
           path: metadata.name
           value: openchoreo-observability-kubelet
-      - isNull:
-          path: spec.endpoints[0].path          # /metrics (the chart sets no path for it)
       - lengthEqual:
-          path: spec.endpoints[0].metricRelabelings
+          path: spec.endpoints
           count: 2
       - equal:
-          path: spec.endpoints[0].metricRelabelings[0]
-          value:
-            action: drop
-            sourceLabels: [__name__, le]
-            regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
-      - equal:
-          path: spec.endpoints[0].metricRelabelings[1].action
-          value: drop
-      - equal:
-          path: spec.endpoints[0].metricRelabelings[1].sourceLabels
-          value: [__name__]
-      - matchRegex:
-          path: spec.endpoints[0].metricRelabelings[1].regex
-          pattern: ^\(apiserver\|etcd\|scheduler\|workqueue\|.*\)_\.\+$
-
-  - it: the cAdvisor and probes endpoints keep their own relabelings (container metrics untouched)
-    asserts:
+          path: spec.endpoints[0].path
+          value: /metrics/cadvisor
       - equal:
           path: spec.endpoints[1].path
-          value: /metrics/cadvisor
-      - notMatchRegex:                       # the chart's cAdvisor list, not the control-plane drop
-          path: spec.endpoints[1].metricRelabelings[0].regex
-          pattern: apiserver
-      - equal:
-          path: spec.endpoints[1].metricRelabelings[0].regex
-          value: container_cpu_(cfs_throttled_seconds_total|load_average_10s|system_seconds_total|user_seconds_total)
-      - equal:
-          path: spec.endpoints[2].path
           value: /metrics/probes
+
+  - it: cAdvisor keeps the chart's relabelings (the container CPU/memory series the OpenChoreo adapter reads stay)
+    asserts:
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].regex
+          value: container_cpu_(cfs_throttled_seconds_total|load_average_10s|system_seconds_total|user_seconds_total)
+      - notMatchRegex:
+          path: spec.endpoints[0].metricRelabelings[0].regex
+          pattern: usage_seconds_total|working_set
+
+  - it: the remaining endpoints scrape with the agent's own token (not anonymously)
+    asserts:
+      - equal:
+          path: spec.endpoints[0].authorization
+          value:
+            type: Bearer
+            credentials:
+              name: openchoreo-prometheus-agent-token
+              key: token
+      - equal:
+          path: spec.endpoints[1].authorization.credentials.name
+          value: openchoreo-prometheus-agent-token
+
+  - it: negative - re-enabling the kubelet /metrics endpoint adds a path-less endpoint first
+    set:
+      observability-metrics-prometheus.kube-prometheus-stack.kubelet.serviceMonitor.kubelet: true
+    asserts:
+      - lengthEqual:
+          path: spec.endpoints
+          count: 3
       - isNull:
-          path: spec.endpoints[2].metricRelabelings
+          path: spec.endpoints[0].path

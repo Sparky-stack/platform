@@ -293,19 +293,15 @@ observability-metrics-prometheus:
           credentials:
             name: openchoreo-prometheus-agent-token
             key: token
-        # platform: the kubelet /metrics endpoint of k3s also serves its embedded control plane (apiserver, etcd,
-        # scheduler, controller workqueues): measured 60-65k of the agent's 70-75k active series per cluster (#83),
-        # which the agent held at 220-250Mi against the chart's hardcoded 256Mi limit (OOM-killed ~28x/day). OpenChoreo
-        # reads none of them (it disables kubeApiServer/kubeEtcd/kubeScheduler monitors on purpose); kubelet_*, prober_*,
-        # volume/storage operations and process/go metrics stay. A no-op on kubelets that do not embed a control plane.
-        # Replaces the chart default list, so its storage-bucket drop is restated first.
-        metricRelabelings:
-          - action: drop
-            sourceLabels: [__name__, le]
-            regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
-          - action: drop
-            sourceLabels: [__name__]
-            regex: (apiserver|etcd|scheduler|workqueue|aggregator|apiextensions|authentication|authorization|kube_apiserver|field_validation|watch_cache|watch_list|flowcontrol)_.+
+        # platform: no kubelet /metrics endpoint (#83). On k3s it also serves the embedded control plane
+        # (apiserver, etcd, scheduler, workqueues): ~100k samples / 15 MB per scrape on dev1. Dropping those
+        # families with metricRelabelings (#105) cut the stored series, not the cost of fetching, parsing and
+        # caching each one, which kept the agent at 230-250Mi of the chart's hardcoded 256Mi limit. OpenChoreo's
+        # metrics adapter (observability-metrics-prometheus 0.8.0) queries only container_cpu_usage_seconds_total
+        # and container_memory_working_set_bytes (cAdvisor), kube_pod_* (kube-state-metrics), hubble_http_* and
+        # OpenCost's node_*_hourly_cost: nothing reads kubelet_*, prober_* or the control-plane families.
+        # /metrics/cadvisor and /metrics/probes stay; /metrics/resource stays off (chart default, duplicates cAdvisor).
+        kubelet: false
     prometheusOperator:
       image:
         tag: v0.94.1
