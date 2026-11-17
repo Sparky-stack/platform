@@ -30,7 +30,7 @@ assert_eq "$(yq '.apps[0].repoURL' "$W/installations/local/tenants/demo.yaml")" 
 has() { grep -Eq -- "$1" "$2" && echo yes || echo no; }
 assert_eq "$(has 'repoURL // "https://github.com/example/platform.git"' "$W/bootstrap/bootstrap.sh")" yes "bootstrap.sh fallback repoURL"
 assert_eq "$(has 'githubOrg: https://github.com/example +# repo-creds' "$W/installations/local/installation.yaml")" yes "trailing comment kept"
-assert_match "$out" "Changed 7 file\\(s\\)" "summary lists changed files"
+assert_match "$out" "Changed 8 file\\(s\\)" "summary lists changed files"
 assert_eq "$(grep -c 'platform\.koorikla\.io' "$W/installations/local/installation.yaml")" "1" "label key comment untouched"
 assert_eq "$(has 'github\.com/koorikla/' "$W/README.md")" yes "docs untouched without DOCS=1"
 

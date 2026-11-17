@@ -1,0 +1,20 @@
+# Fleet file + installation facts for a GKE cluster (charts/cluster capi_* suites).
+installation: { name: gcp-example }
+capi:
+  providers: { docker: false, aws: false, hetzner: false, gcp: true }
+name: prod-euw1
+provider: gcp-gke
+region: europe-west1
+environment: production
+kubernetesVersion: v1.35.1
+cni: gke
+workers:
+  - name: pool-a
+    replicas: 2
+    machineType: e2-standard-8
+    failureDomain: europe-west1-b
+  - name: pool-b
+    replicas: 1
+providerSpec:
+  project: platform-prod-123
+addonsRevision: v1.2.0

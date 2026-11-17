@@ -1,0 +1,69 @@
+# Installation "gcp-example": reference only - renders and schema-checks, never booted (no GCP account).
+# mgmt is any conformant cluster (e.g. a GKE cluster) whose ServiceAccount issuer the GCP Workload Identity pool trusts;
+# workload clusters are GKE clusters created by CAPG (provider gcp-gke, ClusterClass gke-managed). Cluster facts live
+# in clusters/<name>.yaml only. Setup and live-verification steps: docs/providers.md "GKE (CAPG) - rendered only".
+installation:
+  name: gcp-example
+  repoURL: https://github.com/koorikla/platform.git
+  revision: main
+  githubOrg: https://github.com/koorikla
+  domain: gcp.example.com                     # VERIFY: a DNS zone you own
+
+mgmt:
+  name: mgmt
+  provider: gcp-gke
+  region: europe-west1
+  environment: mgmt
+  cni: gke
+  addons:
+    harbor: "false"                           # registry.type external
+    openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
+
+secrets:
+  backend: vault                              # ClusterSecretStore/platform -> Vault / OpenBao (secret-stores has no
+  vault:                                      # GCP Secret Manager backend yet)
+    server: https://vault.gcp.example.com     # VERIFY shape vs addons/secret-stores
+    path: platform                            # KV v2 mount
+    version: v2
+    auth:
+      kubernetes:
+        mountPath: kubernetes
+        role: external-secrets
+  nodeRegistryAuth:
+    enabled: false                            # GKE nodes take no registries.yaml (docs/providers.md "GKE")
+
+# Image registry (docs/build-plane.md): no Harbor in this reference installation; in-cluster builds push to GHCR.
+registry:
+  type: external
+  external:
+    repository: ghcr.io/koorikla
+    credentialsKey: platform-ghcr
+
+capi:
+  providers:
+    docker: false
+    aws: false
+    hetzner: false
+    gcp: true                                 # CAPG v1.13.1 (GKE); Workload Identity Federation, no key file
+  # The pool provider trusts the mgmt cluster's ServiceAccount issuer (OIDC; upload its JWKS when the issuer is not
+  # public) and maps system:serviceaccount:capg-system:capg-manager to serviceAccount below.
+  gcp:
+    workloadIdentityProvider: projects/123456789012/locations/global/workloadIdentityPools/platform-mgmt/providers/mgmt   # VERIFY
+    serviceAccount: capg-manager@platform-example.iam.gserviceaccount.com                                                # VERIFY
+
+openchoreo:
+  orgNamespace: default
+  controlPlane:
+    host: openchoreo.gcp.example.com
+    clusterGatewayURL: wss://cluster-gateway.openchoreo.gcp.example.com/ws   # VERIFY port/path with OC 1.3.3
+  workflowPlane:
+    enabled: true         # addon openchoreo-workflow-plane on mgmt; builds push to registry.external.repository
+  observability:
+    enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
+    httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation
+    tlsPort: 443
+
+# Public DNS (addon external-dns, docs/dns.md): none - the addon supports route53 | cloudflare, not Cloud DNS.
+dns:
+  provider: none
+  domainFilters: []

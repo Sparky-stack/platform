@@ -1,0 +1,6 @@
+# Addon crossplane (opt-in per cluster: `addons: { crossplane: true }`) on this installation's GKE clusters: provider
+# gcp-gke -> PostgreSQL backend gcp-cloudsql. Project of the clusters; the VPC is per cluster (CAPG names it after the
+# cluster unless providerSpec.network says otherwise): set privateNetwork in cluster-<name>.yaml next to this file.
+postgresql:
+  gcp:
+    project: platform-example                 # VERIFY: GCP project id (== clusters/*.yaml providerSpec.project)

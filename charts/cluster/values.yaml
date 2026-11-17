@@ -6,20 +6,26 @@
 # --- from the fleet file -------------------------------------------------------------------------------------------
 name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
 provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
+                              # gcp-gke -> ClusterClass gke-managed (managed GKE control plane via CAPG, needs
+                              #   capi.providers.gcp; docs/providers.md "GKE")
 region: local
 environment: development      # development | staging | production (never prod; docs/conventions.md)
-kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1
+kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1 (gcp-gke: GKE version vX.Y.Z, e.g. v1.35.1)
 cni: cilium                   # cilium | flannel - pod network, fixed at birth (switching = rebuild; docs/networking.md).
+                              # gcp-gke: gke only (GKE's VPC-native networking; CAPG cannot request Dataplane V2).
                               # -> ClusterClass variable cni, label platform.koorikla.io/cni, and
                               #    addons.platform.koorikla.io/cilium (do not set addons.cilium yourself)
 controlPlane:
-  replicas: 1                 # k3s servers = embedded etcd voters: odd only (1, 3, 5); production on aws/hetzner >= 3.
+  # replicas: 1               # k3s servers = embedded etcd voters: odd only (1, 3, 5), default 1; production on aws/hetzner >= 3.
                               # 1 = disposable: every control plane rollout ends with a 2 -> 1 etcd member removal that
                               # can lose quorum (docs/providers.md "Control plane size and rollouts")
   machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
-workers: []                   # [{name, replicas, machineType, failureDomain}]
+                              # gcp-gke: no controlPlane at all (Google runs it; setting either key fails the render)
+workers: []                   # [{name, replicas, machineType, failureDomain}] (gcp-gke: GKE node pools, >= 1; failureDomain
+                              #  = the pool's zone, replicas = nodes per zone)
 providerSpec: {}              # extra ClusterClass variables, passed as-is (docs/providers.md):
                               #   docker: kindImage | aws: ami (required), sshKeyName | hetzner: sshKey, image, networkZone
+                              #   gcp-gke: project (required), network, releaseChannel
                               # `region` comes from the key above; machine types from controlPlane/workers[].machineType
 openchoreo:
   dataPlane:

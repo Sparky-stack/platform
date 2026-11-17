@@ -10,7 +10,8 @@
 #   --live    also add images running in the k3d mgmt cluster (read-only `kubectl get pods`) and local containers
 #   --report  also write the result table as markdown to FILE
 # Sources: every addon rendered like hack/test.sh layers it (mgmt + each cluster file of INST, default local),
-# k3d node/helper images, the CAPD node + load balancer images, CAPI provider controllers (release components) and
+# k3d node/helper images, the CAPD node + load balancer images, CAPI provider controllers (release components; CAPG:
+# the pinned imageUrl the operator substitutes) and
 # the k3s system images (k3s-images.txt) of each Kubernetes version in use. Registry access via crane (mise).
 set -euo pipefail
 
@@ -266,6 +267,10 @@ if [[ "$INST" == local ]]; then
 fi
 if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
   add "$(yq '.docker.kindImage' addons/clusterclasses/values.yaml)" "CAPD node (addons/clusterclasses kindImage)"
+fi
+if [[ "$(yq '.capi.providers.gcp' "$INST_FILE")" == "true" ]]; then
+  # The operator swaps CAPG's release image for this pin (InfrastructureProvider deployment.containers[].imageUrl).
+  add "$(yq '.infrastructure.gcp.image' addons/capi-providers/values.yaml)" "CAPG controller (addons/capi-providers infrastructure.gcp.image)"
 fi
 
 if (( ! RENDERED )); then
