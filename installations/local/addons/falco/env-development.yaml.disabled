@@ -17,10 +17,10 @@ falco-talon:
           ignore_statefulsets: false
           grace_period_seconds: 0
 
-      # - action: Platform isolate pod      # deny all ingress/egress except DNS for the labelled pod
+      # - action: Platform isolate pod      # Egress-only NetworkPolicy on the pod's owner: no egress at all (DNS too)
       #   actionner: kubernetes:networkpolicy
-      #   parameters:
-      #     allow_cidr: []                # VERIFY kubernetes:networkpolicy parameters
+      #   parameters:                     # Talon 0.3: allow_cidr (CIDRs), allow_namespaces (names); both empty = deny
+      #     allow_cidr: []
 
       - rule: Crypto miner in app namespace
         description: Label and kill the pod (its controller recreates it; repeated hits stay visible in OpenSearch).

@@ -1,7 +1,8 @@
-# Local installation: the workflow plane runs on mgmt, whose pods cannot resolve data-plane app hosts
-# (<env>-<org ns>.<cluster>.apps.localhost:19080 - CAPD node containers have no stable DNS name or load balancer for
-# the app Gateway). The gate's HTTP probe is off here; readiness, observer and freeze checks still run. In a cloud
-# installation the app hosts resolve publicly and the probe stays on (docs/promotion.md). VERIFY
+# Local installation: the workflow plane runs on mgmt, where data-plane app hosts
+# (<env>-<org ns>.<cluster>.apps.localhost:19080) resolve to the pod's own loopback (*.localhost); CAPD node containers
+# have no stable DNS name or load balancer for the app Gateway. The gate's HTTP probe is off here; readiness, observer
+# and freeze checks still run. In a cloud installation the app hosts resolve publicly and the probe stays on
+# (docs/promotion.md). Turning it on locally: #156.
 promotionGate:
   smoke:
     http: false

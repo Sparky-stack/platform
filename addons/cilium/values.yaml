@@ -49,7 +49,7 @@ cilium:
   tunnelProtocol: vxlan
 
   # Transparent node-to-node encryption for all pod traffic (mesh or not; replaces k3s flannel wireguard-native on
-  # Hetzner). UDP 51871 between nodes. Needs the host kernel's wireguard module (CAPD: the docker host's). VERIFY
+  # Hetzner). UDP 51871 between nodes. Needs the host kernel's wireguard module (CAPD: the docker host's).
   encryption:
     enabled: true
     type: wireguard

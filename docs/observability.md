@@ -294,8 +294,8 @@ without `k8s.ns.name`) to the three rules that fired on foreign containers - "Dr
 (`installations/local/addons/falco/values.yaml`). Measured before ([#76](https://github.com/koorikla/platform/issues/76)):
 every Critical and Error alert of a dev1 Falco came from such containers (the CAPD nodes' own k3s/mount/CNI processes,
 other clusters' pods, a host pod), and each of the five Falcos escalated them to mgmt as falco-response Workflows that
-could not act and failed. The cluster's own pods keep full coverage. VERIFY after the next sync: Critical alerts without
-`k8s.ns.name` stop, alerts from `dp-*` pods still arrive.
+could not act and failed. The cluster's own pods keep full coverage: measured after the change (#49), a dev1 Falco
+logged no Critical alert without `k8s.ns.name` in 17 h, while alerts from namespaced app pods kept arriving.
 
 ## Falco response
 
