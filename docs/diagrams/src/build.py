@@ -403,8 +403,8 @@ def trust() -> Diagram:
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
-                "Git rebuilds everything declarative; the numbered boxes hold state it cannot recreate, restored in "
-                "this order after losing the management cluster.")
+                "Git rebuilds everything declarative. The numbers are the restore order after losing the management "
+                "cluster; the boxes they touch hold state that Git cannot recreate.")
     M1, M2, MW = 44, 348, 224
     ZR = 588
     OZ = ZR + 96
@@ -412,31 +412,32 @@ def backup() -> Diagram:
     R = [176, 312, 448, 656]
     zb = R[2] + H + 24
     d.zone(28, 128, ZR - 28, zb - 128, "management cluster", "mgmt")
-    d.zone(28, zb + 40, ZR - 28, R[3] + H + 24 - zb - 40, "workload cluster", "workload")
+    d.zone(M2 - 16, zb + 40, ZR - M2 + 16, R[3] + H + 24 - zb - 40, "workload cluster", "workload")
     d.zone(OZ, 128, 932 - OZ, R[3] + H + 24 - 128, "outside the clusters", "external")
     d.box(M1, R[0], M2 + MW - M1, H, "mgmt", "Cluster state (etcd)",
           ["clusters, access and CA keys:", "a snapshot every 12 hours"], step=1, aka=("etcd",))
-    d.box(OX, R[0], OW, H, "external", "Secret backend", ["AWS or Vault", "secret store"], step=2)
-    d.box(M1, R[1], MW, H, "mgmt", "Thunder", ["users and", "sign-in clients"], step=3)
-    d.box(M2, R[1], MW, H, "mgmt", "OpenBao", ["cold copy", "of its data"], status="optin")
-    d.box(M1, R[2], MW, H, "mgmt", "Harbor", ["pushed", "images"], step=5)
-    d.box(M2, R[2], MW, H, "mgmt", "Argo CD", ["re-applies", "everything else"])
+    d.box(OX, R[0], OW, H, "external", "Secret backend", ["AWS or Vault", "secret store"])
+    d.box(M1, R[1], MW, H, "mgmt", "Thunder", ["users and", "sign-in clients"], step=2)
+    d.box(M2, R[1], MW, H, "mgmt", "OpenBao", ["secrets and", "mesh CA keys"], status="optin")
+    d.box(M1, R[2], MW, H, "mgmt", "Harbor", ["pushed", "images"], step=4)
+    d.box(M2, R[2], MW, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(OX, R[2], OW, H, "external", "Git", ["everything", "declarative"])
-    d.box(M2, R[3], MW, H, "workload", "Databases", ["continuous", "backups"], status="optin")
+    d.box(M2, R[3], MW, H, "workload", "Databases", ["app", "data"], status="optin")
     d.box(OX, R[3], OW, H, "external", "Object storage", ["database", "backups"])
     xz = (ZR + OZ) / 2
     xs = OX + OW / 2
-    d.arrow([(M2 + MW, ymid(R[1])), (xs, ymid(R[1])), (xs, R[0] + H)], step=4, badge=(xz, ymid(R[1])),
+    d.arrow([(M2 + MW, ymid(R[1])), (xs, ymid(R[1])), (xs, R[0] + H)], step=3, badge=(xz, ymid(R[1])),
             label="unseal key", label_pos=(xz, ymid(R[1]) + 32))
-    d.arrow([(M2 + MW, ymid(R[2])), (OX, ymid(R[2]))], step=6, badge=(xz, ymid(R[2])))
-    d.arrow([(M2 + MW, ymid(R[3])), (OX, ymid(R[3]))], step=7, badge=(xz, ymid(R[3])))
+    d.arrow([(M2 + MW, ymid(R[2])), (OX, ymid(R[2]))], step=5, badge=(xz, ymid(R[2])), label="re-sync",
+            label_pos=(xz, ymid(R[2]) + 32))
+    d.arrow([(M2 + MW, ymid(R[3])), (OX, ymid(R[3]))], step=6, badge=(xz, ymid(R[3])), label="restore",
+            label_pos=(xz, ymid(R[3]) + 32))
     d.require("Git", "Secret backend", "Cluster state (etcd)", "OpenBao", "Thunder", "Harbor", "Databases")
     d.key("Restore the management cluster's etcd from its latest snapshot: Cluster API keeps its clusters and the "
           "CA keys come back",
-          "The secret backend is outside the clusters and keeps its own backups; on a laptop, re-seed it with task "
-          "secrets",
           "Restore Thunder's volumes: users, sign-in clients, signing keys",
-          "OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend",
+          "OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend, "
+          "which lives outside the clusters (on a laptop, re-seed it with task secrets)",
           "Harbor's images come back from its volumes or from new builds; telemetry starts empty",
           "Argo CD re-syncs everything else from Git",
           "The databases (opt-in) restore themselves from object storage if a workload cluster is lost too")
@@ -446,16 +447,16 @@ def backup() -> Diagram:
 # -------------------------------------------------------------------------------------------- upgrade flow
 def upgrade() -> Diagram:
     d = Diagram("Upgrade flow · every upgrade is a pull request",
-                "Renovate proposes, CI proves, a maintainer merges, and Argo CD rolls the change out to the dev "
-                "clusters before prod.")
+                "Renovate proposes, CI proves, a maintainer merges; Argo CD rolls the change out to the dev clusters, "
+                "and prod follows a second, reviewed pull request.")
     c, w = COLS4, CW4
     R0 = 120
     R1 = R0 + H + 96
     y0 = R0 + H + 48
     y1 = R1 + H + 40
     d.box(c[0], R0, w, H, "external", "Renovate", ["proposes", "version bumps"])
-    d.box(c[1], R0, c[3] + w - c[1], H, "external", "GitHub",
-          ["platform repo: pull request, CI on every platform,", "review, merge to main"], step=2, aka=("main",))
+    d.box(c[1], R0, c[2] + w - c[1], H, "external", "GitHub",
+          ["platform repo: pull request,", "CI, review, merge to main"], step=2, aka=("main",))
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(c[1], R1, w, H, "workload", "Dev clusters", ["follow main", "first"], step=5)
     d.box(c[2], R1, w, H, "workload", "Prod clusters", ["follow a", "verified commit"])
@@ -463,7 +464,7 @@ def upgrade() -> Diagram:
     d.arrow([(c[0] + w / 2, R1), (c[0] + w / 2, y0), (c[1] + 120, y0), (c[1] + 120, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
     d.arrow([(c[0] + w / 2, R1 + H), (c[0] + w / 2, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=6,
-            label="after a second pull request", label_pos=(c[2] + w / 2, y1 + 28))
+            badge=(c[0] + w / 2 + 80, y1), label="after a second pull request", label_pos=(c[1] + 40, y1 - 10), label_anchor="start")
     d.legend_label("workload", "workload clusters")
     d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
@@ -472,7 +473,8 @@ def upgrade() -> Diagram:
           "Argo CD reads main for every cluster that follows it",
           "Argo CD syncs the dev clusters first, each app in a fixed order",
           "Dev clusters are verified: every app synced and healthy",
-          "Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit")
+          "Argo CD syncs the prod clusters only after a maintainer's second pull request moves them to the verified "
+          "commit")
     d.note("Kubernetes versions: a kubernetesVersion bump in a fleet file rolls through Cluster API instead, one "
            "server at a time, dev before prod (see the cluster lifecycle view).")
     return d

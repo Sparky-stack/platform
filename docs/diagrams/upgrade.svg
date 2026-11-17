@@ -11,10 +11,10 @@
 <text class="s" x="123.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Renovate</text>
 <text class="s" x="123.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">proposes</text>
 <text class="s" x="123.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">version bumps</text>
-<rect x="282" y="120" width="634" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
-<text class="s" x="622.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">GitHub</text>
-<text class="s" x="622.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">platform repo: pull request, CI on every platform,</text>
-<text class="s" x="622.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">review, merge to main</text>
+<rect x="282" y="120" width="396" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="503.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">GitHub</text>
+<text class="s" x="503.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">platform repo: pull request,</text>
+<text class="s" x="503.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">CI, review, merge to main</text>
 <rect x="44" y="296" width="158" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="123.0" y="322.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
 <text class="s" x="123.0" y="342.4" font-size="13" fill="#dde5ef" text-anchor="middle">GitOps</text>
@@ -28,7 +28,8 @@
 <text class="s" x="599.0" y="342.4" font-size="13" fill="#dde5ef" text-anchor="middle">follow a</text>
 <text class="s" x="599.0" y="360.4" font-size="13" fill="#dde5ef" text-anchor="middle">verified commit</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Upgrade flow · every upgrade is a pull request</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">Renovate proposes, CI proves, a maintainer merges, and Argo CD rolls the change out to the dev clusters before prod.</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">Renovate proposes, CI proves, a maintainer merges; Argo CD rolls the change out to the dev clusters, and prod follows a second,</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">reviewed pull request.</text>
 <circle cx="308.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="308.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
 <circle cx="308.0" cy="336.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
@@ -39,42 +40,42 @@
 <text class="s" x="262.5" y="252.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <circle cx="234.0" cy="336.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="234.0" y="340.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<rect x="513.8" y="430.0" width="170.4" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="599.0" y="444.0" font-size="13" fill="#aab6c8" text-anchor="middle">after a second pull request</text>
-<circle cx="361.0" cy="416.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="361.0" y="420.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<line x1="28" y1="450.0" x2="932" y2="450.0" stroke="#7c8aa0" stroke-width="1.2"/>
+<rect x="318.0" y="392.0" width="170.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="322.0" y="406.0" font-size="13" fill="#aab6c8">after a second pull request</text>
+<circle cx="203.0" cy="416.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="203.0" y="420.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<line x1="28" y1="450" x2="932" y2="450" stroke="#7c8aa0" stroke-width="1.2"/>
 <circle cx="40" cy="473.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="478.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="40" y="478" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
 <text class="s" x="62.0" y="478.0" font-size="13.5" fill="#dde5ef">Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version</text>
 <circle cx="40" cy="501.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="506.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="40" y="506" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
 <text class="s" x="62.0" y="506.0" font-size="13.5" fill="#dde5ef">GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and arm; a maintainer reviews</text>
 <text class="s" x="62.0" y="525.0" font-size="13.5" fill="#dde5ef">and merges it into main</text>
 <circle cx="40" cy="548.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="553.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="40" y="553" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <text class="s" x="62.0" y="553.0" font-size="13.5" fill="#dde5ef">Argo CD reads main for every cluster that follows it</text>
 <circle cx="40" cy="576.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="581.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="40" y="581" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
 <text class="s" x="62.0" y="581.0" font-size="13.5" fill="#dde5ef">Argo CD syncs the dev clusters first, each app in a fixed order</text>
 <circle cx="40" cy="604.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="609.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="40" y="609" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
 <text class="s" x="62.0" y="609.0" font-size="13.5" fill="#dde5ef">Dev clusters are verified: every app synced and healthy</text>
 <circle cx="40" cy="632.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="637.0" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="62.0" y="637.0" font-size="13.5" fill="#dde5ef">Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit</text>
+<text class="s" x="40" y="637" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="637.0" font-size="13.5" fill="#dde5ef">Argo CD syncs the prod clusters only after a maintainer&#x27;s second pull request moves them to the verified commit</text>
 <text class="s" x="28.0" y="669.0" font-size="13.5" fill="#aab6c8">Kubernetes versions: a kubernetesVersion bump in a fleet file rolls through Cluster API instead, one server at a time, dev before prod (see the</text>
 <text class="s" x="28.0" y="688.0" font-size="13.5" fill="#aab6c8">cluster lifecycle view).</text>
-<rect x="28" y="724.0" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<rect x="28" y="724" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
 <text class="s" x="58.0" y="734.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
-<rect x="283.60519999999997" y="724.0" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<rect x="283.60519999999997" y="724" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
 <text class="s" x="313.6" y="734.0" font-size="13" fill="#aab6c8">workload clusters</text>
-<rect x="448.04192" y="724.0" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<rect x="448.04192" y="724" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
 <text class="s" x="478.0" y="734.0" font-size="13" fill="#aab6c8">outside the clusters</text>
-<path d="M 26 756.0 L 70 756.0" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
-<circle cx="42" cy="756.0" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<path d="M 26 756 L 70 756" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="42" cy="756" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
 <text class="s" x="42" y="760.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
 <text class="s" x="80.0" y="760.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
-<rect x="422.3199" y="746.0" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="432.3199" cy="756.0" r="7" fill="#fbbf24"/><text class="s" x="432.3199" y="760.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<rect x="422.3199" y="746" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="432.3199" cy="756" r="7" fill="#fbbf24"/><text class="s" x="432.3199" y="760.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
 <text class="s" x="454.3" y="760.0" font-size="13" fill="#aab6c8">step at a component</text>
 </svg>

@@ -131,12 +131,11 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 ### Backup & restore ([backup.svg](backup.svg))
 
 1. Restore the management cluster's etcd from its latest snapshot: Cluster API keeps its clusters and the CA keys come back
-2. The secret backend is outside the clusters and keeps its own backups; on a laptop, re-seed it with `task secrets`
-3. Restore Thunder's volumes: users, sign-in clients, signing keys
-4. OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend
-5. Harbor's images come back from its volumes or from new builds; telemetry starts empty
-6. Argo CD re-syncs everything else from Git
-7. The databases (opt-in) restore themselves from object storage if a workload cluster is lost too
+2. Restore Thunder's volumes: users, sign-in clients, signing keys
+3. OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend, which lives outside the clusters (on a laptop, re-seed it with `task secrets`)
+4. Harbor's images come back from its volumes or from new builds; telemetry starts empty
+5. Argo CD re-syncs everything else from Git
+6. The databases (opt-in) restore themselves from object storage if a workload cluster is lost too
 
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
@@ -145,7 +144,7 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 3. Argo CD reads main for every cluster that follows it
 4. Argo CD syncs the dev clusters first, each app in a fixed order
 5. Dev clusters are verified: every app synced and healthy
-6. Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit
+6. Argo CD syncs the prod clusters only after a maintainer's second pull request moves them to the verified commit
 
 Kubernetes versions: a `kubernetesVersion` bump in a fleet file rolls through Cluster API instead, one server at a time, dev before prod (see the cluster lifecycle view).
 
