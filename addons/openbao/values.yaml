@@ -14,6 +14,8 @@
 #   templates/reconcile.yaml    Job (Argo Sync hook, wave 1) + CronJob `mesh-reconcile`: files/mesh-reconcile.sh applies the
 #                               mesh PKI (group CAs: Job only; per member PKI role, identity entity, JWT auth) with
 #                               scoped, short-lived tokens. It writes no ACL policy (all static, self-initialisation).
+#   templates/tenant-secrets.yaml + templates/policy-reconcile.yaml  tenant secrets (opt-in): CronJobs tenant-reconcile
+#                               and policy-reconcile (tenant-* ACL policies from files/policies/, no re-init needed)
 #   templates/mesh-admission.yaml  ValidatingAdmissionPolicies for the remote-secret reader certs (charts/cluster
 #                               <name>-client-ca issuers over the CAPI k3s client CAs)
 #

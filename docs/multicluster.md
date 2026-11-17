@@ -194,8 +194,10 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
 ### Configuration as code, no root token
 OpenBao's [self-initialisation](https://openbao.org/docs/configuration/self-init/) (`initialize` blocks in the
 server config, `addons/openbao/values.yaml`) runs once on the first start: it enables the file audit device to stdout
-and the Kubernetes auth method for mgmt ServiceAccounts, writes **every ACL policy** the mesh uses and their roles,
-then **revokes its own root token**. No root token or recovery key is ever stored. After that,
+and the Kubernetes auth method for mgmt ServiceAccounts, writes **every mesh ACL policy**, every mgmt identity and the
+policy reconciler's narrow identity, then **revokes its own root token**. No root token or recovery key exists
+afterwards: self-initialisation creates no recovery keys, so nobody can run `generate-root` later, not even with the
+unseal key (`task test:openbao` checks this). After that,
 `files/mesh-reconcile.sh` (Argo CD Sync-hook Job + CronJob, idempotent, POSIX sh + the pinned `bao` CLI) applies the
 desired state from git. It logs in with projected, audience-bound ServiceAccount tokens (15-minute OpenBao tokens, no
 Kubernetes API access) and **authors no ACL policy**.
@@ -207,7 +209,8 @@ Kubernetes API access) and **authors no ACL policy**.
 | `platform-mesh-config` (SAs `openbao-mesh-config`, `openbao-mesh-bootstrap`) | CronJob + Sync-hook Job | enable/configure `jwt` auth at `auth/mesh-*` (type pinned to `jwt`, roles may only carry policy `mesh-member`); write `<mount>/roles/<name>` with every widening flag pinned (`required_parameters` + `allowed_parameters`: no any-name, IP SANs, localhost, globs, wildcards, subdomains, other SANs, URI templates, code-signing/email EKUs; `no_store`, `issuer_ref=default`); write identity entities `mesh-*` (metadata only, no policies) and their aliases | everything above, plus any CA operation: no mount, no key generation, no `sign-intermediate` (not CA-equivalent) |
 | `mesh-member` (templated) | members' istio-csr (JWT, batch tokens) | `pki-mesh-<group>-int/sign/<name>` of its own entity | everything else |
 | `mesh-ca-read` (SA `eso-openbao-pki-public`) | ESO | read `+/cert/ca` (public); `auth/token/lookup-self`, `auth/token/revoke-self` (its own token) | everything else |
-| `platform-tenant-config` (SA `openbao-tenant-config`) | CronJob `tenant-reconcile` ([tenant secrets](#tenant-secrets-openbao)) | mount `kv-tenant-*` (type `kv` only; no delete); enable/configure `jwt` auth at `auth/tenants-*` whose roles may only carry `tenant-read`; entities `tenant-*` (metadata only) and their aliases | read or write any secret (`kv-tenant-*` denied), any policy, Kubernetes auth roles, anything of the mesh (`auth/mesh-*`, `pki-*`) |
+| `platform-policy-reconciler` (SA `openbao/openbao-policy-reconciler`, 5-minute tokens) | CronJob `policy-reconcile` ([below](#policies-from-git-the-policy-reconciler)) | write, delete and list ACL policies named `tenant-*`; create/update exactly the roles `tenant-config` and `tenant-writer` with every parameter pinned (ServiceAccount, namespace, audience, policy, no default policy, 15m TTLs); revoke its own token | any other policy name (`mesh-*`, `platform-*`, `default`), its own policy or role, any other or widened Kubernetes auth role, reading roles, Kubernetes auth config, PKI, mounts, auth methods, identities, secrets, tokens, `generate-root`, `sys/raw` |
+| `tenant-config` (SA `openbao-tenant-config`; role and policy written by the policy reconciler) | CronJob `tenant-reconcile` ([tenant secrets](#tenant-secrets-openbao)) | mount `kv-tenant-*` (type `kv` only; no delete); enable/configure `jwt` auth at `auth/tenants-*` whose roles may only carry `tenant-read`; entities `tenant-*` (metadata only) and their aliases | read or write any secret (`kv-tenant-*` denied), any policy, Kubernetes auth roles, anything of the mesh (`auth/mesh-*`, `pki-*`) |
 | `tenant-read` (templated) | per-namespace `SecretStore`s on members (JWT, `auth/tenants-<cluster>`) | read `kv-tenant-<tenant>/data/*`, list its metadata, of its own entity's `tenant`; token self-operations | everything else |
 | `tenant-write` (templated, role `tenant-writer`) | SA `openbao-tenants/<tenant>-writer` on mgmt | write `kv-tenant-<tenant>/` of its own entity | everything else |
 
@@ -219,10 +222,34 @@ export, import or rotate a key, or sign verbatim. Whoever can create pods (or Se
 `openbao` can use these identities, and with the static seal also holds the unseal key: protect namespace `openbao`
 like the CA itself (Argo AppProject + RBAC; production: KMS seal, [#31](https://github.com/koorikla/platform/issues/31)).
 
-The static policies are applied only on the first start. Changing them later is a deliberate admin action (locally:
-re-initialise OpenBao, i.e. delete its PVC; production: a break-glass identity added to self-initialisation before the
-first start). `hack/tests/test_openbao_reconcile.sh` checks that the self-init roles and the addon values name the same
-ServiceAccounts, so a rename cannot lock the reconcile out.
+The mesh policies and every mgmt identity are applied only on the first start. Changing them later is a deliberate
+admin action: re-initialise OpenBao ([break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization), new mesh
+roots). Tenant policies change from git at any time (next section). `hack/tests/test_openbao_reconcile.sh` and
+`hack/tests/test_openbao_policy_reconcile.sh` check that the self-init roles and the addon values name the same
+ServiceAccounts and values, so a rename cannot lock a reconcile out.
+
+#### Policies from git: the policy reconciler
+`files/policies/tenant-*.hcl` are the tenant ACL policies (`tenant-read`, `tenant-write`, `tenant-config`). The CronJob
+`policy-reconcile` (`files/policy-reconcile.sh`, every 5 minutes, final sync wave, only with
+`secrets.tenantStores.enabled`) logs in as `platform-policy-reconciler` and does three things. It writes each file as
+the policy of the same name when the stored text differs, so drift is restored. It deletes `tenant-*` policies that no
+longer have a file, but never when there are zero files. It writes the Kubernetes auth roles `tenant-config` and
+`tenant-writer`. The render fails for a file not named `tenant-*`, and the script refuses one.
+
+The identity is narrow by construction. Its policy (self-initialisation, `initialize "policy-reconciler"`) grants
+`sys/policies/acl/tenant-*` and the two role paths with `required_parameters` + `allowed_parameters` pinning every value.
+It cannot bind a role to its own ServiceAccount, attach another policy, read the roles, or touch PKI, mounts, auth
+methods, identities or secrets (`task test:openbao` probes each of these: 403). It can write *any content* into a `tenant-*`
+policy, which is what it is for. A compromised reconciler pod could therefore widen what tenant tokens may do. Using that
+for itself would also need a token of another ServiceAccount in namespace `openbao`, and whoever has that already holds
+the unseal key. Its trust boundary is namespace `openbao`, the same as the mesh reconcile's.
+
+Non-tenant policies (`mesh-*`, `platform-*`) are deliberately not reconcilable. Whoever may write them is CA-equivalent
+(e.g. could grant itself `root/sign-intermediate`) or could rewrite the reconciler's own policy and lift every bound. They
+stay self-initialisation only and change through the re-initialisation runbook. No "grant root, then revoke" Job is
+possible either: there are no recovery keys to feed `generate-root` (the static seal key is not a key share; tried
+against the real image, also in recovery mode). An installation initialised before the policy reconciler existed gets it
+only through one re-initialisation.
 
 Chosen over the alternatives: a Terraform/OpenTofu provider needs state and a runner outside GitOps; the young
 OpenBao config operators (CR per mount/role/policy) are not yet widely used and would add a privileged controller
@@ -313,8 +340,9 @@ the mesh CA holds one KV v2 mount per tenant (tenant = OpenChoreo project):
 | member | `ClusterSecretStore default`: conditions exclude namespaces labelled `openchoreo.dev/project`; VAPs: tenant `ExternalSecret`/`PushSecret`s may reference only `SecretStore openbao-tenant` (no `ClusterSecretStore`, `ClusterGenerator`, other store or label selector), `SecretStore`s there are written only by Kyverno | addon secret-stores |
 | OpenChoreo | component types render `SecretReference`s as `ExternalSecret`s on `SecretStore openbao-tenant`: developers never name a store; `remoteRef.key` is the key inside their own mount | addon openchoreo-platform |
 
-Isolation is enforced by OpenBao, not by naming: the policies are **static** (self-initialisation; the reconcile writes
-none) and templated on the caller's entity, so a token can only ever reach `kv-tenant-<its entity's tenant>`; a login
+Isolation is enforced by OpenBao, not by naming: the policies come from git (`files/policies/`, written by the
+[policy reconciler](#policies-from-git-the-policy-reconciler); the tenant reconcile writes none) and are templated on
+the caller's entity, so a token can only ever reach `kv-tenant-<its entity's tenant>`; a login
 whose alias the reconcile did not bind resolves to an entity without metadata and reaches nothing. A namespace two
 descriptors claim is bound to neither. A tenant removed from git loses its roles and entity at once; its mount (the
 data) stays. Tests: `hack/tests/test_openbao_tenant_reconcile.sh` (fake CLI, `task test`) and the tenant section of
@@ -336,9 +364,10 @@ Tenant self-service (OpenBao UI/CLI with OIDC from Thunder and a per-tenant grou
 (`workflows-<org>` is shared by all projects of an org) are follow-ups:
 [#169](https://github.com/koorikla/platform/issues/169).
 
-**Existing OpenBao installations**: the tenant policies come with self-initialisation, which ran before this feature
-existed. Enabling it on such an installation is the one-time re-initialisation in
-[break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization) (new mesh roots; members re-enrol).
+**Existing OpenBao installations**: an installation self-initialised before the policy reconciler existed has no
+identity that may write a policy. It needs the one-time re-initialisation in
+[break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization) (new mesh roots; members re-enrol). After
+that, tenant policy changes come from git without re-initialising.
 
 ## Discovery: declarative remote secrets
 Each istiod watches the other members' API servers (Services, EndpointSlices, Pods, Namespaces) through a remote

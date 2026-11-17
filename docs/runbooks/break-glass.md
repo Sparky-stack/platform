@@ -98,32 +98,63 @@ docker exec "$SURVIVOR" sh -c 'systemctl stop k3s; k3s server --cluster-reset; s
 
 ### OpenBao local re-initialization
 
-On a local installation (`seal "static"`), if `openbao-unseal` was lost and `data-openbao-0` can no longer be decrypted, re-initialize OpenBao from scratch (`(not yet verified live)`; invalidates the previous mesh root CA so workload pods roll onto the new root):
+Re-initialize OpenBao from scratch on a local installation (`seal "static"`) only when one of these applies:
+
+- `openbao-unseal` was lost and `data-openbao-0` can no longer be decrypted.
+- A change to self-initialisation (`addons/openbao/values.yaml` `initialize` blocks) must reach a running installation. That covers non-tenant policies and identities, and once, the policy reconciler on an installation initialised before it existed ([#96](https://github.com/koorikla/platform/issues/96)). Tenant policies don't need it: the CronJob `policy-reconcile` applies them from git ([multicluster.md](../multicluster.md#policies-from-git-the-policy-reconciler)). There is no root-token alternative: self-initialisation creates no recovery keys, so `generate-root` cannot work (`task test:openbao`).
+
+Re-initialization wipes every OpenBao object. The mesh gets new group roots, so every member re-enrols and its workloads roll onto the new root. Tenant KV data is lost too, so write it again afterwards. Get approval first.
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
+# 0. Freeze Argo CD (above): self-heal would otherwise scale openbao back up during the wipe.
 # 1. Ensure a valid static unseal key exists in platform-secrets and syncs to openbao
 task secrets
 $K -n openbao annotate externalsecret openbao-unseal force-sync="$(date +%s)" --overwrite
 
-# 2. Stop openbao-0, wipe its PVC so self-initialization runs again, and start openbao-0
+# 2. Stop openbao-0, cold-copy its volume, wipe the PVC so self-initialization runs again, start openbao-0
 $K -n openbao scale statefulset/openbao --replicas=0
 $K -n openbao wait --for=delete pod/openbao-0 --timeout=120s
+PV=$($K -n openbao get pvc data-openbao-0 -o jsonpath='{.spec.volumeName}')
+BK="$HOME/openbao-backup-$(date +%Y%m%d-%H%M)"; mkdir -p "$BK"
+docker cp "k3d-platform-mgmt-server-0:$($K get pv "$PV" -o jsonpath='{.spec.hostPath.path}')/." "$BK/"
 $K -n openbao delete pvc data-openbao-0
 $K -n openbao scale statefulset/openbao --replicas=1
 $K -n openbao rollout status statefulset/openbao --timeout=180s
+$K -n openbao exec openbao-0 -- bao status   # Initialized true, Sealed false, Total Recovery Shares 0
 
-# 3. Re-run mesh-reconcile, refresh mesh CA bundles, and roll istiod + ztunnel on each mesh member
-$K -n openbao create job --from=cronjob/mesh-reconcile mesh-reconcile-reset
-$K -n openbao wait --for=condition=complete job/mesh-reconcile-reset --timeout=120s
+# 3. Unfreeze Argo CD, then SYNC openbao-mgmt. Only its Sync-hook Job mesh-reconcile (ServiceAccount
+#    openbao-mesh-bootstrap, role platform-mesh-bootstrap) can create the group CAs. A Job created from the CronJob
+#    runs as platform-mesh-config and only logs "no intermediate CA yet".
+$K -n argocd scale statefulset/argocd-application-controller deploy/argocd-applicationset-controller --replicas=1
+$K -n argocd patch application openbao-mgmt --type merge \
+  -p '{"operation":{"initiatedBy":{"username":"break-glass"},"sync":{}}}'
+$K -n argocd wait application/openbao-mgmt --timeout=60s \
+  --for=jsonpath='{.status.operationState.operation.initiatedBy.username}'=break-glass
+$K -n argocd wait application/openbao-mgmt --timeout=300s --for=jsonpath='{.status.operationState.phase}'=Succeeded
+$K -n openbao logs job/mesh-reconcile | grep -E 'generate (root|intermediate) CA|done:'
+
+# 4. Publish the new roots and re-enrol every mesh member (fleet/<c>-mesh-trust -> member istio-system/mesh-root-ca)
 $K -n openbao annotate externalsecret openbao-ca-bundle force-sync="$(date +%s)" --overwrite
-for c in dev1 prod1; do
-  $K -n fleet annotate externalsecret "${c}-mesh-ca" force-sync="$(date +%s)" --overwrite
+for c in $($K -n fleet get externalsecret -o name | sed -n 's#.*/\(.*\)-mesh-trust$#\1#p'); do
+  $K -n fleet annotate externalsecret "${c}-mesh-trust" force-sync="$(date +%s)" --overwrite
   task kubeconfig CLUSTER="$c"
-  kubectl --kubeconfig "${c}.kubeconfig" -n istio-system delete secret istiod-tls --ignore-not-found
-  kubectl --kubeconfig "${c}.kubeconfig" -n istio-system rollout restart deploy/istiod ds/ztunnel
+  M="kubectl --kubeconfig ${c}.kubeconfig -n istio-system"
+  # wait until the member's mesh-root-ca carries the new root (its SHA-256 fingerprint changes)
+  $M get secret mesh-root-ca -o jsonpath='{.data.root-cert\.pem}' | base64 -d | openssl x509 -noout -fingerprint -sha256
+  $M rollout restart deploy/cert-manager-istio-csr && $M rollout status deploy/cert-manager-istio-csr --timeout=180s
+  $M delete secret istiod-tls --ignore-not-found
+  $M rollout restart deploy/istiod ds/ztunnel deploy/istio-eastwestgateway
 done
+
+# 5. Tenant secrets (installation.yaml secrets.tenantStores): the policy reconciler first, then the tenants
+$K -n openbao create job --from=cronjob/policy-reconcile policy-reconcile-reset
+$K -n openbao wait --for=condition=complete job/policy-reconcile-reset --timeout=120s
+$K -n openbao create job --from=cronjob/tenant-reconcile tenant-reconcile-reset
+$K -n openbao wait --for=condition=complete job/tenant-reconcile-reset --timeout=240s
 ```
+
+Keep the backup directory until the mesh and the tenant stores are healthy again.
 
 ### Audit trail and post-incident reconciliation
 
