@@ -29,8 +29,8 @@ k3s:
 docker:
   # Node OS only - k3s itself is installed at boot (curl get.k3s.io, version = topology.version). kindest/node is a
   # systemd-in-docker image CAPD knows how to bootstrap; its bundled kubeadm/containerd stay unused.
-  # Fully qualified, pinned by multi-arch index digest (amd64, arm64; docs/conventions.md invariant 9). VERIFY with the
-  # first CAPD boot (k3s v1.35.10+k3s1 on top; CAPD hands customImage to the container runtime as is).
+  # Fully qualified, pinned by multi-arch index digest (amd64, arm64; docs/conventions.md invariant 9). CAPD hands
+  # customImage to the container runtime as is; k3s (topology.version) runs on top.
   kindImage: docker.io/kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
 
 aws:

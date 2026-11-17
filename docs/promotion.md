@@ -234,7 +234,7 @@ release manager (CODEOWNERS) approves ─► merge ─► Argo CD syncs demo-hel
 |---|---|---|---|
 | See what runs where | `occ releasebinding list --namespace default --project demo --component hello-world` | `GET /api/v1/namespaces/default/releasebindings?component=hello-world`, MCP `list_release_bindings` | Component → Deploy tab |
 | Promote dev → staging | PR in the app repo (or `occ component deploy hello-world --to staging` for a non-gated, non-git environment) | MCP `update_release_binding` (staging only) | Promote button (staging only) |
-| Run the gate by hand | `kubectl create -f` the manifest below (or the `occ` equivalent, [#54](https://github.com/koorikla/platform/issues/54)) | `POST /api/v1/namespaces/default/workflowruns`, MCP workflow tools | Workflows → promotion-gate → Run |
+| Run the gate by hand | `kubectl create -f` the manifest below, or `occ clusterworkflow run promotion-gate -n default --set spec.workflow.parameters.project=demo --set spec.workflow.parameters.component=hello-world --set spec.workflow.parameters.sourceEnvironment=staging` | `POST /api/v1/namespaces/default/workflowruns`, MCP workflow tools | Workflows → promotion-gate → Run |
 | Production | merge the gate's PR | denied (ABAC + VAP) | denied |
 | Roll back production | revert the PR | – | – |
 
@@ -278,12 +278,16 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 ## Limits
 
 - The gate fails closed until its GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
-- Locally the workflow plane on mgmt cannot resolve `<env>-default.<cluster>.apps.localhost`, so the smoke probe is
-  off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on.
+- Locally `<env>-default.<cluster>.apps.localhost` resolves to the gate pod's own loopback on mgmt, so the smoke probe
+  is off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on
+  ([#156](https://github.com/koorikla/platform/issues/156)).
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
   ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a
-  no-op when production already runs the release, otherwise it updates the same PR.
+  no-op when production already runs the release, otherwise it updates the PR. The spec-edit event of a promotion still
+  carries the previous rollout's status, so a promotion more than 1 hour after the previous one starts a second run;
+  the later run resets the branch, GitHub closes the first PR and the gate opens a new one
+  ([#155](https://github.com/koorikla/platform/issues/155)).
 - Endpoints outside local: the gate posts the Thunder client secret to `TOKEN_URL` and calls `API_URL` / the observer
   over the control-plane Gateway; locally these are plain HTTP on the docker network. `prometheusURL` is the
   in-cluster Service (no credentials sent; the observability plane runs on mgmt with the workflow plane). Every other installation must
@@ -291,5 +295,3 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 - argo-events renders the promotion-gate Sensor only once the Argo Workflows CRDs exist (`workflowPlane: auto`,
   addon openchoreo-workflow-plane). The Argo Workflows controller watches all namespaces (`workflowNamespaces: []`);
   falco-response runs in `argo-events` with its own ServiceAccount, outside the build NetworkPolicy.
-- Values not yet confirmed live (ABAC deny semantics, observer environment scope, Argo Events event shapes, first gate
-  run): [#54](https://github.com/koorikla/platform/issues/54).

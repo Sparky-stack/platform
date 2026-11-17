@@ -203,8 +203,8 @@ No upgrade or experimental channel is needed.
 | Kyverno (4 controllers) | 125m | 320Mi | per cluster |
 | **Total** | **~425m** | **~900Mi** | +175m / +320Mi per extra node |
 
-Actual usage on an idle cluster is usually close to these requests (cilium-agent ~200-300Mi, istiod ~100-200Mi,
-Kyverno admission ~150-250Mi).
+Measured on dev1 (single node, idle, `kubectl top`, #52): cilium-agent 232Mi, cilium-operator 40Mi, hubble-relay
+25Mi, ztunnel 11Mi, istio-cni 24Mi, istiod 55Mi, Kyverno 343Mi (admission 178Mi): ~730Mi, below the requests.
 
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/istio-ambient addons/kyverno* addons/clusterclasses`):
 [#52](https://github.com/koorikla/platform/issues/52).

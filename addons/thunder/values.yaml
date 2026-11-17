@@ -15,7 +15,7 @@
 # openchoreo-observer-resource-reader-client) and `promotion-gate` client-secret (OAuth client openchoreo-promotion-gate,
 # read by the promotion gate's per-run ExternalSecret too; docs/promotion.md).
 # Thunder's bootstrap (`thunderid bootstrap`, run by the setup Job) resolves `{{ .VAR }}` placeholders in the bundle
-# from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there. VERIFY live.
+# from the Job's environment (backend/cmd/server/bootstrap_cmd.go); setup.secretEnv puts the values there.
 #
 # Argo CD runs every Helm hook of this chart as a PreSync hook, on EVERY sync (Helm: install only):
 #   - VAP thunder-pvc-delete-protection (ours, weight -30, templates/pvc-delete-protection.yaml): denies deleting the

@@ -59,7 +59,7 @@ openchoreo:
   orgNamespace: default
   controlPlane:
     host: openchoreo.localhost                 # console; api.<host>, thunder.<host> derive from it
-    # URL workload-cluster agents dial. Locally resolved to mgmt by the coredns-local addon. VERIFY
+    # URL workload-cluster agents dial. Locally resolved to mgmt by the coredns-local addon.
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
   # Observability plane on mgmt (addon openchoreo-observability-plane) + data-plane telemetry (addon telemetry).
   # Endpoints: observer.<host>:<httpPort>, {opentelemetry,prometheus}.observability.<host>:<httpPort> (HTTP),
