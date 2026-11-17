@@ -140,12 +140,22 @@ imageVerification:
   # reported elsewhere) instead of skipping signature verification.
   platformKey:
     enabled: true
-    publicKey: ""                          # PEM: cosign.pub of store key cosign-platform (the key the workflow plane signs
-                                           # with); installations/<inst>/addons/kyverno-policies/values.yaml. Local: empty
-                                           # (fresh key per bootstrap), docs/supply-chain.md "Wiring the key"
+    publicKey: ""                          # PEM: cosign.pub of store key cosign-platform, inline (stable or KMS-backed
+                                           # installations: installations/<inst>/addons/kyverno-policies/values.yaml)
+    # Without publicKey and with registry.type harbor: the key, the registry CA and pull credentials come from mgmt per
+    # workload cluster (charts/cluster templates/image-verification-crs.yaml, a ClusterResourceSet) into Kyverno's
+    # namespace; the policy reads the key at admission (CEL resource.Get). Locally a fresh key per mgmt bootstrap, so no
+    # committed key could match. A missing ConfigMap fails the check (denied where Deny), never skips it.
+    # docs/supply-chain.md "Wiring the key".
+    cluster:
+      namespace: kyverno                   # == charts/cluster imageVerification.namespace (addon kyverno's namespace)
+      configMap: platform-image-verification   # == charts/cluster imageVerification.configMap; key cosign.pub
+      pullSecret: platform-registry        # == charts/cluster imageVerification.pullSecret (credentials.secrets)
     rekor: false                           # in-cluster signing without a transparency log (cosign --tlog-upload=false)
-    attestations: []                       # workflow plane attests vuln + spdxjson (predicate https://spdx.dev/Document,
-                                           # not attestationTypes.sbom): add [vuln] once verified online
+    # The workflow plane attests the Trivy scan (vuln) and the syft SBOM with predicate https://spdx.dev/Document/v2.3
+    # (attestationTypes.sbom, same as the GitHub path), both with the platform key. Provenance is BuildKit's unsigned
+    # SLSA attestation manifest, not a platform-key attestation: not required.
+    attestations: [sbom, vuln]
   attestationTypes:                        # in-toto predicate types (as listed by `cosign verify` on koorikla images)
     sbom: https://spdx.dev/Document/v2.3
     provenance: https://slsa.dev/provenance/v1

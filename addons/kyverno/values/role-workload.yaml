@@ -1,0 +1,30 @@
+# Kyverno on workload clusters (role overlay on values.yaml).
+#
+# Harbor registry CA for image verification (addon kyverno-policies platformKey.cluster, docs/supply-chain.md "Wiring
+# the key"): charts/cluster (templates/image-verification-crs.yaml) delivers ConfigMap platform-image-verification
+# (ca.crt, cosign.pub) into this namespace. The admission and reports controllers verify Harbor images, so both trust
+# ca.crt: Go adds every certificate under SSL_CERT_DIR to the system bundle (/etc/ssl/certs/ca-certificates.crt, still
+# loaded), so public registries and Sigstore keep working. The chart's caCertificates would REPLACE the bundle.
+# optional: installations without Harbor (registry.type external) have no such ConfigMap. Go reads the roots once per
+# process: a re-issued Harbor CA needs a controller restart (the CA lives 10 years, addons/harbor).
+kyverno:
+  admissionController:
+    container:
+      extraEnvVars: &caEnv
+        - name: SSL_CERT_DIR
+          value: /etc/kyverno/registry-ca
+    extraVolumeMounts: &caMount
+      - name: registry-ca
+        mountPath: /etc/kyverno/registry-ca
+        readOnly: true
+    extraVolumes: &caVolume
+      - name: registry-ca
+        configMap:
+          name: platform-image-verification   # == charts/cluster imageVerification.configMap
+          optional: true
+          items:
+            - { key: ca.crt, path: ca.crt }
+  reportsController:
+    extraEnvVars: *caEnv
+    extraVolumeMounts: *caMount
+    extraVolumes: *caVolume

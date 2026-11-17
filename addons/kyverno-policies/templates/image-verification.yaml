@@ -68,10 +68,16 @@ verification per check; only images still at the transition pin pay the failed a
 Trusted ONLY with a public key configured: without a key nothing could verify them, so they are not trusted at all and
 the trusted-registries policy denies them (enforce) instead of letting them skip signature verification. */ -}}
 {{- $reg := .Values.registry | default dict }}
-{{- $platformKey := and $iv.platformKey.enabled $iv.platformKey.publicKey }}
+{{- /* Key source: inline publicKey, else (registry.type harbor) the ConfigMap charts/cluster delivers per workload cluster. */ -}}
+{{- $pkc := $iv.platformKey.cluster | default dict }}
+{{- $clusterKey := and $iv.platformKey.enabled (not $iv.platformKey.publicKey) (eq (toString $reg.type) "harbor") (ne (toString ($pkc.configMap | default "")) "") }}
+{{- $platformKey := and $iv.platformKey.enabled (or $iv.platformKey.publicKey $clusterKey) }}
+{{- if $clusterKey }}
+{{- range $f := list "namespace" "configMap" }}{{ if not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" (toString (get $pkc $f))) }}{{ fail (printf "imageVerification.platformKey.cluster.%s %q is not a Kubernetes object name" $f (toString (get $pkc $f))) }}{{ end }}{{ end }}
+{{- end }}
 {{- $platformPrefixes := list }}
 {{- if $platformKey }}
-{{- $host := required "imageVerification.platformKey.publicKey is set: installation registry.host is required (image prefix <host>/<appsProject>/)" $reg.host }}
+{{- $host := required "imageVerification.platformKey (publicKey or registry.type harbor) is set: installation registry.host is required (image prefix <host>/<appsProject>/)" $reg.host }}
 {{- $project := $reg.appsProject | default "apps" }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?$" $host) }}{{ fail (printf "registry.host %q must be <dns name>[:<port>]" $host) }}{{ end }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9._]*[a-z0-9])?$" $project) }}{{ fail (printf "registry.appsProject %q is not a registry project name" $project) }}{{ end }}
@@ -162,6 +168,10 @@ spec:
     mutateDigest: false      # OpenChoreo's agent re-applies the rendered Deployment: a digest patch would flap
     verifyDigest: {{ get $iv.requireDigest $action | default false }}
     required: true
+  {{- if and (has "platform" $kinds) $clusterKey $pkc.pullSecret }}
+  credentials:
+    secrets: [{{ $pkc.pullSecret }}]   # in Kyverno's namespace (charts/cluster image-verification-crs): private apps project
+  {{- end }}
   attestors:
     {{- if has "github" $kinds }}
     {{- range $keyless }}
@@ -183,8 +193,12 @@ spec:
     - name: platform-key
       cosign:
         key:
+          {{- if $iv.platformKey.publicKey }}
           data: |
             {{- $iv.platformKey.publicKey | trim | nindent 12 }}
+          {{- else }}
+          expression: variables.platformPublicKey
+          {{- end }}
         {{- if not $iv.platformKey.rekor }}
         ctlog:
           insecureIgnoreTlog: true
@@ -198,6 +212,13 @@ spec:
         type: {{ get $iv.attestationTypes $att }}
   {{- end }}
   variables:
+    {{- if and (has "platform" $kinds) $clusterKey }}
+    # platform signing key delivered by charts/cluster (image-verification-crs) into Kyverno's namespace; read per
+    # admission, so a re-bootstrapped mgmt key needs no policy change. Missing ConfigMap -> evaluation error -> fails.
+    - name: platformPublicKey
+      expression: >-
+        resource.Get("v1", "configmaps", {{ $pkc.namespace | quote }}, {{ $pkc.configMap | quote }}).data["cosign.pub"]
+    {{- end }}
     - name: images                      # every container kind (init / ephemeral too: explicit messages, not only required)
       expression: >-
         images.containers
