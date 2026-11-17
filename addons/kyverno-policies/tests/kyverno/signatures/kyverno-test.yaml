@@ -8,6 +8,8 @@ resources: [resources.yaml]
 variables: values.yaml
 # The signed image was built through koorikla/ci@v1 (mutable tag): since the identity is pinned to a commit SHA it
 # fails everywhere ("expected SAN value ...container.yaml@<sha>, got ...@refs/tags/v1"); staging only reports it.
+# One policy per check (#136): the signature (openchoreo-verify-images-*) and each required attestation
+# (openchoreo-attest-<sbom|provenance|vuln>-*) must all pass for an image to be admitted.
 results:
   - policy: openchoreo-verify-images-enforce
     kind: Pod
@@ -16,14 +18,34 @@ results:
       - dp-default-demo-production-1/prod-tag-only
       - dp-default-demo-production-1/prod-unsigned-init
     result: fail
-  # Signed at workflowRef (a31c234): admitted. Signed at the previous pin (de39b1d) after the move: denied.
+  # Signed at workflowRef (a31c234): signature and every attestation admitted. Signed at the previous pin (de39b1d)
+  # after the move: denied by the signature and the attestation checks.
   - policy: openchoreo-verify-images-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin]
+    result: pass
+  - policy: openchoreo-attest-sbom-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin]
+    result: pass
+  - policy: openchoreo-attest-provenance-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin]
+    result: pass
+  - policy: openchoreo-attest-vuln-enforce
     kind: Pod
     resources: [dp-default-demo-production-1/prod-signed-current-pin]
     result: pass
   - policy: openchoreo-verify-images-enforce
     kind: Pod
     resources: [dp-default-demo-production-1/prod-signed-previous-pin]
+    result: fail
+  - policy: openchoreo-attest-provenance-enforce
+    kind: Pod
+    resources:
+      - dp-default-demo-production-1/prod-signed-previous-pin
+      - dp-default-demo-production-1/prod-signed-mutable-ref
+      - dp-default-demo-production-1/prod-unsigned-init
     result: fail
   - policy: openchoreo-verify-images-audit
     kind: Pod

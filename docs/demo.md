@@ -171,9 +171,11 @@ kubectl --kubeconfig dev1.kubeconfig -n "$NS" run unsigned \
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
 ```
 
-Expected: policies `READY true`; `pod/signed created (server dry run)`; the unsigned digest is denied by
-`openchoreo-verify-images-enforce` (`is not signed by gh-koorikla-hello-world-heads-main ... no signatures found`); the
-docker.io image is denied by `openchoreo-trusted-registries-enforce` (`images must come from ghcr.io/koorikla/`).
+Expected: policies `READY true`; `pod/signed created (server dry run)` (~0.1 s once Kyverno has verified the digest,
+~5-10 s the first time: docs/supply-chain.md "Admission latency"); the unsigned digest is denied by
+`openchoreo-verify-images-enforce` (`is not signed by gh-koorikla-hello-world-heads-main ... no signatures found`; the
+`openchoreo-attest-*-enforce` checks deny it too); the docker.io image is denied by
+`openchoreo-trusted-registries-enforce` (`images must come from ghcr.io/koorikla/`).
 
 Talking points:
 - Keyless signing in CI (koorikla/ci): the certificate names the exact reusable workflow commit, repository, branch

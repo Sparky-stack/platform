@@ -1,0 +1,36 @@
+# Online (registry + Sigstore): hack/tests/test_kyverno_policies.sh runs it with KYVERNO_ONLINE=1.
+# During a pin move (helm-values.yaml: transitionWorkflowRefs = the previous commit) every check tries the current
+# pin's attestor first and the transition attestor second, one attestor per call joined with || (#136): images at either
+# commit pass every check, an image signed at a mutable ref passes none.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: openchoreo-verify-images-transition
+policies: [policies.yaml]
+resources: [resources.yaml]
+variables: values.yaml
+results:
+  - policy: openchoreo-verify-images-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin, dp-default-demo-production-1/prod-signed-previous-pin]
+    result: pass
+  - policy: openchoreo-attest-sbom-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin, dp-default-demo-production-1/prod-signed-previous-pin]
+    result: pass
+  - policy: openchoreo-attest-provenance-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin, dp-default-demo-production-1/prod-signed-previous-pin]
+    result: pass
+  - policy: openchoreo-attest-vuln-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-current-pin, dp-default-demo-production-1/prod-signed-previous-pin]
+    result: pass
+  - policy: openchoreo-verify-images-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-mutable-ref]
+    result: fail
+  - policy: openchoreo-attest-vuln-enforce
+    kind: Pod
+    resources: [dp-default-demo-production-1/prod-signed-mutable-ref]
+    result: fail

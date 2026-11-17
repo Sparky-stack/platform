@@ -106,7 +106,7 @@ Identify the matching failure mode below and execute its **Steps**, **Verify**, 
 
 ## Kyverno denying an image
 
-- **Symptoms**: `production` `RenderedRelease` fails to apply a `Deployment`/`Pod` with an admission error from `openchoreo-verify-images-enforce` or `openchoreo-trusted-registries-enforce` ([supply-chain.md](../supply-chain.md#image-signatures-and-attestations-at-admission)).
+- **Symptoms**: `production` `RenderedRelease` fails to apply a `Deployment`/`Pod` with an admission error from `openchoreo-verify-images-enforce`, `openchoreo-attest-*-enforce` or `openchoreo-trusted-registries-enforce` ([supply-chain.md](../supply-chain.md#image-signatures-and-attestations-at-admission)).
 - **Steps**:
   ```bash
   # 1. Read the admission denial message on mgmt
@@ -123,6 +123,7 @@ Identify the matching failure mode below and execute its **Steps**, **Verify**, 
   - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (`koorikla/ci` output `image_digest_ref`, [#16](https://github.com/koorikla/platform/issues/16)) and cut a new `ComponentRelease`.
   - **Repository or `workflowRef` mismatch**: add `owner/repo` to `imageVerification.github.repositories` in `installations/<inst>/addons/kyverno-policies/values.yaml` or align `workflowRef` with `koorikla/ci` `v1`.
   - **Harbor `apps/` image without `platformKey.publicKey`**: wire `cosign.pub` per [certificates-and-secrets.md](certificates-and-secrets.md) ([#15](https://github.com/koorikla/platform/issues/15)).
+  - **Webhook timeout (`context deadline exceeded`)**: a check of a digest not yet in Kyverno's verification cache takes ~5-10 s ([supply-chain.md "Admission latency"](../supply-chain.md#admission-latency)); much slower means the cluster's egress to `ghcr.io` / `tuf-repo-cdn.sigstore.dev` is degraded. The rollout retries; successful checks are cached per digest.
   - **Kyverno webhook down (`failurePolicy: Fail`)**: running production pods stay up and platform namespaces are excluded; restore `deploy/kyverno-admission-controller` in `kyverno`.
 - **Verify**: `bash hack/tests/test_kyverno_policies.sh` passes offline and `RenderedRelease` transitions to `Ready` on the production data plane.
 - **Rollback**: revert `release-bindings/production.yaml` in the app repo to the previous signed `@sha256:...` release.

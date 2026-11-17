@@ -71,10 +71,13 @@ multicluster_profile() {
   done
 }
 
-# deny_errors <kyverno-policies render> -> violations of the production Deny pair (empty: ok)
+# deny_errors <kyverno-policies render> -> violations of the production Deny policies (empty: ok)
 deny_errors() {
   local r=$1 k n sel
-  for k in ImageValidatingPolicy/openchoreo-verify-images-enforce ValidatingPolicy/openchoreo-trusted-registries-enforce; do
+  # signature + one policy per required attestation (#136: separate policies run in parallel) + trusted registries
+  for k in ImageValidatingPolicy/openchoreo-verify-images-enforce ImageValidatingPolicy/openchoreo-attest-sbom-enforce \
+    ImageValidatingPolicy/openchoreo-attest-provenance-enforce ImageValidatingPolicy/openchoreo-attest-vuln-enforce \
+    ValidatingPolicy/openchoreo-trusted-registries-enforce; do
     n=$(K="${k%/*}" N="${k#*/}" yq -r 'select(.kind == strenv(K) and .metadata.name == strenv(N)) | .spec.validationActions | join(",")' "$r")
     [[ "$n" == Deny ]] || { echo "$k: validationActions '${n:-missing}', want Deny"; continue; }
     sel=$(K="${k%/*}" N="${k#*/}" yq -o=json -I=0 'select(.kind == strenv(K) and .metadata.name == strenv(N)) | .spec.matchConstraints.namespaceSelector.matchExpressions[] | select(.key == "openchoreo.dev/environment" and .operator == "In") | .values' "$r")

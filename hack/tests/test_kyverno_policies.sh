@@ -18,6 +18,9 @@
 #   tests/kyverno/platform-key offline: with a platform key only <registry.host>/<appsProject>/ is trusted
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
+#   tests/kyverno/signatures-transition
+#                              online: during a pin move (transitionWorkflowRefs) images at either commit pass every
+#                              check through the ||-chained attestors (#136); KYVERNO_ONLINE=1 only
 # A suite's helm-values.yaml (optional) is passed to helm template. The kyverno CLI comes from mise.toml; skips only
 # when it is missing (KYVERNO=/path/to/kyverno overrides).
 set -euo pipefail
@@ -66,7 +69,7 @@ addon="$ROOT/addons/kyverno-policies"
 [[ -d "$addon/charts" ]] || helm dependency build "$addon" >/dev/null
 cp -R "$addon/tests/kyverno" "$TMP/kyverno"
 suites=(registries platform-key)
-[[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures)
+[[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
   hv=()
   [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
@@ -79,7 +82,7 @@ for s in "${suites[@]}"; do
     assert_eq failed ok "kyverno test $s"
   fi
 done
-[[ "${KYVERNO_ONLINE:-0}" == "1" ]] || echo "  SKIP signatures (needs network: KYVERNO_ONLINE=1)"
+[[ "${KYVERNO_ONLINE:-0}" == "1" ]] || echo "  SKIP signatures, signatures-transition (needs network: KYVERNO_ONLINE=1)"
 
 # Native VAP: promotion to gated environments only through git (Argo CD)
 ocp="$ROOT/addons/openchoreo-platform"

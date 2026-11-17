@@ -46,7 +46,8 @@ tests:
   - it: verifies images per environment - Audit everywhere but production (defaultAction), Deny (fail closed, digest) in production
     template: templates/image-verification.yaml
     asserts:
-      - hasDocuments: { count: 4 }
+      # per action: signature + sbom/provenance/vuln attestation ImageValidatingPolicies + the trusted-registries policy
+      - hasDocuments: { count: 10 }
       - equal: { path: metadata.name, value: openchoreo-verify-images-audit }
         documentIndex: 0
       - equal: { path: spec.validationActions, value: [Audit] }
@@ -62,29 +63,89 @@ tests:
             matchExpressions: [{ key: openchoreo.dev/environment, operator: NotIn, values: [production] }]
         documentIndex: 0
       - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [pods, pods/ephemeralcontainers] }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [pods, pods/ephemeralcontainers] }
-        documentIndex: 3
+        documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
       - matchRegex: { path: "spec.matchConditions[0].expression", pattern: "^!\\(request\\.namespace in " }
-        documentIndex: 3
-      - equal: { path: metadata.name, value: openchoreo-verify-images-enforce }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
       - equal: { path: spec.validationActions, value: [Deny] }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: spec.failurePolicy, value: Fail }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: spec.validationConfigurations.verifyDigest, value: true }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: spec.validationConfigurations.mutateDigest, value: false }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions[0].values", value: [production] }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - isKind: { of: ValidatingPolicy }
-        documentIndex: 3
+        documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+
+  - it: "one ImageValidatingPolicy per check (#136): the API server calls their webhooks in parallel"
+    template: templates/image-verification.yaml
+    documentSelector: { path: kind, value: ImageValidatingPolicy, matchMany: true }
+    asserts:
+      - matchRegex: { path: metadata.name, pattern: '^openchoreo-(verify-images|attest-(sbom|provenance|vuln))-(audit|enforce)$' }
+      # one check per policy: a policy with several validations runs them one after the other (~5 s each, cold)
+      - lengthEqual: { path: spec.validations, count: 1 }
+      - equal: { path: spec.webhookConfiguration.timeoutSeconds, value: 30 }
+      - equal: { path: spec.validationConfigurations.required, value: true }
+
+  - it: production attestation policies enforce like the signature policy (Deny, fail closed, digest, same scope)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-attest-provenance-enforce }
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: spec.validationConfigurations.verifyDigest, value: true }
+      - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions[0].values", value: [production] }
+      - equal: { path: spec.matchImageReferences, value: [{ glob: "ghcr.io/koorikla/*" }] }
+      - equal: { path: spec.attestations, value: [{ name: provenance, intoto: { type: "https://slsa.dev/provenance/v1" } }] }
+      - equal:
+          path: "spec.validations[0].expression"
+          value: >-
+            variables.images.filter(image, ["ghcr.io/koorikla/"].exists(p, image.startsWith(p))).all(image,
+            verifyAttestationSignatures(image, attestations["provenance"], [attestors["gh-koorikla-hello-world-heads-main"]]) > 0)
+      - matchRegex: { path: "spec.validations[0].message", pattern: 'has no provenance attestation \(https://slsa.dev/provenance/v1\) signed by gh-koorikla-hello-world-heads-main$' }
+
+  - it: the signature policy verifies only the signature (attestations are their own policies)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
+    asserts:
+      - notExists: { path: spec.attestations }
+      - equal:
+          path: "spec.validations[0].expression"
+          value: >-
+            variables.images.filter(image, ["ghcr.io/koorikla/"].exists(p, image.startsWith(p))).all(image,
+            verifyImageSignatures(image, [attestors["gh-koorikla-hello-world-heads-main"]]) > 0)
+
+  - it: every required attestation gets its own production policy
+    template: templates/image-verification.yaml
+    asserts:
+      - containsDocument: { kind: ImageValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: openchoreo-attest-sbom-enforce, any: true }
+      - containsDocument: { kind: ImageValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: openchoreo-attest-provenance-enforce, any: true }
+      - containsDocument: { kind: ImageValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: openchoreo-attest-vuln-enforce, any: true }
+      - containsDocument: { kind: ImageValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: openchoreo-attest-sbom-audit, any: true }
+
+  - it: no attestation required, no attestation policy
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.attestations: []
+    asserts:
+      - hasDocuments: { count: 4 }
+
+  - it: "a policy name over 40 characters is refused (webhook label svc-ignore-finegrained-<policy> <= 63)"
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.attestationTypes.supercalifragilistic: https://example.com/predicate/v1
+      imageVerification.github.attestations: [supercalifragilistic]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'policy name "openchoreo-attest-supercalifragilistic-audit" is longer than 40 characters'
 
   - it: pins the reusable workflow identity AND the calling repository/ref (koorikla/ci is public)
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
     asserts:
       - equal:
           path: spec.attestors[0].cosign.keyless
@@ -97,14 +158,13 @@ tests:
               githubWorkflowRef: refs/heads/main
               githubWorkflowTrigger: push
       - contains: { path: spec.attestations, content: { name: sbom, intoto: { type: "https://spdx.dev/Document/v2.3" } } }
-      - contains: { path: spec.attestations, content: { name: provenance, intoto: { type: "https://slsa.dev/provenance/v1" } } }
-      - matchRegex: { path: "spec.validations[1].expression", pattern: 'verifyAttestationSignatures\(image, attestations\["sbom"\]' }
+      - matchRegex: { path: "spec.validations[0].expression", pattern: 'verifyAttestationSignatures\(image, attestations\["sbom"\]' }
       - matchRegex: { path: "spec.validations[0].expression", pattern: '^variables\.images\.filter\(' }
       - matchRegex: { path: "spec.variables[0].expression", pattern: 'images\.initContainers.*images\.ephemeralContainers' }
 
   - it: the trusted reusable workflow is pinned by commit SHA (subject = workflow@sha)
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
       imageVerification.github.transitionWorkflowRefs: []
@@ -114,9 +174,9 @@ tests:
           path: spec.attestors[0].cosign.keyless.identities[0].subject
           value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
 
-  - it: during a pin move the previous commit stays trusted through its own attestors (one identity each)
+  - it: "during a pin move the previous commit stays trusted through its own attestors, tried after every current one (#136)"
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
       imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
@@ -124,10 +184,11 @@ tests:
     asserts:
       - lengthEqual: { path: spec.attestors, count: 4 }
       - equal: { path: "spec.attestors[0].name", value: gh-koorikla-hello-world-heads-main }
-      - equal: { path: "spec.attestors[1].name", value: gh-koorikla-hello-world-heads-main-fedcba9 }
+      - equal: { path: "spec.attestors[1].name", value: gh-koorikla-other-heads-main }
+      - equal: { path: "spec.attestors[2].name", value: gh-koorikla-hello-world-heads-main-fedcba9 }
       - equal: { path: "spec.attestors[3].name", value: gh-koorikla-other-heads-main-fedcba9 }
       - equal:
-          path: spec.attestors[1].cosign.keyless
+          path: spec.attestors[2].cosign.keyless
           value:
             identities:
               - issuer: https://token.actions.githubusercontent.com
@@ -137,21 +198,39 @@ tests:
               githubWorkflowRef: refs/heads/main
               githubWorkflowTrigger: push
       - equal:
-          path: "spec.attestors[2].cosign.keyless.identities[0].subject"
+          path: "spec.attestors[1].cosign.keyless.identities[0].subject"
           value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
-      - matchRegex:
+      # one attestor per call, ||-chained in that order: CEL stops at the first that verifies and Kyverno caches a
+      # single-attestor success (a list call is cached only when EVERY attestor verifies, i.e. never during a move)
+      - equal:
           path: "spec.validations[0].expression"
-          pattern: 'verifyImageSignatures\(image, \[attestors\["gh-koorikla-hello-world-heads-main"\], attestors\["gh-koorikla-hello-world-heads-main-fedcba9"\], attestors\["gh-koorikla-other-heads-main"\], attestors\["gh-koorikla-other-heads-main-fedcba9"\]\]\) > 0'
-      - matchRegex:
-          path: "spec.validations[1].expression"
-          pattern: 'attestors\["gh-koorikla-other-heads-main-fedcba9"\]\]\) > 0'
+          value: >-
+            variables.images.filter(image, ["ghcr.io/koorikla/"].exists(p, image.startsWith(p))).all(image,
+            verifyImageSignatures(image, [attestors["gh-koorikla-hello-world-heads-main"]]) > 0 ||
+            verifyImageSignatures(image, [attestors["gh-koorikla-other-heads-main"]]) > 0 ||
+            verifyImageSignatures(image, [attestors["gh-koorikla-hello-world-heads-main-fedcba9"]]) > 0 ||
+            verifyImageSignatures(image, [attestors["gh-koorikla-other-heads-main-fedcba9"]]) > 0)
+      - notMatchRegex: { path: "spec.validations[0].expression", pattern: '\[attestors\[[^]]*\], attestors' }
+
+  - it: attestation checks chain the attestors the same way (current pin first)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-attest-vuln-enforce }
+    set:
+      imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
+      imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
+    asserts:
+      - equal:
+          path: "spec.validations[0].expression"
+          value: >-
+            variables.images.filter(image, ["ghcr.io/koorikla/"].exists(p, image.startsWith(p))).all(image,
+            verifyAttestationSignatures(image, attestations["vuln"], [attestors["gh-koorikla-hello-world-heads-main"]]) > 0 ||
+            verifyAttestationSignatures(image, attestations["vuln"], [attestors["gh-koorikla-hello-world-heads-main-fedcba9"]]) > 0)
 
   - it: Kyverno verifies one identity per attestor (multiple identities are unsupported)
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: kind, value: ImageValidatingPolicy, matchMany: true }
     asserts:
       - notExists: { path: "spec.attestors[0].cosign.keyless.identities[1]" }
-      - notExists: { path: "spec.attestors[1].cosign.keyless.identities[1]" }
 
   - it: a transition entry that is not a full commit SHA is refused
     template: templates/image-verification.yaml
@@ -220,7 +299,7 @@ tests:
 
   - it: one attestor per allowed (repository, ref); the platform key only when a public key is set
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
       imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
@@ -240,7 +319,7 @@ tests:
 
   - it: one attestor per trigger when several triggers are allowed
     template: templates/image-verification.yaml
-    documentIndex: 2
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
       imageVerification.github.triggers: [push, workflow_dispatch]
       imageVerification.github.transitionWorkflowRefs: []
@@ -251,7 +330,7 @@ tests:
 
   - it: the platform registry is NOT trusted without a public key (unsigned in-cluster images are denied in production)
     template: templates/image-verification.yaml
-    documentIndex: 3
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
     set:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
     asserts:
@@ -259,7 +338,7 @@ tests:
 
   - it: with a public key exactly <registry.host>/<appsProject>/ is trusted (host, port and project pinned)
     template: templates/image-verification.yaml
-    documentIndex: 3
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
     set:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
       imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
@@ -288,9 +367,11 @@ tests:
       imageVerification.defaultAction: Deny
     asserts:
       - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions", value: [{ key: openchoreo.dev/environment, operator: NotIn, values: [development, production, staging] }] }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
       - equal: { path: spec.validationActions, value: [Deny] }
-        documentIndex: 2
+        documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
+      - equal: { path: "spec.matchConstraints.namespaceSelector.matchExpressions", value: [{ key: openchoreo.dev/environment, operator: NotIn, values: [development, production, staging] }] }
+        documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
 
   - it: rejects unknown actions
     template: templates/image-verification.yaml
@@ -304,3 +385,32 @@ tests:
     values: [../values/role-mgmt.yaml]
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: an attestation policy covers only the sources that require that attestation (platform key requires none)
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
+    set:
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+    asserts:
+      - equal: { path: spec.matchImageReferences, value: [{ glob: "ghcr.io/koorikla/*" }] }
+      - lengthEqual: { path: spec.attestors, count: 1 }
+      - lengthEqual: { path: spec.validations, count: 1 }
+      - notMatchRegex: { path: "spec.validations[0].expression", pattern: platform-key }
+
+  - it: a platform-key attestation requirement adds the platform source to that attestation's policy only
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-attest-vuln-enforce }
+    set:
+      registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
+      imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
+      imageVerification.platformKey.attestations: [vuln]
+    asserts:
+      - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
+      - equal: { path: "spec.attestors[1].name", value: platform-key }
+      - lengthEqual: { path: spec.validations, count: 2 }
+      - equal:
+          path: "spec.validations[1].expression"
+          value: >-
+            variables.images.filter(image, ["harbor.openchoreo.localhost:9443/apps/"].exists(p, image.startsWith(p))).all(image,
+            verifyAttestationSignatures(image, attestations["vuln"], [attestors["platform-key"]]) > 0)

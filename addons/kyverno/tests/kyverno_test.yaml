@@ -38,3 +38,11 @@ tests:
     template: charts/kyverno/templates/reports-controller/deployment.yaml
     asserts:
       - equal: { path: 'spec.template.spec.containers[0].resources.limits.memory', value: 128Mi }
+
+  - it: "admission controller caches verified images (#136): explicit enable, 24h TTL, 32 MiB"
+    template: charts/kyverno/templates/admission-controller/deployment.yaml
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheEnabled=true }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheTTLDuration=24h }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheMaxSize=33554432 }   # not 3.3554432e+07 (unquoted value)
+      - notContains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheEnabled=false }

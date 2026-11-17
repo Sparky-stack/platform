@@ -179,10 +179,11 @@ with people and git stays the record. Rollback is reverting the PR.
 
 ### 4. Policy gate per environment (Kyverno)
 
-On every data plane `addons/kyverno-policies` renders, per action, an `ImageValidatingPolicy`
-`openchoreo-verify-images-<audit|enforce>` (Sigstore signature + SBOM, SLSA provenance and vulnerability attestations;
-digest required in production) and a `ValidatingPolicy` `openchoreo-trusted-registries-<audit|enforce>` (every image
-from a trusted prefix). `Audit` applies to development and staging cell namespaces, `Deny` with `failurePolicy: Fail`
+On every data plane `addons/kyverno-policies` renders, per action, `ImageValidatingPolicies`
+`openchoreo-verify-images-<audit|enforce>` (Sigstore signature) and `openchoreo-attest-<sbom|provenance|vuln>-<audit|enforce>`
+(signed SBOM, SLSA provenance and vulnerability attestations; one policy per check so they run in parallel; digest
+required in production) and a `ValidatingPolicy` `openchoreo-trusted-registries-<audit|enforce>` (every image from a
+trusted prefix). `Audit` applies to development and staging cell namespaces, `Deny` with `failurePolicy: Fail`
 to production (namespace label `openchoreo.dev/environment`). A denied apply shows on the RenderedRelease. Identities,
 scope and test evidence: [supply-chain.md](supply-chain.md#image-signatures-and-attestations-at-admission).
 

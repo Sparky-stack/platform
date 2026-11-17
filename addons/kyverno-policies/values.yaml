@@ -69,8 +69,10 @@ ambientEnrollment:
       - { key: openchoreo.dev/environment, operator: Exists }
 
 # --- Supply-chain gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md) -----------------------
-# templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`, one
+# templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`,
 #   ImageValidatingPolicy  openchoreo-verify-images-<audit|enforce>   cosign signatures of trusted images
+#   ImageValidatingPolicy  openchoreo-attest-<name>-<audit|enforce>   one per required attestation (sbom, provenance,
+#                                                                     vuln): one check per policy, so they run in parallel
 #   ValidatingPolicy       openchoreo-trusted-registries-<audit|enforce>  every container image comes from a trusted
 #                                                                     registry (otherwise an unsigned docker.io image
 #                                                                     would simply not be matched by the image policy)
@@ -95,8 +97,9 @@ imageVerification:
   failurePolicy:
     Audit: Ignore
     Deny: Fail
-  # Webhook timeout, max 30: one image = signature + 3 attestations, each a keyless verification of ~4-5 s on the
-  # local clusters (TUF trusted root + registry referrers), so 20 s left no headroom (#128).
+  # Webhook timeout of every image policy, max 30. A keyless verification takes ~5 s (TUF refresh + registry referrers)
+  # unless Kyverno has it cached (per digest, addons/kyverno imageVerifyCache*); each check is its own policy, so a cold
+  # admission is one verification plus the serialized TUF refreshes (~5-10 s), not the sum (~20 s, #128, #136).
   timeoutSeconds: 30
   # Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
   cellNamespaceSelector:
@@ -105,7 +108,8 @@ imageVerification:
   # Images built by GitHub Actions through the shared reusable workflow koorikla/ci container.yaml: Sigstore keyless
   # (cosign v3 bundle format, verified by Kyverno 1.20). The certificate subject is the REUSABLE workflow, which
   # anyone can call (koorikla/ci is public): the GitHub workflow extensions pin the calling repository, ref and trigger,
-  # so every allowed (repository, ref, trigger) becomes one attestor (Kyverno matches extensions exactly, no regex).
+  # so every allowed (repository, ref, trigger) becomes one attestor (Kyverno matches extensions exactly, no regex),
+  # tried in order: an image matching the n-th attestor pays n-1 failed verifications per check and admission.
   # koorikla/ci also attaches signed SPDX SBOM, SLSA provenance and vulnerability-scan attestations: all required.
   github:
     enabled: true
@@ -121,6 +125,8 @@ imageVerification:
     # Moving the pin without breaking admission: images already running were signed at the previous commit. Keep that
     # commit here (40-hex, at most one: workflowRef + this list <= 2) until every allowed repository's production image
     # is rebuilt at workflowRef, then empty it (docs/supply-chain.md "Moving the workflow pin"). Not tracked by Renovate.
+    # Attestors are tried current pin first: an image still at this commit pays one failed (uncached) verification per
+    # check on every admission, so keep the window short.
     transitionWorkflowRefs: []
     repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
     refs: [refs/heads/main]                # extension githubWorkflowRef

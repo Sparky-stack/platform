@@ -24,7 +24,7 @@ Use this runbook **only** when normal GitOps delivery or an automated gate is de
 | Hook PVCs (`thunder`) | `ValidatingAdmissionPolicy/thunder-pvc-delete-protection` | Freeze Argo CD, back up PVs, drop annotation `platform.koorikla.io/delete-protection` | Platform maintainers |
 | Cluster sync wave `-1` (`fleet`) | `ExternalSecret/<name>-registries` health check + `retry.limit: -1` | Fix secret + `force-sync`, terminate active op, or set `secrets.nodeRegistryAuth.enabled: false` in Git | Platform maintainers |
 | Single-server k3s `etcd` | Embedded `etcd` quorum | `k3s server --cluster-reset` on the newest server | Local / non-HA `dev` clusters only (`production` cloud uses `>= 3` servers) |
-| Production image admission (`kyverno`) | `openchoreo-verify-images-enforce` + `openchoreo-trusted-registries-enforce` (`failurePolicy: Fail`) | **None** (never weaken `production` to `Audit`; fix signing/allowlist or revert to the previous signed digest) | N/A |
+| Production image admission (`kyverno`) | `openchoreo-verify-images-enforce`, `openchoreo-attest-*-enforce` + `openchoreo-trusted-registries-enforce` (`failurePolicy: Fail`) | **None** (never weaken `production` to `Audit`; fix signing/allowlist or revert to the previous signed digest) | N/A |
 
 ### Freezing Argo CD self-heal
 
