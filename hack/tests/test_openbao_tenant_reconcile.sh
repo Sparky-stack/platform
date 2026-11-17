@@ -43,18 +43,33 @@ case "$cmd" in
     case "$p" in
       auth/kubernetes/login) for a in "${rest[@]}"; do [[ "$a" == role=* ]] && echo "tok-${a#role=}"; done; true ;;
       identity/entity/name/*) touch "$S/entities/${p##*/}" ;;
-      identity/entity-alias) cat "$S/writes/identity_entity-alias" >> "$S/aliases"; echo >> "$S/aliases" ;;
+      identity/entity-alias)
+        an=""; ac=""; aa=""
+        for a in "${rest[@]}"; do case "$a" in name=*) an=${a#name=} ;; canonical_id=*) ac=${a#canonical_id=} ;; mount_accessor=*) aa=${a#mount_accessor=} ;; esac; done
+        # OpenBao: an entity has at most ONE alias per auth mount; an existing alias (name, mount) moves to the new entity
+        if awk -v n="$an" -v c="$ac" -v a="$aa" '$2 == a && $3 == c && $1 != n {f=1} END {exit !f}' "$S/aliasmap" 2>/dev/null; then
+          echo "Error writing data to identity/entity-alias: Code: 400. * Alias already exists for requested entity and mount accessor" >&2; exit 2
+        fi
+        { awk -v n="$an" -v a="$aa" '!($1 == n && $2 == a)' "$S/aliasmap" 2>/dev/null; printf '%s %s %s\n' "$an" "$aa" "$ac"; } > "$S/aliasmap.new"
+        mv "$S/aliasmap.new" "$S/aliasmap"
+        cat "$S/writes/identity_entity-alias" >> "$S/aliases"; echo >> "$S/aliases" ;;
       auth/*/role/*) cp "$S/writes/$(enc "$p")" "$S/roles/$(enc "$p")" ;;
     esac ;;
   delete)
     p=${args[0]}
     case "$p" in
-      identity/entity/name/*) rm -f "$S/entities/${p##*/}" ;;
+      identity/entity/name/*) rm -f "$S/entities/${p##*/}"; awk -v c="id-${p##*/}" '$3 != c' "$S/aliasmap" > "$S/aliasmap.new" 2>/dev/null; mv "$S/aliasmap.new" "$S/aliasmap" ;;
       auth/*/role/*) rm -f "$S/roles/$(enc "$p")" ;;
       *) exit 2 ;;
     esac ;;
   list)
-    p=${args[0]}; m=${p#auth/}; m=${m%/role}
+    p=${args[0]}
+    if [[ "$p" == identity/entity/name ]]; then
+      found=$(cd "$S/entities" && ls 2>/dev/null)
+      [[ -n "$found" ]] || { echo "No value found at $p" >&2; exit 2; }
+      printf 'Keys\n----\n%s\n' "$found"; exit 0
+    fi
+    m=${p#auth/}; m=${m%/role}
     found=$(cd "$S/roles" && ls "auth_${m}_role_"* 2>/dev/null | sed "s/^auth_${m}_role_//")
     [[ -n "$found" ]] || { echo "No value found at $p" >&2; exit 2; }
     printf 'Keys\n----\n%s\n' "$found" ;;
@@ -87,13 +102,15 @@ run() {
     unset BAO_TOKEN
     sh addons/openbao/files/tenant-reconcile.sh ) > "$TMP/out" 2>&1
 }
+ents() { (cd "$S/entities" && printf '%s\n' *); }
 wr() { cat "$S/writes/$(printf '%s' "$1" | tr '/' '_')" 2>/dev/null; }
 tenant() { printf '%s' "$2" > "$IN/tenants/$1.namespaces"; }
 cluster() { printf 'local' > "$IN/clusters/$1.group"; printf '%s' "${2:-https://172.18.0.9:6443}" > "$IN/clusters/$1.server"; printf -- '-----BEGIN CERTIFICATE-----\n' > "$IN/clusters/$1.ca"; }
 printf 'jwt' > "$TMP/token"
 
 D1=dp-default-demo-development-ad621210; D2=dp-default-demo-staging-ba410b48; O1=dp-default-other-development-0badc0de
-tenant demo "$D1 $D2"; tenant other "$O1"; tenant rogue "$D2 dp-default-rogue-development-12345678"
+D3=dp-default-demo-production-7cbe998d
+tenant demo "$D1 $D2 $D3"; tenant other "$O1"; tenant rogue "$D2 dp-default-rogue-development-12345678"
 tenant Bad_Name "dp-x"; tenant empty ""; printf 'tenant "demo" does not match' > "$IN/tenants/rejected.evil-openbao-tenant"
 cluster dev1; cluster prod1
 rc=0; run || rc=$?
@@ -113,27 +130,40 @@ assert_match "$(tr '\n' ' ' < "$S/aliases")" 'name=openbao-tenants/demo-writer c
 # per cluster: JWT mount with the member's JWKS; per tenant aliases before the role; role binds exactly its namespaces
 assert_eq "$(wr auth/tenants-dev1/config | tr '\n' ' ')" "jwks_url=https://172.18.0.9:6443/openid/v1/jwks jwks_ca_pem=@$IN/clusters/dev1.ca " "dev1: its API server's JWKS, pinned to its cluster CA"
 role=$(cat "$S/roles/auth_tenants-dev1_role_demo")
-assert_eq "$(printf '%s' "$role" | yq -p json -o json -I0 '.bound_claims')" "{\"sub\":[\"system:serviceaccount:$D1:openbao-tenant\"]}" "demo role: only demo's uncontested namespace's openbao-tenant ServiceAccount"
+assert_eq "$(printf '%s' "$role" | yq -p json -o json -I0 '.bound_claims')" "{\"sub\":[\"system:serviceaccount:$D1:openbao-tenant\",\"system:serviceaccount:$D3:openbao-tenant\"]}" "demo role: only demo's uncontested namespaces' openbao-tenant ServiceAccounts"
 assert_eq "$(printf '%s' "$role" | yq -p json -r '[.role_type, .user_claim, .bound_claims_type, (.bound_audiences | join(",")), .token_policies, .token_no_default_policy, .token_ttl] | join(" ")')" \
   "jwt sub string openbao-tenant-secrets tenant-read true 10m" "demo role: JWT, audience openbao-tenant-secrets, policy tenant-read only, 10m"
 assert_eq "$(yq -p json -o json -I0 '.bound_claims' < "$S/roles/auth_tenants-dev1_role_rogue")" '{"sub":["system:serviceaccount:dp-default-rogue-development-12345678:openbao-tenant"]}' "rogue role: never the namespace it contests"
 assert_match "$(cat "$TMP/out")" "namespace $D2 is claimed by several tenants: bound to none" "contested namespace reported"
 assert_eq "$(grep -c "$D2" "$S/aliases" || true)" 0 "contested namespace: no alias for anybody"
-alias_line=$(grep -n "entity-alias name=system:serviceaccount:$D1:openbao-tenant canonical_id=id-tenant-demo mount_accessor=acc_tenants-dev1" "$S/calls" | head -1 | cut -d: -f1)
+alias_line=$(grep -n "entity-alias name=system:serviceaccount:$D3:openbao-tenant canonical_id=id-tenant-demo.dev1.$D3 mount_accessor=acc_tenants-dev1" "$S/calls" | head -1 | cut -d: -f1)
 role_line=$(grep -n 'write auth/tenants-dev1/role/demo' "$S/calls" | head -1 | cut -d: -f1)
-assert_eq "$(( ${alias_line:-999} < ${role_line:-0} ))" 1 "dev1: demo's alias bound to entity tenant-demo before its role exists"
+assert_eq "$(( ${alias_line:-999} < ${role_line:-0} ))" 1 "dev1: demo's aliases bound (to entity tenant-demo.dev1.<ns>) before its role exists"
+assert_eq "$(wr "identity/entity/name/tenant-demo.dev1.$D1" | tr '\n' ' ')" "metadata=tenant=demo " "namespace entity: metadata tenant=demo only (what tenant-read keys on)"
+assert_eq "$(awk -v a=acc_tenants-dev1 '$2 == a && $3 ~ /^id-tenant-demo/' "$S/aliasmap" | wc -l | tr -d ' ')" 2 "two demo namespaces on one mount: two aliases, one entity each (OpenBao: one alias per entity and mount)"
 assert_eq "$([[ -e "$S/roles/auth_tenants-prod1_role_other" ]] && echo yes)" yes "every member cluster gets every tenant's role"
-assert_eq "$(cd "$S/entities" && printf '%s ' *)" "tenant-demo tenant-other tenant-rogue " "invalid inputs get no entity"
+assert_eq "$(ents | grep -cvE '^tenant-(demo|other|rogue)(\.(dev1|prod1)\.dp-default-[a-z]+-[a-z]+-[0-9a-f]{8})?$' || true)" 0 "invalid inputs get no entity"
+assert_eq "$(ents | grep -c "$D2" || true)" 0 "contested namespace: no entity"
 
 # idempotent
+: > "$S/calls"; rc=0; run || rc=$?
+assert_eq "$rc" 0 "second run exits 0 (aliases rewritten as they are)"
+assert_eq "$(grep -cE 'secrets enable|auth enable|delete' "$S/calls" || true)" 0 "second run: no new mounts, nothing pruned"
+# a namespace leaves demo: its entity (and with it the alias) goes, the other namespaces stay
+tenant demo "$D1 $D2"
 : > "$S/calls"; run
-assert_eq "$(grep -cE 'secrets enable|auth enable' "$S/calls" || true)" 0 "second run: no new mounts"
+assert_match "$(cat "$TMP/out")" "prune entity tenant-demo.dev1.$D3 \\(no longer bound\\)" "namespace left: its entity is pruned"
+assert_eq "$([[ -e "$S/entities/tenant-demo.dev1.$D3" ]] && echo kept || echo pruned)" pruned "namespace left: entity tenant-demo.dev1.<ns> deleted"
+assert_eq "$([[ -e "$S/entities/tenant-demo.dev1.$D1" ]] && echo kept || echo pruned)" kept "namespace left: demo's other namespace kept"
+tenant demo "$D1 $D2 $D3"
 
 # prune: a departed tenant loses role + entity (data mount kept); a departed cluster loses its JWT mount
 rm -f "$IN/tenants/other.namespaces" "$IN"/clusters/prod1.*
 : > "$S/calls"; run
 assert_eq "$([[ -e "$S/roles/auth_tenants-dev1_role_other" ]] && echo kept || echo pruned)" pruned "departed tenant: role pruned"
 assert_eq "$([[ -e "$S/entities/tenant-other" ]] && echo kept || echo pruned)" pruned "departed tenant: entity (and its aliases) deleted"
+assert_eq "$(ents | grep -c '^tenant-other\.' || true)" 0 "departed tenant: its namespace entities deleted"
+assert_eq "$(ents | grep -c '\.prod1\.' || true)" 0 "departed cluster: its namespace entities deleted"
 assert_eq "$(grep -c 'secrets disable' "$S/calls" || true)" 0 "departed tenant: its data mount is never deleted"
 assert_eq "$([[ -e "$S/auth/tenants-prod1" ]] && echo kept || echo pruned)" pruned "departed cluster: tenants-prod1 disabled"
 assert_eq "$([[ -e "$S/roles/auth_tenants-dev1_role_demo" ]] && echo kept || echo pruned)" kept "remaining tenant untouched"

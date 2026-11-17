@@ -22,6 +22,8 @@ path "identity/entity/name/tenant-*" {
   capabilities       = ["create", "read", "update", "delete"]
   allowed_parameters = { "metadata" = [] }
 }
+# list: prune of namespace entities tenant-<t>.<c>.<ns> that are no longer bound (names only)
+path "identity/entity/name" { capabilities = ["list"] }
 path "identity/entity-alias" {
   capabilities       = ["create", "update"]
   allowed_parameters = { "name" = [], "canonical_id" = [], "mount_accessor" = [] }

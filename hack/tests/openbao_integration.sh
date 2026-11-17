@@ -410,7 +410,8 @@ probes_run
 # Inputs as ESO builds them: two tenants, one namespace claimed by demo and a rogue descriptor (bound to neither), member
 # c1 (JWKS reachable) and c3 (JWKS 403). Environment = the chart's CronJob; login replaced by the userpass test user.
 DEV=dp-default-demo-development-ad621210; STG=dp-default-demo-staging-ba410b48; OTH=dp-default-other-development-0badc0de
-printf '%s %s' "$DEV" "$STG" > "$W/tin/tenants/demo.namespaces"
+PRD=dp-default-demo-production-7cbe998d   # a second uncontested demo namespace: two aliases of one tenant on one mount
+printf '%s %s %s' "$DEV" "$STG" "$PRD" > "$W/tin/tenants/demo.namespaces"
 printf '%s' "$OTH" > "$W/tin/tenants/other.namespaces"
 printf '%s dp-default-rogue-development-12345678' "$STG" > "$W/tin/tenants/rogue.namespaces"
 for c in 1 3; do printf 'local' > "$W/tin/clusters/c$c.group"; printf 'https://jwks:844%s' "$((c + 2))" > "$W/tin/clusters/c$c.server"; cp "$W/tls/ca.crt" "$W/tin/clusters/c$c.ca"; done
@@ -443,6 +444,7 @@ tread() { # tread <role> <jwt> <bao args>: 403 / Key / denied (login refused)
   bao_in "t=\$(bao write -field=token auth/tenants-c1/login role=$1 jwt=$2 2>/dev/null) || { echo denied; exit 0; }; BAO_TOKEN=\$t bao ${3:-token lookup} 2>&1" | grep -m1 -oE 'denied|Code: [0-9]+|Key|=====|password' | head -n1 | sed 's/Code: //'
 }
 assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "demo's namespace reads demo's secret (ESO's path kv-tenant-demo/data/db)"
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$PRD")) bao kv get -field=password kv-tenant-demo/db")" demo-value "demo's second namespace reads demo's secret too (one entity per namespace)"
 assert_eq "$(tread demo "$(tok "$DEV")" 'read kv-tenant-other/data/db')" 403 "negative: demo's token cannot read other's secret"
 assert_eq "$(tread demo "$(tok "$DEV")" 'list kv-tenant-demo/metadata')" Key "demo lists its own keys (ESO dataFrom.find)"
 assert_eq "$(tread demo "$(tok "$DEV")" 'kv put kv-tenant-demo/db password=x')" 403 "negative: readers cannot write"
@@ -484,6 +486,12 @@ res=$(bao_in 'T_tenantcfg=$(bao write -field=token auth/userpass/login/tenantcfg
 for i in "${!P_EXP[@]}"; do
   assert_eq "$(printf '%s\n' "$res" | awk -v id=$((i + 1)) '$1 == id {print $2}')" "${P_EXP[$i]}" "${P_LABEL[$i]}"
 done
+# prune: a namespace leaves demo -> its entity goes (it can no longer log in), demo's other namespace keeps reading
+printf '%s %s' "$DEV" "$STG" > "$W/tin/tenants/demo.namespaces"
+out=$(bao_in "$TRECONCILE" 2>&1)
+assert_match "$out" "prune entity tenant-demo.c1.$PRD \\(no longer bound\\)" "namespace left demo: its entity pruned"
+assert_eq "$(tread demo "$(tok "$PRD")")" denied "namespace left demo: it can no longer log in"
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "namespace left demo: demo's other namespace unaffected"
 # prune: tenant other leaves -> its role and entity go, its data stays (mount kept), its namespace can no longer read
 rm -f "$W/tin/tenants/other.namespaces"
 out=$(bao_in "$TRECONCILE" 2>&1)

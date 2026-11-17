@@ -17,12 +17,16 @@
 # Per member cluster <c>:
 #   auth/tenants-<c> (jwt)              the member's ServiceAccount signing keys (jwks_url = its API server's
 #                                       /openid/v1/jwks, pinned to its cluster CA), like auth/mesh-<c>
-#   per tenant: an alias system:serviceaccount:<ns>:READER_SA -> entity tenant-<t> for each of its namespaces (bound
-#   before the role exists, so no login ever auto-creates an entity for it), then role <t>: that subject list only,
-#   audience READER_AUDIENCE, policy READER_POLICY, short service tokens (ESO revokes them after use).
-# Prune: roles of tenants no longer in the inputs and their entity; tenants-<c> mounts of clusters no longer in the
-# inputs. Never with an empty tenant list (fail-safe: an ESO outage must not cut every tenant off). A namespace claimed
-# by two tenants is bound to neither (and logged): one descriptor must never move another tenant's namespace.
+#   per tenant and namespace <ns>: entity tenant-<t>.<c>.<ns> (metadata tenant=<t>) with the alias
+#   system:serviceaccount:<ns>:READER_SA (bound before the role exists, so no login ever auto-creates an entity for
+#   it), then role <t>: that subject list only, audience READER_AUDIENCE, policy READER_POLICY, short service tokens
+#   (ESO revokes them after use). One entity per namespace because OpenBao allows an entity only ONE alias per auth
+#   mount ("Alias already exists for requested entity and mount accessor"); the policies only read metadata.tenant.
+# Prune: roles of tenants no longer in the inputs and their entities; namespace entities tenant-<t>.<c>.<ns> that are
+#   no longer bound (namespace left or contested, tenant left; only for clusters configured in this run and tenants
+#   not failed in it) and those of clusters that left; tenants-<c> mounts of clusters no longer in the inputs. Never
+#   with an empty tenant list (fail-safe: an ESO outage must not cut every tenant off). A namespace claimed by two
+#   tenants is bound to neither (and logged): one descriptor must never move another tenant's namespace.
 # Exit status: non-zero for a failed login, when every tenant input is invalid, or when no member cluster could be
 # configured although there are members. The summary line goes to the container termination message.
 set -eu
@@ -104,7 +108,7 @@ done
 eid_of() { for p in $ready; do case "$p" in "$1="*) printf '%s' "${p#*=}"; return 0 ;; esac; done; return 1; }
 
 # --- per member cluster: JWT auth, aliases, roles -------------------------------------------------------------------
-clusters=" "; ok_c=""; failed_c=""; pruned=""
+clusters=" "; ok_c=""; failed_c=""; pruned=""; bound=" "
 configure_cluster() { # <cluster> <server>
   c=$1; server=$2; m="tenants-$c"
   if ! bao read "sys/auth/$m" >/dev/null 2>&1; then
@@ -115,12 +119,15 @@ configure_cluster() { # <cluster> <server>
   q write "auth/$m/config" jwks_url="$server/openid/v1/jwks" jwks_ca_pem=@"$IN/clusters/$c.ca" \
     || { log "cluster $c: JWKS $server/openid/v1/jwks not readable (API server unreachable, or issuer discovery not yet public)"; return 1; }
   for t in $tenants; do
-    eid=$(eid_of "$t") || continue          # tenant not configured this run: its existing role is kept
+    eid_of "$t" >/dev/null || continue      # tenant not configured this run: its existing role is kept
     subs=""
     for ns in $(namespaces_of "$t"); do
-      sub="system:serviceaccount:$ns:$READER_SA"
-      q write identity/entity-alias name="$sub" canonical_id="$eid" mount_accessor="$acc" \
+      sub="system:serviceaccount:$ns:$READER_SA"; en="tenant-$t.$c.$ns"
+      q write "identity/entity/name/$en" metadata="tenant=$t" || { log "cluster $c tenant $t: entity $en failed"; return 1; }
+      neid=$(bao read -field=id "identity/entity/name/$en") || { log "cluster $c tenant $t: entity $en unreadable"; return 1; }
+      q write identity/entity-alias name="$sub" canonical_id="$neid" mount_accessor="$acc" \
         || { log "cluster $c tenant $t: alias $sub failed"; return 1; }
+      bound="$bound$en "
       subs="$subs\"$sub\","
     done
     if [ -z "$subs" ]; then q delete "auth/$m/role/$t" || true; log "cluster $c tenant $t: no uncontested namespace, no role"; continue; fi
@@ -147,6 +154,18 @@ done
 # shellcheck disable=SC2086  # word list on purpose
 for r in $(printf '%s\n' $pruned | sort -u); do
   case "$tenants" in *" $r "*) ;; *) q delete "identity/entity/name/tenant-$r" || log "prune: entity tenant-$r not deleted" ;; esac
+done
+# namespace entities tenant-<t>.<c>.<ns> no longer bound (three DNS labels, so the dots are unambiguous)
+for en in $(bao list identity/entity/name 2>/dev/null | sed '1,2d' | grep -E '^tenant-[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$' || true); do
+  case "$bound" in *" $en "*) continue ;; esac
+  rest=${en#tenant-}; et=${rest%%.*}; rest=${rest#*.}; ec=${rest%%.*}
+  case "$failed_t " in *" $et "*) continue ;; esac              # tenant not configured in this run: keep
+  case "$ok_c " in
+    *" $ec "*) ;;                                               # cluster configured in this run: $bound is complete
+    *) case "$clusters" in " "|*" $ec "*) continue ;; esac ;;   # cluster failed in this run (or no inputs): keep
+  esac
+  log "prune entity $en (no longer bound)"
+  q delete "identity/entity/name/$en" || log "prune: entity $en not deleted"
 done
 # auth mounts of clusters that left (only with a non-empty member list)
 if [ "$clusters" != " " ]; then
