@@ -171,6 +171,33 @@ imageVerification:
   # would simply not be matched by the signature policy.
   extraTrustedPrefixes: []
 
+# --- PR preview environments (installation.yaml `previews`, docs/preview-environments.md) ------------------------------
+# templates/previews.yaml. `previews` comes from installation.yaml (enabled, ttl, maxPerTenant); these are defaults.
+previews:
+  enabled: false
+  ttl: 48h
+  maxPerTenant: 2
+previewGuards:
+  environments: false                # mgmt (values/role-mgmt.yaml): expiry stamp, per-tenant cap, TTL deletion
+  namespaces: true                   # data planes: quota, limits, isolation of preview cell namespaces
+  schedule: "*/5 * * * *"            # DeletingPolicy run (cron)
+  ttlGrace: 1h                       # delete this long after expires-at: the auto-build pass expires the PR first
+  # Per preview cell namespace: sized for one or two small services (ClusterComponentType defaults 100m / 256Mi).
+  quota:
+    pods: "10"
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "4"
+    limits.memory: 2Gi
+    persistentvolumeclaims: "2"
+    requests.storage: 5Gi
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+  containerLimits:
+    default: { cpu: 500m, memory: 256Mi }
+    defaultRequest: { cpu: 50m, memory: 64Mi }
+    max: { memory: 1Gi }
+
 # Installation image registry (installation.yaml `registry`, passed to every addon by the addon ApplicationSet; this is
 # the standalone default). host: image reference host[:port]; appsProject: project in-cluster builds push to.
 registry:

@@ -17,6 +17,7 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 - `developerKinds`: allowlisted OpenChoreo developer CRDs (`Component`, `Workload`, `ReleaseBinding`, `ComponentRelease`, `SecretReference`).
 - `secrets.tenantStores.enabled` (from `installation.yaml`), `tenantSecrets.{namespace,label}`: per-tenant OpenBao secrets: descriptor `Secret/<project>-openbao-tenant` (the project's cell namespaces, computed like OpenChoreo names them) and `ServiceAccount/<project>-writer` in `openbao-tenants` ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
 - `promotion.{gatedEnvironments,restrictedGroups,bindingFile,freezeWindows}`: separate gated `Application`s, ABAC component-delete deny, and sync freeze windows.
+- `previews.*` (from `installation.yaml`), `previewOptIn`, `previewToken`: `ApplicationSet/previews-<project>` = opted-in Components x open pull requests -> one `charts/preview` Application per PR ([preview environments](../../docs/preview-environments.md)).
 
 ## Day-2 notes
 

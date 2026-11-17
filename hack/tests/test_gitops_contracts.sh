@@ -639,4 +639,46 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   fi
 done
 
+
+# 17. PR previews (#168): the pieces of one preview agree across charts - the Component opt-in the ApplicationSet selects
+#     on is the one the auto-build pass re-checks; the pull request generator's token Secret is the one addon
+#     secret-stores mints, in Argo CD's namespace; AppProject previews admits exactly the kinds charts/preview renders;
+#     every installation with previews on names a data plane its fleet has, and the policy tier of preview cells (the
+#     supply-chain gate's defaultAction: their environment names are not listed) is the development tier.
+tenant_values="$ROOT/charts/tenant/values.yaml"
+assert_eq "$(yq -o=json -I=0 '.previewOptIn' "$tenant_values")" "$(yq -o=json -I=0 '.autoBuild.previews.optIn' "$ocp_values")" \
+  "previews: charts/tenant previewOptIn == openchoreo-platform autoBuild.previews.optIn"
+assert_eq "$(yq '.previewToken.secretName' "$tenant_values")" \
+  "$(yq '.previewToken.secretName' "$ROOT/addons/secret-stores/values.yaml")" \
+  "previews: the pull request generator's tokenRef is the Secret addon secret-stores mints"
+assert_eq "$(yq '.argocd.namespace' "$tenant_values")" "$(yq '.previewToken.namespace' "$ROOT/addons/secret-stores/values.yaml")" \
+  "previews: the token Secret lives in the ApplicationSets' namespace (tokenRef is namespace-local)"
+assert_eq "$(yq '.autoBuild.previews.argocdNamespace' "$ocp_values")" "$(yq '.argocd.namespace' "$tenant_values")" \
+  "previews: the auto-build pass lists preview Applications where the ApplicationSets put them"
+helm template platform "$ROOT/charts/platform" --namespace argocd -s templates/projects.yaml > "$TMP/pv-projects.yaml"
+pv_kinds=$(yq 'select(.metadata.name == "previews") | .spec.namespaceResourceWhitelist[] | .group + "/" + .kind' \
+  "$TMP/pv-projects.yaml" | sort | tr '\n' ' ')
+helm template p "$ROOT/charts/preview" --set project=demo,component=hello-world,pullRequest=7 \
+  --set-string commit=0123456789abcdef0123456789abcdef01234567 > "$TMP/pv-chart.yaml"
+chart_kinds=$(yq 'select(.kind) | (.apiVersion | sub("/.*", "")) + "/" + .kind' "$TMP/pv-chart.yaml" | grep -v '^---$' | sort -u | tr '\n' ' ')
+assert_eq "$pv_kinds" "$chart_kinds" "previews: AppProject previews admits exactly the kinds charts/preview renders"
+kp_values="$ROOT/addons/kyverno-policies/values.yaml"
+for inst_file in "$ROOT"/installations/*/installation.yaml; do
+  inst=$(basename "$(dirname "$inst_file")")
+  [[ "$(yq '.previews.enabled // false' "$inst_file")" == true ]] || continue
+  dp=$(yq '.previews.dataPlane // ""' "$inst_file")
+  dp_ok=no
+  for cf in "$(dirname "$inst_file")"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    [[ "$(yq '.name' "$cf")" == "$dp" && "$(yq '.openchoreo.dataPlane.enabled // false' "$cf")" == true ]] && dp_ok=yes
+  done
+  assert_eq "$dp_ok" yes "$inst: previews.dataPlane $dp is a cluster of the fleet with an OpenChoreo data plane"
+  ov="$(dirname "$inst_file")/addons/kyverno-policies/values.yaml"
+  ovargs=(); [[ -f "$ov" ]] && ovargs=("$ov")
+  # shellcheck disable=SC2016  # $i is a yq variable
+  tier=$(yq eval-all '. as $i ireduce ({}; . * $i) | .imageVerification.defaultAction + "/" + .imageVerification.environments.development' \
+    "$kp_values" ${ovargs[@]+"${ovargs[@]}"})
+  assert_eq "${tier%%/*}" "${tier##*/}" "$inst: preview cells get the development policy tier (imageVerification.defaultAction == development's action: $tier)"
+done
+
 finish

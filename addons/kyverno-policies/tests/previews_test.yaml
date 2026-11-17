@@ -1,0 +1,107 @@
+suite: kyverno-policies - PR preview environments (expiry, cap, TTL on mgmt; guardrails on data planes)
+templates:
+  - templates/previews.yaml
+set:
+  previews:
+    enabled: true
+    ttl: 48h
+    maxPerTenant: 2
+tests:
+  - it: renders nothing while previews are off (the default)
+    set:
+      previews.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: "data planes: only the guardrails GeneratingPolicy and its background-controller role"
+    asserts:
+      - hasDocuments: { count: 2 }
+      - isKind: { of: GeneratingPolicy }
+        documentIndex: 0
+      - isKind: { of: ClusterRole }
+        documentIndex: 1
+
+  - it: "mgmt: expiry stamp, cap, TTL and the controller roles; no guardrails (no cells there)"
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 5 }
+      - containsDocument: { kind: MutatingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-expiry, any: true }
+      - containsDocument: { kind: ValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-cap, any: true }
+      - containsDocument: { kind: DeletingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-ttl, any: true }
+
+  - it: stamps expires-at once, at creation, on preview Environments only
+    values: [../values/role-mgmt.yaml]
+    documentSelector: { path: kind, value: MutatingPolicy }
+    asserts:
+      - equal: { path: spec.failurePolicy, value: Ignore }
+      - equal:
+          path: spec.matchConstraints.resourceRules
+          value: [{ apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: [CREATE], resources: [environments] }]
+      - equal:
+          path: spec.matchConstraints.objectSelector
+          value:
+            matchLabels: { platform.koorikla.io/preview: "true" }
+            matchExpressions: [{ key: platform.koorikla.io/expires-at, operator: DoesNotExist }]
+      - matchRegex: { path: "spec.mutations[0].jsonPatch.expression", pattern: 'time.now\(\) \+ duration\("48h"\)' }
+
+  - it: caps previews per tenant, denying (fail closed) only preview Environments
+    values: [../values/role-mgmt.yaml]
+    documentSelector: { path: kind, value: ValidatingPolicy }
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: spec.evaluation.background.enabled, value: false }
+      - equal: { path: spec.matchConstraints.objectSelector, value: { matchLabels: { platform.koorikla.io/preview: "true" } } }
+      - equal: { path: "spec.validations[1].expression", value: "size(variables.running) < 2" }
+
+  - it: follows the installation's cap and TTL
+    values: [../values/role-mgmt.yaml]
+    set:
+      previews.maxPerTenant: 5
+      previews.ttl: 6h
+    asserts:
+      - equal: { path: "spec.validations[1].expression", value: "size(variables.running) < 5" }
+        documentSelector: { path: kind, value: ValidatingPolicy }
+      - matchRegex: { path: "spec.variables[1].expression", pattern: 'duration\("6h"\)' }
+        documentSelector: { path: kind, value: DeletingPolicy }
+
+  - it: deletes expired previews on a schedule, after the grace, with the controllers allowed to list and delete them
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - equal: { path: spec.schedule, value: "*/5 * * * *" }
+        documentSelector: { path: kind, value: DeletingPolicy }
+      - matchRegex: { path: "spec.conditions[1].expression", pattern: 'variables.expiresAt \+ duration\("1h"\).getSeconds\(\)' }
+        documentSelector: { path: kind, value: DeletingPolicy }
+      - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [environments], verbs: [get, list, watch, delete] }] }
+        documentSelector: { path: metadata.name, value: "kyverno:cleanup-controller:preview-environments" }
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-cleanup-controller"]', value: "true" }
+        documentSelector: { path: metadata.name, value: "kyverno:cleanup-controller:preview-environments" }
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-admission-controller"]', value: "true" }
+        documentSelector: { path: metadata.name, value: "kyverno:admission-controller:preview-environments" }
+
+  - it: generates quota, limits and egress isolation into OpenChoreo preview cell namespaces, kept in sync
+    documentSelector: { path: kind, value: GeneratingPolicy }
+    asserts:
+      - equal: { path: spec.evaluation.synchronize.enabled, value: true }
+      - equal: { path: spec.evaluation.generateExisting.enabled, value: true }
+      - equal:
+          path: spec.matchConstraints.objectSelector
+          value:
+            matchLabels: { platform.koorikla.io/preview: "true", openchoreo.dev/managed-by: renderedrelease-controller }
+            matchExpressions: [{ key: openchoreo.dev/environment, operator: Exists }]
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "kind: ResourceQuota" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "kind: LimitRange" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "policyTypes: \\[Egress\\]" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "key: openchoreo.dev/environment, operator: DoesNotExist" }
+
+  - it: refuses a TTL that is not hours/minutes and a cap below 1
+    set:
+      previews.ttl: 2d
+    asserts:
+      - failedTemplate: { errorMessage: 'previews.ttl "2d": hours and/or minutes, e.g. 48h' }
+
+  - it: refuses a cap below 1
+    set:
+      previews.maxPerTenant: 0
+    asserts:
+      - failedTemplate: { errorMessage: "previews.maxPerTenant must be at least 1" }

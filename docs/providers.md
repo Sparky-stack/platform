@@ -35,8 +35,9 @@ schema-checked only ([#26](https://github.com/koorikla/platform/issues/26),
 Core 1.13 accepts v1beta1-contract providers (`GetCompatibleVersions`: v1beta2 is "temporarily compatible" with v1beta1).
 k3s is not in clusterctl's built-in provider list, so its operator CRs carry
 `fetchConfig.url: https://github.com/k3s-io/cluster-api-k3s/releases/<version>/{bootstrap,control-plane}-components.yaml`.
-cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line every other piece supports
-(open checks: [#56](https://github.com/koorikla/platform/issues/56)).
+cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line every other piece supports, and this
+combination (k3s v1.35.10+k3s1 on kindest/node v1.35.8, cluster-api-k3s v0.5.0, CAPI/CAPD v1.13.8) runs on CAPD
+([#56](https://github.com/koorikla/platform/issues/56)).
 
 ### Feature gates
 - `ClusterTopology` is alpha and **off by default** in core 1.13 -> set to `true` on the CoreProvider (and on CAPD,
@@ -117,8 +118,9 @@ k3s servers are the cluster's etcd: cluster-api-k3s v0.5.0 always starts the fir
 (`pkg/k3s/config.go`), `IsEtcdEmbedded()` is hard-wired to `true` ("TODO ... other k3s database options",
 `cluster-api-k3s/bootstrap/api/v1beta2/kthreesconfig_types.go`) and the control plane controller requires an
 `EtcdMemberHealthy` machine condition before every scale step. A control plane rollout (any change to the control plane
-templates or variables, a k3s upgrade, `rollout.after`) replaces servers one at a time, scale-up first: there is no
-`rolloutStrategy`/`maxSurge` field on `KThreesControlPlane` v1beta2 and no in-place update support.
+templates or variables, a k3s upgrade, `KThreesControlPlane.spec.rolloutAfter`) replaces servers one at a time,
+scale-up first: there is no `rolloutStrategy`/`maxSurge` field on `KThreesControlPlane` v1beta2 and no in-place update
+support.
 
 What a rollout does to etcd (cluster-api-k3s `controlplane/controllers/scale.go`, `machine_controller.go`,
 `pkg/k3s/workload_cluster_etcd.go`):
@@ -153,7 +155,7 @@ the newest server is still a learner: 3 voters -> 2 + learner, still a removal f
 | 1 server, SQLite (kine) | none: cluster-api-k3s v0.5.0 cannot run it - `cluster-init` is forced and KCP waits for an etcd member that never exists, so no rollout ever starts; a joining server would need etcd anyway | | not possible |
 | external datastore (`datastore-endpoint`, kine on Postgres) | k3s side fine (it ignores `cluster-init` then), but KCP still generates the etcd CA and requires `EtcdMemberHealthy`, so the control plane never passes preflight | an extra HA database per cluster | not possible with v0.5.0 |
 | CAPI in-place updates (1.12+, `InPlaceUpdates` gate) | no new member at all | needs an update runtime extension and control plane provider support; cluster-api-k3s v0.5.0 has neither | not available |
-| KCP rollout/remediation knobs | - | v0.5.0 has only `rolloutAfter` and `remediationStrategy`; remediation never acts on 1 replica | no help for 1 server |
+| KCP rollout/remediation knobs | - | v0.5.0 has only `rolloutAfter` and `remediationStrategy`; remediation never acts on 1 replica. CAPI 1.13's topology `controlPlane.rollout.after` writes `spec.rollout.after` (v1beta2 contract), which KThreesControlPlane v0.5.0 does not have: the topology reconcile fails (`.spec.rollout: field not declared in schema`) | no help for 1 server; do not set `controlPlane.rollout.after` |
 
 charts/cluster enforces the table: `controlPlane.replicas` must be odd and >= 1, and a non-docker cluster with
 `environment: production` needs >= 3. Local clusters stay at 1 server for host RAM (each extra CAPD server costs
@@ -181,8 +183,13 @@ revision (fleet ApplicationSet `retry.limit: -1`).
 
 `hack/tests/test_bootstrap_file_sources.sh` checks, for every installation and cluster, that each contentFrom Secret a
 class enables is rendered as such an ExternalSecret with the referenced key, in an earlier wave. Bootstrap data is
-rendered once per Machine, so a rotated token reaches only new nodes: roll the machines (CAPI `rollout.after`) or use a
-long-lived read-only token.
+rendered once per Machine, so a rotated token reaches only new nodes: the KThreesConfig controller returns early once a
+config is Ready (`kthreesconfig_controller.go`: "the config is already generated and need not be generated again"), and
+on CAPD the bootstrap data Secret keeps its creation-time content while `<name>-registries` refreshes hourly. Prefer a
+long-lived read-only token. To push a rotated one: workers roll with the topology's
+`workers.machineDeployments[].rollout.after`; the control plane does not (CAPI writes `spec.rollout.after`, which
+KThreesControlPlane v0.5.0 lacks, see the KCP knobs above), so it picks up the new Secret only on its next rollout (a
+change to its template or variables, a k3s upgrade).
 
 #### Break-glass when `<name>-registries` is `Ready=False`
 Because `ExternalSecret/<name>-registries` refreshes every `1h` in sync wave `-1`, an ESO refresh error (`Ready=False`)
@@ -213,8 +220,10 @@ random host port on `0.0.0.0`, which `task kubeconfig` uses on hosts that cannot
   LB IP directly. This is what makes the Argo CD cluster secret built from `<name>-kubeconfig` work unmodified.
 - The Linux host reaches container IPs on `kind` directly. On macOS / Docker Desktop it does not: use
   `task kubeconfig CLUSTER=<name>` ([dev-environment.md](dev-environment.md#host-differences-docker-desktop-and-friends)).
-- The endpoint is recorded once. If Docker re-addresses the LB container (e.g. the network is recreated after a host
-  reboot), the stored endpoint goes stale; recreate the cluster.
+- The endpoint is recorded once (CAPD sets `DockerCluster.spec.controlPlaneEndpoint.host` only while it is empty) and
+  baked into `<name>-kubeconfig` and every server's k3s `tls-san`. The LB container has no static address (`docker
+  inspect`: no `IPAMConfig`), and Docker releases a dynamic address when a container stops: if the LB comes back on
+  another IP after a Docker or host restart, the stored endpoint is stale; recreate the cluster.
 
 ## AWS (CAPA) - untested example
 
@@ -401,6 +410,7 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
   `capi-operator` with `ServerSideApply=true`. CAPI webhooks default many Cluster/ClusterClass fields: use server-side
   diff (or ignoreDifferences) for the `cluster-*` and `clusterclasses` Applications.
 
-Open checks: CAPD [#56](https://github.com/koorikla/platform/issues/56); AWS and Hetzner
-[#26](https://github.com/koorikla/platform/issues/26); GKE [#87](https://github.com/koorikla/platform/issues/87)
-(`grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).
+Open checks: CAPD single-server `--cluster-reset` break-glass [#56](https://github.com/koorikla/platform/issues/56);
+AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
+[#87](https://github.com/koorikla/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
+addons/clusterclasses addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).

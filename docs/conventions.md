@@ -65,6 +65,11 @@ On the CAPI `Cluster` and the Argo CD cluster secret (provider byo: the cluster 
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
 
+On a PR preview's Environment, bindings and Argo CD Application (charts/preview, charts/tenant): `platform.koorikla.io/preview:
+"true"`, `.../tenant`, `.../component`, `.../pull-request`; Kyverno adds `platform.koorikla.io/expires-at` (unix
+seconds) to the Environment; a Component opts in with annotation `platform.koorikla.io/preview-environments: enabled`
+([preview-environments.md](preview-environments.md)).
+
 On a PersistentVolumeClaim, annotation `platform.koorikla.io/delete-protection: enabled` means a ValidatingAdmissionPolicy
 of the owning addon denies its deletion; every PVC that Argo CD runs as a hook must carry it (with `hook-failed` as its
 only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements).
@@ -115,7 +120,8 @@ Workload-cluster keys (store `default`): `openchoreo-observability`, optional `d
 bootstrap/                      k3d config, bootstrap.sh (task up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
 charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
-charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications
+charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
+charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/

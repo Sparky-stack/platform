@@ -11,6 +11,8 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 
 ## Key values
 
+- `previews` (from `installation.yaml`) and `previewGuards`: PR previews - expiry stamp, per-tenant cap and TTL `DeletingPolicy` on `mgmt` Environments; quota, limits and egress isolation generated into preview cell namespaces ([preview environments](../../docs/preview-environments.md)).
+
 - `kyverno-policies.{podSecurityStandard,validationFailureAction,vpolExclude}`: `baseline` in `Audit` mode (`failurePolicy: Ignore`), excluding `platformNamespaces`.
 - `ambientEnrollment.enabled`: `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient.
 - `imageVerification.{enabled,environments,github,platformKey,requireDigest}`: `Audit` in `development`/`staging` and `Deny` in `production`, verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures (key inline in `platformKey.publicKey` or, with Harbor, from ConfigMap `platform-image-verification` that `charts/cluster` delivers; `platformKey.cluster`).

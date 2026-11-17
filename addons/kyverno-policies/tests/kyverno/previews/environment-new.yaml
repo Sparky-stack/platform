@@ -1,0 +1,8 @@
+# A new preview Environment of tenant demo (expiry stamp, per-tenant cap).
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata:
+  name: pr-9-hello-world
+  namespace: default
+  labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}
+spec: {dataPlaneRef: {kind: ClusterDataPlane, name: dev1}, isProduction: false}

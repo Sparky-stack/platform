@@ -1,0 +1,74 @@
+suite: openchoreo-platform - auto-build pass for PR previews (#168)
+templates:
+  - templates/auto-build.yaml
+set:
+  previews: { enabled: true, ttl: 48h, expiredLabel: preview-expired }
+tests:
+  - it: previews off (the default) adds nothing to the trigger
+    set:
+      previews.enabled: false
+    asserts:
+      - notContains:
+          path: "spec.templates[0].script.env"
+          content: { name: PREVIEWS, value: "true" }
+        documentSelector: { path: kind, value: WorkflowTemplate }
+      - hasDocuments: { count: 12 }
+
+  - it: the pass gets the preview settings (opt-in == charts/tenant previewOptIn, TTL and label == installation.yaml)
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEWS, value: "true" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_OPT_IN_ANNOTATION, value: platform.koorikla.io/preview-environments } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_OPT_IN_VALUE, value: enabled } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_EXPIRED_LABEL, value: preview-expired } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_TTL, value: 48h } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_TOKEN_FILE, value: /var/run/secrets/auto-build-previews/token } }
+      - contains: { path: spec.volumes, content: { name: previews-token, secret: { secretName: auto-build-previews-token, defaultMode: 288 } } }
+
+  - it: a separate token for statuses and PR labels; the build token stays contents read
+    asserts:
+      - equal: { path: metadata.name, value: auto-build-previews }
+        documentSelector: { path: spec.permissions.statuses, value: write }
+      - equal: { path: spec.permissions, value: { statuses: write, pull_requests: write } }
+        documentSelector: { path: spec.permissions.statuses, value: write }
+      - equal: { path: metadata.name, value: auto-build }
+        documentSelector: { path: spec.permissions.contents, value: read }
+      - equal: { path: spec.permissions, value: { contents: read } }
+        documentSelector: { path: spec.permissions.contents, value: read }
+
+  - it: may cut ComponentReleases and read previews, nothing more
+    documentSelector: { path: "rules[0].resources[0]", value: components }
+    asserts:
+      - equal: { path: metadata.namespace, value: default }
+      - contains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [componentreleases], verbs: [get, create] }
+      - contains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [components, environments], verbs: [get] }
+      - contains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, patch] }
+      - notContains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, create] }
+
+  - it: lists only Argo CD Applications (the preview ones, by label) in argocd
+    documentSelector: { path: "rules[0].resources[0]", value: applications }
+    asserts:
+      - equal: { path: metadata.namespace, value: argocd }
+      - equal: { path: rules, value: [{ apiGroups: [argoproj.io], resources: [applications], verbs: [list] }] }
+
+  - it: webhook installations poll previews on their own schedule
+    set: { openchoreo.workflowPlane.autoBuild: webhook }
+    documentSelector: { path: "spec.schedules[0]", value: "*/2 * * * *" }
+    asserts:
+      - equal: { path: metadata.name, value: auto-build-previews }
+      - equal: { path: kind, value: CronWorkflow }
+
+  - it: poll installations need no extra CronWorkflow (the poll runs previews every minute)
+    asserts:
+      - lengthEqual: { path: spec.schedules, count: 1 }
+        documentSelector: { path: kind, value: CronWorkflow }
+      - equal: { path: metadata.name, value: auto-build-poll }
+        documentSelector: { path: kind, value: CronWorkflow }

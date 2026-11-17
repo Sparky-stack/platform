@@ -45,7 +45,8 @@ infrastructure:
     configSecret: capa-variables
     # true: ExternalSecret from ClusterSecretStore/platform key `capi-aws` (property AWS_B64ENCODED_CREDENTIALS,
     #       `clusterawsadm bootstrap credentials encode-as-profile`).
-    # false: empty credentials, CAPA uses its pod identity (IRSA / EKS Pod Identity on an AWS mgmt cluster). VERIFY
+    # false: empty credentials, CAPA uses its pod identity (IRSA / EKS Pod Identity on an AWS mgmt cluster).
+    #        Untested (#26).
     credentialsFromStore: true
     # CAPA feature gates are CAPA's own (EKS, MachinePool, ...); ClusterTopology is not one of them - do not add it.
     featureGates: {}

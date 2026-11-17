@@ -15,7 +15,7 @@ template:
     sshKeyName: ""              # replaced by variable sshKeyName ("" = no key; omitted would mean key "default")
     controlPlaneLoadBalancer:
       # k3s serves an ECDSA certificate the classic ELB's SSL health check cannot negotiate -> TCP.
-      healthCheckProtocol: TCP  # VERIFY ELB type (CAPA default classic) on the first AWS boot
+      healthCheckProtocol: TCP  # ELB type (CAPA default: classic) untested until the first AWS boot (#26)
     network:
       cni:
         # Node-to-node rules replacing CAPA's Calico defaults. Base = cni: cilium; patch cni-flannel swaps them.
