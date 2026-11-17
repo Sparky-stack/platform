@@ -113,9 +113,10 @@ Production admission must finish within the webhook timeout (30 s max, `failureP
 What the platform does about it:
 
 - **Verification cache** (`addons/kyverno` values, `imageVerifyCache*` flags of the admission controller): a
-  successful verification is cached per image **digest**, attestor definition and attestation type, so the next
-  admission of the same digest (the Deployment's ReplicaSet pods, a scale-up, a restart, the same image in production
-  after staging - same attestors, same entries) skips it. Not weakened by the cache: tag references are never cached
+  successful verification is cached per image reference **with digest** (`repo:tag@sha256:…`), attestor definition
+  and attestation type, so the next admission of the same reference (the Deployment's ReplicaSet pods, a scale-up, a
+  restart, the same image in production after staging - same attestors, same entries) skips it. Not weakened by the
+  cache: tag-only references are never cached
   (production requires digests anyway), failed verifications are never cached (a denied image is verified again every
   time), any change of the policy identity, extensions or Rekor URL changes the key. TTL 24 h bounds how long a
   Sigstore trust-root change takes to reach digests verified before it; deleting the admission controller pod flushes
@@ -129,16 +130,23 @@ What the platform does about it:
   check on every admission.
 
 Measured on dev1 with a server dry-run in production (`kubectl -n <production cell namespace> run probe
---image=ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede… --dry-run=server`, timed), admission controller freshly
-restarted for "cold":
+--image=<ref> --dry-run=server`, timed; `<ref>` = `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`). "New
+digest" uses a reference Kyverno has not seen yet (same digest, another tag: the cache key is the full reference):
 
-| | before (#135: one policy, 4 checks) | after |
+| | before (#135: one policy, 4 checks) | after (#142) |
 |---|---|---|
-| signed image, cold (first admission of the digest) | 20.6 s | measured after rollout, [#136](https://github.com/koorikla/platform/issues/136) |
-| signed image, cached | 0.07 s | (after rollout) |
-| image signed at the previous pin (denied) | 5.7-7.0 s, every time | (after rollout) |
-| tag-only reference (denied) | 0.06 s | (after rollout) |
-| unsigned docker.io image (denied, trusted registries) | 0.09 s | (after rollout) |
+| signed image, new digest | ~20 s | 8.3-8.5 s |
+| signed image, first admission after an admission controller restart | 20.6 s | 12.1-15.9 s (*) |
+| signed image, cached | 0.07 s | 0.06-0.08 s |
+| production after the same reference was admitted in staging | cold unless within 60 min | 0.08 s |
+| image signed at the previous pin (denied, never cached) | 5.7-7.0 s | 8.3 s |
+| unsigned digest (denied) | | 6.0 s |
+| tag-only reference (denied) | 0.06 s | 0.09 s |
+| unsigned docker.io image (denied, trusted registries) | 0.09 s | 0.06 s |
+
+(*) includes the first TUF initialization of the new pod, and another admission of the same image (OpenChoreo
+re-applying the production Deployment) arrived within 2 s: Kyverno does not coalesce identical in-flight
+verifications, so both ran their 4 checks and the 8 TUF refreshes queued on the lock.
 
 Further cut, not done: an in-cluster caching TUF mirror (attestor `tuf.mirror`; TUF metadata is signed, so a mirror
 needs no trust) would remove most of the per-call TUF time.
