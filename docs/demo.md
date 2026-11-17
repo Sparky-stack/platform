@@ -150,22 +150,50 @@ Fallback: show the existing `hello-world` component and its repo (koorikla/hello
 
 ## 4. Build and supply chain
 
-Show: only signed images with SBOM, provenance and a vulnerability scan run in production; an unsigned one is denied
-live.
+Show: hello-world is built in-cluster (OpenChoreo workflow plane -> Harbor, signed with the platform key); only signed
+images with an SBOM and a vulnerability scan run in production; an unsigned one is denied live.
+
+The build: Backstage -> hello-world -> **Build** (or the WorkflowRun below), then follow the run: checkout, check,
+scan-fs, build (rootless BuildKit, linux/amd64 + linux/arm64), scan-image, sbom, sign, gitops (commits the digest ref
+into `deploy/openchoreo/workload.yaml`; Argo CD + autoDeploy roll it out to development). About 5 minutes.
+
+```bash
+kubectl --context k3d-platform-mgmt create -f - <<'EOF'
+apiVersion: openchoreo.dev/v1alpha1
+kind: WorkflowRun
+metadata:
+  generateName: hello-world-build-
+  namespace: default
+  labels: { openchoreo.dev/component: hello-world, openchoreo.dev/project: demo }
+spec:
+  workflow:
+    kind: ClusterWorkflow
+    name: go
+    parameters:
+      repository: { url: https://github.com/koorikla/hello-world.git, revision: { branch: main }, appPath: "." }
+EOF
+kubectl --context k3d-platform-mgmt get workflowruns -n default -w
+```
+
+The checkout step skips a head commit that only touches `deploy/` (the hand-off's own commit, loop guard): push a code
+or docs change first, or the run ends after checkout.
+
+Verify the image the Workload deploys (platform key, Harbor CA, pull-only robot; `task demo:check` row "latest image
+signed" does the same):
 
 ```bash
 IMAGE=$(kubectl --context k3d-platform-mgmt get workloads -n default hello-world-workload -o jsonpath='{.spec.container.image}')
-cosign verify "$IMAGE" \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity https://github.com/koorikla/ci/.github/workflows/container.yaml@<workflowRef> \
-  --certificate-github-workflow-repository koorikla/hello-world \
-  --certificate-github-workflow-ref refs/heads/main --certificate-github-workflow-trigger push >/dev/null
+kubectl --context k3d-platform-mgmt -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d > cosign.pub
+kubectl --context k3d-platform-mgmt -n harbor get secret harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' | base64 -d > harbor-ca.crt
+cosign verify --key cosign.pub --insecure-ignore-tlog=true --registry-cacert harbor-ca.crt "$IMAGE" >/dev/null
+cosign tree --registry-cacert harbor-ca.crt "$IMAGE"
 ```
 
-`<workflowRef>` is `imageVerification.github.workflowRef` in `addons/kyverno-policies/values.yaml`. Expected:
-`The following checks were performed ...`, `The code-signing certificate was verified ...`.
+Harbor's `apps` project is private: `docker login harbor.openchoreo.localhost:9443` first (robot `robot$nodes`, secret
+`nodes-secret` of `platform-secrets/harbor`). Expected: `The signatures were verified against the specified public key`;
+the tree lists the signature, `https://spdx.dev/Document/v2.3` and `https://cosign.sigstore.dev/attestation/vuln/v1`.
 
-The live deny, in the production cell namespace on `dev1` (production is where signatures are enforced; development
+The live admission, in the production cell namespace on `dev1` (production is where signatures are enforced; development
 and staging, on the same cluster, only report: the policies select namespaces by their environment label):
 
 ```bash
@@ -177,23 +205,23 @@ kubectl --kubeconfig dev1.kubeconfig -n "$NS" run unsigned \
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
 ```
 
-Expected: policies `READY true`; `pod/signed created (server dry run)` (~0.1 s once Kyverno has verified the digest,
-~5-10 s the first time: docs/supply-chain.md "Admission latency"); the unsigned digest is denied by
-`openchoreo-verify-images-enforce` (`is not signed by gh-koorikla-hello-world-heads-main ... no signatures found`; the
-`openchoreo-attest-*-enforce` checks deny it too); the docker.io image is denied by
-`openchoreo-trusted-registries-enforce` (`images must come from ghcr.io/koorikla/`).
+Expected: policies `READY true`; `pod/signed created (server dry run)` (Kyverno on dev1 reads the platform key, the
+Harbor CA and a pull-only robot that mgmt delivered: docs/supply-chain.md "Wiring the key"); the unsigned digest is
+denied by an `openchoreo-verify-images-enforce` / `openchoreo-attest-*-enforce` check (`... no signatures found`); the
+docker.io image is denied by `openchoreo-trusted-registries-enforce`. An image pushed to Harbor `apps/` outside the
+pipeline is denied the same way (`image (harbor.openchoreo.localhost:9443/apps/) is not signed by platform-key`).
 
 Talking points:
-- Keyless signing in CI (koorikla/ci): the certificate names the exact reusable workflow commit, repository, branch
-  and trigger. A fork, a PR build or a manual run does not get in (docs/supply-chain.md).
-- Kyverno checks signature + SBOM + SLSA provenance + vuln attestations and a digest reference at admission.
-- The unsigned image above is a real digest in the same repository that CI never signed: anything pushed outside the
-  pipeline looks like this.
+- One pipeline for every stack, CI-provider-agnostic: the workflow plane runs the same koorikla/ci scripts as the
+  GitHub path; Git stays the source of truth (the build commits the digest ref, Argo CD deploys it).
+- Kyverno checks signature + SBOM + vuln attestations and a digest reference at admission; the GitHub path
+  (keyless, SLSA provenance too) stays available per Component (`IMAGE_BUILDER=github-actions` in hello-world).
+- The signing key never leaves mgmt; workload clusters get only `cosign.pub`.
 
-Fallback / pending: the in-cluster build on the OpenChoreo workflow plane (Harbor, platform key) is **pending #17**
-(and #15, #40). Show the GitHub Actions run of koorikla/hello-world and the attestations instead
-(`cosign tree "$IMAGE"`). If the live deny returns a webhook timeout, Kyverno is still starting: show the `READY`
-column and retry after a minute; `task demo:check` row "unsigned image denied" is the proof from the pre-flight.
+Fallback: if the build is slow, show the last run's tasks (`kubectl get workflowrun -n default <name> -o yaml`,
+`status.tasks`) and the verification above. If the live deny returns a webhook timeout, Kyverno is still starting: show
+the `READY` column and retry after a minute; `task demo:check` row "unsigned image denied" is the proof from the
+pre-flight.
 
 ## 5. Deploy and promote
 

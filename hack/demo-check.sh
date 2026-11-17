@@ -35,6 +35,8 @@ CURL_IMAGE="curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da
 OBS_NS=openchoreo-observability-plane
 PROM_PROXY="/api/v1/namespaces/$OBS_NS/services/prometheus-operated:9090/proxy/api/v1/query"
 KYVERNO_VALUES=addons/kyverno-policies/values.yaml
+# In-cluster builds (docs/build-plane.md): images under <registry.host>/<registry.appsProject>/ carry the platform key.
+INSTALLATION=installations/local/installation.yaml
 
 if [[ "$CTX" == koorikla ]]; then
   echo "refusing context 'koorikla' (homelab, AGENTS.md): set KUBE_CTX to the local mgmt context" >&2
@@ -52,7 +54,6 @@ trap 'rm -rf "$KCDIR"' EXIT
 pending_issue() {
   case "$1" in
     http-production|gate-latest) echo 54 ;;   # production rollout waits for a passing promotion gate
-    build-in-cluster) echo 17 ;;               # hello-world built on the OpenChoreo workflow plane
     *) return 1 ;;
   esac
 }
@@ -314,12 +315,45 @@ c_component_types() {
 }
 
 # ---- step 4: build & supply chain -----------------------------------------------------------------------------------
+# platform_prefix: <registry.host>/<registry.appsProject>/ of the installation (empty without a registry host).
+platform_prefix() {
+  local host project
+  host=$(yq '.registry.host // ""' "$INSTALLATION" 2>/dev/null)
+  project=$(yq '.registry.appsProject // "apps"' "$INSTALLATION" 2>/dev/null)
+  [[ -n "$host" ]] && printf '%s/%s/' "$host" "$project"
+}
+
+# cosign_platform <image>: verify an in-cluster build with the platform key (cosign.pub of store key cosign-platform,
+# public), the registry CA (public) and the pull-only robot `nodes` (private apps project; written into a docker config
+# in the private temp dir, never printed). No public tlog by default (buildWorkflows.signing.transparencyLog).
+cosign_platform() {
+  local image=$1 host=${1%%/*} d="$KCDIR/cosign" pw err
+  mkdir -p "$d/docker"
+  km get secret -n platform-secrets cosign-platform -o jsonpath='{.data.cosign\.pub}' | b64dec > "$d/cosign.pub" \
+    && [[ -s "$d/cosign.pub" ]] || { echo "cannot read cosign.pub (platform-secrets/cosign-platform)"; return 1; }
+  km get secret -n harbor harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' | b64dec > "$d/ca.crt" \
+    && [[ -s "$d/ca.crt" ]] || { echo "cannot read the registry CA (harbor/harbor-ca-bundle)"; return 1; }
+  pw=$(km get secret -n platform-secrets harbor -o jsonpath='{.data.nodes-secret}' | b64dec) \
+    && [[ -n "$pw" ]] || { echo "cannot read the registry robot (platform-secrets/harbor nodes-secret)"; return 1; }
+  # shellcheck disable=SC2016  # robot$nodes is Harbor's literal robot name
+  ( umask 077; printf '{"auths":{"%s":{"auth":"%s"}}}' "$host" "$(printf 'robot$nodes:%s' "$pw" | base64 | tr -d '\n')" \
+      > "$d/docker/config.json" )
+  if ! err=$(DOCKER_CONFIG="$d/docker" cosign verify --timeout 60s --key "$d/cosign.pub" --insecure-ignore-tlog=true \
+      --registry-cacert "$d/ca.crt" "$image" 2>&1 >/dev/null); then
+    echo "$(short_image "$image") NOT verified: $(printf '%s\n' "$err" | grep -m1 -i 'error' || printf '%s' "$err" | tail -n1)"
+    return 1
+  fi
+  echo "$(short_image "$image") signed by the platform key (in-cluster build)"
+}
+
 c_cosign() {
-  local image repo issuer workflow ref trig wref err
+  local image repo issuer workflow ref trig wref err prefix
   command -v cosign >/dev/null 2>&1 || { echo "cosign not found (mise install)"; return 1; }
   image=$(latest_image)
   [[ -n "$image" ]] || { echo "no Workload image for component $COMP in namespace $NS"; return 1; }
   [[ "$image" == *@sha256:* ]] || { echo "$image is not pinned by digest"; return 1; }
+  prefix=$(platform_prefix)
+  if [[ -n "$prefix" && "$image" == "$prefix"* ]]; then cosign_platform "$image"; return; fi
   repo=${image#ghcr.io/}; repo=${repo%%@*}; repo=${repo%%:*}
   issuer=$(yq '.imageVerification.github.issuer' "$KYVERNO_VALUES")
   workflow=$(yq '.imageVerification.github.workflow' "$KYVERNO_VALUES")
