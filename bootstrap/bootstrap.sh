@@ -231,13 +231,21 @@ node_registry_auth() {
   echo "$v"
 }
 
+# get_secret_yaml <ns> <name>: Secret YAML on stdout, empty on NotFound, non-zero on any other kubectl error
+# (API unreachable, timeout, wrong context, RBAC) so callers never mistake a failed lookup for a missing Secret.
+get_secret_yaml() {
+  kubectl --context "$CTX" -n "$1" get secret "$2" --ignore-not-found -o yaml
+}
+
 # drop_stale_ghcr <nodeRegistryAuth true|false>: no GHCR credential this run, but an earlier run may have left
 # platform-ghcr. A gh CLI copy (annotation seeded-from=gh, or a gho_ token from before the annotation existed) is
 # deleted when no node needs it; while nodeRegistryAuth is on, new nodes do need it, so it is kept and reported, as is
 # any secret the user seeded.
 drop_stale_ghcr() {
   local doc from tok
-  doc=$(kubectl --context "$CTX" -n platform-secrets get secret platform-ghcr -o yaml 2>/dev/null) || return 0
+  doc=$(get_secret_yaml platform-secrets platform-ghcr) \
+    || die "failed to look up secret platform-secrets/platform-ghcr in context '$CTX'"
+  [[ -n "$doc" ]] || return 0
   from=$(printf '%s\n' "$doc" | yq '.metadata.annotations["platform.koorikla.io/seeded-from"] // ""')
   tok=$(printf '%s\n' "$doc" | yq '.data.token // ""' | b64dec 2>/dev/null || true)
   if [[ "$from" == gh || "$tok" == gho_* ]]; then
@@ -266,7 +274,8 @@ rand_alnum() {
 # on re-runs.
 seed_generated_secret() {
   local name=$1 existing; shift
-  existing=$(kubectl --context "$CTX" -n platform-secrets get secret "$name" -o yaml 2>/dev/null || true)
+  existing=$(get_secret_yaml platform-secrets "$name") \
+    || die "failed to look up secret platform-secrets/$name in context '$CTX'; refusing to generate or overwrite secrets"
   local -a specs=() vals=()
   local spec k fixed val i=0
   for spec in "$@"; do
@@ -323,7 +332,10 @@ COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289a
 COSIGN_TMP=""
 # shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
 seed_cosign_secret() {
-  if kubectl --context "$CTX" -n platform-secrets get secret cosign-platform >/dev/null 2>&1; then
+  local existing
+  existing=$(kubectl --context "$CTX" -n platform-secrets get secret cosign-platform --ignore-not-found -o name) \
+    || die "failed to look up secret platform-secrets/cosign-platform in context '$CTX'; refusing to regenerate key pair"
+  if [[ -n "$existing" ]]; then
     log "  cosign-platform exists (keeping the key pair)"
     return 0
   fi
