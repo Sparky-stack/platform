@@ -43,7 +43,7 @@ MUTED = "#aab6c8"    # lede, legend, arrow labels, context detail
 LINE = "#8b9ab0"     # structural arrows
 HAIR = "#7c8aa0"     # context box outline, dividers
 ACCENT = "#fbbf24"   # the ONE accent: numbered flow (arrows, badges, motion)
-CONTEXT_FILL = "#1b2434"
+CONTEXT_FILL = "#263247"
 
 # plane -> (colour, legend label). Box colour = where it runs (one dimension per diagram); the accent is the flow.
 PLANES = {
@@ -521,9 +521,11 @@ class Diagram:
                     self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
                                       f'fill="{CONTEXT_FILL}"/>')
                 elif t == "node":
-                    self.l_top.append(f'<rect x="{x - 2}" y="{ly - 13}" width="24" height="18" rx="4" fill="none" '
+                    self.l_top.append(f'<rect x="{x - 2}" y="{ly - 14}" width="26" height="20" rx="4" fill="none" '
                                       f'stroke="{INK2}" stroke-width="1.2"/>'
-                                      f'<circle cx="{x + 5}" cy="{ly - 4}" r="4" fill="{ACCENT}"/>')
+                                      f'<circle cx="{x + 8}" cy="{ly - 4}" r="7" fill="{ACCENT}"/>'
+                                      f'<text class="s" x="{x + 8}" y="{ly + 0.2}" font-size="11" font-weight="700" '
+                                      f'fill="{BG}" text-anchor="middle">1</text>')
                 elif t in ("optin", "planned"):
                     chip = TAGS[t]
                     cw = tw(chip, 11, bold=True, spacing=0.4) + 10

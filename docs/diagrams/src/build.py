@@ -59,11 +59,11 @@ def architecture() -> Diagram:
     d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry,", "secrets, sign-in"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
-    d.zone(28, Z2, 904, R3 + H + 24 - Z2, "workload clusters", "workload", label_at="tr")
+    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "workload clusters", "workload", label_at="tr")
     d.box(c[0], R3, w, H, "workload", "k3s nodes", ["servers and", "workers"])
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
     d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
-    d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"], step=8)
+    d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, 160)], step=1, badge=(xa, R1 - 32))
     d.arrow([(xa, R1 + H), (xa, R2)], step=2)
@@ -72,19 +72,24 @@ def architecture() -> Diagram:
     d.arrow([(xa, R2 + H), (xa, R3)], step=4, badge=(xa, CH))
     x5 = c[1] + w / 2
     d.arrow([(c[0] + w, R1 + 56), (x5, R1 + 56), (x5, R3)], step=5, badge=(x5, CH))
+    yb = Z2 + 24                                # step 5 also installs the cluster-agent
+    d.arrow([(x5, yb), (c[2] + 40, yb), (c[2] + 40, R3)], step=5, badge=False)
+    d.junction(x5, yb)
     x6 = c[2] + w / 2 + 40
     d.arrow([(x6, R3), (x6, R2 + H)], step=6, badge=(x6, CH), label="dials out", label_pos=(x6 + 20, CH + 5),
             label_anchor="start")
     d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=7, badge_at=0.4)
+    yk = R3 + H + 36                            # step 8: Kyverno (an addon) admits the apps
+    d.arrow([(c[1] + w / 2, R3 + H), (c[1] + w / 2, yk), (c[3] + w / 2, yk), (c[3] + w / 2, R3 + H)], step=8)
     d.require("Git", "Argo CD", "Cluster API", "OpenChoreo", "cluster-agent", "Apps", "Addons", "Shared services")
     d.key("Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
           "Argo CD turns each fleet file into a cluster for Cluster API to build",
           "Argo CD hands each app's release to OpenChoreo",
           "Cluster API creates the cluster's k3s nodes on docker, AWS or Hetzner",
-          "Argo CD installs the addons on every cluster whose labels match",
+          "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
           "The cluster-agent dials out to OpenChoreo and pulls the app releases",
           "The agent deploys the apps",
-          "Apps start only after Kyverno, one of the addons, admits them: signed images, safe settings")
+          "Kyverno, one of the addons, admits only apps with signed images and safe settings")
     return d
 
 
@@ -100,51 +105,49 @@ def security() -> Diagram:
                           (Y[1], "admission", ["only verified", "images start"]),
                           (Y[2], "runtime", ["detect and", "respond"])):
         d.lane(28, y + 22, label, sub)
-    d.box(X[0], Y[0], BW, H, "mgmt", "Build", ["builds and", "scans images"])
-    d.box(X[1], Y[0], BW, H, "mgmt", "cosign", ["signing", "tool"])
-    d.box(X[2], Y[0], BW, H, "mgmt", "Registry", ["stores images", "and signatures"])
-    d.box(X[0], Y[1], BW, H, "workload", "Kyverno", ["admission", "policy"])
+    d.box(X[0], Y[0], BW, H, "mgmt", "Build & sign", ["scan, then", "cosign"], step=1, aka=("cosign",))
+    d.box(X[1], Y[0], BW, H, "mgmt", "Registry", ["images and", "signatures"])
+    d.box(X[0], Y[1], BW, H, "workload", "Admission control", ["Kyverno"], aka=("Kyverno",))
     d.box(X[1], Y[1], BW, H, "workload", "App pods", ["your", "services"])
-    d.box(X[0], Y[2], BW, H, "workload", "Falco", ["runtime", "detection"])
-    d.box(X[1], Y[2], BW, H, "workload", "Falco Talon", ["automatic", "response"])
-    d.box(X[2], Y[2], BW, H, "mgmt", "Response workflow", ["escalation on the", "management cluster"])
-    xk = X[0] + BW / 2
-    xr = X[2] + BW / 2
-    d.arrow([(X[0] + BW, ymid(Y[0])), (X[1], ymid(Y[0]))], step=1, badge_at=0.4)
-    d.arrow([(X[1] + BW, ymid(Y[0])), (X[2], ymid(Y[0]))], step=2, badge_at=0.4)
+    d.box(X[0], Y[2], BW, H, "mgmt", "Escalation", ["on the management", "cluster"])
+    d.box(X[1], Y[2], BW, H, "workload", "Runtime detection", ["Falco"], aka=("Falco",))
+    d.box(X[2], Y[2], BW, H, "workload", "Auto-response", ["Falco Talon"], aka=("Falco Talon",))
+    xp = X[1] + BW / 2
+    d.arrow([(X[0] + BW, ymid(Y[0])), (X[1], ymid(Y[0]))], step=2, badge_at=0.4)
     c0 = Y[0] + H + 40
-    d.arrow([(xk, Y[1]), (xk, c0), (xr, c0), (xr, Y[0] + H)], step=3)
+    d.arrow([(X[0] + BW / 2, Y[1]), (X[0] + BW / 2, c0), (X[1] + 40, c0), (X[1] + 40, Y[0] + H)], step=3)
     d.arrow([(X[0] + BW, ymid(Y[1])), (X[1], ymid(Y[1]))], step=4, badge_at=0.4)
     c1 = Y[1] + H + 40
-    d.arrow([(xk, Y[2]), (xk, c1), (X[1] + 64, c1), (X[1] + 64, Y[1] + H)], step=5)
-    d.arrow([(X[0] + BW, ymid(Y[2])), (X[1], ymid(Y[2]))], step=6, badge_at=0.4)
-    c2 = Y[2] + H + 40
-    d.arrow([(xk, Y[2] + H), (xk, c2), (xr, c2), (xr, Y[2] + H)], step=7)
-    d.require("Kyverno", "cosign", "Registry", "Falco", "Falco Talon", "Response workflow", "App pods", "Build")
-    d.key("The build scans the image for known vulnerabilities, records what is inside it and hands it to cosign",
-          "cosign signs the image and its build record and stores both next to it in the registry",
+    d.arrow([(xp, Y[2]), (xp, Y[1] + H)], step=5, badge=(xp, c1))
+    xt = X[2] + BW / 2
+    d.arrow([(xt, Y[2]), (xt, ymid(Y[1])), (X[1] + BW, ymid(Y[1]))], step=6, badge=(xt, c1))
+    d.arrow([(X[1] + BW, ymid(Y[2])), (X[2], ymid(Y[2]))], label="alerts", label_pos=(X[1] + BW + 52, ymid(Y[2]) - 8))
+    d.line_label = "Falco alerts Falco Talon"
+    d.arrow([(X[1], ymid(Y[2])), (X[0] + BW, ymid(Y[2]))], step=7, badge_at=0.4)
+    d.require("Admission control", "Build & sign", "Registry", "Runtime detection", "Auto-response", "Escalation",
+              "App pods")
+    d.key("Build & sign scans the image for known vulnerabilities, then cosign signs it with its build record",
+          "Build & sign pushes the image and its signature to the registry",
           "Kyverno fetches the signature from the registry before any pod starts",
           "Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and "
           "staging",
           "Falco watches what every pod does at runtime, on every node",
-          "Falco alerts Falco Talon, which stops or labels the offending pod",
-          "Falco escalates critical alerts to the response workflow on the management cluster")
+          "Falco Talon stops or labels an offending pod as soon as Falco alerts it",
+          "Falco escalates critical alerts to a response workflow on the management cluster")
     return d
 
 
 # ----------------------------------------------------------------------------------------------- network
 def network() -> Diagram:
-    d = Diagram("Network · a request in, the agents out",
-                "A request comes in through kgateway and the mesh; separately, the agent and the collectors dial out "
-                "to the management cluster. Kyverno adds every app to the mesh before traffic arrives.")
+    d = Diagram("Network · a request in, its telemetry out",
+                "A request comes in through kgateway and the encrypted mesh; its telemetry goes out to the management "
+                "cluster. Everything rides the cluster network (Cilium or flannel).")
     ZX = 204
     X = [228, 484, 740]
     BW = 176
     Z = 112
     RA = 180
-    RB = RA + H + 72
-    HB = 64
-    DIV = RB + HB + 32
+    DIV = RA + H + 56
     RC = DIV + 56
     Zb = RC + H + 24
     Z2 = Zb + 64
@@ -152,38 +155,33 @@ def network() -> Diagram:
     gap = (Zb + Z2) / 2
     d.box(28, RA, 112, H, "external", "Client", ["opens the", "app URL"])
     d.zone(ZX, Z, 932 - ZX, Zb - Z, "workload cluster", "workload")
-    d.zone(ZX, Z2, 932 - ZX, RD + H + 24 - Z2, "management cluster", "mgmt", label_at="tr")
-    d.lane(X[0] + 200, Z + 24, "a request in", color="#cbd5e1")
+    d.zone(ZX, Z2, 932 - ZX, RD + H + 24 - Z2, "management cluster", "mgmt")
+    d.lane(X[0], Z + 50, "a request in", color="#cbd5e1")
     d.divider(ZX + 16, 916, DIV)
-    d.lane(X[0], DIV + 32, "the agents out", color="#cbd5e1")
+    d.lane(X[0], DIV + 32, "its telemetry out", color="#cbd5e1")
     d.box(X[0], RA, BW, H, "workload", "kgateway", ["front door", "of the cluster"])
     d.box(X[1], RA, BW, H, "workload", "Service mesh", ["Istio ambient:", "encrypted hops"])
     d.box(X[2], RA, BW, H, "workload", "App pods", ["your", "services"])
-    d.box(X[0], RB, X[2] + BW - X[0], HB, "workload", "Cluster network (Cilium or flannel)",
-          ["chosen per cluster when it is created"], aka=("cluster network",))
-    d.box(X[0], RC, BW, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"])
-    d.box(X[1], RC, BW, H, "workload", "Collectors", ["logs, metrics,", "traces"])
-    d.box(X[0], RD, BW, H, "mgmt", "cluster-gateway", ["entry point", "for agents"])
-    d.box(X[1], RD, BW, H, "mgmt", "Observability plane", ["stores all", "telemetry"])
+    d.box(X[1], RC, BW, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], context=True)
+    d.box(X[2], RC, BW, H, "workload", "Collectors", ["logs, metrics,", "traces"])
+    d.box(X[1], RD, BW, H, "mgmt", "cluster-gateway", ["entry point", "for agents"], context=True)
+    d.box(X[2], RD, BW, H, "mgmt", "Observability plane", ["stores all", "telemetry"])
     d.arrow([(140, ymid(RA)), (X[0], ymid(RA))], step=1, badge=(176, ymid(RA)))
     d.arrow([(X[0] + BW, ymid(RA)), (X[1], ymid(RA))], step=2, badge_at=0.4)
     d.arrow([(X[1] + BW, ymid(RA)), (X[2], ymid(RA))], step=3, badge_at=0.4)
-    xm = X[1] + BW / 2
-    d.arrow([(xm, RA + H), (xm, RB)], step=4, badge_at=0.42)
-    xa = X[0] + BW / 2
-    d.arrow([(xa, RC + H), (xa, RD)], step=5, badge=(xa, gap), label="dials out", label_pos=(xa + 20, gap + 5),
+    xp = X[2] + BW / 2
+    d.arrow([(xp, RA + H), (xp, RC)], step=4, badge=(xp, RA + H + 30))
+    d.arrow([(xp, RC + H), (xp, RD)], step=5, badge=(xp, gap), label="dials out", label_pos=(xp + 20, gap + 5),
             label_anchor="start")
-    d.arrow([(xm, RC + H), (xm, RD)], step=6, badge=(xm, gap), label="dials out", label_pos=(xm + 20, gap + 5),
-            label_anchor="start")
-    d.require("kgateway", "Service mesh", "Cluster network (Cilium or flannel)", "cluster-gateway", "cluster-agent",
-              "Collectors", "App pods")
+    xg = X[1] + BW / 2
+    d.arrow([(xg, RC + H), (xg, RD)], label="dials out", label_pos=(xg + 14, gap + 5), label_anchor="start")
+    d.line_label = "the cluster-agent's own connection (context)"
+    d.require("kgateway", "Service mesh", "cluster-gateway", "cluster-agent", "Collectors", "App pods")
     d.key("A client opens the app URL; kgateway takes the request",
           "kgateway routes it into the service mesh",
           "The service mesh delivers it to the app pods and encrypts every hop between pods",
-          "The service mesh rides the cluster network: Cilium or flannel, chosen per cluster",
-          "Separately, the cluster-agent dials out to the management cluster; cluster-gateway accepts only that "
-          "cluster's certificate",
-          "The collectors dial out too and ship logs, metrics and traces to the observability plane")
+          "The app pods send their logs, metrics and traces to the collectors",
+          "The collectors dial out and ship them to the observability plane on the management cluster")
     return d
 
 
@@ -194,19 +192,19 @@ def observability() -> Diagram:
                 "cluster; Backstage, the promotion gate and the AI agents query it through one API.",
                 reading="columns")
     K, KW = 44, 192
-    T, TW = 364, 120
-    O, OW = 568, 120
+    T, TW = 380, 120
+    O, OW = 572, 120
     U, UW = 784, 132
-    R = [200, 336, 472]
+    R = [216, 352, 488]
     m = [ymid(y) for y in R]
     zb = R[2] + H + 24
     d.zone(28, 128, 224, zb - 128, "workload cluster", "workload")
     d.zone(348, 128, 584, zb - 128, "management cluster", "mgmt")
-    d.lane(T, R[0] - 20, "observability plane", color="#cbd5e1")
+    d.zone(364, 168, O + OW + 16 - 364, zb - 16 - 168, "observability plane", "mgmt")
     d.lane(U, R[0] - 20, "consumers", color="#cbd5e1")
-    d.box(K, R[0], KW, H, "workload", "Fluent Bit", ["log", "collector"])
-    d.box(K, R[1], KW, H, "workload", "OpenTelemetry", ["trace and event", "collector"])
-    d.box(K, R[2], KW, H, "workload", "Prometheus agent", ["metrics", "collector"])
+    d.box(K, R[0], KW, H, "workload", "Fluent Bit", ["container logs,", "security alerts"])
+    d.box(K, R[1], KW, H, "workload", "OpenTelemetry", ["traces, events,", "app metrics"])
+    d.box(K, R[2], KW, H, "workload", "Prometheus agent", ["container and", "cluster metrics"])
     d.box(T, R[0], TW, R[1] + H - R[0], "mgmt", "OpenSearch", ["logs, traces", "and events"])
     d.box(T, R[2], TW, H, "mgmt", "Prometheus", ["metrics"])
     d.box(O, R[1], OW, H, "mgmt", "Observer API", ["one query API,", "one login"])
@@ -221,24 +219,22 @@ def observability() -> Diagram:
     d.arrow([(xj, m[1]), (xj, R[2] + 24), (T, R[2] + 24)], step=2, badge=False)
     d.junction(xj, m[1])
     d.arrow([(K + KW, R[2] + 56), (T, R[2] + 56)], step=3, badge=(xb, R[2] + 56))
-    xi = T + TW + 24                           # step 4 forks after its badge: the observer API queries both stores
-    d.arrow([(O, m[1]), (xi, m[1])], step=4, head=False, badge=(O - 30, m[1]))
-    d.arrow([(xi, m[1]), (T + TW, m[1])], step=4, badge=False)
-    d.arrow([(xi, m[1]), (xi, m[2]), (T + TW, m[2])], step=4, badge=False)
-    d.junction(xi, m[1])
-    xo = O + OW + 56                           # step 5 joins before its badge: three consumers query the API
-    d.arrow([(U, m[1]), (O + OW, m[1])], step=5, badge=(O + OW + 38, m[1]))
-    d.arrow([(U, m[0]), (xo, m[0]), (xo, m[1])], step=5, badge=False, head=False)
-    d.arrow([(U, m[2]), (xo, m[2]), (xo, m[1])], step=5, badge=False, head=False)
+    d.arrow([(O, m[1]), (T + TW, m[1])])
+    xi = T + TW + 36
+    d.arrow([(O, m[1] + 26), (xi, m[1] + 26), (xi, m[2]), (T + TW, m[2])])
+    d.line_label = "the observer API reads both stores"
+    xo = U - 24                                # step 4 joins before its badge: three consumers query the API
+    d.arrow([(U, m[1]), (O + OW, m[1])], step=4, badge=(O + OW + 48, m[1]))
+    d.arrow([(U, m[0]), (xo, m[0]), (xo, m[1])], step=4, badge=False, head=False)
+    d.arrow([(U, m[2]), (xo, m[2]), (xo, m[1])], step=4, badge=False, head=False)
     d.junction(xo, m[1])
     d.require("OpenTelemetry", "Fluent Bit", "Prometheus agent", "OpenSearch", "Prometheus", "Observer API",
               "Backstage", "Promotion gate", "AI agents")
     d.key("Fluent Bit ships container logs, security alerts included, to OpenSearch",
-          "The OpenTelemetry collector sends app traces and cluster events to OpenSearch and app metrics to "
-          "Prometheus",
+          "The OpenTelemetry collector sends app traces and events to OpenSearch and app metrics to Prometheus",
           "The Prometheus agent collects container and cluster metrics and sends them to Prometheus",
-          "The observer API queries both stores; one login covers all of them",
-          "Backstage, the promotion gate and the opt-in AI agents query the observer API")
+          "Backstage, the promotion gate and the opt-in AI agents query the observer API, which reads both stores "
+          "behind one login")
     return d
 
 
@@ -254,99 +250,87 @@ def sdlc() -> Diagram:
     R2 = ch + 48
     d.box(c[0], R0, w, H, "external", "App repo", ["your code and", "deploy/ folder"])
     d.box(c[1], R0, c[2] + w - c[1], H, "mgmt", "Build & sign",
-          ["OpenChoreo workflow plane (or GitHub Actions)", "scan, inventory, signature"])
+          ["builds, scans and signs every image"])
     d.box(c[3], R0, w, H, "mgmt", "Registry", ["signed", "images"])
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(c[1], R1, w, H, "mgmt", "Release", ["immutable", "snapshot"])
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[3], R1, w, H, "mgmt", "Promotion gate", ["health checks,", "pull requests"])
     d.box(c[1], R2, w, H, "workload", "Staging", ["second", "environment"])
-    d.box(c[2], R2, w, H, "workload", "Production", ["admission", "checked"], step=8)
-    d.arrow([(c[0] + w, ymid(R0)), (c[1], ymid(R0))], step=1, badge_at=0.4)
+    d.box(c[2], R2, w, H, "workload", "Production", ["signed images", "only"])
+    d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1, badge_at=0.4)
+    d.arrow([(c[1], R0 + 58), (c[0] + w, R0 + 58)])
+    d.line_label = "the build commits the new version to deploy/"
     d.arrow([(c[2] + w, ymid(R0)), (c[3], ymid(R0))], step=2, badge_at=0.4)
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=5, badge_at=0.4)
     d.arrow([(c[3], ymid(R1)), (c[2] + w, ymid(R1))], step=6, badge_at=0.4)
-    xg = c[3] + w / 2                         # step 7 forks after its badge: staging and production pull requests
-    d.arrow([(xg, R1 + H), (xg, ch)], step=7, head=False, badge=(xg, R1 + H + 30))
-    d.arrow([(xg, ch), (c[1] + w / 2, ch), (c[1] + w / 2, R2)], step=7, badge=False)
-    d.arrow([(c[2] + w / 2, ch), (c[2] + w / 2, R2)], step=7, badge=False)
-    d.junction(xg, ch)
-    d.junction(c[2] + w / 2, ch)
+    d.arrow([(c[3] + 40, R1 + H), (c[3] + 40, ch), (c[1] + w / 2, ch), (c[1] + w / 2, R2)], step=7,
+            label="pull request", label_pos=((c[1] + w / 2 + c[3] + 40) / 2 + 70, ch - 10))
+    d.arrow([(c[3] + 110, R1 + H), (c[3] + 110, ymid(R2)), (c[2] + w, ymid(R2))], step=8,
+            badge=(c[3] + 30, ymid(R2)), label="pull request + code owners", label_pos=(c[3] + 30, ymid(R2) + 32))
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "Release", "Promotion gate", "Development",
               "Staging", "Production")
     d.key("A push to the app repo starts a build on the OpenChoreo workflow plane, or GitHub Actions",
-          "Build & sign scans and signs the image, pushes it to the registry and commits the new version to deploy/",
+          "Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to "
+          "deploy/)",
           "Argo CD reads the deploy/ folder of the app repo",
           "Argo CD applies it to OpenChoreo, which snapshots an immutable release",
           "The release deploys to development automatically",
           "The promotion gate checks development: readiness, smoke tests, alerts, change freezes",
-          "The promotion gate opens the pull requests that promote the release: staging first, production only "
-          "with code-owner approval",
-          "Production admits only signed images pinned by digest: Kyverno blocks the rest")
+          "The promotion gate opens the pull request that promotes the release to staging once development is "
+          "healthy; Argo CD applies it",
+          "The promotion gate opens the production pull request only after staging; it also needs code-owner "
+          "approval, and Kyverno admits only signed images pinned by digest")
     return d
 
 
 # ------------------------------------------------------------------------------------- cluster lifecycle
 def cluster_lifecycle() -> Diagram:
     d = Diagram("Cluster lifecycle · add, upgrade, remove = edit one file",
-                "A fleet file becomes a Cluster API cluster, an Argo CD cluster secret and an OpenChoreo data plane; "
-                "deleting it removes all three.")
-    AX, AW = 44, 144
-    A, B, CW = 288, 500, 132
-    ZR = 648
+                "One fleet file in Git becomes a running cluster with its addons and its OpenChoreo agent; deleting "
+                "the file removes all of it.")
+    AX, AW = 44, 160
+    A, AWD = 300, 200
+    ZR = 596
     WZ = ZR + 96
     WX, WW = WZ + 16, 932 - 16 - WZ - 16
     L = [264, 264 + H + 72, 264 + 2 * (H + 72), 264 + 3 * (H + 72)]
     m = [ymid(y) for y in L]
     ZB = L[3] + H + 24
-    d.box(AX, 100, 240, 56, "external", "Fleet file", ["`clusters/dev1.yaml`"])
+    xz = (ZR + WZ) / 2
+    d.box(AX, 108, 240, 52, "external", "Fleet file", ["`clusters/dev1.yaml`"])
     d.zone(28, 200, ZR - 28, ZB - 200, "management cluster", "mgmt", label_at="tr")
     d.zone(WZ, 200, 932 - WZ, ZB - 200, "new cluster", "workload", label_at="tr")
-    d.box(AX, L[0], AW, L[3] + H - L[0], "mgmt", "Argo CD",
-          ["renders one chart", "per fleet file:", "", "the cluster,", "its secrets,", "its identity,", "its data plane"])
-    d.box(A, L[0], CW, H, "mgmt", "Cluster API", ["creates and", "upgrades nodes"])
-    d.box(WX, L[0], WW, H, "workload", "k3s nodes", ["servers +", "workers"])
-    d.box(A, L[1], CW, H, "mgmt", "Cluster secret", ["access + labels", "for Argo CD"])
-    d.box(B, L[1], CW, H, "mgmt", "Addon sets", ["pick clusters", "by label"])
-    d.box(WX, L[1], WW, H, "workload", "Addons", ["network, mesh,", "policy, …"])
-    d.box(A, L[2], CW, H, "mgmt", "Agent identity", ["a CA of its own", "per cluster"])
+    d.box(AX, L[0], AW, L[1] + H - L[0], "mgmt", "Argo CD", ["GitOps", "engine"])
+    d.box(A, L[0], AWD, H, "mgmt", "Cluster API", ["creates and", "upgrades nodes"])
+    d.box(A, L[2], AWD, H, "mgmt", "cert-manager", ["one CA", "per cluster"])
+    d.box(A, L[3], AWD, H, "mgmt", "OpenChoreo", ["developer", "platform"])
+    d.box(WX, L[0], WW, H, "workload", "k3s nodes", ["servers and", "workers"])
+    d.box(WX, L[1], WW, H, "workload", "Addons", ["network, mesh,", "policy, telemetry"])
     d.box(WX, L[2], WW, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"])
-    d.box(B, L[3], CW, H, "mgmt", "Data plane", ["OpenChoreo's", "record"])
     xf = AX + AW / 2
-    xz = (ZR + WZ) / 2                          # badge column between the zones
-    d.arrow([(xf, 156), (xf, L[0])], step=1, badge=(xf, L[0] - 42))
-    xj = A - 40                                 # step 2 forks after its badge: Argo CD renders all four
-    d.arrow([(AX + AW, m[0]), (xj, m[0])], step=2, head=False, badge=(AX + AW + 30, m[0]))
-    d.arrow([(xj, m[0]), (A, m[0])], step=2, badge=False)
-    d.arrow([(xj, m[0]), (xj, m[1]), (A, m[1])], step=2, badge=False)
-    d.arrow([(xj, m[1]), (xj, m[2]), (A, m[2])], step=2, badge=False)
-    d.arrow([(xj, m[2]), (xj, m[3]), (B, m[3])], step=2, badge=False)
-    for y in m[:3]:
-        d.junction(xj, y)
-    d.arrow([(A + CW, m[0]), (WX, m[0])], step=3, badge=(xz, m[0]))
-    d.arrow([(A + CW / 2, L[0] + H), (A + CW / 2, L[1])], step=4, badge_at=0.42)
-    d.arrow([(A + CW, m[1]), (B, m[1])], step=5, badge_at=0.4)
-    d.arrow([(B + CW, m[1]), (WX, m[1])], step=6, badge=(xz, m[1]))
-    d.arrow([(A + CW, m[2]), (WX, m[2])], step=7, badge=(xz, m[2]))
+    d.arrow([(xf, L[0]), (xf, 160)], step=1, badge=(xf, L[0] - 32))
+    d.arrow([(AX + AW, m[0]), (A, m[0])], step=2, badge_at=0.35)
+    d.arrow([(A + AWD, m[0]), (WX, m[0])], step=3, badge=(xz, m[0]))
+    d.arrow([(AX + AW, m[1]), (WX, m[1])], step=4, badge=(xz, m[1]))
+    d.arrow([(A + AWD, m[2]), (WX, m[2])], step=5, badge=(xz, m[2]), label="via Cluster API",
+            label_pos=(A + AWD + 62, m[2] - 12))
     xg = WX + WW / 2
-    d.arrow([(xg, L[2] + H), (xg, m[3]), (B + CW, m[3])], step=8, badge=(xz, m[3]), label="dials out",
+    d.arrow([(xg, L[2] + H), (xg, m[3]), (A + AWD, m[3])], step=6, badge=(xz, m[3]), label="dials out",
             label_pos=(xz, m[3] + 32))
-    d.require("Fleet file", "Argo CD", "Cluster API", "k3s nodes", "Cluster secret", "Addon sets", "Addons",
-              "Agent identity", "Data plane", "cluster-agent")
-    d.key("The fleet file clusters/<name>.yaml is synced by Argo CD (ApplicationSet fleet → Application "
-          "cluster-<name>)",
-          "Argo CD renders charts/cluster: the Cluster API cluster, its secrets, the agent identity and the "
-          "OpenChoreo data plane",
+    d.require("Fleet file", "Argo CD", "Cluster API", "k3s nodes", "Addons", "cert-manager", "OpenChoreo",
+              "cluster-agent")
+    d.key("Argo CD reads the fleet file clusters/<name>.yaml",
+          "Argo CD renders the cluster chart and hands the cluster to Cluster API, with the agent's certificate "
+          "request and its OpenChoreo data plane",
           "Cluster API creates the machines and installs k3s",
-          "Cluster API's kubeconfig becomes an Argo CD cluster secret with the fleet labels (ESO)",
-          "The cluster secret's labels select the addon sets (ApplicationSets) that apply",
-          "The addon sets install every selected addon on the new cluster",
-          "The agent identity (its certificate) is delivered to the cluster; the CA key never leaves the "
-          "management cluster",
-          "The cluster-agent dials out; the data plane tells the gateway to accept only this cluster's CA")
+          "Argo CD installs every addon whose labels match, as soon as the cluster's access secret exists",
+          "cert-manager issues the agent's certificate from this cluster's own CA; Cluster API copies it into the "
+          "cluster",
+          "The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA")
     d.note("Upgrade: bump kubernetesVersion in the fleet file; Cluster API replaces the nodes one at a time. "
            "Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.")
     return d
@@ -355,8 +339,8 @@ def cluster_lifecycle() -> Diagram:
 # ------------------------------------------------------------------------------------ trust & certificates
 def trust() -> Diagram:
     d = Diagram("Trust & certificates · who signs what, and how it renews",
-                "Two certificate chains, both rooted on the management cluster: a CA per cluster for the OpenChoreo "
-                "agent, and OpenBao's mesh CA per group of clusters. No private CA key leaves the management cluster.")
+                "Two separate certificate chains, both rooted on the management cluster: a CA per cluster for the "
+                "OpenChoreo agent, and an opt-in mesh CA in OpenBao. No private CA key leaves the management cluster.")
     C1, W1 = 44, 220
     C2, W2 = 336, 220
     ZR = 572
@@ -373,41 +357,46 @@ def trust() -> Diagram:
     d.zone(28, Z, ZR - 28, ZB - Z, "management cluster", "mgmt")
     d.zone(WZ, Z, 932 - WZ, ZB - Z, "workload cluster", "workload")
     d.divider(44, 916, DIV)
-    d.lane(44, Z + 52, "agent identity", color="#cbd5e1")
-    d.lane(44, DIV + 34, "service mesh CA", color="#cbd5e1")
+    d.lane(44, Z + 52, "agent identity · steps 1-4", color="#cbd5e1")
+    d.lane(44, DIV + 34, "service mesh CA · steps 5-7", color="#cbd5e1")
     d.box(C1, RA1, W1, H, "mgmt", "cert-manager", ["one CA", "per cluster"], step=1)
     d.box(C2, RA2, W2, H, "mgmt", "cluster-gateway", ["entry point", "for agents"])
     d.box(WX, RA1, WW, H, "workload", "cluster-agent", ["OpenChoreo's agent", "on the cluster"])
     d.box(C1, RB1, C2 + W2 - C1, H, "mgmt", "OpenBao", ["mesh certificate authority,", "one per group of clusters"],
           status="optin", step=5)
-    d.box(WX, RB1, WW, H, "workload", "istio-csr", ["requests mesh", "certificates"], status="optin")
-    d.box(WX, RB2, WW, H, "workload", "Mesh proxies", ["ztunnel and", "gateways"])
-    d.arrow([(C1 + W1, ymid(RA1)), (WX, ymid(RA1))], step=2, badge=(xz, ymid(RA1)))
+    d.box(WX, RB1, WW, H, "workload", "Mesh proxies", ["ztunnel and", "gateways"])
+    d.box(WX, RB2, WW, H, "workload", "istio-csr", ["signs requests", "through OpenBao"], status="optin")
+    d.arrow([(C1 + W1, ymid(RA1)), (WX, ymid(RA1))], step=2, badge=(xz, ymid(RA1)), label="copied in by Cluster API",
+            label_pos=(C2 + 110, ymid(RA1) - 10))
     xc = C1 + W1 / 2
     d.arrow([(xc, RA1 + H), (xc, ymid(RA2)), (C2, ymid(RA2))], step=3)
     xa = WX + WW / 2
     d.arrow([(xa, RA1 + H), (xa, ymid(RA2)), (C2 + W2, ymid(RA2))], step=4, badge=(xz, ymid(RA2)),
             label="dials out", label_pos=(xz, ymid(RA2) + 32))
-    d.arrow([(WX, ymid(RB1)), (C2 + W2, ymid(RB1))], step=6, badge=(xz, ymid(RB1)), label="dials out",
-            label_pos=(xz, ymid(RB1) + 32))
-    d.arrow([(xa, RB2), (xa, RB1 + H)], step=7)
+    d.arrow([(xa, RB1 + H), (xa, RB2)], step=6)
+    xb = C2 + W2 - 100
+    d.arrow([(WX, ymid(RB2)), (xb, ymid(RB2)), (xb, RB1 + H)], step=7, badge=(xz, ymid(RB2)), label="dials out",
+            label_pos=(xz, ymid(RB2) + 32))
     d.require("cert-manager", "cluster-agent", "cluster-gateway", "OpenBao", "istio-csr", "Mesh proxies")
     d.key("cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it a month "
           "before it expires",
-          "cert-manager delivers the certificate to the cluster; the CA's private key stays on the management cluster",
+          "cert-manager's certificate is copied into the cluster by Cluster API; the CA's private key stays on the "
+          "management cluster",
           "cert-manager gives cluster-gateway that cluster's CA, the only one it accepts for that cluster",
           "The cluster-agent dials out with its certificate and restarts by itself when the certificate renews",
-          "OpenBao (opt-in) creates a root and an intermediate CA for each group of clusters; the keys never leave it",
-          "istio-csr (opt-in) dials out to OpenBao, logs in with its service account and gets mesh certificates signed",
-          "The mesh proxies get short-lived certificates from istio-csr: 24 hours, renewed at half-life")
+          "Separately, OpenBao (opt-in) creates a root and an intermediate CA for each group of clusters; the keys "
+          "never leave it",
+          "The mesh proxies ask istio-csr for short-lived certificates: 24 hours, renewed at half-life (without the "
+          "opt-in, istiod signs them)",
+          "istio-csr dials out to OpenBao, logs in with its service account and gets each request signed")
     return d
 
 
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
-                "Git rebuilds everything declarative; the violet boxes hold state it cannot recreate. The numbers "
-                "are the restore order after losing the management cluster.")
+                "Git rebuilds everything declarative; the numbered boxes hold state it cannot recreate, restored in "
+                "this order after losing the management cluster.")
     M1, M2, MW = 44, 348, 224
     ZR = 588
     OZ = ZR + 96
@@ -416,29 +405,28 @@ def backup() -> Diagram:
     zb = R[2] + H + 24
     d.zone(28, 128, ZR - 28, zb - 128, "management cluster", "mgmt")
     d.zone(28, zb + 40, ZR - 28, R[3] + H + 24 - zb - 40, "workload cluster", "workload")
-    d.zone(OZ, 128, 932 - OZ, R[3] + H + 24 - 128, "outside", "external")
-    d.box(M1, R[0], M2 + MW - M1, H, "data", "Cluster state (etcd)",
+    d.zone(OZ, 128, 932 - OZ, R[3] + H + 24 - 128, "outside the clusters", "external")
+    d.box(M1, R[0], M2 + MW - M1, H, "mgmt", "Cluster state (etcd)",
           ["clusters, access and CA keys:", "a snapshot every 12 hours"], step=1, aka=("etcd",))
     d.box(OX, R[0], OW, H, "external", "Secret backend", ["AWS or Vault", "secret store"], step=2)
-    d.box(M1, R[1], MW, H, "data", "Thunder", ["users and", "sign-in clients"], step=3)
-    d.box(M2, R[1], MW, H, "data", "OpenBao", ["cold copy", "of its data"], status="optin")
-    d.box(M1, R[2], MW, H, "data", "Harbor", ["pushed", "images"], step=5)
+    d.box(M1, R[1], MW, H, "mgmt", "Thunder", ["users and", "sign-in clients"], step=3)
+    d.box(M2, R[1], MW, H, "mgmt", "OpenBao", ["cold copy", "of its data"], status="optin")
+    d.box(M1, R[2], MW, H, "mgmt", "Harbor", ["pushed", "images"], step=5)
     d.box(M2, R[2], MW, H, "mgmt", "Argo CD", ["re-applies", "everything else"])
     d.box(OX, R[2], OW, H, "external", "Git", ["everything", "declarative"])
-    d.box(M2, R[3], MW, H, "data", "Databases", ["continuous", "backups"], status="optin")
+    d.box(M2, R[3], MW, H, "workload", "Databases", ["continuous", "backups"], status="optin")
     d.box(OX, R[3], OW, H, "external", "Object storage", ["database", "backups"])
     xz = (ZR + OZ) / 2
     xs = OX + OW / 2
-    d.arrow([(M2 + MW, ymid(R[1])), (xs, ymid(R[1])), (xs, R[0] + H)], step=4, badge=(xz, ymid(R[1])))
+    d.arrow([(M2 + MW, ymid(R[1])), (xs, ymid(R[1])), (xs, R[0] + H)], step=4, badge=(xz, ymid(R[1])),
+            label="unseal key", label_pos=(xz, ymid(R[1]) + 32))
     d.arrow([(M2 + MW, ymid(R[2])), (OX, ymid(R[2]))], step=6, badge=(xz, ymid(R[2])))
     d.arrow([(M2 + MW, ymid(R[3])), (OX, ymid(R[3]))], step=7, badge=(xz, ymid(R[3])))
-    d.legend_label("data", "holds state: restore it")
-    d.legend_label("mgmt", "management cluster: rebuilt from Git")
-    d.legend_label("external", "outside: where backups live")
     d.require("Git", "Secret backend", "Cluster state (etcd)", "OpenBao", "Thunder", "Harbor", "Databases")
     d.key("Restore the management cluster's etcd from its latest snapshot: Cluster API keeps its clusters and the "
           "CA keys come back",
-          "The secret backend lives outside the clusters; on a laptop, re-seed it with task secrets",
+          "The secret backend is outside the clusters and keeps its own backups; on a laptop, re-seed it with task "
+          "secrets",
           "Restore Thunder's volumes: users, sign-in clients, signing keys",
           "OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend",
           "Harbor's images come back from its volumes or from new builds; telemetry starts empty",
