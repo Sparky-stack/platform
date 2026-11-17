@@ -1,7 +1,7 @@
 {{- /*
 secret-stores.store: one ClusterSecretStore and the identity it authenticates with. Dict arguments:
   root             the chart context (.)
-  backend          kubernetes | aws | vault (anything else renders nothing)
+  backend          kubernetes | aws | vault (anything else fails the render)
   name             ClusterSecretStore name
   serviceAccount   ServiceAccount ESO authenticates as (in the release namespace)
   conditions       spec.conditions (list; omitted when empty: no namespace restriction)
@@ -13,7 +13,9 @@ secret-stores.store: one ClusterSecretStore and the identity it authenticates wi
               secrets.vault.path, else platform)
 */ -}}
 {{- define "secret-stores.store" -}}
-{{- if has .backend (list "kubernetes" "aws" "vault") -}}
+{{- if not (has .backend (list "kubernetes" "aws" "vault")) -}}
+{{- fail (printf "secrets.backend must be kubernetes, aws, or vault (got %q)" .backend) -}}
+{{- end -}}
 {{- $v := .root.Values.secrets -}}
 {{- $ns := .root.Release.Namespace -}}
 {{- $irsaRole := ternary .irsaRole ($v.aws).role (hasKey . "irsaRole") -}}
@@ -116,7 +118,6 @@ spec:
             name: {{ .serviceAccount }}
             namespace: {{ $ns }}
     {{- end }}
-{{- end -}}
 {{- end -}}
 
 {{- /*
