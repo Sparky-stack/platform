@@ -100,3 +100,46 @@ tests:
       reloader.reloader.deployment.containerSecurityContext.allowPrivilegeEscalation: true
     asserts:
       - failedTemplate: {}
+
+  # --- mgmt (values/role-mgmt.yaml): Backstage restarts on a config change -------------------------------------------
+  - it: mgmt watches only Backstage-labelled ConfigMaps in openchoreo-control-plane and auto-reloads their consumers
+    template: charts/reloader/templates/deployment.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --namespaces=openchoreo-control-plane,reloader
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --auto-reload-all=true
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --resource-label-selector=app.kubernetes.io/component=backstage
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --resources-to-ignore=secrets
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: --reload-strategy=annotations
+
+  - it: mgmt grants a ConfigMap-only Role in openchoreo-control-plane (no Secret reads, no ClusterRole)
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: charts/reloader/templates/clusterrole.yaml
+      - equal: { path: metadata.namespace, value: openchoreo-control-plane }
+        template: charts/reloader/templates/role.yaml
+        documentIndex: 0
+      - equal:
+          path: rules[0].resources
+          value: [configmaps]
+        template: charts/reloader/templates/role.yaml
+        documentIndex: 0
+
+  - it: fails when autoReloadAll has no resource label selector (would roll every workload in the namespace)
+    template: templates/validate.yaml
+    values: [../values/role-mgmt.yaml]
+    set:
+      reloader.reloader.resourceLabelSelector: ""
+    asserts:
+      - failedTemplate: {}

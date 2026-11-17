@@ -1,0 +1,15 @@
+# mgmt (role mgmt): restart OpenChoreo's Backstage when its config changes. The upstream Backstage Deployment
+# (openchoreo-control-plane 1.3.3) has no checksum or pod annotation for its ConfigMaps - unlike openchoreo-api and
+# event-forwarder - and no value to add one, so a new `openchoreo-control-plane.backstage.appConfig` (ConfigMap
+# backstage-extra-config, e.g. the golden-path templates location) was applied but not loaded until a manual restart.
+# Reloader watches only the ConfigMaps labelled `app.kubernetes.io/component=backstage` in openchoreo-control-plane
+# (backstage-extra-config, -ci-config, -csp-config) and, with autoReloadAll, rolls the workloads that mount a changed
+# one (only Deployment backstage). No Secret RBAC (ignoreSecrets) and no annotations on upstream workloads needed.
+# Contract: hack/tests/test_gitops_contracts.sh (9d).
+reloader:
+  reloader:
+    namespaces:
+      - openchoreo-control-plane
+    autoReloadAll: true
+    resourceLabelSelector: app.kubernetes.io/component=backstage
+    ignoreSecrets: true

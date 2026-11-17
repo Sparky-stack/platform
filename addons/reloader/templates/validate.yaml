@@ -7,6 +7,9 @@ strategy (no containers[].env drift under Argo CD SSA), and Pod Security `restri
 {{- if ne ($r.reloadStrategy | default "") "annotations" -}}
 {{- fail (printf "reloader.reloader.reloadStrategy (%q) must be \"annotations\" (avoids containers[].env drift under Argo CD ServerSideApply)" ($r.reloadStrategy | default "")) -}}
 {{- end -}}
+{{- if and $r.autoReloadAll (empty $r.resourceLabelSelector) -}}
+{{- fail "reloader.reloader.autoReloadAll needs a resourceLabelSelector (otherwise every workload in the watched namespaces restarts on any ConfigMap/Secret change)" -}}
+{{- end -}}
 {{- $dep := $r.deployment | default dict -}}
 {{- $psc := $dep.securityContext | default dict -}}
 {{- $csc := $dep.containerSecurityContext | default dict -}}
