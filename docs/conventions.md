@@ -22,6 +22,11 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    Second exception, for a credential tenants must not reach: on workload clusters the external-dns Cloudflare token
    comes from `ClusterSecretStore/dns` (only while `dns.provider: cloudflare`; conditions: namespace `external-dns`
    only; its own backend location and identity that `default`, the tenants' `secretStoreRef`, cannot read).
+   Tenant namespaces on workload clusters (OpenChoreo cell namespaces, label `openchoreo.dev/project`) with
+   `secrets.tenantStores.enabled` use only their own namespaced `SecretStore openbao-tenant` (OpenBao on mgmt, mount
+   `kv-tenant-<project>`, per-namespace JWT login); `ClusterSecretStore/default` then refuses them (conditions) and
+   ValidatingAdmissionPolicies deny every other store reference ([multicluster.md](multicluster.md#tenant-secrets-openbao)).
+   On mgmt the namespaced `openbao/openbao-tenant-source` reads the non-secret tenant descriptors in `openbao-tenants`.
    Third exception, for workflow run namespaces shared with tenant build steps: on mgmt `ClusterWorkflowPlane default`
    points at `ClusterSecretStore/workflows` (conditions: `workflows-*` only; on the kubernetes backend a name-scoped
    `get` Role in `platform-secrets` limited by `resourceNames` to `workflowStore.keys` — `platform-github-build`,

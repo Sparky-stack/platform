@@ -1,0 +1,7 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: dp-default-demo-development-ad621210
+    labels:
+      openchoreo.dev/managed-by: renderedrelease-controller
+      openchoreo.dev/project: demo

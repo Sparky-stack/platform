@@ -1,0 +1,77 @@
+suite: secret-stores - per-tenant OpenBao SecretStores on workload clusters (#96)
+templates:
+  - templates/stores.yaml
+  - templates/tenant-stores.yaml
+values: [../values.yaml, ../values/role-workload.yaml]
+set:
+  cluster: { name: dev1 }
+  mesh: { ca: { host: openbao.example.test, port: 8200 } }
+tests:
+  - it: off by default - store default has no conditions, no tenant policies
+    asserts:
+      - notExists: { path: spec.conditions }
+        template: templates/stores.yaml
+        documentSelector: { path: metadata.name, value: default }
+      - hasDocuments: { count: 0 }
+        template: templates/tenant-stores.yaml
+
+  - it: never on mgmt
+    values: [../values.yaml, ../values/role-mgmt.yaml]
+    set: { secrets.tenantStores.enabled: true }
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: templates/tenant-stores.yaml
+
+  - it: enabled - ClusterSecretStore default refuses tenant namespaces (ESO-enforced)
+    set: { secrets.tenantStores.enabled: true }
+    template: templates/stores.yaml
+    asserts:
+      - equal:
+          path: spec.conditions
+          value: [{ namespaceSelector: { matchExpressions: [{ key: openchoreo.dev/project, operator: DoesNotExist }] } }]
+        documentSelector: { path: metadata.name, value: default }
+
+  - it: enabled - generates ServiceAccount + SecretStore per cell namespace (OpenBao, own mount, own JWT role)
+    set: { secrets.tenantStores.enabled: true }
+    template: templates/tenant-stores.yaml
+    documentSelector: { path: kind, value: GeneratingPolicy }
+    asserts:
+      - equal: { path: spec.evaluation, value: { synchronize: { enabled: true }, generateExisting: { enabled: true } } }
+      - equal: { path: spec.matchConstraints.objectSelector.matchExpressions, value: [{ key: openchoreo.dev/project, operator: Exists }] }
+      - matchRegex: { path: 'spec.variables[4].expression', pattern: '"server": dyn\("https://openbao\.example\.test:8200"\)' }
+      - matchRegex: { path: 'spec.variables[4].expression', pattern: '"path": dyn\("kv-tenant-" \+ variables\.project\)' }
+      - matchRegex: { path: 'spec.variables[4].expression', pattern: '"path": dyn\("tenants-dev1"\),\s+"role": dyn\(variables\.project\)' }
+      - matchRegex: { path: 'spec.variables[4].expression', pattern: '"serviceAccountRef": dyn\(\{"name": "openbao-tenant", "audiences": \["openbao-tenant-secrets"\]\}\)' }
+      - matchRegex: { path: 'spec.variables[4].expression', pattern: '"kind": dyn\("SecretStore"\)' }
+      - notMatchRegex: { path: 'spec.variables[4].expression', pattern: 'ClusterSecretStore' }
+      - equal: { path: 'spec.variables[2].expression', value: "resource.Get('v1', 'secrets', 'istio-system', 'openbao-ca').data['ca.crt']" }
+
+  - it: enabled - tenant ExternalSecrets may reference only their own SecretStore (all three reference sites)
+    set: { secrets.tenantStores.enabled: true }
+    template: templates/tenant-stores.yaml
+    documentIndex: 0
+    asserts:
+      - equal: { path: kind, value: ValidatingAdmissionPolicy }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: spec.matchConstraints.namespaceSelector.matchExpressions, value: [{ key: openchoreo.dev/project, operator: Exists }] }
+      - equal: { path: 'spec.matchConstraints.resourceRules[0].resources', value: [externalsecrets] }
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: "object.spec.secretStoreRef.kind == 'SecretStore'\\) && object.spec.secretStoreRef.name == 'openbao-tenant'" }
+      - matchRegex: { path: 'spec.validations[1].expression', pattern: "d.sourceRef.storeRef.name == 'openbao-tenant'" }
+      - matchRegex: { path: 'spec.validations[2].expression', pattern: "generatorRef.kind != 'ClusterGenerator'" }
+
+  - it: enabled - PushSecrets likewise, SecretStores only from Kyverno, every policy bound with Deny
+    set: { secrets.tenantStores.enabled: true }
+    template: templates/tenant-stores.yaml
+    asserts:
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: "!has\\(r.labelSelector\\) && \\(!has\\(r.kind\\) \\|\\| r.kind == 'SecretStore'\\) && has\\(r.name\\) && r.name == 'openbao-tenant'" }
+        documentIndex: 1
+      - equal: { path: 'spec.validations[0].expression', value: 'request.userInfo.username in ["system:serviceaccount:kyverno:kyverno-background-controller"]' }
+        documentIndex: 2
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentSelector: { path: kind, value: ValidatingAdmissionPolicyBinding, matchMany: true }
+
+  - it: needs mesh.ca.host (where members reach OpenBao)
+    set: { secrets.tenantStores.enabled: true, mesh: null }
+    template: templates/tenant-stores.yaml
+    asserts:
+      - failedTemplate: { errorPattern: "secrets.tenantStores needs mesh.ca.host" }

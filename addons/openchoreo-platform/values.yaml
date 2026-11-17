@@ -33,6 +33,13 @@ deploymentPipeline:
 upstreamDefaults:
   enabled: true
 
+# installation.yaml secrets.tenantStores.enabled (#96): component types' ExternalSecrets reference the cell namespace's
+# SecretStore tenantStoreName (== addon secret-stores tenantStores.storeName) instead of ${dataplane.secretStore}.
+secrets:
+  tenantStores:
+    enabled: false
+tenantStoreName: openbao-tenant
+
 # --- Promotion gates (docs/promotion.md) ------------------------------------------------------------------------------
 # installation.yaml `promotion` is shared with charts/tenant (Argo CD sync windows, per-environment Applications) and
 # overrides these defaults.
