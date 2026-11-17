@@ -247,59 +247,60 @@ def observability() -> Diagram:
 # -------------------------------------------------------------------------------------------------- sdlc
 def sdlc() -> Diagram:
     d = Diagram("SDLC · from git push to production",
-                "One signed image, promoted by pull requests in the app repo: development, then staging, then "
-                "production. Production is gated twice, at promotion and at admission.")
-    c, w = [44, 272, 500, 728], 148              # a wider last column: the gate carries its own step
+                "One signed image: development deploys automatically, staging and production are promoted by pull "
+                "requests in the app repo. Production is gated twice, at promotion and at admission.")
+    c, w = [44, 272, 500, 728], 148
     w3 = 916 - c[3]
+    H0 = 100                                    # top row: room for three arrows between the repo and the build
     R0 = 120
-    R1 = R0 + PITCH
+    R1 = R0 + H0 + 80
     R2 = R1 + PITCH
     R3 = R2 + PITCH
-    d.box(c[0], R0, w, H, "external", "App repo", ["your code and", "deploy/ folder"])
-    d.box(c[1], R0, c[2] + w - c[1], H, "mgmt", "Build & sign", ["builds, scans and signs every image"])
-    d.box(c[3], R0, w3, H, "mgmt", "Registry", ["signed", "images"])
+    d.box(c[0], R0, w, H0, "external", "App repo", ["your code and", "deploy/ folder"])
+    d.box(c[1], R0, c[2] + w - c[1], H0, "mgmt", "Build & sign", ["builds, scans and signs every image"])
+    d.box(c[3], R0, w3, H0, "mgmt", "Registry", ["signed", "images"])
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(c[1], R1, w, H, "mgmt", "OpenChoreo", ["snapshots and", "deploys releases"])
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[2], R2, w, H, "workload", "Staging", ["second", "environment"])
-    d.box(c[3], R2, w3, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"], step=8)
+    d.box(c[3], R2, 152, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"])
     d.box(c[2], R3, w, H, "workload", "Production", ["approved PR,", "then admission"])
-    d.box(c[3], R3, w3, H, "workload", "Admission", ["Kyverno"], aka=("Kyverno",))
-    d.arrow([(c[1], R0 + 24), (c[0] + w, R0 + 24)], step=1)
-    d.arrow([(c[1], R0 + 56), (c[0] + w, R0 + 56)], label="commit", label_pos=((c[0] + w + c[1]) / 2, R0 + 76))
-    d.line_label = "writes to the app repo: the new version, the production pull request"
-    d.arrow([(c[2] + w, ymid(R0)), (c[3], ymid(R0))], step=2, badge_at=0.4)
+    d.box(c[3], R3, w3, H, "workload", "Admission", ["admits only", "signed images"], aka=("Kyverno",))
+    d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1)
+    d.arrow([(c[2] + w, R0 + H0 / 2), (c[3], R0 + H0 / 2)], step=2)
+    d.arrow([(c[1], R0 + H0 - 16), (c[0] + w, R0 + H0 - 16)], step=3)       # the commit Argo CD then reads
     xa = c[0] + w / 2
-    d.arrow([(xa, R1), (xa, R0 + H)], step=3)
-    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
-    d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=5, badge_at=0.4)
+    d.arrow([(xa, R1), (xa, R0 + H0)], step=4)
+    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5, label="every merge",
+            label_pos=((c[0] + w + c[1]) / 2, ymid(R1) + 32))
+    d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=6)
     xs, xq = c[1] + 110, c[1] + 48             # the release reaches staging, and only later production
-    d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=6, badge=(c[1] + w + 40, ymid(R2)),
-            label="after the staging PR merges", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
-    d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))], step=7, badge=(c[3] - 40, ymid(R2)))
-    xg = c[3] + w3 / 2                          # step 8 happens at the gate: it writes Git, it does not deploy
-    yg = R0 + H + 40
-    d.arrow([(xg, R2), (xg, yg), (c[0] + w - 30, yg), (c[0] + w - 30, R0 + H)],
-            label="production pull request", label_pos=(c[2] + 40, yg - 8), label_anchor="start")
-    d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=9, badge=(xq, ymid(R3) - 60),
+    d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=7, badge=(c[1] + w + 40, ymid(R2)),
+            label="after the team's staging PR", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
+    d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))], step=8)
+    xr, yg = 904, R0 + H0 + 40                 # the gate's pull request: up its right side, back to the repo
+    d.arrow([(c[3] + 152, R2 + 50), (xr, R2 + 50), (xr, yg), (c[0] + w - 22, yg), (c[0] + w - 22, R0 + H0)],
+            step=9, badge=(xr, R2 + 28), label="production pull request", label_pos=(c[2] + 40, yg - 8),
+            label_anchor="start")
+    d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=10, badge=(xq, ymid(R3) - 60),
             label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
-    d.arrow([(c[3], ymid(R3)), (c[2] + w, ymid(R3))], step=10, badge=(c[3] - 40, ymid(R3)))
+    d.arrow([(c[3], ymid(R3)), (c[2] + w, ymid(R3))], step=11)
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
     d.stages("Development", "Staging", "Production")
-    d.key("Build & sign builds every push to the app repo, on OpenChoreo's workflow plane on the management cluster",
-          "Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to "
-          "deploy/)",
+    d.key("A push to the app repo starts Build & sign on OpenChoreo's workflow plane on the management cluster",
+          "Build & sign scans and signs the image and pushes it to the registry",
+          "Build & sign commits the new image version to the deploy/ folder of the app repo",
           "Argo CD reads the deploy/ folder of the app repo",
-          "Argo CD applies it to OpenChoreo, which snapshots an immutable release",
+          "Argo CD applies it, and every merged promotion pull request after it, to OpenChoreo, which snapshots an "
+          "immutable release",
           "OpenChoreo deploys the release to development automatically",
-          "OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo and Argo "
-          "CD applies it",
+          "OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo",
           "The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes",
           "The promotion gate opens the production pull request in the app repo only if every check passes",
-          "OpenChoreo deploys it to production only after a code owner approves and merges that pull request and "
-          "Argo CD applies it",
-          "Kyverno admits into production only signed images pinned by digest")
+          "OpenChoreo submits it to production only after a code owner approves and merges that pull request",
+          "Kyverno admits a pod into production, before it starts, only if its image is signed in the registry and "
+          "pinned by digest")
     return d
 
 
@@ -420,22 +421,23 @@ def trust() -> Diagram:
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
                 "After losing the management cluster, the operator first restores the state Git cannot recreate, "
-                "from copies kept off the host; then Argo CD rebuilds the rest from Git.")
-    SX, SW = 44, 136                           # left: the operator and the off-host copies
+                "from backup copies kept off the host; then Argo CD rebuilds the rest from Git.")
+    SX, SW = 44, 136                           # left: the off-host copies and the operator who restores them
     MZ = SX + SW + 88                          # middle: one restore per row, in order
     OZ = 932 - 236                             # right: the secret backend, Git and object storage
     ZR = OZ - 96
     MX, MW = MZ + 16, ZR - 16 - MZ - 16
     OX, OW = OZ + 16, 932 - 16 - OZ - 16
-    R = [176 + i * (H + 40) for i in range(5)]
+    BY, BH = 120, 60                           # the backup copies, above the operator
+    R = [BY + BH + 80 + i * (H + 32) for i in range(5)]
     zb = R[4] + H + 24
     RW = zb + 40 + 72                          # the workload cluster's row: room between its label and the chip
     zw = RW + H + 24
-    d.zone(MZ, 128, ZR - MZ, zb - 128, "management cluster", "mgmt")
+    d.zone(MZ, R[0] - 48, ZR - MZ, zb - R[0] + 48, "management cluster", "mgmt")
     d.zone(MZ, zb + 40, ZR - MZ, zw - zb - 40, "workload cluster", "workload")
     d.zone(OZ, R[2] - 48, 932 - OZ, zw - R[2] + 48, "outside the clusters", "external")
+    d.box(SX, BY, SW, BH, "external", "Backup copies", ["off the host"])
     d.box(SX, R[0], SW, R[3] + H - R[0], "external", "Operator", ["runs the restore", "runbook"])
-    d.box(SX, R[4], SW, H, "external", "Backup copies", ["snapshots and", "volume copies"], context=True)
     d.box(MX, R[0], MW, H, "mgmt", "Cluster state (etcd)", ["clusters, access and CA keys:",
                                                              "a snapshot every 12 hours"], aka=("etcd",))
     d.box(MX, R[1], MW, H, "mgmt", "Thunder", ["users, sign-in clients,", "signing keys"])
@@ -447,23 +449,25 @@ def backup() -> Diagram:
     d.box(OX, R[2], OW, H, "external", "Secret backend", ["AWS or Vault", "secret store"])
     d.box(OX, R[4], OW, H, "external", "Git", ["everything", "declarative"])
     d.box(OX, RW, OW, H, "external", "Object storage", ["database", "backups"])
+    xo = SX + SW / 2
+    d.arrow([(xo, R[0]), (xo, BY + BH)], step=1, badge=(xo, BY + BH + 40), label="fetches",
+            label_pos=(xo + 20, BY + BH + 45), label_anchor="start")
     xl = (SX + SW + MZ) / 2                    # badge columns: left and right of the management cluster
     xz = (ZR + OZ) / 2
-    for i, n in ((0, 1), (1, 2), (2, 3), (3, 5)):
-        d.arrow([(SX + SW, ymid(R[i])), (MX, ymid(R[i]))], step=n, badge=(xl, ymid(R[i])))
-    xo = SX + SW / 2
-    d.arrow([(xo, R[3] + H), (xo, R[4])], label="reads", label_pos=(xo + 12, R[3] + H + 25), label_anchor="start")
-    d.line_label = "the operator reads the off-host copies"
-    d.arrow([(MX + MW, ymid(R[2])), (OX, ymid(R[2]))], step=4, badge=(xz, ymid(R[2])),
-            label="unseal key", label_pos=(xz, ymid(R[2]) + 32))
-    d.arrow([(MX + MW, ymid(R[4])), (OX, ymid(R[4]))], step=6, badge=(xz, ymid(R[4])), label="re-sync",
+    for i, n in ((0, 2), (1, 3), (2, 4), (3, 6)):
+        d.arrow([(SX + SW, ymid(R[i])), (MX, ymid(R[i]))], step=n, badge=(xl, ymid(R[i])), label="restores",
+                label_pos=(xl, ymid(R[i]) + 32))
+    d.arrow([(MX + MW, ymid(R[2])), (OX, ymid(R[2]))], step=5, badge=(xz, ymid(R[2])),
+            label="reads its key", label_pos=(xz, ymid(R[2]) + 32))
+    d.arrow([(MX + MW, ymid(R[4])), (OX, ymid(R[4]))], step=7, badge=(xz, ymid(R[4])), label="reads",
             label_pos=(xz, ymid(R[4]) + 32))
-    d.arrow([(MX + MW, ymid(RW)), (OX, ymid(RW))], step=7, badge=(xz, ymid(RW)), label="restore",
+    d.arrow([(MX + MW, ymid(RW)), (OX, ymid(RW))], step=8, badge=(xz, ymid(RW)), label="reads backups",
             label_pos=(xz, ymid(RW) + 32))
     d.require("Git", "Secret backend", "Cluster state (etcd)", "OpenBao", "Thunder", "Harbor", "Databases",
               "Backup copies", "Object storage", "Operator")
-    d.key("The operator restores the management cluster's etcd from its latest snapshot copy: the workload "
-          "clusters' records and the CA keys come back",
+    d.key("The operator fetches the latest backup copies from off the host: etcd snapshots and volume copies",
+          "The operator restores the management cluster's etcd from its latest snapshot: the workload clusters' "
+          "records and the CA keys come back",
           "The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys",
           "The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys",
           "OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local "

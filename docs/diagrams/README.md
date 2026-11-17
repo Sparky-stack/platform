@@ -96,16 +96,17 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. Build & sign builds every push to the app repo, on OpenChoreo's workflow plane on the management cluster
-2. Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to `deploy/`)
-3. Argo CD reads the `deploy/` folder of the app repo
-4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
-5. OpenChoreo deploys the release to development automatically
-6. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo and Argo CD applies it
-7. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
-8. The promotion gate opens the production pull request in the app repo only if every check passes
-9. OpenChoreo deploys it to production only after a code owner approves and merges that pull request and Argo CD applies it
-10. Kyverno admits into production only signed images pinned by digest
+1. A push to the app repo starts Build & sign on OpenChoreo's workflow plane on the management cluster
+2. Build & sign scans and signs the image and pushes it to the registry
+3. Build & sign commits the new image version to the `deploy/` folder of the app repo
+4. Argo CD reads the `deploy/` folder of the app repo
+5. Argo CD applies it, and every merged promotion pull request after it, to OpenChoreo, which snapshots an immutable release
+6. OpenChoreo deploys the release to development automatically
+7. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo
+8. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
+9. The promotion gate opens the production pull request in the app repo only if every check passes
+10. OpenChoreo submits it to production only after a code owner approves and merges that pull request
+11. Kyverno admits a pod into production, before it starts, only if its image is signed in the registry and pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
@@ -130,13 +131,14 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 
 ### Backup & restore ([backup.svg](backup.svg))
 
-1. The operator restores the management cluster's etcd from its latest snapshot copy: the workload clusters' records and the CA keys come back
-2. The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys
-3. The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys
-4. OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
-5. The operator restores Harbor's volume copy, or new builds push the images again
-6. Argo CD re-syncs everything else from Git
-7. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
+1. The operator fetches the latest backup copies from off the host: etcd snapshots and volume copies
+2. The operator restores the management cluster's etcd from its latest snapshot: the workload clusters' records and the CA keys come back
+3. The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys
+4. The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys
+5. OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
+6. The operator restores Harbor's volume copy, or new builds push the images again
+7. Argo CD re-syncs everything else from Git
+8. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
 
 Telemetry is not backed up: it starts empty.
 
