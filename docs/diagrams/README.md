@@ -13,7 +13,7 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | [security.svg](security.svg) | supply chain, admission, runtime detection and response | [supply-chain.md](../supply-chain.md) |
 | [network.svg](network.svg) | a request in (kgateway, mesh), its telemetry out to the management cluster | [networking.md](../networking.md) |
 | [observability.svg](observability.svg) | every signal lands in the observability plane | [observability.md](../observability.md) |
-| [sdlc.svg](sdlc.svg) | git push → signed image → environments → gated production | [promotion.md](../promotion.md) |
+| [sdlc.svg](sdlc.svg) | build once in-cluster; every environment repeats merge → sync → deploy → admit; the gate links staging to production | [promotion.md](../promotion.md) |
 | [cluster-lifecycle.svg](cluster-lifecycle.svg) | add, upgrade, remove a cluster by editing one file | [providers.md](../providers.md) |
 | [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [runbooks/certificates-and-secrets.md](../runbooks/certificates-and-secrets.md) |
 | [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
@@ -45,7 +45,9 @@ one idea per diagram, read top-left to bottom-right, the numbered flow carries t
   at a dot. An arrow points from the component that acts (opens the connection, does the work) to the one it acts
   on, and the step text names that component first: Argo CD reads Git, so its arrow points at Git; the cluster-agent
   dials out, so its arrow leaves the workload cluster (labelled "dials out"). The key under every diagram and the
-  lists below are the same text (`build.py` fails when they differ).
+  lists below are the same text (`build.py` fails when they differ). Exception: the SDLC view is a swimlane (actors
+  as rows, environments as columns) whose arrows follow the change from one lane to the next; its legend says so
+  (`flow_label`), and `MANUAL` chips (explained in the legend, `legend_chip`) mark where a person merges.
 - **Motion** only on the numbered flow: a light particle runs along each step's arrow, in step order, then rests.
   `@media (prefers-reduced-motion: reduce)` stops it. Every animated element is an overlay with static opacity 0,
   so a static frame (rsvg-convert, PDF, reduced motion) is the complete diagram.
@@ -97,18 +99,25 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A push to the app repo starts Build & sign on OpenChoreo's workflow plane on the management cluster
-2. Build & sign scans and signs the image and pushes it to the registry
-3. Build & sign commits the new image version to the `deploy/` folder of the app repo
-4. Argo CD reads the `deploy/` folder of the app repo
-5. Argo CD applies every merge to OpenChoreo, which snapshots an immutable release
-6. OpenChoreo deploys the release to development automatically
-7. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo (back through steps 4 and 5)
-8. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
-9. The promotion gate opens the production pull request in the app repo only if every check passes
-10. OpenChoreo submits the release to production, through admission, only after a code owner approves and merges that pull request
-11. Kyverno checks each production pod's image signature and digest in the registry before the pod starts
-12. Kyverno admits only verified pods into production
+1. A developer merges a reviewed PR to main in the app repo
+2. The new commit reaches Build & sign within a minute (it polls main)
+3. Build & sign tests, scans and signs the image with the platform key and pushes it to Harbor
+4. Build & sign commits the image digest to `deploy/` on main, which starts no new build
+5. The digest commit is synced by Argo CD; OpenChoreo cuts one immutable release
+6. OpenChoreo deploys it to development
+7. Kyverno in development checks the image signature and attestations, and only warns
+8. The team opens and merges a staging PR that picks the release verified in development
+9. The merged staging PR is synced by Argo CD
+10. OpenChoreo deploys the same release to staging
+11. Kyverno in staging checks them the same way, and only warns
+12. Staging's finished rollout starts the promotion gate: readiness, smoke tests, alerts, 5xx rate, freeze window
+13. The promotion gate opens a production PR only if every check passes
+14. A code owner approves and merges the production PR
+15. The merged production PR is synced by Argo CD, after the freeze window if one is active
+16. OpenChoreo deploys the same release to production
+17. Kyverno in production blocks any pod whose image signature, attestations or digest do not verify
+
+Freeze window: the gate opens no production PR (re-run it afterwards) and Argo CD holds a production PR merged anyway until the window ends; break glass by changing the window in git. A failed scan stops the build, a failed gate check the promotion. Roll back by reverting the production PR.
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 

@@ -156,6 +156,13 @@ assert_eq "$n" 0 "the same actor's next step may sit anywhere around it"
 n=$(grep -c "step 3 reads before step 2" <<<"$out" || true)
 assert_eq "$n" 1 "another actor's step still has to read after it"
 
+# 8. sdlc swimlanes: the legend explains the change-flow arrows and the MANUAL chip, and the workload legend names
+#    the local profile (one workload cluster, a namespace per environment)
+svg=$(cat "$ROOT/docs/diagrams/sdlc.svg")
+assert_match "$svg" "the change moves along the arrow" "sdlc legend: arrows follow the change"
+assert_match "$svg" ">MANUAL</text>.*a person merges a pull request" "sdlc legend explains the MANUAL chip"
+assert_match "$svg" "local default: one, with a namespace per environment" "sdlc legend names the local profile"
+
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"

@@ -167,7 +167,9 @@ class Diagram:
         self.node_badges = False
         self.ring_steps: set[int] = set()
         self.ring_owner: dict[int, tuple] = {}
+        self.flow_label = "numbered step: arrow from the component that acts"
         self.line_label = "other relation"
+        self.chip_legend: dict[str, str] = {}   # chip text -> legend label (chips that carry meaning)
         self.notes: list[str] = []
         self._final = False
         # bookkeeping for check()
@@ -320,13 +322,17 @@ class Diagram:
         self.bottom = max(self.bottom, y + h)
         return rect
 
+    @staticmethod
+    def zone_fill(plane: str) -> str:
+        return mix(PLANES[plane][0], BG, ZONE_TINT)
+
     def zone(self, x, y, w, h, label, plane="external", dash=None, label_at="tl"):
         """Boundary: a cluster, a trust zone or a column. Label: tracked caps inside the top-left (tl) or top-right
         (tr) corner; put it where no arrow crosses the border."""
         color = PLANES[plane][0]
         self.planes_used.add(plane)
         dd = f' stroke-dasharray="{dash}"' if dash else ""
-        zfill = mix(color, BG, ZONE_TINT)
+        zfill = self.zone_fill(plane)
         self.l_zones.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14" fill="{zfill}" '
                             f'stroke="{color}" stroke-opacity=".8" stroke-width="1.3"{dd}/>')
         if label:
@@ -350,7 +356,7 @@ class Diagram:
         return f"url(#ah{color.lstrip('#')})"
 
     def arrow(self, pts, step=None, status="built", label=None, label_pos=None, label_anchor="middle", aid=None,
-              both=False, badge=True, badge_at=None, loose=False, head=True):
+              both=False, badge=True, badge_at=None, loose=False, head=True, label_bg=BG):
         """Arrow pts[0] -> pts[-1] (orthogonal polyline), from the component that acts (opens the connection,
         writes, sends) to the one it acts on. With `step` it is part of the numbered flow: accent colour, animated
         overlay, badge (on the longest segment at `badge_at`, or at `badge=(x, y)`). Without, a neutral line.
@@ -388,7 +394,7 @@ class Diagram:
             self.ends.append((aid, pts[0], pts[-1]))
         if label:
             lx, ly = label_pos
-            self.label(lx, ly, label, anchor=label_anchor, owner=aid)
+            self.label(lx, ly, label, anchor=label_anchor, owner=aid, bg=label_bg)
         if step is not None and isinstance(badge, tuple):
             self.badge(badge[0], badge[1], step, owner=None, arrow=aid)
         elif step is not None and badge:
@@ -406,13 +412,13 @@ class Diagram:
         (self.l_fx if layer is None else layer).append(
             f'<path class="fx" d="{d}" stroke="{lighten(ACCENT)}" style="animation-delay:0s,{delay:.2f}s"/>')
 
-    def label(self, x, y, s, size=13, anchor="middle", owner=None):
-        """Arrow label on an opaque backing so crossing lines never hide it."""
+    def label(self, x, y, s, size=13, anchor="middle", owner=None, bg=BG):
+        """Arrow label on an opaque backing so crossing lines never hide it (bg: the fill under it, e.g. a zone's)."""
         w = tw(s, size)
         x0 = x - w / 2 if anchor == "middle" else (x - w if anchor == "end" else x)
         self.l_top.append(f'<rect x="{x0 - 4:.1f}" y="{y - size - 1:.1f}" width="{w + 8:.1f}" height="{size + 7:.1f}" '
-                          f'rx="3" fill="{BG}"/>')
-        self._text(x, y, s, size, MUTED, anchor=anchor, layer=self.l_top, kind="label")
+                          f'rx="3" fill="{bg}"/>')
+        self._text(x, y, s, size, MUTED, anchor=anchor, layer=self.l_top, kind="label", bg=bg)
         if owner:
             self.arrow_labels.setdefault(owner, []).append(self.r_text[-1][1])
 
@@ -444,6 +450,10 @@ class Diagram:
 
     def legend_label(self, plane: str, label: str):
         self.legend_labels[plane] = label
+
+    def legend_chip(self, chip: str, label: str):
+        """Explain a box chip (tag=...) in the legend, e.g. MANUAL: a person decides."""
+        self.chip_legend[chip] = label
 
     # ------------------------------------------------------------------ key + legend (below the content)
     def _finalize(self):
@@ -478,7 +488,7 @@ class Diagram:
                 entries.append((p, self.legend_labels.get(p, "runs on the " + PLANES[p][1]
                                                           if p in ("mgmt", "workload") else PLANES[p][1])))
         if self.fx_steps or self.badges:
-            entries.append(("flow", "numbered step: arrow from the component that acts"))
+            entries.append(("flow", self.flow_label))
         if self.ring_steps:
             entries.append(("node", "step at a component"))
         if self.has_both:
@@ -487,11 +497,15 @@ class Diagram:
             entries.append(("line", self.line_label))
         if self.has_context:
             entries.append(("context", "context, not a step"))
+        for chip, lab in self.chip_legend.items():
+            entries.append(("chip:" + chip, lab))
         for s in ("optin", "planned"):
             if s in self.status_used:
                 entries.append((s, {"optin": "opt-in, off by default", "planned": "planned, not on main"}[s]))
 
         def sw(t):
+            if t.startswith("chip:"):
+                return tw(t[5:], MIN_CHIP, bold=True, spacing=0.6) + 14
             return {"flow": 44, "both": 36, "optin": 92, "planned": 106}.get(t, 22)
 
         widths = [sw(t) + 8 + tw(lab, 13) for t, lab in entries]
@@ -534,6 +548,13 @@ class Diagram:
                                       f'<circle cx="{x + 8}" cy="{ly - 4}" r="7" fill="{ACCENT}"/>'
                                       f'<text class="s" x="{x + 8}" y="{ly + 0.2}" font-size="11" font-weight="700" '
                                       f'fill="{BG}" text-anchor="middle">1</text>')
+                elif t.startswith("chip:"):
+                    chip, cw = t[5:], sw(t)
+                    self.l_top.append(f'<rect x="{x}" y="{ly - 14}" width="{cw:.1f}" height="19" rx="9.5" '
+                                      f'fill="{BG}" stroke="{INK2}" stroke-width="1.2"/>'
+                                      f'<text class="s" x="{x + cw / 2:.1f}" y="{ly - 0.2:.1f}" font-size="{MIN_CHIP}" '
+                                      f'font-weight="700" fill="{INK2}" text-anchor="middle" letter-spacing="0.6">'
+                                      f'{html.escape(chip)}</text>')
                 elif t in ("optin", "planned"):
                     chip = TAGS[t]
                     cw = tw(chip, 11, bold=True, spacing=0.4) + 10
