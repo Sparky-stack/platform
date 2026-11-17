@@ -138,50 +138,50 @@ def security() -> Diagram:
 # ----------------------------------------------------------------------------------------------- network
 def network() -> Diagram:
     d = Diagram("Network · a request in, its telemetry out",
-                "A request comes in through kgateway and the encrypted mesh; its telemetry goes out to the management "
-                "cluster. Everything rides the cluster network (Cilium or flannel).")
+                "A request comes in through the ingress gateway to the app pods, where the service mesh encrypts the "
+                "traffic between pods; their telemetry goes out to the management cluster.")
     ZX = 204
-    X = [228, 484, 740]
+    X = [228, 472, 708]
     BW = 176
-    Z = 112
-    RA = 180
-    DIV = RA + H + 56
-    RC = DIV + 56
+    Z = 128
+    RA = Z + 72
+    RC = RA + H + 128
     Zb = RC + H + 24
     Z2 = Zb + 64
     RD = Z2 + 48
     gap = (Zb + Z2) / 2
     d.box(28, RA, 112, H, "external", "Client", ["opens the", "app URL"])
     d.zone(ZX, Z, 932 - ZX, Zb - Z, "workload cluster", "workload")
+    d.zone(X[2] - 16, RA - 44, BW + 32, H + 60, "service mesh", "workload")
     d.zone(ZX, Z2, 932 - ZX, RD + H + 24 - Z2, "management cluster", "mgmt")
-    d.lane(X[0], Z + 50, "a request in", color="#cbd5e1")
-    d.divider(ZX + 16, 916, DIV)
-    d.lane(X[0], DIV + 32, "its telemetry out", color="#cbd5e1")
-    d.box(X[0], RA, BW, H, "workload", "Ingress gateway", ["kgateway: front", "door of the cluster"],
+    d.box(X[0], RA, BW, H, "workload", "Ingress gateway", ["front door of", "the cluster"],
           aka=("kgateway",))
-    d.box(X[1], RA, BW, H, "workload", "Service mesh", ["Istio ambient:", "encrypts every hop"])
-    d.box(X[2], RA, BW, H, "workload", "App pods", ["your", "services"])
+    d.box(X[2], RA, BW, H, "workload", "App pods", ["your services,", "encrypted pod to pod"])
     d.box(X[1], RC, BW, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], context=True)
-    d.box(X[2], RC, BW, H, "workload", "Collectors", ["on every node:", "logs, metrics, traces"])
+    d.box(X[2], RC, BW, H, "workload", "Collectors", ["on every node"])
     d.box(X[1], RD, BW, H, "mgmt", "cluster-gateway", ["entry point", "for agents"], context=True)
     d.box(X[2], RD, BW, H, "mgmt", "Observability plane", ["stores all", "telemetry"])
     d.arrow([(140, ymid(RA)), (X[0], ymid(RA))], step=1, badge=(176, ymid(RA)))
-    d.arrow([(X[0] + BW, ymid(RA)), (X[1], ymid(RA))], step=2, badge_at=0.4)
-    d.arrow([(X[1] + BW, ymid(RA)), (X[2], ymid(RA))], step=3, badge_at=0.4)
+    d.arrow([(X[0] + BW, ymid(RA)), (X[2], ymid(RA))], step=2, badge_at=0.35)
+    xl, xr = X[2] + BW / 2 - 40, X[2] + BW / 2 + 40
+    yb = RA + H + 62
+    d.arrow([(xl, RC), (xl, RA + H)], step=3, badge=(xl, yb), label="tails logs, scrapes metrics",
+            label_pos=(xl - 18, yb + 5), label_anchor="end")       # the collectors act: they pull
+    d.arrow([(xr, RA + H), (xr, RC)], step=4, badge=(xr, yb), label="traces", label_pos=(xr + 18, yb + 5),
+            label_anchor="start")                                   # the pods push their traces
     xp = X[2] + BW / 2
-    d.arrow([(xp, RC), (xp, RA + H)], step=4, badge=(xp, RC - 32))   # the collectors act: tail, scrape, receive
     d.arrow([(xp, RC + H), (xp, RD)], step=5, badge=(xp, gap), label="dials out", label_pos=(xp + 20, gap + 5),
             label_anchor="start")
     xg = X[1] + BW / 2
     d.arrow([(xg, RC + H), (xg, RD)], label="control link", label_pos=(xg + 14, gap + 5), label_anchor="start")
     d.line_label = "the cluster-agent's control link, not telemetry (context)"
-    d.require("Ingress gateway", "Service mesh", "cluster-gateway", "cluster-agent", "Collectors", "App pods")
+    d.require("Ingress gateway", "cluster-gateway", "cluster-agent", "Collectors", "App pods")
     d.key("A client opens the app URL; kgateway takes the request",
-          "kgateway routes it into the service mesh",
-          "The service mesh delivers it to the app pods and encrypts every hop between pods",
-          "The collectors on each node gather the app pods' telemetry: Fluent Bit tails their logs, the Prometheus "
-          "agent scrapes their metrics, the OpenTelemetry collector takes their traces",
-          "The collectors dial out and ship them to the observability plane on the management cluster")
+          "kgateway routes it to the app pods; inside the Istio ambient mesh, ztunnel encrypts every hop between pods",
+          "The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the "
+          "Prometheus agent scrapes their metrics",
+          "The app pods send their traces to the OpenTelemetry collector",
+          "The collectors dial out and ship everything to the observability plane on the management cluster")
     return d
 
 
