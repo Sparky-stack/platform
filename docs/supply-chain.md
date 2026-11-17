@@ -244,5 +244,4 @@ sourceIntegrity:
   upstream charts and are pinned by digest (`hack/tests/test_image_pins.sh`), not verified at admission.
 
 Open checks: web-flow key ID ([#42](https://github.com/koorikla/platform/issues/42)), Kyverno egress and registry
-credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)), the rendered workflow-plane image
-host ([#40](https://github.com/koorikla/platform/issues/40)).
+credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)).

@@ -67,7 +67,7 @@ gateway:
   name: harbor
   className: kgateway
   routeName: harbor-route                   # the chart's HTTPRoute (harbor.route helper)
-  requestTimeout: 30m                       # VERIFY kgateway v2.3 applies it to blob uploads
+  requestTimeout: 30m                       # live: Envoy route timeout 1800s on every Harbor route (kgateway v2.3)
   streamIdleTimeout: 5m
 
 # Public CA publication: Secret harbor-ca-bundle holds only ca.crt (ExternalSecret from the CA Secret, templates/pki.yaml).
@@ -215,7 +215,8 @@ harbor:
       image: { repository: docker.io/goharbor/harbor-db, tag: "v2.15.4@sha256:a32d51e636d76303e086a7c5251a2c8415c6f165b2f87bafa914efd866c5403f" }
       # Placeholder only: the chart has no existingSecret for its internal PostgreSQL. The real password reaches the
       # database container through extraEnvVars (env wins over the chart's envFrom) and core through
-      # database.external.existingSecret, which core-dpl.yaml honours for both database types. VERIFY
+      # database.external.existingSecret, which core-dpl.yaml honours for both database types (live: both read
+      # Secret harbor-platform, core serves pushes).
       password: set-from-secret-harbor-platform
       extraEnvVars:
         - name: POSTGRES_PASSWORD

@@ -300,7 +300,8 @@ spec:
           securityContext: *restricted
           mirrorVolumeMounts: true
       container:
-        image: "{{workflow.parameters.check-image}}"
+        # never empty: Argo validates every referenced template's image at submission, even when `when` skips the task
+        image: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : '@@TOOLBOX_IMAGE@@'}}"
         command: [bash, -euo, pipefail, -c]
         args:
           - |
@@ -344,7 +345,8 @@ spec:
     - name: check-with-postgres
       initContainers: *check-init
       container:
-        image: "{{workflow.parameters.check-image}}"
+        # never empty: Argo validates every referenced template's image at submission, even when `when` skips the task
+        image: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : '@@TOOLBOX_IMAGE@@'}}"
         command: [bash, -euo, pipefail, -c]
         args:
           - |
@@ -441,7 +443,10 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
-        fsGroup: 65532                     # reads the source written by uid 65532 on the run volume
+        # Reads the source written by uid 65532 on the run volume through group 65532. supplementalGroups, not fsGroup:
+        # fsGroup also chowns the BuildKit state emptyDir to gid 65532 (setgid), a gid the rootless user namespace does not
+        # map, so overlayfs snapshots fail with "lchown ...: operation not permitted".
+        supplementalGroups: [65532]
         seccompProfile:
           type: Unconfined
         appArmorProfile:
@@ -455,6 +460,11 @@ spec:
             cp /registry-auth/config.json "$HOME/.docker/config.json"
             if [ -f /registry-ca/ca.crt ]; then
               printf '[registry."%s"]\n  ca = ["/registry-ca/ca.crt"]\n' "$REGISTRY_HOST" > "$HOME/.config/buildkit/buildkitd.toml"
+              # buildkitd.toml covers buildkitd's registry requests only: buildctl fetches the registry's bearer token
+              # itself (session auth provider) with Go's system roots, so it must trust the CA too ("failed to fetch
+              # oauth token: ... x509: certificate signed by unknown authority" otherwise).
+              cat /etc/ssl/certs/ca-certificates.crt /registry-ca/ca.crt > "$HOME/ca.pem"
+              export SSL_CERT_FILE="$HOME/ca.pem"
             fi
             ctx="/work/source/${DOCKER_CONTEXT#./}"
             df="/work/source/${DOCKERFILE_PATH#./}"
@@ -494,7 +504,10 @@ spec:
             printf '%s:%s@%s' "$IMAGE_REPO" "$SHORT_SHA" "$digest" > /tmp/image
             echo ">> pushed $(cat /tmp/image)"
         env:
-          - { name: BUILDKITD_FLAGS, value: --oci-worker-no-process-sandbox }
+          # overlayfs explicitly: "auto" picks the native snapshotter in this pod (seen on k3d, btrfs node disk), which copies
+          # the whole parent tree for every layer and step - a hello-world build took >15 min instead of ~1. Rootless
+          # overlayfs needs Linux >= 5.11 (unprivileged overlay mounts in a user namespace).
+          - { name: BUILDKITD_FLAGS, value: --oci-worker-no-process-sandbox --oci-worker-snapshotter=overlayfs }
           - { name: HOME, value: /home/user }
           - { name: IMAGE_REPO, value: "{{workflow.parameters.image-repo}}" }
           - { name: REGISTRY_HOST, value: "{{workflow.parameters.registry-host}}" }
@@ -507,9 +520,13 @@ spec:
         resources:
           requests: { cpu: 500m, memory: 768Mi }
           limits: { cpu: "4", memory: 6Gi }
+        # rootlesskit maps the build user namespace with newuidmap/newgidmap, which gain CAP_SETUID/CAP_SETGID from file
+        # capabilities: that needs privilege escalation (no no_new_privs) and both caps in the bounding set. Without
+        # them: "newuidmap ... operation not permitted" (escalation off) or "Could not set caps" (caps dropped).
+        # The process itself runs as uid 1000 with no effective capabilities.
         securityContext:
-          allowPrivilegeEscalation: false
-          capabilities: { drop: [ALL] }
+          allowPrivilegeEscalation: true
+          capabilities: { drop: [ALL], add: [SETUID, SETGID] }
           seccompProfile: { type: Unconfined }
           appArmorProfile: { type: Unconfined }
         volumeMounts:
@@ -618,8 +635,11 @@ spec:
               chmod 0755 /tmp/bin/cosign; export PATH="/tmp/bin:$PATH"
             fi
             IMAGE_DIGEST_REF="$DIGEST_REF" VULN_PREDICATE=/work/out/trivy-vuln.json sign-image.sh
-            echo ">> cosign attest --type spdxjson $DIGEST_REF"
-            cosign attest --yes --key "$COSIGN_KEY" --type spdxjson --predicate /work/out/sbom.spdx.json "$DIGEST_REF"
+            # Predicate type https://spdx.dev/Document/v2.3 (syft writes SPDX 2.3), the type koorikla/ci's GitHub path attests:
+            # admission (addon kyverno-policies attestationTypes.sbom) checks one SBOM type for both build paths.
+            # (the cosign type shorthand spdxjson would record https://spdx.dev/Document)
+            echo ">> cosign attest --type https://spdx.dev/Document/v2.3 $DIGEST_REF"
+            cosign attest --yes --key "$COSIGN_KEY" --type https://spdx.dev/Document/v2.3 --predicate /work/out/sbom.spdx.json "$DIGEST_REF"
         env:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: COSIGN_KEY, value: /cosign/cosign.key }
