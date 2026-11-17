@@ -195,14 +195,20 @@ tests:
     template: templates/sensors.yaml
     documentSelector: { path: metadata.name, value: promotion-gate }
     asserts:
+      # #155: the spec-edit event carries the previous rollout's whole status; only Ready.observedGeneration lags
       - equal:
           path: "spec.dependencies[0].filters.exprs"
           value:
+            - expr: observed == generation
+              fields:
+                - { name: observed, path: 'body.status.conditions.#(type=="Ready").observedGeneration' }
+                - { name: generation, path: body.metadata.generation }
             - expr: started >= specChanged
               fields:
                 - { name: started, path: body.status.delivery.startedAt }
                 - { name: specChanged, path: body.status.lastSpecUpdateTime }
       - notExists: { path: "spec.dependencies[0].filtersLogicalOperator" }   # default and: data AND exprs
+      - notExists: { path: "spec.dependencies[0].filters.exprLogicalOperator" }   # default and: every expr
 
   - it: rejects an unknown minimum priority
     template: templates/sensors.yaml

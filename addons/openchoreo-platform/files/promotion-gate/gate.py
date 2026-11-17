@@ -423,6 +423,22 @@ def set_release(text, release):
     return text[:m.end()] + "\n%sreleaseName: %s" % (m.group("indent"), release) + text[m.end():]
 
 
+def pinned_pull(repo, path, branch, release):
+    """The open gate PR of `branch` and its head commit if that head already pins `release`, else (None, None).
+
+    A second gate run for the same release (re-delivered event, manual run) must not reset the branch: GitHub
+    auto-closes an open PR whose head is reset to its base (#155)."""
+    owner = repo.split("/")[0]
+    pulls = gh("GET", "/repos/%s/pulls?state=open&head=%s:%s" % (repo, owner, branch))
+    if not pulls:
+        return None, None
+    head = pulls[0]["head"]["sha"]
+    text = base64.b64decode(gh("GET", "/repos/%s/contents/%s?ref=%s" % (repo, path, head))["content"]).decode()
+    if set_release(text, release) != text:
+        return None, None
+    return pulls[0], head
+
+
 def promote(repo, path, target, release, evidence):
     base = env("BASE_BRANCH", "main")
     branch = "promote/%s-%s" % (env("COMPONENT"), target)
@@ -432,25 +448,30 @@ def promote(repo, path, target, release, evidence):
     if updated == text:
         log("  promote   %s already pins %s on %s: nothing to do" % (path, release, base))
         return None
-    head = gh("GET", "/repos/%s/git/ref/heads/%s" % (repo, base))["object"]["sha"]
-    try:
-        gh("POST", "/repos/%s/git/refs" % repo, {"ref": "refs/heads/" + branch, "sha": head})
-    except GateFailed:
-        gh("PATCH", "/repos/%s/git/refs/heads/%s" % (repo, branch), {"sha": head, "force": True})
     title = "promote(%s): %s to %s" % (env("COMPONENT"), release, target)
-    commit = gh("PUT", "/repos/%s/contents/%s" % (repo, path), {
-        "message": title + "\n\nOpened by the OpenChoreo promotion gate (" + env("RUN_NAME", "manual") + ").",
-        "content": base64.b64encode(updated.encode()).decode(),
-        "branch": branch,
-        "sha": current["sha"],
-    })["commit"]["sha"]
-    owner = repo.split("/")[0]
-    pulls = gh("GET", "/repos/%s/pulls?state=open&head=%s:%s" % (repo, owner, branch))
     body = "Gate evidence (`%s`):\n\n%s\n\nMerge = deploy to `%s` (Argo CD syncs the binding). Requires the `%s` " \
            "status and a CODEOWNERS approval." % (env("RUN_NAME", "manual"), "\n".join("- " + e for e in evidence),
                                                    target, env("STATUS_CONTEXT"))
-    if pulls:
-        pr = gh("PATCH", "/repos/%s/pulls/%d" % (repo, pulls[0]["number"]), {"title": title, "body": body})
+    pull, commit = pinned_pull(repo, path, branch, release)
+    if commit:
+        log("  promote   PR #%d already pins %s: branch kept, evidence refreshed" % (pull["number"], release))
+    else:
+        head = gh("GET", "/repos/%s/git/ref/heads/%s" % (repo, base))["object"]["sha"]
+        try:
+            gh("POST", "/repos/%s/git/refs" % repo, {"ref": "refs/heads/" + branch, "sha": head})
+        except GateFailed:
+            gh("PATCH", "/repos/%s/git/refs/heads/%s" % (repo, branch), {"sha": head, "force": True})
+        commit = gh("PUT", "/repos/%s/contents/%s" % (repo, path), {
+            "message": title + "\n\nOpened by the OpenChoreo promotion gate (" + env("RUN_NAME", "manual") + ").",
+            "content": base64.b64encode(updated.encode()).decode(),
+            "branch": branch,
+            "sha": current["sha"],
+        })["commit"]["sha"]
+        # the reset auto-closed a PR for another release: look again
+        pulls = gh("GET", "/repos/%s/pulls?state=open&head=%s:%s" % (repo, repo.split("/")[0], branch))
+        pull = pulls[0] if pulls else None
+    if pull:
+        pr = gh("PATCH", "/repos/%s/pulls/%d" % (repo, pull["number"]), {"title": title, "body": body})
     else:
         pr = gh("POST", "/repos/%s/pulls" % repo, {"title": title, "head": branch, "base": base, "body": body})
     gh("POST", "/repos/%s/statuses/%s" % (repo, commit), {

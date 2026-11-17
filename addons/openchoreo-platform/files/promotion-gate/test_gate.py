@@ -364,5 +364,92 @@ class ErrorRate(unittest.TestCase):
             os.environ.pop("PROMETHEUS_URL", None)
 
 
+def b64(text):
+    return base64.b64encode(text.encode()).decode()
+
+
+BINDING = "spec:\n  environment: production\n  releaseName: %s\n"
+
+
+class FakeGitHub:
+    """Stand-in for gate.gh: a repo with main pinning `main_release` and, optionally, an open gate PR."""
+
+    def __init__(self, main_release="hello-world-old", pr_release=None):
+        self.calls = []
+        self.files = {"main": BINDING % main_release}
+        self.pulls = []
+        if pr_release:
+            self.files["pr-head"] = BINDING % pr_release
+            self.pulls = [{"number": 15, "head": {"sha": "pr-head"}, "html_url": "https://github.com/o/r/pull/15"}]
+
+    def __call__(self, method, path, body=None, ok=(200, 201)):
+        self.calls.append((method, path.split("?")[0], body))
+        if method == "GET" and "/contents/" in path:
+            return {"content": b64(self.files[path.split("ref=")[1]]), "sha": "blob"}
+        if method == "GET" and "/pulls" in path:
+            return self.pulls
+        if method == "GET" and "/git/ref/heads/" in path:
+            return {"object": {"sha": "main-head"}}
+        if method == "POST" and path.endswith("/git/refs"):
+            raise gate.GateFailed("Reference already exists")
+        if method == "PATCH" and "/git/refs/heads/" in path:
+            self.pulls = []                       # GitHub auto-closes the PR of a branch reset to its base
+            return {}
+        if method == "PUT":
+            return {"commit": {"sha": "new-commit"}}
+        if "/pulls" in path:
+            number = int(path.rsplit("/", 1)[1]) if method == "PATCH" else 16
+            return {"number": number, "html_url": "https://github.com/o/r/pull/%d" % number}
+        return {}
+
+    def writes(self):
+        return [(m, p) for m, p, _ in self.calls if m != "GET"]
+
+
+class Promote(unittest.TestCase):
+    def setUp(self):
+        self.real, self.real_log = gate.gh, gate.log
+        gate.log = lambda msg: None
+        os.environ.update(COMPONENT="hello-world", STATUS_CONTEXT="openchoreo/promotion-gate", SOURCE_ENV="staging")
+
+    def tearDown(self):
+        gate.gh, gate.log = self.real, self.real_log
+        for k in ("COMPONENT", "STATUS_CONTEXT", "SOURCE_ENV"):
+            os.environ.pop(k, None)
+
+    def promote(self, fake, release="hello-world-new"):
+        gate.gh = fake
+        return gate.promote("o/r", "deploy/production.yaml", "production", release, ["ok"])
+
+    def test_first_run_opens_a_pr_on_a_fresh_branch(self):
+        fake = FakeGitHub()
+        self.assertEqual(self.promote(fake), "https://github.com/o/r/pull/16")
+        self.assertEqual(fake.writes(), [
+            ("POST", "/repos/o/r/git/refs"), ("PATCH", "/repos/o/r/git/refs/heads/promote/hello-world-production"),
+            ("PUT", "/repos/o/r/contents/deploy/production.yaml"), ("POST", "/repos/o/r/pulls"),
+            ("POST", "/repos/o/r/statuses/new-commit")])
+
+    def test_second_run_for_the_same_release_keeps_the_open_pr(self):
+        # #155: a duplicate run reset the branch, GitHub closed the first PR and the gate opened another
+        fake = FakeGitHub(pr_release="hello-world-new")
+        self.assertEqual(self.promote(fake), "https://github.com/o/r/pull/15")
+        self.assertEqual(fake.writes(), [("PATCH", "/repos/o/r/pulls/15"), ("POST", "/repos/o/r/statuses/pr-head")])
+        self.assertEqual(fake.pulls[0]["number"], 15)   # still open
+
+    def test_open_pr_for_another_release_is_replaced(self):
+        fake = FakeGitHub(pr_release="hello-world-older")
+        self.promote(fake)
+        writes = fake.writes()
+        self.assertIn(("PATCH", "/repos/o/r/git/refs/heads/promote/hello-world-production"), writes)
+        self.assertIn(("POST", "/repos/o/r/pulls"), writes)          # new PR, not a PATCH of the closed one
+        self.assertNotIn(("PATCH", "/repos/o/r/pulls/15"), writes)
+        self.assertEqual(writes[-1], ("POST", "/repos/o/r/statuses/new-commit"))
+
+    def test_release_already_on_main_is_a_no_op(self):
+        fake = FakeGitHub(main_release="hello-world-new")
+        self.assertIsNone(self.promote(fake))
+        self.assertEqual(fake.writes(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

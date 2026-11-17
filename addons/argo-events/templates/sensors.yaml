@@ -177,10 +177,17 @@ spec:
           - path: body.status.delivery.succeededAt    # set once per rollout when every resource is healthy
             type: string
             value: [".+"]
-        # ...and that rollout is the current spec's: right after a releaseName edit the controller's first status
-        # write (lastSpecUpdateTime) still carries the previous release's finished delivery, which would start a run
-        # for a release that is not rolled out yet. RFC 3339 UTC timestamps compare as strings (govaluate).
+        # ...and that rollout is the current spec's. Two stale states follow every releaseName edit:
+        # - the spec edit itself (Argo CD's UPDATE) still carries the whole previous status, delivery AND
+        #   lastSpecUpdateTime of the previous rollout (#155): only the generation tells it apart, so the Ready
+        #   condition must have observed this generation (gjson numbers are float64 on both sides);
+        # - the controller's first status write (new lastSpecUpdateTime) still carries the previous release's
+        #   finished delivery. RFC 3339 UTC timestamps compare as strings (govaluate).
         exprs:
+          - expr: observed == generation
+            fields:
+              - { name: observed, path: 'body.status.conditions.#(type=="Ready").observedGeneration' }
+              - { name: generation, path: body.metadata.generation }
           - expr: started >= specChanged
             fields:
               - { name: started, path: body.status.delivery.startedAt }
