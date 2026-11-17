@@ -24,7 +24,7 @@ tests:
   - it: "mgmt: expiry stamp, cap, TTL and the controller roles; no guardrails (no cells there)"
     values: [../values/role-mgmt.yaml]
     asserts:
-      - hasDocuments: { count: 5 }
+      - hasDocuments: { count: 6 }
       - containsDocument: { kind: MutatingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-expiry, any: true }
       - containsDocument: { kind: ValidatingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-cap, any: true }
       - containsDocument: { kind: DeletingPolicy, apiVersion: policies.kyverno.io/v1, name: platform-preview-ttl, any: true }
@@ -78,6 +78,11 @@ tests:
         documentSelector: { path: metadata.name, value: "kyverno:cleanup-controller:preview-environments" }
       - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-admission-controller"]', value: "true" }
         documentSelector: { path: metadata.name, value: "kyverno:admission-controller:preview-environments" }
+      # without it the MutatingPolicy reports RBACPermissionsGranted=False and the app is Degraded (found live)
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-reports-controller"]', value: "true" }
+        documentSelector: { path: metadata.name, value: "kyverno:reports-controller:preview-environments" }
+      - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [environments], verbs: [get, list, watch] }] }
+        documentSelector: { path: metadata.name, value: "kyverno:reports-controller:preview-environments" }
 
   - it: generates quota, limits and egress isolation into OpenChoreo preview cell namespaces, kept in sync
     documentSelector: { path: kind, value: GeneratingPolicy }

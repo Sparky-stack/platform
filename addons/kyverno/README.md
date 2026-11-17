@@ -13,6 +13,7 @@ Wrapper chart for Kyverno (`3.10.0` / `v1.20.0`). Runs the admission, background
 
 - `kyverno.config.webhooks.namespaceSelector`: excludes `platformNamespaces` (`kube-system`, `argocd`, `capi-*`, `openchoreo-*`, etc.) from admission webhook interception.
 - `SSL_CERT_DIR` + optional ConfigMap `platform-image-verification` volume on the admission and reports controllers (`values/role-workload.yaml`): trust the Harbor CA delivered by `charts/cluster` for verifying Harbor-built images ([supply-chain](../../docs/supply-chain.md#wiring-the-key)).
+- `byoDelivery.enabled` (`values/provider-byo.yaml`): on byo clusters `templates/byo-image-verification.yaml` rebuilds ConfigMap `platform-image-verification` from the Secret mgmt pushes ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
 - `kyverno.reportsController.resources` (`values/role-mgmt.yaml`): raises memory to `96Mi` request / `256Mi` limit on `mgmt` for initial object-list peaks.
 - `kyverno.{admissionController,backgroundController,cleanupController,reportsController}` images: `v1.20.0` pinned by multi-arch index digest.
 

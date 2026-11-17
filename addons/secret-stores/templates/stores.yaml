@@ -122,6 +122,25 @@ token, zone-wide DNS:Edit. The tenant store `default` is the ClusterDataPlane se
 is readable by every tenant; this store reads from a separate backend location with its own identity and is scoped to
 dnsStore.namespaces (external-dns). AGENTS.md invariant 5 exception; addon external-dns refuses any other store.
 */ -}}
+{{- /*
+ClusterSecretStore `delivery` (byo clusters, values/provider-byo.yaml): reads, by name only, the PUBLIC certificates and
+keys mgmt pushes into delivery.namespace (charts/cluster PushSecrets: the ConfigMap parts of the CAPI ClusterResourceSet
+payloads), for the consumers' generic-target ExternalSecrets in delivery.namespaces. Always the kubernetes provider (the
+cluster's own API): the material is pushed, not stored in the installation's backend.
+*/ -}}
+{{- if (.Values.delivery).enabled }}
+{{- $d := .Values.delivery }}
+{{- if not (and $d.namespace $d.keys $d.namespaces) }}{{ fail "delivery needs namespace, keys and namespaces" }}{{ end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $d.namespace | quote }}
+---
+{{ include "secret-stores.store" (dict "root" . "backend" "kubernetes" "name" "delivery" "serviceAccount" "eso-delivery"
+      "conditions" (list (dict "namespaces" $d.namespaces)) "remoteNamespace" $d.namespace "resourceNames" $d.keys
+      "automountToken" false) }}
+{{- end }}
 {{- if eq ((.Values.dns).provider | default "none") "cloudflare" }}
 {{- $dnsNs := .Values.dnsStore.namespaces | default list }}
 {{- if not $dnsNs }}{{ fail "dnsStore.namespaces must list the namespaces allowed to read ClusterSecretStore dns" }}{{ end }}

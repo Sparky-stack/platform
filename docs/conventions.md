@@ -9,7 +9,8 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    and the Argo CD cluster secret. ApplicationSets select on labels; nothing hardcodes a cluster name.
 3. Argo CD runs only on mgmt (push mode). Workload clusters run no Argo component; apps reach them via OpenChoreo.
 4. CA private keys never leave mgmt. Workload clusters receive only their own client cert/key and public CAs, via CAPI
-   `ClusterResourceSet` payloads templated by ESO. The Istio mesh CA is OpenBao on mgmt (keys generated inside OpenBao,
+   `ClusterResourceSet` payloads templated by ESO (`provider: byo`, no CAPI `Cluster`: the same objects by ESO
+   `PushSecret` from mgmt, [providers.md](providers.md#bring-your-own-cluster-byo); `hack/tests/test_byo_delivery.sh`). The Istio mesh CA is OpenBao on mgmt (keys generated inside OpenBao,
    never exported); mesh members obtain certificates through istio-csr (docs/multicluster.md "Mesh CA (OpenBao)").
 5. Every ExternalSecret on mgmt uses `ClusterSecretStore/platform` (its namespace must be in addon secret-stores
    `platformStore.namespaces`); on workload clusters `ClusterSecretStore/default`. Only exception: read-only stores
@@ -27,6 +28,10 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    `kv-tenant-<project>`, per-namespace JWT login); `ClusterSecretStore/default` then refuses them (conditions) and
    ValidatingAdmissionPolicies deny every other store reference ([multicluster.md](multicluster.md#tenant-secrets-openbao)).
    On mgmt the namespaced `openbao/openbao-tenant-source` reads the non-secret tenant descriptors in `openbao-tenants`.
+   Provider byo: on mgmt `ClusterSecretStore/byo-<name>` (the byo cluster's own kubeconfig; namespace `fleet`; used only
+   by the PushSecrets that replace ClusterResourceSets), and on the byo cluster `ClusterSecretStore/delivery`
+   (name-scoped GET of the PUBLIC gateway CA and image-verification keys mgmt pushes into `platform-delivery`; namespaces
+   `openchoreo-data-plane` and `kyverno` only).
    Third exception, for workflow run namespaces shared with tenant build steps: on mgmt `ClusterWorkflowPlane default`
    points at `ClusterSecretStore/workflows` (conditions: `workflows-*` only; on the kubernetes backend a name-scoped
    `get` Role in `platform-secrets` limited by `resourceNames` to `workflowStore.keys` — `cosign-platform`,
@@ -43,17 +48,17 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    ([build-plane.md](build-plane.md#images-and-architectures)).
 
 ## Labels and annotations
-On the CAPI `Cluster` and the Argo CD cluster secret:
+On the CAPI `Cluster` and the Argo CD cluster secret (provider byo: the cluster secret only):
 
 | Key | Values |
 |---|---|
 | `platform.koorikla.io/name` | cluster name |
 | `platform.koorikla.io/role` | `mgmt` \| `workload` |
-| `platform.koorikla.io/provider` | `docker` \| `aws` \| `hetzner` \| `gcp-gke` |
+| `platform.koorikla.io/provider` | `docker` \| `aws` \| `hetzner` \| `gcp-gke` \| `byo` (existing cluster, no CAPI object) |
 | `platform.koorikla.io/region` | free text (`local`, `eu-central-1`, `fsn1`) |
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
-| `platform.koorikla.io/cni` | `cilium` \| `flannel` (`gke` on `gcp-gke`) — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
+| `platform.koorikla.io/cni` | `cilium` \| `flannel` (`gke` on `gcp-gke`; on `byo` whatever the cluster runs) — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
 | `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
 | `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
@@ -76,6 +81,8 @@ only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements
 | ClusterClasses (namespace `fleet`) | `k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed` |
 | Per-cluster agent CA / client cert secrets (ns `fleet`) | `<name>-agent-ca`, `<name>-agent-tls` |
 | CRS payload secrets (ns `fleet`) | `<name>-openchoreo-agent` (per cluster), `openchoreo-gateway-ca` (shared) |
+| Provider byo (mgmt) | `fleet/<name>-kubeconfig` (from store key `byo-<name>`), `ClusterSecretStore/byo-<name>`, `fleet/<name>-push-<what>` PushSecrets and their plain source Secrets |
+| Provider byo (on the cluster) | ns `platform-delivery` (pushed public material), `ClusterSecretStore/delivery` |
 | On workload clusters, ns `openchoreo-data-plane` | Secret `cluster-agent-tls`, ConfigMap `cluster-gateway-ca` |
 | Mesh CA / remote secrets (opt-in) | ns `openbao`: OpenBao mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`, role `<name>`, auth `mesh-<name>`, identity entity `mesh-<name>` (static policy `mesh-member`); ns `fleet`: `<name>-mesh-openbao`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-trust` (+ ConfigMap `<name>-mesh-oidc`), `<name>-mesh-remote-secret` |
 | On mesh members, ns `istio-system` | Secrets `openbao-ca`, `mesh-root-ca` (public), Issuer `openbao-mesh`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
@@ -90,8 +97,8 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `platform-github` | `username`, `token` (or `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` with secret-stores `repoCreds.auth: githubApp`) | Argo CD repo-creds for `installation.githubOrg` (read-only) | [forking.md](forking.md#3-credentials) |
 | `platform-github-app` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | git write access: Backstage scaffolder repo creation + platform PRs (opt-in, addon openchoreo-control-plane `scaffolder.githubApp`) | [project-templates.md](project-templates.md#repository-creation) |
 | `platform-ghcr` | `username`, `token` | node registry auth for `ghcr.io`; Harbor GHCR proxy cache | [providers.md](providers.md#node-registry-config) |
-| `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA | [providers.md](providers.md#aws-capa---rendered-only) |
-| `capi-hetzner` | `hcloud` | CAPH | [providers.md](providers.md#hetzner-cloud-caph---rendered-only) |
+| `capi-aws` | `AWS_B64ENCODED_CREDENTIALS` | CAPA | [providers.md](providers.md#aws-capa---untested-example) |
+| `capi-hetzner` | `hcloud` | CAPH | [providers.md](providers.md#hetzner-cloud-caph---untested-example) |
 | `openchoreo` | Thunder, OpenChoreo user and Backstage secrets | addons thunder, openchoreo-control-plane | [openchoreo.md](openchoreo.md#secrets) |
 | `openchoreo-observability` | `opensearch-username`, `opensearch-password`, `observer-client-secret` | observability plane; data-plane shippers (store `default`) | [observability.md](observability.md#secrets) |
 | `harbor` | admin, robot and chart secrets | addon harbor, build pushes, node pulls | [build-plane.md](build-plane.md#secrets-clustersecretstore-platform) |
@@ -102,6 +109,7 @@ Keys in the `platform` store (flat, backend-agnostic). The doc in the last colum
 | `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the platform GitHub App: promotion gate; in-cluster builds' per-run installation tokens for one repository (ESO generator, `contents: write`: clone + GitOps commit); the auto-build trigger's read-only tokens (`contents: read`). No build PAT | [promotion.md](promotion.md#configuration-reference), [build-plane.md](build-plane.md#git-credentials) |
 | `github-webhook` | `secret` | auto-build trigger `webhook` (cloud installations): HMAC secret of the GitHub App webhook, addon argo-events | [build-plane.md](build-plane.md#auto-build-poll-or-webhook) |
 | `external-dns-cloudflare` | `api-token` | addon external-dns with `dns.provider: cloudflare`; on workload clusters only via store `dns`, never `default`. Route 53 has no key: IRSA / Pod Identity only | [dns.md](dns.md#credentials) |
+| `byo-<name>` | `kubeconfig` (client cert or bearer token, server reachable from mgmt pods) | registration of the `provider: byo` cluster `<name>`: Argo CD cluster secret, PushSecret store | [providers.md](providers.md#bring-your-own-cluster-byo) |
 | `openchoreo-ai` | `rca-llm-api-key`, `rca-oauth-client-secret`, `finops-llm-api-key`, `finops-oauth-client-secret`, `<provider>-api-key` | OpenChoreo AI agents, Thunder agent clients, addon agentgateway; only while switched on | [ai-agents.md](ai-agents.md) |
 
 Workload-cluster keys (store `default`): `openchoreo-observability`, optional `datadog`, `falco-slack`; store `dns`: `external-dns-cloudflare`.
@@ -124,7 +132,8 @@ mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Ma
 
 Adding things:
 - **Workload cluster**: `installations/<inst>/clusters/<name>.yaml` (schema: `charts/cluster/values.yaml`;
-  [providers.md](providers.md#adding-a-cluster)).
+  [providers.md](providers.md#adding-a-cluster); an existing cluster: `provider: byo`,
+  [providers.md](providers.md#bring-your-own-cluster-byo)).
 - **Addon**: `addons/<name>/` (wrapper `Chart.yaml`, `values.yaml`, `README.md` <= 40 lines checked by
   `hack/check-docs.py`, optional `values/role-*.yaml`, `values/provider-*.yaml`, `values/cni-*.yaml`), registered in
   the catalog in `charts/platform/values.yaml` ([architecture.md](architecture.md#addons-catalog--labels-gitops-bridge-style)).

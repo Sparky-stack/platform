@@ -6,7 +6,7 @@ Renders k3s `coredns-custom` `ConfigMap` rules so pods inside local Docker (`k3d
 
 ## Where it runs
 
-- **Roles / providers:** `roles: [mgmt, workload]`, `providers: [docker]` (`namespace: kube-system`; layers `values/role-<role>.yaml`).
+- **Roles / providers:** `roles: [mgmt, workload]`, `providers: [docker, byo]` (`namespace: kube-system`; layers `values/role-<role>.yaml`). On byo clusters `enabled: false` (`values/provider-byo.yaml`) unless the installation turns it on: `installations/local/addons/coredns-local/values.yaml` does, its byo k3d clusters share network `kind`.
 - **Catalog label:** `addons.platform.koorikla.io/coredns-local` (`default: true`, opt-out with `"false"`).
 
 ## Key values

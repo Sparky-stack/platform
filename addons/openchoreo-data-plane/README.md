@@ -13,6 +13,7 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 
 - `openchoreo-data-plane.clusterAgent.{planeID,serverUrl}`: set per cluster (`clusterNameParameters`) and from `openchoreo.controlPlane.clusterGatewayURL` (`installationParameters`).
 - `openchoreo-data-plane.clusterAgent.tls.{clientSecretName,serverCAConfigMap}`: mounts `cluster-agent-tls` and `cluster-gateway-ca` delivered by CAPI `ClusterResourceSet` (with Reloader annotations).
+- `byoDelivery.enabled` (`values/provider-byo.yaml`): on byo clusters both arrive by `PushSecret`; `templates/byo-gateway-ca.yaml` rebuilds the `cluster-gateway-ca` ConfigMap from the pushed Secret ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
 - `openchoreo-data-plane.gateway.{httpPort,httpsPort}`: workload data-plane Gateway ports (`19080` / `19443`).
 
 ## Day-2 notes

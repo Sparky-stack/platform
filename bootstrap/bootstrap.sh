@@ -28,7 +28,8 @@ Subcommands:
   secrets  Seed/refresh local platform-secrets (no-op if backend != kubernetes). GitHub creds from env, least
            privilege first: GITHUB_APP_ID/GITHUB_APP_INSTALLATION_ID/GITHUB_APP_PRIVATE_KEY_FILE,
            PLATFORM_GITHUB_TOKEN [PLATFORM_GITHUB_USER] (GITHUB_TOKEN accepted with a warning), else gh CLI
-           (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_* (docs/forking.md)
+           (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_* (docs/forking.md); provider byo
+           clusters: BYO_KUBECONFIG_<NAME> or the k3d cluster of that name (docs/providers.md)
   argocd   Install/upgrade Argo CD via Helm, seed the bootstrap repo secret until ESO's repo-creds is Ready (then
            delete it), apply root-app. `up` waits REPO_CREDS_WAIT seconds (default 600, 0 skips) for that hand-over
   status   Show clusters, Argo CD apps, and UI info (how to read the admin password; never the password)
@@ -359,6 +360,35 @@ seed_cosign_secret() {
   trap - EXIT
 }
 
+# seed_byo_kubeconfigs: platform store key byo-<name> (property kubeconfig) for every `provider: byo` fleet file of the
+# installation (charts/cluster templates/byo-access.yaml; docs/providers.md "Bring your own cluster (byo)"). Source, first
+# match: the file named by BYO_KUBECONFIG_<NAME> (name upper-cased, '-' -> '_'), else the local k3d cluster <name>
+# (`k3d kubeconfig get`, API server rewritten to its server node's IP on docker network kind: what mgmt pods reach, as
+# with CAPD's kubeconfigs). Neither: a warning, and the cluster stays unregistered until seeded. Re-run after rotating.
+seed_byo_kubeconfigs() {
+  local cf name var file kc ip
+  for cf in "installations/$INST/clusters/"*.yaml; do
+    [[ -f "$cf" ]] || continue
+    [[ "$(yq -r '.provider // ""' "$cf")" == byo ]] || continue
+    name=$(yq -r '.name' "$cf")
+    var="BYO_KUBECONFIG_$(printf '%s' "$name" | tr 'abcdefghijklmnopqrstuvwxyz-' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_')"
+    file="${!var:-}"
+    if [[ -n "$file" ]]; then
+      [[ -r "$file" ]] || die "$var=$file is not readable"
+      apply_secret platform-secrets "byo-$name" kubeconfig=@"$file"
+      log "  byo-$name: kubeconfig from \$$var"
+    elif command -v k3d >/dev/null 2>&1 && kc=$(k3d kubeconfig get "$name" 2>/dev/null) && [[ -n "$kc" ]]; then
+      ip=$(docker inspect -f '{{with index .NetworkSettings.Networks "kind"}}{{.IPAddress}}{{end}}' "k3d-$name-server-0" 2>/dev/null || true)
+      [[ -n "$ip" ]] || die "k3d cluster $name is not on docker network kind (k3d cluster create $name --network kind ...)"
+      kc=$(printf '%s\n' "$kc" | SERVER="https://$ip:6443" yq '.clusters[0].cluster.server = strenv(SERVER)')
+      apply_secret platform-secrets "byo-$name" kubeconfig=kc
+      log "  byo-$name: kubeconfig of k3d cluster $name (API https://$ip:6443 on network kind)"
+    else
+      warn "  byo-$name: no \$$var and no k3d cluster $name: $cf stays unregistered until it is seeded"
+    fi
+  done
+}
+
 cmd_secrets() {
   load_inst
   if [[ "$BACKEND" != "kubernetes" ]]; then
@@ -443,6 +473,7 @@ cmd_secrets() {
   seed_cosign_secret
   seed_openbao_secret
   log "  openchoreo, openchoreo-observability, harbor, cosign-platform, openbao-unseal: generated once, kept on re-runs"
+  seed_byo_kubeconfigs
 }
 
 # Bootstrap repo credentials so Argo CD can read a private fork before ESO exists (same sources as platform-github;

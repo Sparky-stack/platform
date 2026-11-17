@@ -64,6 +64,21 @@ dnsStore:
   namespaces:
     - external-dns
 
+# ClusterSecretStore `delivery` on byo clusters (values/provider-byo.yaml, docs/providers.md "Bring your own cluster
+# (byo)"): mgmt pushes the PUBLIC material that CAPI clusters receive as ConfigMaps (gateway CA, image verification) as
+# Secrets into `namespace`; the consumers' ExternalSecrets (generic target ConfigMap) read them through this store.
+# Name-scoped GET of exactly `keys` (AGENTS.md invariant 5 exception: public certificates/keys only), only from
+# `namespaces`. Off elsewhere: CAPI clusters get the ConfigMaps from ClusterResourceSets.
+delivery:
+  enabled: false
+  namespace: platform-delivery
+  keys:
+    - cluster-gateway-ca             # ca.crt: OpenChoreo cluster-gateway CA (addon openchoreo-data-plane)
+    - platform-image-verification    # cosign.pub + Harbor ca.crt (addon kyverno)
+  namespaces:
+    - openchoreo-data-plane
+    - kyverno
+
 # Namespaces on mgmt allowed to read ClusterSecretStore `platform` (spec.conditions). Every current consumer is listed;
 # a new one must be added here (hack/tests/test_secret_store_scope.sh fails otherwise).
 platformStore:

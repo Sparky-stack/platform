@@ -1,3 +1,4 @@
+# UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only). README.md next to this file.
 # Installation "hetzner-example": reference only - renders and schema-checks, never booted (no credentials).
 # mgmt is any conformant cluster (e.g. k3s on a Hetzner server); workload clusters are CAPH k3s clusters on Hetzner
 # Cloud (ClusterClass k3s-hetzner). Adding a cluster: docs/providers.md.

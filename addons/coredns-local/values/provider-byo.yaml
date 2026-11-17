@@ -1,0 +1,3 @@
+# provider byo: an existing cluster resolves names with its own DNS; nothing to rewrite unless the installation says so
+# (installations/local/addons/coredns-local/values.yaml).
+enabled: false

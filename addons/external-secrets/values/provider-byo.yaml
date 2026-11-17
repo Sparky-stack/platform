@@ -1,0 +1,7 @@
+# provider byo (an existing cluster registered without CAPI, docs/providers.md "Bring your own cluster (byo)"): mgmt
+# pushes the public CA material that is a ConfigMap on CAPI clusters as Secrets into namespace platform-delivery
+# (ESO PushSecret writes only Secrets); addons openchoreo-data-plane and kyverno turn them back into their ConfigMaps
+# with ExternalSecrets of generic target ConfigMap. Adds --unsafe-allow-generic-targets and ConfigMap RBAC here only.
+external-secrets:
+  genericTargets:
+    enabled: true

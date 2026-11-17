@@ -40,7 +40,7 @@ the cluster is created. It flows to three places:
    secret says `flannel`). `istio-ambient` uses this to pick its CNI directories (below).
 
 GKE (`provider: gcp-gke`) takes only `cni: gke`: GKE's own VPC-native networking, no Cilium addon (CAPG v1.13.1
-cannot request Dataplane V2; [providers.md](providers.md#gke-capg---rendered-only)).
+cannot request Dataplane V2; [providers.md](providers.md#gke-capg---untested-example)).
 
 **You can't change `cni` on a live cluster: rebuild it instead.** Changing the variable would roll the control plane
 onto a different CNI while pods keep addresses and policies from the old one. Delete the fleet file, let CAPI remove
