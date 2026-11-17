@@ -284,10 +284,10 @@ def sdlc() -> Diagram:
     d.label(c[0] + w - 10, yg + 24, "once merged: back through 4 and 5", anchor="start", owner=pr)
     d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=10, badge=(xq, ymid(R3) - 60),
             label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
-    yb = R3 + H + 30                            # Kyverno checks the registry: under Production, up the right side
-    d.arrow([(c[2] + w / 2, R3 + H), (c[2] + w / 2, yb), (xr, yb), (xr, R0 + H0 / 2 + 14),
-             (c[3] + w, R0 + H0 / 2 + 14)], step=11, badge=(c[3] + 40, yb), label="checks the signature",
-            label_pos=(c[3] + 60, yb + 5), label_anchor="start")
+    yb = R2 + H + 40                            # Kyverno checks the registry first: out of its top, up the right side
+    d.arrow([(c[2] + w - 30, R3), (c[2] + w - 30, yb), (xr, yb), (xr, R0 + H0 / 2 + 14),
+             (c[3] + w, R0 + H0 / 2 + 14)], step=11, badge=(c[2] + w + 40, yb), label="checks the signature",
+            label_pos=(c[3] + 8, yb + 26), label_anchor="start")
     d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=12)
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
