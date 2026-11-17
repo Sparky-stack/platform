@@ -106,6 +106,56 @@ assert_match "$out" "runs along the border of zone" "arrows hugging a zone borde
 assert_match "$out" "badge 3 is closer than 6 px to text 'note text'" "badge clearance from text is enforced"
 assert_match "$out" "text contrast .* 'dim note'" "low text contrast is reported"
 
+# 6. stages: one step must not reach two gated stages at once, and stages are reached in order
+out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from svglib import Diagram
+d = Diagram("t", "lede")
+d.box(40, 120, 140, 80, "mgmt", "Release")
+d.box(300, 120, 140, 80, "workload", "Dev")
+d.box(300, 260, 140, 80, "workload", "Staging")
+d.box(600, 260, 140, 80, "workload", "Production")
+d.box(600, 400, 140, 80, "workload", "Canary")
+d.arrow([(180, 160), (300, 160)], step=1)
+d.arrow([(110, 200), (110, 300), (300, 300)], step=2)
+d.arrow([(110, 230), (520, 230), (520, 290), (600, 290)], step=2, badge=False)
+d.junction(110, 230)
+d.arrow([(110, 260), (110, 440), (600, 440)], step=3)
+d.stages("Dev", "Staging", "Production")
+d.stages("Canary", "Dev")
+d.stages("Dev", "Nowhere")
+d.key("Release deploys to dev", "Release deploys to staging and production", "Release deploys to canary")
+for i in d.check():
+    print(i)
+EOF
+)
+assert_match "$out" "step 2 reaches stages 'Staging' and 'Production' at once" "a fork into two gated stages is reported"
+assert_match "$out" "stage 'Dev' is reached in step 1, before stage 'Canary' is done" "stages reached out of order are reported"
+assert_match "$out" "stage 'Nowhere' is not a box" "an unknown stage is reported"
+
+# 7. reading order: consecutive steps of the same actor may radiate in any direction (check, then open a PR)
+out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from svglib import Diagram
+d = Diagram("t", "lede")
+d.box(40, 300, 140, 80, "mgmt", "Gate")
+d.box(400, 120, 140, 80, "external", "Repo")
+d.box(400, 300, 140, 80, "workload", "Env")
+d.arrow([(180, 340), (400, 340)], step=1)
+d.arrow([(110, 300), (110, 160), (400, 160)], step=2, badge=(110, 260))
+d.arrow([(400, 130), (160, 130), (160, 300)], step=3, badge=(300, 130))
+d.key("Gate checks env", "Gate opens a PR in the repo", "Repo notifies the gate")
+for i in d.check():
+    print(i)
+EOF
+)
+n=$(grep -c "step 2 reads before step 1" <<<"$out" || true)
+assert_eq "$n" 0 "the same actor's next step may sit anywhere around it"
+n=$(grep -c "step 3 reads before step 2" <<<"$out" || true)
+assert_eq "$n" 1 "another actor's step still has to read after it"
+
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"

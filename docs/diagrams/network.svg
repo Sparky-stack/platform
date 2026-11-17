@@ -1,99 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="956" viewBox="0 0 960 956" role="img" aria-label="Network · a request in, its telemetry out"><title>Network · a request in, its telemetry out</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 8.00s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}33.0%{opacity:1}38.0%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="956" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="940" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
-<rect x="204" y="112" width="728" height="364" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="220.0" y="136.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD CLUSTER</text>
-<rect x="204" y="540" width="728" height="152" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="220.0" y="564.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MANAGEMENT CLUSTER</text>
-<path d="M 220 316 L 916 316" stroke="#7c8aa0" stroke-width="1.2" stroke-dasharray="3 5"/>
-<path d="M 140.0 220.0 L 228.0 220.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 404.0 220.0 L 484.0 220.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 660.0 220.0 L 740.0 220.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 828.0 260.0 L 828.0 372.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 828.0 452.0 L 828.0 588.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 572.0 452.0 L 572.0 588.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path class="fx" d="M 140.0 220.0 L 228.0 220.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 404.0 220.0 L 484.0 220.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 660.0 220.0 L 740.0 220.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 828.0 260.0 L 828.0 372.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 828.0 452.0 L 828.0 588.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<rect x="28" y="180" width="112" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
-<text class="s" x="84.0" y="206.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Client</text>
-<text class="s" x="84.0" y="226.4" font-size="13" fill="#dde5ef" text-anchor="middle">opens the</text>
-<text class="s" x="84.0" y="244.4" font-size="13" fill="#dde5ef" text-anchor="middle">app URL</text>
-<rect x="228" y="180" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="316.0" y="206.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">kgateway</text>
-<text class="s" x="316.0" y="226.4" font-size="13" fill="#dde5ef" text-anchor="middle">front door</text>
-<text class="s" x="316.0" y="244.4" font-size="13" fill="#dde5ef" text-anchor="middle">of the cluster</text>
-<rect x="484" y="180" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="572.0" y="206.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Service mesh</text>
-<text class="s" x="572.0" y="226.4" font-size="13" fill="#dde5ef" text-anchor="middle">Istio ambient:</text>
-<text class="s" x="572.0" y="244.4" font-size="13" fill="#dde5ef" text-anchor="middle">encrypted hops</text>
-<rect x="740" y="180" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="828.0" y="206.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
-<text class="s" x="828.0" y="226.4" font-size="13" fill="#dde5ef" text-anchor="middle">your</text>
-<text class="s" x="828.0" y="244.4" font-size="13" fill="#dde5ef" text-anchor="middle">services</text>
-<rect x="484" y="372" width="176" height="80" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
-<text class="s" x="572.0" y="398.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cluster-agent</text>
-<text class="s" x="572.0" y="418.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenChoreo&#x27;s</text>
-<text class="s" x="572.0" y="436.4" font-size="13" fill="#dde5ef" text-anchor="middle">agent</text>
-<rect x="740" y="372" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="828.0" y="398.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Collectors</text>
-<text class="s" x="828.0" y="418.4" font-size="13" fill="#dde5ef" text-anchor="middle">logs, metrics,</text>
-<text class="s" x="828.0" y="436.4" font-size="13" fill="#dde5ef" text-anchor="middle">traces</text>
-<rect x="484" y="588" width="176" height="80" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
-<text class="s" x="572.0" y="614.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cluster-gateway</text>
-<text class="s" x="572.0" y="634.4" font-size="13" fill="#dde5ef" text-anchor="middle">entry point</text>
-<text class="s" x="572.0" y="652.4" font-size="13" fill="#dde5ef" text-anchor="middle">for agents</text>
-<rect x="740" y="588" width="176" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="828.0" y="614.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Observability plane</text>
-<text class="s" x="828.0" y="634.4" font-size="13" fill="#dde5ef" text-anchor="middle">stores all</text>
-<text class="s" x="828.0" y="652.4" font-size="13" fill="#dde5ef" text-anchor="middle">telemetry</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1072" viewBox="0 0 960 1072" role="img" aria-label="Network · a request in, its telemetry out"><title>Network · a request in, its telemetry out</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 9.10s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}29.0%{opacity:1}34.0%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1072" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1056" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<rect x="204" y="128" width="728" height="384" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="220.0" y="152.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD CLUSTER</text>
+<rect x="204" y="576" width="728" height="152" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="220.0" y="600.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MANAGEMENT CLUSTER</text>
+<path d="M 140.0 240.0 L 228.0 240.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 404.0 240.0 L 708.0 240.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 756.0 408.0 L 756.0 280.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 836.0 280.0 L 836.0 408.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 796.0 488.0 L 796.0 624.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 560.0 488.0 L 560.0 624.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path class="fx" d="M 140.0 240.0 L 228.0 240.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 404.0 240.0 L 708.0 240.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 756.0 408.0 L 756.0 280.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 836.0 280.0 L 836.0 408.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 796.0 488.0 L 796.0 624.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<rect x="28" y="200" width="112" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="84.0" y="226.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Client</text>
+<text class="s" x="84.0" y="246.4" font-size="13" fill="#dde5ef" text-anchor="middle">opens the</text>
+<text class="s" x="84.0" y="264.4" font-size="13" fill="#dde5ef" text-anchor="middle">app URL</text>
+<rect x="228" y="200" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="316.0" y="226.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Ingress gateway</text>
+<text class="s" x="316.0" y="246.4" font-size="13" fill="#dde5ef" text-anchor="middle">front door of</text>
+<text class="s" x="316.0" y="264.4" font-size="13" fill="#dde5ef" text-anchor="middle">the cluster</text>
+<rect x="708" y="200" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="819.0" y="226.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
+<text class="s" x="819.0" y="246.4" font-size="13" fill="#dde5ef" text-anchor="middle">your services, in</text>
+<text class="s" x="819.0" y="264.4" font-size="13" fill="#dde5ef" text-anchor="middle">the service mesh</text>
+<rect x="472" y="408" width="176" height="80" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
+<text class="s" x="560.0" y="434.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cluster-agent</text>
+<text class="s" x="560.0" y="454.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenChoreo&#x27;s</text>
+<text class="s" x="560.0" y="472.4" font-size="13" fill="#dde5ef" text-anchor="middle">agent</text>
+<rect x="708" y="408" width="176" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="796.0" y="443.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Collectors</text>
+<text class="s" x="796.0" y="463.4" font-size="13" fill="#dde5ef" text-anchor="middle">on every node</text>
+<rect x="472" y="624" width="176" height="80" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
+<text class="s" x="560.0" y="650.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">cluster-gateway</text>
+<text class="s" x="560.0" y="670.4" font-size="13" fill="#dde5ef" text-anchor="middle">entry point</text>
+<text class="s" x="560.0" y="688.4" font-size="13" fill="#dde5ef" text-anchor="middle">for agents</text>
+<rect x="708" y="624" width="176" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="796.0" y="650.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Observability plane</text>
+<text class="s" x="796.0" y="670.4" font-size="13" fill="#dde5ef" text-anchor="middle">stores all</text>
+<text class="s" x="796.0" y="688.4" font-size="13" fill="#dde5ef" text-anchor="middle">telemetry</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Network · a request in, its telemetry out</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A request comes in through kgateway and the encrypted mesh; its telemetry goes out to the management cluster. Everything rides the</text>
-<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">cluster network (Cilium or flannel).</text>
-<text class="s" x="228.0" y="162.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">A REQUEST IN</text>
-<text class="s" x="228.0" y="348.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">ITS TELEMETRY OUT</text>
-<circle cx="176.0" cy="220.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="176.0" y="224.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<circle cx="436.0" cy="220.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="436.0" y="224.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="692.0" cy="220.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="692.0" y="224.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="828.0" cy="290.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="828.0" y="294.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<rect x="844.0" y="499.0" width="59.3" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="848.0" y="513.0" font-size="13" fill="#aab6c8">dials out</text>
-<circle cx="828.0" cy="508.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="828.0" y="512.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<rect x="582.0" y="499.0" width="59.3" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="586.0" y="513.0" font-size="13" fill="#aab6c8">dials out</text>
-<line x1="28" y1="714" x2="932" y2="714" stroke="#7c8aa0" stroke-width="1.2"/>
-<circle cx="40" cy="737.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="742" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="62.0" y="742.0" font-size="13.5" fill="#dde5ef">A client opens the app URL; kgateway takes the request</text>
-<circle cx="40" cy="765.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="770" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="62.0" y="770.0" font-size="13.5" fill="#dde5ef">kgateway routes it into the service mesh</text>
-<circle cx="40" cy="793.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="798" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="62.0" y="798.0" font-size="13.5" fill="#dde5ef">The service mesh delivers it to the app pods and encrypts every hop between pods</text>
-<circle cx="40" cy="821.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="826" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="62.0" y="826.0" font-size="13.5" fill="#dde5ef">The app pods send their logs, metrics and traces to the collectors</text>
-<circle cx="40" cy="849.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="854" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="854.0" font-size="13.5" fill="#dde5ef">The collectors dial out and ship them to the observability plane on the management cluster</text>
-<rect x="28" y="894" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
-<text class="s" x="58.0" y="904.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
-<rect x="283.60519999999997" y="894" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
-<text class="s" x="313.6" y="904.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
-<rect x="513.9241" y="894" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
-<text class="s" x="543.9" y="904.0" font-size="13" fill="#aab6c8">outside the clusters</text>
-<path d="M 26 926 L 70 926" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
-<circle cx="42" cy="926" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="42" y="930.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="80.0" y="930.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
-<path d="M 422.3199 926 L 444.3199 926" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
-<text class="s" x="454.3" y="930.0" font-size="13" fill="#aab6c8">the cluster-agent&#x27;s own connection (context)</text>
-<rect x="751.4846400000001" y="920" width="20" height="13" rx="3" fill="#263247"/>
-<text class="s" x="781.5" y="930.0" font-size="13" fill="#aab6c8">context, not a step</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A request comes in through the ingress gateway to the app pods, and the service mesh encrypts the traffic between pods; their telemetry</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">goes out to the management cluster.</text>
+<circle cx="734.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="734.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="176.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="176.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="510.4" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="510.4" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<rect x="576.3" y="333.0" width="165.7" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="738.0" y="347.0" font-size="13" fill="#aab6c8" text-anchor="end">tails logs, scrapes metrics</text>
+<circle cx="756.0" cy="342.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="756.0" y="346.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<rect x="850.0" y="333.0" width="45.5" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="854.0" y="347.0" font-size="13" fill="#aab6c8">traces</text>
+<circle cx="836.0" cy="342.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="836.0" y="346.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<rect x="812.0" y="535.0" width="59.3" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="816.0" y="549.0" font-size="13" fill="#aab6c8">dials out</text>
+<circle cx="796.0" cy="544.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="796.0" y="548.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<rect x="570.0" y="535.0" width="73.9" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="574.0" y="549.0" font-size="13" fill="#aab6c8">control link</text>
+<line x1="28" y1="750" x2="932" y2="750" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="773.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="778" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="778.0" font-size="13.5" fill="#dde5ef">A client opens the app URL; kgateway takes the request</text>
+<circle cx="40" cy="801.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="806" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="806.0" font-size="13.5" fill="#dde5ef">kgateway routes it to the app pods</text>
+<circle cx="40" cy="829.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="834" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="834.0" font-size="13.5" fill="#dde5ef">Inside the Istio ambient service mesh, ztunnel encrypts every hop between the app pods</text>
+<circle cx="40" cy="857.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="862" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="862.0" font-size="13.5" fill="#dde5ef">The collectors on each node gather the pods&#x27; logs and metrics: Fluent Bit tails their log files, the Prometheus agent scrapes their metrics</text>
+<circle cx="40" cy="885.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="890" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="890.0" font-size="13.5" fill="#dde5ef">The app pods send their traces to the OpenTelemetry collector</text>
+<circle cx="40" cy="913.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="918" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="918.0" font-size="13.5" fill="#dde5ef">The collectors dial out and ship everything to the observability plane on the management cluster</text>
+<rect x="28" y="958" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="968.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="958" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="968.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<rect x="28" y="984" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="58.0" y="994.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 202.7147 990 L 246.7147 990" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="218.7147" cy="990" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="218.7147" y="994.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="256.7" y="994.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
+<rect x="26" y="1006" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="36" cy="1016" r="7" fill="#fbbf24"/><text class="s" x="36" y="1020.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="58.0" y="1020.0" font-size="13" fill="#aab6c8">step at a component</text>
+<path d="M 208.86058000000003 1016 L 230.86058000000003 1016" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
+<text class="s" x="240.9" y="1020.0" font-size="13" fill="#aab6c8">the cluster-agent&#x27;s control link, not telemetry (context)</text>
+<rect x="28" y="1036" width="20" height="13" rx="3" fill="#263247"/>
+<text class="s" x="58.0" y="1046.0" font-size="13" fill="#aab6c8">context, not a step</text>
 </svg>

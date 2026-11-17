@@ -9,8 +9,9 @@ the complete diagram.
 Every element registers its geometry, so `check()` reports layout defects (overlaps, overflow, arrows through text or
 boxes, cramped bends, arrows hugging a border, badges or chips closer than 6 px to text and borders), reading defects
 (step numbers out of reading order, boxes neither on the numbered flow nor marked context, duplicate boxes, arrows
-whose source is not the actor of the step text, "dials out" arrows pointing inward, jargon and placeholders in box
-text) and output defects (contrast below 4.5:1, missing animation rules, unsafe SVG) before anyone looks at a PNG.
+whose source is not the actor of the step text, "dials out" arrows pointing inward, one step forking into two gated
+stages, jargon and placeholders in box text) and output defects (contrast below 4.5:1, missing animation rules, unsafe
+SVG) before anyone looks at a PNG.
 """
 from __future__ import annotations
 
@@ -190,6 +191,7 @@ class Diagram:
         self.arrow_badges: dict[str, list[tuple]] = {}     # arrow id -> [(x, y, r)] of its badges
         self.titles: list[str] = []
         self.required: list[str] = []
+        self.stage_seqs: list[tuple[str, ...]] = []
         self.statuses: dict[str, str] = {}
         self.layout: list[dict] = []         # exported layout data (tests read it)
         self.bottom = 0.0
@@ -239,6 +241,12 @@ class Diagram:
     def require(self, *names):
         """Component names this diagram must contain (box titles or `name=`); check() fails otherwise."""
         self.required += names
+
+    def stages(self, *names):
+        """Boxes a change reaches one after the other with a gate between them (development -> staging ->
+        production, dev clusters -> prod clusters). check() fails when one step reaches two neighbouring stages at
+        once (a fork that skips the gate) or a stage is reached before the stage in front of it is done."""
+        self.stage_seqs.append(names)
 
     def box(self, x, y, w, h, plane, title, lines=(), status="built", name=None, tag=None, step=None,
             title_size=15, line_size=13, context=False, aka=()):
@@ -784,9 +792,17 @@ class Diagram:
             issues.append(f"badge {n} has no key entry")
         for n in sorted(set(self.steps) - self.badges):
             issues.append(f"key step {n} has no badge in the diagram")
-        # --- reading order: each step's badge comes after the previous one (same row: further right; else lower)
+        # --- reading order: each step's badge comes after the previous one (same row: further right; else lower).
+        # Consecutive steps of the same actor are exempt: they radiate from one box (check, then open a PR) and the
+        # reader follows the actor, not the page.
+        def actors(n):
+            out = {self._box_at(pts[0]) for a, pts in self.flow_arrows.items() if self.flow_step[a] == n}
+            return (out | {self.ring_owner.get(n)}) - {None}
+
         order = sorted(n for n in self.badge_pos if n in self.steps)
         for a, b in zip(order, order[1:]):
+            if actors(a) & actors(b):
+                continue
             (ax, ay), (bx, by) = self.badge_pos[a], self.badge_pos[b]
             if self.reading == "columns":
                 ax, ay, bx, by = ay, ax, by, bx
@@ -878,6 +894,26 @@ class Diagram:
                     continue
                 if hx1 + 1 < vx < hx2 - 1 and vy1 + 1 < hy < vy2 - 1:
                     issues.append(f"flow arrows {a} and {b} cross at ({vx:.0f}, {hy:.0f})")
+        # --- stages: one step per stage, in stage order (no fork past a gate)
+        named = {n: b for n, b in self.r_boxes} | {self.box_info[b]["title"]: b for _, b in self.r_boxes}
+        for seq in self.stage_seqs:
+            reach = {}
+            for nm in seq:
+                if nm not in named:
+                    issues.append(f"stage {nm!r} is not a box")
+                    continue
+                r = named[nm]
+                reach[nm] = {self.flow_step[a] for a, pts in self.flow_arrows.items()
+                             if self._on_edge(pts[-1], r) or (self.flow_both[a] and self._on_edge(pts[0], r))}
+                reach[nm] |= {n for n, o in self.ring_owner.items() if o == r}
+            for a, b in zip(seq, seq[1:]):
+                sa, sb = reach.get(a, set()), reach.get(b, set())
+                for n in sorted(sa & sb):
+                    issues.append(f"step {n} reaches stages {a!r} and {b!r} at once: give each stage its own step, "
+                                  f"after the gate between them")
+                if sa and sb and not sa & sb and min(sb) < max(sa):
+                    issues.append(f"stage {b!r} is reached in step {min(sb)}, before stage {a!r} is done "
+                                  f"(step {max(sa)})")
         names_all = {n for n, _ in self.r_boxes} | set(self.titles)
         for n in self.required:
             if n not in names_all:
