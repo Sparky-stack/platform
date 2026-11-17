@@ -383,7 +383,7 @@ name-scoped `ClusterSecretStore/delivery`, addons `openchoreo-data-plane` and `k
 Deregistering (deleting the fleet file) deletes what was pushed (`deletionPolicy: Delete`): remove the fleet file
 **before** the cluster goes away, or the PushSecrets wait on their finalizer.
 
-Locally (RAM: about 1.5 GiB for a k3d server with the workload addons):
+Locally (RAM: about 2.5 GiB for a k3d server with the workload addons):
 
 ```sh
 k3d cluster create byo1 --agents 0 --no-lb --network kind \
@@ -393,6 +393,9 @@ task secrets                     # seeds byo-byo1
 # enable installations/local/clusters/byo1.yaml(.disabled), merge: Argo CD registers it and syncs its addons
 ```
 
+A project deploys to the byo cluster's environments like to any other: the environment needs a `ProjectReleaseBinding`
+(charts/tenant creates one per `deploymentPipeline.environments` entry) and a `ReleaseBinding` per component. The live
+test used a temporary pair for environment `byo` (evidence on [#173](https://github.com/koorikla/platform/issues/173)).
 Harbor-built images additionally need the node's registry config (`--registry-config` with the Harbor CA and the
 `nodes` robot, `--host-alias` for the registry name), which CAPD clusters get from their ClusterClass.
 
