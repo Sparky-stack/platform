@@ -93,10 +93,18 @@ eastwest_errors() {
   (( n >= 2 )) || echo "examples.eastwest is enabled with $n mesh member(s); it needs two (echo and callers on different clusters)"
 }
 
-# kyverno_render <inst dir> <platform render> <fleet file> [helm args...] -> addon kyverno-policies as Argo renders it there
+# kyverno_render <inst> <inst dir> <platform render> <fleet file> [helm args...] -> addon kyverno-policies as Argo renders it there
 kyverno_render() {
-  local inst_dir=$1 prender=$2 cf=$3 args=(); shift 3
-  read_lines args addon_helm_args kyverno-policies "$inst_dir" "$prender" workload "$(yq -r '.name' "$cf")" \
+  local inst=$1 inst_dir=$2 prender=$3 cf=$4 n args=(); shift 4
+  n=$(yq -r '.name' "$cf")
+  if (( $# == 0 )) && [[ "$cf" == "$inst_dir/clusters/$n.yaml" ]]; then
+    render_layered_addon "$inst" kyverno-policies "$TMP/kp-raw-$inst-$n.yaml" "$prender" workload "$n" \
+      "$(yq -r '.provider // "docker"' "$cf")" "$(yq -r '.environment // "development"' "$cf")" \
+      "$(yq -r '.region // "local"' "$cf")" "$(yq -r '.cni // "cilium"' "$cf")" https://192.0.2.10:6443
+    yq 'select(.kind == "ImageValidatingPolicy" or .kind == "ValidatingPolicy" or .kind == "MutatingPolicy")' "$TMP/kp-raw-$inst-$n.yaml"
+    return
+  fi
+  read_lines args addon_helm_args kyverno-policies "$inst_dir" "$prender" workload "$n" \
     "$(yq -r '.provider // "docker"' "$cf")" "$(yq -r '.environment // "development"' "$cf")" \
     "$(yq -r '.region // "local"' "$cf")" "$(yq -r '.cni // "cilium"' "$cf")" https://192.0.2.10:6443
   helm template kyverno-policies addons/kyverno-policies --namespace kyverno "${args[@]}" "$@" \
@@ -108,7 +116,7 @@ for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir")
   prender="$TMP/platform-$inst.yaml"
-  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$prender"
+  render_platform "$inst" "$prender"
   multi="$TMP/$inst-multicluster"
   multicluster_profile "$inst_dir" "$multi"
   for profile in default multicluster; do
@@ -137,7 +145,10 @@ for inst_dir in installations/*; do
     for cf in "${files[@]}"; do
       n=$(yq -r '.name' "$cf")
       out="$TMP/$inst-$profile-$n.yaml"
-      if helm template "cluster-$n" charts/cluster --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" > "$out" 2> "$out.err"; then
+      if [[ "$profile" == default ]]; then
+        render_cluster "$inst" "$n" "$out"
+        assert_eq "$(N="$n" yq -r 'select(.kind == "Cluster" and .metadata.name == strenv(N)) | .metadata.name' "$out")" "$n" "$tag: $n renders its CAPI Cluster"
+      elif helm template "cluster-$n" charts/cluster --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" > "$out" 2> "$out.err"; then
         assert_eq "$(N="$n" yq -r 'select(.kind == "Cluster" and .metadata.name == strenv(N)) | .metadata.name' "$out")" "$n" "$tag: $n renders its CAPI Cluster"
       else
         assert_eq "$(cat "$out.err")" "" "$tag: charts/cluster renders $n"
@@ -155,7 +166,7 @@ for inst_dir in installations/*; do
     for cf in "${files[@]}"; do
       n=$(yq -r '.name' "$cf")
       kr="$TMP/$inst-$profile-$n-kyverno.yaml"
-      kyverno_render "$inst_dir" "$prender" "$cf" > "$kr"
+      kyverno_render "$inst" "$inst_dir" "$prender" "$cf" > "$kr"
       if [[ -z "$ref" ]]; then
         ref=$kr; ref_name=$n
       else
@@ -164,7 +175,7 @@ for inst_dir in installations/*; do
       if [[ "$n" == "$prod_cluster" ]]; then
         assert_eq "$(deny_errors "$kr")" "" "$tag: production Deny policies active on $n (hosts production)"
         # cluster-level facts do not move the gate: the same render with another name / cluster environment
-        kyverno_render "$inst_dir" "$prender" "$cf" --set-string cluster.name=elsewhere,cluster.environment=development > "$kr.other"
+        kyverno_render "$inst" "$inst_dir" "$prender" "$cf" --set-string cluster.name=elsewhere,cluster.environment=development > "$kr.other"
         assert_eq "$(cmp -s "$kr" "$kr.other" && echo same || echo differs)" same "$tag: Deny policies independent of cluster name and cluster environment"
       fi
     done
@@ -182,8 +193,7 @@ for d in "$L"/clusters/*.yaml.disabled; do b=$(basename "$d"); cp "$d" "$neg/${b
 assert_match "$(placement_errors "$L" "$neg"/*.yaml)" 'environment production is on 2 enabled clusters' "neg: half switch (prod1 enabled, production left on dev1) fails"
 yq -i '.openchoreo.dataPlane.environments = ["development", "staging"]' "$neg/dev1.yaml"; rm -f "$neg/prod1.yaml"
 assert_match "$(placement_errors "$L" "$neg"/*.yaml)" 'environment production is on no enabled cluster' "neg: production placed nowhere fails"
-helm template platform charts/platform --namespace argocd --values "$L/installation.yaml" > "$TMP/platform-neg.yaml"
-kyverno_render "$L" "$TMP/platform-neg.yaml" "$L/clusters/dev1.yaml" --set imageVerification.environments.production=Audit > "$TMP/kyverno-audit.yaml"
+kyverno_render local "$L" "$TMP/platform-local.yaml" "$L/clusters/dev1.yaml" --set imageVerification.environments.production=Audit > "$TMP/kyverno-audit.yaml"
 assert_match "$(deny_errors "$TMP/kyverno-audit.yaml")" 'openchoreo-verify-images-enforce: validationActions' "neg: production Audit-only fails the Deny check"
 assert_match "$(eastwest_errors true "$L"/clusters/*.yaml)" 'with 1 mesh member' "neg: examples.eastwest on the lean profile (one member) fails"
 finish

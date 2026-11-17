@@ -21,6 +21,16 @@ jobs:
           version: 2026.11.8
           install: true
           cache: true
+      - name: Cache Helm chart dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/helm
+            charts/*/charts
+            addons/*/charts
+          key: helm-charts-${{ hashFiles('charts/*/Chart.lock', 'addons/*/Chart.lock') }}
+          restore-keys: |
+            helm-charts-
       # Every git hook from prek.toml on every tracked file: the same checks developers get on commit. The changed-
       # charts hook is skipped here only because `task test` below renders every chart.
       - name: Git hooks on all files (task hooks:run)

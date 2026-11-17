@@ -71,11 +71,64 @@ cp -R "$addon/tests/kyverno" "$TMP/kyverno"
 suites=(registries platform-key)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
-  hv=()
-  [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/image-verification.yaml \
-    ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
-  if out=$("$KYVERNO" test "$TMP/kyverno/$s" 2>&1) && [[ "$out" =~ "0 tests failed" ]]; then
+  (
+    hv=()
+    [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
+    helm template kyverno-policies "$addon" --namespace kyverno -s templates/image-verification.yaml \
+      ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
+    rc=0
+    "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || rc=$?
+    echo "$rc" > "$TMP/kyverno-$s.rc"
+  ) &
+done
+
+# Native VAP: promotion to gated environments only through git (Argo CD)
+ocp="$ROOT/addons/openchoreo-platform"
+cp_chart="$ROOT/addons/openchoreo-control-plane"
+[[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
+(
+  helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
+  helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
+  for c in argocd:resources api:resources argocd:smuggled; do
+    who=${c%%:*}; res=${c#*:}
+    "$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
+      --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" > "$TMP/ocp-$who-$res.out" 2>&1 || true
+  done
+) &
+
+# Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
+# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule - spec kept, except
+# shutdown/suspend - is pinned by the addon's helm-unittest and was checked against a real API server in #77.)
+ae="$ROOT/addons/argo-events"
+wp_chart="$ROOT/addons/openchoreo-workflow-plane"
+[[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null
+(
+  render_standalone_addon openchoreo-workflow-plane "$TMP/wp.yaml"
+  yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "workflows.argoproj.io")' "$TMP/wp.yaml" > "$TMP/wf-crd.yaml"
+  helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true -s templates/workflow-admission.yaml \
+    > "$TMP/ae-vap.yaml"
+  for res in allowed denied; do
+    "$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
+      --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" > "$TMP/ae-$res.out" 2>&1 || true
+  done
+) &
+
+# Kyverno ValidatingPolicies of addon crossplane: PostgreSQL only through the platform API
+xp="$ROOT/addons/crossplane"
+[[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
+(
+  helm template crossplane "$xp" --namespace crossplane-system -s templates/policies.yaml > "$TMP/xp-policies.yaml"
+  for c in raw-objects:tenant raw-objects:crossplane platform-namespace:tenant xrs:tenant; do
+    res=${c%%:*}; who=${c#*:}
+    "$KYVERNO" apply "$TMP/xp-policies.yaml" --resource "$xp/tests/kyverno/$res.yaml" \
+      --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" > "$TMP/xp-$res-$who.out" 2>&1 || true
+  done
+) &
+wait
+
+for s in "${suites[@]}"; do
+  out=$(cat "$TMP/kyverno-$s.out")
+  if [[ "$(cat "$TMP/kyverno-$s.rc")" == 0 && "$out" =~ "0 tests failed" ]]; then
     assert_eq ok ok "kyverno test $s"
   else
     echo "$out" >&2
@@ -84,51 +137,28 @@ for s in "${suites[@]}"; do
 done
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] || echo "  SKIP signatures, signatures-transition (needs network: KYVERNO_ONLINE=1)"
 
-# Native VAP: promotion to gated environments only through git (Argo CD)
-ocp="$ROOT/addons/openchoreo-platform"
-cp_chart="$ROOT/addons/openchoreo-control-plane"
-[[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
-helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
-helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
 # who:resources:expected  (staging bindings are out of scope and not counted)
 for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'pass: 0, fail: 1, warn: 0, error: 0' \
   argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0'; do
   who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
-  out=$("$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
-    --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" 2>&1 || true)
+  out=$(cat "$TMP/ocp-$who-$res.out")
   assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"
 done
 
-# Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
-# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule - spec kept, except
-# shutdown/suspend - is pinned by the addon's helm-unittest and was checked against a real API server in #77.)
-ae="$ROOT/addons/argo-events"
-wp_chart="$ROOT/addons/openchoreo-workflow-plane"
-[[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null
-helm template wp "$wp_chart" --namespace openchoreo-workflow-plane \
-  | yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "workflows.argoproj.io")' > "$TMP/wf-crd.yaml"
 assert_nonempty "$(yq '.metadata.name' "$TMP/wf-crd.yaml")" "Argo Workflow CRD rendered from addon openchoreo-workflow-plane"
-helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true -s templates/workflow-admission.yaml \
-  > "$TMP/ae-vap.yaml"
 for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 13'; do
   res=${c%%:*}; want=${c#*:}
-  out=$("$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
-    --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" 2>&1 || true)
+  out=$(cat "$TMP/ae-$res.out")
   assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
 done
 
-# Kyverno ValidatingPolicies of addon crossplane: PostgreSQL only through the platform API
-xp="$ROOT/addons/crossplane"
-[[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
-helm template crossplane "$xp" --namespace crossplane-system -s templates/policies.yaml > "$TMP/xp-policies.yaml"
 # resources:userinfo:expected
 for c in raw-objects:tenant:'pass: 0, fail: 4, warn: 0, error: 0, skip: 0' \
   raw-objects:crossplane:'pass: 0, fail: 0, warn: 0, error: 0, skip: 4' \
   platform-namespace:tenant:'pass: 0, fail: 0, warn: 0, error: 0, skip: 1' \
   xrs:tenant:'pass: 1, fail: 2, warn: 0, error: 0, skip: 0'; do
   res=${c%%:*}; rest=${c#*:}; who=${rest%%:*}; want=${rest#*:}
-  out=$("$KYVERNO" apply "$TMP/xp-policies.yaml" --resource "$xp/tests/kyverno/$res.yaml" \
-    --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" 2>&1 || true)
+  out=$(cat "$TMP/xp-$res-$who.out")
   assert_match "$out" "$want" "crossplane policies: $who applying tests/kyverno/$res.yaml -> $want"
 done
 

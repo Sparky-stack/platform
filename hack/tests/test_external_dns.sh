@@ -28,7 +28,7 @@ has_arg() { local a; a=$(args_of "$1"); if grep -qx -- "$2" <<<"$a"; then echo y
 
 expect_running() {   # expect_running <inst> <dns provider> <helm provider> <expected store on mgmt>
   local inst=$1 dnsp=$2 hp=$3 inst_dir="installations/$1" prender="$TMP/platform-$1.yaml" cf name prov role out zone
-  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$prender"
+  render_platform "$inst" "$prender"
   assert_eq "$(yq '.dns.provider' "$inst_dir/installation.yaml")" "$dnsp" "$inst: dns.provider"
   zone=$(yq '.dns.domainFilters[0]' "$inst_dir/installation.yaml")
   for cf in mgmt "$inst_dir"/clusters/*.yaml; do
@@ -70,7 +70,7 @@ expect_running aws-example route53 aws
 expect_running hetzner-example cloudflare cloudflare
 
 # Opted in where the installation has no DNS provider (local): the render fails loudly.
-helm template platform charts/platform --namespace argocd --values installations/local/installation.yaml > "$TMP/platform-local.yaml"
+render_platform local "$TMP/platform-local.yaml"
 if render installations/local "$TMP/platform-local.yaml" workload dev1 docker "$TMP/edns-local.yaml"; then
   assert_eq rendered fails "local/dev1: opting in without dns.provider fails"
 else
@@ -107,7 +107,7 @@ else
 fi
 
 # Standalone (no installation): nothing runs.
-helm template external-dns addons/external-dns --namespace "$NS" > "$TMP/edns-standalone.yaml"
+render_standalone_addon external-dns "$TMP/edns-standalone.yaml"
 assert_eq "$(yq -N 'select(.kind == "Deployment") | .metadata.name' "$TMP/edns-standalone.yaml")" "" "standalone: no Deployment while dns.provider is none"
 
 finish

@@ -20,6 +20,7 @@ cd "$ROOT"
 # violations <render> -> one line per broken rule, empty when the render keeps the contract
 violations() {
   local f=$1 key pol prot ns vap
+  grep -q 'PersistentVolumeClaim' "$f" || return 0
   # \x1f (unit separator), not tab: tab is IFS whitespace, so an empty policy field would collapse into the next one.
   # shellcheck disable=SC2016  # yq variables ($a, $p, ...), not shell
   while IFS=$'\x1f' read -r key pol prot; do
@@ -70,7 +71,7 @@ if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
 else
   echo "  (no RENDERED_DIR: standalone render of addon thunder only)"
 fi
-helm template thunder addons/thunder --namespace thunder > "$TMP/thunder.yaml"
+render_standalone_addon thunder "$TMP/thunder.yaml"
 assert_eq "$(violations "$TMP/thunder.yaml")" "" "addons/thunder (standalone): hook PVCs are hook-failed, annotated and delete-protected"
 assert_eq "$(yq -N 'select(.kind == "PersistentVolumeClaim") | .metadata.name' "$TMP/thunder.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
   "thunder-certs-pvc thunder-database-pvc thunder-secrets-pvc " "addon thunder still renders its three PVCs (the contract is not vacuous)"

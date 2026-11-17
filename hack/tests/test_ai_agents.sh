@@ -17,13 +17,13 @@ assert_eq "$(yq '.addons.agentgateway.default' "$CAT")" false "addon agentgatewa
 assert_eq "$(yq '.addons["finops-opencost"].default' "$CAT")" false "addon finops-opencost is opt-in"
 assert_eq "$(yq '.addons["finops-opencost"].namespace' "$CAT")" "$(yq '.addons["openchoreo-observability-plane"].namespace' "$CAT")" "finops-opencost runs next to the observability plane"
 assert_eq "$(yq '.bootstrapSecret.aiAgentClients | length' addons/thunder/values.yaml)" 0 "Thunder agent clients off by default"
-helm template thunder addons/thunder --namespace thunder > "$TMP/th-off.yaml"
+render_standalone_addon thunder "$TMP/th-off.yaml"
 # Off = no key (no file in the bootstrap directory), never an empty/comment-only placeholder: Thunder's bootstrap fails
 # on a document that is not a mapping (hack/tests/test_thunder_bootstrap.sh parses the whole bundle).
 assert_eq "$(yq -N 'select(.metadata.name == "thunder-ai-agent-clients") | .data | keys | join(",")' "$TMP/th-off.yaml")" "README" "Thunder scripts 53/60 absent while off (README only)"
 # Invariant 7: no commented-out clients or secretEnv entries to toggle.
 assert_eq "$(grep -cE '^ *# .*(agent-client\.yaml: \||AGENT_CLIENT_SECRET)' addons/thunder/values.yaml || true)" 0 "no commented Thunder agent blocks"
-helm template obs "$OBS" --namespace openchoreo-observability-plane > "$TMP/obs.yaml"
+render_standalone_addon openchoreo-observability-plane "$TMP/obs.yaml"
 assert_eq "$(yq -N 'select(.kind == "Deployment" and (.metadata.name == "sre-agent" or .metadata.name == "finops-agent")) | .metadata.name' "$TMP/obs.yaml")" "" "no agent Deployments rendered"
 
 # 2. One store key for everything AI: the agents' Secrets, Thunder's client secrets, agentgateway's provider key.
@@ -62,8 +62,8 @@ helm template obs "$OBS" --namespace openchoreo-observability-plane \
   --set openchoreo-observability-plane.rca.enabled=true --set openchoreo-observability-plane.rca.llm.modelName=gpt-5.2 \
   --set openchoreo-observability-plane.finOpsAgent.enabled=true --set openchoreo-observability-plane.finOpsAgent.llmName=gpt-5.2 \
   > "$TMP/obs-on.yaml"
-helm template agentgateway addons/agentgateway --namespace "$(yq '.addons.agentgateway.namespace' "$CAT")" > "$TMP/agw.yaml"
-helm template finops-opencost addons/finops-opencost --namespace "$(yq '.addons["finops-opencost"].namespace' "$CAT")" > "$TMP/fo.yaml"
+render_standalone_addon agentgateway "$TMP/agw.yaml"
+render_standalone_addon finops-opencost "$TMP/fo.yaml"
 gw=$(yq -N 'select(.kind == "Gateway") | .metadata.name + "." + .metadata.namespace + ".svc.cluster.local:" + (.spec.listeners[0].port | tostring)' "$TMP/agw.yaml")
 for v in RCA_LLM_BASE_URL FINOPS_AGENT_LLM_BASE_URL; do
   url=$(yq -N "select(.kind == \"ConfigMap\") | .data.$v | select(. != null)" "$TMP/obs-on.yaml")

@@ -16,13 +16,16 @@ echo "== test_build_guards =="
 cd "$ROOT"
 command -v git >/dev/null || { echo "  SKIP: git not found"; exit 0; }
 
-./hack/deps.sh >/dev/null 2>&1 || true
-helm template openchoreo-platform addons/openchoreo-platform --namespace default > "$TMP/platform.yaml"
-helm template openchoreo-workflow-plane addons/openchoreo-workflow-plane --namespace openchoreo-workflow-plane \
-  > "$TMP/plane.yaml"
+if [[ ! -d addons/openchoreo-platform/charts || ! -d addons/openchoreo-workflow-plane/charts ]]; then
+  ./hack/deps.sh >/dev/null 2>&1 || true
+fi
+render_standalone_addon openchoreo-platform "$TMP/platform.yaml"
+render_standalone_addon openchoreo-workflow-plane "$TMP/plane.yaml"
+yq 'select(.kind == "ClusterWorkflow")' "$TMP/platform.yaml" > "$TMP/cw.yaml"
+yq 'select(.kind == "ClusterWorkflowTemplate")' "$TMP/plane.yaml" > "$TMP/cwt.yaml"
 
-cw() { yq -r "select(.kind == \"ClusterWorkflow\" and .metadata.name == \"$1\") | $2" "$TMP/platform.yaml"; }
-cwt() { yq -r "select(.kind == \"ClusterWorkflowTemplate\" and .metadata.name == \"$1\") | $2" "$TMP/plane.yaml"; }
+cw() { yq -r "select(.metadata.name == \"$1\") | $2" "$TMP/cw.yaml"; }
+cwt() { yq -r "select(.metadata.name == \"$1\") | $2" "$TMP/cwt.yaml"; }
 S='.spec.parameters.openAPIV3Schema.properties'
 
 # accepts <label> <pattern> <value>... / rejects <label> <pattern> <value>...  (ERE == the RE2 subset used here)

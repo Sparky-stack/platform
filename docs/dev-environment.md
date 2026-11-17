@@ -148,8 +148,17 @@ userlands; helpers live in [`hack/lib/portable.sh`](../hack/lib/portable.sh).
 | `/tmp/...` | `mktemp -d` |
 | `xdg-open` | `open_url` (`open` / `start` / `wslview` / `xdg-open`) |
 | MSYS paths handed to Go/Python binaries | `native_path` (`cygpath -m` on Windows) |
+| `nproc` (GNU only) | `cpu_count` (`getconf` / `sysctl`) |
+| a bare network call (`helm repo update`, chart downloads) | `retry_with_backoff <attempts> <delay> <command...>` |
 
 `task lint` runs `bash -n` + shellcheck on every script; the macOS CI job runs the whole suite on `/bin/bash` 3.2.
+
+`hack/test.sh` renders every chart once (step 5) and exports that directory as `RENDERED_DIR` to the suites in
+`hack/tests/`. Suites take renders through `render_platform`, `render_cluster`, `render_standalone_addon` and
+`render_layered_addon` (`hack/tests/lib.sh`): the `hack/test.sh` render of this run when present, else a fresh
+`helm template` (a suite run on its own never reads an old render). `hack/deps.sh` rebuilds only charts whose `charts/`
+differs from their `Chart.lock` (missing or extra tarballs) and retries downloads; CI caches the chart tarballs keyed
+on every `Chart.lock`.
 
 ## Host differences (Docker Desktop and friends)
 
