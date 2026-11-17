@@ -65,3 +65,23 @@ around the end of the week. Cron day of week: Sun=0 .. Sat=6.
 schedule: {{ printf "%d %d * * %d" (atoi (index $parts 2)) (atoi (index $parts 1)) $cronDay | quote }}
 duration: {{ if eq (mod $dur 60) 0 }}{{ printf "%dh" (div $dur 60) }}{{ else }}{{ printf "%dh%dm" (div $dur 60) (mod $dur 60) }}{{ end }}
 {{- end }}
+
+{{- /*
+Cell namespace OpenChoreo creates for this project on an environment's data plane (ProjectReleaseBinding controller:
+GenerateK8sNameWithLengthLimit(63, "dp", <org ns>, <project>, <env>), internal/dataplane/kubernetes/name.go in
+openchoreo/openchoreo v1.3.3): each part truncated to its share of the 63 characters (51 for the parts: 13, 13, 13,
+12), joined with "-", plus "-" and the first 8 hex digits of sha256("dp-<org>-<project>-<env>") of the untruncated
+parts. Inputs are DNS labels already, so OpenChoreo's sanitising is the identity. Pinned against live names in
+tests/secrets_test.yaml (dp-default-demo-development-ad621210). Context: dict org project env.
+*/ -}}
+{{- define "tenant.cellNamespace" -}}
+{{- $names := list "dp" .org .project .env -}}
+{{- $limit := 63 -}}{{- $hashLen := 8 -}}
+{{- $maxBase := sub (sub $limit $hashLen) (len $names) -}}
+{{- $per := div $maxBase (len $names) -}}{{- $extra := mod $maxBase (len $names) -}}
+{{- $parts := list -}}
+{{- range $i, $n := $names -}}
+{{- $parts = append $parts (trunc (int (ternary (add $per 1) $per (lt $i $extra))) $n) -}}
+{{- end -}}
+{{- printf "%s-%s" (join "-" $parts) (join "-" $names | sha256sum | trunc $hashLen) -}}
+{{- end }}
