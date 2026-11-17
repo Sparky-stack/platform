@@ -1,247 +1,28 @@
 {{- /*
-ClusterSecretStore `platform` holds every platform credential (GitHub read + write Apps, GHCR, cloud, OpenChoreo):
-only the mgmt namespaces in platformStore.namespaces may reference it. hack/tests/test_secret_store_scope.sh checks
-that every rendered ExternalSecret using it is in that list.
+ClusterSecretStores and the identities they authenticate with: one secret-stores.store call each (_helpers.tpl).
+mgmt:     platform (every platform credential; platformStore.namespaces only), mgmt-fleet, mgmt-openchoreo, workflows
+          (key-scoped; workflows-* only), plus the Argo CD repo-creds ExternalSecret.
+workload: default (tenant store, the ClusterDataPlane secretStoreRef) and, with dns.provider cloudflare, dns.
 */ -}}
-{{- define "secret-stores.platformConditions" -}}
-{{- $ns := .Values.platformStore.namespaces | default list -}}
-{{- if not $ns }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
-{{- range $ns -}}
-{{- if hasPrefix "workflows-" (toString .) }}{{ fail (printf "platformStore.namespaces must not include workflow run namespace %q: use ClusterSecretStore workflows (key-scoped)" .) }}{{ end -}}
-{{- end -}}
-conditions:
-  - namespaces:
-      {{- toYaml $ns | nindent 6 }}
-{{- end -}}
-{{- define "secret-stores.workflowConditions" -}}
-{{- $re := (.Values.workflowStore).namespaceRegexes | default list -}}
-{{- if not $re }}{{ fail "workflowStore.namespaceRegexes must restrict ClusterSecretStore workflows to workflow run namespaces" }}{{ end -}}
-{{- range $re -}}
-{{- if not (hasPrefix "^workflows-" (toString .)) }}{{ fail (printf "workflowStore.namespaceRegexes entry %q must start with ^workflows-" .) }}{{ end -}}
-{{- end -}}
-conditions:
-  - namespaceRegexes:
-      {{- toYaml $re | nindent 6 }}
-{{- end -}}
 {{- $backend := .Values.secrets.backend | default "kubernetes" -}}
 {{- if eq .Values.role "mgmt" -}}
-{{- if eq $backend "kubernetes" -}}
 {{- $platformNs := .Values.secrets.kubernetes.namespace | default "platform-secrets" -}}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-platform
-  namespace: {{ .Release.Namespace }}
+{{- include "secret-stores.store" (dict "root" . "backend" $backend "name" "platform"
+      "serviceAccount" (get (dict "kubernetes" "eso-platform" "aws" "eso-aws" "vault" "eso-vault") $backend)
+      "conditions" (include "secret-stores.platformConditions" . | fromYamlArray)
+      "remoteNamespace" $platformNs) }}
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-platform
-  namespace: {{ $platformNs | quote }}
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
+{{- /* readers: fleet, argocd, openbao (addon openbao mesh-clients: members' public auth inputs
+       fleet/<name>-mesh-openbao, found by label) */}}
+{{ include "secret-stores.store" (dict "root" . "backend" "kubernetes" "name" "mgmt-fleet" "serviceAccount" "eso-mgmt-fleet"
+      "conditions" (list (dict "namespaces" (list "fleet" "argocd" "openbao")))
+      "remoteNamespace" "fleet") }}
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-platform
-  namespace: {{ $platformNs | quote }}
-subjects:
-  - kind: ServiceAccount
-    name: eso-platform
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-platform
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: platform
-spec:
-  {{- include "secret-stores.platformConditions" . | nindent 2 }}
-  provider:
-    kubernetes:
-      remoteNamespace: {{ $platformNs | quote }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-platform
-          namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "aws" -}}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-aws
-  namespace: {{ .Release.Namespace }}
-  {{- if .Values.secrets.aws.role }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.secrets.aws.role | quote }}
-  {{- end }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: platform
-spec:
-  {{- include "secret-stores.platformConditions" . | nindent 2 }}
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.secrets.aws.region | quote }}
-      {{- if .Values.secrets.aws.prefix }}
-      prefix: {{ .Values.secrets.aws.prefix | quote }}
-      {{- end }}
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: eso-aws
-            namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "vault" -}}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-vault
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: platform
-spec:
-  {{- include "secret-stores.platformConditions" . | nindent 2 }}
-  provider:
-    vault:
-      server: {{ .Values.secrets.vault.server | quote }}
-      path: {{ .Values.secrets.vault.path | default "platform" | quote }}
-      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
-      auth:
-        kubernetes:
-          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
-          role: {{ .Values.secrets.vault.auth.kubernetes.role | quote }}
-          serviceAccountRef:
-            name: eso-vault
-            namespace: {{ .Release.Namespace }}
-{{- end }}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-mgmt-fleet
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-mgmt-fleet
-  namespace: fleet
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-mgmt-fleet
-  namespace: fleet
-subjects:
-  - kind: ServiceAccount
-    name: eso-mgmt-fleet
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-mgmt-fleet
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: mgmt-fleet
-spec:
-  conditions:
-    - namespaces:
-        - fleet
-        - argocd
-        - openbao     # addon openbao mesh-clients: members' public auth inputs (fleet/<name>-mesh-openbao, find by label)
-  provider:
-    kubernetes:
-      remoteNamespace: fleet
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-mgmt-fleet
-          namespace: {{ .Release.Namespace }}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-mgmt-openchoreo
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-mgmt-openchoreo
-  namespace: openchoreo-control-plane
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-mgmt-openchoreo
-  namespace: openchoreo-control-plane
-subjects:
-  - kind: ServiceAccount
-    name: eso-mgmt-openchoreo
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-mgmt-openchoreo
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: mgmt-openchoreo
-spec:
-  conditions:
-    - namespaces:
-        - fleet                            # CRS payload openchoreo-gateway-ca (addon openchoreo-control-plane)
-        - openchoreo-observability-plane   # in-cluster agent's gateway CA ConfigMap (addon openchoreo-observability-plane)
-        - openchoreo-workflow-plane        # in-cluster agent's gateway CA ConfigMap (addon openchoreo-workflow-plane)
-  provider:
-    kubernetes:
-      remoteNamespace: openchoreo-control-plane
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-mgmt-openchoreo
-          namespace: {{ .Release.Namespace }}
+{{- /* readers: fleet (CRS payload openchoreo-gateway-ca, addon openchoreo-control-plane) and the in-cluster agents'
+       gateway CA ConfigMaps (addons openchoreo-observability-plane, openchoreo-workflow-plane) */}}
+{{ include "secret-stores.store" (dict "root" . "backend" "kubernetes" "name" "mgmt-openchoreo" "serviceAccount" "eso-mgmt-openchoreo"
+      "conditions" (list (dict "namespaces" (list "fleet" "openchoreo-observability-plane" "openchoreo-workflow-plane")))
+      "remoteNamespace" "openchoreo-control-plane") }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -294,7 +75,8 @@ spec:
 ClusterSecretStore `workflows` (mgmt): the only store ClusterWorkflowPlane `default` (${workflowplane.secretStore})
 points at. Restricted by namespaceRegexes to `workflows-*` run namespaces and, on the kubernetes backend, by a
 name-scoped GET Role (resourceNames = workflowStore.keys) with SelfSubjectRulesReview create so ESO validates the store
-without list/watch or access to any other Secret in platform-secrets (AGENTS.md invariant 5).
+without list/watch or access to any other Secret in platform-secrets (AGENTS.md invariant 5). On aws / vault it uses
+its own identity (secrets.workflowStore.<backend>.role), never store platform's.
 */ -}}
 {{- $wfKeys := (.Values.workflowStore).keys | default list }}
 {{- if not $wfKeys }}{{ fail "workflowStore.keys must list the secret keys ClusterSecretStore workflows may read" }}{{ end }}
@@ -302,376 +84,63 @@ without list/watch or access to any other Secret in platform-secrets (AGENTS.md 
 {{- $wfKeys = append (without $wfKeys "harbor") .Values.registry.external.credentialsKey | uniq }}
 {{- end }}
 {{- $ws := .Values.secrets.workflowStore | default dict }}
----
-{{- if eq $backend "kubernetes" }}
-{{- $platformNs := .Values.secrets.kubernetes.namespace | default "platform-secrets" }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-workflows
-  namespace: {{ .Release.Namespace }}
-automountServiceAccountToken: false
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-workflows
-  namespace: {{ $platformNs | quote }}
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    resourceNames:
-      {{- toYaml $wfKeys | nindent 6 }}
-    verbs: ["get"]
-  - apiGroups: ["authorization.k8s.io"]
-    resources: ["selfsubjectrulesreviews"]
-    verbs: ["create"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-workflows
-  namespace: {{ $platformNs | quote }}
-subjects:
-  - kind: ServiceAccount
-    name: eso-workflows
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-workflows
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: workflows
-spec:
-  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
-  provider:
-    kubernetes:
-      remoteNamespace: {{ $platformNs | quote }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-workflows
-          namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "aws" }}
 {{- $wfAwsRole := ($ws.aws).role | default "" }}
-{{- if and $wfAwsRole (eq $wfAwsRole (.Values.secrets.aws.role | default "")) }}
+{{- $wfVaultRole := ($ws.vault).role | default "" }}
+{{- if and (eq $backend "aws") $wfAwsRole (eq $wfAwsRole (.Values.secrets.aws.role | default "")) }}
 {{- fail "ClusterSecretStore workflows on AWS Secrets Manager needs secrets.workflowStore.aws.role: an IAM role that reads only workflowStore.keys, distinct from secrets.aws.role (store platform's)" }}
 {{- end }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-aws-workflows
-  namespace: {{ .Release.Namespace }}
-  {{- if $wfAwsRole }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ $wfAwsRole | quote }}
-  {{- end }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: workflows
-spec:
-  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.secrets.aws.region | quote }}
-      {{- if .Values.secrets.aws.prefix }}
-      prefix: {{ .Values.secrets.aws.prefix | quote }}
-      {{- end }}
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: eso-aws-workflows
-            namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "vault" }}
-{{- $wfVaultRole := ($ws.vault).role | default "" }}
-{{- if or (not $wfVaultRole) (eq $wfVaultRole (.Values.secrets.vault.auth.kubernetes.role | default "")) }}
+{{- if and (eq $backend "vault") (or (not $wfVaultRole) (eq $wfVaultRole (.Values.secrets.vault.auth.kubernetes.role | default ""))) }}
 {{- fail "ClusterSecretStore workflows on Vault needs secrets.workflowStore.vault.role: a kubernetes-auth role whose policy reads only workflowStore.keys, distinct from secrets.vault.auth.kubernetes.role (store platform's)" }}
 {{- end }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-vault-workflows
-  namespace: {{ .Release.Namespace }}
 ---
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: workflows
-spec:
-  {{- include "secret-stores.workflowConditions" . | nindent 2 }}
-  provider:
-    vault:
-      server: {{ .Values.secrets.vault.server | quote }}
-      path: {{ ($ws.vault).path | default .Values.secrets.vault.path | default "platform" | quote }}
-      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
-      auth:
-        kubernetes:
-          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
-          role: {{ $wfVaultRole | quote }}
-          serviceAccountRef:
-            name: eso-vault-workflows
-            namespace: {{ .Release.Namespace }}
-{{- end }}
+{{ include "secret-stores.store" (dict "root" . "backend" $backend "name" "workflows"
+      "serviceAccount" (get (dict "kubernetes" "eso-workflows" "aws" "eso-aws-workflows" "vault" "eso-vault-workflows") $backend)
+      "conditions" (include "secret-stores.workflowConditions" . | fromYamlArray)
+      "remoteNamespace" $platformNs "automountToken" (ne $backend "kubernetes")
+      "resourceNames" $wfKeys "irsaRole" $wfAwsRole "vaultRole" $wfVaultRole "vaultPath" ($ws.vault).path) }}
 {{- else -}}
-{{- if eq $backend "kubernetes" -}}
 {{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}
+{{- if eq $backend "kubernetes" -}}
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $wlNs | quote }}
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-workload-default
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-workload-default
-  namespace: {{ $wlNs | quote }}
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-workload-default
-  namespace: {{ $wlNs | quote }}
-subjects:
-  - kind: ServiceAccount
-    name: eso-workload-default
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-workload-default
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: default
-spec:
-  provider:
-    kubernetes:
-      remoteNamespace: {{ $wlNs | quote }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-workload-default
-          namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "aws" -}}
-# VERIFY: workload IRSA / Pod Identity auth for AWS Secrets Manager
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-aws
-  namespace: {{ .Release.Namespace }}
-  {{- if .Values.secrets.aws.role }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.secrets.aws.role | quote }}
-  {{- end }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: default
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.secrets.aws.region | quote }}
-      {{- if .Values.secrets.aws.prefix }}
-      prefix: {{ .Values.secrets.aws.prefix | quote }}
-      {{- end }}
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: eso-aws
-            namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "vault" -}}
-# VERIFY: workload Vault auth
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-vault
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: default
-spec:
-  provider:
-    vault:
-      server: {{ .Values.secrets.vault.server | quote }}
-      path: {{ .Values.secrets.vault.path | default "platform" | quote }}
-      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
-      auth:
-        kubernetes:
-          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
-          role: {{ .Values.secrets.vault.auth.kubernetes.role | quote }}
-          serviceAccountRef:
-            name: eso-vault
-            namespace: {{ .Release.Namespace }}
 {{- end }}
+{{- /* VERIFY: workload auth on the aws (IRSA / Pod Identity) and vault backends (stores default and dns) */}}
+{{ include "secret-stores.store" (dict "root" . "backend" $backend "name" "default"
+      "serviceAccount" (get (dict "kubernetes" "eso-workload-default" "aws" "eso-aws" "vault" "eso-vault") $backend)
+      "remoteNamespace" $wlNs) }}
 {{- /*
 ClusterSecretStore `dns` (workload clusters, installation.yaml dns.provider cloudflare): the external-dns Cloudflare
 token, zone-wide DNS:Edit. The tenant store `default` is the ClusterDataPlane secretStoreRef, so anything it can read
 is readable by every tenant; this store reads from a separate backend location with its own identity and is scoped to
 dnsStore.namespaces (external-dns). AGENTS.md invariant 5 exception; addon external-dns refuses any other store.
 */ -}}
-{{- if and (ne .Values.role "mgmt") (eq ((.Values.dns).provider | default "none") "cloudflare") }}
+{{- if eq ((.Values.dns).provider | default "none") "cloudflare" }}
 {{- $dnsNs := .Values.dnsStore.namespaces | default list }}
 {{- if not $dnsNs }}{{ fail "dnsStore.namespaces must list the namespaces allowed to read ClusterSecretStore dns" }}{{ end }}
 {{- $ds := .Values.secrets.dnsStore | default dict }}
+{{- $credNs := ($ds.kubernetes).namespace | default "external-dns-credentials" }}
+{{- $role := (get $ds $backend | default dict).role | default "" }}
+{{- if and (eq $backend "kubernetes") (eq $credNs $wlNs) }}
+{{- fail "secrets.dnsStore.kubernetes.namespace must differ from secrets.workloadKubernetes.namespace (the tenant store default reads that one)" }}
+{{- else if and (eq $backend "aws") (or (not $role) (eq $role (.Values.secrets.aws.role | default ""))) }}
+{{- fail "dns.provider cloudflare on AWS Secrets Manager needs secrets.dnsStore.aws.role: an IAM role that reads only the DNS key, distinct from secrets.aws.role (the tenant store default's)" }}
+{{- else if and (eq $backend "vault") (or (not $role) (eq $role (.Values.secrets.vault.auth.kubernetes.role | default ""))) }}
+{{- fail "dns.provider cloudflare on Vault needs secrets.dnsStore.vault.role: a kubernetes-auth role whose policy reads only the DNS key, distinct from secrets.vault.auth.kubernetes.role (the tenant store default's)" }}
+{{- end }}
 ---
 {{- if eq $backend "kubernetes" }}
-{{- $credNs := ($ds.kubernetes).namespace | default "external-dns-credentials" }}
-{{- if eq $credNs (.Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets") }}
-{{- fail "secrets.dnsStore.kubernetes.namespace must differ from secrets.workloadKubernetes.namespace (the tenant store default reads that one)" }}
-{{- end }}
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $credNs | quote }}
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-workload-dns
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-workload-dns
-  namespace: {{ $credNs | quote }}
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-workload-dns
-  namespace: {{ $credNs | quote }}
-subjects:
-  - kind: ServiceAccount
-    name: eso-workload-dns
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: eso-workload-dns
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: dns
-spec:
-  conditions:
-    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
-  provider:
-    kubernetes:
-      remoteNamespace: {{ $credNs | quote }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-workload-dns
-          namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "aws" }}
-{{- $role := ($ds.aws).role | default "" }}
-{{- if or (not $role) (eq $role (.Values.secrets.aws.role | default "")) }}
-{{- fail "dns.provider cloudflare on AWS Secrets Manager needs secrets.dnsStore.aws.role: an IAM role that reads only the DNS key, distinct from secrets.aws.role (the tenant store default's)" }}
 {{- end }}
-# VERIFY: workload IRSA / Pod Identity auth for AWS Secrets Manager
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-aws-dns
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ $role | quote }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: dns
-spec:
-  conditions:
-    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
-  provider:
-    aws:
-      service: SecretsManager
-      region: {{ .Values.secrets.aws.region | quote }}
-      {{- if .Values.secrets.aws.prefix }}
-      prefix: {{ .Values.secrets.aws.prefix | quote }}
-      {{- end }}
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: eso-aws-dns
-            namespace: {{ .Release.Namespace }}
-{{- else if eq $backend "vault" }}
-{{- $role := ($ds.vault).role | default "" }}
-{{- if or (not $role) (eq $role (.Values.secrets.vault.auth.kubernetes.role | default "")) }}
-{{- fail "dns.provider cloudflare on Vault needs secrets.dnsStore.vault.role: a kubernetes-auth role whose policy reads only the DNS key, distinct from secrets.vault.auth.kubernetes.role (the tenant store default's)" }}
-{{- end }}
-# VERIFY: workload Vault auth
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-vault-dns
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: dns
-spec:
-  conditions:
-    - namespaces: {{- toYaml $dnsNs | nindent 8 }}
-  provider:
-    vault:
-      server: {{ .Values.secrets.vault.server | quote }}
-      path: {{ ($ds.vault).path | default .Values.secrets.vault.path | default "platform" | quote }}
-      version: {{ .Values.secrets.vault.version | default "v2" | quote }}
-      auth:
-        kubernetes:
-          mountPath: {{ .Values.secrets.vault.auth.kubernetes.mountPath | default "kubernetes" | quote }}
-          role: {{ $role | quote }}
-          serviceAccountRef:
-            name: eso-vault-dns
-            namespace: {{ .Release.Namespace }}
-{{- end }}
+{{ include "secret-stores.store" (dict "root" . "backend" $backend "name" "dns"
+      "serviceAccount" (get (dict "kubernetes" "eso-workload-dns" "aws" "eso-aws-dns" "vault" "eso-vault-dns") $backend)
+      "conditions" (list (dict "namespaces" $dnsNs))
+      "remoteNamespace" $credNs "irsaRole" $role "vaultRole" $role "vaultPath" ($ds.vault).path) }}
 {{- end }}
 {{- end -}}
