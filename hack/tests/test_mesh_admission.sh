@@ -7,6 +7,8 @@
 #           a token the mesh CA accepts (ServiceAccount istio-csr-openbao / audience vault://istio-system/openbao-mesh)
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
 
 echo "== test_mesh_admission =="
 if ! command -v kyverno >/dev/null 2>&1; then
@@ -24,10 +26,10 @@ CM=system:serviceaccount:cert-manager:cert-manager
   helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local \
     --set-string cluster.name=dev1 -s templates/admission.yaml
 } > "$TMP/mrc.yaml"
-helm template cert-manager addons/cert-manager --namespace cert-manager \
-  | yq 'select(.kind == "CustomResourceDefinition" and .spec.group == "cert-manager.io")' > "$TMP/crds.yaml"
-{ echo '---'; helm template external-secrets addons/external-secrets --namespace external-secrets \
-  | yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "externalsecrets.external-secrets.io")'; } >> "$TMP/crds.yaml"
+render_standalone_addon cert-manager "$TMP/cm.yaml"
+yq 'select(.kind == "CustomResourceDefinition" and .spec.group == "cert-manager.io")' "$TMP/cm.yaml" > "$TMP/crds.yaml"
+render_standalone_addon external-secrets "$TMP/es.yaml"
+{ echo '---'; yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "externalsecrets.external-secrets.io")' "$TMP/es.yaml"; } >> "$TMP/crds.yaml"
 for p in $(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.name' "$TMP/mrc.yaml"); do
   yq "select(.metadata.name == \"$p\" and .kind == \"ValidatingAdmissionPolicy\")" "$TMP/mrc.yaml" > "$TMP/policy-$p.yaml"
   b=$(yq -N "select(.kind == \"ValidatingAdmissionPolicyBinding\" and .spec.policyName == \"$p\") | .spec.validationActions[]" "$TMP/mrc.yaml")
@@ -39,16 +41,21 @@ assert_eq "$(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .metadata.nam
 
 user_file() {   # user_file <username> -> path of a kyverno CLI UserInfo file
   local f="$TMP/user-${1//[^a-zA-Z0-9]/_}.yaml"
-  printf 'apiVersion: cli.kyverno.io/v1alpha1\nkind: UserInfo\nmetadata: { name: u }\nuserInfo:\n  username: %s\n' "$1" > "$f"
+  [[ -s "$f" ]] || printf 'apiVersion: cli.kyverno.io/v1alpha1\nkind: UserInfo\nmetadata: { name: u }\nuserInfo:\n  username: %s\n' "$1" > "$f"
   printf '%s' "$f"
 }
 
-# check <policy> <user> <pass|fail|skip> <label> < resource-yaml. Runs at the end of a pipe (subshell), so results go
-# to a file and are asserted in the main shell (tally).
+# check <policy> <user> <pass|fail|skip> <label> < resource-yaml. Queues each resource from its pipe subshell;
+# tally() evaluates the queue in parallel and asserts in the main shell.
 check() {
-  local policy=$1 user=$2 want=$3 label=$4 res="$TMP/res.yaml" out got
+  local policy=$1 user=$2 want=$3 label=$4 res
+  res=$(mktemp "$TMP/res.XXXXXX")
   cat > "$res"
-  out=$(kyverno apply "$TMP/policy-$policy.yaml" --resource "$res" --userinfo "$(user_file "$user")" \
+  printf '%s\t%s\t%s\t%s\t%s\n' "$res" "$policy" "$user" "$want" "$label" >> "$TMP/queue"
+}
+run_check() {
+  local res=$1 policy=$2 ufile=$3 out got
+  out=$(kyverno apply "$TMP/policy-$policy.yaml" --resource "$res" --userinfo "$ufile" \
     --crd-paths "$TMP/crds.yaml" 2>&1 || true)
   got=$(printf '%s\n' "$out" | sed -n 's/^pass: \([0-9]*\), fail: \([0-9]*\), warn: [0-9]*, error: \([0-9]*\), skip: \([0-9]*\).*/p\1 f\2 e\3 s\4/p')
   case "$got" in
@@ -57,14 +64,23 @@ check() {
     "p0 f0 e0 s1"|"p0 f0 e0 s0") got=skip ;;
     *) got="unexpected: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-300)" ;;
   esac
-  printf '%s\t%s\t%s\n' "$got" "$want" "$policy: $label" >> "$TMP/results"
+  printf '%s\n' "$got" > "$res.got"
 }
 tally() {
-  local got want label
-  while IFS=$'\t' read -r got want label; do assert_eq "$got" "$want" "$label"; done < "$TMP/results"
-  : > "$TMP/results"
+  local res policy user want label ufile jobs running=0
+  jobs=$(cpu_count)
+  while IFS=$'\t' read -r res policy user want label; do
+    ufile=$(user_file "$user")
+    run_check "$res" "$policy" "$ufile" &
+    if (( ++running >= jobs )); then wait; running=0; fi
+  done < "$TMP/queue"
+  wait
+  while IFS=$'\t' read -r res policy user want label; do
+    assert_eq "$(cat "$res.got")" "$want" "$policy: $label"
+  done < "$TMP/queue"
+  : > "$TMP/queue"
 }
-: > "$TMP/results"
+: > "$TMP/queue"
 
 reader() {   # reader <extra spec yaml (indented 2)> [namespace]
   printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: dev1-mesh-reader, namespace: %s }\nspec:\n  secretName: dev1-mesh-reader\n  issuerRef: { kind: Issuer, name: dev1-client-ca }\n%s\n' "${2:-fleet}" "$1"
@@ -155,8 +171,8 @@ cr Issuer openbao-mesh '  isCA: true
   duration: 24h' istio-system | check $P "$CSR" fail "negative: CA request"
 cr Issuer letsencrypt '  duration: 24h' istio-system | check $P alice skip "other issuers are not affected"
 P=platform-mesh-ca-certificates
-helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 \
-  | yq 'select(.kind == "Certificate" and .metadata.name == "istiod")' | check $P "$ARGO" pass "the chart's istiod Certificate"
+helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 > "$TMP/istio-csr-dev1.yaml"
+yq 'select(.kind == "Certificate" and .metadata.name == "istiod")' "$TMP/istio-csr-dev1.yaml" | check $P "$ARGO" pass "the chart's istiod Certificate"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: impostor, namespace: istio-system }\nspec:\n  secretName: impostor\n  uris: [spiffe://cluster.local/ns/prod/sa/payments]\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
   | check $P alice fail "negative: another Certificate minting a SPIFFE identity"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: istiod, namespace: default }\nspec:\n  secretName: x\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
@@ -169,8 +185,7 @@ vault_issuer() {   # vault_issuer <kind> <name> <namespace|""> <serviceAccountRe
   local md="{ name: $2 }"; [[ -n "$3" ]] && md="{ name: $2, namespace: $3 }"
   printf 'apiVersion: cert-manager.io/v1\nkind: %s\nmetadata: %s\nspec:\n  vault:\n    server: https://openbao.example:8200\n    path: pki-mesh-local-int/sign/dev1\n    auth:\n      kubernetes:\n        mountPath: /v1/auth/mesh-dev1\n        role: istio-csr\n        serviceAccountRef: %s\n' "$1" "$md" "$4"
 }
-helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 \
-  | yq 'select(.kind == "Issuer" and .metadata.name == "openbao-mesh")' | check $P "$ARGO" pass "the chart's Issuer openbao-mesh"
+yq 'select(.kind == "Issuer" and .metadata.name == "openbao-mesh")' "$TMP/istio-csr-dev1.yaml" | check $P "$ARGO" pass "the chart's Issuer openbao-mesh"
 vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao }' | check $P alice fail "negative: second Issuer as istio-csr-openbao"
 vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao, audiences: ["vault://istio-system/openbao-mesh"] }' \
   | check $P alice fail "negative: second Issuer with the mesh audience (the review's bypass)"
@@ -189,6 +204,7 @@ printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: selfsign
 n=0
 for f in "${RENDERED_DIR:-/nonexistent}"/cluster-*.yaml; do
   [[ -f "$f" ]] || continue
+  grep -qE -- '-mesh-reader|-client-ca' "$f" || continue
   for c in $(yq -N 'select(.kind == "Certificate" and (.metadata.name | test("-mesh-reader$"))) | .metadata.name' "$f"); do
     n=$((n + 1))
     yq "select(.kind == \"Certificate\" and .metadata.name == \"$c\")" "$f" \
