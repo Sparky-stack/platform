@@ -19,11 +19,11 @@ echo "== test_falco_tokens =="
 URL="http://events.example.test:8080/falco/"   # trailing slash on purpose: senders trim it
 TOKEN="sample-store-token"
 
+mkdir -p "$TMP/eval/templates"
+printf 'apiVersion: v2\nname: eval\nversion: 0.0.0\n' > "$TMP/eval/Chart.yaml"
 # eso_eval <ESO template> -> its value for the sample store key (url, token), via Helm's template engine
 eso_eval() {
   local d="$TMP/eval" t
-  mkdir -p "$d/templates"
-  printf 'apiVersion: v2\nname: eval\nversion: 0.0.0\n' > "$d/Chart.yaml"
   t=${1//.token/.Values.token}; t=${t//.url/.Values.url}
   printf 'apiVersion: v1\nkind: ConfigMap\nmetadata: { name: v }\ndata:\n  v: |-\n    %s\n' "$t" > "$d/templates/v.yaml"
   helm template e "$d" --set-string "token=$TOKEN,url=$URL" | yq -r '.data.v'
@@ -34,15 +34,13 @@ for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir")
   prender="$TMP/platform-$inst.yaml"
-  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$prender"
+  render_platform "$inst" "$prender"
   m_name=$(yq -r '.mgmt.name // "mgmt"' "$inst_dir/installation.yaml")
   m_prov=$(yq -r '.mgmt.provider // "docker"' "$inst_dir/installation.yaml")
 
   # receiver
-  args=()
-  read_lines args addon_helm_args argo-events "$inst_dir" "$prender" mgmt "$m_name" "$m_prov" mgmt local flannel https://kubernetes.default.svc
   ae="$TMP/ae-$inst.yaml"
-  helm template argo-events addons/argo-events --namespace argo-events "${args[@]}" > "$ae"
+  render_layered_addon "$inst" argo-events "$ae" "$prender" mgmt "$m_name" "$m_prov" mgmt local flannel https://kubernetes.default.svc
   es=$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "falco-webhook")' "$ae")
   assert_eq "$(yq -r '.spec.data[0].remoteRef.key + "/" + .spec.data[0].remoteRef.property' <<<"$es")" falco-webhook/token "$inst: receiver reads the store token"
   fleet=$(addon_fleet_names "$inst_dir"); fleet=${fleet#\{}; fleet=${fleet%\}}
@@ -55,15 +53,13 @@ for inst_dir in installations/*; do
       "/falco/$c falco-webhook/$c" "$inst/$c: endpoint /falco/$c accepts only key $c"
 
     if [[ "$c" == "$m_name" ]]; then
-      args=()
-      read_lines args addon_helm_args falco "$inst_dir" "$prender" mgmt "$m_name" "$m_prov" mgmt local flannel https://kubernetes.default.svc
-      fo=$(helm template falco addons/falco --namespace falco "${args[@]}" | yq 'select(.kind == "ExternalSecret" and .metadata.name == "falcosidekick-escalation")')
+      render_layered_addon "$inst" falco "$TMP/falco-$inst-mgmt.yaml" "$prender" mgmt "$m_name" "$m_prov" mgmt local flannel https://kubernetes.default.svc
+      fo=$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "falcosidekick-escalation")' "$TMP/falco-$inst-mgmt.yaml")
       header=$(eso_eval "$(yq -r '.spec.target.template.data.WEBHOOK_CUSTOMHEADERS' <<<"$fo")")
       address=$(eso_eval "$(yq -r '.spec.target.template.data.WEBHOOK_ADDRESS' <<<"$fo")")
     else
-      cf=$(grep -l "^name: $c\$" "$inst_dir"/clusters/*.yaml)
-      crs=$(helm template "cluster-$c" charts/cluster --namespace fleet --values "$inst_dir/installation.yaml" --values "$cf" -s templates/falco-escalation-crs.yaml \
-        | yq -r 'select(.kind == "ExternalSecret") | .spec.target.template.data["falco-escalation.yaml"]')
+      render_cluster "$inst" "$c" "$TMP/cluster-$inst-$c.yaml"
+      crs=$(yq -r 'select(.kind == "ExternalSecret" and (.spec.target.template.data | has("falco-escalation.yaml"))) | .spec.target.template.data["falco-escalation.yaml"]' "$TMP/cluster-$inst-$c.yaml")
       # the payload is an ESO template, not YAML yet: take the value text after the key
       header=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_CUSTOMHEADERS: //p' <<<"$crs")")")
       address=$(b64d "$(eso_eval "$(sed -n 's/^ *WEBHOOK_ADDRESS: //p' <<<"$crs")")")
@@ -80,9 +76,8 @@ for inst_dir in installations/*; do
   for cf in "$inst_dir"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue
     c=$(yq -r '.name' "$cf")
-    args=()
-    read_lines args addon_helm_args falco "$inst_dir" "$prender" workload "$c" "$(yq -r '.provider // "docker"' "$cf")" env local cilium https://192.0.2.10:6443
-    reads=$(helm template falco addons/falco --namespace falco "${args[@]}" | yq -r 'select(.kind == "ExternalSecret") | .spec.data[].remoteRef.key' | grep -c '^falco-webhook$' || true)
+    render_layered_addon "$inst" falco "$TMP/falco-$inst-$c.yaml" "$prender" workload "$c" "$(yq -r '.provider // "docker"' "$cf")" env local cilium https://192.0.2.10:6443
+    reads=$(yq -r 'select(.kind == "ExternalSecret") | .spec.data[].remoteRef.key' "$TMP/falco-$inst-$c.yaml" | grep -c '^falco-webhook$' || true)
     assert_eq "$reads" 0 "$inst/$c: the workload's falco never reads store key falco-webhook"
   done
 done
