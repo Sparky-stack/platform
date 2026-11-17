@@ -24,6 +24,10 @@ previews:
   requeueAfterSeconds: 1800
   expiredLabel: preview-expired
 
+secrets:
+  tenantStores:
+    enabled: false          # per-tenant OpenBao secrets (templates/secrets.yaml); needs addon openbao on mgmt
+
 # --- chart settings (platform-wide; override in installation.yaml only if needed) ---------------------------------
 argocd:
   namespace: argocd
@@ -89,3 +93,8 @@ sourceIntegrity:
   mode: head                         # none | head (HEAD commit/tag signed) | strict (every commit since the last signed tag)
   keys: [B5690EEEBB952194]           # GitHub web-flow commit signing key (since 2024-01; VERIFY); add maintainers' keys
   repos: ["{{ .Values.installation.githubOrg }}/*"]   # tpl over the installation values
+
+# Per-tenant secrets (templates/secrets.yaml); == addon openbao tenantSecrets.inputsNamespace / .label.
+tenantSecrets:
+  namespace: openbao-tenants
+  label: openbao.platform.koorikla.io/tenant

@@ -12,6 +12,9 @@ for bin in helm yq kubeconform; do
   command -v "$bin" >/dev/null || { echo "missing required tool: $bin" >&2; exit 1; }
 done
 pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
+# Name tool drift up front: a non-interactive shell whose mise PATH was activated outside the repo runs the global
+# yq/helm, not mise.toml's, and an older yq fails deep in a test with a bare parse error. A warning only.
+./hack/tools.sh check helm yq kubeconform 2>&1 | grep -E '^ *(DRIFT|MISSING)' >&2 || true
 
 # CHARTS="addons/x charts/y": lint/render/unittest only these chart dirs (git pre-commit hook: hack/hooks.sh charts).
 # charts/platform and charts/cluster still render (addons read their output); contract tests run in the full suite only.

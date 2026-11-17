@@ -14,6 +14,8 @@ secrets:
     region: eu-central-1
     prefix: ""
     role: ""
+  tenantStores:
+    enabled: false             # installation.yaml: per-tenant OpenBao SecretStores (tenantStores below)
   vault:
     server: https://vault.example.com
     path: platform
@@ -106,6 +108,20 @@ previewToken:
   githubKey: promotion-gate-github
   permissions: { pull_requests: read }
   refreshInterval: 30m
+
+# Per-tenant SecretStores on workload clusters (templates/tenant-stores.yaml; installation.yaml
+# secrets.tenantStores.enabled, default off; needs addon openbao on mgmt and the cluster to be a mesh member: OpenBao
+# verifies the logins against the members' JWKS from the mesh-clients inputs, and the CA comes with the mesh trust).
+# ClusterSecretStore default then excludes tenant namespaces (conditions), which use SecretStore storeName only.
+tenantStores:
+  tenantLabel: openchoreo.dev/project          # set by OpenChoreo on every cell namespace (value = project)
+  storeName: openbao-tenant
+  serviceAccount: openbao-tenant               # == addon openbao tenantSecrets.readerServiceAccount
+  audience: openbao-tenant-secrets             # == addon openbao tenantSecrets.audience
+  tokenExpirationSeconds: 600
+  caSecret: { namespace: istio-system, name: openbao-ca, key: ca.crt }   # charts/cluster mesh-trust payload
+  storeWriters:                                # the only identities that may write SecretStores in tenant namespaces
+    - system:serviceaccount:kyverno:kyverno-background-controller
 
 repoCreds:
   name: platform-repo-creds

@@ -26,8 +26,11 @@ app.kubernetes.io/part-of: openbao
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{- /* Pod spec of the mesh reconcile Job/CronJob (templates/reconcile.yaml); context: dict r env sa img meshClients tlsSecret. */ -}}
+{{- /* Pod spec of the reconcile Jobs/CronJobs (templates/reconcile.yaml, templates/tenant-secrets.yaml); context: dict
+r env sa img meshClients tlsSecret, optional script (default mesh-reconcile: ConfigMap + files/<script>.sh) and inputs
+(list of {name, secret, path}; default: meshClients at /inputs). */ -}}
 {{- define "openbao-addon.reconcilePod" }}
+{{- $inputs := .inputs | default (list (dict "name" "inputs" "secret" .meshClients "path" "/inputs")) }}
 serviceAccountName: {{ .sa }}
 automountServiceAccountToken: false
 restartPolicy: Never
@@ -39,7 +42,7 @@ securityContext:
 containers:
   - name: reconcile
     image: {{ printf "%s/%s:%s" .img.registry .img.repository .img.tag | quote }}
-    command: [/bin/sh, /scripts/mesh-reconcile.sh]
+    command: [/bin/sh, {{ printf "/scripts/%s.sh" (.script | default "mesh-reconcile") }}]
     env:
       {{- toYaml .env | nindent 6 }}
     resources:
@@ -50,15 +53,19 @@ containers:
       capabilities: { drop: [ALL] }
     volumeMounts:
       - { name: scripts, mountPath: /scripts, readOnly: true }
-      - { name: inputs, mountPath: /inputs, readOnly: true }
+      {{- range $i := $inputs }}
+      - { name: {{ $i.name }}, mountPath: {{ $i.path }}, readOnly: true }
+      {{- end }}
       - { name: token, mountPath: /var/run/secrets/openbao, readOnly: true }
       - { name: tls-ca, mountPath: /openbao/tls, readOnly: true }
       - { name: tmp, mountPath: /tmp }
 volumes:
   - name: scripts
-    configMap: { name: mesh-reconcile }
-  - name: inputs
-    secret: { secretName: {{ .meshClients }}, optional: true }    # no members yet: groups only
+    configMap: { name: {{ .script | default "mesh-reconcile" }} }
+  {{- range $i := $inputs }}
+  - name: {{ $i.name }}
+    secret: { secretName: {{ $i.secret }}, optional: true }    # no members / tenants yet: nothing to enrol
+  {{- end }}
   - name: token
     projected:
       sources:

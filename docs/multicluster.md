@@ -207,6 +207,9 @@ Kubernetes API access) and **authors no ACL policy**.
 | `platform-mesh-config` (SAs `openbao-mesh-config`, `openbao-mesh-bootstrap`) | CronJob + Sync-hook Job | enable/configure `jwt` auth at `auth/mesh-*` (type pinned to `jwt`, roles may only carry policy `mesh-member`); write `<mount>/roles/<name>` with every widening flag pinned (`required_parameters` + `allowed_parameters`: no any-name, IP SANs, localhost, globs, wildcards, subdomains, other SANs, URI templates, code-signing/email EKUs; `no_store`, `issuer_ref=default`); write identity entities `mesh-*` (metadata only, no policies) and their aliases | everything above, plus any CA operation: no mount, no key generation, no `sign-intermediate` (not CA-equivalent) |
 | `mesh-member` (templated) | members' istio-csr (JWT, batch tokens) | `pki-mesh-<group>-int/sign/<name>` of its own entity | everything else |
 | `mesh-ca-read` (SA `eso-openbao-pki-public`) | ESO | read `+/cert/ca` (public); `auth/token/lookup-self`, `auth/token/revoke-self` (its own token) | everything else |
+| `platform-tenant-config` (SA `openbao-tenant-config`) | CronJob `tenant-reconcile` ([tenant secrets](#tenant-secrets-openbao)) | mount `kv-tenant-*` (type `kv` only; no delete); enable/configure `jwt` auth at `auth/tenants-*` whose roles may only carry `tenant-read`; entities `tenant-*` (metadata only) and their aliases | read or write any secret (`kv-tenant-*` denied), any policy, Kubernetes auth roles, anything of the mesh (`auth/mesh-*`, `pki-*`) |
+| `tenant-read` (templated) | per-namespace `SecretStore`s on members (JWT, `auth/tenants-<cluster>`) | read `kv-tenant-<tenant>/data/*`, list its metadata, of its own entity's `tenant`; token self-operations | everything else |
+| `tenant-write` (templated, role `tenant-writer`) | SA `openbao-tenants/<tenant>-writer` on mgmt | write `kv-tenant-<tenant>/` of its own entity | everything else |
 
 Read this as: **the reconcile identities are CA administrators of the mesh, not OpenBao administrators.** The bootstrap
 identity can sign an intermediate CSR with a group root, which is CA-equivalent; that is why it exists only in the
@@ -295,6 +298,47 @@ Planned procedure, not a renewal (the intermediate lives 5 years inside OpenBao;
 short-lived): generate a new root next to the old one, publish both in `mesh-root-ca` (a trust bundle), switch the
 intermediate to the new root, then drop the old root. Tracked with the other follow-ups in
 [#71](https://github.com/koorikla/platform/issues/71).
+
+## Tenant secrets (OpenBao)
+Tenants never share a secret store ([#96](https://github.com/koorikla/platform/issues/96)). With
+`installation.yaml secrets.tenantStores.enabled` (on in `local`; needs `mgmt.addons.openbao` and mesh members) every
+OpenChoreo cell namespace on a workload cluster has its own `SecretStore openbao-tenant`, and the same OpenBao that is
+the mesh CA holds one KV v2 mount per tenant (tenant = OpenChoreo project):
+
+| Where | What | Rendered by |
+|---|---|---|
+| mgmt `openbao-tenants` | `Secret <project>-openbao-tenant` (the project's cell namespaces, computed like OpenChoreo 1.3.3 names them: `dp-<org>-<project>-<env>-<sha256[:8]>`), `ServiceAccount <project>-writer` | charts/tenant |
+| OpenBao | `kv-tenant-<project>`; entity `tenant-<project>` (metadata `tenant`); per member `auth/tenants-<cluster>` (jwt, the member's JWKS like `auth/mesh-<cluster>`) with role `<project>` = exactly the `openbao-tenant` ServiceAccount of those namespaces, audience `openbao-tenant-secrets`, policy `tenant-read` | addon openbao, CronJob `tenant-reconcile` (`files/tenant-reconcile.sh`, every 5 min) |
+| member, each cell namespace | `ServiceAccount` + `SecretStore openbao-tenant`: vault provider, `path: kv-tenant-<project>`, JWT login with a 10-minute projected token, CA from `istio-system/openbao-ca` | addon secret-stores, Kyverno `GeneratingPolicy platform-tenant-secret-store` (synchronised) |
+| member | `ClusterSecretStore default`: conditions exclude namespaces labelled `openchoreo.dev/project`; VAPs: tenant `ExternalSecret`/`PushSecret`s may reference only `SecretStore openbao-tenant` (no `ClusterSecretStore`, `ClusterGenerator`, other store or label selector), `SecretStore`s there are written only by Kyverno | addon secret-stores |
+| OpenChoreo | component types render `SecretReference`s as `ExternalSecret`s on `SecretStore openbao-tenant`: developers never name a store; `remoteRef.key` is the key inside their own mount | addon openchoreo-platform |
+
+Isolation is enforced by OpenBao, not by naming: the policies are **static** (self-initialisation; the reconcile writes
+none) and templated on the caller's entity, so a token can only ever reach `kv-tenant-<its entity's tenant>`; a login
+whose alias the reconcile did not bind resolves to an entity without metadata and reaches nothing. A namespace two
+descriptors claim is bound to neither. A tenant removed from git loses its roles and entity at once; its mount (the
+data) stays. Tests: `hack/tests/test_openbao_tenant_reconcile.sh` (fake CLI, `task test`) and the tenant section of
+`task test:openbao` (real OpenBao: tenant A's token is denied on tenant B's mount, writers and the reconcile identity
+confined), `tests/vap` of addon secret-stores (kyverno CLI).
+
+**Writing a secret** (the value never goes through git): whoever may mint a token for `openbao-tenants/<project>-writer`
+(Kubernetes RBAC on mgmt; platform operators by default) writes to the tenant's mount:
+
+```bash
+K="kubectl --context k3d-platform-mgmt"
+# line 1: a 10-minute token of the writer ServiceAccount; the rest: the value (here from a local file, never echoed)
+{ $K -n openbao-tenants create token demo-writer --audience openbao --duration 10m; cat ./db-password; } \
+  | $K -n openbao exec -i openbao-0 -- sh -c 'read -r jwt
+      BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=tenant-writer jwt="$jwt") bao kv put kv-tenant-demo/db password=-'
+```
+
+Tenant self-service (OpenBao UI/CLI with OIDC from Thunder and a per-tenant group) and per-tenant build secrets on mgmt
+(`workflows-<org>` is shared by all projects of an org) are follow-ups:
+[#169](https://github.com/koorikla/platform/issues/169).
+
+**Existing OpenBao installations**: the tenant policies come with self-initialisation, which ran before this feature
+existed. Enabling it on such an installation is the one-time re-initialisation in
+[break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization) (new mesh roots; members re-enrol).
 
 ## Discovery: declarative remote secrets
 Each istiod watches the other members' API servers (Services, EndpointSlices, Pods, Namespaces) through a remote

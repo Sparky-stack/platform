@@ -1,0 +1,8 @@
+# A tenant: the OpenChoreo cluster agent applying a rendered release (or a person with namespace edit rights).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: UserInfo
+metadata:
+  name: tenant
+userInfo:
+  username: system:serviceaccount:openchoreo-data-plane:cluster-agent
+  groups: [system:serviceaccounts, system:authenticated]

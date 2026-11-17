@@ -12,6 +12,16 @@ allowedWorkflows (the platform's build ClusterWorkflows). Cluster-scoped. */ -}}
 {{- range $.Values.buildWorkflows.stacks }}{{ $wf = append $wf (dict "kind" "ClusterWorkflow" "name" .name) }}{{ end }}
 {{- $_ := set $obj.spec "allowedWorkflows" $wf }}
 {{- end }}
+{{- /* Per-tenant secret stores (installation.yaml secrets.tenantStores.enabled, #96): the ExternalSecrets component
+types render for SecretReferences use the cell namespace's own SecretStore instead of the data plane's
+ClusterSecretStore (which then refuses tenant namespaces; addon secret-stores). Developers never name a store. */ -}}
+{{- if and (eq $obj.kind "ClusterComponentType") ((($.Values.secrets).tenantStores).enabled) }}
+{{- range $r := $obj.spec.resources }}
+{{- if and $r.template (eq (toString $r.template.kind) "ExternalSecret") }}
+{{- $_ := set $r.template.spec "secretStoreRef" (dict "kind" "SecretStore" "name" $.Values.tenantStoreName) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{ toYaml $obj }}
 {{- end }}
 {{- end }}
