@@ -92,8 +92,9 @@ promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
 
 `platforms` defaults to `linux/amd64,linux/arm64`. Dockerfiles that cross-compile (`FROM --platform=$BUILDPLATFORM`,
 like hello-world's Go build) need no emulation. `RUN` steps of a foreign architecture need QEMU binfmt handlers on the
-build node's kernel (present on the dev host; install with `tonistiigi/binfmt` where missing - it changes the host
-kernel, so it is not done by the platform). Narrow `platforms` per Component to build only the node's architecture.
+build node's kernel (present on the dev host: an arm64 `RUN uname -m` printed `aarch64` in rootless BuildKit on the
+amd64 mgmt node; install with `tonistiigi/binfmt` where missing - it changes the host kernel, so it is not done by the
+platform). Narrow `platforms` per Component to build only the node's architecture.
 
 ### Security posture of build pods
 
@@ -109,10 +110,14 @@ kernel, so it is not done by the platform). Narrow `platforms` per Component to 
   Residual: any build may use any repo under an allowed owner (a tenant can rebuild another tenant's repo at an old
   commit); per-repo GitHub App installation tokens close that ([#34](https://github.com/koorikla/platform/issues/34)).
 - Pod Security `restricted` for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
-  capabilities dropped, read-only root where the tool allows) **except `build`**: rootless BuildKit runs as uid 1000,
-  no privilege escalation, no added capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user
-  namespaces (rootlesskit). No privileged container, no Docker daemon, no DinD. Kyverno's Pod Security policies (Audit)
-  report that pod.
+  capabilities dropped, read-only root where the tool allows) **except `build`**: rootless BuildKit runs as uid 1000
+  with no effective capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user namespaces
+  (rootlesskit), and privilege escalation with `SETUID`/`SETGID` kept in the bounding set (all others dropped):
+  rootlesskit maps the user namespace with `newuidmap`/`newgidmap`, which gain those two caps from file capabilities.
+  It reads the run volume through `supplementalGroups: [65532]`, not `fsGroup` (which would chown BuildKit's state
+  emptyDir to a gid the user namespace does not map). Snapshotter `overlayfs` (rootless overlay mounts, Linux >= 5.11):
+  `auto` picked the copying `native` snapshotter on the k3d node and a hello-world build took over 15 minutes. No
+  privileged container, no Docker daemon, no DinD. Kyverno's Pod Security policies (Audit) report that pod.
 - **No ServiceAccount token in run containers**: both ClusterWorkflowTemplates (and the ClusterWorkflows' run
   templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
   init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
@@ -153,7 +158,8 @@ one of them. The GitHub Actions path stays keyless.
   egress to Sigstore. Set it `true` per installation (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to
   upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
-  vuln|spdxjson`). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
+  vuln` / `--type https://spdx.dev/Document/v2.3`: the SBOM uses the predicate type of koorikla/ci's GitHub path, so
+  admission checks one SBOM type for both). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
 - Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
   only with `imageVerification.platformKey.publicKey` = this `cosign.pub` (tlog ignored, `rekor: false`); without it
   the registry is not a trusted source (production denies its images). Set per installation; local leaves it empty
@@ -308,7 +314,7 @@ Names: `harbor.openchoreo.localhost`
 |---|---|---|
 | Harbor core / jobservice / registry+ctl / portal | 50m / 20m / 30m / 10m | 128Mi / 64Mi / 96Mi / 32Mi |
 | Harbor PostgreSQL / Valkey / Trivy | 25m / 10m / 50m | 128Mi / 32Mi / 192Mi |
-| Harbor Gateway proxy (kgateway Envoy) | kgateway default | ~64Mi (estimate) |
+| Harbor Gateway proxy (kgateway Envoy) | kgateway default | ~55Mi (measured after builds) |
 | Argo Workflows controller / cluster-agent | 25m / 10m | 64Mi / 64Mi |
 | **Steady state total** | **~240m** | **~0.85 GiB** (budget: 1.5 GiB) |
 | Per build (peak, sequential steps) | 500m (BuildKit) | 768Mi BuildKit; checks 512Mi; scans 384Mi |
