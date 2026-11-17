@@ -408,8 +408,8 @@ def trust() -> Diagram:
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
-                "The restore order after losing the management cluster: first the state Git cannot recreate, then "
-                "Argo CD rebuilds everything declarative from Git.")
+                "The restore order after losing the management cluster: first the state Git cannot recreate, from "
+                "snapshots and volume copies kept off the host, then Argo CD rebuilds the rest from Git.")
     M1, M2, MW = 44, 348, 224
     ZR = 588
     OZ = ZR + 96
@@ -438,10 +438,10 @@ def backup() -> Diagram:
     d.arrow([(M2 + MW, ymid(R[3])), (OX, ymid(R[3]))], step=6, badge=(xz, ymid(R[3])), label="restore",
             label_pos=(xz, ymid(R[3]) + 32))
     d.require("Git", "Secret backend", "Cluster state (etcd)", "OpenBao", "Thunder", "Harbor", "Databases")
-    d.key("Restore the management cluster's etcd from its latest snapshot: Cluster API keeps its clusters and the "
+    d.key("Restore the management cluster's etcd from its latest snapshot copy: Cluster API keeps its clusters and the "
           "CA keys come back",
-          "Restore Thunder's volumes: users, sign-in clients, signing keys",
-          "OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend, "
+          "Restore Thunder's volumes from their copy: users, sign-in clients, signing keys",
+          "OpenBao (opt-in) restores its volume copy and fetches its unseal key from the secret backend, "
           "which lives outside the clusters (on a laptop, re-seed it with task secrets)",
           "Harbor's images come back from its volumes or from new builds; telemetry starts empty",
           "Argo CD re-syncs everything else from Git",
