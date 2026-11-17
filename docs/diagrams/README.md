@@ -108,6 +108,8 @@ The numbered flow of each diagram, word for word.
 10. OpenChoreo submits it to production only after a code owner approves and merges that pull request
 11. Kyverno admits a pod into production, before it starts, only if its image is signed in the registry and pinned by digest
 
+Every merged pull request, the team's staging one and the gate's production one, comes back in at step 4: Argo CD reads it and applies it to OpenChoreo.
+
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
 1. Argo CD reads the fleet file `clusters/<name>.yaml`

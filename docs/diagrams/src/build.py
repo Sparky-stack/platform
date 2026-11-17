@@ -264,15 +264,14 @@ def sdlc() -> Diagram:
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[2], R2, w, H, "workload", "Staging", ["second", "environment"])
     d.box(c[3], R2, 152, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"])
-    d.box(c[2], R3, w, H, "workload", "Production", ["approved PR,", "then admission"])
-    d.box(c[3], R3, w3, H, "workload", "Admission", ["admits only", "signed images"], aka=("Kyverno",))
+    d.box(c[2], R3, w, H, "workload", "Admission", ["checks every", "image first"], aka=("Kyverno",))
+    d.box(c[3], R3, w3, H, "workload", "Production", ["runs only", "admitted pods"])
     d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1)
     d.arrow([(c[2] + w, R0 + H0 / 2), (c[3], R0 + H0 / 2)], step=2)
     d.arrow([(c[1], R0 + H0 - 16), (c[0] + w, R0 + H0 - 16)], step=3)       # the commit Argo CD then reads
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, R0 + H0)], step=4)
-    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5, label="every merge",
-            label_pos=((c[0] + w + c[1]) / 2, ymid(R1) + 32))
+    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=6)
     xs, xq = c[1] + 110, c[1] + 48             # the release reaches staging, and only later production
     d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=7, badge=(c[1] + w + 40, ymid(R2)),
@@ -284,7 +283,7 @@ def sdlc() -> Diagram:
             label_anchor="start")
     d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=10, badge=(xq, ymid(R3) - 60),
             label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
-    d.arrow([(c[3], ymid(R3)), (c[2] + w, ymid(R3))], step=11)
+    d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=11)              # admission comes before the pods run
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
     d.stages("Development", "Staging", "Production")
@@ -301,6 +300,8 @@ def sdlc() -> Diagram:
           "OpenChoreo submits it to production only after a code owner approves and merges that pull request",
           "Kyverno admits a pod into production, before it starts, only if its image is signed in the registry and "
           "pinned by digest")
+    d.note("Every merged pull request, the team's staging one and the gate's production one, comes back in at step "
+           "4: Argo CD reads it and applies it to OpenChoreo.")
     return d
 
 
