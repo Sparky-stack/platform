@@ -5,14 +5,14 @@
 <path d="M 264.0 308.0 L 696.0 308.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 264.0 346.0 L 324.0 346.0 L 324.0 480.0 L 384.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 576.0 480.0 L 696.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 168.0 360.0 L 168.0 600.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 168.0 360.0 L 168.0 640.0 L 384.0 640.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 264.0 160.0 L 384.0 160.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
 <path class="fx" d="M 696.0 160.0 L 576.0 160.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
 <path class="fx" d="M 792.0 200.0 L 792.0 280.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
 <path class="fx" d="M 264.0 308.0 L 696.0 308.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
 <path class="fx" d="M 264.0 346.0 L 324.0 346.0 L 324.0 480.0 L 384.0 480.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
 <path class="fx" d="M 576.0 480.0 L 696.0 480.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
-<path class="fx" d="M 168.0 360.0 L 168.0 600.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
+<path class="fx" d="M 168.0 360.0 L 168.0 640.0 L 384.0 640.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
 <rect x="72" y="120" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="191.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build &amp; sign</text>
 <text class="s" x="191.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">scans and signs</text>
@@ -34,12 +34,12 @@
 <text class="s" x="792.0" y="415.4" font-size="13" fill="#dde5ef" text-anchor="middle">your services</text>
 <rect x="384" y="440" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="480.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Auto-response</text>
-<text class="s" x="480.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">acts only when</text>
-<text class="s" x="480.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">a rule matches</text>
-<rect x="72" y="600" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="168.0" y="626.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Incident workflow</text>
-<text class="s" x="168.0" y="646.4" font-size="13" fill="#dde5ef" text-anchor="middle">finds the app,</text>
-<text class="s" x="168.0" y="664.4" font-size="13" fill="#dde5ef" text-anchor="middle">records the incident</text>
+<text class="s" x="480.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">stops or labels</text>
+<text class="s" x="480.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">offending pods</text>
+<rect x="384" y="600" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="480.0" y="626.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Incident workflow</text>
+<text class="s" x="480.0" y="646.4" font-size="13" fill="#dde5ef" text-anchor="middle">finds the app,</text>
+<text class="s" x="480.0" y="664.4" font-size="13" fill="#dde5ef" text-anchor="middle">records the incident</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Security · from build to runtime</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A signed supply chain, admission that verifies it, and runtime detection with an automatic response. Identity, secrets and keys</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">underneath: see the trust view.</text>
@@ -61,8 +61,8 @@
 <text class="s" x="636.0" y="512.0" font-size="13" fill="#aab6c8" text-anchor="middle">on a rule match</text>
 <circle cx="636.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="636.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<rect x="184.0" y="551.0" width="84.6" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="188.0" y="565.0" font-size="13" fill="#aab6c8">critical alerts</text>
+<rect x="184.0" y="551.0" width="117.5" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="188.0" y="565.0" font-size="13" fill="#aab6c8">also: critical alerts</text>
 <circle cx="168.0" cy="560.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="168.0" y="564.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
 <line x1="28" y1="702" x2="932" y2="702" stroke="#7c8aa0" stroke-width="1.2"/>

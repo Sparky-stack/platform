@@ -109,8 +109,8 @@ def security() -> Diagram:
     d.box(X[2], R0, BW, H, "workload", "Admission control", ["checks signatures", "and pod settings"])
     d.box(X[0], R1, BW, H, "workload", "Detection", ["watches every pod", "at runtime"])
     d.box(X[2], R1, BW, R2 + H - R1, "workload", "App pods", ["your services"])
-    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["acts only when", "a rule matches"])
-    d.box(X[0], R3, BW, H, "mgmt", "Incident workflow", ["finds the app,", "records the incident"])
+    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["stops or labels", "offending pods"])
+    d.box(X[1], R3, BW, H, "mgmt", "Incident workflow", ["finds the app,", "records the incident"])
     d.arrow([(X[0] + BW, ymid(R0)), (X[1], ymid(R0))], step=2, badge_at=0.5)
     d.arrow([(X[2], ymid(R0)), (X[1] + BW, ymid(R0))], step=3, badge_at=0.5)     # Kyverno reads the registry
     xa = X[2] + BW / 2
@@ -124,8 +124,8 @@ def security() -> Diagram:
             label_pos=((X[1] + BW + X[2]) / 2, ymid(R2) + 32))
     x8 = X[0] + BW / 2                          # Detection's bottom: critical alerts to the management cluster
     y8 = R2 + H + 40
-    d.arrow([(x8, R1 + H), (x8, R3)], step=8, badge=(x8, y8), label="critical alerts", label_pos=(x8 + 20, y8 + 5),
-            label_anchor="start")
+    d.arrow([(x8, R1 + H), (x8, ymid(R3)), (X[1], ymid(R3))], step=8, badge=(x8, y8),
+            label="also: critical alerts", label_pos=(x8 + 20, y8 + 5), label_anchor="start")
     d.require("Admission control", "Build & sign", "Registry", "Detection", "Auto-response",
               "Incident workflow", "App pods")
     d.key("Build & sign scans the image for known vulnerabilities, then cosign signs it with its build record",
