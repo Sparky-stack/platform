@@ -313,7 +313,7 @@ Dry run per environment: rename `installations/local/addons/falco/env-developmen
 
 **Escalation** (on): falcosidekick's webhook output POSTs Critical-and-above events to addon `argo-events` on mgmt,
 each cluster to its own endpoint with its own token. Store key `falco-webhook` (`url`, `token`; locally seeded by
-`make secrets` with `url=http://events.openchoreo.localhost:8080/falco`) stays on mgmt; every token is derived from it:
+`task secrets` with `url=http://events.openchoreo.localhost:8080/falco`) stays on mgmt; every token is derived from it:
 
 | Cluster | Endpoint | Bearer token | Delivered by |
 |---|---|---|---|

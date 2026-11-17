@@ -268,7 +268,7 @@ spec:
 | `promotionGate.sourceEnvironments` | addon argo-events | `[staging]` |
 | `imageVerification.*` | addon kyverno-policies | Audit dev/staging, Deny production |
 
-Secrets (store `workflows` for the gate run, `platform` for addon thunder; seeded locally by `make secrets`):
+Secrets (store `workflows` for the gate run, `platform` for addon thunder; seeded locally by `task secrets`):
 
 | Key | Properties | Used by |
 |---|---|---|

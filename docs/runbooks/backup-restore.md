@@ -132,6 +132,8 @@ $K -n openbao rollout status statefulset/openbao --timeout=180s
 $K -n argocd scale statefulset/argocd-application-controller deploy/argocd-applicationset-controller --replicas=1
 ```
 
+To restore from `$BK` `(not yet verified live)`, confirm the matching `platform-secrets/openbao-unseal` secret is present, freeze Argo CD and scale `statefulset/openbao` to `0` as above, replace `/var/lib/rancher/k3s/storage/${PV}_openbao_data-openbao-0/.` inside `k3d-platform-mgmt-server-0` from `$BK/` (`docker exec` wipe + `docker cp`), then scale `statefulset/openbao` and Argo CD back to `1` and verify `$K -n openbao exec openbao-0 -- bao status` (`Sealed: false`). If `openbao-unseal` or the backup is unavailable locally, re-initialize OpenBao via [break-glass.md](break-glass.md#openbao-local-re-initialization).
+
 ### 4. Thunder PVC recovery (live-verified)
 
 Thunder's 3 PVCs (`thunder-database-pvc`, `thunder-certs-pvc`, `thunder-secrets-pvc` in `thunder`) are PreSync hooks with `hook-failed` and `platform.koorikla.io/delete-protection: enabled`, guarded by `ValidatingAdmissionPolicy/thunder-pvc-delete-protection` ([openchoreo.md](../openchoreo.md#argo-cd-requirements)).

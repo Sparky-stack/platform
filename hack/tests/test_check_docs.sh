@@ -10,6 +10,14 @@ echo "== test_check_docs =="
 
 fx="$TMP/repo"
 mkdir -p "$fx/docs" "$fx/hack" "$fx/addons/a/charts/dep"
+cat > "$fx/addons/a/README.md" <<'EOF'
+# a
+## Purpose
+## Where it runs
+## Key values
+## Day-2 notes
+## Links
+EOF
 printf 'tasks:\n  up:\n    cmds: []\n  images:audit:\n    cmds: []\n' > "$fx/Taskfile.yml"
 printf 'up: ; @true\n' > "$fx/Makefile"
 touch "$fx/hack/real.sh"
@@ -97,6 +105,25 @@ assert_match "$out" 'runbook missing section "rollback"' "missing runbook sectio
 assert_match "$out" 'must pass --context or --kubeconfig' "bare kubectl in runbook"
 assert_match "$out" 'forbidden kube context .koorikla.' "homelab context rejected"
 assert_match "$out" 'runbook docs/runbooks/orphan.md is not linked' "unindexed runbook rejected"
+
+cp -R "$TMP/good" "$TMP/readmes"
+mkdir -p "$TMP/readmes/charts/no-readme" "$TMP/readmes/addons/incomplete" "$TMP/readmes/addons/toolong"
+cat > "$TMP/readmes/addons/incomplete/README.md" <<'EOF'
+# incomplete
+## Purpose
+## Where it runs
+## Key values
+## Links
+EOF
+{
+  printf '# toolong\n## Purpose\n## Where it runs\n## Key values\n## Day-2 notes\n## Links\n'
+  printf 'line\n%.0s' {1..36}
+} > "$TMP/readmes/addons/toolong/README.md"
+out=$(py "$ROOT/hack/check-docs.py" "$TMP/readmes" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "missing or malformed chart/addon READMEs fail"
+assert_match "$out" "charts/no-readme/README.md: missing README.md" "missing chart README rejected"
+assert_match "$out" 'README missing section "day-2 notes"' "missing addon README section rejected"
+assert_match "$out" "README is 42 lines \(max 40\)" "overlong addon README rejected"
 
 out=$(py "$ROOT/hack/check-docs.py" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 0 "repo docs resolve ($out)"

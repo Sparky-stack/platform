@@ -227,11 +227,15 @@ holding a broad token. The script is ~150 lines, tested against a fake CLI (`hac
 part of `task test`) and against the real pinned image (`task test:openbao`, docker).
 
 ### Unseal
-Locally OpenBao uses the **static seal** (`seal "static"`, AES-256-GCM key from the secret backend): `make secrets`
+Locally OpenBao uses the **static seal** (`seal "static"`, AES-256-GCM key from the secret backend): `task secrets`
 seeds `openbao-unseal` once in the `platform` store, ESO mounts it, and OpenBao unseals itself on every start. This
 is auto-unseal with the key next to the data, acceptable for a laptop only. **Production**: replace the stanza with a
 cloud KMS seal (`seal "awskms"` with IRSA / Pod Identity, no static keys) or `seal "transit"` against a separate
 OpenBao, and run 3 raft replicas: [#31](https://github.com/koorikla/platform/issues/31).
+Backup/restore of the raft directory + unseal secret, sealed triage, and local re-initialisation:
+[runbooks/backup-restore.md](runbooks/backup-restore.md#3-openbao-raft-storage-and-unseal-key),
+[runbooks/incidents.md](runbooks/incidents.md#openbao-sealed), and
+[runbooks/break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization).
 
 ### When OpenBao is down
 Running workloads keep working; nothing new gets an identity:
@@ -249,7 +253,7 @@ compromised member is cut off at once by deleting its auth mount (remove `mesh.g
 issued certificates expire within a day. The 7-day reader client certs (remote secrets) cannot be revoked either.
 
 ### Bootstrapping order
-1. mgmt: `make secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals. Argo CD sync waves
+1. mgmt: `task secrets` seeds `openbao-unseal`; addon openbao starts, self-initialises, unseals. Argo CD sync waves
    order the rest: wave 0 OpenBao (Ready = unsealed), wave 1 the `mesh-reconcile` Job (Sync hook) creates the group
    mounts, wave 2 store `openbao-pki-public`, `openbao-ca-bundle` and the CronJob. Not PostSync: a PostSync hook runs
    only once every resource is Healthy, and `openbao-ca-bundle` cannot be before the roots exist (contract:
@@ -397,14 +401,10 @@ Peers must reach each member's API endpoint: locally the CAPD load balancer cont
 the CAPA API ELB, on Hetzner the API load balancer.
 
 ### Removing a member (decommissioning)
-CRS never deletes what it applied, and Istio checks no revocation, so decommissioning is explicit:
-1. Remove `mesh.group` from the fleet file (or delete the fleet file). `<name>-mesh-openbao` goes with the cluster
-   chart, and the next reconcile deletes `auth/mesh-<name>` and entity `mesh-<name>`: the member can no longer
-   get certificates. Its issued certificates expire within 24h (istiod's 48h).
-2. On every remaining member delete `istio-system/istio-remote-secret-<gone>` (CRS leaves it behind; istiod logs a
-   failing remote cluster until then). Its reader cert stops authenticating within 7 days in any case.
-3. On mgmt delete the leftover Secret `fleet/<gone>-mesh-reader` (cert-manager does not delete a Certificate's Secret
-   with it).
+CRS never deletes what it applied, and Istio checks no revocation, so removing `mesh.group` (or deleting the fleet
+file) revokes OpenBao issuance (`auth/mesh-<name>` and entity `mesh-<name>`) while leaving `istio-system/istio-remote-secret-<gone>`
+on remaining peers and `fleet/<gone>-mesh-reader` on `mgmt` (reader certs expire within 7d; workload/istiod certs within
+24h/48h). Exact cleanup commands: [runbooks/scaling-and-capacity.md](runbooks/scaling-and-capacity.md#2-remove-decommission-a-workload-cluster).
 
 ## Example (`examples/eastwest`)
 The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
@@ -482,7 +482,7 @@ k3d cluster edit platform-mgmt --port-add '127.0.0.1:8200:8200@loadbalancer'
 docker port k3d-platform-mgmt-serverlb | grep 8200     # 8200/tcp -> 127.0.0.1:8200
 ```
 
-(`--port-add` is marked experimental in k3d v5.8), or recreate everything (`make down && make up`: deletes the CAPD
+(`--port-add` is marked experimental in k3d v5.8), or recreate everything (`task down && task up`: deletes the CAPD
 workload clusters too). Without it members cannot reach OpenBao: the Vault issuer stays not Ready
 and istiod on dev1/prod1 waits for `istiod-tls` (the old istiod keeps serving). Fresh clusters get the port from the
 config file.
