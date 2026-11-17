@@ -97,6 +97,23 @@ falco:
         override:
           condition: append
 
+      # In-cluster builds (addon openchoreo-workflow-plane, Argo Workflows in OpenChoreo's workflows-<org> namespaces)
+      # execute binaries they wrote themselves, which this rule reports at CRITICAL (= an escalation per build step):
+      # rootless buildkitd extracts and runs its binfmt/qemu probe ($HOME/.local/tmp/qemu-check<n>/check) on start, and
+      # `go test` runs the test binary it just compiled (/tmp/go-build<n>/b<n>/<pkg>.test). Measured on mgmt: these two
+      # were every Critical alert from workflows-* pods. Each exception is the full tuple (namespace prefix, image, parent
+      # process, binary path); any other dropped binary in the same pods, and the same binary anywhere else, still fires.
+      - rule: Drop and execute new binary in container
+        exceptions:
+          - name: platform_build_dropped_binaries
+            fields: [k8s.ns.name, container.image.repository, proc.pname, proc.exepath]
+            comps: [startswith, =, =, glob]
+            values:
+              - [workflows-, docker.io/moby/buildkit, buildkitd, /home/user/.local/tmp/qemu-check*/check]
+              - [workflows-, docker.io/library/golang, go, /tmp/go-build*/b*/*.test]
+        override:
+          exceptions: append
+
       - rule: Platform shell in app container
         desc: An interactive or scripted shell started inside a container of an OpenChoreo app namespace.
         condition: >

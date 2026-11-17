@@ -6,6 +6,7 @@ templates:
   - templates/validate.yaml
   - templates/run-network-policy.yaml
   - templates/run-executor-token.yaml
+  - charts/openchoreo-workflow-plane/charts/argo-workflows/templates/controller/workflow-controller-config-map.yaml
 release:
   name: openchoreo-workflow-plane
   namespace: openchoreo-workflow-plane
@@ -282,3 +283,8 @@ tests:
     set: { clusterWorkflowPlane.secretStore: platform }
     asserts:
       - failedTemplate: { errorPattern: "never the full platform store" }
+
+  - it: the Argo executor (init/wait) has room for the argoexec copy in init (page cache, measured ~107Mi)
+    template: charts/openchoreo-workflow-plane/charts/argo-workflows/templates/controller/workflow-controller-config-map.yaml
+    asserts:
+      - matchRegex: { path: data.config, pattern: 'executor:\n(.*\n)*?\s+resources:\n\s+limits:\n\s+cpu: 200m\n\s+memory: 256Mi' }

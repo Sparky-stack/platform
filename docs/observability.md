@@ -297,6 +297,16 @@ other clusters' pods, a host pod), and each of the five Falcos escalated them to
 could not act and failed. The cluster's own pods keep full coverage: measured after the change (#49), a dev1 Falco
 logged no Critical alert without `k8s.ns.name` in 17 h, while alerts from namespaced app pods kept arriving.
 
+**In-cluster builds:** the build pods in `workflows-<org>` (mgmt workflow plane) run binaries they wrote themselves, which
+"Drop and execute new binary in container" reports at Critical - one escalation per build step. Measured on mgmt, the
+only Critical alerts from `workflows-*` pods were rootless buildkitd running its binfmt probe
+(`$HOME/.local/tmp/qemu-check<n>/check`) and `go test` running its compiled test binary (`/tmp/go-build<n>/b<n>/*.test`);
+BuildKit's unshare/mount/setuid activity fires no Critical rule. `platform-rules.yaml` appends one exception list to that
+rule with exactly these two tuples (namespace prefix `workflows-`, image repository, parent process, binary path), so any
+other dropped binary in a build pod, and the same binary in any other namespace or image, still escalates. The build
+image repositories are pinned in `addons/openchoreo-workflow-plane` (`BUILDKIT_IMAGE`) and `addons/openchoreo-platform`
+(`checkImage`); a different repository (mirror) is not excepted until the tuple is updated.
+
 ## Falco response
 
 **Talon** (workload clusters, `falco-talon` 0.5.0) receives every event from falcosidekick but its rules match only the

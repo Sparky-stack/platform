@@ -118,9 +118,13 @@ openchoreo-workflow-plane:
     executor:
       image:
         tag: v4.0.8@sha256:86a965d7eea176959351156e24f3a2fa8d8e342e477ef425009af95a12e3fe87
+      # Limit 256Mi: the `init` container copies the argoexec binary (~108Mi) into the pod's emptyDir, and that page cache
+      # is charged to its cgroup. Measured on mgmt (falco-response pods): init peaked at 124-128Mi (anon ~17Mi, file
+      # ~107Mi) under the old 128Mi limit, and 2 of 29 escalation Workflows were OOMKilled in init when writeback lagged.
+      # wait peaks at ~19Mi; the request stays at the anon working set.
       resources:
         requests: { cpu: 10m, memory: 32Mi }
-        limits: { cpu: 200m, memory: 128Mi }
+        limits: { cpu: 200m, memory: 256Mi }
     server:
       enabled: false                          # Backstage shows runs and logs; no second UI to secure
     workflow:

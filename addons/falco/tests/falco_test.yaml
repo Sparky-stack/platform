@@ -114,3 +114,13 @@ tests:
     asserts:
       - matchRegex: { path: 'data["platform-rules.yaml"]', pattern: 'condition: \(container.image.repository endswith "kindest/node"\)' }
       - matchRegex: { path: 'data["platform-rules.yaml"]', pattern: '- rule: Drop and execute new binary in container\n\s+condition: and not platform_capd_node_container\n\s+override:\n\s+condition: append' }
+
+  - it: in-cluster build pods are excepted from "Drop and execute new binary in container" only for their own binaries
+    template: charts/falco/templates/rules-configmap.yaml
+    asserts:
+      # exactly two rows, each the full tuple (workflows-* namespace, build image, parent, binary path), appended
+      - matchRegex:
+          path: 'data["platform-rules.yaml"]'
+          pattern: '- rule: Drop and execute new binary in container\n\s+exceptions:\n\s+- name: platform_build_dropped_binaries\n\s+fields: \[k8s\.ns\.name, container\.image\.repository, proc\.pname, proc\.exepath\]\n\s+comps: \[startswith, =, =, glob\]\n\s+values:\n\s+- \[workflows-, docker\.io/moby/buildkit, buildkitd, /home/user/\.local/tmp/qemu-check\*/check\]\n\s+- \[workflows-, docker\.io/library/golang, go, /tmp/go-build\*/b\*/\*\.test\]\n\s+override:\n\s+exceptions: append\n'
+      # never a blanket disable or a replaced rule / exception list
+      - notMatchRegex: { path: 'data["platform-rules.yaml"]', pattern: 'enabled: false|exceptions: replace|condition: replace' }
