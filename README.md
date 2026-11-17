@@ -1,11 +1,22 @@
 # platform
 
-A cloud-agnostic Kubernetes developer platform reconciled from Git with zero imperative steps after bootstrap:
+A cloud-agnostic Kubernetes developer platform reconciled from Git with zero imperative steps after bootstrap. This repo is a
+**local platform lab**: everything is built and proven on Docker (`k3d` + Cluster API's Docker provider). The developer-facing
+layer runs on any conformant Kubernetes; only the infrastructure layer (CNI, storage, cloud controller, load balancer, CA
+backend) changes per provider - see [docs/portability.md](docs/portability.md).
 
-- **Cluster API (CAPI)** provisions and upgrades k3s workload clusters locally on Docker (`k3d` + CAPD) and is ready for AWS (CAPA) and Hetzner Cloud (CAPH) from one file per cluster.
+- **Cluster API (CAPI)** provisions and upgrades workload clusters from one file per cluster. Locally that is k3s on Docker
+  (CAPD). CAPI has providers for practically every cloud and on-prem target (AWS, Azure, GCP, vSphere, OpenStack, Proxmox,
+  bare metal via Metal3, Hetzner, ...); the AWS, Hetzner and GKE ClusterClasses here are **untested examples** of that.
+  Existing clusters can also be registered without CAPI (`provider: byo`).
 - **Argo CD** pushes platform addons from a single label-driven catalog on the management cluster (`mgmt`) to every workload cluster.
-- **OpenChoreo** provides the developer platform on top: Golden-path Backstage templates, projects, environments, in-cluster BuildKit builds into Harbor, and gated GitOps promotion.
-- **External Secrets Operator (ESO)** delivers every credential and CA bundle from a pluggable secret backend (`kubernetes` locally, AWS Secrets Manager or Vault/OpenBao in the cloud).
+- **OpenChoreo** provides the developer platform on top: Golden-path Backstage templates, projects, environments, in-cluster BuildKit
+  builds into Harbor (auto-triggered on push), PR preview environments, and gated GitOps promotion.
+- **External Secrets Operator (ESO)** delivers every credential and CA bundle from a pluggable secret backend (`kubernetes` and
+  per-tenant OpenBao stores locally; a cloud secret manager or Vault/OpenBao elsewhere).
+- **Certificates are pluggable too.** Locally, OpenBao (the open-source Vault fork) on `mgmt` is the mesh CA, consumed by
+  cert-manager/istio-csr so CA keys never leave `mgmt`. In a cloud you would typically point the same cert-manager issuer
+  contract at a managed CA instead (AWS Private CA, Google CAS, Azure Key Vault, or an existing Vault).
 
 <img src="docs/diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, hands app releases to OpenChoreo and clusters to Cluster API, which creates the workload clusters; Argo CD installs their addons and the cluster-agent, which dials out to OpenChoreo and deploys the apps; Kyverno admits only signed images" width="100%">
 
@@ -35,7 +46,7 @@ Full walkthrough (~30 minutes) and talking points: **[docs/demo.md](docs/demo.md
 6. **Observe**: query logs, traces (OpenSearch), metrics (Prometheus), and Hubble network flows from `mgmt`.
 7. **Runtime security**: detect container anomalies with modern-eBPF Falco, quarantine or terminate pods with Talon, and escalate critical alerts to Argo Events.
 8. **Zero trust**: enforce sidecarless mTLS with Istio ambient (backed across clusters by OpenBao's mesh CA) and admission policy with Kyverno.
-9. **App with a database**: provision PostgreSQL through one Crossplane v2 API, backed by CloudNativePG locally/Hetzner or cloud-managed RDS, Cloud SQL, or Flexible Server.
+9. **App with a database**: provision PostgreSQL through one Crossplane v2 API, backed by CloudNativePG locally (or on any cluster) or, as untested examples, cloud-managed RDS, Cloud SQL, or Flexible Server.
 
 ## Diagrams
 
