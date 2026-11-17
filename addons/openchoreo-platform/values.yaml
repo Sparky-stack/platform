@@ -255,6 +255,22 @@ autoBuild:
   resources:
     requests: { cpu: 10m, memory: 32Mi }
     limits: { memory: 96Mi }
+  # PR previews (installation.yaml previews.enabled, docs/preview-environments.md): the same pass builds PR heads of
+  # opted-in Components, cuts their ComponentRelease, posts the URL and expires them. A second token of the same App
+  # for that (commit statuses, PR lookup, the expiry label); the App needs Commit statuses + Pull requests write.
+  previews:
+    github:
+      permissions: { statuses: write, pull_requests: write }
+    statusContext: openchoreo/preview          # commit status on the PR head (Details = the preview URL)
+    optIn:                                     # == charts/tenant previewOptIn (the ApplicationSet's selector)
+      annotation: platform.koorikla.io/preview-environments
+      value: enabled
+    argocdNamespace: argocd
+    schedule: "*/2 * * * *"                    # trigger webhook only (poll runs previews every pollSchedule)
+
+# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel.
+previews:
+  enabled: false
 
 # Generic (non-component) workflow: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
 helmChartWorkflow:

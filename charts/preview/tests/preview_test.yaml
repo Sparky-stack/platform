@@ -1,0 +1,100 @@
+suite: preview (one PR preview environment)
+templates:
+  - templates/preview.yaml
+set:
+  project: demo
+  component: hello-world
+  pullRequest: "7"
+  commit: 0123456789abcdef0123456789abcdef01234567
+  repository: koorikla/hello-world
+  branch: feat/x
+tests:
+  - it: renders Environment, ProjectReleaseBinding and ReleaseBinding in that order of sync waves
+    asserts:
+      - hasDocuments: { count: 3 }
+      - isKind: { of: Environment }
+        documentIndex: 0
+      - isKind: { of: ProjectReleaseBinding }
+        documentIndex: 1
+      - isKind: { of: ReleaseBinding }
+        documentIndex: 2
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "0" }
+        documentIndex: 0
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentIndex: 1
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentIndex: 2
+
+  - it: puts the Environment on the preview data plane, never production, labelled for Kyverno (TTL, cap)
+    documentIndex: 0
+    asserts:
+      - equal: { path: metadata.name, value: pr-7-hello-world }
+      - equal: { path: metadata.namespace, value: default }
+      - equal: { path: spec.dataPlaneRef, value: { kind: ClusterDataPlane, name: dev1 } }
+      - equal: { path: spec.isProduction, value: false }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/preview"]', value: "true" }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/tenant"]', value: demo }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/component"]', value: hello-world }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/pull-request"]', value: "7" }
+      - equal: { path: 'metadata.annotations["platform.koorikla.io/commit"]', value: 0123456789abcdef0123456789abcdef01234567 }
+      # the TTL stamp is Kyverno's (admission, once): the chart must never render it, or every sync would reset it
+      - notExists: { path: 'metadata.labels["platform.koorikla.io/expires-at"]' }
+
+  - it: labels the preview cell namespace (Kyverno on the data plane adds quota, limits and isolation)
+    documentIndex: 1
+    asserts:
+      - equal: { path: metadata.name, value: demo-pr-7-hello-world }
+      - equal: { path: spec.environment, value: pr-7-hello-world }
+      - equal: { path: spec.owner.projectName, value: demo }
+      - notExists: { path: spec.projectRelease }
+      - equal:
+          path: spec.environmentConfigs.namespaceLabels
+          value: { platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo }
+
+  - it: pins the release cut from the PR head build (one per commit)
+    documentIndex: 2
+    asserts:
+      - equal: { path: metadata.name, value: hello-world-pr-7 }
+      - equal: { path: spec.owner, value: { projectName: demo, componentName: hello-world } }
+      - equal: { path: spec.environment, value: pr-7-hello-world }
+      - equal: { path: spec.releaseName, value: hello-world-pr-7-0123456789ab }
+
+  - it: follows the installation's data plane and org namespace
+    set:
+      previews.dataPlane: dev2
+      openchoreo.orgNamespace: acme
+    asserts:
+      - equal: { path: spec.dataPlaneRef.name, value: dev2 }
+        documentIndex: 0
+      - equal: { path: metadata.namespace, value: acme }
+        documentIndex: 2
+
+  - it: renders nothing once the PR carries the expired label (Argo CD prunes, finalizers clean up)
+    set:
+      expired: "true"
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: rejects a commit that is not a full SHA
+    set:
+      commit: main
+    asserts:
+      - failedTemplate: { errorMessage: 'commit "main" must be a 40-hex commit SHA' }
+
+  - it: rejects a pull request number that is not a number
+    set:
+      pullRequest: "7; rm"
+    asserts:
+      - failedTemplate: { errorMessage: 'pullRequest "7; rm" must be a pull request number' }
+
+  - it: rejects component names that are not DNS labels
+    set:
+      component: Hello_World
+    asserts:
+      - failedTemplate: { errorMessage: 'component "Hello_World" must be a DNS-1123 label' }
+
+  - it: rejects previews whose route host label would exceed 63 characters
+    set:
+      component: a-very-long-component-name-that-goes-on-and-on-forever
+    asserts:
+      - failedTemplate: { errorMessage: 'preview host label "pr-7-a-very-long-component-name-that-goes-on-and-on-forever-default" is longer than 63 characters (shorten the component name)' }

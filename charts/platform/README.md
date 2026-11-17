@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`, `fleet`, `examples`), the `mgmt` cluster secret, and `ApplicationSet`s for workload clusters (`fleet`), the addon catalog (`addons/*`), tenants (`tenants`), and opt-in examples.
+Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`, `fleet`, `previews`, `examples`), the `mgmt` cluster secret, and `ApplicationSet`s for workload clusters (`fleet`), the addon catalog (`addons/*`), tenants (`tenants`), and opt-in examples.
 
 ## Where it runs
 

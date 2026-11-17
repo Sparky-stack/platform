@@ -13,8 +13,17 @@ apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision
 installation:
   name: local
   githubOrg: https://github.com/koorikla
+  repoURL: https://github.com/koorikla/platform.git   # charts/preview source of the preview Applications
+  revision: main
 openchoreo:
   orgNamespace: default
+# PR preview environments (templates/previews.yaml, docs/preview-environments.md); installation.yaml overrides.
+previews:
+  enabled: false
+  dataPlane: dev1
+  requeueAfterSeconds: 1800
+  expiredLabel: preview-expired
+
 secrets:
   tenantStores:
     enabled: false          # per-tenant OpenBao secrets (templates/secrets.yaml); needs addon openbao on mgmt
@@ -26,6 +35,16 @@ argocd:
 defaults:
   path: deploy/openchoreo
   revision: main
+# PR previews (templates/previews.yaml). The opt-in a Component carries in its app repo (same key and value in addon
+# openchoreo-platform autoBuild.previews, which re-checks it before building PR code); the Secret with the GitHub token
+# of the pull request generator (addon secret-stores previewToken, namespace argocd); the AppProject of the preview
+# Applications (charts/platform templates/projects.yaml).
+previewOptIn:
+  annotation: platform.koorikla.io/preview-environments
+  value: enabled
+previewToken:
+  secretName: preview-github-token
+previewProject: previews
 # Must match addon openchoreo-platform deploymentPipeline: one ProjectReleaseBinding per environment provisions the
 # project's namespace on that environment's data plane.
 deploymentPipeline:

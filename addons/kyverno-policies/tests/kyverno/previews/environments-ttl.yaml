@@ -1,0 +1,22 @@
+# platform-preview-ttl: pr-1 (stamp long past) and pr-3 (no stamp, created long ago) are deleted; pr-2 (stamp in
+# 2100), pr-4 (expired 10 min ago, inside the 1h grace; @IN_GRACE@ = now - 600, set by the test) and development (no
+# preview label) are kept.
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata: {name: pr-1-expired, namespace: default, creationTimestamp: "2026-11-01T00:00:00Z", labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo, platform.koorikla.io/expires-at: "1000"}}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata: {name: pr-2-fresh, namespace: default, creationTimestamp: "2026-11-01T00:00:00Z", labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo, platform.koorikla.io/expires-at: "4102444800"}}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata: {name: pr-3-unstamped-old, namespace: default, creationTimestamp: "2020-01-01T00:00:00Z", labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata: {name: pr-4-in-grace, namespace: default, creationTimestamp: "2020-01-01T00:00:00Z", labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo, platform.koorikla.io/expires-at: "@IN_GRACE@"}}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: Environment
+metadata: {name: development, namespace: default, creationTimestamp: "2020-01-01T00:00:00Z", labels: {platform.koorikla.io/expires-at: "1000"}}

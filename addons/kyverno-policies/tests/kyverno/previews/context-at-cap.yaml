@@ -1,0 +1,18 @@
+# resource.List context: tenant demo already runs 2 previews (cap 2); acme's preview and development do not count.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Context
+metadata: {name: two-running}
+spec:
+  resources:
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Environment
+      metadata: {name: pr-1-hello-world, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Environment
+      metadata: {name: pr-2-hello-world, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Environment
+      metadata: {name: pr-3-other, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: acme}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Environment
+      metadata: {name: development, namespace: default}

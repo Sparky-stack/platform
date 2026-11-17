@@ -74,6 +74,7 @@ Also prepare:
 | 7 | Runtime security | 3 | live |
 | 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1; #19); per-tenant stores pending #96 |
 | 9 | App with a database | 2 | live on dev1 (CloudNativePG); RDS / Cloud SQL / Flexible Server render-only (#107) |
+| 10 | PR preview environment | 4 | live (#168); the build takes ~6 min, so open the PR before the demo |
 
 ## 1. Clean bootstrap
 
@@ -363,6 +364,32 @@ Talking points: the same XR becomes RDS / Aurora, Cloud SQL or Azure Flexible Se
 tested offline, live accounts pending #107); production XRs must set HA and backups. OpenChoreo resource types: #70.
 
 Fallback: show docs/data-services.md "PostgreSQL as a service". Clean up with `kubectl delete namespace pg-demo`.
+
+## 10. PR preview environment
+
+Show: a pull request gets its own environment with its own URL, and loses it when the PR closes.
+
+hello-world opts in with the Component annotation `platform.koorikla.io/preview-environments: enabled`. Open a PR that
+changes the code (the build takes ~6 minutes, so do this before the demo), e.g. the greeting in `main.go`:
+
+```bash
+gh pr create -R koorikla/hello-world --head <branch> --fill     # or in the GitHub UI
+kubectl --context k3d-platform-mgmt -n argocd get applications -l platform.koorikla.io/preview=true
+kubectl --context k3d-platform-mgmt -n default get environment,releasebinding -l platform.koorikla.io/preview=true -L platform.koorikla.io/expires-at
+gh pr checks <n> -R koorikla/hello-world                          # openchoreo/preview: the URL
+NODE_DEV=$(kubectl --context k3d-platform-mgmt get machines -n fleet -l cluster.x-k8s.io/cluster-name=dev1 -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+H=pr-<n>-hello-world-default.dev1.apps.localhost
+curl -s --resolve "$H:19080:$NODE_DEV" "http://$H:19080/hello-world-http/version"   # the PR head's short SHA
+```
+
+Then close the PR: within ~2 minutes the Application, the Environment and the cell namespace on dev1 are gone.
+
+Talking points: only stock OpenChoreo objects (Environment, ProjectReleaseBinding, ReleaseBinding), shaped like the
+upstream ephemeral-environment proposal; same build, scan and platform signature as `main`; 48h TTL, two previews per
+tenant locally, quota and NetworkPolicy isolation from staging and production (docs/preview-environments.md
+"Lifecycle and limits").
+
+Fallback: the commit status on an older PR and docs/preview-environments.md "How it works".
 
 ## Wrap-up (1 minute)
 

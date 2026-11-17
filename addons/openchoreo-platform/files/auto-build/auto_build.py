@@ -23,6 +23,15 @@
 # from the platform's GitHub App), mounted at TOKEN_FILE. This script never sees the App's private key.
 # Kubernetes: the pod's ServiceAccount (list Components, get ClusterWorkflows, create WorkflowRuns, one ConfigMap).
 #
+# PR previews (PREVIEWS=true, docs/preview-environments.md): the same pass then walks the preview Applications Argo CD
+# generated for open pull requests (ApplicationSet previews-<project>, charts/tenant) and, per PR head commit, builds it
+# (WorkflowRun <component>-pr<n>-<sha[:12]>, GitOps hand-off off: nothing is written to the repo), cuts ComponentRelease
+# <component>-pr-<n>-<sha[:12]> from the Component's latest release with the PR image (owned by the preview
+# Environment, so it goes with it), posts commit status openchoreo/preview with the preview URL, and expires the
+# preview after the TTL by labelling the PR (the Application then renders empty and Argo CD prunes it). It re-checks
+# the Component's opt-in annotation and never builds pull requests from forks. GitHub: a second token (statuses,
+# pull requests) at PREVIEW_TOKEN_FILE.
+#
 # Stdlib only. The WorkflowTemplate embeds this file in an Argo template: the source must not contain two opening
 # braces (hack/tests/test_workflow_scripts.sh).
 import datetime as dt
@@ -43,6 +52,15 @@ COMMIT_LINE_RE = re.compile(r"^\s+commit:\s*[\"']?([0-9a-f]{7,40})[\"']?\s*(#.*)
 TRIGGER_LABEL = "platform.koorikla.io/trigger"
 COMMIT_ANNOTATION = "platform.koorikla.io/commit"
 DEFAULT_WORKLOAD_PATH = "deploy/openchoreo/workload.yaml"
+PREVIEW_LABEL = "platform.koorikla.io/preview"
+EXPIRES_LABEL = "platform.koorikla.io/expires-at"
+PR_LABEL = "platform.koorikla.io/pull-request"
+COMPONENT_LABEL = "platform.koorikla.io/component"
+REPOSITORY_ANNOTATION = "platform.koorikla.io/repository"
+RELEASE_ANNOTATION = "platform.koorikla.io/release"
+NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+NUMBER_RE = re.compile(r"^[1-9][0-9]{0,6}$")
+SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
 
 
 def env(name, default=""):
@@ -152,22 +170,25 @@ def parse_time(value):
         return None
 
 
-def build_run(component, namespace, paths, sha, labels):
-    """The WorkflowRun OpenChoreo's own trigger would create for this commit, with a deterministic name."""
+def build_run(component, namespace, paths, sha, labels, name=None, overrides=None):
+    """The WorkflowRun OpenChoreo's own trigger would create for this commit, with a deterministic name.
+    overrides: {dotted parameter path: value} on top (previews: gitops.enabled false)."""
     wf = component["spec"]["workflow"]
     params = wf.get("parameters") or {}
     if "commit" in paths:
         params = set_path(params, paths["commit"], sha)
-    name = component["metadata"]["name"]
+    for path, value in sorted((overrides or {}).items()):
+        params = set_path(params, path, value)
+    comp = component["metadata"]["name"]
     return {
         "apiVersion": "openchoreo.dev/v1alpha1",
         "kind": "WorkflowRun",
         "metadata": {
-            "name": run_name(name, sha),
+            "name": name or run_name(comp, sha),
             "namespace": namespace,
             "labels": dict(labels, **{
                 "openchoreo.dev/project": component["spec"]["owner"]["projectName"],
-                "openchoreo.dev/component": name,
+                "openchoreo.dev/component": comp,
             }),
             "annotations": {COMMIT_ANNOTATION: sha},
         },
@@ -309,13 +330,255 @@ class Reconciler:
         return self.created
 
 
+# --- PR previews --------------------------------------------------------------------------------------------------------
+def preview_names(component, number, sha):
+    """(environment, binding, release, build run) of one PR head commit; charts/preview renders the same names."""
+    return ("pr-%s-%s" % (number, component), "%s-pr-%s" % (component, number),
+            "%s-pr-%s-%s" % (component, number, sha[:12]), "%s-pr%s-%s" % (component[:30].rstrip("-"), number, sha[:12]))
+
+
+def succeeded(run):
+    for c in (run.get("status") or {}).get("conditions") or []:
+        if c.get("type") == "WorkflowSucceeded":
+            return c.get("status") == "True"
+    return False
+
+
+def build_image(workflow):
+    """The image ref (tag@digest) the koorikla-build `build` step reported, or None (step skipped / not found)."""
+    for node in ((workflow or {}).get("status") or {}).get("nodes", {}).values():
+        if node.get("templateName") == "build" and node.get("type") == "Pod" and node.get("phase") == "Succeeded":
+            for p in (node.get("outputs") or {}).get("parameters") or []:
+                if p.get("name") == "image" and "@sha256:" in (p.get("value") or ""):
+                    return p["value"]
+    return None
+
+
+def preview_release(base, name, namespace, image, sha, branch, environment, labels):
+    """ComponentRelease for the PR: the Component's latest release (platform type, traits, parameters) with the PR's
+    image and commit. Owned by the preview Environment: deleting the preview deletes it."""
+    spec = json.loads(json.dumps(base.get("spec") or {}))
+    workload = spec.setdefault("workload", {})
+    workload.setdefault("container", {})["image"] = image
+    source = workload.setdefault("source", {})
+    source["commit"] = sha
+    if branch:
+        source["branch"] = branch
+    return {
+        "apiVersion": "openchoreo.dev/v1alpha1",
+        "kind": "ComponentRelease",
+        "metadata": {
+            "name": name, "namespace": namespace, "labels": labels,
+            "annotations": {COMMIT_ANNOTATION: sha, "platform.koorikla.io/base-release": base["metadata"]["name"]},
+            "ownerReferences": [{"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Environment",
+                                 "name": environment["metadata"]["name"], "uid": environment["metadata"]["uid"]}],
+        },
+        "spec": spec,
+    }
+
+
+def ready(binding, release):
+    """The binding points at `release` and OpenChoreo reports it Ready for the current generation."""
+    if not binding or (binding.get("spec") or {}).get("releaseName") != release:
+        return False
+    gen = (binding.get("metadata") or {}).get("generation")
+    for c in (binding.get("status") or {}).get("conditions") or []:
+        if c.get("type") == "Ready":
+            return c.get("status") == "True" and c.get("observedGeneration") == gen
+    return False
+
+
+def endpoint_url(binding):
+    """First external URL OpenChoreo resolved for the binding (status.endpoints[].externalURLs), or ""."""
+    for ep in (binding.get("status") or {}).get("endpoints") or []:
+        for scheme in ("https", "http"):
+            u = (ep.get("externalURLs") or {}).get(scheme)
+            if u and u.get("host"):
+                port = u.get("port")
+                default = 443 if scheme == "https" else 80
+                return "%s://%s%s%s" % (u.get("scheme") or scheme, u["host"],
+                                        ":%s" % port if port and port != default else "", u.get("path") or "/")
+    return ""
+
+
+def expires_at(environment, ttl_seconds):
+    """Unix seconds the preview expires: Kyverno's stamp, else creation + TTL (what platform-preview-ttl uses)."""
+    stamp = ((environment.get("metadata") or {}).get("labels") or {}).get(EXPIRES_LABEL, "")
+    if re.match(r"^[0-9]{1,12}$", stamp or ""):
+        return int(stamp)
+    created = parse_time((environment.get("metadata") or {}).get("creationTimestamp"))
+    return int(created.timestamp()) + ttl_seconds if created else None
+
+
+class Previews:
+    """One pass over the preview Applications (`api` provides cluster and GitHub calls, fake in tests)."""
+
+    def __init__(self, api, namespace, allowed_prefixes, state, opt_in, expired_label, ttl_seconds,
+                 status_context="openchoreo/preview", repository="", max_runs=5, now=None):
+        self.api = api
+        self.namespace = namespace
+        self.allowed = allowed_prefixes
+        self.state = state
+        self.state.setdefault("previews", {})
+        self.opt_in = opt_in                      # (annotation, value)
+        self.expired_label = expired_label
+        self.ttl = ttl_seconds
+        self.context = status_context
+        self.repository = repository.lower()
+        self.max_runs = max_runs
+        self.now = now or dt.datetime.now(dt.timezone.utc)
+        self.created = []
+        self.errors = []
+        self._schemas = {}
+
+    def status(self, key, slug, sha, state, description, url=""):
+        """Commit status on the PR head, posted only when it changed since the last pass."""
+        description = description[:140]
+        mark = "%s|%s|%s|%s" % (sha, state, description, url)
+        if (self.state["previews"].get(key) or {}).get("status") == mark:
+            return
+        self.api.set_status(slug, sha, state, description, url, self.context)
+        log("%s: status %s: %s %s" % (key, state, description, url))
+        self.state["previews"][key] = {"status": mark}
+
+    def schema(self, kind, name):
+        if (kind, name) not in self._schemas:
+            self._schemas[(kind, name)] = self.api.workflow_schema(kind, name, self.namespace) or {}
+        return self._schemas[(kind, name)]
+
+    def preview(self, app):
+        md = app.get("metadata") or {}
+        key = md.get("name", "")
+        labels = md.get("labels") or {}
+        ann = md.get("annotations") or {}
+        comp_name, number = labels.get(COMPONENT_LABEL, ""), labels.get(PR_LABEL, "")
+        sha, slug = ann.get(COMMIT_ANNOTATION, ""), ann.get(REPOSITORY_ANNOTATION, "")
+        if not (NAME_RE.match(comp_name) and NUMBER_RE.match(number) and SHA_RE.match(sha) and SLUG_RE.match(slug)):
+            log("%s: not a well-formed preview Application: skipped" % key)
+            return
+        if self.repository and slug.lower() != self.repository:
+            return
+        env_name, binding_name, release, run = preview_names(comp_name, number, sha)
+        comp = self.api.get("components", comp_name)
+        if not comp:
+            log("%s: Component %s not found: skipped" % (key, comp_name))
+            return
+        annotation, value = self.opt_in
+        if ((comp.get("metadata") or {}).get("annotations") or {}).get(annotation) != value:
+            log("%s: Component %s has no %s: %s: not built" % (key, comp_name, annotation, value))
+            return
+        wf = (comp.get("spec") or {}).get("workflow") or {}
+        if not wf.get("name"):
+            log("%s: Component %s has no spec.workflow: not built" % (key, comp_name))
+            return
+        schema = self.schema(wf.get("kind") or "Workflow", wf["name"])
+        paths = extension_paths(schema)
+        comp_slug = repo_slug(get_path(wf.get("parameters") or {}, paths.get("url", "")), self.allowed) \
+            if "url" in paths else None
+        if not comp_slug or comp_slug.lower() != slug.lower():
+            log("%s: repository %s is not Component %s's build repository: skipped" % (key, slug, comp_name))
+            return
+        pr = self.api.pull(slug, number)
+        if pr.get("state") != "open" or (pr.get("head") or {}).get("sha") != sha:
+            log("%s: PR #%s is %s at %s, Application at %s: waiting for Argo CD"
+                % (key, number, pr.get("state"), ((pr.get("head") or {}).get("sha") or "")[:12], sha[:12]))
+            return
+        head_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name") or ""
+        if head_repo.lower() != slug.lower():
+            self.status(key, slug, sha, "failure", "No preview: pull requests from forks are not built")
+            return
+        pr_labels = [lbl.get("name") for lbl in pr.get("labels") or []]
+        if self.expired_label in pr_labels:
+            self.status(key, slug, sha, "error", "Preview expired after the platform TTL; remove label %s for a fresh "
+                        "one" % self.expired_label)
+            return
+        env = self.api.get("environments", env_name)
+        if not env:
+            msg = ((app.get("status") or {}).get("operationState") or {}).get("message") or "syncing"
+            self.status(key, slug, sha, "pending", "Waiting for environment %s: %s" % (env_name, msg))
+            return
+        expiry = expires_at(env, self.ttl)
+        if expiry is not None and int(self.now.timestamp()) >= expiry:
+            self.api.add_label(slug, number, self.expired_label)
+            log("%s: TTL over (expired at %d): labelled PR #%s %s" % (key, expiry, number, self.expired_label))
+            self.status(key, slug, sha, "error", "Preview expired after the platform TTL; remove label %s for a fresh "
+                        "one" % self.expired_label)
+            return
+        until = dt.datetime.fromtimestamp(expiry, dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC") if expiry else "?"
+        if not self.api.get("componentreleases", release):
+            wr = self.api.get("workflowruns", run)
+            if not wr:
+                if len(self.created) >= self.max_runs:
+                    log("%s: build budget of this pass used, next pass" % key)
+                    return
+                obj = build_run(comp, self.namespace, paths, sha,
+                                {TRIGGER_LABEL: "preview", PR_LABEL: number}, name=run,
+                                overrides={"gitops.enabled": False})
+                self.api.create_run(obj)
+                self.created.append(run)
+                self.status(key, slug, sha, "pending", "Building %s (WorkflowRun %s)" % (sha[:7], run))
+                return
+            if not completed(wr):
+                self.status(key, slug, sha, "pending", "Building %s (WorkflowRun %s)" % (sha[:7], run))
+                return
+            if not succeeded(wr):
+                self.status(key, slug, sha, "failure", "Build of %s failed (WorkflowRun %s)" % (sha[:7], run))
+                return
+            latest = ((comp.get("status") or {}).get("latestRelease") or {}).get("name")
+            base = self.api.get("componentreleases", latest) if latest else None
+            if not base:
+                self.status(key, slug, sha, "pending", "Waiting for a first release of %s on main" % comp_name)
+                return
+            ref = (wr.get("status") or {}).get("runReference") or {}
+            image = build_image(self.api.argo_workflow(ref.get("name") or run))
+            if not image:
+                # nothing built (the head only changes the GitOps directory): preview the main image
+                image = ((base.get("spec") or {}).get("workload") or {}).get("container", {}).get("image")
+            branch = (pr.get("head") or {}).get("ref") or ""
+            self.api.create_release(preview_release(
+                base, release, self.namespace, image, sha, branch, env,
+                {PREVIEW_LABEL: "true", PR_LABEL: number, COMPONENT_LABEL: comp_name,
+                 "openchoreo.dev/component": comp_name,
+                 "openchoreo.dev/project": comp["spec"]["owner"]["projectName"]}))
+            log("%s: ComponentRelease %s <- %s" % (key, release, image))
+            self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
+        binding = self.api.get("releasebindings", binding_name)
+        if binding and ((binding.get("metadata") or {}).get("annotations") or {}).get(RELEASE_ANNOTATION) != release:
+            # OpenChoreo 1.3.3 does not requeue a binding whose ComponentRelease appears after it (ReleaseSynced stays
+            # ComponentReleaseNotFound): an annotation change makes it reconcile. Once per release.
+            self.api.poke_binding(binding_name, release)
+            log("%s: ReleaseBinding %s reconciles %s" % (key, binding_name, release))
+            return
+        if ready(binding, release):
+            url = endpoint_url(binding)
+            self.status(key, slug, sha, "success", "Preview %s is up (until %s)" % (env_name, until), url)
+        else:
+            self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
+
+    def run(self):
+        apps = sorted(self.api.preview_apps(), key=lambda a: a["metadata"]["name"])
+        names = set()
+        for app in apps:
+            names.add(app["metadata"]["name"])
+            try:
+                self.preview(app)
+            except RateLimited:
+                raise
+            except Failed as e:
+                log("%s: error: %s" % (app["metadata"]["name"], e))
+                self.errors.append(str(e))
+        for gone in [k for k in self.state["previews"] if k not in names]:
+            del self.state["previews"][gone]       # PR closed: Argo CD removed the Application
+        return self.created
+
+
 # --- clients ------------------------------------------------------------------------------------------------------------
 def http(method, url, headers=None, body=None, context=None, timeout=20):
     data = json.dumps(body).encode() if body is not None else None
     hdrs = {"User-Agent": "koorikla-auto-build"}
     hdrs.update(headers or {})
     if data is not None:
-        hdrs["Content-Type"] = "application/json"
+        hdrs.setdefault("Content-Type", "application/json")
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
@@ -328,26 +591,34 @@ class Api:
     SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 
     def __init__(self, namespace, state_namespace, state_configmap, token_file, github_api="https://api.github.com",
-                 min_remaining=100):
+                 min_remaining=100, preview_token_file="", argocd_namespace="argocd"):
         self.namespace = namespace
         self.state_namespace = state_namespace
         self.state_configmap = state_configmap
         self.github_api = github_api.rstrip("/")
         self.min_remaining = min_remaining
-        with open(token_file) as f:
-            self.gh_token = f.read().strip()
-        if not self.gh_token:
-            raise Failed("empty GitHub token in %s" % token_file)
+        self.argocd_namespace = argocd_namespace
+        self.gh_token = self.read_token(token_file)
+        self.preview_token = self.read_token(preview_token_file) if preview_token_file else ""
         with open(os.path.join(self.SA, "token")) as f:
             self.kube_token = f.read().strip()
         self.kube_url = "https://%s:%s" % (env("KUBERNETES_SERVICE_HOST"), env("KUBERNETES_SERVICE_PORT", "443"))
         self.kube_ctx = ssl.create_default_context(cafile=os.path.join(self.SA, "ca.crt"))
         self.remaining = None
 
+    @staticmethod
+    def read_token(path):
+        with open(path) as f:
+            token = f.read().strip()
+        if not token:
+            raise Failed("empty GitHub token in %s" % path)
+        return token
+
     # Kubernetes
-    def kube(self, method, path, body=None, ok=(200, 201)):
+    def kube(self, method, path, body=None, ok=(200, 201), content_type="application/json"):
         status, _, raw = http(method, self.kube_url + path, body=body, context=self.kube_ctx,
-                              headers={"Authorization": "Bearer " + self.kube_token, "Accept": "application/json"})
+                              headers={"Authorization": "Bearer " + self.kube_token, "Accept": "application/json",
+                                       "Content-Type": content_type})
         if status not in ok:
             raise Failed("%s %s -> HTTP %d: %s" % (method, path, status, raw[:300].decode(errors="replace")))
         return status, (json.loads(raw) if raw else {})
@@ -378,6 +649,33 @@ class Api:
                               body=run, ok=(201, 409))
         return status == 201
 
+    # PR previews
+    def preview_apps(self):
+        _, body = self.kube("GET", "/apis/argoproj.io/v1alpha1/namespaces/%s/applications?labelSelector=%s"
+                            % (self.argocd_namespace, urllib.parse.quote(PREVIEW_LABEL + "=true")))
+        return body.get("items") or []
+
+    def get(self, resource, name):
+        """An openchoreo.dev object of the org namespace, or None."""
+        status, body = self.kube("GET", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/%s/%s"
+                                 % (self.namespace, resource, urllib.parse.quote(name)), ok=(200, 404))
+        return body if status == 200 else None
+
+    def argo_workflow(self, name):
+        status, body = self.kube("GET", "/apis/argoproj.io/v1alpha1/namespaces/%s/workflows/%s"
+                                 % (self.state_namespace, urllib.parse.quote(name)), ok=(200, 404))
+        return body if status == 200 else None
+
+    def poke_binding(self, name, release):
+        self.kube("PATCH", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/releasebindings/%s"
+                  % (self.namespace, urllib.parse.quote(name)),
+                  body={"metadata": {"annotations": {RELEASE_ANNOTATION: release}}},
+                  content_type="application/merge-patch+json")
+
+    def create_release(self, release):
+        self.kube("POST", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/componentreleases" % self.namespace,
+                  body=release, ok=(201, 409))
+
     def load_state(self):
         status, body = self.kube("GET", "/api/v1/namespaces/%s/configmaps/%s"
                                  % (self.state_namespace, self.state_configmap), ok=(200, 404))
@@ -401,11 +699,12 @@ class Api:
             self.kube("PUT", base + "/" + self.state_configmap, body=cm, ok=(200, 409))   # 409: a parallel pass won
 
     # GitHub
-    def gh(self, path, accept="application/vnd.github+json", etag="", ok=(200,)):
-        headers = {"Authorization": "Bearer " + self.gh_token, "Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
+    def gh(self, path, accept="application/vnd.github+json", etag="", ok=(200,), method="GET", body=None, token=""):
+        headers = {"Authorization": "Bearer " + (token or self.gh_token), "Accept": accept,
+                   "X-GitHub-Api-Version": "2022-11-28"}
         if etag:
             headers["If-None-Match"] = etag
-        status, hdrs, raw = http("GET", self.github_api + path, headers=headers)
+        status, hdrs, raw = http(method, self.github_api + path, headers=headers, body=body)
         hdrs = hdrs or {}
         if str(hdrs.get("X-RateLimit-Remaining") or "").isdigit():
             self.remaining = int(str(hdrs.get("X-RateLimit-Remaining")))
@@ -413,7 +712,7 @@ class Api:
             raise RateLimited("GitHub rate limit (HTTP %d, retry after %ss, reset %s)"
                               % (status, hdrs.get("Retry-After", "?"), hdrs.get("X-RateLimit-Reset", "?")))
         if status not in ok:
-            raise Failed("GET %s -> HTTP %d: %s" % (path, status, raw[:300].decode(errors="replace")))
+            raise Failed("%s %s -> HTTP %d: %s" % (method, path, status, raw[:300].decode(errors="replace")))
         if self.remaining is not None and self.remaining < self.min_remaining:
             raise RateLimited("GitHub rate limit nearly used (%d left): pausing until the next pass" % self.remaining)
         return status, hdrs, raw
@@ -441,6 +740,28 @@ class Api:
             return None
         return files
 
+    def pull(self, slug, number):
+        _, _, raw = self.gh("/repos/%s/pulls/%s" % (slug, number), token=self.preview_token)
+        return json.loads(raw)
+
+    def set_status(self, slug, sha, state, description, url, context):
+        body = {"state": state, "description": description, "context": context}
+        if url:
+            body["target_url"] = url
+        self.gh("/repos/%s/statuses/%s" % (slug, sha), method="POST", body=body, ok=(201,), token=self.preview_token)
+
+    def add_label(self, slug, number, label):
+        self.gh("/repos/%s/issues/%s/labels" % (slug, number), method="POST", body={"labels": [label]}, ok=(200,),
+                token=self.preview_token)
+
+
+def duration_seconds(value):
+    """'48h', '90m', '1h30m' -> seconds (the TTL format of installation.yaml previews.ttl)."""
+    m = re.match(r"^(?:([0-9]+)h)?(?:([0-9]+)m)?$", value or "")
+    if not m or not (m.group(1) or m.group(2)):
+        raise ValueError("not a duration in hours/minutes: %r" % value)
+    return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60
+
 
 def main():
     namespace = env("ORG_NAMESPACE", "default")
@@ -449,21 +770,36 @@ def main():
     if repository and not m:
         log("REPOSITORY %r is not a github.com repository URL: nothing to do" % repository)
         return 0
+    previews = env("PREVIEWS") == "true"
     api = Api(namespace, env("STATE_NAMESPACE"), env("STATE_CONFIGMAP", "auto-build-state"), env("TOKEN_FILE"),
-              env("GITHUB_API", "https://api.github.com"), int(env("MIN_RATE_REMAINING", "100")))
+              env("GITHUB_API", "https://api.github.com"), int(env("MIN_RATE_REMAINING", "100")),
+              preview_token_file=env("PREVIEW_TOKEN_FILE") if previews else "",
+              argocd_namespace=env("ARGOCD_NAMESPACE", "argocd"))
     state, current = api.load_state()
-    rec = Reconciler(api, namespace, env("ALLOWED_PREFIXES").split(), state,
-                     repository="%s/%s" % (m.group(1), m.group(2)) if m else "",
-                     max_runs=int(env("MAX_RUNS", "5")), stale_seconds=int(env("STALE_SECONDS", "7200")))
+    slug = "%s/%s" % (m.group(1), m.group(2)) if m else ""
+    max_runs = int(env("MAX_RUNS", "5"))
+    rec = Reconciler(api, namespace, env("ALLOWED_PREFIXES").split(), state, repository=slug, max_runs=max_runs,
+                     stale_seconds=int(env("STALE_SECONDS", "7200")))
+    errors = []
+    created = []
     try:
         created = rec.run()
+        if previews:
+            pv = Previews(api, namespace, env("ALLOWED_PREFIXES").split(), rec.state,
+                          (env("PREVIEW_OPT_IN_ANNOTATION"), env("PREVIEW_OPT_IN_VALUE")), env("PREVIEW_EXPIRED_LABEL"),
+                          duration_seconds(env("PREVIEW_TTL", "48h")), env("PREVIEW_STATUS_CONTEXT", "openchoreo/preview"),
+                          repository=slug, max_runs=max(0, max_runs - len(created)))
+            try:
+                created = created + pv.run()
+            finally:
+                errors += pv.errors
     except RateLimited as e:
         log("paused: %s" % e)
-        created = rec.created
+        created = created or rec.created
     api.save_state(rec.state, current)
     log("pass done: %d WorkflowRun(s) created%s, GitHub rate limit remaining %s"
         % (len(created), (": " + ", ".join(created)) if created else "", api.remaining))
-    return 1 if rec.errors else 0
+    return 1 if rec.errors or errors else 0
 
 
 if __name__ == "__main__":

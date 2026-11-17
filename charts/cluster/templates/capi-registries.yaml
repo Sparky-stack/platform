@@ -16,8 +16,11 @@ Cluster - and any change to it, e.g. registryAuth/registryCA turning on - only o
 CD's built-in ExternalSecret health check); until then (e.g. the Harbor CA is not issued yet) the sync fails and Argo
 retries, so no Machine is created before its registry config exists.
 Not rendered for gcp-gke (no node bootstrap files on GKE node pools).
-Bootstrap data is rendered once per Machine: rotated tokens, robot secrets or mirror changes reach machines created
-afterwards only (roll them: CAPI topology `rollout.after`). VERIFY rotation story.
+Bootstrap data is rendered once per Machine (cluster-api-k3s v0.5.0 returns early once a KThreesConfig is Ready; seen on
+CAPD dev1: the bootstrap Secret is never updated): rotated tokens, robot secrets or mirror changes reach machines created
+afterwards only. Rolling them (docs/providers.md "Node registry config"): workers via topology
+`workers.machineDeployments[].rollout.after`; NOT the control plane via `controlPlane.rollout.after` (CAPI 1.13 writes
+spec.rollout.after, which KThreesControlPlane v0.5.0 lacks, so the topology reconcile fails).
 */ -}}
 {{- include "capi.validate" . }}
 {{- $auth := .Values.secrets.nodeRegistryAuth }}
