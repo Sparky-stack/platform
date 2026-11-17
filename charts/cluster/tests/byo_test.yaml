@@ -55,6 +55,9 @@ tests:
       - equal: { path: 'spec.target.template.metadata.labels["platform.koorikla.io/cni"]', value: flannel }
       - equal: { path: 'spec.target.template.metadata.labels["addons.platform.koorikla.io/cilium"]', value: "false" }
       - matchRegex: { path: spec.target.template.data.config, pattern: 'bearerToken' }
+      # ESO executes templates with missingkey=error: a cert kubeconfig has no `token` key (seen live on byo1)
+      - matchRegex: { path: spec.target.template.data.config, pattern: 'if hasKey \$u "token"' }
+      - notMatchRegex: { path: spec.target.template.data.config, pattern: 'if \$u\.token' }
       - matchRegex: { path: spec.target.template.data.config, pattern: 'client-key-data' }
 
   - it: keeps the cilium addon off on byo even when the cluster runs Cilium (the platform installs a CNI only at birth)
@@ -79,6 +82,9 @@ tests:
       - equal: { path: 'spec.data[0].metadata.spec.remoteNamespace', value: openchoreo-data-plane }
         documentIndex: 0
       - equal: { path: spec.deletionPolicy, value: Delete }
+        documentIndex: 0
+      # last wave: waits for namespaces on the cluster without holding back the ClusterDataPlane (waves 9, 10)
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "20" }
         documentIndex: 0
 
   - it: pushes the gateway CA public cert (read from store mgmt-openchoreo) into platform-delivery
