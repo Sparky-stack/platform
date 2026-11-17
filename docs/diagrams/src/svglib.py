@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 W = 960                       # canvas width: GitHub's README column is 1012 px, so text renders at >= 1:1
 MAX_BOXES = 12                # components per diagram (zones, notes, legend and key do not count)
 MIN_TEXT = 13                 # px, every text except status chips
-MIN_CHIP = 11                 # px, uppercase status chips
+MIN_CHIP = 12                 # px, uppercase status chips
 MIN_CONTRAST = 4.5            # WCAG AA, every text including box detail lines, chips and badge numbers
 CLEAR = 6                     # px, badges and chips keep this far from text, boxes and borders
 ARROW_TEXT_CLEAR = 6          # px, arrows keep this far from any text that is not their own label
@@ -41,13 +41,13 @@ INK = "#f8fafc"      # titles
 INK2 = "#dde5ef"     # box detail lines, key text
 MUTED = "#aab6c8"    # lede, legend, arrow labels, context detail
 LINE = "#8b9ab0"     # structural arrows
-HAIR = "#64748b"     # context box outline, dividers
+HAIR = "#7c8aa0"     # context box outline, dividers
 ACCENT = "#fbbf24"   # the ONE accent: numbered flow (arrows, badges, motion)
 CONTEXT_FILL = "#151d2c"
 
 # plane -> (colour, legend label). Box colour = where it runs (one dimension per diagram); the accent is the flow.
 PLANES = {
-    "mgmt":     ("#2dd4bf", "mgmt cluster"),
+    "mgmt":     ("#2dd4bf", "management cluster"),
     "workload": ("#38bdf8", "workload cluster"),
     "security": ("#fb7185", "security & trust"),
     "data":     ("#a78bfa", "holds state"),
@@ -252,7 +252,7 @@ class Diagram:
         assert status in STATUSES, status
         if context:
             color, fill, stroke, sw = HAIR, CONTEXT_FILL, HAIR, 1.2
-            tcol, lcol = INK2, MUTED
+            tcol, lcol = INK, INK2
             self.has_context = True
         else:
             color = PLANES[plane][0]
@@ -273,8 +273,10 @@ class Diagram:
         widths = [tw(title, title_size, bold=True)] + [
             tw(ln.strip("`"), line_size, mono=ln.startswith("`")) for ln in lines]
         block = max(widths)
-        if step is not None:            # a ring badge sits left of the text block: shift the block right
-            cx += max(0, (x + 48) - (cx - block / 2))
+        if step is not None:            # a step badge sits at the left: centre the text in the rest of the box
+            cx = x + 46 + (w - 46) / 2
+            if cx - block / 2 < x + 46:
+                cx = x + 46 + block / 2
         self._text(cx, ty, title, title_size, tcol, weight=600, anchor="middle", container=rect, layer=out, bg=fill,
                    alpha=alpha, kind="title")
         yy = ty + 2
@@ -288,18 +290,18 @@ class Diagram:
         if chip:
             cs, sp = MIN_CHIP, 0.6
             cw = tw(chip, cs, bold=True, spacing=sp) + 14
-            chx, chy = x + w - cw - 12, y - 17 - CLEAR
-            out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="17" rx="8.5" fill="{BG}" '
-                       f'stroke="{color}" stroke-width="1"/>')
-            out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 12.5}" font-size="{cs}" font-weight="700" '
+            chx, chy = x + w - cw, y - 19 - CLEAR
+            out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="19" rx="9.5" fill="{BG}" '
+                       f'stroke="{color}" stroke-width="1.2"/>')
+            out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 13.8}" font-size="{cs}" font-weight="700" '
                        f'fill="{color}" text-anchor="middle" letter-spacing="{sp}">{html.escape(chip)}</text>')
-            self.r_tags.append((chip, (chx, chy, cw, 17), rect))
+            self.r_tags.append((chip, (chx, chy, cw, 19), rect))
             self.r_ink.append((chip, color, BG, alpha))
         if status == "planned":
             out = [f'<g opacity="{PLANNED_OPACITY}">'] + out + ["</g>"]
         self.l_boxes += out
         if step is not None:            # step at a component: ring badge left of the text block, vertically centred
-            self.badge(cx - block / 2 - 24, y + h / 2, step, owner=rect, ring=True)
+            self.badge(x + 26, y + h / 2, step, owner=rect, ring=True)
         self.r_boxes.append((name or title, rect))
         self.box_info[rect] = {"name": name or title, "title": title, "aka": tuple(aka), "context": context,
                                "lines": list(lines)}
@@ -314,6 +316,7 @@ class Diagram:
         """Boundary: a cluster, a trust zone or a column. Label: tracked caps inside the top-left (tl) or top-right
         (tr) corner; put it where no arrow crosses the border."""
         color = PLANES[plane][0]
+        self.planes_used.add(plane)
         dd = f' stroke-dasharray="{dash}"' if dash else ""
         zfill = mix(color, BG, ZONE_TINT)
         self.l_zones.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14" fill="{zfill}" '
@@ -412,20 +415,13 @@ class Diagram:
         self.badge_pos[n] = (x, y)
         fs = 12 if n > 9 else 13
         if ring:
-            self.node_badges = True
             self.ring_steps.add(n)
             self.ring_owner[n] = owner
-            self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r - 1}" fill="{BG}" stroke="{ACCENT}" '
-                              f'stroke-width="2.4"/>')
-            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="{fs}" '
-                              f'font-weight="700" fill="{ACCENT}" text-anchor="middle">{n}</text>')
-            self.r_ink.append((str(n), ACCENT, BG, 1.0))
-        else:
-            self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" '
-                              f'stroke-width="2"/>')
-            self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="{fs}" font-weight="700" '
-                              f'fill="{BG}" text-anchor="middle">{n}</text>')
-            self.r_ink.append((str(n), BG, ACCENT, 1.0))
+        self.l_top.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{ACCENT}" stroke="{BG}" '
+                          f'stroke-width="2"/>')
+        self.l_top.append(f'<text class="s" x="{x:.1f}" y="{y + 4.6:.1f}" font-size="{fs}" font-weight="700" '
+                          f'fill="{BG}" text-anchor="middle">{n}</text>')
+        self.r_ink.append((str(n), BG, ACCENT, 1.0))
         rect = (x - r, y - r, 2 * r, 2 * r)
         self.r_badges.append((n, rect, owner))
         self.bottom = max(self.bottom, y + r)
@@ -454,14 +450,9 @@ class Diagram:
         tx = 28 + 34
         for n, st in sorted(self.steps.items()):
             lines = wrap(st, 13.5, W - 28 - tx)
-            if n in self.ring_steps:
-                self.l_top.append(f'<circle cx="40" cy="{cy - 4.5}" r="10" fill="{BG}" stroke="{ACCENT}" '
-                                  f'stroke-width="2.2"/>')
-            else:
-                self.l_top.append(f'<circle cx="40" cy="{cy - 4.5}" r="11" fill="{ACCENT}"/>')
+            self.l_top.append(f'<circle cx="40" cy="{cy - 4.5}" r="11" fill="{ACCENT}"/>')
             self.l_top.append(f'<text class="s" x="40" y="{cy}" font-size="{12 if n > 9 else 13}" '
-                              f'font-weight="700" fill="{ACCENT if n in self.ring_steps else BG}" '
-                              f'text-anchor="middle">{n}</text>')
+                              f'font-weight="700" fill="{BG}" text-anchor="middle">{n}</text>')
             for k, ln in enumerate(lines):
                 self._text(tx, cy + k * 19, ln, 13.5, INK2, layer=self.l_top, kind="key")
             cy += len(lines) * 19 + 9
@@ -472,15 +463,14 @@ class Diagram:
         y = cy + 4 if (self.steps or self.notes) else y
         if self.steps:
             self.r_panels.append(("key", (24, y0 - 10, W - 48, y - y0)))
-        # legend: only what this diagram uses
+        # legend: only what this diagram uses, in balanced rows
         entries: list[tuple[str, str]] = []
         for p in PLANES:
             if p in self.planes_used:
-                entries.append((p, self.legend_labels.get(p, PLANES[p][1])))
+                entries.append((p, self.legend_labels.get(p, "runs on the " + PLANES[p][1]
+                                                          if p in ("mgmt", "workload") else PLANES[p][1])))
         if self.fx_steps or self.badges:
             entries.append(("flow", "numbered step"))
-        if self.node_badges:
-            entries.append(("node", "step inside a component"))
         if self.has_both:
             entries.append(("both", "request and reply"))
         if self.has_line:
@@ -489,43 +479,58 @@ class Diagram:
             entries.append(("context", "context, not a step"))
         for s in ("optin", "planned"):
             if s in self.status_used:
-                entries.append((s, {"optin": "opt-in (off by default)", "planned": "planned (not on main)"}[s]))
-        x, ly = 28, y + 18
-        for t, lab in entries:
-            sw = 36 if t in ("flow", "both", "optin") else 22
-            wlab = tw(lab, 13)
-            if x + sw + 8 + wlab > W - 28:
-                x, ly = 28, ly + 26
-            if t in PLANES:
-                c = PLANES[t][0]
-                self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
-                                  f'fill="{mix(c, BASE, TINT)}" stroke="{c}" stroke-width="1.4"/>')
-            elif t == "flow":
-                dd = f"M {x - 2} {ly - 4} L {x + 34} {ly - 4}"
-                self.l_top.append(f'<path d="{dd}" stroke="{ACCENT}" stroke-width="2.4" '
-                                  f'marker-end="{self._marker(ACCENT)}"/>')
-                self.l_top.append(f'<circle cx="{x + 12}" cy="{ly - 4}" r="7" fill="{ACCENT}" stroke="{BG}" '
-                                  f'stroke-width="1.5"/>')
-            elif t == "both":
-                dd = f"M {x + 2} {ly - 4} L {x + 34} {ly - 4}"
-                self.l_top.append(f'<path d="{dd}" stroke="{ACCENT}" stroke-width="2.4" '
-                                  f'marker-end="{self._marker(ACCENT)}" '
-                                  f'marker-start="{self._marker(ACCENT).replace("#ah", "#as")}"/>')
-            elif t == "line":
-                self.l_top.append(f'<path d="M {x - 2} {ly - 4} L {x + 20} {ly - 4}" stroke="{LINE}" '
-                                  f'stroke-width="1.6" marker-end="{self._marker(LINE)}"/>')
-            elif t == "context":
-                self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" fill="{CONTEXT_FILL}" '
-                                  f'stroke="{HAIR}" stroke-width="1.2"/>')
-            elif t in ("optin", "planned"):
-                op = f' opacity="{PLANNED_OPACITY}"' if t == "planned" else ""
-                self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="34" height="13" rx="3" fill="none" '
-                                  f'stroke="{INK2}" stroke-width="1.3" stroke-dasharray="5 3"{op}/>')
-            elif t == "node":
-                self.l_top.append(f'<circle cx="{x + 10}" cy="{ly - 4}" r="8" fill="{BG}" stroke="{ACCENT}" '
-                                  f'stroke-width="2.2"/>')
-            self._text(x + sw + 8, ly, lab, 13, MUTED, layer=self.l_top, kind="legend")
-            x += sw + 8 + wlab + 26
+                entries.append((s, {"optin": "opt-in: off by default", "planned": "planned: not on main"}[s]))
+
+        def sw(t):
+            return {"flow": 44, "both": 36, "optin": 52, "planned": 66}.get(t, 22)
+
+        widths = [sw(t) + 8 + tw(lab, 13) for t, lab in entries]
+        rows = 1
+        while True:
+            per = -(-len(entries) // rows)
+            chunks = [list(range(k, min(k + per, len(entries)))) for k in range(0, len(entries), per)]
+            if all(sum(widths[i] for i in c) + 28 * (len(c) - 1) <= W - 56 for c in chunks) or per == 1:
+                break
+            rows += 1
+        ly = y + 18
+        for c in chunks:
+            x = 28
+            for i in c:
+                t, lab = entries[i]
+                if t in PLANES:
+                    col = PLANES[t][0]
+                    self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
+                                      f'fill="{mix(col, BASE, TINT)}" stroke="{col}" stroke-width="1.4"/>')
+                elif t == "flow":
+                    self.l_top.append(f'<path d="M {x - 2} {ly - 4} L {x + 42} {ly - 4}" stroke="{ACCENT}" '
+                                      f'stroke-width="2.4" marker-end="{self._marker(ACCENT)}"/>')
+                    self.l_top.append(f'<circle cx="{x + 14}" cy="{ly - 4}" r="9" fill="{ACCENT}" stroke="{BG}" '
+                                      f'stroke-width="1.5"/>')
+                    self.l_top.append(f'<text class="s" x="{x + 14}" y="{ly + 0.5}" font-size="12" '
+                                      f'font-weight="700" fill="{BG}" text-anchor="middle">1</text>')
+                elif t == "both":
+                    self.l_top.append(f'<path d="M {x + 2} {ly - 4} L {x + 34} {ly - 4}" stroke="{ACCENT}" '
+                                      f'stroke-width="2.4" marker-end="{self._marker(ACCENT)}" '
+                                      f'marker-start="{self._marker(ACCENT).replace("#ah", "#as")}"/>')
+                elif t == "line":
+                    self.l_top.append(f'<path d="M {x - 2} {ly - 4} L {x + 20} {ly - 4}" stroke="{LINE}" '
+                                      f'stroke-width="1.6" marker-end="{self._marker(LINE)}"/>')
+                elif t == "context":
+                    self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
+                                      f'fill="{CONTEXT_FILL}" stroke="{HAIR}" stroke-width="1.2"/>')
+                elif t in ("optin", "planned"):
+                    chip = TAGS[t]
+                    cw = tw(chip, 11, bold=True, spacing=0.4) + 10
+                    op = f' opacity="{PLANNED_OPACITY}"' if t == "planned" else ""
+                    self.l_top.append(f'<g{op}><rect x="{x}" y="{ly - 12}" width="{cw:.1f}" height="16" rx="8" '
+                                      f'fill="none" stroke="{INK2}" stroke-width="1.2" stroke-dasharray="4 2.5"/>'
+                                      f'<text class="s" x="{x + cw / 2:.1f}" y="{ly}" font-size="11" '
+                                      f'font-weight="700" fill="{INK2}" text-anchor="middle" letter-spacing="0.4">'
+                                      f'{chip}</text></g>')
+                self._text(x + sw(t) + 8, ly, lab, 13, MUTED, layer=self.l_top, kind="legend")
+                x += widths[i] + 28
+            ly += 26
+        ly -= 26
         self.r_panels.append(("legend", (24, y, W - 48, ly + 10 - y)))
         self.h = int(ly + 26)
 

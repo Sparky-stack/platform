@@ -57,61 +57,63 @@ The numbered flow of each diagram, word for word.
 
 ### Architecture ([architecture.svg](architecture.svg))
 
-1. Argo CD reads git: fleet files, the addon catalog, teams
-2. Argo CD turns each fleet file into a Cluster API cluster
-3. Cluster API creates the k3s nodes on docker, AWS or Hetzner
-4. Argo CD installs the addons on every cluster whose labels match
-5. The cluster-agent dials out to OpenChoreo (mTLS) and pulls app releases
-6. The agent applies them; Kyverno checks every pod first
-7. Kyverno admits only signed images with safe pod settings into the app namespaces
+1. Git holds everything: fleet files, the addon catalog, teams and app repos; Argo CD syncs it
+2. Argo CD hands each app's release to OpenChoreo
+3. Argo CD turns each fleet file into a Cluster API cluster
+4. Cluster API creates a workload cluster per fleet file, on docker, AWS or Hetzner
+5. Argo CD installs the addons on every cluster whose labels match: network, mesh, policy, telemetry
+6. The cluster-agent dials out to OpenChoreo (mTLS); the releases come back over that connection
+7. The agent deploys the apps
+8. Apps start only after Kyverno admits them: signed images, safe pod settings
 
 ### Security ([security.svg](security.svg))
 
-1. The build scans the image (Trivy), writes an SBOM and SLSA provenance and hands it to cosign
-2. cosign signs and attests it (platform key in-cluster, keyless on GitHub) and stores both in the registry
-3. Kyverno checks the signature and attestations in the registry: Deny in production, Audit in dev and staging
-4. Kyverno admits only verified images with Pod Security baseline settings
-5. Falco watches every pod's system calls (eBPF on each node)
-6. Falco alerts Falco Talon, which terminates or labels the pod in place
-7. Falco escalates critical alerts to mgmt: falcosidekick → argo-events → the response workflow
+1. The build scans the image (Trivy), writes an SBOM and SLSA provenance and hands the digest to cosign
+2. cosign signs and attests the image and stores both next to it in the registry (Harbor or GHCR)
+3. The registry serves image, signature and attestations to Kyverno at admission
+4. Kyverno admits only verified images whose pods meet the Pod Security baseline: it blocks in production and only warns in dev and staging
+5. App pods' system calls are watched by Falco (eBPF on every node)
+6. Falco alerts Falco Talon, which stops or labels the offending pod
+7. Falco escalates critical alerts to the response workflow on the management cluster (falcosidekick, argo-events)
 
 ### Network ([network.svg](network.svg))
 
 1. A client opens the app URL; kgateway (Gateway API) takes the request
-2. kgateway routes it to the app pods (HTTPRoute; through a waypoint if opted in)
-3. App pods reach each other only through the service mesh: ztunnel adds mTLS and a workload identity, no sidecars
-4. The service mesh rides the cluster network: Cilium (eBPF, WireGuard) or flannel, chosen in the fleet file
-5. The cluster-agent dials out to mgmt on port 8443 (TLS passthrough); cluster-gateway accepts only that cluster's certificate
-6. Collectors (OTel Collector, Fluent Bit, Prometheus agent) dial out and ship logs, metrics and traces to the observability plane
+2. kgateway routes it into the service mesh (HTTPRoute; a waypoint adds L7 policy if opted in)
+3. The service mesh delivers it to the app pods: ztunnel encrypts every hop with mTLS and a workload identity, no sidecars
+4. The service mesh rides the cluster network: Cilium (eBPF, WireGuard) or flannel, chosen per cluster
+5. Separately, the cluster-agent dials out to the management cluster on port 8443; cluster-gateway accepts only that cluster's certificate
+6. The collectors (OTel Collector, Fluent Bit, Prometheus agent) dial out too and ship logs, metrics and traces to the observability plane
 
 ### Observability ([observability.svg](observability.svg))
 
 1. Fluent Bit ships container logs, Falco security alerts included, to OpenSearch
 2. The OTel Collector sends app traces and Kubernetes events to OpenSearch and app metrics to Prometheus
 3. The Prometheus agent scrapes container and cluster metrics (cAdvisor, kube-state-metrics) and remote-writes them to Prometheus
-4. The observer API queries both stores behind one login (Thunder)
-5. Backstage, the promotion gate and the opt-in AI agents query the observer API
+4. OpenSearch and Prometheus answer the observer API: one query API behind one login (Thunder)
+5. The observer API answers Backstage, the promotion gate and the opt-in AI agents
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
 1. A push to the app repo starts a build on the OpenChoreo workflow plane (or GitHub Actions)
-2. Build & sign scans the image (Trivy), writes SBOM and SLSA provenance, signs with cosign, pushes it and commits the new image ref to `deploy/`
-3. Argo CD reads the app repo's `deploy/` folder (Component and Workload)
-4. Argo CD applies them to OpenChoreo, which snapshots an immutable release (ComponentRelease)
-5. The release deploys to development automatically (autoDeploy)
-6. The promotion gate checks development (readiness, smoke tests, alerts, freezes) and opens the PR to staging
-7. The promotion gate opens production only with CODEOWNERS approval; an admission policy lets only Argo CD write production
-8. Kyverno admits into production only signed images pinned by digest (Audit in development and staging)
+2. Build & sign scans the image (Trivy), writes SBOM and SLSA provenance, signs with cosign, pushes it to the registry and commits the new image ref to `deploy/`
+3. The app repo's `deploy/` folder is synced by Argo CD
+4. Argo CD applies it to OpenChoreo, which snapshots an immutable release (ComponentRelease)
+5. The release deploys to development automatically
+6. Development's health (readiness, smoke tests, alerts, freezes) is checked by the promotion gate
+7. The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it once merged
+8. Staging is promoted to production the same way, plus CODEOWNERS approval; only Argo CD may write production
+9. Production admits only signed images pinned by digest: Kyverno blocks the rest (in dev and staging it only warns)
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
-1. Argo CD reads `clusters/<name>.yaml` and creates Application `cluster-<name>` (ApplicationSet fleet)
+1. The fleet file `clusters/<name>.yaml` is synced by Argo CD (ApplicationSet fleet → Application `cluster-<name>`)
 2. Argo CD renders `charts/cluster`: the Cluster API cluster, its secrets, the agent identity and the OpenChoreo data plane
 3. Cluster API creates the machines and installs k3s
 4. Cluster API's kubeconfig becomes an Argo CD cluster secret with the fleet labels (ESO)
 5. The cluster secret's labels select the addon sets (ApplicationSets) that apply
 6. The addon sets install every selected addon on the new cluster
-7. The agent identity (its certificate) is delivered to the cluster; the CA key never leaves mgmt
+7. The agent identity (its certificate) is delivered to the cluster; the CA key never leaves the management cluster
 8. The cluster-agent dials out; the data plane tells the gateway to accept only this cluster's CA
 
 Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the nodes one at a time. Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.
@@ -119,33 +121,33 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 ### Trust & certificates ([trust.svg](trust.svg))
 
 1. cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it 30 days before expiry
-2. cert-manager's certificate is copied to the cluster (ESO, ClusterResourceSet); the CA key stays on mgmt
-3. cert-manager gives cluster-gateway that CA: the only one it accepts for this cluster
-4. The cluster-agent dials out with its certificate (mTLS); Reloader restarts it when the certificate renews
-5. OpenBao (opt-in) holds each group's root and intermediate CA; its public root is copied to every member
-6. istio-csr logs in to OpenBao with its service account token and gets mesh certificates signed
-7. istio-csr hands short-lived certificates to the mesh: 24 h for workloads, 48 h for istiod, renewed at half-life
+2. cert-manager delivers the certificate to the cluster through ESO and a ClusterResourceSet; the CA key stays on the management cluster
+3. cert-manager gives cluster-gateway that cluster's CA: the only one it accepts for it
+4. The cluster-agent dials out with its certificate (mTLS) and restarts by itself when the certificate renews
+5. OpenBao (opt-in) creates a root and an intermediate CA per group of clusters; the keys never leave it, the public root is copied to each member
+6. istio-csr (opt-in) dials out to OpenBao through cert-manager's OpenBao issuer, logs in with its service account and gets mesh certificates signed
+7. istio-csr hands short-lived certificates to the mesh: 24 h for ztunnel and gateways, 48 h for istiod, renewed at half-life
 
 ### Backup & restore ([backup.svg](backup.svg))
 
-1. The secret backend lives outside the clusters (AWS Secrets Manager, Vault); locally re-seed it with `task secrets`
-2. Restore mgmt etcd from a k3s snapshot: Cluster API keeps its clusters and the CA keys come back
-3. OpenBao (opt-in) restores its data from a cold volume copy and unseals with the key from the secret backend
+1. The secret backend (AWS Secrets Manager, Vault) lives outside the clusters; locally, re-seed it with `task secrets`
+2. Restore the management cluster's etcd from a k3s snapshot (every 12 h, 5 kept): Cluster API keeps its clusters, the CA keys come back
+3. The secret backend gives OpenBao (opt-in) its unseal key; OpenBao's data comes back from a cold volume copy
 4. Restore Thunder's volumes: users, OAuth clients, signing keys
-5. Argo CD re-syncs everything else from git
+5. Git re-creates everything else through Argo CD
 6. Harbor's images come back from its volumes or from new builds; telemetry starts empty
-7. Databases (opt-in CNPG) restore from object storage when a workload cluster is lost
+7. Object storage restores the databases (opt-in CNPG) if a workload cluster is lost too
 
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
 1. Renovate opens a pull request: a Helm chart, a k3s release, an image digest or a tool pin
 2. The pull request runs CI: every chart rendered for every installation; lint, schema, unit and contract tests on Linux (x86, arm), macOS, Windows and the devcontainers
-3. CI must pass and a maintainer reviews; then the pull request is squash-merged into main
-4. Argo CD reads main for every cluster that follows it (`addonsRevision: HEAD`)
+3. CI gates the merge: once it passes and a maintainer approves, the pull request is squash-merged into main
+4. Main is synced by Argo CD for every cluster that follows it (`addonsRevision: HEAD`)
 5. Argo CD syncs the dev clusters first; sync waves order each app (e.g. istiod before ztunnel)
 6. Dev clusters are verified: every Argo CD app Synced and Healthy, `task status` green
-7. Argo CD syncs the prod clusters only after a pull request moves their `addonsRevision` to the verified commit
-8. Argo CD hands a `kubernetesVersion` bump to Cluster API, which replaces servers one at a time (3 keep quorum)
+7. Dev clusters' verified commit reaches the prod clusters through a second pull request that moves their `addonsRevision`
+8. Argo CD hands a `kubernetesVersion` bump to Cluster API, which replaces servers one at a time, dev before prod (3 keep quorum)
 
 ## Editing
 
