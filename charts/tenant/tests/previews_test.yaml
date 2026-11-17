@@ -89,12 +89,21 @@ tests:
             platform.koorikla.io/component: "{{ .metadata.name }}"
             platform.koorikla.io/pull-request: "{{ .number }}"
 
-  - it: refuses app repos outside github.com
+  - it: apps outside github.com get no previews (the rest of the tenant does)
+    set:
+      apps:
+        - { name: x, repoURL: https://gitlab.com/acme/x.git }
+        - { name: hello-world, repoURL: https://github.com/koorikla/hello-world.git }
+    asserts:
+      - lengthEqual: { path: spec.generators, count: 1 }
+      - equal: { path: "spec.generators[0].matrix.generators[1].pullRequest.github.repo", value: hello-world }
+
+  - it: no GitHub app at all - no ApplicationSet
     set:
       apps:
         - { name: x, repoURL: https://gitlab.com/acme/x.git }
     asserts:
-      - failedTemplate: { errorMessage: 'apps[x].repoURL "https://gitlab.com/acme/x.git": previews need a https://github.com/<owner>/<repo> repository' }
+      - hasDocuments: { count: 0 }
 
   - it: refuses an expiry label that could break the template expression
     set:

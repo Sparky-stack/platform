@@ -14,7 +14,13 @@ Only generator values that cannot inject anything reach the template: number, he
 the Component name, which the selector pins to the app name. Branch names and titles are never rendered.
 */ -}}
 {{- $pv := .Values.previews | default dict }}
-{{- if and $pv.enabled .Values.apps }}
+{{- /* Only GitHub repositories have a pull request generator here; other apps of the tenant simply get no previews. */ -}}
+{{- $gh := list }}
+{{- range $app := include "tenant.apps" . | fromYamlArray }}
+{{- $m := regexFind "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$" (trimSuffix ".git" (trimSuffix "/" $app.repoURL)) }}
+{{- if $m }}{{ $gh = append $gh (merge (dict "slug" (trimPrefix "https://github.com/" $m)) $app) }}{{ end }}
+{{- end }}
+{{- if and $pv.enabled $gh }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
 {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" $label) }}{{ fail (printf "previews.expiredLabel %q: letters, digits, space, . _ - only" $label) }}{{ end }}
@@ -30,10 +36,8 @@ spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
-    {{- range $app := include "tenant.apps" . | fromYamlArray }}
-    {{- $m := regexFind "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$" (trimSuffix ".git" (trimSuffix "/" $app.repoURL)) }}
-    {{- if not $m }}{{ fail (printf "apps[%s].repoURL %q: previews need a https://github.com/<owner>/<repo> repository" $app.name $app.repoURL) }}{{ end }}
-    {{- $parts := splitList "/" (trimPrefix "https://github.com/" $m) }}
+    {{- range $app := $gh }}
+    {{- $parts := splitList "/" $app.slug }}
     - matrix:
         generators:
           - git:
