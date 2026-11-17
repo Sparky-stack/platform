@@ -41,7 +41,7 @@
 <rect x="678" y="140" width="196" height="72" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="776.0" y="162.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Promotion gate</text>
 <text class="s" x="776.0" y="182.4" font-size="13" fill="#dde5ef" text-anchor="middle">readiness, smoke, alerts,</text>
-<text class="s" x="776.0" y="200.4" font-size="13" fill="#dde5ef" text-anchor="middle">5xx; no PR in a freeze</text>
+<text class="s" x="776.0" y="200.4" font-size="13" fill="#dde5ef" text-anchor="middle">5xx rate, freeze window</text>
 <rect x="150" y="308" width="196" height="72" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
 <text class="s" x="271.0" y="330.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Main branch</text>
 <text class="s" x="271.0" y="350.4" font-size="13" fill="#dde5ef" text-anchor="middle">developers merge</text>

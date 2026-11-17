@@ -13,7 +13,7 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | [security.svg](security.svg) | supply chain, admission, runtime detection and response | [supply-chain.md](../supply-chain.md) |
 | [network.svg](network.svg) | a request in (kgateway, mesh), its telemetry out to the management cluster | [networking.md](../networking.md) |
 | [observability.svg](observability.svg) | every signal lands in the observability plane | [observability.md](../observability.md) |
-| [sdlc.svg](sdlc.svg) | git push → signed image → environments → gated production | [promotion.md](../promotion.md) |
+| [sdlc.svg](sdlc.svg) | build once in-cluster; every environment repeats merge → sync → deploy → admit; the gate links staging to production | [promotion.md](../promotion.md) |
 | [cluster-lifecycle.svg](cluster-lifecycle.svg) | add, upgrade, remove a cluster by editing one file | [providers.md](../providers.md) |
 | [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [runbooks/certificates-and-secrets.md](../runbooks/certificates-and-secrets.md) |
 | [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
@@ -45,7 +45,9 @@ one idea per diagram, read top-left to bottom-right, the numbered flow carries t
   at a dot. An arrow points from the component that acts (opens the connection, does the work) to the one it acts
   on, and the step text names that component first: Argo CD reads Git, so its arrow points at Git; the cluster-agent
   dials out, so its arrow leaves the workload cluster (labelled "dials out"). The key under every diagram and the
-  lists below are the same text (`build.py` fails when they differ).
+  lists below are the same text (`build.py` fails when they differ). Exception: the SDLC view is a swimlane (actors
+  as rows, environments as columns) whose arrows follow the change from one lane to the next; its legend says so
+  (`flow_label`), and `MANUAL` chips (explained in the legend, `legend_chip`) mark where a person merges.
 - **Motion** only on the numbered flow: a light particle runs along each step's arrow, in step order, then rests.
   `@media (prefers-reduced-motion: reduce)` stops it. Every animated element is an overlay with static opacity 0,
   so a static frame (rsvg-convert, PDF, reduced motion) is the complete diagram.

@@ -300,7 +300,7 @@ def sdlc() -> Diagram:
 
     d.box(cx[0], RB, cw, HB, "mgmt", "Build & sign", ["in-cluster: tests, scans,", "signs with platform key"])
     d.box(cx[1], RB, cw, HB, "mgmt", "Harbor", ["one signed image per", "build; every env pulls it"])
-    d.box(cx[2], RB, cw, HB, "mgmt", "Promotion gate", ["readiness, smoke, alerts,", "5xx; no PR in a freeze"])
+    d.box(cx[2], RB, cw, HB, "mgmt", "Promotion gate", ["readiness, smoke, alerts,", "5xx rate, freeze window"])
     d.box(cx[0], RG, cw, HG, "external", "Main branch", ["developers merge", "reviewed code"], step=1,
           tag="MANUAL", aka=("developer", "new commit", "digest commit"))
     d.box(cx[1], RG, cw, HG, "external", "Staging PR", ["picks a release,", "the team merges"], step=8,

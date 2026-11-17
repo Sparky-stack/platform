@@ -213,16 +213,18 @@ platform renders for it:
 App repo changes (koorikla/hello-world, outside this repo):
 
 - `CODEOWNERS` + branch ruleset as in gate 1.
-- CI: write the image **by digest** into `workload.yaml`. koorikla/ci outputs `image_digest_ref`; production denies
-  tag-only references ([#16](https://github.com/koorikla/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push` if `sourceIntegrity` is enabled
-  ([supply-chain.md](supply-chain.md#git-commit-signatures)).
+- Builds write the image **by digest** into `workload.yaml`: the in-cluster build does it for every Component with
+  `autoBuild: true` ([build-plane.md](build-plane.md#auto-build-poll-or-webhook)); on the optional GitHub Actions path
+  koorikla/ci outputs `image_digest_ref`. Production denies tag-only references
+  ([#16](https://github.com/koorikla/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push`
+  if `sourceIntegrity` is enabled ([supply-chain.md](supply-chain.md#git-commit-signatures)).
 - Optional `/` health endpoint for the smoke test (`promotionGate.smoke.path`).
 
-Flow:
+Flow (drawn in [diagrams/sdlc.svg](diagrams/sdlc.svg)):
 
 ```text
-push main ─► CI (koorikla/ci: build, sign, SBOM, SLSA, vuln) ─► bump workload.yaml (digest)
-  └► Argo CD syncs Workload ─► OpenChoreo cuts ComponentRelease hello-world-<hash> ─► binds development (autoDeploy)
+merge to main ─► auto-build poll (≤ 1 min) ─► in-cluster build: test, scan, sign with the platform key, SBOM, SLSA ─► Harbor
+  └► commit workload.yaml (digest; deploy/ changes start no build) ─► Argo CD syncs Workload ─► OpenChoreo cuts ComponentRelease hello-world-<hash> ─► binds development (autoDeploy)
 developer: PR "staging: releaseName hello-world-<hash>" (review by the team) ─► merge ─► staging rollout
   └► rollout succeeded ─► Argo Events ─► WorkflowRun gate-hello-world-<id> (promotion-gate)
        pipeline ✓ readiness ✓ smoke ✓ alerts + 5xx ✓ freeze ✓ ─► PR "promote(hello-world): hello-world-<hash> to production"
