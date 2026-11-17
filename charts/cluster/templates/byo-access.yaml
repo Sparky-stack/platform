@@ -90,6 +90,10 @@ metadata:
   namespace: fleet
   labels:
     platform.koorikla.io/name: {{ .root.Values.name | quote }}
+  annotations:
+    # After everything else of the cluster app: a PushSecret stays Degraded until its namespace exists on the cluster
+    # (created by the cluster's addon apps), and must not hold back the ClusterDataPlane / Environments (waves 9, 10).
+    argocd.argoproj.io/sync-wave: "20"
 spec:
   refreshInterval: 10m
   updatePolicy: Replace
