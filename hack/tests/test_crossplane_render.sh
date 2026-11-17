@@ -111,12 +111,21 @@ XP_IMAGE="$(yq -r '.crossplane.image.repository + ":" + .crossplane.image.tag' "
 yq 'select(.kind == "Function")
   | .metadata.annotations["render.crossplane.io/runtime-docker-pull-policy"] = "IfNotPresent"' "$TMP/addon-cnpg.yaml" \
   > "$TMP/functions.yaml"
+# Pull every image once, serially and with retries, before the parallel renders: ten renders pulling the same images
+# at once from xpkg.crossplane.io get connection resets (#140). The renders then find them locally (IfNotPresent).
+pkgs=()
+read_lines pkgs yq -N -r '.spec.package' "$TMP/functions.yaml"
+for img in "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}; do
+  [[ -n "$img" && "$img" != null ]] || continue
+  docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
+done
 
-# render_bg <case> <composition> <xr> [observed]: run crossplane composition render in the background
+# render_bg <case> <composition> <xr> [observed]: run crossplane composition render in the background (one retry for
+# a transient registry/Docker error; a real render failure fails both attempts)
 render_bg() {
   local c=$1 comp=$2 xr=$3 obs=${4:-} args=()
   [[ -n "$obs" ]] && args=(--observed-resources "$obs")
-  crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
+  retry_with_backoff 2 2 crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
     --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err" \
     && : > "$TMP/render-$c.ok" &
 }
