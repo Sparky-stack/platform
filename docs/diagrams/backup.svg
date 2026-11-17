@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1345" viewBox="0 0 960 1345" role="img" aria-label="Backup &amp; restore · the restore order"><title>Backup &amp; restore · the restore order</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1345" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1329" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1369" viewBox="0 0 960 1369" role="img" aria-label="Backup &amp; restore · the restore order"><title>Backup &amp; restore · the restore order</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1369" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1353" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
 <rect x="268" y="128" width="332" height="632" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
 <text class="s" x="284.0" y="152.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MANAGEMENT CLUSTER</text>
-<rect x="268" y="800" width="332" height="152" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
+<rect x="268" y="800" width="332" height="176" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
 <text class="s" x="284.0" y="824.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD CLUSTER</text>
-<rect x="696" y="368" width="236" height="584" rx="14" fill="#161d2c" stroke="#94a3b8" stroke-opacity=".8" stroke-width="1.3"/>
+<rect x="696" y="368" width="236" height="608" rx="14" fill="#161d2c" stroke="#94a3b8" stroke-opacity=".8" stroke-width="1.3"/>
 <text class="s" x="712.0" y="392.0" font-size="13" fill="#94a3b8" font-weight="700" letter-spacing="1.0">OUTSIDE THE CLUSTERS</text>
 <path d="M 180.0 216.0 L 284.0 216.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 180.0 336.0 L 284.0 336.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
@@ -12,14 +12,14 @@
 <path d="M 112.0 616.0 L 112.0 656.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
 <path d="M 584.0 456.0 L 712.0 456.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 584.0 696.0 L 712.0 696.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 584.0 888.0 L 712.0 888.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 584.0 912.0 L 712.0 912.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 180.0 216.0 L 284.0 216.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
 <path class="fx" d="M 180.0 336.0 L 284.0 336.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
 <path class="fx" d="M 180.0 456.0 L 284.0 456.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
 <path class="fx" d="M 180.0 576.0 L 284.0 576.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
 <path class="fx" d="M 584.0 456.0 L 712.0 456.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
 <path class="fx" d="M 584.0 696.0 L 712.0 696.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 584.0 888.0 L 712.0 888.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 584.0 912.0 L 712.0 912.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
 <rect x="44" y="176" width="136" height="440" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
 <text class="s" x="112.0" y="382.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Operator</text>
 <text class="s" x="112.0" y="402.4" font-size="13" fill="#dde5ef" text-anchor="middle">runs the restore</text>
@@ -50,12 +50,12 @@
 <text class="s" x="434.0" y="682.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
 <text class="s" x="434.0" y="702.4" font-size="13" fill="#dde5ef" text-anchor="middle">GitOps</text>
 <text class="s" x="434.0" y="720.4" font-size="13" fill="#dde5ef" text-anchor="middle">engine</text>
-<rect x="284" y="848" width="300" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4"/>
-<text class="s" x="434.0" y="874.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Databases</text>
-<text class="s" x="434.0" y="894.4" font-size="13" fill="#dde5ef" text-anchor="middle">app data, only if this</text>
-<text class="s" x="434.0" y="912.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster is lost too</text>
-<rect x="520.9" y="823" width="63.1" height="19" rx="9.5" fill="#0b1120" stroke="#dde5ef" stroke-width="1.2"/>
-<text class="s" x="552.4" y="836.8" font-size="12" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<rect x="284" y="872" width="300" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text class="s" x="434.0" y="898.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Databases</text>
+<text class="s" x="434.0" y="918.4" font-size="13" fill="#dde5ef" text-anchor="middle">app data, only if this</text>
+<text class="s" x="434.0" y="936.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster is lost too</text>
+<rect x="520.9" y="847" width="63.1" height="19" rx="9.5" fill="#0b1120" stroke="#dde5ef" stroke-width="1.2"/>
+<text class="s" x="552.4" y="860.8" font-size="12" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
 <rect x="712" y="416" width="204" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
 <text class="s" x="814.0" y="442.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Secret backend</text>
 <text class="s" x="814.0" y="462.4" font-size="13" fill="#dde5ef" text-anchor="middle">AWS or Vault</text>
@@ -64,10 +64,10 @@
 <text class="s" x="814.0" y="682.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Git</text>
 <text class="s" x="814.0" y="702.4" font-size="13" fill="#dde5ef" text-anchor="middle">everything</text>
 <text class="s" x="814.0" y="720.4" font-size="13" fill="#dde5ef" text-anchor="middle">declarative</text>
-<rect x="712" y="848" width="204" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
-<text class="s" x="814.0" y="874.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Object storage</text>
-<text class="s" x="814.0" y="894.4" font-size="13" fill="#dde5ef" text-anchor="middle">database</text>
-<text class="s" x="814.0" y="912.4" font-size="13" fill="#dde5ef" text-anchor="middle">backups</text>
+<rect x="712" y="872" width="204" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="814.0" y="898.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Object storage</text>
+<text class="s" x="814.0" y="918.4" font-size="13" fill="#dde5ef" text-anchor="middle">database</text>
+<text class="s" x="814.0" y="936.4" font-size="13" fill="#dde5ef" text-anchor="middle">backups</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Backup &amp; restore · the restore order</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">After losing the management cluster, the operator first restores the state Git cannot recreate, from copies kept off the host; then Argo CD</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">rebuilds the rest from Git.</text>
@@ -89,48 +89,48 @@
 <text class="s" x="648.0" y="728.0" font-size="13" fill="#aab6c8" text-anchor="middle">re-sync</text>
 <circle cx="648.0" cy="696.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="648.0" y="700.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<rect x="622.6" y="906.0" width="50.9" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="648.0" y="920.0" font-size="13" fill="#aab6c8" text-anchor="middle">restore</text>
-<circle cx="648.0" cy="888.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="648.0" y="892.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<line x1="28" y1="974" x2="932" y2="974" stroke="#7c8aa0" stroke-width="1.2"/>
-<circle cx="40" cy="997.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1002" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="62.0" y="1002.0" font-size="13.5" fill="#dde5ef">The operator restores the management cluster&#x27;s etcd from its latest snapshot copy: the workload clusters&#x27; records and the CA keys come</text>
-<text class="s" x="62.0" y="1021.0" font-size="13.5" fill="#dde5ef">back</text>
-<circle cx="40" cy="1044.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1049" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="62.0" y="1049.0" font-size="13.5" fill="#dde5ef">The operator restores Thunder&#x27;s volumes from their copy: users, sign-in clients, signing keys</text>
-<circle cx="40" cy="1072.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1077" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="62.0" y="1077.0" font-size="13.5" fill="#dde5ef">The operator restores OpenBao&#x27;s volume copy (opt-in): secrets and the mesh CA keys</text>
-<circle cx="40" cy="1100.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1105" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="62.0" y="1105.0" font-size="13.5" fill="#dde5ef">OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with task secrets)</text>
-<circle cx="40" cy="1128.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1133" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="1133.0" font-size="13.5" fill="#dde5ef">The operator restores Harbor&#x27;s volume copy, or new builds push the images again</text>
-<circle cx="40" cy="1156.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1161" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="62.0" y="1161.0" font-size="13.5" fill="#dde5ef">Argo CD re-syncs everything else from Git</text>
-<circle cx="40" cy="1184.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1189" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="62.0" y="1189.0" font-size="13.5" fill="#dde5ef">The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too</text>
-<text class="s" x="28.0" y="1221.0" font-size="13.5" fill="#aab6c8">Telemetry is not backed up: it starts empty.</text>
-<rect x="28" y="1257" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
-<text class="s" x="58.0" y="1267.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
-<rect x="283.60519999999997" y="1257" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
-<text class="s" x="313.6" y="1267.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
-<rect x="513.9241" y="1257" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
-<text class="s" x="543.9" y="1267.0" font-size="13" fill="#aab6c8">outside the clusters</text>
-<path d="M 26 1289 L 70 1289" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
-<circle cx="42" cy="1289" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="42" y="1293.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="80.0" y="1293.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
-<path d="M 422.3199 1289 L 444.3199 1289" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
-<text class="s" x="454.3" y="1293.0" font-size="13" fill="#aab6c8">the operator reads the off-host copies</text>
-<rect x="711.3435" y="1283" width="20" height="13" rx="3" fill="#263247"/>
-<text class="s" x="741.3" y="1293.0" font-size="13" fill="#aab6c8">context, not a step</text>
-<g><rect x="28" y="1306" width="28" height="18" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.3" stroke-dasharray="4 2.5"/><rect x="64" y="1307" width="54.3" height="16" rx="8" fill="none" stroke="#dde5ef" stroke-width="1.2"/><text class="s" x="91.1" y="1319" font-size="11" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.4">OPT-IN</text></g>
-<text class="s" x="128.0" y="1319.0" font-size="13" fill="#aab6c8">opt-in, off by default</text>
+<rect x="622.6" y="930.0" width="50.9" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="648.0" y="944.0" font-size="13" fill="#aab6c8" text-anchor="middle">restore</text>
+<circle cx="648.0" cy="912.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="648.0" y="916.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<line x1="28" y1="998" x2="932" y2="998" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="1021.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1026" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="1026.0" font-size="13.5" fill="#dde5ef">The operator restores the management cluster&#x27;s etcd from its latest snapshot copy: the workload clusters&#x27; records and the CA keys come</text>
+<text class="s" x="62.0" y="1045.0" font-size="13.5" fill="#dde5ef">back</text>
+<circle cx="40" cy="1068.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1073" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="1073.0" font-size="13.5" fill="#dde5ef">The operator restores Thunder&#x27;s volumes from their copy: users, sign-in clients, signing keys</text>
+<circle cx="40" cy="1096.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1101" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="1101.0" font-size="13.5" fill="#dde5ef">The operator restores OpenBao&#x27;s volume copy (opt-in): secrets and the mesh CA keys</text>
+<circle cx="40" cy="1124.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1129" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="1129.0" font-size="13.5" fill="#dde5ef">OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with task secrets)</text>
+<circle cx="40" cy="1152.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1157" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="1157.0" font-size="13.5" fill="#dde5ef">The operator restores Harbor&#x27;s volume copy, or new builds push the images again</text>
+<circle cx="40" cy="1180.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1185" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="1185.0" font-size="13.5" fill="#dde5ef">Argo CD re-syncs everything else from Git</text>
+<circle cx="40" cy="1208.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1213" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="1213.0" font-size="13.5" fill="#dde5ef">The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too</text>
+<text class="s" x="28.0" y="1245.0" font-size="13.5" fill="#aab6c8">Telemetry is not backed up: it starts empty.</text>
+<rect x="28" y="1281" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="1291.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="1281" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="1291.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<rect x="513.9241" y="1281" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="543.9" y="1291.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 26 1313 L 70 1313" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="42" cy="1313" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="42" y="1317.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="80.0" y="1317.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
+<path d="M 422.3199 1313 L 444.3199 1313" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
+<text class="s" x="454.3" y="1317.0" font-size="13" fill="#aab6c8">the operator reads the off-host copies</text>
+<rect x="711.3435" y="1307" width="20" height="13" rx="3" fill="#263247"/>
+<text class="s" x="741.3" y="1317.0" font-size="13" fill="#aab6c8">context, not a step</text>
+<g><rect x="28" y="1330" width="28" height="18" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.3" stroke-dasharray="4 2.5"/><rect x="64" y="1331" width="54.3" height="16" rx="8" fill="none" stroke="#dde5ef" stroke-width="1.2"/><text class="s" x="91.1" y="1343" font-size="11" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.4">OPT-IN</text></g>
+<text class="s" x="128.0" y="1343.0" font-size="13" fill="#aab6c8">opt-in, off by default</text>
 </svg>

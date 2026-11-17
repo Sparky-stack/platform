@@ -423,7 +423,7 @@ def backup() -> Diagram:
     OX, OW = OZ + 16, 932 - 16 - OZ - 16
     R = [176 + i * (H + 40) for i in range(5)]
     zb = R[4] + H + 24
-    RW = zb + 88                               # the workload cluster's row
+    RW = zb + 40 + 72                          # the workload cluster's row: room between its label and the chip
     zw = RW + H + 24
     d.zone(MZ, 128, ZR - MZ, zb - 128, "management cluster", "mgmt")
     d.zone(MZ, zb + 40, ZR - MZ, zw - zb - 40, "workload cluster", "workload")
