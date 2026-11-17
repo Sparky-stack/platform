@@ -253,14 +253,14 @@ def sdlc() -> Diagram:
     d.box(c[1], R0, c[2] + w - c[1], H, "mgmt", "Build & sign", ["builds, scans and signs every image"])
     d.box(c[3], R0, w3, H, "mgmt", "Registry", ["signed", "images"])
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
-    d.box(c[1], R1, w, H, "mgmt", "Release", ["immutable", "snapshot"])
+    d.box(c[1], R1, w, H, "mgmt", "OpenChoreo", ["snapshots and", "deploys releases"])
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[2], R2, w, H, "workload", "Staging", ["second", "environment"])
     d.box(c[3], R2, w3, H, "mgmt", "Promotion gate", ["checks staging,", "opens the PR"], step=8)
     d.box(c[2], R3, w, H, "workload", "Production", ["approved PR,", "then admission"])
     d.box(c[3], R3, w3, H, "workload", "Admission", ["Kyverno"], aka=("Kyverno",))
     d.arrow([(c[1], R0 + 24), (c[0] + w, R0 + 24)], step=1)
-    d.arrow([(c[1], R0 + 58), (c[0] + w, R0 + 58)])
+    d.arrow([(c[1], R0 + 56), (c[0] + w, R0 + 56)], label="commit", label_pos=((c[0] + w + c[1]) / 2, R0 + 76))
     d.line_label = "writes to the app repo: the new version, the production pull request"
     d.arrow([(c[2] + w, ymid(R0)), (c[3], ymid(R0))], step=2, badge_at=0.4)
     xa = c[0] + w / 2
@@ -269,16 +269,16 @@ def sdlc() -> Diagram:
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=5, badge_at=0.4)
     xs, xq = c[1] + 110, c[1] + 48             # the release reaches staging, and only later production
     d.arrow([(xs, R1 + H), (xs, ymid(R2)), (c[2], ymid(R2))], step=6, badge=(c[1] + w + 40, ymid(R2)),
-            label="after the staging PR", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
+            label="after the staging PR merges", label_pos=(xs + 12, R1 + H + 52), label_anchor="start")
     d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))], step=7, badge=(c[3] - 40, ymid(R2)))
     xg = c[3] + w3 / 2                          # step 8 happens at the gate: it writes Git, it does not deploy
     yg = R0 + H + 40
     d.arrow([(xg, R2), (xg, yg), (c[0] + w - 30, yg), (c[0] + w - 30, R0 + H)],
             label="production pull request", label_pos=(c[2] + 40, yg - 8), label_anchor="start")
-    d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=9, badge=(c[1] + w + 40, ymid(R3)),
-            label="after approval", label_pos=(xq + 16, ymid(R3) - 12), label_anchor="start")
+    d.arrow([(xq, R1 + H), (xq, ymid(R3)), (c[2], ymid(R3))], step=9, badge=(xq, ymid(R3) - 60),
+            label="after the approved PR", label_pos=(xq + 14, ymid(R3) + 24), label_anchor="start")
     d.arrow([(c[3], ymid(R3)), (c[2] + w, ymid(R3))], step=10, badge=(c[3] - 40, ymid(R3)))
-    d.require("App repo", "Build & sign", "Registry", "Argo CD", "Release", "Promotion gate", "Development",
+    d.require("App repo", "Build & sign", "Registry", "Argo CD", "OpenChoreo", "Promotion gate", "Development",
               "Staging", "Production", "Admission")
     d.stages("Development", "Staging", "Production")
     d.key("Build & sign builds every push to the app repo, on OpenChoreo's workflow plane on the management cluster",
@@ -286,11 +286,13 @@ def sdlc() -> Diagram:
           "deploy/)",
           "Argo CD reads the deploy/ folder of the app repo",
           "Argo CD applies it to OpenChoreo, which snapshots an immutable release",
-          "The release deploys to development automatically",
-          "The release deploys to staging once the team merges a staging pull request in the app repo",
+          "OpenChoreo deploys the release to development automatically",
+          "OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo and Argo "
+          "CD applies it",
           "The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes",
           "The promotion gate opens the production pull request in the app repo only if every check passes",
-          "The release deploys to production only after a code owner approves and merges that pull request",
+          "OpenChoreo deploys it to production only after a code owner approves and merges that pull request and "
+          "Argo CD applies it",
           "Kyverno admits into production only signed images pinned by digest")
     return d
 

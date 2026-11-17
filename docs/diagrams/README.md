@@ -100,11 +100,11 @@ The numbered flow of each diagram, word for word.
 2. Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to `deploy/`)
 3. Argo CD reads the `deploy/` folder of the app repo
 4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
-5. The release deploys to development automatically
-6. The release deploys to staging once the team merges a staging pull request in the app repo
+5. OpenChoreo deploys the release to development automatically
+6. OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo and Argo CD applies it
 7. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
 8. The promotion gate opens the production pull request in the app repo only if every check passes
-9. The release deploys to production only after a code owner approves and merges that pull request
+9. OpenChoreo deploys it to production only after a code owner approves and merges that pull request and Argo CD applies it
 10. Kyverno admits into production only signed images pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="1110" viewBox="0 0 960 1110" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 13.50s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}19.6%{opacity:1}24.6%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1110" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1094" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
 <path d="M 272.0 144.0 L 192.0 144.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 272.0 178.0 L 192.0 178.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path d="M 272.0 176.0 L 192.0 176.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
 <path d="M 648.0 160.0 L 728.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 118.0 280.0 L 118.0 200.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 192.0 320.0 L 272.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
@@ -35,9 +35,9 @@
 <text class="s" x="118.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">GitOps</text>
 <text class="s" x="118.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">engine</text>
 <rect x="272" y="280" width="148" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="346.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Release</text>
-<text class="s" x="346.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">immutable</text>
-<text class="s" x="346.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">snapshot</text>
+<text class="s" x="346.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">OpenChoreo</text>
+<text class="s" x="346.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">snapshots and</text>
+<text class="s" x="346.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">deploys releases</text>
 <rect x="500" y="280" width="148" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="574.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Development</text>
 <text class="s" x="574.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">first</text>
@@ -64,6 +64,8 @@
 <text class="s" x="754.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
 <circle cx="232.0" cy="144.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="232.0" y="148.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<rect x="205.8" y="182.0" width="52.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="232.0" y="196.0" font-size="13" fill="#aab6c8" text-anchor="middle">commit</text>
 <circle cx="680.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="680.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
 <circle cx="118.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
@@ -72,18 +74,18 @@
 <text class="s" x="224.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
 <circle cx="452.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="452.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<rect x="390.0" y="398.0" width="129.8" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="394.0" y="412.0" font-size="13" fill="#aab6c8">after the staging PR</text>
+<rect x="390.0" y="398.0" width="179.6" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="394.0" y="412.0" font-size="13" fill="#aab6c8">after the staging PR merges</text>
 <circle cx="460.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="460.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
 <circle cx="688.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="688.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
 <rect x="536.0" y="218.0" width="147.4" height="20.0" rx="3" fill="#0b1120"/>
 <text class="s" x="540.0" y="232.0" font-size="13" fill="#aab6c8">production pull request</text>
-<rect x="332.0" y="614.0" width="92.3" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="336.0" y="628.0" font-size="13" fill="#aab6c8">after approval</text>
-<circle cx="460.0" cy="640.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="460.0" y="644.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<rect x="330.0" y="650.0" width="142.8" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="334.0" y="664.0" font-size="13" fill="#aab6c8">after the approved PR</text>
+<circle cx="320.0" cy="580.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="320.0" y="584.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
 <circle cx="688.0" cy="640.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="688.0" y="644.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
 <line x1="28" y1="702" x2="932" y2="702" stroke="#7c8aa0" stroke-width="1.2"/>
@@ -101,10 +103,10 @@
 <text class="s" x="62.0" y="814.0" font-size="13.5" fill="#dde5ef">Argo CD applies it to OpenChoreo, which snapshots an immutable release</text>
 <circle cx="40" cy="837.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="842" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="842.0" font-size="13.5" fill="#dde5ef">The release deploys to development automatically</text>
+<text class="s" x="62.0" y="842.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys the release to development automatically</text>
 <circle cx="40" cy="865.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="870" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="62.0" y="870.0" font-size="13.5" fill="#dde5ef">The release deploys to staging once the team merges a staging pull request in the app repo</text>
+<text class="s" x="62.0" y="870.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo and Argo CD applies it</text>
 <circle cx="40" cy="893.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="898" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
 <text class="s" x="62.0" y="898.0" font-size="13.5" fill="#dde5ef">The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes</text>
@@ -113,7 +115,7 @@
 <text class="s" x="62.0" y="926.0" font-size="13.5" fill="#dde5ef">The promotion gate opens the production pull request in the app repo only if every check passes</text>
 <circle cx="40" cy="949.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="954" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
-<text class="s" x="62.0" y="954.0" font-size="13.5" fill="#dde5ef">The release deploys to production only after a code owner approves and merges that pull request</text>
+<text class="s" x="62.0" y="954.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys it to production only after a code owner approves and merges that pull request and Argo CD applies it</text>
 <circle cx="40" cy="977.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="982" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
 <text class="s" x="62.0" y="982.0" font-size="13.5" fill="#dde5ef">Kyverno admits into production only signed images pinned by digest</text>
