@@ -107,9 +107,54 @@ if [[ "$(docker info --format '{{.OSType}}' 2>/dev/null | tr -d '\r')" != linux 
   finish; exit 0
 fi
 XP_IMAGE="$(yq -r '.crossplane.image.repository + ":" + .crossplane.image.tag' "$ADDON/values.yaml" | tr -d '\r')"
-# The addon's own Function objects (same pinned packages); each render starts and removes its containers.
-yq 'select(.kind == "Function")
-  | .metadata.annotations["render.crossplane.io/runtime-docker-pull-policy"] = "IfNotPresent"' "$TMP/addon-cnpg.yaml" \
+# One Docker network and one container per Function for the whole run, shared by every render. Left to itself each
+# `crossplane render` creates its own bridge network (crossplane-render-<random>) plus fresh function containers, and
+# leaves both behind when it is killed: ten renders per run, several runs at once on a shared Docker host and the leaked
+# networks of killed runs exhaust Docker's default address pools (~30 networks) and renders fail with "all predefined
+# address pools have been fully subnetted". The run's network and containers carry its name, are removed on exit
+# (including INT / TERM), and a later run removes those of runs whose process is gone (SIGKILL).
+XP_LABEL=koorikla.platform/test=crossplane-render
+XP_HOST=$(uname -n)
+XP_NET="koorikla-xp-render-$$-$RANDOM"
+XP_RENDER_JOBS=${XP_RENDER_JOBS:-4}   # parallel renders (each one starts the render engine container)
+xp_cleanup_run() {   # xp_cleanup_run <network>: remove the run's containers, then its network
+  local ids
+  ids=$( (docker ps -aq --filter "name=$1-"; docker ps -aq --filter "network=$1") 2>/dev/null | sort -u | tr '\n' ' ')
+  # shellcheck disable=SC2086 # word-split container ids
+  [[ -z "${ids// /}" ]] || docker rm -f $ids >/dev/null 2>&1 || true
+  docker network rm "$1" >/dev/null 2>&1 || true
+}
+xp_cleanup() {
+  local pids
+  pids=$(jobs -p)
+  # shellcheck disable=SC2086 # word-split pids
+  [[ -z "$pids" ]] || kill $pids 2>/dev/null || true
+  xp_cleanup_run "$XP_NET"
+  rm -rf "$TMP"
+}
+trap xp_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+while read -r net pid host; do
+  [[ -n "$net" && "$host" == "$XP_HOST" ]] || continue
+  kill -0 "$pid" 2>/dev/null || xp_cleanup_run "$net"
+done < <(docker network ls --filter "label=$XP_LABEL" \
+  --format '{{.Name}} {{.Label "koorikla.platform/owner-pid"}} {{.Label "koorikla.platform/owner-host"}}' | tr -d '\r')
+if ! out=$(docker network create --label "$XP_LABEL" --label "koorikla.platform/owner-pid=$$" \
+  --label "koorikla.platform/owner-host=$XP_HOST" "$XP_NET" 2>&1); then
+  echo "$out" >&2
+  echo "  hint: $(docker network ls -q | wc -l | tr -d ' ') Docker networks exist; networks left by killed renders:" \
+    "docker network ls --filter name=crossplane-render- (remove only those without containers you own)" >&2
+  assert_eq failed ok "crossplane render: create the run's Docker network $XP_NET"
+  finish; exit 1
+fi
+# The addon's own Function objects (same pinned packages), run as the run's named containers on its network; the
+# first render starts them, the others reuse them (Orphan: the render leaves them running, xp_cleanup removes them).
+XP_NET="$XP_NET" yq 'select(.kind == "Function")
+  | .metadata.annotations["render.crossplane.io/runtime-docker-pull-policy"] = "IfNotPresent"
+  | .metadata.annotations["render.crossplane.io/runtime-docker-network"] = strenv(XP_NET)
+  | .metadata.annotations["render.crossplane.io/runtime-docker-name"] = strenv(XP_NET) + "-" + .metadata.name
+  | .metadata.annotations["render.crossplane.io/runtime-docker-cleanup"] = "Orphan"' "$TMP/addon-cnpg.yaml" \
   > "$TMP/functions.yaml"
 # Pull every image once, serially and with retries, before the parallel renders: ten renders pulling the same images
 # at once from xpkg.crossplane.io get connection resets (#140). The renders then find them locally (IfNotPresent).
@@ -120,16 +165,21 @@ for img in "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}; do
   docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
 done
 
-# render_bg <case> <composition> <xr> [observed]: run crossplane composition render in the background (one retry for
-# a transient registry/Docker error; a real render failure fails both attempts)
-render_bg() {
+# render_one <case> <composition> <xr> [observed]: crossplane composition render (one retry for a transient
+# registry/Docker error; a real render failure fails both attempts, the stderr of both is kept for render())
+render_one() {
   local c=$1 comp=$2 xr=$3 obs=${4:-} args=()
   [[ -n "$obs" ]] && args=(--observed-resources "$obs")
   retry_with_backoff 2 2 crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
     --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err" \
-    && : > "$TMP/render-$c.ok" &
+    && : > "$TMP/render-$c.ok"
 }
-render_bg cnpg-minimal "$TMP/composition-cnpg.yaml" "$FIX/xr-minimal.yaml"
+# render_bg: render_one in the background, at most XP_RENDER_JOBS at a time (bash 3.2: no `wait -n`)
+render_bg() {
+  while [[ $(jobs -rp | wc -l) -ge $XP_RENDER_JOBS ]]; do sleep 0.2; done
+  render_one "$@" &
+}
+render_one cnpg-minimal "$TMP/composition-cnpg.yaml" "$FIX/xr-minimal.yaml" || true   # starts the function containers
 render_bg cnpg-production "$TMP/composition-cnpg.yaml" "$FIX/xr-production.yaml"
 render_bg cnpg-backup "$TMP/composition-cnpg-backup.yaml" "$FIX/xr-production.yaml"
 render_bg aws-minimal "$TMP/composition-aws-rds.yaml" "$FIX/xr-minimal.yaml"
