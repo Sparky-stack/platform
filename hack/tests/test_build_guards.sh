@@ -228,11 +228,12 @@ bash -n <(printf '%s\n' "$GUARDS") && assert_eq ok ok "BUILD_GUARDS parses"
 # Runs the rendered gitops script with a fake `git clone` (a local copy) and a fake `curl` that records the request:
 # one PUT to <api>/repos/<owner>/<repo>/contents/<workload> with the token only in a header file, compare-and-swap on
 # the file's blob sha, a 409 re-reads and retries, any other status stops with the reason. Linux toolbox tools
-# (GNU base64 -w0, realpath -e); skipped where they are missing.
+# (GNU base64 -w0, realpath -e, LF-only jq output); skipped where they are missing and on Windows (Git Bash's jq
+# prints CRLF; the step only ever runs in the Linux toolbox, the Linux and arm CI jobs run these checks).
 GITOPS_SCRIPT=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
 assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'git push' || true)" 0 "gitops: no git push (the API commits as the App)"
 assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'GIT_AUTHOR' || true)" 0 "gitops: no git identity of its own"
-if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" ]]; then
+if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)" != windows ]]; then
   REAL_GIT=$(command -v git)
   GX="$TMP/gx"; GB="$TMP/gxbin"; SRC="$TMP/gxsrc"; mkdir -p "$GB"
   rm -rf "$SRC"; mkdir -p "$SRC/deploy/openchoreo"
@@ -292,7 +293,7 @@ FAKE
   gitops "201" old aaa
   assert_eq "$RC:$([[ -e "$GX.calls" ]] && echo called || echo none)" "0:none" "gitops API: unchanged Workload, no commit"
 else
-  echo "  SKIP gitops API runtime checks: no GNU base64/realpath (Linux toolbox tools)"
+  echo "  SKIP gitops API runtime checks: Linux toolbox tools only (GNU base64/realpath, LF jq output)"
 fi
 
 # --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
