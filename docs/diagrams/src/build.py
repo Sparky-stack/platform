@@ -244,33 +244,35 @@ def sdlc() -> Diagram:
     c, w = COLS4, CW4
     R0 = 120
     R1 = R0 + PITCH
-    ch = R1 + H + 56
-    R2 = ch + 48
+    ch1 = R1 + H + 40
+    ch2 = ch1 + 40
+    R2 = ch2 + 48
     d.box(c[0], R0, w, H, "external", "App repo", ["your code and", "deploy/ folder"])
-    d.box(c[1], R0, c[2] + w - c[1], H, "mgmt", "Build & sign",
-          ["builds, scans and signs every image"])
+    d.box(c[1], R0, c[2] + w - c[1], H, "mgmt", "Build & sign", ["builds, scans and signs every image"])
     d.box(c[3], R0, w, H, "mgmt", "Registry", ["signed", "images"])
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(c[1], R1, w, H, "mgmt", "Release", ["immutable", "snapshot"])
     d.box(c[2], R1, w, H, "workload", "Development", ["first", "environment"])
     d.box(c[3], R1, w, H, "mgmt", "Promotion gate", ["health checks,", "pull requests"])
     d.box(c[1], R2, w, H, "workload", "Staging", ["second", "environment"])
-    d.box(c[2], R2, w, H, "workload", "Production", ["signed images", "only"])
+    d.box(c[2], R2, w, H, "workload", "Production", ["gated", "twice"])
+    d.box(c[3], R2, w, H, "workload", "Admission", ["Kyverno"], step=9, aka=("Kyverno",))
     d.arrow([(c[0] + w, R0 + 24), (c[1], R0 + 24)], step=1, badge_at=0.4)
     d.arrow([(c[1], R0 + 58), (c[0] + w, R0 + 58)])
-    d.line_label = "the build commits the new version to deploy/"
+    d.line_label = "commits the new version; admits"
     d.arrow([(c[2] + w, ymid(R0)), (c[3], ymid(R0))], step=2, badge_at=0.4)
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
     d.arrow([(c[1] + w, ymid(R1)), (c[2], ymid(R1))], step=5, badge_at=0.4)
     d.arrow([(c[3], ymid(R1)), (c[2] + w, ymid(R1))], step=6, badge_at=0.4)
-    d.arrow([(c[3] + 40, R1 + H), (c[3] + 40, ch), (c[1] + w / 2, ch), (c[1] + w / 2, R2)], step=7,
-            label="pull request", label_pos=((c[1] + w / 2 + c[3] + 40) / 2 + 70, ch - 10))
-    d.arrow([(c[3] + 110, R1 + H), (c[3] + 110, ymid(R2)), (c[2] + w, ymid(R2))], step=8,
-            badge=(c[3] + 30, ymid(R2)), label="pull request + code owners", label_pos=(c[3] + 30, ymid(R2) + 32))
+    d.arrow([(c[3] + 30, R1 + H), (c[3] + 30, ch1), (c[1] + w / 2, ch1), (c[1] + w / 2, R2)], step=7,
+            badge=(c[2] - 40, ch1))
+    d.arrow([(c[3] + 90, R1 + H), (c[3] + 90, ch2), (c[2] + 110, ch2), (c[2] + 110, R2)], step=8,
+            badge=(c[2] + w + 24, ch2))
+    d.arrow([(c[3], ymid(R2)), (c[2] + w, ymid(R2))])
     d.require("App repo", "Build & sign", "Registry", "Argo CD", "Release", "Promotion gate", "Development",
-              "Staging", "Production")
+              "Staging", "Production", "Admission")
     d.key("A push to the app repo starts a build on the OpenChoreo workflow plane, or GitHub Actions",
           "Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to "
           "deploy/)",
@@ -278,10 +280,9 @@ def sdlc() -> Diagram:
           "Argo CD applies it to OpenChoreo, which snapshots an immutable release",
           "The release deploys to development automatically",
           "The promotion gate checks development: readiness, smoke tests, alerts, change freezes",
-          "The promotion gate opens the pull request that promotes the release to staging once development is "
-          "healthy; Argo CD applies it",
-          "The promotion gate opens the production pull request only after staging; it also needs code-owner "
-          "approval, and Kyverno admits only signed images pinned by digest")
+          "The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it",
+          "The promotion gate opens the production pull request only after staging, with code-owner approval",
+          "Kyverno admits into production only images signed in the registry and pinned by digest")
     return d
 
 
@@ -302,32 +303,38 @@ def cluster_lifecycle() -> Diagram:
     d.box(AX, 108, 240, 52, "external", "Fleet file", ["`clusters/dev1.yaml`"])
     d.zone(28, 200, ZR - 28, ZB - 200, "management cluster", "mgmt", label_at="tr")
     d.zone(WZ, 200, 932 - WZ, ZB - 200, "new cluster", "workload", label_at="tr")
-    d.box(AX, L[0], AW, L[1] + H - L[0], "mgmt", "Argo CD", ["GitOps", "engine"])
+    d.box(AX, L[0], AW, L[3] + H - L[0], "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(A, L[0], AWD, H, "mgmt", "Cluster API", ["creates and", "upgrades nodes"])
-    d.box(A, L[2], AWD, H, "mgmt", "cert-manager", ["one CA", "per cluster"])
+    d.box(A, L[1], AWD, H, "mgmt", "cert-manager", ["one CA", "per cluster"])
     d.box(A, L[3], AWD, H, "mgmt", "OpenChoreo", ["developer", "platform"])
     d.box(WX, L[0], WW, H, "workload", "k3s nodes", ["servers and", "workers"])
-    d.box(WX, L[1], WW, H, "workload", "Addons", ["network, mesh,", "policy, telemetry"])
-    d.box(WX, L[2], WW, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"])
+    d.box(WX, L[2], WW, H, "workload", "cluster-agent", ["installed with", "the addons"])
     xf = AX + AW / 2
     d.arrow([(xf, L[0]), (xf, 160)], step=1, badge=(xf, L[0] - 32))
-    d.arrow([(AX + AW, m[0]), (A, m[0])], step=2, badge_at=0.35)
+    xj = A - 40                                 # step 2 forks after its badge: Argo CD renders all four
+    d.arrow([(AX + AW, m[0]), (xj, m[0])], step=2, head=False, badge=(AX + AW + 30, m[0]))
+    d.arrow([(xj, m[0]), (A, m[0])], step=2, badge=False)
+    d.arrow([(xj, m[0]), (xj, m[1]), (A, m[1])], step=2, badge=False)
+    d.arrow([(xj, m[1]), (xj, m[2]), (WX, m[2])], step=2, badge=False)
+    d.arrow([(xj, m[2]), (xj, m[3]), (A, m[3])], step=2, badge=False)
+    for y in m[:3]:
+        d.junction(xj, y)
     d.arrow([(A + AWD, m[0]), (WX, m[0])], step=3, badge=(xz, m[0]))
-    d.arrow([(AX + AW, m[1]), (WX, m[1])], step=4, badge=(xz, m[1]))
-    d.arrow([(A + AWD, m[2]), (WX, m[2])], step=5, badge=(xz, m[2]), label="via Cluster API",
-            label_pos=(A + AWD + 62, m[2] - 12))
+    d.arrow([(A + AWD / 2, L[1]), (A + AWD / 2, L[0] + H)], label="certificate", label_pos=(A + AWD / 2 + 8, L[0] + H + 40),
+            label_anchor="start")
+    d.line_label = "Cluster API picks up the agent certificate"
+    xc = ZR + 34
+    d.arrow([(A + AWD, L[0] + 64), (xc, L[0] + 64), (xc, L[2] + 20), (WX, L[2] + 20)], step=4, badge=(xc, m[1]))
     xg = WX + WW / 2
-    d.arrow([(xg, L[2] + H), (xg, m[3]), (A + AWD, m[3])], step=6, badge=(xz, m[3]), label="dials out",
+    d.arrow([(xg, L[2] + H), (xg, m[3]), (A + AWD, m[3])], step=5, badge=(xz, m[3]), label="dials out",
             label_pos=(xz, m[3] + 32))
-    d.require("Fleet file", "Argo CD", "Cluster API", "k3s nodes", "Addons", "cert-manager", "OpenChoreo",
-              "cluster-agent")
+    d.legend_label("workload", "runs on the new cluster")
+    d.require("Fleet file", "Argo CD", "Cluster API", "k3s nodes", "cert-manager", "OpenChoreo", "cluster-agent")
     d.key("Argo CD reads the fleet file clusters/<name>.yaml",
-          "Argo CD renders the cluster chart and hands the cluster to Cluster API, with the agent's certificate "
-          "request and its OpenChoreo data plane",
+          "Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager, "
+          "the data plane for OpenChoreo, and the addons, cluster-agent included, for the new cluster",
           "Cluster API creates the machines and installs k3s",
-          "Argo CD installs every addon whose labels match, as soon as the cluster's access secret exists",
-          "cert-manager issues the agent's certificate from this cluster's own CA; Cluster API copies it into the "
-          "cluster",
+          "Cluster API copies the agent certificate into the cluster; the CA key stays on the management cluster",
           "The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA")
     d.note("Upgrade: bump kubernetesVersion in the fleet file; Cluster API replaces the nodes one at a time. "
            "Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.")

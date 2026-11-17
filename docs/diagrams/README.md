@@ -104,17 +104,17 @@ The numbered flow of each diagram, word for word.
 4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
 5. The release deploys to development automatically
 6. The promotion gate checks development: readiness, smoke tests, alerts, change freezes
-7. The promotion gate opens the pull request that promotes the release to staging once development is healthy; Argo CD applies it
-8. The promotion gate opens the production pull request only after staging; it also needs code-owner approval, and Kyverno admits only signed images pinned by digest
+7. The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it
+8. The promotion gate opens the production pull request only after staging, with code-owner approval
+9. Kyverno admits into production only images signed in the registry and pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
 1. Argo CD reads the fleet file `clusters/<name>.yaml`
-2. Argo CD renders the cluster chart and hands the cluster to Cluster API, with the agent's certificate request and its OpenChoreo data plane
+2. Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager, the data plane for OpenChoreo, and the addons, cluster-agent included, for the new cluster
 3. Cluster API creates the machines and installs k3s
-4. Argo CD installs every addon whose labels match, as soon as the cluster's access secret exists
-5. cert-manager issues the agent's certificate from this cluster's own CA; Cluster API copies it into the cluster
-6. The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA
+4. Cluster API copies the agent certificate into the cluster; the CA key stays on the management cluster
+5. The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA
 
 Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the nodes one at a time. Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.
 
