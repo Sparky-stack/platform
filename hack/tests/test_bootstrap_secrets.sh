@@ -22,7 +22,9 @@ printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
 LOCAL_INST="$R/installations/local/installation.yaml"
 cp "$LOCAL_INST" "$TMP/local-installation.orig"
 
-printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
+# It logs its argv too: secret values reach yq only through the environment (strenv), never as arguments.
+# shellcheck disable=SC2016  # literal code for the generated wrapper
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "yq $*" >> "$HLOG/calls"\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
 
 # Fake kubectl: logs argv, refuses the homelab context, captures server-side applies, answers a few gets from FAKE_*.
 cat > "$BIN/kubectl" <<'EOF'
@@ -44,6 +46,10 @@ case "$args" in
   *" get secret platform-ghcr "*)
     [[ -n "${FAKE_GHCR_YAML:-}" ]] || exit 1
     cat "$FAKE_GHCR_YAML"; exit 0 ;;
+  *" get secret "*" -o yaml "*)   # an existing Secret for seed_generated_secret re-runs: $FAKE_SECRET_DIR/<name>.yaml
+    n=""; prev=""; for a in "$@"; do [[ "$prev" == secret ]] && n=$a; prev=$a; done
+    [[ -n "${FAKE_SECRET_DIR:-}" && -f "$FAKE_SECRET_DIR/$n.yaml" ]] || exit 1
+    cat "$FAKE_SECRET_DIR/$n.yaml"; exit 0 ;;
   *) exit 1 ;;
 esac
 EOF
@@ -84,7 +90,7 @@ chmod +x "$BIN/"*
 PEM="$TMP/app.pem"
 printf -- '-----BEGIN FAKE KEY-----\nFAKEPEMBODY\n-----END FAKE KEY-----\n' > "$PEM"
 chmod 600 "$PEM"
-SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY'
+SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY|FAKEKEEP'
 
 # run <name> <call> [VAR=val ...]: run a bootstrap function in a clean environment; sets RC, OUT (stdout+stderr,
 # colours stripped) and HLOG (calls, apply.N.yaml).
@@ -100,6 +106,7 @@ run() {
   OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
   # Invariants for every scenario: no secret value in any argv, only the fake context, every apply server-side.
   assert_eq "$(grep -Ec "$SECRETS" "$HLOG/calls" || true)" 0 "$name: no secret value in argv"
+  assert_eq "$(grep -Ec "$SECRETS" "$HLOG/out" || true)" 0 "$name: no secret value in the output"
   assert_eq "$(grep -c -- '--context fake' "$HLOG/calls" || true)" "$(grep -c '^kubectl' "$HLOG/calls" || true)" "$name: only the fake context"
   assert_eq "$(grep '^kubectl' "$HLOG/calls" | grep ' apply ' | grep -vc -- '--server-side --field-manager=platform-bootstrap --force-conflicts' || true)" 0 "$name: applies are server-side"
   assert_eq "$(grep -Ec -- 'create secret|--from-literal|--from-file|last-applied' "$HLOG/calls" || true)" 0 "$name: no client-side secret building"
@@ -295,6 +302,23 @@ run cosign_fail "$S" NO_GH=1 FAKE_DOCKER_FAIL=1
 assert_eq "$([[ $RC -ne 0 ]] && echo failed || echo ok)" failed "cosign: docker failure fails the run"
 assert_eq "$([[ -e "$(cat "$HLOG/cosign-dir")" ]] && echo left || echo removed)" removed "cosign: key dir removed on failure (trap)"
 assert_eq "$(applied cosign-platform)" "" "cosign: nothing applied on failure"
+
+# --- generated secrets: re-runs keep every existing value, generate only the missing keys ----------------------------
+# (a lost value here would rotate live credentials, e.g. the OpenBao static seal key = sealed data unreadable)
+mkdir -p "$TMP/existing"
+b64() { printf '%s' "$1" | base64 | tr -d '\r\n'; }
+printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: openchoreo-observability, namespace: platform-secrets }\ndata:\n  opensearch-username: %s\n  opensearch-password: %s\n' \
+  "$(b64 custom-admin)" "$(b64 'Px9!FAKEKEEPPASS')" > "$TMP/existing/openchoreo-observability.yaml"
+printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: openbao-unseal, namespace: platform-secrets }\ndata:\n  key: %s\n' \
+  "$(b64 FAKEKEEPUNSEAL)" > "$TMP/existing/openbao-unseal.yaml"
+run regen "seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong observer-client-secret; seed_generated_secret openbao-unseal key=@hex32" \
+  FAKE_SECRET_DIR="$TMP/existing"
+assert_eq "$RC" 0 "re-run: rc"
+assert_eq "$(val openchoreo-observability opensearch-username)" custom-admin "re-run: existing value wins over the fixed default"
+assert_eq "$(val openchoreo-observability opensearch-password)" 'Px9!FAKEKEEPPASS' "re-run: existing @strong value kept"
+assert_match "$(val openchoreo-observability observer-client-secret)" '^[A-Za-z0-9]{24}$' "re-run: missing key generated"
+assert_eq "$(val openbao-unseal key)" FAKEKEEPUNSEAL "re-run: OpenBao seal key kept"
+assert_eq "$(grep -c FAKEKEEP "$HLOG/out" || true)" 0 "re-run: no secret value in the output"
 
 # --- Argo CD bootstrap repo secret ----------------------------------------------------------------------------------
 B=seed_argocd_repo_secret
