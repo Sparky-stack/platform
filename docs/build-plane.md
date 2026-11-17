@@ -89,7 +89,7 @@ local k3d stack cannot receive webhooks at all. The platform therefore owns the 
 | Trigger | Installations | Push → build |
 |---|---|---|
 | `poll` | local | CronWorkflow `auto-build-poll`, every minute (`concurrencyPolicy: Forbid`); nothing exposed |
-| `webhook` | aws-example, hetzner-example | GitHub App webhook → `https://events.<host>/github` (control-plane Gateway, TLS listener) → Argo Events EventSource `github` (checks `X-Hub-Signature-256` with store key `github-webhook`, never calls GitHub) → Sensor `auto-build` → a Workflow for the pushed repository; the CronWorkflow still runs every 30 min to catch missed deliveries |
+| `webhook` | aws-example, gcp-example, hetzner-example | GitHub App webhook → `https://events.<host>/github` (control-plane Gateway, TLS listener) → Argo Events EventSource `github` (checks `X-Hub-Signature-256` with store key `github-webhook`, never calls GitHub) → Sensor `auto-build` → a Workflow for the pushed repository; the CronWorkflow still runs every 30 min to catch missed deliveries |
 | `none` | - | Backstage / `occ` / `kubectl` only |
 
 Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org ns>` (addon openchoreo-platform,

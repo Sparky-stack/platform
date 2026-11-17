@@ -58,6 +58,8 @@ openchoreo:
     clusterGatewayURL: wss://cluster-gateway.openchoreo.gcp.example.com/ws   # VERIFY port/path with OC 1.3.3
   workflowPlane:
     enabled: true         # addon openchoreo-workflow-plane on mgmt; builds push to registry.external.repository
+    # Auto-build of Components with spec.autoBuild: true: poll | webhook | none (docs/build-plane.md "Auto-build")
+    autoBuild: webhook    # GitHub App push webhook via events.<host> (addon argo-events) + resync poll
   observability:
     enabled: false        # enable with installations/<inst>/addons/{openchoreo-observability-plane,telemetry} host/port overrides
     httpPort: 443         # VERIFY: real Gateway listener ports + TLS for ingest in a cloud installation
