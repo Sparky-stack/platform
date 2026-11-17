@@ -19,6 +19,7 @@ cluster-agent (never through Argo CD). Design background: [architecture.md](arch
 | mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
 | workload | `openchoreo-data-plane` | openchoreo-data-plane | cluster-agent + Gateway `gateway-default` (app ingress) |
 | workload | `reloader` | reloader | Stakater Reloader (scoped to `openchoreo-data-plane`): rolls `cluster-agent` on cert / gateway CA renewal |
+| mgmt | `reloader` | reloader | the same addon with `values/role-mgmt.yaml`: scoped to `openchoreo-control-plane`, restarts Backstage when one of its ConfigMaps (`backstage-extra-config` etc.) changes ([project-templates.md](project-templates.md#backstage-wiring)) |
 | mgmt + workload (docker) | `coredns-local` | kube-system | resolves `*.openchoreo.localhost` (mgmt: to the control-plane Gateway; workload: to mgmt) |
 
 The workload clusters also need `cert-manager`, `external-secrets` and ClusterSecretStore `default` (secret-stores

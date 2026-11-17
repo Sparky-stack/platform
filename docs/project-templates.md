@@ -78,6 +78,11 @@ OpenChoreo's Backstage (addon openchoreo-control-plane) reads extra config from
 Templates are read from `main` of the public repo; Backstage reads it anonymously until the GitHub App below is set
 (GitHub's unauthenticated rate limit applies).
 
+Backstage reads its config files only at start, and the upstream Deployment has no checksum annotation for its
+ConfigMaps. Addon `reloader` on mgmt (`addons/reloader/values/role-mgmt.yaml`) watches the ConfigMaps labelled
+`app.kubernetes.io/component=backstage` in `openchoreo-control-plane` and rolls Backstage when one changes, so a
+merged `appConfig` change is live after Argo CD's sync plus a Backstage restart (~1-2 min), with no manual step.
+
 ### Repository creation
 
 The publish steps need the platform write GitHub App ([forking.md](forking.md#what-needs-which-credential) (c):

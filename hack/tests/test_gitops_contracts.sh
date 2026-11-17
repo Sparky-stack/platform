@@ -449,6 +449,29 @@ yq 'del(select(.kind == "Deployment").spec.template.metadata.annotations["secret
 assert_eq "$(dp_reload_targets "$TMP/dp-noreload.yaml")" "<none>/$crs_cm_name" \
   "negative: contract catches a cluster-agent Deployment missing the Secret Reloader annotation"
 
+# 9d. reloader on mgmt (values/role-mgmt.yaml) restarts OpenChoreo's Backstage on a config change: the catalog runs
+#     it on mgmt, it watches Backstage's namespace with autoReloadAll, and its ConfigMap label selector matches every
+#     ConfigMap the Backstage Deployment of addon openchoreo-control-plane mounts (backstage-extra-config included).
+assert_match "$(yq -o=json -I=0 '.addons.reloader.roles' "$PV")" '"mgmt"' "reloader runs on mgmt (catalog roles)"
+cp_ns=$(yq '.addons["openchoreo-control-plane"].namespace' "$PV")
+helm template reloader "$ROOT/addons/reloader" --namespace "$rel_ns" \
+  --values "$ROOT/addons/reloader/values/role-mgmt.yaml" > "$TMP/reloader-mgmt.yaml"
+rel_args=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[0].args[]' "$TMP/reloader-mgmt.yaml")
+rel_watch=$(printf '%s\n' "$rel_args" | sed -n 's/^--namespaces=//p')
+rel_sel=$(printf '%s\n' "$rel_args" | sed -n 's/^--resource-label-selector=//p')
+assert_match ",$rel_watch," ",$cp_ns," "mgmt reloader watches $cp_ns"
+assert_match "$rel_args" '--auto-reload-all=true' "mgmt reloader auto-reloads workloads that mount a watched ConfigMap"
+assert_match "$rel_sel" '^[^,=]+=[^,=]+$' "mgmt reloader selects ConfigMaps by one label (key=value)"
+helm template openchoreo-control-plane "$ROOT/addons/openchoreo-control-plane" --namespace "$cp_ns" > "$TMP/cp-backstage.yaml"
+bs_cms=$(yq 'select(.kind == "Deployment" and .metadata.name == "backstage")
+  | .spec.template.spec.volumes[] | select(.configMap) | .configMap.name' "$TMP/cp-backstage.yaml")
+assert_match "$bs_cms" '(^|[[:space:]])backstage-extra-config($|[[:space:]])' "Backstage mounts ConfigMap backstage-extra-config"
+for cm in $bs_cms; do
+  got=$(CM="$cm" K="${rel_sel%%=*}" yq 'select(.kind == "ConfigMap" and .metadata.name == strenv(CM))
+    | .metadata.labels[strenv(K)] // "<none>"' "$TMP/cp-backstage.yaml")
+  assert_eq "$got" "${rel_sel#*=}" "Backstage ConfigMap $cm carries the mgmt reloader label $rel_sel"
+done
+
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do

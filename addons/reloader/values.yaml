@@ -1,4 +1,5 @@
-# Stakater Reloader on workload clusters (catalog: namespace reloader, roles [workload], default true).
+# Stakater Reloader (catalog: namespace reloader, roles [mgmt, workload], default true). These defaults are the
+# workload setup; mgmt layers values/role-mgmt.yaml (Backstage in openchoreo-control-plane on config change).
 # Watches only the namespaces listed in `reloader.reloader.namespaces` (no ClusterRole: cannot read tenant `dp-*`,
 # `external-dns` or `kube-system` Secrets) and rolls annotated Deployments when a referenced Secret or ConfigMap
 # changes - in particular `openchoreo-data-plane/cluster-agent-dataplane` when CAPI ClusterResourceSet updates

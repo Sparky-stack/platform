@@ -1,6 +1,6 @@
 apiVersion: v2
 name: reloader
-description: Stakater Reloader on workload clusters, namespace-scoped to roll the OpenChoreo cluster-agent on cert or CA renewal
+description: Stakater Reloader, namespace-scoped - rolls the OpenChoreo cluster-agent on cert or CA renewal (workload) and Backstage on config change (mgmt)
 type: application
 version: 0.1.0
 dependencies:
