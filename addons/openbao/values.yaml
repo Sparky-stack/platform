@@ -486,7 +486,6 @@ openbao:
               data = {
                 policy = <<EOP
           path "sys/auth" { capabilities = ["read"] }
-          path "sys/auth/kubernetes" { capabilities = ["read"] }
           path "sys/auth/tenants-*" {
             capabilities       = ["create", "read", "update", "delete", "sudo"]
             allowed_parameters = { "*" = [], "type" = ["jwt"] }

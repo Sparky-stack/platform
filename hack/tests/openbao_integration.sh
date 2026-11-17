@@ -12,6 +12,10 @@
 #     policies) all answer 403
 #   - CronJob mode (member token only) configures members but creates no group
 #   - restart: auto-unseals with the static key; prune removes a member's auth
+#   - tenant secrets (files/tenant-reconcile.sh, static templated tenant-read / tenant-write): a tenant namespace's
+#     ServiceAccount token reads its own kv-tenant-<t> and nothing else (another tenant's mount, its namespace, wrong
+#     audience / ServiceAccount / cluster key, a namespace two tenants claim), writers write only their own mount, the
+#     tenant reconcile identity cannot read secrets or widen anything, prune removes a departed tenant's access
 # Kubernetes-only parts are faked: a dummy ServiceAccount mount for the Kubernetes auth config, and userpass users with
 # the reconcile policies (instead of the projected-token logins) - initialised in a test-only extra stanza.
 set -euo pipefail
@@ -20,7 +24,7 @@ echo "== openbao_integration =="
 for b in docker openssl python3 helm yq; do command -v "$b" >/dev/null || { echo "  SKIP: needs $b"; exit 0; }; done
 docker info >/dev/null 2>&1 || { echo "  SKIP: docker not reachable"; exit 0; }
 cd "$ROOT"
-W="$TMP/w"; mkdir -p "$W"/{tls,unseal,sa,inputs,jwks1/openid/v1,jwks2/openid/v1}
+W="$TMP/w"; mkdir -p "$W"/{tls,unseal,sa,inputs,jwks1/openid/v1,jwks2/openid/v1,tin/tenants,tin/clusters}
 IMG=$(yq '.openbao.server.image | .registry + "/" + .repository + ":" + .tag' addons/openbao/values.yaml)
 PYIMG=$(yq '.config.image' addons/harbor/values.yaml)   # pinned python image already used by the repo
 NET="openbao-it-$$"
@@ -71,6 +75,21 @@ initialize "zz-integration-test-only" {
     operation = "update"
     path      = "auth/userpass/users/careader"
     data      = { password = "$IT_PW", token_policies = ["mesh-ca-read"], token_no_default_policy = true }
+  }
+  request "tenantcfg" {
+    operation = "update"
+    path      = "auth/userpass/users/tenantcfg"
+    data      = { password = "$IT_PW", token_policies = ["platform-tenant-config"], token_no_default_policy = true }
+  }
+  request "demowriter" {
+    operation = "update"
+    path      = "auth/userpass/users/demowriter"
+    data      = { password = "$IT_PW", token_policies = ["tenant-write"], token_no_default_policy = true }
+  }
+  request "otherwriter" {
+    operation = "update"
+    path      = "auth/userpass/users/otherwriter"
+    data      = { password = "$IT_PW", token_policies = ["tenant-write"], token_no_default_policy = true }
   }
 }
 EOF
@@ -296,5 +315,95 @@ out=$(bao_in "$RECONCILE" 2>&1)
 assert_match "$out" 'prune auth mesh-c2' "removed member: auth mount pruned"
 assert_eq "$(printf '%s\n' "$out" | grep -c 'prune auth mesh-c3' || true)" 0 "failing member still in the inputs is not pruned"
 assert_eq "$(bao_in "bao write -field=token auth/mesh-c2/login role=istio-csr jwt=$other >/dev/null 2>&1 && echo ok || echo denied")" denied "removed member can no longer log in"
+
+# --- tenant secrets -------------------------------------------------------------------------------------------------------
+# Inputs as ESO builds them: two tenants, one namespace claimed by demo and a rogue descriptor (bound to neither), member
+# c1 (JWKS reachable) and c3 (JWKS 403). Environment = the chart's CronJob; login replaced by the userpass test user.
+DEV=dp-default-demo-development-ad621210; STG=dp-default-demo-staging-ba410b48; OTH=dp-default-other-development-0badc0de
+printf '%s %s' "$DEV" "$STG" > "$W/tin/tenants/demo.namespaces"
+printf '%s' "$OTH" > "$W/tin/tenants/other.namespaces"
+printf '%s dp-default-rogue-development-12345678' "$STG" > "$W/tin/tenants/rogue.namespaces"
+for c in 1 3; do printf 'local' > "$W/tin/clusters/c$c.group"; printf 'https://jwks:844%s' "$((c + 2))" > "$W/tin/clusters/c$c.server"; cp "$W/tls/ca.crt" "$W/tin/clusters/c$c.ca"; done
+helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local,prod}' \
+  --set secrets.tenantStores.enabled=true -s templates/tenant-secrets.yaml \
+  | yq -N 'select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec.containers[0].env[] | select(.name != "BAO_ADDR" and .name != "BAO_CACERT" and .name != "INPUT_DIR") | "export " + .name + "=\"" + .value + "\""' > "$W/tenv.sh"
+chmod -R a+rX "$W"
+TRECONCILE=". /w/tenv.sh; export INPUT_DIR=/w/tin BAO_TOKEN=\$($UP/tenantcfg password=@/w/it-pw); sh /scripts/tenant-reconcile.sh"
+rc=0; out=$(bao_in "$TRECONCILE" 2>&1) || rc=$?
+assert_eq "$rc" 0 "tenant reconcile runs with platform-tenant-config only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
+assert_match "$out" 'done: tenants=\[demo other rogue\] failed=\[\] invalid=\[\] clusters=\[c1\] failed-clusters=\[c3\]' "tenants configured on c1; c3 (JWKS 403) reported"
+assert_match "$out" "namespace $STG is claimed by several tenants: bound to none" "a namespace claimed twice is bound to neither tenant"
+out=$(bao_in "$TRECONCILE" 2>&1)
+assert_eq "$(printf '%s\n' "$out" | grep -c 'enable' || true)" 0 "second tenant run is a no-op (idempotent)"
+# writers: the test binds the userpass users' aliases like the reconcile binds openbao-tenants/<t>-writer
+# shellcheck disable=SC2016  # runs inside the container
+bao_in 'export BAO_TOKEN=$(bao write -field=token auth/userpass/login/tenantcfg password=@/w/it-pw)
+  acc=$(bao auth list | awk "\$1 == \"userpass/\" {print \$3}")
+  for t in demo other; do bao write identity/entity-alias name=${t}writer canonical_id=$(bao read -field=id identity/entity/name/tenant-$t) mount_accessor=$acc >/dev/null; done' 2>/dev/null \
+  || bao_in 'export BAO_TOKEN=$(bao write -field=token auth/userpass/login/tenantcfg password=@/w/it-pw); bao read sys/auth' >&2
+twr() { bao_in "export BAO_TOKEN=\$($UP/$1 password=@/w/it-pw); bao $2 2>&1" | grep -m1 -oE 'Code: [0-9]+|Success|Key|=====' | head -n1 | sed 's/Code: //'; }
+assert_eq "$(twr demowriter 'kv put kv-tenant-demo/db password=demo-value')" "=====" "demo writer writes its own secret"
+assert_eq "$(twr otherwriter 'kv put kv-tenant-other/db password=other-value')" "=====" "other writer writes its own secret"
+assert_eq "$(twr demowriter 'kv put kv-tenant-other/db password=pwn')" 403 "negative: demo writer cannot write other's mount"
+assert_eq "$(twr demowriter 'kv get kv-tenant-other/db')" 403 "negative: demo writer cannot read other's mount"
+# readers: ServiceAccount tokens of the tenant namespaces on c1 (key sa1), audience of the chart
+TAUD=$(yq .tenantSecrets.audience addons/openbao/values.yaml); TSA=$(yq .tenantSecrets.readerServiceAccount addons/openbao/values.yaml)
+tok() { python3 "$W/jwt.py" jwt "${3:-$W/sa1.key}" "${4:-k1}" "system:serviceaccount:$1:${2:-$TSA}" "${5:-$TAUD}"; }
+tread() { # tread <role> <jwt> <bao args>: 403 / Key / denied (login refused)
+  bao_in "t=\$(bao write -field=token auth/tenants-c1/login role=$1 jwt=$2 2>/dev/null) || { echo denied; exit 0; }; BAO_TOKEN=\$t bao ${3:-token lookup} 2>&1" | grep -m1 -oE 'denied|Code: [0-9]+|Key|=====|password' | head -n1 | sed 's/Code: //'
+}
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "demo's namespace reads demo's secret (ESO's path kv-tenant-demo/data/db)"
+assert_eq "$(tread demo "$(tok "$DEV")" 'read kv-tenant-other/data/db')" 403 "negative: demo's token cannot read other's secret"
+assert_eq "$(tread demo "$(tok "$DEV")" 'list kv-tenant-demo/metadata')" Key "demo lists its own keys (ESO dataFrom.find)"
+assert_eq "$(tread demo "$(tok "$DEV")" 'kv put kv-tenant-demo/db password=x')" 403 "negative: readers cannot write"
+assert_eq "$(tread demo "$(tok "$DEV")" 'read sys/mounts')" 403 "negative: readers reach nothing else"
+assert_eq "$(tread demo "$(tok "$OTH")")" denied "negative: other's namespace cannot log in as demo (bound subjects)"
+assert_eq "$(tread other "$(tok "$DEV")")" denied "negative: demo's namespace cannot log in as other"
+assert_eq "$(tread other "$(tok "$OTH")" 'read kv-tenant-demo/data/db')" 403 "negative: other's token cannot read demo's secret"
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=other jwt=$(tok "$OTH")) bao kv get -field=password kv-tenant-other/db")" other-value "positive control: other reads its own secret"
+assert_eq "$(tread demo "$(tok "$DEV" app)")" denied "negative: another ServiceAccount in demo's namespace"
+assert_eq "$(tread demo "$(tok "$DEV" "" "" "" https://kubernetes.default.svc.cluster.local)")" denied "negative: API-server audience"
+assert_eq "$(tread demo "$(tok "$DEV" "" "$W/sa2.key" k2)")" denied "negative: a token signed by another cluster's key"
+assert_eq "$(tread demo "$(tok "$STG")")" denied "negative: the contested namespace is bound to demo ..."
+assert_eq "$(tread rogue "$(tok "$STG")")" denied "negative: ... and not to the rogue descriptor either"
+# the tenant reconcile identity: tenant authority, but no secret, no policy, nothing outside tenants-* / kv-tenant-*
+P_EXP=(); P_LABEL=(); : > "$W/probes.sh"
+tp() { P_EXP+=("$1"); P_LABEL+=("$2"); printf 'r %s tenantcfg %s\n' "${#P_EXP[@]}" "${*:3}" >> "$W/probes.sh"; }
+tp 403 "tenantcfg: cannot read a tenant secret" read kv-tenant-demo/data/db
+tp 403 "tenantcfg: cannot write a tenant secret" kv put kv-tenant-demo/db password=pwn
+tp 403 "tenantcfg: cannot author an ACL policy" policy write tenant-pwn /w/pwn.hcl
+tp 403 "tenantcfg: cannot rewrite tenant-read" policy write tenant-read /w/pwn.hcl
+tp 403 "tenantcfg: a tenant role cannot carry tenant-write" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=tenant-write
+tp 403 "tenantcfg: ... nor its own policy" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=platform-tenant-config
+tp 403 "tenantcfg: ... nor via the legacy policies field" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x policies=tenant-write
+tp 403 "tenantcfg: no non-jwt auth method under tenants-*" auth enable -path=tenants-pwn userpass
+tp 403 "tenantcfg: no non-kv engine under kv-tenant-*" secrets enable -path=kv-tenant-pwn pki
+tp 403 "tenantcfg: cannot delete a tenant mount (data)" secrets disable kv-tenant-demo
+tp 403 "tenantcfg: an entity cannot carry policies" write identity/entity/name/tenant-demo policies=tenant-write
+tp 403 "tenantcfg: only tenant-* entities" write identity/entity/name/mesh-c1 metadata=tenant=demo
+tp 403 "tenantcfg: cannot rewrite Kubernetes auth roles" write auth/kubernetes/role/tenant-writer bound_service_account_names=x bound_service_account_namespaces=x token_policies=tenant-write
+tp 403 "tenantcfg: cannot touch mesh auth" write auth/mesh-c1/role/istio-csr role_type=jwt user_claim=sub bound_audiences=x token_policies=mesh-member
+tp 403 "tenantcfg: cannot disable mesh auth" auth disable mesh-c1
+tp 403 "tenantcfg: no PKI" write pki-mesh-local-int/sign/c1 csr=@/w/rogue.csr
+tp Success "positive control: tenantcfg writes a tenant role with tenant-read" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=tenant-read
+chmod a+r "$W/probes.sh"
+# shellcheck disable=SC2016  # runs inside the container
+res=$(bao_in 'T_tenantcfg=$(bao write -field=token auth/userpass/login/tenantcfg password=@/w/it-pw)
+  r() { id=$1; eval "t=\$T_$2"; shift 2; c=$(BAO_TOKEN=$t bao "$@" 2>&1 | grep -m1 -oE "Code: [0-9]+|Success|Key|BEGIN" | sed "s/Code: //"); echo "$id ${c:-none}"; }
+  . /w/probes.sh')
+for i in "${!P_EXP[@]}"; do
+  assert_eq "$(printf '%s\n' "$res" | awk -v id=$((i + 1)) '$1 == id {print $2}')" "${P_EXP[$i]}" "${P_LABEL[$i]}"
+done
+# prune: tenant other leaves -> its role and entity go, its data stays (mount kept), its namespace can no longer read
+rm -f "$W/tin/tenants/other.namespaces"
+out=$(bao_in "$TRECONCILE" 2>&1)
+assert_match "$out" 'cluster c1: prune role other \(tenant left\)' "departed tenant: role pruned"
+assert_eq "$(tread other "$(tok "$OTH")")" denied "departed tenant: its namespace can no longer log in"
+assert_eq "$(twr otherwriter 'kv get kv-tenant-other/db')" 403 "departed tenant: its writer lost access (entity deleted)"
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "remaining tenant unaffected"
+rm -f "$W"/tin/tenants/*
+out=$(bao_in "$TRECONCILE" 2>&1)
+assert_match "$out" 'no tenant inputs: nothing configured, nothing pruned' "empty tenant inputs: fail-safe"
+assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "empty tenant inputs: nothing pruned"
 
 finish

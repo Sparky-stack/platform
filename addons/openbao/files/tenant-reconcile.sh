@@ -67,10 +67,12 @@ done
 dup=" "
 for c in $claims; do
   ns=${c%%:*}
+  # shellcheck disable=SC2086  # word list on purpose (validated DNS labels)
   n=$(printf '%s\n' $claims | grep -c "^$ns:" || true)
   if [ "$n" -gt 1 ]; then case "$dup" in *" $ns "*) ;; *) dup="$dup$ns "; log "namespace $ns is claimed by several tenants: bound to none" ;; esac; fi
 done
 namespaces_of() { # <tenant>: its namespaces, minus contested ones
+  # shellcheck disable=SC2013  # space-separated words, validated above
   for ns in $(cat "$IN/tenants/$1.namespaces"); do case "$dup" in *" $ns "*) ;; *) printf '%s ' "$ns" ;; esac; done
 }
 
@@ -81,7 +83,8 @@ if [ "$tenants" = " " ]; then
 fi
 
 # --- per tenant: KV mount, entity, writer alias ---------------------------------------------------------------------
-k8s_acc=$(bao read -field=accessor "sys/auth/$K8S_MOUNT") || die "accessor of auth/$K8S_MOUNT unreadable"
+k8s_acc=$(bao auth list | awk -v m="$K8S_MOUNT/" '$1 == m {print $3}')   # sys/auth list (no sudo on that mount)
+[ -n "$k8s_acc" ] || die "accessor of auth/$K8S_MOUNT unreadable"
 ok_t=""; failed_t=""; ready=" "
 configure_tenant() { # <tenant>
   t=$1
@@ -121,7 +124,7 @@ configure_cluster() { # <cluster> <server>
       subs="$subs\"$sub\","
     done
     if [ -z "$subs" ]; then q delete "auth/$m/role/$t" || true; log "cluster $c tenant $t: no uncontested namespace, no role"; continue; fi
-    printf '{"role_type":"jwt","user_claim":"sub","bound_audiences":["%s"],"bound_claims_type":"string","bound_claims":{"sub":[%s]},"token_policies":["%s"],"token_no_default_policy":true,"token_type":"service","token_ttl":"%s","token_max_ttl":"%s"}' \
+    printf '{"role_type":"jwt","user_claim":"sub","bound_audiences":["%s"],"bound_claims_type":"string","bound_claims":{"sub":[%s]},"token_policies":"%s","token_no_default_policy":true,"token_type":"service","token_ttl":"%s","token_max_ttl":"%s"}' \
       "$READER_AUDIENCE" "${subs%,}" "$READER_POLICY" "$TOKEN_TTL" "$TOKEN_TTL" \
       | bao write "auth/$m/role/$t" - >/dev/null || { log "cluster $c tenant $t: role failed"; return 1; }
   done
@@ -141,6 +144,7 @@ for f in "$IN"/clusters/*.server; do
   if configure_cluster "$c" "$server"; then ok_c="$ok_c $c"; log "cluster $c: tenant auth in place"; else failed_c="$failed_c $c"; fi
 done
 # entities of tenants that left
+# shellcheck disable=SC2086  # word list on purpose
 for r in $(printf '%s\n' $pruned | sort -u); do
   case "$tenants" in *" $r "*) ;; *) q delete "identity/entity/name/tenant-$r" || log "prune: entity tenant-$r not deleted" ;; esac
 done
