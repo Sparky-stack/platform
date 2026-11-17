@@ -104,6 +104,7 @@ postgresql:
   backend: ""
   backendByProvider:
     docker: cnpg
+    byo: cnpg            # an existing cluster: in-cluster CloudNativePG (set postgresql.backend for a managed service)
     hetzner: cnpg
     vsphere-talos: cnpg
     aws: aws-rds
