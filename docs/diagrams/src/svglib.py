@@ -792,9 +792,17 @@ class Diagram:
             issues.append(f"badge {n} has no key entry")
         for n in sorted(set(self.steps) - self.badges):
             issues.append(f"key step {n} has no badge in the diagram")
-        # --- reading order: each step's badge comes after the previous one (same row: further right; else lower)
+        # --- reading order: each step's badge comes after the previous one (same row: further right; else lower).
+        # Consecutive steps of the same actor are exempt: they radiate from one box (check, then open a PR) and the
+        # reader follows the actor, not the page.
+        def actors(n):
+            out = {self._box_at(pts[0]) for a, pts in self.flow_arrows.items() if self.flow_step[a] == n}
+            return (out | {self.ring_owner.get(n)}) - {None}
+
         order = sorted(n for n in self.badge_pos if n in self.steps)
         for a, b in zip(order, order[1:]):
+            if actors(a) & actors(b):
+                continue
             (ax, ay), (bx, by) = self.badge_pos[a], self.badge_pos[b]
             if self.reading == "columns":
                 ax, ay, bx, by = ay, ax, by, bx

@@ -134,6 +134,28 @@ assert_match "$out" "step 2 reaches stages 'Staging' and 'Production' at once" "
 assert_match "$out" "stage 'Dev' is reached in step 1, before stage 'Canary' is done" "stages reached out of order are reported"
 assert_match "$out" "stage 'Nowhere' is not a box" "an unknown stage is reported"
 
+# 7. reading order: consecutive steps of the same actor may radiate in any direction (check, then open a PR)
+out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from svglib import Diagram
+d = Diagram("t", "lede")
+d.box(40, 300, 140, 80, "mgmt", "Gate")
+d.box(400, 120, 140, 80, "external", "Repo")
+d.box(400, 300, 140, 80, "workload", "Env")
+d.arrow([(180, 340), (400, 340)], step=1)
+d.arrow([(110, 300), (110, 160), (400, 160)], step=2, badge=(110, 260))
+d.arrow([(400, 130), (160, 130), (160, 300)], step=3, badge=(300, 130))
+d.key("Gate checks env", "Gate opens a PR in the repo", "Repo notifies the gate")
+for i in d.check():
+    print(i)
+EOF
+)
+n=$(grep -c "step 2 reads before step 1" <<<"$out" || true)
+assert_eq "$n" 0 "the same actor's next step may sit anywhere around it"
+n=$(grep -c "step 3 reads before step 2" <<<"$out" || true)
+assert_eq "$n" 1 "another actor's step still has to read after it"
+
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"

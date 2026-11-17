@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1179" viewBox="0 0 960 1179" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 14.60s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}18.1%{opacity:1}23.1%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1179" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1163" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1179" viewBox="0 0 960 1179" role="img" aria-label="SDLC · from git push to production"><title>SDLC · from git push to production</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 15.70s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}16.8%{opacity:1}21.8%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1179" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1163" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
 <path d="M 192.0 144.0 L 272.0 144.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 648.0 170.0 L 728.0 170.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 272.0 204.0 L 192.0 204.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
@@ -7,9 +7,10 @@
 <path d="M 420.0 340.0 L 500.0 340.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 382.0 380.0 L 382.0 500.0 L 500.0 500.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 728.0 500.0 L 648.0 500.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 880.0 510.0 L 904.0 510.0 L 904.0 260.0 L 170.0 260.0 L 170.0 220.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 802.0 460.0 L 802.0 260.0 L 170.0 260.0 L 170.0 220.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 320.0 380.0 L 320.0 660.0 L 500.0 660.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 648.0 660.0 L 728.0 660.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 876.0 640.0 L 904.0 640.0 L 904.0 184.0 L 876.0 184.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 728.0 676.0 L 648.0 676.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 192.0 144.0 L 272.0 144.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
 <path class="fx" d="M 648.0 170.0 L 728.0 170.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
 <path class="fx" d="M 272.0 204.0 L 192.0 204.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
@@ -18,9 +19,10 @@
 <path class="fx" d="M 420.0 340.0 L 500.0 340.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
 <path class="fx" d="M 382.0 380.0 L 382.0 500.0 L 500.0 500.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
 <path class="fx" d="M 728.0 500.0 L 648.0 500.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
-<path class="fx" d="M 880.0 510.0 L 904.0 510.0 L 904.0 260.0 L 170.0 260.0 L 170.0 220.0" stroke="#fde5a7" style="animation-delay:0s,8.80s"/>
+<path class="fx" d="M 802.0 460.0 L 802.0 260.0 L 170.0 260.0 L 170.0 220.0" stroke="#fde5a7" style="animation-delay:0s,8.80s"/>
 <path class="fx" d="M 320.0 380.0 L 320.0 660.0 L 500.0 660.0" stroke="#fde5a7" style="animation-delay:0s,9.90s"/>
-<path class="fx" d="M 648.0 660.0 L 728.0 660.0" stroke="#fde5a7" style="animation-delay:0s,11.00s"/>
+<path class="fx" d="M 876.0 640.0 L 904.0 640.0 L 904.0 184.0 L 876.0 184.0" stroke="#fde5a7" style="animation-delay:0s,11.00s"/>
+<path class="fx" d="M 728.0 676.0 L 648.0 676.0" stroke="#fde5a7" style="animation-delay:0s,12.10s"/>
 <rect x="44" y="120" width="148" height="100" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
 <text class="s" x="118.0" y="156.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App repo</text>
 <text class="s" x="118.0" y="176.4" font-size="13" fill="#dde5ef" text-anchor="middle">your code and</text>
@@ -28,10 +30,10 @@
 <rect x="272" y="120" width="376" height="100" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="460.0" y="165.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build &amp; sign</text>
 <text class="s" x="460.0" y="185.4" font-size="13" fill="#dde5ef" text-anchor="middle">builds, scans and signs every image</text>
-<rect x="728" y="120" width="188" height="100" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="822.0" y="156.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Registry</text>
-<text class="s" x="822.0" y="176.4" font-size="13" fill="#dde5ef" text-anchor="middle">signed</text>
-<text class="s" x="822.0" y="194.4" font-size="13" fill="#dde5ef" text-anchor="middle">images</text>
+<rect x="728" y="120" width="148" height="100" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="802.0" y="156.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Registry</text>
+<text class="s" x="802.0" y="176.4" font-size="13" fill="#dde5ef" text-anchor="middle">signed</text>
+<text class="s" x="802.0" y="194.4" font-size="13" fill="#dde5ef" text-anchor="middle">images</text>
 <rect x="44" y="300" width="148" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="118.0" y="326.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
 <text class="s" x="118.0" y="346.4" font-size="13" fill="#dde5ef" text-anchor="middle">GitOps</text>
@@ -48,18 +50,18 @@
 <text class="s" x="574.0" y="486.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Staging</text>
 <text class="s" x="574.0" y="506.4" font-size="13" fill="#dde5ef" text-anchor="middle">second</text>
 <text class="s" x="574.0" y="524.4" font-size="13" fill="#dde5ef" text-anchor="middle">environment</text>
-<rect x="728" y="460" width="152" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="804.0" y="486.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Promotion gate</text>
-<text class="s" x="804.0" y="506.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks staging,</text>
-<text class="s" x="804.0" y="524.4" font-size="13" fill="#dde5ef" text-anchor="middle">opens the PR</text>
+<rect x="728" y="460" width="148" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="802.0" y="486.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Promotion gate</text>
+<text class="s" x="802.0" y="506.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks staging,</text>
+<text class="s" x="802.0" y="524.4" font-size="13" fill="#dde5ef" text-anchor="middle">opens the PR</text>
 <rect x="500" y="620" width="148" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="574.0" y="646.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Admission</text>
-<text class="s" x="574.0" y="666.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks every</text>
-<text class="s" x="574.0" y="684.4" font-size="13" fill="#dde5ef" text-anchor="middle">image first</text>
-<rect x="728" y="620" width="188" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="822.0" y="646.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Production</text>
-<text class="s" x="822.0" y="666.4" font-size="13" fill="#dde5ef" text-anchor="middle">runs only</text>
-<text class="s" x="822.0" y="684.4" font-size="13" fill="#dde5ef" text-anchor="middle">admitted pods</text>
+<text class="s" x="574.0" y="646.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Production</text>
+<text class="s" x="574.0" y="666.4" font-size="13" fill="#dde5ef" text-anchor="middle">runs only</text>
+<text class="s" x="574.0" y="684.4" font-size="13" fill="#dde5ef" text-anchor="middle">admitted pods</text>
+<rect x="728" y="620" width="148" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="802.0" y="646.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Admission</text>
+<text class="s" x="802.0" y="666.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks every</text>
+<text class="s" x="802.0" y="684.4" font-size="13" fill="#dde5ef" text-anchor="middle">pod first</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">SDLC · from git push to production</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">One signed image: development deploys automatically, staging and production are promoted by pull requests in the app repo. Production</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">is gated twice, at promotion and at admission.</text>
@@ -71,6 +73,8 @@
 <text class="s" x="232.0" y="208.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <circle cx="118.0" cy="260.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="118.0" y="264.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<rect x="196.2" y="356.0" width="71.6" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="232.0" y="370.0" font-size="13" fill="#aab6c8" text-anchor="middle">all merges</text>
 <circle cx="232.0" cy="340.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="232.0" y="344.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
 <circle cx="460.0" cy="340.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
@@ -81,16 +85,20 @@
 <text class="s" x="460.0" y="504.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
 <circle cx="688.0" cy="500.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="688.0" y="504.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<rect x="536.0" y="238.0" width="147.4" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="540.0" y="252.0" font-size="13" fill="#aab6c8">production pull request</text>
-<circle cx="904.0" cy="488.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="904.0" y="492.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<rect x="638.6" y="417.0" width="147.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="782.0" y="431.0" font-size="13" fill="#aab6c8" text-anchor="end">production pull request</text>
+<circle cx="802.0" cy="426.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="802.0" y="430.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
 <rect x="330.0" y="670.0" width="142.8" height="20.0" rx="3" fill="#0b1120"/>
 <text class="s" x="334.0" y="684.0" font-size="13" fill="#aab6c8">after the approved PR</text>
 <circle cx="320.0" cy="600.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="320.0" y="604.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
-<circle cx="688.0" cy="660.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="688.0" y="664.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
+<rect x="755.6" y="597.0" width="134.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="886.0" y="611.0" font-size="13" fill="#aab6c8" text-anchor="end">checks the signature</text>
+<circle cx="904.0" cy="606.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="904.0" y="610.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
+<circle cx="688.0" cy="676.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="688.0" y="680.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">12</text>
 <line x1="28" y1="722" x2="932" y2="722" stroke="#7c8aa0" stroke-width="1.2"/>
 <circle cx="40" cy="745.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="750" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
@@ -106,13 +114,13 @@
 <text class="s" x="62.0" y="834.0" font-size="13.5" fill="#dde5ef">Argo CD reads the deploy/ folder of the app repo</text>
 <circle cx="40" cy="857.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="862" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="862.0" font-size="13.5" fill="#dde5ef">Argo CD applies it, and every merged promotion pull request after it, to OpenChoreo, which snapshots an immutable release</text>
+<text class="s" x="62.0" y="862.0" font-size="13.5" fill="#dde5ef">Argo CD applies every merge to OpenChoreo, which snapshots an immutable release</text>
 <circle cx="40" cy="885.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="890" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
 <text class="s" x="62.0" y="890.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys the release to development automatically</text>
 <circle cx="40" cy="913.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="918" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="62.0" y="918.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo</text>
+<text class="s" x="62.0" y="918.0" font-size="13.5" fill="#dde5ef">OpenChoreo deploys it to staging once the team merges a staging pull request in the app repo (back through steps 4 and 5)</text>
 <circle cx="40" cy="941.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="946" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
 <text class="s" x="62.0" y="946.0" font-size="13.5" fill="#dde5ef">The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes</text>
@@ -121,12 +129,14 @@
 <text class="s" x="62.0" y="974.0" font-size="13.5" fill="#dde5ef">The promotion gate opens the production pull request in the app repo only if every check passes</text>
 <circle cx="40" cy="997.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="1002" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
-<text class="s" x="62.0" y="1002.0" font-size="13.5" fill="#dde5ef">OpenChoreo submits it to production only after a code owner approves and merges that pull request</text>
-<circle cx="40" cy="1025.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="1030" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
-<text class="s" x="62.0" y="1030.0" font-size="13.5" fill="#dde5ef">Kyverno admits a pod into production, before it starts, only if its image is signed in the registry and pinned by digest</text>
-<text class="s" x="28.0" y="1062.0" font-size="13.5" fill="#aab6c8">Every merged pull request, the team&#x27;s staging one and the gate&#x27;s production one, comes back in at step 4: Argo CD reads it and applies it to</text>
-<text class="s" x="28.0" y="1081.0" font-size="13.5" fill="#aab6c8">OpenChoreo.</text>
+<text class="s" x="62.0" y="1002.0" font-size="13.5" fill="#dde5ef">OpenChoreo submits the release to production only after a code owner approves and merges that pull request (back through steps 4 and</text>
+<text class="s" x="62.0" y="1021.0" font-size="13.5" fill="#dde5ef">5)</text>
+<circle cx="40" cy="1044.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1049" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
+<text class="s" x="62.0" y="1049.0" font-size="13.5" fill="#dde5ef">Before any pod starts, Kyverno checks its image&#x27;s signature and digest in the registry</text>
+<circle cx="40" cy="1072.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="1077" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">12</text>
+<text class="s" x="62.0" y="1077.0" font-size="13.5" fill="#dde5ef">Kyverno admits only verified pods into production</text>
 <rect x="28" y="1117" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
 <text class="s" x="58.0" y="1127.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
 <rect x="283.60519999999997" y="1117" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
