@@ -2,33 +2,33 @@
 <path d="M 264.0 160.0 L 384.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 696.0 160.0 L 576.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 792.0 200.0 L 792.0 280.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 264.0 320.0 L 696.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 168.0 360.0 L 168.0 460.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 234.0 360.0 L 234.0 384.0 L 444.0 384.0 L 444.0 460.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 576.0 320.0 L 696.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 424.0 360.0 L 424.0 404.0 L 168.0 404.0 L 168.0 460.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 510.0 360.0 L 510.0 460.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path d="M 576.0 500.0 L 696.0 500.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 264.0 160.0 L 384.0 160.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
 <path class="fx" d="M 696.0 160.0 L 576.0 160.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
 <path class="fx" d="M 792.0 200.0 L 792.0 280.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 264.0 320.0 L 696.0 320.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 168.0 360.0 L 168.0 460.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 234.0 360.0 L 234.0 384.0 L 444.0 384.0 L 444.0 460.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 576.0 320.0 L 696.0 320.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 424.0 360.0 L 424.0 404.0 L 168.0 404.0 L 168.0 460.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 510.0 360.0 L 510.0 460.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
 <path class="fx" d="M 576.0 500.0 L 696.0 500.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
 <rect x="72" y="120" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="191.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build &amp; sign</text>
-<text class="s" x="191.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">scans and signs</text>
-<text class="s" x="191.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">every image</text>
+<text class="s" x="191.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">scans, then signs</text>
+<text class="s" x="191.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">with cosign</text>
 <rect x="384" y="120" width="192" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="480.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Registry</text>
 <text class="s" x="480.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">images and</text>
 <text class="s" x="480.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">signatures</text>
 <rect x="696" y="120" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="792.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Admission control</text>
-<text class="s" x="792.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">verifies images</text>
-<text class="s" x="792.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">before pods start</text>
-<rect x="72" y="280" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="168.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Detection</text>
-<text class="s" x="168.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">watches every pod</text>
-<text class="s" x="168.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">at runtime</text>
+<text class="s" x="792.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">Kyverno: verifies</text>
+<text class="s" x="792.0" y="184.4" font-size="13" fill="#dde5ef" text-anchor="middle">every image</text>
+<rect x="384" y="280" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="480.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Detection</text>
+<text class="s" x="480.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco: watches</text>
+<text class="s" x="480.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">every pod</text>
 <rect x="696" y="280" width="192" height="260" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="792.0" y="405.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
 <text class="s" x="792.0" y="425.4" font-size="13" fill="#dde5ef" text-anchor="middle">your services</text>
@@ -37,8 +37,8 @@
 <text class="s" x="168.0" y="515.4" font-size="13" fill="#dde5ef" text-anchor="middle">response runbook</text>
 <rect x="384" y="460" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="480.0" y="486.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Auto-response</text>
-<text class="s" x="480.0" y="506.4" font-size="13" fill="#dde5ef" text-anchor="middle">stops or labels</text>
-<text class="s" x="480.0" y="524.4" font-size="13" fill="#dde5ef" text-anchor="middle">the offending pod</text>
+<text class="s" x="480.0" y="506.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco Talon: stops</text>
+<text class="s" x="480.0" y="524.4" font-size="13" fill="#dde5ef" text-anchor="middle">or labels the pod</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Security · from build to runtime</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A signed supply chain, admission that verifies it, and runtime detection with an automatic response. Identity, secrets and keys</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">underneath: see the trust view.</text>
@@ -50,14 +50,16 @@
 <text class="s" x="636.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <circle cx="792.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="792.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="480.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="480.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<rect x="184.0" y="401.0" width="84.6" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="188.0" y="415.0" font-size="13" fill="#aab6c8">critical alerts</text>
-<circle cx="168.0" cy="410.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="168.0" y="414.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<circle cx="444.0" cy="410.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="444.0" y="414.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="636.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="636.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<rect x="253.7" y="368.0" width="84.6" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="296.0" y="382.0" font-size="13" fill="#aab6c8" text-anchor="middle">critical alerts</text>
+<circle cx="296.0" cy="404.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="296.0" y="408.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<rect x="526.0" y="395.0" width="59.3" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="530.0" y="409.0" font-size="13" fill="#aab6c8">all alerts</text>
+<circle cx="510.0" cy="404.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="510.0" y="408.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
 <circle cx="636.0" cy="500.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="636.0" y="504.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
 <line x1="28" y1="562" x2="932" y2="562" stroke="#7c8aa0" stroke-width="1.2"/>
@@ -69,22 +71,22 @@
 <text class="s" x="62.0" y="618.0" font-size="13.5" fill="#dde5ef">Build &amp; sign pushes the image and its signature to the registry</text>
 <circle cx="40" cy="641.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="646" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="62.0" y="646.0" font-size="13.5" fill="#dde5ef">Kyverno fetches the signature from the registry before any pod starts</text>
+<text class="s" x="62.0" y="646.0" font-size="13.5" fill="#dde5ef">Admission control (Kyverno) fetches the signature from the registry before any pod starts</text>
 <circle cx="40" cy="669.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="674" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="62.0" y="674.0" font-size="13.5" fill="#dde5ef">Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging</text>
+<text class="s" x="62.0" y="674.0" font-size="13.5" fill="#dde5ef">Admission control admits only signed images with safe pod settings: it blocks in production and warns in dev and staging</text>
 <circle cx="40" cy="697.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="702" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="702.0" font-size="13.5" fill="#dde5ef">Falco watches what every pod does at runtime, on every node</text>
+<text class="s" x="62.0" y="702.0" font-size="13.5" fill="#dde5ef">Detection (Falco) watches what every pod does at runtime, on every node</text>
 <circle cx="40" cy="725.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="730" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="62.0" y="730.0" font-size="13.5" fill="#dde5ef">Falco escalates critical alerts to an incident workflow on the management cluster</text>
+<text class="s" x="62.0" y="730.0" font-size="13.5" fill="#dde5ef">Detection escalates critical alerts to an incident workflow on the management cluster</text>
 <circle cx="40" cy="753.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="758" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="62.0" y="758.0" font-size="13.5" fill="#dde5ef">Falco also sends its alerts to Falco Talon</text>
+<text class="s" x="62.0" y="758.0" font-size="13.5" fill="#dde5ef">Detection sends every alert to Auto-response (Falco Talon)</text>
 <circle cx="40" cy="781.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="786" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
-<text class="s" x="62.0" y="786.0" font-size="13.5" fill="#dde5ef">Falco Talon stops or labels the offending pod</text>
+<text class="s" x="62.0" y="786.0" font-size="13.5" fill="#dde5ef">Auto-response stops or labels the offending pod when an alert matches one of its rules</text>
 <rect x="28" y="826" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
 <text class="s" x="58.0" y="836.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
 <rect x="283.60519999999997" y="826" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>

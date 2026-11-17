@@ -103,39 +103,37 @@ def security() -> Diagram:
     R0 = 120
     R1 = R0 + H + 80
     R2 = R1 + H + 100
-    d.box(X[0], R0, BW, H, "mgmt", "Build & sign", ["scans and signs", "every image"], step=1, aka=("cosign",))
+    d.box(X[0], R0, BW, H, "mgmt", "Build & sign", ["scans, then signs", "with cosign"], step=1, aka=("cosign",))
     d.box(X[1], R0, BW, H, "mgmt", "Registry", ["images and", "signatures"])
-    d.box(X[2], R0, BW, H, "workload", "Admission control", ["verifies images", "before pods start"],
-          aka=("Kyverno",))
-    d.box(X[0], R1, BW, H, "workload", "Detection", ["watches every pod", "at runtime"], aka=("Falco",))
+    d.box(X[2], R0, BW, H, "workload", "Admission control", ["Kyverno: verifies", "every image"])
+    d.box(X[1], R1, BW, H, "workload", "Detection", ["Falco: watches", "every pod"])
     d.box(X[2], R1, BW, R2 + H - R1, "workload", "App pods", ["your services"])
     d.box(X[0], R2, BW, H, "mgmt", "Incident workflow", ["response runbook"])
-    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["stops or labels", "the offending pod"],
-          aka=("Falco Talon",))
+    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["Falco Talon: stops", "or labels the pod"])
     d.arrow([(X[0] + BW, ymid(R0)), (X[1], ymid(R0))], step=2, badge_at=0.5)
     d.arrow([(X[2], ymid(R0)), (X[1] + BW, ymid(R0))], step=3, badge_at=0.5)     # Kyverno reads the registry
     xa = X[2] + BW / 2
     d.arrow([(xa, R0 + H), (xa, R1)], step=4)
-    d.arrow([(X[0] + BW, ymid(R1)), (X[2], ymid(R1))], step=5, badge_at=0.5)
-    yb = R1 + H + 50                            # badges 6 and 7 side by side: escalate, then alert Talon
-    xd = X[0] + BW / 2
-    d.arrow([(xd, R1 + H), (xd, R2)], step=6, badge=(xd, yb), label="critical alerts", label_pos=(xd + 20, yb + 5),
+    d.arrow([(X[1] + BW, ymid(R1)), (X[2], ymid(R1))], step=5, badge_at=0.5)
+    yb = R1 + H + 44                            # badges 6 and 7 side by side: escalate, then alert Talon
+    x6, xi = X[1] + 40, X[0] + BW / 2
+    d.arrow([(x6, R1 + H), (x6, yb), (xi, yb), (xi, R2)], step=6, badge=((x6 + xi) / 2, yb),
+            label="critical alerts", label_pos=((x6 + xi) / 2, yb - 22))
+    x7 = X[1] + BW / 2 + 30
+    d.arrow([(x7, R1 + H), (x7, R2)], step=7, badge=(x7, yb), label="all alerts", label_pos=(x7 + 20, yb + 5),
             label_anchor="start")
-    xt = X[1] + 60
-    d.arrow([(X[0] + BW - 30, R1 + H), (X[0] + BW - 30, R1 + H + 24), (xt, R1 + H + 24), (xt, R2)], step=7,
-            badge=(xt, yb))
     d.arrow([(X[1] + BW, ymid(R2)), (X[2], ymid(R2))], step=8, badge_at=0.5)
     d.require("Admission control", "Build & sign", "Registry", "Detection", "Auto-response",
               "Incident workflow", "App pods")
     d.key("Build & sign scans the image for known vulnerabilities, then cosign signs it with its build record",
           "Build & sign pushes the image and its signature to the registry",
-          "Kyverno fetches the signature from the registry before any pod starts",
-          "Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and "
-          "staging",
-          "Falco watches what every pod does at runtime, on every node",
-          "Falco escalates critical alerts to an incident workflow on the management cluster",
-          "Falco also sends its alerts to Falco Talon",
-          "Falco Talon stops or labels the offending pod")
+          "Admission control (Kyverno) fetches the signature from the registry before any pod starts",
+          "Admission control admits only signed images with safe pod settings: it blocks in production and warns in "
+          "dev and staging",
+          "Detection (Falco) watches what every pod does at runtime, on every node",
+          "Detection escalates critical alerts to an incident workflow on the management cluster",
+          "Detection sends every alert to Auto-response (Falco Talon)",
+          "Auto-response stops or labels the offending pod when an alert matches one of its rules")
     return d
 
 
