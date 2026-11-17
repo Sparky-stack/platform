@@ -320,13 +320,8 @@ from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
 
 When a workload cluster is re-created under the same name (new CAPD/cloud cluster, new agent connection), OpenChoreo's
 RenderedRelease controller can stay on a failed apply (`proxy request failed with status 502`, from while the agent was
-not connected yet) for a long backoff, so app namespaces and workloads do not reappear for many minutes. Kick it:
-
-```bash
-kubectl -n <namespace> annotate renderedrelease --all platform.koorikla.io/kick="$(date +%s)" --overwrite
-```
-
-Seen with OpenChoreo 1.3.3 ([#51](https://github.com/koorikla/platform/issues/51)).
+not connected yet) for a long backoff ([#51](https://github.com/koorikla/platform/issues/51)). Triage and the
+annotation kick command: [runbooks/incidents.md](runbooks/incidents.md#data-plane-agent-disconnected).
 
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*`):
 [#52](https://github.com/koorikla/platform/issues/52).
