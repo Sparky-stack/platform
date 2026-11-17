@@ -134,9 +134,10 @@ MGMT_SERVER=https://kubernetes.default.svc
 # render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels file>]: layered like the ApplicationSet
 # (hack/lib/addons.sh), installation parameters / value files from the charts/platform render of this installation.
 render() {
-  local addon=$1 name=$3 dir="addons/$1" rf="$TMP/render.yaml" ns
-  if [[ -n "${RENDERED_DIR:-}" && -s "$RENDERED_DIR/addons-$INST-$name-$addon.yaml" ]]; then
-    rf="$RENDERED_DIR/addons-$INST-$name-$addon.yaml"
+  local addon=$1 role=$2 name=$3 target=$3 dir="addons/$1" rf="$TMP/render.yaml" ns
+  [[ "$role" == mgmt ]] && target=mgmt
+  if [[ -n "${RENDERED_DIR:-}" && -s "$RENDERED_DIR/addon-$addon-$INST-$target.yaml" ]]; then
+    rf="$RENDERED_DIR/addon-$addon-$INST-$target.yaml"
   else
     local -a vargs=()
     ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" "$CATALOG")
