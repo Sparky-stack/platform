@@ -1,0 +1,241 @@
+{{- /*
+Auto-build webhook (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): rendered only when
+installation.yaml openchoreo.workflowPlane.autoBuild is `webhook` and the workflow plane exists.
+  ExternalSecret github-webhook   HMAC secret of the GitHub App webhook (store platform)
+  EventSource github              POST <endpoint>: X-Hub-Signature-256 validated (unsigned/forged payloads -> 400);
+                                  never calls GitHub (no token: hooks are configured on the App, not managed here)
+  HTTPRoute auto-build-webhook    exposes exactly POST <endpoint> on the control-plane Gateway's TLS listener
+  Sensor auto-build               push to a branch of a repository of installation.githubOrg -> Workflow from
+                                  WorkflowTemplate auto-build in workflows-<org ns> with that repository's clone URL
+  RBAC + ValidatingAdmissionPolicy the Sensor may create Workflows there, and only that one shape
+The Workflow reconciles the repository's opted-in Components like a poll (addon openchoreo-platform), so a forged,
+replayed or redelivered push can at most cause one extra reconcile, never a build of a commit that is not the branch
+head, and never a second build of the same commit.
+*/ -}}
+{{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
+{{- if and (eq $trigger "webhook") (eq (include "ae.workflowPlane" .) "true") }}
+{{- $w := .Values.autoBuildWebhook }}
+{{- $org := .Values.openchoreo.orgNamespace }}
+{{- $ns := printf "workflows-%s" $org }}
+{{- $sa := "auto-build-sensor" }}
+{{- $tpl := required "autoBuildWebhook.workflowTemplate is required" $w.workflowTemplate }}
+{{- $ghOrg := required "installation.githubOrg is required (owner whose pushes trigger builds)" (dig "githubOrg" "" (.Values.installation | default dict)) }}
+{{- if not (regexMatch "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/?$" $ghOrg) }}
+{{- fail (printf "installation.githubOrg %q: the auto-build webhook supports https://github.com/<owner>" $ghOrg) }}
+{{- end }}
+{{- $owner := trimSuffix "/" $ghOrg | splitList "/" | last }}
+{{- if not (and $w.secret.store $w.secret.key $w.secret.property) }}
+{{- fail "autoBuildWebhook.secret.{store,key,property} are required: without an HMAC secret the EventSource accepts unsigned payloads" }}
+{{- end }}
+{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
+{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: github-webhook
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $w.secret.store }}
+  target:
+    name: github-webhook
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  data:
+    - secretKey: secret
+      remoteRef: { key: {{ $w.secret.key }}, property: {{ $w.secret.property }} }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: github
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: platform-eventsource
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
+  service:
+    ports:
+      - name: github
+        port: {{ $w.port }}
+        targetPort: {{ $w.port }}
+  github:
+    push:
+      organizations: [{{ $owner | quote }}]
+      events: [push]
+      contentType: json
+      active: true
+      webhook:
+        endpoint: {{ $w.endpoint | quote }}
+        port: {{ $w.port | quote }}
+        method: POST
+      webhookSecret:
+        name: github-webhook
+        key: secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: auto-build-webhook
+spec:
+  parentRefs:
+    - name: {{ $w.route.gateway.name }}
+      namespace: {{ $w.route.gateway.namespace }}
+      sectionName: {{ $w.route.sectionName }}
+  hostnames:
+    - {{ printf "%s.%s" $w.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
+  rules:
+    - matches:
+        - path: { type: Exact, value: {{ $w.endpoint }} }
+          method: POST
+      backendRefs:
+        - name: github-eventsource-svc     # Service the controller creates for EventSource `github`
+          port: {{ $w.port }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-events-auto-build
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-events-auto-build
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-events-auto-build
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: auto-build
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  eventBusName: default
+  template:
+    serviceAccountName: {{ $sa }}
+    securityContext: {{- toYaml $podSc | nindent 6 }}
+    container:
+      resources: {{- toYaml .Values.podResources | nindent 8 }}
+      securityContext: {{- toYaml $sc | nindent 8 }}
+  dependencies:
+    - name: push
+      eventSourceName: github
+      eventName: push
+      filters:
+        data:
+          - path: body.X-GitHub-Event          # the EventSource copies the event header into the body
+            type: string
+            value: ["^push$"]
+          - path: body.ref                     # branch pushes only (no tags)
+            type: string
+            value: ["^refs/heads/.+$"]
+          - path: body.deleted                 # not a branch deletion
+            type: bool
+            value: ["false"]
+          - path: body.repository.clone_url
+            type: string
+            value: [{{ printf "^https://github\\.com/%s/[A-Za-z0-9._-]+\\.git$" (regexQuoteMeta $owner) | quote }}]
+  triggers:
+    - rateLimit: {{- toYaml $w.rateLimit | nindent 8 }}
+      template:
+        name: auto-build
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: auto-build-push-
+                namespace: {{ $ns }}
+                labels:
+                  platform.koorikla.io/trigger: webhook
+              spec:
+                workflowTemplateRef:
+                  name: {{ $tpl }}
+                arguments:
+                  parameters:
+                    - name: repository
+                      value: ""
+          parameters:
+            - src: { dependencyName: push, dataKey: body.repository.clone_url }
+              dest: spec.arguments.parameters.0.value
+      retryStrategy:
+        steps: 3
+        duration: 2s
+---
+{{- /*
+Admission pin (like argo-events-workflows-falco-response-only): Workflows the Sensor creates in the run namespace run
+WorkflowTemplate auto-build with nothing but its `repository` argument, even if the Sensor's token leaks. Matched by
+the requesting identity: OpenChoreo's own Workflows in that namespace (builds, gates) are not affected.
+*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: argo-events-auto-build-workflows
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: ["*"]
+        operations: [CREATE]
+        resources: [workflows]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ $ns }}
+  matchConditions:
+    - name: auto-build-sensor
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace $sa | quote }}
+  validations:
+    - expression: >-
+        has(object.spec) && has(object.spec.workflowTemplateRef)
+        && object.spec.workflowTemplateRef == {'name': '{{ $tpl }}'}
+      message: Workflows of the auto-build Sensor must reference WorkflowTemplate {{ $tpl }} (namespaced, by name only)
+      reason: Forbidden
+    - expression: "object.spec.all(k, k in ['workflowTemplateRef', 'arguments'])"
+      message: Workflows of the auto-build Sensor may set only spec.workflowTemplateRef and spec.arguments
+      reason: Forbidden
+    - expression: >-
+        !has(object.spec.arguments)
+        || (object.spec.arguments.all(k, k == 'parameters')
+            && (!has(object.spec.arguments.parameters)
+                || object.spec.arguments.parameters.all(p, p.all(k, k in ['name', 'value']) && p.name == 'repository')))
+      message: Workflows of the auto-build Sensor take only the parameter `repository`
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: argo-events-auto-build-workflows
+spec:
+  policyName: argo-events-auto-build-workflows
+  validationActions: [Deny]
+{{- end }}

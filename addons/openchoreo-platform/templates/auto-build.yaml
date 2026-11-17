@@ -1,0 +1,256 @@
+{{- /*
+Auto-build trigger (values.yaml autoBuild, docs/build-plane.md "Auto-build"). Everything lives in the run namespace
+workflows-<org ns> of the workflow plane on mgmt:
+  ExternalSecret auto-build-github-app   the platform GitHub App (scoped store `workflows`); read only by ESO
+  GithubAccessToken auto-build           ESO generator: installation token restricted to autoBuild.github.permissions
+  ExternalSecret auto-build-github-token Secret with that token (`token`), re-minted every tokenRefreshInterval
+  WorkflowTemplate auto-build            one reconcile pass (files/auto-build/auto_build.py), parameter `repository`
+                                         (empty = every opted-in Component; webhook runs pass the pushed repo)
+  CronWorkflow auto-build-poll           trigger poll: every pollSchedule; trigger webhook: every resyncSchedule
+  ServiceAccount + RBAC                  list Components, get (Cluster)Workflows, get/list/create WorkflowRuns in the
+                                         org namespace; one ConfigMap (cache) and Argo's task results here
+The Sensor of addon argo-events (trigger webhook) creates Workflows from the same WorkflowTemplate.
+Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, public 443.
+*/ -}}
+{{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
+{{- if not (has $trigger (list "poll" "webhook" "none")) }}
+{{- fail (printf "openchoreo.workflowPlane.autoBuild: %q is not poll, webhook or none" $trigger) }}
+{{- end }}
+{{- $wpEnabled := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) }}
+{{- if and (ne $trigger "none") $wpEnabled .Values.buildWorkflows.enabled }}
+{{- $a := .Values.autoBuild }}
+{{- $org := .Values.openchoreo.orgNamespace }}
+{{- $ns := printf "workflows-%s" $org }}
+{{- $name := required "autoBuild.workflowTemplate is required" $a.workflowTemplate }}
+{{- $script := .Files.Get "files/auto-build/auto_build.py" }}
+{{- if contains "{{" $script }}{{ fail "files/auto-build/auto_build.py must not contain '{{' (Argo templating)" }}{{ end }}
+{{- $schedule := ternary $a.pollSchedule $a.resyncSchedule (eq $trigger "poll") }}
+{{- if and (eq $trigger "poll") (not $schedule) }}{{ fail "autoBuild.pollSchedule is required for trigger poll" }}{{ end }}
+{{- $sync := dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: platform-auto-build
+  namespace: {{ $org }}
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [components]
+    verbs: [list]
+  - apiGroups: [openchoreo.dev]
+    resources: [workflows]
+    verbs: [get]
+  - apiGroups: [openchoreo.dev]
+    resources: [workflowruns]
+    verbs: [get, list, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: platform-auto-build
+  namespace: {{ $org }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: platform-auto-build
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-auto-build
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [clusterworkflows]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-auto-build
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-auto-build
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: platform-auto-build
+  namespace: {{ $ns }}
+rules:
+  # The cache ConfigMap: create cannot be limited by name, read/write is.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [{{ $a.stateConfigMap }}]
+    verbs: [get, update]
+  # Argo's executor (init/wait) reports step results with the pod's token.
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: platform-auto-build
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: platform-auto-build
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ $ns }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-github-app
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $a.secretStore }}
+  target:
+    name: {{ $name }}-github-app
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  data:
+    - secretKey: app-id
+      remoteRef: { key: {{ $a.github.key }}, property: githubAppID }
+    - secretKey: installation-id
+      remoteRef: { key: {{ $a.github.key }}, property: githubAppInstallationID }
+    - secretKey: private-key
+      remoteRef: { key: {{ $a.github.key }}, property: githubAppPrivateKey }
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: GithubAccessToken
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  annotations: {{- toYaml $sync | nindent 4 }}
+spec:
+  appIDRef: { name: {{ $name }}-github-app, key: app-id }
+  installIDRef: { name: {{ $name }}-github-app, key: installation-id }
+  permissions: {{- toYaml (required "autoBuild.github.permissions is required (least privilege: contents: read)" $a.github.permissions) | nindent 4 }}
+  auth:
+    privateKey:
+      secretRef: { name: {{ $name }}-github-app, key: private-key }
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-github-token
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: {{ $a.github.tokenRefreshInterval }}
+  target:
+    name: {{ $name }}-github-token
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: GithubAccessToken
+          name: {{ $name }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  annotations: {{- toYaml $sync | nindent 4 }}
+spec:
+  entrypoint: reconcile
+  serviceAccountName: {{ $name }}
+  arguments:
+    parameters:
+      - name: repository              # webhook: the pushed repository's clone URL; empty = every opted-in Component
+        value: ""
+  activeDeadlineSeconds: 300
+  # One pass at a time across poll, resync and webhook runs (WorkflowRun creation is idempotent anyway).
+  synchronization:
+    mutexes:
+      - name: {{ $name }}
+  podGC:
+    strategy: OnPodSuccess
+  ttlStrategy:
+    secondsAfterSuccess: 600
+    secondsAfterFailure: 86400
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile: { type: RuntimeDefault }
+  volumes:
+    - name: github-token
+      secret:
+        secretName: {{ $name }}-github-token
+        defaultMode: 288              # 0440: group 65532 (fsGroup)
+  templates:
+    - name: reconcile
+      script:
+        image: {{ $a.image }}
+        command: [python3]
+        resources: {{- toYaml $a.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: [ALL] }
+        volumeMounts:
+          - { name: github-token, mountPath: /var/run/secrets/auto-build, readOnly: true }
+        env:
+          - { name: ORG_NAMESPACE, value: {{ $org | quote }} }
+          - { name: STATE_NAMESPACE, value: {{ $ns | quote }} }
+          - { name: STATE_CONFIGMAP, value: {{ $a.stateConfigMap | quote }} }
+          - { name: TOKEN_FILE, value: /var/run/secrets/auto-build/token }
+          - { name: ALLOWED_PREFIXES, value: {{ include "build.gitPrefixes" . | quote }} }
+          - { name: MAX_RUNS, value: {{ $a.maxRunsPerPass | toString | quote }} }
+          - { name: STALE_SECONDS, value: {{ $a.staleRunSeconds | toString | quote }} }
+          - { name: MIN_RATE_REMAINING, value: {{ $a.minRateRemaining | toString | quote }} }
+          # Webhook input reaches the script only as an env value, never as code.
+          - { name: REPOSITORY, value: {{ `"{{workflow.parameters.repository}}"` }} }
+        source: |
+          {{- $script | nindent 10 }}
+{{- if $schedule }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: {{ $name }}-poll
+  namespace: {{ $ns }}
+  annotations: {{- toYaml $sync | nindent 4 }}
+spec:
+  schedules: [{{ $schedule | quote }}]
+  timezone: UTC
+  concurrencyPolicy: Forbid           # a slow pass is never overlapped by the next tick
+  startingDeadlineSeconds: 30
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  workflowMetadata:
+    labels:
+      platform.koorikla.io/trigger: {{ $trigger }}
+  workflowSpec:
+    workflowTemplateRef:
+      name: {{ $name }}
+{{- end }}
+{{- end }}

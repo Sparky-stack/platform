@@ -77,6 +77,8 @@ openchoreo:
   # `default`; build ClusterWorkflows in addon openchoreo-platform. docs/build-plane.md.
   workflowPlane:
     enabled: true                              # false: disable the addon and Backstage's workflow features
+    # Auto-build of Components with spec.autoBuild: true: poll | webhook | none (docs/build-plane.md "Auto-build")
+    autoBuild: poll                            # GitHub cannot reach a laptop: poll, nothing exposed
 
 # Public DNS (addon external-dns, docs/dns.md): none locally, coredns-local resolves *.openchoreo.localhost.
 dns:

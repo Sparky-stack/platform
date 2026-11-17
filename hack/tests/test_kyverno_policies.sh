@@ -115,6 +115,17 @@ wp_chart="$ROOT/addons/openchoreo-workflow-plane"
     "$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
       --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" > "$TMP/ae-$res.out" 2>&1 || true
   done
+  # auto-build webhook (#164): the Sensor's Workflows in the run namespace run only WorkflowTemplate auto-build;
+  # other creators there (OpenChoreo's agent: builds, gates) are not matched.
+  helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true \
+    --set openchoreo.workflowPlane.autoBuild=webhook -s templates/auto-build-webhook.yaml \
+    | yq 'select(.kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding")' > "$TMP/ab-vap.yaml"
+  for c in sensor:allowed sensor:denied agent:denied; do
+    who=${c%%:*}; res=${c#*:}
+    "$KYVERNO" apply "$TMP/ab-vap.yaml" --resource "$ae/tests/vap-auto-build/$res.yaml" \
+      --userinfo "$ae/tests/vap-auto-build/$who.yaml" --values-file "$ae/tests/vap-auto-build/values.yaml" \
+      --crd-paths "$TMP/wf-crd.yaml" > "$TMP/ab-$who-$res.out" 2>&1 || true
+  done
 ) &
 
 # Native VAPs of addon secret-stores: tenant namespaces use only their own SecretStore (per-tenant OpenBao stores)
@@ -177,6 +188,12 @@ for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 13'; do
   res=${c%%:*}; want=${c#*:}
   out=$(cat "$TMP/ae-$res.out")
   assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
+done
+for c in sensor:allowed:'pass: 1, fail: 0, warn: 0, error: 0' sensor:denied:'pass: 0, fail: 7, warn: 0, error: 0' \
+  agent:denied:'pass: 0, fail: 0, warn: 0, error: 0'; do
+  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
+  out=$(cat "$TMP/ab-$who-$res.out")
+  assert_match "$out" "$want" "VAP argo-events-auto-build-workflows: $who applying tests/vap-auto-build/$res.yaml -> $want"
 done
 
 # who:resources:expected
