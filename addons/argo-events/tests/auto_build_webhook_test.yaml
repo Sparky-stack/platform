@@ -1,0 +1,94 @@
+suite: argo-events - auto-build webhook (GitHub App push -> WorkflowTemplate auto-build, #164)
+release:
+  name: argo-events
+  namespace: argo-events
+templates:
+  - templates/auto-build-webhook.yaml
+set:
+  workflowPlane: "true"
+  openchoreo.workflowPlane.autoBuild: webhook
+tests:
+  - it: poll (the default, e.g. installation local) exposes nothing
+    set: { openchoreo.workflowPlane.autoBuild: poll }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: none exposes nothing
+    set: { openchoreo.workflowPlane.autoBuild: none }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no workflow plane, no webhook (the Sensor's Workflows would never run)
+    set: { workflowPlane: auto }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: the EventSource validates the GitHub signature and never calls GitHub
+    documentSelector: { path: kind, value: EventSource }
+    asserts:
+      - equal: { path: metadata.name, value: github }
+      - equal: { path: spec.github.push.webhookSecret, value: { name: github-webhook, key: secret } }
+      - equal: { path: spec.github.push.organizations, value: [koorikla] }
+      - equal: { path: spec.github.push.webhook, value: { endpoint: /github, port: "12001", method: POST } }
+      - notExists: { path: spec.github.push.apiToken }
+      - notExists: { path: spec.github.push.githubApp }
+      - notExists: { path: spec.github.push.webhook.url }   # no hook management
+      - equal: { path: spec.template.securityContext.runAsNonRoot, value: true }
+
+  - it: refuses to run without an HMAC secret (unsigned payloads would be accepted)
+    set: { autoBuildWebhook.secret.key: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "without an HMAC secret the EventSource accepts unsigned payloads" }
+
+  - it: the HMAC secret comes from store platform
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: 'spec.data[0].remoteRef', value: { key: github-webhook, property: secret } }
+
+  - it: the route exposes only POST /github on the Gateway's TLS listener
+    documentSelector: { path: kind, value: HTTPRoute }
+    asserts:
+      - equal: { path: 'spec.parentRefs[0]', value: { name: gateway-default, namespace: openchoreo-control-plane, sectionName: https } }
+      - equal: { path: spec.hostnames, value: [events.openchoreo.localhost] }
+      - equal: { path: 'spec.rules[0].matches', value: [{ path: { type: Exact, value: /github }, method: POST }] }
+      - equal: { path: 'spec.rules[0].backendRefs', value: [{ name: github-eventsource-svc, port: 12001 }] }
+
+  - it: the Sensor turns branch pushes of the installation's owner into a reconcile of that repository
+    documentSelector: { path: kind, value: Sensor }
+    asserts:
+      - equal: { path: metadata.name, value: auto-build }
+      - contains: { path: 'spec.dependencies[0].filters.data', content: { path: body.X-GitHub-Event, type: string, value: ["^push$"] } }
+      - contains: { path: 'spec.dependencies[0].filters.data', content: { path: body.ref, type: string, value: ["^refs/heads/.+$"] } }
+      - contains: { path: 'spec.dependencies[0].filters.data', content: { path: body.deleted, type: bool, value: ["false"] } }
+      - contains:
+          path: 'spec.dependencies[0].filters.data'
+          content: { path: body.repository.clone_url, type: string, value: ['^https://github\.com/koorikla/[A-Za-z0-9._-]+\.git$'] }
+      - equal: { path: 'spec.triggers[0].template.k8s.source.resource.metadata.namespace', value: workflows-default }
+      - equal: { path: 'spec.triggers[0].template.k8s.source.resource.spec.workflowTemplateRef', value: { name: auto-build } }
+      - equal: { path: 'spec.triggers[0].template.k8s.parameters[0].src.dataKey', value: body.repository.clone_url }
+      - equal: { path: 'spec.triggers[0].rateLimit', value: { unit: Minute, requestsPerUnit: 30 } }
+
+  - it: the Sensor may only create Workflows in the run namespace
+    documentSelector: { path: kind, value: Role }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal: { path: rules, value: [{ apiGroups: [argoproj.io], resources: [workflows], verbs: [create] }] }
+
+  - it: admission pins the Sensor's Workflows to WorkflowTemplate auto-build, matched by the Sensor's identity
+    documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+    asserts:
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: 'spec.matchConditions[0].expression', value: "request.userInfo.username == 'system:serviceaccount:argo-events:auto-build-sensor'" }
+      - equal: { path: spec.matchConstraints.namespaceSelector.matchLabels, value: { kubernetes.io/metadata.name: workflows-default } }
+
+  - it: owner follows installation.githubOrg
+    set: { installation.githubOrg: https://github.com/acme }
+    documentSelector: { path: kind, value: EventSource }
+    asserts:
+      - equal: { path: spec.github.push.organizations, value: [acme] }
+
+  - it: rejects a non-GitHub owner URL
+    set: { installation.githubOrg: https://gitlab.com/acme }
+    asserts:
+      - failedTemplate: { errorPattern: "supports https://github.com/<owner>" }

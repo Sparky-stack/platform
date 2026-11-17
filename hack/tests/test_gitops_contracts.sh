@@ -595,4 +595,48 @@ assert_eq "$(yq '[.kyverno.admissionController.extraVolumes[], .kyverno.reportsC
   "$ROOT/addons/kyverno/values/role-workload.yaml")" "$iv_cm" \
   "Kyverno admission + reports controllers mount the registry CA from the delivered ConfigMap"
 
+
+# 16. Auto-build (#164): every installation selects a trigger explicitly, and whichever it selects ends in the one
+#     WorkflowTemplate that creates the per-commit WorkflowRun: poll = CronWorkflow in the run namespace; webhook = the
+#     argo-events Sensor creating Workflows from that same template (names and namespace agree across both addons).
+#     The template reads the GitHub App only through the scoped store `workflows` (key allowed there) and its pods are
+#     under the run namespace's default-deny NetworkPolicy.
+ab_tpl=$(yq '.autoBuild.workflowTemplate' "$ocp_values")
+assert_eq "$(yq '.autoBuildWebhook.workflowTemplate' "$ROOT/addons/argo-events/values.yaml")" "$ab_tpl" \
+  "argo-events autoBuildWebhook.workflowTemplate == openchoreo-platform autoBuild.workflowTemplate"
+assert_eq "$(yq '.autoBuild.secretStore' "$ocp_values")" \
+  "$(yq '.clusterWorkflowPlane.secretStore' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")" \
+  "autoBuild.secretStore == the ClusterWorkflowPlane's secret store"
+ab_key=$(yq '.autoBuild.github.key' "$ocp_values")
+assert_eq "$(K="$ab_key" yq '.workflowStore.keys[] | select(. == strenv(K))' "$ROOT/addons/secret-stores/values.yaml")" \
+  "$ab_key" "autoBuild.github.key is readable through ClusterSecretStore workflows (workflowStore.keys)"
+helm template openchoreo-workflow-plane "$ROOT/addons/openchoreo-workflow-plane" --namespace openchoreo-workflow-plane \
+  -s templates/run-network-policy.yaml > "$TMP/run-np.yaml"
+assert_eq "$(yq -o=json -I=0 'select(.kind == "NetworkPolicy" and .metadata.name == "build-runs-default-deny") | .spec.podSelector' \
+  "$TMP/run-np.yaml")" "{}" "the run namespace's default-deny NetworkPolicy selects every pod (auto-build pods included)"
+for inst_file in "$ROOT"/installations/*/installation.yaml; do
+  inst=$(basename "$(dirname "$inst_file")")
+  trig=$(yq '.openchoreo.workflowPlane.autoBuild // "unset"' "$inst_file")
+  assert_match "$trig" '^(poll|webhook)$' "$inst selects an auto-build trigger (openchoreo.workflowPlane.autoBuild: $trig)"
+  run_ns="workflows-$(yq '.openchoreo.orgNamespace // "default"' "$inst_file")"
+  helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default --values "$inst_file" \
+    -s templates/auto-build.yaml > "$TMP/ab-$inst.yaml" 2>/dev/null || : > "$TMP/ab-$inst.yaml"
+  helm template argo-events "$ROOT/addons/argo-events" --namespace argo-events --values "$inst_file" \
+    --set workflowPlane=true --set-string 'falco.clusters={mgmt}' > "$TMP/ae-$inst.yaml"
+  assert_eq "$(N="$ab_tpl" yq 'select(.kind == "WorkflowTemplate" and .metadata.name == strenv(N)) | .metadata.namespace' \
+    "$TMP/ab-$inst.yaml")" "$run_ns" "$inst: WorkflowTemplate $ab_tpl renders in $run_ns"
+  cron=$(yq 'select(.kind == "CronWorkflow") | .spec.workflowSpec.workflowTemplateRef.name + "@" + .metadata.namespace' "$TMP/ab-$inst.yaml")
+  sensor=$(yq 'select(.kind == "Sensor" and .metadata.name == "auto-build") | .spec.triggers[0].template.k8s.source.resource
+    | .spec.workflowTemplateRef.name + "@" + .metadata.namespace' "$TMP/ae-$inst.yaml")
+  route=$(yq 'select(.kind == "HTTPRoute" and .metadata.name == "auto-build-webhook") | .metadata.name' "$TMP/ae-$inst.yaml")
+  if [[ "$trig" == poll ]]; then
+    assert_eq "$cron" "$ab_tpl@$run_ns" "$inst (poll): CronWorkflow runs $ab_tpl"
+    assert_eq "$sensor$route" "" "$inst (poll): nothing exposed (no webhook Sensor, no route)"
+  else
+    assert_eq "$sensor" "$ab_tpl@$run_ns" "$inst (webhook): the Sensor creates Workflows from $ab_tpl"
+    assert_eq "$route" "auto-build-webhook" "$inst (webhook): the GitHub endpoint is routed"
+    assert_eq "$cron" "$ab_tpl@$run_ns" "$inst (webhook): resync CronWorkflow runs the same $ab_tpl"
+  fi
+done
+
 finish
