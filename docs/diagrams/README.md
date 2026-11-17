@@ -140,13 +140,13 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
 1. Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version
-2. The pull request runs CI: every chart rendered and tested on Linux, macOS and Windows, x86 and arm
-3. CI gates the merge: once it passes and a maintainer approves, the pull request is merged into main
-4. Argo CD reads main for every cluster that follows it
-5. Argo CD syncs the dev clusters first, each app in a fixed order
-6. Dev clusters are verified: every app synced and healthy
-7. Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit
-8. Argo CD hands a Kubernetes version bump to Cluster API, which replaces servers one at a time, dev before prod
+2. GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and arm; a maintainer reviews and merges it into main
+3. Argo CD reads main for every cluster that follows it
+4. Argo CD syncs the dev clusters first, each app in a fixed order
+5. Dev clusters are verified: every app synced and healthy
+6. Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit
+
+Kubernetes versions: a `kubernetesVersion` bump in a fleet file rolls through Cluster API instead, one server at a time, dev before prod (see the cluster lifecycle view).
 
 ## Editing
 

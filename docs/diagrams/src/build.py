@@ -438,40 +438,35 @@ def backup() -> Diagram:
 # -------------------------------------------------------------------------------------------- upgrade flow
 def upgrade() -> Diagram:
     d = Diagram("Upgrade flow · every upgrade is a pull request",
-                "Renovate proposes, CI proves, Argo CD rolls out dev before prod; Kubernetes versions roll through "
-                "Cluster API.")
+                "Renovate proposes, CI proves, a maintainer merges, and Argo CD rolls the change out to the dev "
+                "clusters before prod.")
     c, w = COLS4, CW4
     R0 = 120
     R1 = R0 + H + 96
     y0 = R0 + H + 48
-    y1 = R1 + H + 36
-    y2 = R1 + H + 80
+    y1 = R1 + H + 40
     d.box(c[0], R0, w, H, "external", "Renovate", ["proposes", "version bumps"])
-    d.box(c[1], R0, w, H, "external", "Pull request", ["one bump", "per PR"])
-    d.box(c[2], R0, w, H, "external", "CI", ["renders and", "tests everything"])
-    d.box(c[3], R0, w, H, "external", "Main branch", ["reviewed,", "merged"], aka=("main",))
+    d.box(c[1], R0, c[3] + w - c[1], H, "external", "GitHub",
+          ["platform repo: pull request, CI on every platform,", "review, merge to main"], step=2, aka=("main",))
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps", "engine"])
-    d.box(c[1], R1, w, H, "workload", "Dev clusters", ["follow main", "first"], step=6)
+    d.box(c[1], R1, w, H, "workload", "Dev clusters", ["follow main", "first"], step=5)
     d.box(c[2], R1, w, H, "workload", "Prod clusters", ["follow a", "verified commit"])
-    d.box(c[3], R1, w, H, "mgmt", "Cluster API", ["replaces servers", "one at a time"])
-    for i in range(3):
-        d.arrow([(c[i] + w, ymid(R0)), (c[i + 1], ymid(R0))], step=i + 1, badge_at=0.4)
-    d.arrow([(c[0] + w / 2, R1), (c[0] + w / 2, y0), (c[3] + w / 2, y0), (c[3] + w / 2, R0 + H)], step=4)
-    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=5, badge_at=0.4)
-    d.arrow([(c[0] + 100, R1 + H), (c[0] + 100, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=7)
-    d.arrow([(c[0] + 40, R1 + H), (c[0] + 40, y2), (c[3] + w / 2, y2), (c[3] + w / 2, R1 + H)], step=8,
-            badge=(c[3] - 40, y2))
-    d.require("Renovate", "Pull request", "CI", "Main branch", "Argo CD", "Dev clusters", "Prod clusters",
-              "Cluster API")
+    d.arrow([(c[0] + w, ymid(R0)), (c[1], ymid(R0))], step=1, badge_at=0.4)
+    d.arrow([(c[0] + w / 2, R1), (c[0] + w / 2, y0), (c[1] + 120, y0), (c[1] + 120, R0 + H)], step=3)
+    d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
+    d.arrow([(c[0] + w / 2, R1 + H), (c[0] + w / 2, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=6,
+            label="after a second pull request", label_pos=(c[2] + w / 2, y1 + 28))
+    d.legend_label("workload", "workload clusters")
+    d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
-          "The pull request runs CI: every chart rendered and tested on Linux, macOS and Windows, x86 and arm",
-          "CI gates the merge: once it passes and a maintainer approves, the pull request is merged into main",
+          "GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and "
+          "arm; a maintainer reviews and merges it into main",
           "Argo CD reads main for every cluster that follows it",
           "Argo CD syncs the dev clusters first, each app in a fixed order",
           "Dev clusters are verified: every app synced and healthy",
-          "Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit",
-          "Argo CD hands a Kubernetes version bump to Cluster API, which replaces servers one at a time, dev "
-          "before prod")
+          "Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit")
+    d.note("Kubernetes versions: a kubernetesVersion bump in a fleet file rolls through Cluster API instead, one "
+           "server at a time, dev before prod (see the cluster lifecycle view).")
     return d
 
 
