@@ -27,6 +27,17 @@ provider values file - never in a Component, a template or a tenant file.
 | Registry pulls | k3s `registries.yaml` from the ClusterClass | the owner configures node trust/auth | ClusterClass / GKE node SA |
 | Platform secrets and CAs | ClusterResourceSet payloads | PushSecrets (same objects) | ClusterResourceSet payloads |
 
+Two backends are pluggable per installation rather than per cluster:
+
+- **Secret backend** (`secrets.backend`): `kubernetes` + per-tenant OpenBao stores locally; AWS Secrets Manager or
+  Vault/OpenBao in the examples. Everything consumes it through ESO, so apps never see the difference.
+- **Mesh CA** (`mesh.ca`): locally OpenBao on mgmt signs each cluster's intermediate, and istio-csr on the workload
+  cluster requests certificates through a cert-manager `Issuer` of type `vault`. Any cert-manager issuer can take that
+  place - e.g. [aws-privateca-issuer](https://github.com/cert-manager/aws-privateca-issuer) (AWS Private CA),
+  [google-cas-issuer](https://github.com/jetstack/google-cas-issuer) (Google CAS), or an existing Vault - without
+  changing istio-csr, Istio or the apps. Only the OpenBao/Vault path is implemented and tested here; the istio-csr addon
+  renders the `vault` Issuer today, so another backend means adding an issuer option to that one template.
+
 Details and setup: [providers.md](providers.md) ([byo](providers.md#bring-your-own-cluster-byo)).
 
 ## How addons adapt
