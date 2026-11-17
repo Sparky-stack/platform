@@ -111,7 +111,7 @@ py() {
 open_url() {
   local url=$1
   [[ -n "${NO_BROWSER:-}" ]] && return 0
-  case "$(os_name)" in
+  case "$HOST_OS" in
     darwin) open "$url" >/dev/null 2>&1 ;;
     windows) cmd.exe //c start "" "$url" >/dev/null 2>&1 ;;
     linux)
@@ -121,6 +121,23 @@ open_url() {
       fi ;;
   esac
   return 0
+}
+
+# retry_with_backoff <attempts> <initial_delay_s> <command...>: retry transient failures with exponential backoff.
+retry_with_backoff() {
+  local attempts=$1 delay=$2 try=1 rc=0
+  shift 2
+  while true; do
+    "$@" && return 0 || rc=$?
+    if [[ $try -ge $attempts ]]; then
+      echo "ERROR: failed after $attempts attempt(s) (exit $rc): $*" >&2
+      return "$rc"
+    fi
+    echo "WARN: attempt $try/$attempts failed (exit $rc): $* (retrying in ${delay}s)" >&2
+    sleep "$delay"
+    try=$((try + 1))
+    delay=$((delay * 2))
+  done
 }
 
 # read_lines <array-name> <command...>: bash 3.2 replacement for `mapfile -t name < <(command)`.
