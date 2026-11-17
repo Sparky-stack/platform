@@ -72,6 +72,31 @@
     },
     {
       "customType": "regex",
+      "description": "CAPG (addons/capi-providers infrastructure.gcp): provider version and the pinned manager image, bumped together",
+      "managerFilePatterns": [
+        "/^addons/capi-providers/values\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>registry\\.k8s\\.io/cluster-api-gcp/cluster-api-gcp-controller):(?<currentValue>v[0-9][^@\\s]*)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "groupName": "cluster-api-provider-gcp"
+    },
+    {
+      "customType": "regex",
+      "description": "CAPG provider version (InfrastructureProvider gcp spec.version); grouped with its manager image",
+      "managerFilePatterns": [
+        "/^addons/capi-providers/values\\.yaml$/"
+      ],
+      "matchStrings": [
+        "\\n  gcp:\\n    version:\\s*(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "kubernetes-sigs/cluster-api-provider-gcp",
+      "groupName": "cluster-api-provider-gcp"
+    },
+    {
+      "customType": "regex",
       "description": "Crossplane packages (Functions, upjet family providers) pinned as xpkg.crossplane.io/<org>/<pkg>:<tag>@<digest> in addon crossplane; bump a provider family together (same tag for every member)",
       "managerFilePatterns": [
         "/^addons/crossplane/values\\.yaml$/"

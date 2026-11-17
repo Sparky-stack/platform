@@ -51,6 +51,7 @@ CAPI_VER=$(read_ver '.core.version' 'v1.13.8')
 K3S_VER=$(read_ver '.k3s.version' 'v0.5.0')
 AWS_VER=$(read_ver '.infrastructure.aws.version' 'v2.13.1')
 HZ_VER=$(read_ver '.infrastructure.hetzner.version' 'v1.1.12')
+GCP_VER=$(read_ver '.infrastructure.gcp.version' 'v1.13.1')
 
 fetch_crd() {
   local name="$1" url="$2"
@@ -72,6 +73,8 @@ fetch_crd "k3s-bootstrap-${K3S_VER}" "https://github.com/k3s-io/cluster-api-k3s/
 fetch_crd "k3s-cp-${K3S_VER}" "https://github.com/k3s-io/cluster-api-k3s/releases/download/${K3S_VER}/control-plane-components.yaml"
 fetch_crd "capa-${AWS_VER}" "https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases/download/${AWS_VER}/infrastructure-components.yaml"
 fetch_crd "caph-${HZ_VER}" "https://github.com/syself/cluster-api-provider-hetzner/releases/download/${HZ_VER}/infrastructure-components.yaml"
+# CAPG ships its GKE CRDs (GCPManaged*, bootstrap GKEConfig*) in the same infrastructure-components.yaml.
+fetch_crd "capg-${GCP_VER}" "https://github.com/kubernetes-sigs/cluster-api-provider-gcp/releases/download/${GCP_VER}/infrastructure-components.yaml"
 # Argo Workflows CRDs: the OpenChoreo workflow plane chart installs them from a hook Job (not extractable above).
 # v4.0.8 = argo-workflows appVersion in openchoreo-workflow-plane 1.3.3 (chart dependency argo-workflows 1.0.23).
 AWF_VER=v4.0.8

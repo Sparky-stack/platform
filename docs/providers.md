@@ -1,8 +1,9 @@
 # Cluster API providers
 
 How workload clusters are built: Cluster API (CAPI) with the **k3s** bootstrap + control plane provider on one of three
-infrastructure providers. Docker (CAPD) is the booted local path; AWS (CAPA) and Hetzner (CAPH) are rendered and
-schema-checked only ([#26](https://github.com/koorikla/platform/issues/26)). Design: [architecture.md](architecture.md);
+infrastructure providers, or a managed control plane (GKE via CAPG). Docker (CAPD) is the booted local path; AWS
+(CAPA) and Hetzner (CAPH) are rendered and schema-checked only ([#26](https://github.com/koorikla/platform/issues/26)),
+GKE likewise ([#87](https://github.com/koorikla/platform/issues/87)). Design: [architecture.md](architecture.md);
 names and labels: [conventions.md](conventions.md).
 
 ## What runs where
@@ -10,8 +11,8 @@ names and labels: [conventions.md](conventions.md).
 | Piece | Path | Installs |
 |---|---|---|
 | Operator | `addons/capi-operator` | cluster-api-operator chart 0.30.0 (needs cert-manager, its own addon) |
-| Providers | `addons/capi-providers` | operator CRs: core, k3s bootstrap + control plane, `docker` \| `aws` \| `hetzner` per `installation.yaml` `capi.providers` |
-| Classes | `addons/clusterclasses` | namespace `fleet`, ClusterClasses `k3s-docker` (if CAPD), `k3s-aws`, `k3s-hetzner` (if enabled) + their templates |
+| Providers | `addons/capi-providers` | operator CRs: core, k3s bootstrap + control plane, `docker` \| `aws` \| `hetzner` \| `gcp` per `installation.yaml` `capi.providers` |
+| Classes | `addons/clusterclasses` | namespace `fleet`, ClusterClasses `k3s-docker` (if CAPD), `k3s-aws`, `k3s-hetzner`, `gke-managed` (if enabled) + their templates |
 | Clusters | `charts/cluster` (`templates/capi-*.yaml`) | one topology `Cluster` per fleet file + its node registry config secret |
 | Cloud CCMs | `addons/aws-ccm`, `addons/hcloud-ccm` | AWS / Hetzner cloud-controller-manager on workload clusters of that provider |
 
@@ -24,6 +25,7 @@ names and labels: [conventions.md](conventions.md).
 | CAPD | v1.13.8 | - | v1beta2 | `infrastructure.cluster.x-k8s.io/v1beta2` DockerClusterTemplate, DockerMachineTemplate |
 | CAPA | v2.13.1 | 1.13.4 | v1beta2 | `infrastructure.cluster.x-k8s.io/v1beta2` AWSClusterTemplate, AWSMachineTemplate |
 | CAPH | v1.1.12 | 1.13.4 | v1beta1 | `infrastructure.cluster.x-k8s.io/v1beta1` HetznerClusterTemplate, HCloudMachineTemplate |
+| CAPG | v1.13.1 | 1.13.8 | v1beta1 | `infrastructure.cluster.x-k8s.io/v1beta1` GCPManagedClusterTemplate, GCPManagedControlPlaneTemplate, GCPManagedMachinePoolTemplate; `bootstrap.cluster.x-k8s.io/v1beta1` GKEConfigTemplate |
 | k3s (workload) | v1.35.10+k3s1 | | | Kubernetes 1.35: CAPI 1.13 supports workload 1.30-1.37, OpenChoreo 1.3.3 needs >= 1.32 |
 | kindest/node (CAPD node OS) | v1.35.8 | | | only the OS; k3s is installed at boot |
 
@@ -39,6 +41,8 @@ cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line eve
 - `ClusterResourceSet` (used for the OpenChoreo agent identity) is **GA in 1.13**: the controller always runs and the
   gate no longer exists. Do not list it: an unknown gate in `--feature-gates` makes the manager exit at startup.
 - CAPA has its own gates (EKS, MachinePool, ...) and CAPH has no `--feature-gates` flag; neither gets ClusterTopology.
+- CAPG: `GKE` (the GCPManaged* controllers, default off) and `MachinePool` (GKE node pools) on its own manager; while
+  `gcp` is enabled core's `MachinePool` gate (default on in 1.13) is listed explicitly too.
 
 ## Adding a cluster
 
@@ -58,7 +62,7 @@ aws/hetzner (see "Control plane size and rollouts").
 | `controlPlane.replicas` | k3s servers = embedded etcd voters: odd (1, 3, 5); >= 3 for production on aws/hetzner |
 | `controlPlane.machineType` | variable `controlPlaneMachineType` (aws, hetzner; ignored on docker) |
 | `workers[]` `{name, replicas, machineType, failureDomain}` | machineDeployments of class `default-worker`; `machineType` -> per-MD override of `workerMachineType` |
-| `region` | label; variable `region` (aws, hetzner) |
+| `region` | label; variable `region` (aws, hetzner, gcp-gke) |
 | `providerSpec.*` | ClusterClass variables as-is, last (can override generated ones) |
 | `secrets.nodeRegistryAuth.enabled` (installation) | variable `registryAuth` + `ExternalSecret/<name>-registries` |
 | `openchoreo.dataPlane` | ClusterDataPlane + Environments ([openchoreo.md](openchoreo.md#adding-a-data-plane)) |
@@ -86,6 +90,14 @@ ClusterClass variables:
 | | `sshKey` | `""` | name of an SSH key in the Hetzner project |
 | | `image` | ubuntu-24.04 | |
 | | `controlPlaneMachineType`, `workerMachineType` | cpx31 | |
+| gke-managed | `project` | (required) | GCP project id (`providerSpec.project`) |
+| | `region` | (required) | regional GKE cluster |
+| | `network` | `""` | VPC name; `""` = the cluster name (CAPG creates it) |
+| | `releaseChannel` | regular | rapid, regular, stable, extended |
+| | `workerMachineType` | e2-standard-4 | per pool from `workers[].machineType` |
+| | `workerNodeLocations` | `[]` | per pool from `workers[].failureDomain` (one zone); `[]` = GKE's default zones |
+
+The `all` row above means every k3s class: `gke-managed` has none of `registryAuth`, `registryCA`, `cni`.
 
 Removing the file deletes the cluster (Argo CD prune -> CAPI deletes machines and cloud resources).
 
@@ -255,6 +267,48 @@ runs with `networking.enabled: false` (no route controller; the overlay CNI does
 CSI is not included (hcloud-csi would be another workload addon with `providers: [hetzner]`, reading the same
 `kube-system/hcloud` secret).
 
+## GKE (CAPG) - rendered only
+
+Managed control plane: `provider: gcp-gke` -> ClusterClass `gke-managed` (`addons/clusterclasses`, CAPG v1.13.1).
+GCPManagedControlPlane is the GKE cluster (regional, version = `topology.version`, release channel, VPC-native,
+GKE Workload Identity pool `<project>.svc.id.goog`), GCPManagedCluster its VPC, and every fleet file worker a GKE node
+pool (MachinePool with GCPManagedMachinePool + an empty GKEConfig; autoscaler off, size = `replicas` per zone,
+auto-repair/upgrade, Shielded VM). No k3s and no cloud-controller-manager addon: Google runs both. Example:
+`installations/gcp-example`.
+
+Fleet file differences (render-time guards in `charts/cluster`, `tests/gke_test.yaml`):
+- `kubernetesVersion` is a GKE version `vX.Y.Z` (CAPG drops any `-gke.N` suffix; GKE picks the build in the channel).
+- `controlPlane` must be absent (`replicas` / `machineType` fail the render); `workers` needs >= 1 entry.
+- `cni: gke` is the only value. CAPG v1.13.1's API has no `datapathProvider` / network-policy field, so Dataplane V2
+  (GKE's Cilium) cannot be requested and the cilium addon stays off (`addons.platform.koorikla.io/cilium: "false"`).
+  `istio-ambient` layers `values/provider-gcp-gke.yaml` (Istio's `gke` platform profile).
+- `providerSpec.project` is required; `network`, `releaseChannel` optional.
+- No node registry config: CAPG v1.13.1 exposes no node containerd config, so `<name>-registries` is not rendered and
+  nodes pull directly (private images: `imagePullSecrets` or Artifact Registry with the node service account).
+
+Credentials, Workload Identity Federation only (no JSON key anywhere):
+1. A GCP service account for CAPG (roles: Kubernetes Engine Admin, Compute Network Admin, Service Account User on the
+   node service account) that may also mint tokens for itself (`roles/iam.serviceAccountTokenCreator` on itself):
+   CAPG v1.13.1 writes `<name>-kubeconfig` with a 1 h access token from IAM `generateAccessToken` for `client_email`.
+2. A Workload Identity pool + OIDC provider trusting the mgmt cluster's ServiceAccount issuer (upload the issuer's
+   JWKS when it is not publicly reachable), with `roles/iam.workloadIdentityUser` for
+   `principal://iam.googleapis.com/projects/<n>/locations/global/workloadIdentityPools/<pool>/subject/system:serviceaccount:capg-system:capg-manager`.
+3. `installation.yaml`: `capi.providers.gcp: true`, `capi.gcp.workloadIdentityProvider`, `capi.gcp.serviceAccount`.
+   `addons/capi-providers` renders `capg-system/capg-variables` (`GCP_B64ENCODED_CREDENTIALS` = an `external_account`
+   credential config: identifiers + token path, no key material) and patches a projected ServiceAccount token
+   (audience = the provider) into `capg-controller-manager`.
+
+Argo CD reaches GKE clusters with `execProviderConfig` `argocd-k8s-auth gcp` (server + CA from `<name>-kubeconfig`, no
+token or client cert copied). The Argo CD application controller and server then need Google ADC: GKE Workload
+Identity when mgmt is GKE, otherwise a WIF credential config like CAPG's; that identity needs a GKE role (e.g.
+Kubernetes Engine Developer) in the workload project.
+
+Validated offline: CAPG CRD schemas (kubeconform -strict on the rendered class, templates, provider CRs and the
+example), a ClusterClass patch simulation of `gke-managed` for the example cluster, helm-unittest. Needs a live
+account ([#87](https://github.com/koorikla/platform/issues/87)): the operator's handling of the CAPG image/feature
+gates/patch, WIF token exchange incl. the `client_email` self-impersonation, node pool sizing per zone, Argo CD
+`argocd-k8s-auth gcp`, ClusterResourceSet delivery through the token kubeconfig, Istio's GKE profile.
+
 ## Catalog entries (charts/platform/values.yaml)
 
 ```yaml
@@ -270,4 +324,5 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
   diff (or ignoreDifferences) for the `cluster-*` and `clusterclasses` Applications.
 
 Open checks: CAPD [#56](https://github.com/koorikla/platform/issues/56); AWS and Hetzner
-[#26](https://github.com/koorikla/platform/issues/26) (`grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm charts/cluster installations/*-example`).
+[#26](https://github.com/koorikla/platform/issues/26); GKE [#87](https://github.com/koorikla/platform/issues/87)
+(`grep -rn VERIFY addons/capi-* addons/clusterclasses addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).

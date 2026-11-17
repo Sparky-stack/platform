@@ -54,9 +54,9 @@ tuning (`aws-zone-type`, `cloudflare-proxied`, an IRSA role ARN, `policy: sync`)
 ## Choosing the DNS provider (independent of the infra provider)
 
 The addon ApplicationSet layers `values/provider-<provider>.yaml` from the cluster label
-`platform.koorikla.io/provider`, the **CAPI infrastructure provider** (`docker | aws | hetzner`). Where DNS lives is a
-different fact: a Hetzner installation can use Route 53, an AWS one Cloudflare. Keying DNS off the infra provider would
-force every such combination into per-installation copies of provider settings.
+`platform.koorikla.io/provider`, the **CAPI infrastructure provider** (`docker | aws | hetzner | gcp-gke`). Where DNS
+lives is a different fact: a Hetzner installation can use Route 53, an AWS one Cloudflare. Keying DNS off the infra
+provider would force every such combination into per-installation copies of provider settings.
 
 So the catalog gained a generic field, `installationValueFiles`: value files chosen by a template over installation
 values, rendered once per installation by `charts/platform` and layered after the role/provider/cni overlays, before the
