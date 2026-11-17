@@ -1,0 +1,4 @@
+# provider byo: no ClusterResourceSet. cluster-agent-tls arrives by PushSecret (charts/cluster), cluster-gateway-ca is
+# rebuilt here from the pushed Secret (templates/byo-gateway-ca.yaml).
+byoDelivery:
+  enabled: true

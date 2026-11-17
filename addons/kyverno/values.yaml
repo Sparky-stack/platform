@@ -9,6 +9,13 @@
 # last-applied annotation limit. Chart hooks: pre/post-install/upgrade jobs run as Argo PreSync/PostSync hooks on every
 # sync; the chart's `helm test` pods have no toggle; Argo CD ignores them.
 
+# provider byo (values/provider-byo.yaml): ConfigMap platform-image-verification rebuilt from the Secret mgmt pushes into
+# platform-delivery, instead of the ClusterResourceSet (templates/byo-image-verification.yaml).
+byoDelivery:
+  enabled: false
+  store: delivery                           # ClusterSecretStore of addon secret-stores (delivery.*)
+  configMap: platform-image-verification    # == charts/cluster imageVerification.configMap
+
 kyverno:
   # Images: chart default registries (reg.kyverno.io, ghcr.io), tag@digest pinned by multi-arch index digest
   # (docs/conventions.md invariant 9; hack/tests/test_image_pins.sh). Every image of the chart, hooks and the helm test

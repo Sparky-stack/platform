@@ -1,0 +1,3 @@
+# provider byo: ConfigMap platform-image-verification from the Secret mgmt pushes (templates/byo-image-verification.yaml).
+byoDelivery:
+  enabled: true

@@ -1,0 +1,20 @@
+# Bring-your-own cluster (opt-in): an existing cluster registered without Cluster API (docs/providers.md "Bring your own
+# cluster (byo)"). Locally a plain k3d cluster on docker network kind:
+#   k3d cluster create byo1 --agents 0 --no-lb --network kind --image <bootstrap/k3d-mgmt.yaml image> \
+#     --k3s-arg '--disable=traefik@server:*'
+#   task secrets        # seeds platform store key byo-byo1 from `k3d kubeconfig get byo1` (API on the node's kind IP)
+# Off by default (lean local profile): rename to byo1.yaml.disabled before deleting the k3d cluster.
+name: byo1
+provider: byo
+region: local
+environment: development
+cni: flannel                # what the cluster runs (k3s default); a fact for labels, never installed by the platform
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: byo1.apps.localhost
+    environments: [byo]     # an environment appears in exactly one cluster file
+addonsRevision: HEAD
+addons:
+  istio-ambient: false      # host RAM; no mesh.group on byo yet (#174)
+  telemetry: false

@@ -1,0 +1,20 @@
+# Same shape as installations/local/clusters/byo1.yaml + the installation keys the byo templates read.
+installation: { name: local }
+capi:
+  providers: { docker: true, aws: false, hetzner: false }
+registry:
+  type: harbor
+  host: harbor.example.test:9443
+name: byo1
+provider: byo
+region: local
+environment: development
+cni: flannel
+openchoreo:
+  dataPlane:
+    enabled: true
+    gatewayHost: byo1.apps.localhost
+    environments: [byo]
+addonsRevision: HEAD
+addons:
+  istio-ambient: false

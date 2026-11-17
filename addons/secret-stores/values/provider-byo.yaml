@@ -1,0 +1,4 @@
+# provider byo: ClusterSecretStore `delivery` (values.yaml delivery) for the public material mgmt pushes into
+# namespace platform-delivery (charts/cluster PushSecrets).
+delivery:
+  enabled: true

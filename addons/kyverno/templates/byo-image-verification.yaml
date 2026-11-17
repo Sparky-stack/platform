@@ -1,0 +1,33 @@
+{{- /*
+provider byo only (values/provider-byo.yaml; docs/providers.md "Bring your own cluster (byo)"): ConfigMap
+platform-image-verification (cosign.pub + Harbor ca.crt, public), which a ClusterResourceSet delivers on CAPI clusters.
+mgmt pushes both keys as Secret platform-delivery/platform-image-verification (charts/cluster PushSecret
+<cluster>-push-image-verification; PushSecret writes only Secrets); this ExternalSecret rebuilds the ConfigMap that
+values/role-workload.yaml mounts and addon kyverno-policies reads, through ClusterSecretStore `delivery` (addon
+secret-stores, name-scoped). The pull secret platform-registry is pushed as is. Only with registry.type harbor (like
+charts/cluster imageVerification). Needs external-secrets' generic targets (addon external-secrets values/provider-byo.yaml).
+*/ -}}
+{{- $reg := .Values.registry | default dict }}
+{{- if and .Values.byoDelivery.enabled (eq (toString $reg.type) "harbor") $reg.host }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.byoDelivery.configMap }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 10m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.byoDelivery.store }}
+  target:
+    name: {{ .Values.byoDelivery.configMap }}
+    creationPolicy: Owner
+    manifest:
+      apiVersion: v1
+      kind: ConfigMap
+  data:
+    - secretKey: cosign.pub
+      remoteRef: { key: {{ .Values.byoDelivery.configMap }}, property: cosign.pub }
+    - secretKey: ca.crt
+      remoteRef: { key: {{ .Values.byoDelivery.configMap }}, property: ca.crt }
+{{- end }}

@@ -75,7 +75,7 @@ addons:
   reloader:                 { namespace: reloader,                 roles: [mgmt, workload], default: true }   # workload: cluster-agent on cert/CA renewal; mgmt: Backstage on config change
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
-  coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker] }
+  coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker, byo] }   # byo: off unless the installation turns it on
   # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. The DNS provider is installation.yaml
   # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and
   # <installation>-<cluster> (TXT owner) become helm parameters.
