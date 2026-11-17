@@ -10,7 +10,7 @@ Use this runbook to inspect certificate expiry, rotate cert-manager CAs or leaf 
 
 - `Certificate` or `ExternalSecret` shows `READY=False` (`SecretSyncedError`, `Issuing`, or expired `notAfter`).
 - `cluster-agent-dataplane` logs TLS handshake failures after `<cluster>-agent-tls` or `cluster-gateway-ca` renewed.
-- Argo CD fails repository fetches (`platform-repo-creds`), in-cluster builds fail at checkout with `no GitHub token for <repo>` or `promotion-gate` fails GitHub App token minting (both `promotion-gate-github`: App key, permissions, or the App not installed on the repository; `kubectl -n workflows-default describe externalsecret <run>-git`).
+- Argo CD fails repository fetches (`platform-repo-creds`), in-cluster builds fail at checkout with `no GitHub token for <repo>` or `promotion-gate` fails GitHub App token minting (both `promotion-gate-github`: App key, permissions, or the App not installed on the repository; `kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`).
 - Workload mesh pods or `cert-manager-istio-csr` fail to sign SPIFFE certificates against `Issuer/openbao-mesh`.
 - Falco Critical escalations return `401 Unauthorized` at `argo-events` after `falco-webhook` changed.
 

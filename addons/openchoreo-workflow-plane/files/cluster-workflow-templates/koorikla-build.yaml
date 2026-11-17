@@ -262,8 +262,10 @@ spec:
                 while [ ! -s "$dir/password" ] && [ "$waited" -lt "${GIT_SECRET_WAIT:-120}" ]; do sleep 5; waited=$((waited + 5)); done
                 [ -s "$dir/password" ] || die "no GitHub token for $1: Secret ${GIT_SECRET:-<run>-git} was not created." \
                   "The platform GitHub App must be installed on this repository with Contents: Read and write" \
-                  "(GitHub: Settings > Applications > the App > Configure > Repository access). GitHub's answer:" \
-                  "kubectl -n ${RUN_NAMESPACE:-workflows-<org ns>} describe externalsecret ${GIT_SECRET:-<run>-git}"
+                  "(GitHub: Settings > Applications > the App > Configure > Repository access). Status:" \
+                  "kubectl -n ${RUN_NAMESPACE:-workflows-<org ns>} describe externalsecret ${GIT_SECRET:-<run>-git};" \
+                  "GitHub's answer (e.g. 422 not accessible to the installation): kubectl -n external-secrets logs" \
+                  "deploy/external-secrets | grep ${GIT_SECRET:-<run>-git}"
                 printf '#!/bin/sh\n[ "$1" = get ] || exit 0\necho "username=$(cat %s/username)"\necho "password=$(cat %s/password)"\n' \
                   "$dir" "$dir" > "$helper"
                 chmod 0700 "$helper"

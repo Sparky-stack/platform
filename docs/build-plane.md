@@ -170,8 +170,9 @@ The App's private key reaches only ESO: ExternalSecret `build-github-app` (templ
 through the scoped store `workflows`; no pod mounts it. OpenChoreo's workflow-plane agent applies the per-run
 generators, so it gets a Role for `githubaccesstokens` in the run namespace only. Requirements: the App has
 Contents: Read and write and is installed on the repository. If it is not, GitHub refuses the token, the Secret never
-appears, and checkout fails with `no GitHub token for <repo>: Secret <run>-git was not created ...`; GitHub's answer is
-in `kubectl -n workflows-<org ns> describe externalsecret <run>-git`. Fix: GitHub → Settings → Applications → the App →
+appears, and checkout fails with `no GitHub token for <repo>: Secret <run>-git was not created ...`. The ExternalSecret
+only reports `could not get secret data from provider`; GitHub's answer (`422 ... not accessible to the parent
+installation`) is in the ESO controller log (`kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`). Fix: GitHub → Settings → Applications → the App →
 Configure → Repository access → add the repository.
 
 ### Multi-arch

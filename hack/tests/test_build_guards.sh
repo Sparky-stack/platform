@@ -132,7 +132,8 @@ assert_eq "$([[ "$out" == *REACHED* ]] && echo reached || echo stopped):$([[ -e 
   "stopped:none" "no git token: the run stops, no anonymous clone"
 assert_match "$out" 'no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created' "no git token: says which Secret"
 assert_match "$out" 'GitHub App must be installed on this repository' "no git token: says what to fix"
-assert_match "$out" 'kubectl -n workflows-default describe externalsecret run-1-git' "no git token: points at GitHub's answer"
+assert_match "$out" 'kubectl -n workflows-default describe externalsecret run-1-git' "no git token: points at the ExternalSecret"
+assert_match "$out" 'logs deploy/external-secrets \| grep run-1-git' "no git token: points at GitHub's answer (ESO log)"
 
 # --- gitops: only a real Workload under deploy/openchoreo/ is rewritten -------------------------------------------
 GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
