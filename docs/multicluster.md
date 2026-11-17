@@ -335,7 +335,7 @@ the mesh CA holds one KV v2 mount per tenant (tenant = OpenChoreo project):
 | Where | What | Rendered by |
 |---|---|---|
 | mgmt `openbao-tenants` | `Secret <project>-openbao-tenant` (the project's cell namespaces, computed like OpenChoreo 1.3.3 names them: `dp-<org>-<project>-<env>-<sha256[:8]>`), `ServiceAccount <project>-writer` | charts/tenant |
-| OpenBao | `kv-tenant-<project>`; entity `tenant-<project>` (metadata `tenant`); per member `auth/tenants-<cluster>` (jwt, the member's JWKS like `auth/mesh-<cluster>`) with role `<project>` = exactly the `openbao-tenant` ServiceAccount of those namespaces, audience `openbao-tenant-secrets`, policy `tenant-read` | addon openbao, CronJob `tenant-reconcile` (`files/tenant-reconcile.sh`, every 5 min) |
+| OpenBao | `kv-tenant-<project>`; entity `tenant-<project>` (metadata `tenant`, the writer's alias); per member `auth/tenants-<cluster>` (jwt, the member's JWKS like `auth/mesh-<cluster>`) with role `<project>` = exactly the `openbao-tenant` ServiceAccount of those namespaces, audience `openbao-tenant-secrets`, policy `tenant-read`; one entity `tenant-<project>.<cluster>.<namespace>` (metadata `tenant`) per namespace, because OpenBao gives an entity only one alias per auth mount | addon openbao, CronJob `tenant-reconcile` (`files/tenant-reconcile.sh`, every 5 min) |
 | member, each cell namespace | `ServiceAccount` + `SecretStore openbao-tenant`: vault provider, `path: kv-tenant-<project>`, JWT login with a 10-minute projected token, CA from `istio-system/openbao-ca` | addon secret-stores, Kyverno `GeneratingPolicy platform-tenant-secret-store` (synchronised) |
 | member | `ClusterSecretStore default`: conditions exclude namespaces labelled `openchoreo.dev/project`; VAPs: tenant `ExternalSecret`/`PushSecret`s may reference only `SecretStore openbao-tenant` (no `ClusterSecretStore`, `ClusterGenerator`, other store or label selector), `SecretStore`s there are written only by Kyverno | addon secret-stores |
 | OpenChoreo | component types render `SecretReference`s as `ExternalSecret`s on `SecretStore openbao-tenant`: developers never name a store; `remoteRef.key` is the key inside their own mount | addon openchoreo-platform |
@@ -344,8 +344,8 @@ Isolation is enforced by OpenBao, not by naming: the policies come from git (`fi
 [policy reconciler](#policies-from-git-the-policy-reconciler); the tenant reconcile writes none) and are templated on
 the caller's entity, so a token can only ever reach `kv-tenant-<its entity's tenant>`; a login
 whose alias the reconcile did not bind resolves to an entity without metadata and reaches nothing. A namespace two
-descriptors claim is bound to neither. A tenant removed from git loses its roles and entity at once; its mount (the
-data) stays. Tests: `hack/tests/test_openbao_tenant_reconcile.sh` (fake CLI, `task test`) and the tenant section of
+descriptors claim is bound to neither. A tenant removed from git loses its roles and entities at once, a namespace that
+leaves a tenant its entity; the mount (the data) stays. Tests: `hack/tests/test_openbao_tenant_reconcile.sh` (fake CLI, `task test`) and the tenant section of
 `task test:openbao` (real OpenBao: tenant A's token is denied on tenant B's mount, writers and the reconcile identity
 confined), `tests/vap` of addon secret-stores (kyverno CLI).
 
@@ -354,8 +354,9 @@ confined), `tests/vap` of addon secret-stores (kyverno CLI).
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
-# line 1: a 10-minute token of the writer ServiceAccount; the rest: the value (here from a local file, never echoed)
-{ $K -n openbao-tenants create token demo-writer --audience openbao --duration 10m; cat ./db-password; } \
+# line 1: a 10-minute token of the writer ServiceAccount (`create token` prints no newline when piped: the `echo` ends
+# the line); the rest: the value (here from a local file, never echoed, without a trailing newline)
+{ $K -n openbao-tenants create token demo-writer --audience openbao --duration 10m; echo; tr -d '\n' < ./db-password; } \
   | $K -n openbao exec -i openbao-0 -- sh -c 'read -r jwt
       BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=tenant-writer jwt="$jwt") bao kv put kv-tenant-demo/db password=-'
 ```
