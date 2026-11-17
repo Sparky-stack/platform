@@ -50,6 +50,17 @@ falcoEscalation:
   remoteKey: falco-webhook     # platform store key: url (base, e.g. http://events.<host>:8080/falco), token
   namespace: falco             # == addon falco's namespace (charts/platform catalog)
 
+# Kyverno verification of Harbor-built images on this cluster (templates/image-verification-crs.yaml): built on mgmt,
+# applied by a ClusterResourceSet into Kyverno's namespace, read by addon kyverno-policies (platformKey.cluster) and
+# addon kyverno (values/role-workload.yaml: Harbor CA). registry.type harbor only; skipped when the cluster file sets
+# addons.kyverno: false. Only PUBLIC material and a pull-only robot: never the private signing key.
+imageVerification:
+  enabled: true
+  namespace: kyverno                       # == addon kyverno's namespace (charts/platform catalog)
+  configMap: platform-image-verification   # cosign.pub (platform signing key) + ca.crt (Harbor CA)
+  pullSecret: platform-registry            # kubernetes.io/dockerconfigjson: nodeRegistry.robot for registry.host
+  cosignKey: cosign-platform               # platform store key; only property cosign.pub is read
+
 secrets:
   backend: kubernetes
   workloadKubernetes:

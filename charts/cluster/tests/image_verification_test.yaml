@@ -1,0 +1,67 @@
+suite: image verification material for Kyverno (cosign.pub + Harbor CA + pull robot -> ClusterResourceSet, #15)
+templates:
+  - templates/image-verification-crs.yaml
+  - templates/capi-cluster.yaml     # defines capi.registry.harbor
+values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+tests:
+  - it: reads only PUBLIC key material, the pull-only robot and the public CA (never cosign.key / cosign.password)
+    template: templates/image-verification-crs.yaml
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: metadata.name, value: dev1-image-verification }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.template.type, value: addons.cluster.x-k8s.io/resource-set }
+      - notExists: { path: spec.dataFrom }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: cosignPub, remoteRef: { key: cosign-platform, property: cosign.pub } }
+            - { secretKey: nodesSecret, remoteRef: { key: harbor, property: nodes-secret } }
+            - secretKey: registryCA
+              remoteRef: { key: harbor-ca-bundle, property: ca.crt }
+              sourceRef: { storeRef: { kind: ClusterSecretStore, name: mgmt-harbor } }
+      - notMatchRegex: { path: 'spec.target.template.data["image-verification.yaml"]', pattern: 'cosign\.(key|password)' }
+
+  - it: payload = ConfigMap (cosign.pub, ca.crt) + dockerconfigjson pull Secret in Kyverno's namespace
+    template: templates/image-verification-crs.yaml
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - matchRegex:
+          path: 'spec.target.template.data["image-verification.yaml"]'
+          pattern: 'kind: ConfigMap\n\s*metadata:\n\s*name: platform-image-verification\n\s*namespace: kyverno\n\s*data:\n\s*cosign.pub: \{\{ \.cosignPub \| toJson \}\}\n\s*ca.crt: \{\{ \.registryCA \| toJson \}\}'
+      - matchRegex:
+          path: 'spec.target.template.data["image-verification.yaml"]'
+          pattern: 'name: platform-registry\n\s*namespace: kyverno\n\s*type: kubernetes.io/dockerconfigjson'
+      - matchRegex:
+          path: 'spec.target.template.data["image-verification.yaml"]'
+          pattern: '\.dockerconfigjson: \{\{ dict "auths" \(dict "harbor\.openchoreo\.localhost:9443" \(dict "username" "robot\$nodes" "password" \.nodesSecret "auth" \(printf "%s:%s" "robot\$nodes" \.nodesSecret \| b64enc\)\)\) \| toJson \| b64enc \}\}'
+
+  - it: a ClusterResourceSet (Reconcile) applies it to exactly this cluster
+    template: templates/image-verification-crs.yaml
+    documentSelector: { path: kind, value: ClusterResourceSet }
+    asserts:
+      - equal: { path: spec.strategy, value: Reconcile }
+      - equal: { path: spec.clusterSelector.matchLabels, value: { platform.koorikla.io/name: dev1 } }
+      - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-image-verification }] }
+
+  - it: nothing without Harbor (registry.type external)
+    template: templates/image-verification-crs.yaml
+    set:
+      registry.type: external
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: nothing when the cluster opts out of addon kyverno
+    template: templates/image-verification-crs.yaml
+    set:
+      addons: { kyverno: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: nothing when switched off
+    template: templates/image-verification-crs.yaml
+    set:
+      imageVerification.enabled: false
+    asserts:
+      - hasDocuments: { count: 0 }

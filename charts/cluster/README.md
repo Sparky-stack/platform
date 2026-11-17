@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, and optional multicluster mesh trust.
+Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
 
 ## Where it runs
 

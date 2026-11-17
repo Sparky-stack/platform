@@ -1,0 +1,94 @@
+{{- /*
+Kyverno image verification for Harbor-built images (docs/supply-chain.md "Wiring the key", #15): everything Kyverno on
+this workload cluster needs to verify <registry.host>/<registry.appsProject>/ images signed by the workflow plane,
+delivered like the agent identity: an ESO-templated ClusterResourceSet payload, built on mgmt, applied by CAPI to
+exactly this Cluster (strategy Reconcile: a rotated key, CA or robot secret is re-applied).
+  ExternalSecret <name>-image-verification (fleet) reads
+    cosign.pub of store key imageVerification.cosignKey   (property select: the private key and its password are
+                                                           never read, so they cannot reach the payload)
+    nodes-secret of store key nodeRegistry.secretKey      (pull-only robot, the one the nodes' registries.yaml uses)
+    ca.crt of harbor-ca-bundle via store mgmt-harbor      (public CA cert, name-scoped store)
+  and templates, in namespace imageVerification.namespace:
+    ConfigMap <configMap>   cosign.pub, ca.crt            public; addon kyverno-policies reads cosign.pub at admission
+                                                          (resource.Get), addon kyverno trusts ca.crt (SSL_CERT_DIR)
+    Secret <pullSecret>     .dockerconfigjson             credentials.secrets of the Harbor image policies
+Why not the local seed path (secrets.workloadSeed): it copies whole store keys, i.e. the encrypted private key + its
+password. Why a ConfigMap and not the policy: the key is per installation (locally a fresh pair per mgmt bootstrap),
+and Kyverno 1.20 takes a key inline, from KMS or from a CEL expression - not from a Secret reference.
+*/ -}}
+{{- $iv := .Values.imageVerification }}
+{{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
+{{- if and $iv.enabled $harbor (ne (toString (dig "kyverno" "" (.Values.addons | default dict))) "false") }}
+{{- $name := required "name is required" .Values.name }}
+{{- $nr := .Values.nodeRegistry }}
+{{- $host := .Values.registry.host }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-image-verification
+  namespace: fleet
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: {{ $name }}-image-verification
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: addons.cluster.x-k8s.io/resource-set
+      data:   # gitleaks:allow: ESO template of the CRS payload Secret; values come from the store, none in git
+        image-verification.yaml: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{ $iv.namespace }}
+          ---
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: {{ $iv.configMap }}
+            namespace: {{ $iv.namespace }}
+          data:
+            cosign.pub: {{`{{ .cosignPub | toJson }}`}}
+            ca.crt: {{`{{ .registryCA | toJson }}`}}
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: {{ $iv.pullSecret }}
+            namespace: {{ $iv.namespace }}
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: {{ printf "{{ dict \"auths\" (dict %s (dict \"username\" %s \"password\" .nodesSecret \"auth\" (printf \"%%s:%%s\" %s .nodesSecret | b64enc))) | toJson | b64enc }}" (quote $host) (quote $nr.robot) (quote $nr.robot) }}
+  data:
+    - secretKey: cosignPub
+      remoteRef: { key: {{ $iv.cosignKey }}, property: cosign.pub }
+    - secretKey: nodesSecret
+      remoteRef: { key: {{ $nr.secretKey }}, property: {{ $nr.secretProperty }} }
+    - secretKey: registryCA
+      remoteRef: { key: {{ $nr.caSecret }}, property: ca.crt }
+      sourceRef:
+        storeRef:
+          kind: ClusterSecretStore
+          name: {{ $nr.caStore }}
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: {{ $name }}-image-verification
+  namespace: fleet
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      platform.koorikla.io/name: {{ $name }}
+  resources:
+    - kind: Secret
+      name: {{ $name }}-image-verification
+{{- end }}
