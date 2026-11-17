@@ -2,7 +2,7 @@
 # Installation "gcp-example": reference only - renders and schema-checks, never booted (no GCP account).
 # mgmt is any conformant cluster (e.g. a GKE cluster) whose ServiceAccount issuer the GCP Workload Identity pool trusts;
 # workload clusters are GKE clusters created by CAPG (provider gcp-gke, ClusterClass gke-managed). Cluster facts live
-# in clusters/<name>.yaml only. Setup and live-verification steps: docs/providers.md "GKE (CAPG) - rendered only".
+# in clusters/<name>.yaml only. Setup and live-verification steps: docs/providers.md "GKE (CAPG) - untested example".
 installation:
   name: gcp-example
   repoURL: https://github.com/koorikla/platform.git

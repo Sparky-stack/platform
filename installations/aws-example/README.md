@@ -8,7 +8,7 @@ What it shows: CAPA k3s clusters (ClusterClass `k3s-aws`) on EC2, mgmt on any co
 controller manager, load balancer, node image); the developer-facing platform is the same
 ([portability.md](../../docs/portability.md)).
 
-- Setup and open checks: [providers.md](../../docs/providers.md#aws-capa---rendered-only)
+- Setup and open checks: [providers.md](../../docs/providers.md#aws-capa---untested-example)
 - Cluster files: `installations/aws-example/clusters/`
 - Bring an existing cluster instead of creating one: `provider: byo`
   ([providers.md](../../docs/providers.md#bring-your-own-cluster-byo))

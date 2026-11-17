@@ -1,10 +1,13 @@
 # Cluster API providers
 
 How workload clusters are built: Cluster API (CAPI) with the **k3s** bootstrap + control plane provider on one of three
-infrastructure providers, or a managed control plane (GKE via CAPG). Docker (CAPD) is the booted local path; AWS
-(CAPA) and Hetzner (CAPH) are rendered and schema-checked only ([#26](https://github.com/koorikla/platform/issues/26)),
-GKE likewise ([#87](https://github.com/koorikla/platform/issues/87)). Design: [architecture.md](architecture.md);
-names and labels: [conventions.md](conventions.md).
+infrastructure providers, or a managed control plane (GKE via CAPG), or not built at all: `provider: byo` registers an
+existing cluster ([below](#bring-your-own-cluster-byo)). This repo is a local lab: Docker (CAPD) and byo (a plain k3d
+cluster) are the booted paths. AWS (CAPA), Hetzner (CAPH) and GKE (CAPG) are **untested examples**, rendered and
+schema-checked only ([#26](https://github.com/koorikla/platform/issues/26),
+[#87](https://github.com/koorikla/platform/issues/87)). What differs per provider and what never does:
+[portability.md](portability.md). Design: [architecture.md](architecture.md); names and labels:
+[conventions.md](conventions.md).
 
 ## What runs where
 
@@ -48,7 +51,8 @@ cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line eve
 
 One file: `installations/<inst>/clusters/<name>.yaml` (schema and defaults: `charts/cluster/values.yaml`). The `fleet`
 ApplicationSet renders `charts/cluster` with `installation.yaml` + this file. The chart fails rendering (so Argo CD
-shows the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider`, a provider
+shows the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersion`, unknown `provider` (`docker` |
+`aws` | `hetzner` | `gcp-gke` | `byo`), a provider
 that the installation does not enable, a cloud provider without `region`, unknown `environment` (`development` | `staging` | `production`), non-boolean `addons.*`, workers without
 `name`, an even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
 aws/hetzner (see "Control plane size and rollouts").
@@ -212,7 +216,11 @@ random host port on `0.0.0.0`, which `task kubeconfig` uses on hosts that cannot
 - The endpoint is recorded once. If Docker re-addresses the LB container (e.g. the network is recreated after a host
   reboot), the stored endpoint goes stale; recreate the cluster.
 
-## AWS (CAPA) - rendered only
+## AWS (CAPA) - untested example
+
+> **Untested example.** Never booted in this lab (Docker + k3s/CAPD only); rendered and schema-checked in `task test`.
+> Kept as a reference for real infrastructure; the developer-facing platform does not depend on it
+> ([portability.md](portability.md)).
 
 Prerequisites (once per account):
 1. `clusterawsadm bootstrap iam create-cloudformation-stack` (creates the instance profiles
@@ -241,7 +249,11 @@ label value; the chart default `""` never matches on k3s).
 CSI is not included (aws-ebs-csi-driver would be another workload addon with `providers: [aws]`; the node instance
 profile needs the EBS policy).
 
-## Hetzner Cloud (CAPH) - rendered only
+## Hetzner Cloud (CAPH) - untested example
+
+> **Untested example.** Never booted in this lab (Docker + k3s/CAPD only); rendered and schema-checked in `task test`.
+> Kept as a reference for real infrastructure; the developer-facing platform does not depend on it
+> ([portability.md](portability.md)).
 
 Prerequisites:
 1. Hetzner Cloud project + API token (read/write) as key `capi-hetzner`, property `hcloud`, in the `platform` store
@@ -267,7 +279,11 @@ runs with `networking.enabled: false` (no route controller; the overlay CNI does
 CSI is not included (hcloud-csi would be another workload addon with `providers: [hetzner]`, reading the same
 `kube-system/hcloud` secret).
 
-## GKE (CAPG) - rendered only
+## GKE (CAPG) - untested example
+
+> **Untested example.** Never booted in this lab (Docker + k3s/CAPD only); rendered and schema-checked in `task test`.
+> Kept as a reference for real infrastructure; the developer-facing platform does not depend on it
+> ([portability.md](portability.md)).
 
 Managed control plane: `provider: gcp-gke` -> ClusterClass `gke-managed` (`addons/clusterclasses`, CAPG v1.13.1).
 GCPManagedControlPlane is the GKE cluster (regional, version = `topology.version`, release channel, VPC-native,
@@ -308,6 +324,68 @@ example), a ClusterClass patch simulation of `gke-managed` for the example clust
 account ([#87](https://github.com/koorikla/platform/issues/87)): the operator's handling of the CAPG image/feature
 gates/patch, WIF token exchange incl. the `client_email` self-impersonation, node pool sizing per zone, Argo CD
 `argocd-k8s-auth gcp`, ClusterResourceSet delivery through the token kubeconfig, Istio's GKE profile.
+
+## Bring your own cluster (byo)
+
+`provider: byo` registers a cluster that already exists - any conformant Kubernetes - with **no CAPI object**. It gets
+the same names, labels and identities as a CAPI cluster ([conventions.md](conventions.md#invariants): name == Argo CD
+cluster secret == `ClusterDataPlane` == `planeID` == agent cert CN), the same addons and the same developer experience.
+Its owner runs the infrastructure layer ([portability.md](portability.md)): nodes, version, CNI, storage, load
+balancer, and node trust for the installation's registry (Harbor-built images: the nodes must trust the registry CA and
+authenticate, e.g. k3s `registries.yaml`).
+
+Fleet file (example: byo1 in `installations/local/clusters/`, opt-in: `byo1.yaml.disabled` by default):
+
+```yaml
+name: byo1
+provider: byo
+environment: development
+cni: flannel          # what the cluster runs: label platform.koorikla.io/cni only; the cilium addon never runs on byo
+openchoreo:
+  dataPlane: { enabled: true, gatewayHost: byo1.apps.localhost, environments: [byo] }
+```
+
+`kubernetesVersion`, `controlPlane`, `workers`, `providerSpec`, `addons.cilium: true` and (for now) `mesh.group`
+([#174](https://github.com/koorikla/platform/issues/174)) fail the render.
+
+Credential: a kubeconfig in the installation's `platform` store, key `byo-<name>`, property `kubeconfig`: client
+certificate or bearer token (no exec plugins), with a server address mgmt's pods can reach. Locally `task secrets`
+seeds it from `BYO_KUBECONFIG_<NAME>` (a file) or, for a k3d cluster of that name on network `kind`, from
+`k3d kubeconfig get` with the API server rewritten to the node's IP on `kind` (as CAPD's kubeconfigs). It grants what
+the Argo CD cluster secret needs anyway; nothing more is added.
+
+What `charts/cluster` renders for byo (`templates/byo-access.yaml`):
+
+| Object (mgmt) | Purpose |
+|---|---|
+| `ExternalSecret/<name>-kubeconfig` (ns `fleet`) | the store key as `Secret/<name>-kubeconfig`, key `value`: what CAPI writes for its clusters, so the Argo CD cluster secret, labels and addon ApplicationSets work unchanged |
+| `ClusterSecretStore/byo-<name>` | ESO kubernetes provider on that kubeconfig (`authRef`), usable from `fleet` only |
+| `PushSecret/<name>-push-*` (ns `fleet`) | the ClusterResourceSet replacement, below |
+
+**Why PushSecret.** On CAPI clusters, ClusterResourceSets apply ESO-templated payloads (agent client cert, public CAs,
+derived Falco token, seeded keys) - and a CRS needs a CAPI `Cluster`. A byo cluster gets the same objects pushed by
+ESO on mgmt (push mode, like Argo CD): each payload Secret is templated as a plain Secret in `fleet` and copied whole to
+its namespace on the cluster. CA private keys stay on mgmt (invariant 4): only the objects a CRS would deliver are
+pushed, which `hack/tests/test_byo_delivery.sh` checks for every fleet file against its CAPI twin. PushSecret writes
+only Secrets, so the two CRS ConfigMaps (gateway CA, image verification; public material) are pushed as Secrets into
+namespace `platform-delivery` and rebuilt as ConfigMaps on the cluster by ESO there: addon `secret-stores` adds the
+name-scoped `ClusterSecretStore/delivery`, addons `openchoreo-data-plane` and `kyverno` the ExternalSecrets
+(`values/provider-byo.yaml` each). The target namespaces come from their addons; a PushSecret retries until they exist.
+Deregistering (deleting the fleet file) deletes what was pushed (`deletionPolicy: Delete`): remove the fleet file
+**before** the cluster goes away, or the PushSecrets wait on their finalizer.
+
+Locally (RAM: about 1.5 GiB for a k3d server with the workload addons):
+
+```sh
+k3d cluster create byo1 --agents 0 --no-lb --network kind \
+  --image docker.io/rancher/k3s:v1.35.10-k3s1@sha256:8262ca99a558dca0c0437443421986480b2359f9118f2371359f88a41514522f \
+  --k3s-arg '--disable=traefik@server:*'
+task secrets                     # seeds byo-byo1
+# enable installations/local/clusters/byo1.yaml(.disabled), merge: Argo CD registers it and syncs its addons
+```
+
+Harbor-built images additionally need the node's registry config (`--registry-config` with the Harbor CA and the
+`nodes` robot, `--host-alias` for the registry name), which CAPD clusters get from their ClusterClass.
 
 ## Catalog entries (charts/platform/values.yaml)
 

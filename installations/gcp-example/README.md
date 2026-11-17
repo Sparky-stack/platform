@@ -8,7 +8,7 @@ What it shows: GKE clusters created by CAPG (provider `gcp-gke`, ClusterClass `g
 controller manager, load balancer, node image); the developer-facing platform is the same
 ([portability.md](../../docs/portability.md)).
 
-- Setup and open checks: [providers.md](../../docs/providers.md#gke-capg---rendered-only)
+- Setup and open checks: [providers.md](../../docs/providers.md#gke-capg---untested-example)
 - Cluster files: `installations/gcp-example/clusters/`
 - Bring an existing cluster instead of creating one: `provider: byo`
   ([providers.md](../../docs/providers.md#bring-your-own-cluster-byo))

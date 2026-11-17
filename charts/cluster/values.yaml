@@ -6,6 +6,9 @@
 # --- from the fleet file -------------------------------------------------------------------------------------------
 name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
 provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
+                              # byo -> no CAPI object: an existing cluster, kubeconfig from platform store key byo-<name>
+                              #   (templates/byo-access.yaml; no kubernetesVersion/controlPlane/workers/providerSpec;
+                              #   docs/providers.md "Bring your own cluster (byo)")
                               # gcp-gke -> ClusterClass gke-managed (managed GKE control plane via CAPG, needs
                               #   capi.providers.gcp; docs/providers.md "GKE")
 region: local

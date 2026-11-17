@@ -18,6 +18,7 @@ Every store and its identity (ServiceAccount, plus a reader Role on the kubernet
 - `workflowStore.{namespaceRegexes,keys}` and `secrets.workflowStore`: least-privilege `workflows` store for `workflows-*` build and promotion runs.
 - `dnsStore.namespaces` and `secrets.dnsStore`: isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only).
 - `secrets.tenantStores.enabled` + `tenantStores.*` (workload): per-tenant OpenBao `SecretStore/openbao-tenant` in every OpenChoreo cell namespace (Kyverno `GeneratingPolicy`), `ValidatingAdmissionPolicies` that allow tenant namespaces no other store, and `ClusterSecretStore/default` conditions that exclude them ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
+- `delivery.*` (`values/provider-byo.yaml`): `ClusterSecretStore/delivery` on byo clusters, name-scoped to the public material mgmt pushes into `platform-delivery` ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
 - `repoCreds.{auth,remoteKey}`: `token` (PAT) or `githubApp` credentials for Argo CD.
 
 ## Day-2 notes

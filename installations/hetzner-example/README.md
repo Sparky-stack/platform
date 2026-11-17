@@ -8,7 +8,7 @@ What it shows: CAPH k3s clusters (ClusterClass `k3s-hetzner`), mgmt on any confo
 controller manager, load balancer, node image); the developer-facing platform is the same
 ([portability.md](../../docs/portability.md)).
 
-- Setup and open checks: [providers.md](../../docs/providers.md#hetzner-cloud-caph---rendered-only)
+- Setup and open checks: [providers.md](../../docs/providers.md#hetzner-cloud-caph---untested-example)
 - Cluster files: `installations/hetzner-example/clusters/`
 - Bring an existing cluster instead of creating one: `provider: byo`
   ([providers.md](../../docs/providers.md#bring-your-own-cluster-byo))

@@ -13,7 +13,7 @@ Wrapper chart for External Secrets Operator (`2.15.0`). Reconciles `ExternalSecr
 
 - `external-secrets.installCRDs`: `true`.
 - `external-secrets.{image,webhook.image,certController.image}.tag`: `v2.15.0` pinned by multi-arch index digest.
-- `external-secrets.genericTargets.enabled` (`values/role-mgmt.yaml`): `true` on `mgmt` only so ESO can render non-Secret targets such as gateway CA `ConfigMap`s.
+- `external-secrets.genericTargets.enabled` (`values/role-mgmt.yaml`, `values/provider-byo.yaml`): `true` on `mgmt` and on byo clusters only, so ESO can render non-Secret targets such as gateway CA `ConfigMap`s (byo: rebuilt from the Secrets mgmt pushes, [byo](../../docs/providers.md#bring-your-own-cluster-byo)).
 
 ## Day-2 notes
 
