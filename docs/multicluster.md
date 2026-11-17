@@ -354,8 +354,9 @@ confined), `tests/vap` of addon secret-stores (kyverno CLI).
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
-# line 1: a 10-minute token of the writer ServiceAccount; the rest: the value (here from a local file, never echoed)
-{ $K -n openbao-tenants create token demo-writer --audience openbao --duration 10m; cat ./db-password; } \
+# line 1: a 10-minute token of the writer ServiceAccount (`create token` prints no newline when piped: the `echo` ends
+# the line); the rest: the value (here from a local file, never echoed, without a trailing newline)
+{ $K -n openbao-tenants create token demo-writer --audience openbao --duration 10m; echo; tr -d '\n' < ./db-password; } \
   | $K -n openbao exec -i openbao-0 -- sh -c 'read -r jwt
       BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=tenant-writer jwt="$jwt") bao kv put kv-tenant-demo/db password=-'
 ```
