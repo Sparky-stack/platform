@@ -1,0 +1,12 @@
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedDeletingPolicy
+metadata:
+  name: ttl
+  namespace: team-a
+  generation: 1
+spec:
+  schedule: "*/5 * * * *"
+status:
+  conditionStatus:
+    message: ""
+  lastExecutionTime: "2026-11-17T20:20:00Z"

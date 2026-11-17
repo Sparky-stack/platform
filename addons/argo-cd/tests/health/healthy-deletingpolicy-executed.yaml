@@ -1,0 +1,12 @@
+# Status exactly as Kyverno 1.20's cleanup controller writes it after a run (no conditionStatus.ready, ever).
+apiVersion: policies.kyverno.io/v1
+kind: DeletingPolicy
+metadata:
+  name: platform-preview-ttl
+  generation: 1
+spec:
+  schedule: "*/5 * * * *"
+status:
+  conditionStatus:
+    message: ""
+  lastExecutionTime: "2026-11-17T20:20:00Z"

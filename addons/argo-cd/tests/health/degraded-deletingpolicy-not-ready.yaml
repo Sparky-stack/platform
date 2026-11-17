@@ -1,0 +1,11 @@
+apiVersion: policies.kyverno.io/v1
+kind: DeletingPolicy
+metadata:
+  name: not-ready
+  generation: 1
+spec:
+  schedule: "*/5 * * * *"
+status:
+  conditionStatus:
+    ready: false
+    message: policy failed to compile

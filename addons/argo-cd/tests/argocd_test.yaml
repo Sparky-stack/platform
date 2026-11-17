@@ -21,6 +21,16 @@ tests:
           path: data["resource.customizations.health.PersistentVolumeClaim"]
           pattern: 'Pending'
 
+  - it: overrides the built-in Kyverno DeletingPolicy health check (no conditionStatus.ready from Kyverno)
+    template: charts/argo-cd/templates/argocd-configs/argocd-cm.yaml
+    asserts:
+      - matchRegex:
+          path: data["resource.customizations.health.policies.kyverno.io_DeletingPolicy"]
+          pattern: 'lastExecutionTime'
+      - matchRegex:
+          path: data["resource.customizations.health.policies.kyverno.io_NamespacedDeletingPolicy"]
+          pattern: 'lastExecutionTime'
+
   - it: keeps argocd-server Service as ClusterIP and enables server-side diff
     template: charts/argo-cd/templates/argocd-server/service.yaml
     asserts:

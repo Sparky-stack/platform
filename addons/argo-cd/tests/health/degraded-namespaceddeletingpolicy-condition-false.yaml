@@ -1,0 +1,17 @@
+# A failure Kyverno does report (False condition) still degrades the app.
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedDeletingPolicy
+metadata:
+  name: denied
+  namespace: team-a
+  generation: 1
+spec:
+  schedule: "*/5 * * * *"
+status:
+  conditionStatus:
+    message: ""
+    conditions:
+      - type: RBACPermissionsGranted
+        status: "False"
+        reason: Failed
+        message: missing delete on environments
