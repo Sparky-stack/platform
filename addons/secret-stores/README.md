@@ -18,6 +18,7 @@ Every store and its identity (ServiceAccount, plus a reader Role on the kubernet
 - `workflowStore.{namespaceRegexes,keys}` and `secrets.workflowStore`: least-privilege `workflows` store for `workflows-*` build and promotion runs.
 - `dnsStore.namespaces` and `secrets.dnsStore`: isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only).
 - `repoCreds.{auth,remoteKey}`: `token` (PAT) or `githubApp` credentials for Argo CD.
+- `previewToken.*` (with `installation.yaml` `previews.enabled`): pull-request-read installation token of the platform GitHub App for the preview ApplicationSets (`argocd/preview-github-token`).
 
 ## Day-2 notes
 

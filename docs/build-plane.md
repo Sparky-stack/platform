@@ -119,6 +119,10 @@ key `autoBuild.github.key`, default `promotion-gate-github`, through the scoped 
 `contents: read`, re-minted every 30 min (GitHub expires it after 1 h). The pass mounts only that token; the App key
 stays in a Secret that only ESO reads. No PAT.
 
+**PR heads.** With `installation.yaml` `previews.enabled` the same pass also builds the head of every open pull request
+of an opted-in Component (WorkflowRun `<component>-pr<n>-<sha[:12]>`, label `platform.koorikla.io/trigger: preview`,
+`gitops.enabled: false`) for its preview environment: [preview-environments.md](preview-environments.md).
+
 **Least privilege.** ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create`
 WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and
 Argo's task results. Network: the run namespace's default-deny policy (DNS, API server, public 443), no ingress. Webhook

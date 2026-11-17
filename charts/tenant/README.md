@@ -16,6 +16,7 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 - `deploymentPipeline.{name,environments}`: environments (`development`, `staging`, `production`) provisioned via `ProjectReleaseBinding`.
 - `developerKinds`: allowlisted OpenChoreo developer CRDs (`Component`, `Workload`, `ReleaseBinding`, `ComponentRelease`, `SecretReference`).
 - `promotion.{gatedEnvironments,restrictedGroups,bindingFile,freezeWindows}`: separate gated `Application`s, ABAC component-delete deny, and sync freeze windows.
+- `previews.*` (from `installation.yaml`), `previewOptIn`, `previewToken`: `ApplicationSet/previews-<project>` = opted-in Components x open pull requests -> one `charts/preview` Application per PR ([preview environments](../../docs/preview-environments.md)).
 
 ## Day-2 notes
 
