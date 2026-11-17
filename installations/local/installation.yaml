@@ -94,8 +94,8 @@ promotion:
       environments: [production]
 
 # PR preview environments (docs/preview-environments.md): every open pull request of a component whose Component carries
-# the annotation platform.koorikla.io/preview-environments: enabled gets its own OpenChoreo Environment pr-<n>-<component>
-# on `dataPlane`, running the in-cluster build of the PR head; the URL is posted to the PR as commit status
+# the preview opt-in annotation (that doc, "Opting in") gets its own OpenChoreo Environment pr-<n>-<component> on
+# `dataPlane`, running the in-cluster build of the PR head; the URL is posted to the PR as commit status
 # openchoreo/preview. Removed when the PR closes, or after `ttl`: the auto-build pass labels the PR `expiredLabel` (the
 # preview renders empty, Argo CD prunes it) and Kyverno deletes whatever is left. Read by charts/tenant (ApplicationSet),
 # addon secret-stores (GitHub token), kyverno-policies (TTL, cap, quotas, isolation), openchoreo-platform (build).
