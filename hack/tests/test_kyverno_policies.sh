@@ -76,7 +76,9 @@ for s in "${suites[@]}"; do
     [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
     helm template kyverno-policies "$addon" --namespace kyverno -s templates/image-verification.yaml \
       ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
-    "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || true
+    rc=0
+    "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || rc=$?
+    echo "$rc" > "$TMP/kyverno-$s.rc"
   ) &
 done
 
@@ -126,7 +128,7 @@ wait
 
 for s in "${suites[@]}"; do
   out=$(cat "$TMP/kyverno-$s.out")
-  if [[ "$out" =~ "0 tests failed" ]]; then
+  if [[ "$(cat "$TMP/kyverno-$s.rc")" == 0 && "$out" =~ "0 tests failed" ]]; then
     assert_eq ok ok "kyverno test $s"
   else
     echo "$out" >&2
