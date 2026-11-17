@@ -100,7 +100,7 @@ def security() -> Diagram:
                 "response. Identity, secrets and keys underneath: see the trust view.")
     X = [204, 476, 748]
     BW = 168
-    Y = [120, 280, 440]
+    Y = [120, 280, 440, 600]
     for y, label, sub in ((Y[0], "supply chain", ["every image", "is signed"]),
                           (Y[1], "admission", ["only verified", "images start"]),
                           (Y[2], "runtime", ["detect and", "respond"])):
@@ -108,32 +108,30 @@ def security() -> Diagram:
     d.box(X[0], Y[0], BW, H, "mgmt", "Build & sign", ["scan, then", "cosign"], step=1, aka=("cosign",))
     d.box(X[1], Y[0], BW, H, "mgmt", "Registry", ["images and", "signatures"])
     d.box(X[0], Y[1], BW, H, "workload", "Admission control", ["Kyverno"], aka=("Kyverno",))
-    d.box(X[1], Y[1], BW, H, "workload", "App pods", ["your", "services"])
-    d.box(X[0], Y[2], BW, H, "mgmt", "Escalation", ["on the management", "cluster"])
-    d.box(X[1], Y[2], BW, H, "workload", "Runtime detection", ["Falco"], aka=("Falco",))
-    d.box(X[2], Y[2], BW, H, "workload", "Auto-response", ["Falco Talon"], aka=("Falco Talon",))
-    xp = X[1] + BW / 2
+    d.box(X[2], Y[1], BW, H, "workload", "App pods", ["your", "services"])
+    d.box(X[0], Y[2], BW, H, "workload", "Detection", ["Falco, at", "runtime"], step=5, aka=("Falco",))
+    d.box(X[1], Y[2], BW, H, "workload", "Auto-response", ["Falco Talon"], aka=("Falco Talon",))
+    d.box(X[0], Y[3], BW, H, "mgmt", "Incident workflow", ["response", "runbook"])
     d.arrow([(X[0] + BW, ymid(Y[0])), (X[1], ymid(Y[0]))], step=2, badge_at=0.4)
     c0 = Y[0] + H + 40
-    d.arrow([(X[0] + BW / 2, Y[1]), (X[0] + BW / 2, c0), (X[1] + 40, c0), (X[1] + 40, Y[0] + H)], step=3)
-    d.arrow([(X[0] + BW, ymid(Y[1])), (X[1], ymid(Y[1]))], step=4, badge_at=0.4)
-    c1 = Y[1] + H + 40
-    d.arrow([(xp, Y[2]), (xp, Y[1] + H)], step=5, badge=(xp, c1))
-    xt = X[2] + BW / 2
-    d.arrow([(xt, Y[2]), (xt, ymid(Y[1])), (X[1] + BW, ymid(Y[1]))], step=6, badge=(xt, c1))
-    d.arrow([(X[1] + BW, ymid(Y[2])), (X[2], ymid(Y[2]))], label="alerts", label_pos=(X[1] + BW + 52, ymid(Y[2]) - 8))
-    d.line_label = "Falco alerts Falco Talon"
-    d.arrow([(X[1], ymid(Y[2])), (X[0] + BW, ymid(Y[2]))], step=7, badge_at=0.4)
-    d.require("Admission control", "Build & sign", "Registry", "Runtime detection", "Auto-response", "Escalation",
-              "App pods")
+    d.arrow([(X[0] + BW / 2, Y[1]), (X[0] + BW / 2, c0), (X[1] + BW / 2, c0), (X[1] + BW / 2, Y[0] + H)], step=3)
+    d.arrow([(X[0] + BW, ymid(Y[1])), (X[2], ymid(Y[1]))], step=4, badge=(X[0] + BW + 42, ymid(Y[1])))
+    d.arrow([(X[0] + BW, ymid(Y[2])), (X[1], ymid(Y[2]))], step=6, badge_at=0.4)
+    xp = X[2] + BW / 2
+    d.arrow([(X[1] + BW, ymid(Y[2])), (xp, ymid(Y[2])), (xp, Y[1] + H)], step=7, badge=(X[1] + BW + 42, ymid(Y[2])))
+    xd = X[0] + BW / 2
+    d.arrow([(xd, Y[2] + H), (xd, Y[3])], step=8)
+    d.require("Admission control", "Build & sign", "Registry", "Detection", "Auto-response",
+              "Incident workflow", "App pods")
     d.key("Build & sign scans the image for known vulnerabilities, then cosign signs it with its build record",
           "Build & sign pushes the image and its signature to the registry",
           "Kyverno fetches the signature from the registry before any pod starts",
           "Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and "
           "staging",
           "Falco watches what every pod does at runtime, on every node",
-          "Falco Talon stops or labels an offending pod as soon as Falco alerts it",
-          "Falco escalates critical alerts to a response workflow on the management cluster")
+          "Falco alerts Falco Talon",
+          "Falco Talon stops or labels the offending pod",
+          "Falco escalates critical alerts to an incident workflow on the management cluster")
     return d
 
 
@@ -339,8 +337,8 @@ def cluster_lifecycle() -> Diagram:
 # ------------------------------------------------------------------------------------ trust & certificates
 def trust() -> Diagram:
     d = Diagram("Trust & certificates · who signs what, and how it renews",
-                "Two separate certificate chains, both rooted on the management cluster: a CA per cluster for the "
-                "OpenChoreo agent, and an opt-in mesh CA in OpenBao. No private CA key leaves the management cluster.")
+                "Two separate chains, both rooted on the management cluster: a CA per cluster for the OpenChoreo "
+                "agent and, opt-in, OpenBao's mesh CA (by default istiod signs mesh certificates itself).")
     C1, W1 = 44, 220
     C2, W2 = 336, 220
     ZR = 572
@@ -356,18 +354,21 @@ def trust() -> Diagram:
     xz = (ZR + WZ) / 2
     d.zone(28, Z, ZR - 28, ZB - Z, "management cluster", "mgmt")
     d.zone(WZ, Z, 932 - WZ, ZB - Z, "workload cluster", "workload")
-    d.divider(44, 916, DIV)
+    d.divider(44, ZR - 16, DIV)
+    d.divider(WZ + 16, 916, DIV)
     d.lane(44, Z + 52, "agent identity · steps 1-4", color="#cbd5e1")
-    d.lane(44, DIV + 34, "service mesh CA · steps 5-7", color="#cbd5e1")
+    d.lane(44, DIV + 34, "opt-in mesh CA · steps 5-7", color="#cbd5e1")
     d.box(C1, RA1, W1, H, "mgmt", "cert-manager", ["one CA", "per cluster"], step=1)
+    d.box(C2, RA1, W2, H, "mgmt", "Cluster API", ["manages the", "cluster"])
     d.box(C2, RA2, W2, H, "mgmt", "cluster-gateway", ["entry point", "for agents"])
     d.box(WX, RA1, WW, H, "workload", "cluster-agent", ["OpenChoreo's agent", "on the cluster"])
     d.box(C1, RB1, C2 + W2 - C1, H, "mgmt", "OpenBao", ["mesh certificate authority,", "one per group of clusters"],
           status="optin", step=5)
     d.box(WX, RB1, WW, H, "workload", "Mesh proxies", ["ztunnel and", "gateways"])
     d.box(WX, RB2, WW, H, "workload", "istio-csr", ["signs requests", "through OpenBao"], status="optin")
-    d.arrow([(C1 + W1, ymid(RA1)), (WX, ymid(RA1))], step=2, badge=(xz, ymid(RA1)), label="copied in by Cluster API",
-            label_pos=(C2 + 110, ymid(RA1) - 10))
+    d.arrow([(C1 + W1, ymid(RA1)), (C2, ymid(RA1))], label="certificate", label_pos=((C1 + W1 + C2) / 2, ymid(RA1) - 10))
+    d.line_label = "cert-manager's certificate, picked up by Cluster API"
+    d.arrow([(C2 + W2, ymid(RA1)), (WX, ymid(RA1))], step=2, badge=(xz, ymid(RA1)))
     xc = C1 + W1 / 2
     d.arrow([(xc, RA1 + H), (xc, ymid(RA2)), (C2, ymid(RA2))], step=3)
     xa = WX + WW / 2
@@ -377,17 +378,17 @@ def trust() -> Diagram:
     xb = C2 + W2 - 100
     d.arrow([(WX, ymid(RB2)), (xb, ymid(RB2)), (xb, RB1 + H)], step=7, badge=(xz, ymid(RB2)), label="dials out",
             label_pos=(xz, ymid(RB2) + 32))
-    d.require("cert-manager", "cluster-agent", "cluster-gateway", "OpenBao", "istio-csr", "Mesh proxies")
+    d.require("cert-manager", "cluster-agent", "cluster-gateway", "OpenBao", "istio-csr", "Mesh proxies",
+              "Cluster API")
     d.key("cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it a month "
           "before it expires",
-          "cert-manager's certificate is copied into the cluster by Cluster API; the CA's private key stays on the "
-          "management cluster",
+          "Cluster API copies the agent certificate into the cluster; the CA's private key stays on the management "
+          "cluster",
           "cert-manager gives cluster-gateway that cluster's CA, the only one it accepts for that cluster",
           "The cluster-agent dials out with its certificate and restarts by itself when the certificate renews",
           "Separately, OpenBao (opt-in) creates a root and an intermediate CA for each group of clusters; the keys "
           "never leave it",
-          "The mesh proxies ask istio-csr for short-lived certificates: 24 hours, renewed at half-life (without the "
-          "opt-in, istiod signs them)",
+          "The mesh proxies ask istio-csr for short-lived certificates: 24 hours, renewed at half-life",
           "istio-csr dials out to OpenBao, logs in with its service account and gets each request signed")
     return d
 

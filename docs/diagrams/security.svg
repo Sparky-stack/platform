@@ -1,17 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="840" viewBox="0 0 960 840" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 10.20s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}25.9%{opacity:1}30.9%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="840" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="824" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1028" viewBox="0 0 960 1028" role="img" aria-label="Security · from build to runtime"><title>Security · from build to runtime</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 11.30s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}23.4%{opacity:1}28.4%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1028" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1012" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
 <path d="M 372.0 160.0 L 476.0 160.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 288.0 280.0 L 288.0 240.0 L 516.0 240.0 L 516.0 200.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 372.0 320.0 L 476.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 560.0 440.0 L 560.0 360.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 832.0 440.0 L 832.0 320.0 L 644.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 644.0 480.0 L 748.0 480.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
-<path d="M 476.0 480.0 L 372.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 288.0 280.0 L 288.0 240.0 L 560.0 240.0 L 560.0 200.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 372.0 320.0 L 748.0 320.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 372.0 480.0 L 476.0 480.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 644.0 480.0 L 832.0 480.0 L 832.0 360.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 288.0 520.0 L 288.0 600.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
 <path class="fx" d="M 372.0 160.0 L 476.0 160.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 288.0 280.0 L 288.0 240.0 L 516.0 240.0 L 516.0 200.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 372.0 320.0 L 476.0 320.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 560.0 440.0 L 560.0 360.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 832.0 440.0 L 832.0 320.0 L 644.0 320.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
-<path class="fx" d="M 476.0 480.0 L 372.0 480.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 288.0 280.0 L 288.0 240.0 L 560.0 240.0 L 560.0 200.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 372.0 320.0 L 748.0 320.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 372.0 480.0 L 476.0 480.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 644.0 480.0 L 832.0 480.0 L 832.0 360.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 288.0 520.0 L 288.0 600.0" stroke="#fde5a7" style="animation-delay:0s,7.70s"/>
 <rect x="204" y="120" width="168" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="311.0" y="146.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Build &amp; sign</text>
 <text class="s" x="311.0" y="166.4" font-size="13" fill="#dde5ef" text-anchor="middle">scan, then</text>
@@ -23,20 +22,21 @@
 <rect x="204" y="280" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
 <text class="s" x="288.0" y="315.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Admission control</text>
 <text class="s" x="288.0" y="335.4" font-size="13" fill="#dde5ef" text-anchor="middle">Kyverno</text>
-<rect x="476" y="280" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="560.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
-<text class="s" x="560.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">your</text>
-<text class="s" x="560.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">services</text>
-<rect x="204" y="440" width="168" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="288.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Escalation</text>
-<text class="s" x="288.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">on the management</text>
-<text class="s" x="288.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster</text>
+<rect x="748" y="280" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="832.0" y="306.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App pods</text>
+<text class="s" x="832.0" y="326.4" font-size="13" fill="#dde5ef" text-anchor="middle">your</text>
+<text class="s" x="832.0" y="344.4" font-size="13" fill="#dde5ef" text-anchor="middle">services</text>
+<rect x="204" y="440" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="311.0" y="466.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Detection</text>
+<text class="s" x="311.0" y="486.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco, at</text>
+<text class="s" x="311.0" y="504.4" font-size="13" fill="#dde5ef" text-anchor="middle">runtime</text>
 <rect x="476" y="440" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="560.0" y="475.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Runtime detection</text>
-<text class="s" x="560.0" y="495.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco</text>
-<rect x="748" y="440" width="168" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="832.0" y="475.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Auto-response</text>
-<text class="s" x="832.0" y="495.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco Talon</text>
+<text class="s" x="560.0" y="475.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Auto-response</text>
+<text class="s" x="560.0" y="495.4" font-size="13" fill="#dde5ef" text-anchor="middle">Falco Talon</text>
+<rect x="204" y="600" width="168" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="288.0" y="626.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Incident workflow</text>
+<text class="s" x="288.0" y="646.4" font-size="13" fill="#dde5ef" text-anchor="middle">response</text>
+<text class="s" x="288.0" y="664.4" font-size="13" fill="#dde5ef" text-anchor="middle">runbook</text>
 <text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Security · from build to runtime</text>
 <text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">A signed supply chain, admission that verifies it, and runtime detection with an automatic response. Identity, secrets and keys</text>
 <text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">underneath: see the trust view.</text>
@@ -51,52 +51,53 @@
 <text class="s" x="28.0" y="500.0" font-size="13" fill="#aab6c8">respond</text>
 <circle cx="230.0" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="230.0" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="230.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="230.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
 <circle cx="413.6" cy="160.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="413.6" y="164.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="402.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="402.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="413.6" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="413.6" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="560.0" cy="400.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="560.0" y="404.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<circle cx="832.0" cy="400.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="832.0" y="404.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<rect x="675.2" y="458.0" width="41.7" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="696.0" y="472.0" font-size="13" fill="#aab6c8" text-anchor="middle">alerts</text>
-<circle cx="434.4" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
-<text class="s" x="434.4" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<line x1="28" y1="542" x2="932" y2="542" stroke="#7c8aa0" stroke-width="1.2"/>
-<circle cx="40" cy="565.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="570" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="62.0" y="570.0" font-size="13.5" fill="#dde5ef">Build &amp; sign scans the image for known vulnerabilities, then cosign signs it with its build record</text>
-<circle cx="40" cy="593.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="598" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="62.0" y="598.0" font-size="13.5" fill="#dde5ef">Build &amp; sign pushes the image and its signature to the registry</text>
-<circle cx="40" cy="621.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="626" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="62.0" y="626.0" font-size="13.5" fill="#dde5ef">Kyverno fetches the signature from the registry before any pod starts</text>
-<circle cx="40" cy="649.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="654" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="62.0" y="654.0" font-size="13.5" fill="#dde5ef">Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging</text>
-<circle cx="40" cy="677.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="682" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="62.0" y="682.0" font-size="13.5" fill="#dde5ef">Falco watches what every pod does at runtime, on every node</text>
-<circle cx="40" cy="705.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="710" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
-<text class="s" x="62.0" y="710.0" font-size="13.5" fill="#dde5ef">Falco Talon stops or labels an offending pod as soon as Falco alerts it</text>
-<circle cx="40" cy="733.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40" y="738" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
-<text class="s" x="62.0" y="738.0" font-size="13.5" fill="#dde5ef">Falco escalates critical alerts to a response workflow on the management cluster</text>
-<rect x="28" y="778" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
-<text class="s" x="58.0" y="788.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
-<rect x="283.60519999999997" y="778" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
-<text class="s" x="313.6" y="788.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
-<path d="M 511.92409999999995 784 L 555.9241 784" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
-<circle cx="527.9241" cy="784" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="527.9241" y="788.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="565.9" y="788.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
-<rect x="26" y="800" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="36" cy="810" r="7" fill="#fbbf24"/><text class="s" x="36" y="814.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="58.0" y="814.0" font-size="13" fill="#aab6c8">step at a component</text>
-<path d="M 208.86058000000003 810 L 230.86058000000003 810" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
-<text class="s" x="240.9" y="814.0" font-size="13" fill="#aab6c8">Falco alerts Falco Talon</text>
+<circle cx="424.0" cy="240.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="424.0" y="244.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="414.0" cy="320.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="414.0" y="324.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="413.6" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="413.6" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="686.0" cy="480.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="686.0" y="484.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="288.0" cy="560.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="288.0" y="564.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<line x1="28" y1="702" x2="932" y2="702" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="725.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="730" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="730.0" font-size="13.5" fill="#dde5ef">Build &amp; sign scans the image for known vulnerabilities, then cosign signs it with its build record</text>
+<circle cx="40" cy="753.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="758" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="758.0" font-size="13.5" fill="#dde5ef">Build &amp; sign pushes the image and its signature to the registry</text>
+<circle cx="40" cy="781.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="786" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="786.0" font-size="13.5" fill="#dde5ef">Kyverno fetches the signature from the registry before any pod starts</text>
+<circle cx="40" cy="809.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="814" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="814.0" font-size="13.5" fill="#dde5ef">Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging</text>
+<circle cx="40" cy="837.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="842" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="842.0" font-size="13.5" fill="#dde5ef">Falco watches what every pod does at runtime, on every node</text>
+<circle cx="40" cy="865.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="870" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="870.0" font-size="13.5" fill="#dde5ef">Falco alerts Falco Talon</text>
+<circle cx="40" cy="893.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="898" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="898.0" font-size="13.5" fill="#dde5ef">Falco Talon stops or labels the offending pod</text>
+<circle cx="40" cy="921.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="926" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="62.0" y="926.0" font-size="13.5" fill="#dde5ef">Falco escalates critical alerts to an incident workflow on the management cluster</text>
+<rect x="28" y="966" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="976.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="966" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="976.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<path d="M 26 998 L 70 998" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="42" cy="998" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="42" y="1002.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="80.0" y="1002.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
+<rect x="422.3199" y="988" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="432.3199" cy="998" r="7" fill="#fbbf24"/><text class="s" x="432.3199" y="1002.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="454.3" y="1002.0" font-size="13" fill="#aab6c8">step at a component</text>
 </svg>

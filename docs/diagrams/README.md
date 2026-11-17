@@ -77,8 +77,9 @@ The numbered flow of each diagram, word for word.
 3. Kyverno fetches the signature from the registry before any pod starts
 4. Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging
 5. Falco watches what every pod does at runtime, on every node
-6. Falco Talon stops or labels an offending pod as soon as Falco alerts it
-7. Falco escalates critical alerts to a response workflow on the management cluster
+6. Falco alerts Falco Talon
+7. Falco Talon stops or labels the offending pod
+8. Falco escalates critical alerts to an incident workflow on the management cluster
 
 ### Network ([network.svg](network.svg))
 
@@ -120,11 +121,11 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 ### Trust & certificates ([trust.svg](trust.svg))
 
 1. cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it a month before it expires
-2. cert-manager's certificate is copied into the cluster by Cluster API; the CA's private key stays on the management cluster
+2. Cluster API copies the agent certificate into the cluster; the CA's private key stays on the management cluster
 3. cert-manager gives cluster-gateway that cluster's CA, the only one it accepts for that cluster
 4. The cluster-agent dials out with its certificate and restarts by itself when the certificate renews
 5. Separately, OpenBao (opt-in) creates a root and an intermediate CA for each group of clusters; the keys never leave it
-6. The mesh proxies ask istio-csr for short-lived certificates: 24 hours, renewed at half-life (without the opt-in, istiod signs them)
+6. The mesh proxies ask istio-csr for short-lived certificates: 24 hours, renewed at half-life
 7. istio-csr dials out to OpenBao, logs in with its service account and gets each request signed
 
 ### Backup & restore ([backup.svg](backup.svg))
