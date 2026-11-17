@@ -155,10 +155,9 @@ one of them. The GitHub Actions path stays keyless.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
   vuln|spdxjson`). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
 - Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
-  only with `imageVerification.platformKey.publicKey` = this `cosign.pub` (tlog ignored, `rekor: false`); without it
-  the registry is not a trusted source (production denies its images). Set per installation; local leaves it empty
-  (fresh key per bootstrap, and workload clusters cannot reach Harbor's signatures yet,
-  [#15](https://github.com/koorikla/platform/issues/15)): [supply-chain.md](supply-chain.md#wiring-the-key).
+  only with this `cosign.pub` (tlog ignored, `rekor: false`) and the signed SBOM + vuln attestations: inline
+  (`imageVerification.platformKey.publicKey`) or, with Harbor, delivered from mgmt to each workload cluster's Kyverno
+  together with the Harbor CA and a pull-only robot (local default): [supply-chain.md](supply-chain.md#wiring-the-key).
 
 ## Registry: Harbor
 
@@ -322,7 +321,7 @@ Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build
 ([#32](https://github.com/koorikla/platform/issues/32)), scoped workflow-plane agent RBAC
 ([#33](https://github.com/koorikla/platform/issues/33)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
-([#35](https://github.com/koorikla/platform/issues/35)), admission for Harbor-built images
-([#15](https://github.com/koorikla/platform/issues/15), [#36](https://github.com/koorikla/platform/issues/36)). BuildKit pulls base images
+([#35](https://github.com/koorikla/platform/issues/35)), digest-pinned images in `workflows-*`
+([#36](https://github.com/koorikla/platform/issues/36)). BuildKit pulls base images
 directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
 [#40](https://github.com/koorikla/platform/issues/40).
