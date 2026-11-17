@@ -43,7 +43,7 @@ MUTED = "#aab6c8"    # lede, legend, arrow labels, context detail
 LINE = "#8b9ab0"     # structural arrows
 HAIR = "#7c8aa0"     # context box outline, dividers
 ACCENT = "#fbbf24"   # the ONE accent: numbered flow (arrows, badges, motion)
-CONTEXT_FILL = "#151d2c"
+CONTEXT_FILL = "#1b2434"
 
 # plane -> (colour, legend label). Box colour = where it runs (one dimension per diagram); the accent is the flow.
 PLANES = {
@@ -251,7 +251,7 @@ class Diagram:
         """
         assert status in STATUSES, status
         if context:
-            color, fill, stroke, sw = HAIR, CONTEXT_FILL, HAIR, 1.2
+            color, fill, stroke, sw = HAIR, CONTEXT_FILL, "none", 0
             tcol, lcol = INK, INK2
             self.has_context = True
         else:
@@ -292,11 +292,11 @@ class Diagram:
             cw = tw(chip, cs, bold=True, spacing=sp) + 14
             chx, chy = x + w - cw, y - 19 - CLEAR
             out.append(f'<rect x="{chx:.1f}" y="{chy}" width="{cw:.1f}" height="19" rx="9.5" fill="{BG}" '
-                       f'stroke="{color}" stroke-width="1.2"/>')
+                       f'stroke="{INK2}" stroke-width="1.2"/>')
             out.append(f'<text class="s" x="{chx + cw / 2:.1f}" y="{chy + 13.8}" font-size="{cs}" font-weight="700" '
-                       f'fill="{color}" text-anchor="middle" letter-spacing="{sp}">{html.escape(chip)}</text>')
+                       f'fill="{INK2}" text-anchor="middle" letter-spacing="{sp}">{html.escape(chip)}</text>')
             self.r_tags.append((chip, (chx, chy, cw, 19), rect))
-            self.r_ink.append((chip, color, BG, alpha))
+            self.r_ink.append((chip, INK2, BG, alpha))
         if status == "planned":
             out = [f'<g opacity="{PLANNED_OPACITY}">'] + out + ["</g>"]
         self.l_boxes += out
@@ -470,7 +470,9 @@ class Diagram:
                 entries.append((p, self.legend_labels.get(p, "runs on the " + PLANES[p][1]
                                                           if p in ("mgmt", "workload") else PLANES[p][1])))
         if self.fx_steps or self.badges:
-            entries.append(("flow", "numbered step"))
+            entries.append(("flow", "numbered step: arrow from the component that acts"))
+        if self.ring_steps:
+            entries.append(("node", "step at a component"))
         if self.has_both:
             entries.append(("both", "request and reply"))
         if self.has_line:
@@ -479,10 +481,10 @@ class Diagram:
             entries.append(("context", "context, not a step"))
         for s in ("optin", "planned"):
             if s in self.status_used:
-                entries.append((s, {"optin": "opt-in: off by default", "planned": "planned: not on main"}[s]))
+                entries.append((s, {"optin": "opt-in, off by default", "planned": "planned, not on main"}[s]))
 
         def sw(t):
-            return {"flow": 44, "both": 36, "optin": 52, "planned": 66}.get(t, 22)
+            return {"flow": 44, "both": 36, "optin": 92, "planned": 106}.get(t, 22)
 
         widths = [sw(t) + 8 + tw(lab, 13) for t, lab in entries]
         rows = 1
@@ -517,14 +519,20 @@ class Diagram:
                                       f'stroke-width="1.6" marker-end="{self._marker(LINE)}"/>')
                 elif t == "context":
                     self.l_top.append(f'<rect x="{x}" y="{ly - 10}" width="20" height="13" rx="3" '
-                                      f'fill="{CONTEXT_FILL}" stroke="{HAIR}" stroke-width="1.2"/>')
+                                      f'fill="{CONTEXT_FILL}"/>')
+                elif t == "node":
+                    self.l_top.append(f'<rect x="{x - 2}" y="{ly - 13}" width="24" height="18" rx="4" fill="none" '
+                                      f'stroke="{INK2}" stroke-width="1.2"/>'
+                                      f'<circle cx="{x + 5}" cy="{ly - 4}" r="4" fill="{ACCENT}"/>')
                 elif t in ("optin", "planned"):
                     chip = TAGS[t]
                     cw = tw(chip, 11, bold=True, spacing=0.4) + 10
                     op = f' opacity="{PLANNED_OPACITY}"' if t == "planned" else ""
-                    self.l_top.append(f'<g{op}><rect x="{x}" y="{ly - 12}" width="{cw:.1f}" height="16" rx="8" '
-                                      f'fill="none" stroke="{INK2}" stroke-width="1.2" stroke-dasharray="4 2.5"/>'
-                                      f'<text class="s" x="{x + cw / 2:.1f}" y="{ly}" font-size="11" '
+                    self.l_top.append(f'<g{op}><rect x="{x}" y="{ly - 13}" width="28" height="18" rx="4" '
+                                      f'fill="none" stroke="{INK2}" stroke-width="1.3" stroke-dasharray="4 2.5"/>'
+                                      f'<rect x="{x + 36}" y="{ly - 12}" width="{cw:.1f}" height="16" rx="8" '
+                                      f'fill="none" stroke="{INK2}" stroke-width="1.2"/>'
+                                      f'<text class="s" x="{x + 36 + cw / 2:.1f}" y="{ly}" font-size="11" '
                                       f'font-weight="700" fill="{INK2}" text-anchor="middle" letter-spacing="0.4">'
                                       f'{chip}</text></g>')
                 self._text(x + sw(t) + 8, ly, lab, 13, MUTED, layer=self.l_top, kind="legend")

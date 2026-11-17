@@ -31,19 +31,23 @@ one idea per diagram, read top-left to bottom-right, the numbered flow carries t
 - **Type**: the platform sans stack (`Segoe UI`, Helvetica Neue, Arial / Liberation Sans) for words, a mono stack
   only for identifiers such as `clusters/<name>.yaml`. README images cannot load web fonts, so the stack is chosen,
   not defaulted. Scale: title 24 bold, lede 14, zone label 13 bold tracked caps, box title 15 semibold, box detail
-  13, step key 13.5, legend 13. Floor: 13 px for every text except the 11 px uppercase status chips.
-- **Colour**: one accent, amber `#fbbf24`, used only for the numbered flow (arrows, badges, motion). Every other
-  colour is a plane: teal mgmt cluster, sky workload cluster, rose security & trust, violet stateful data, slate git /
-  GitHub / outside. Neutral grey arrows are secondary relations. Text contrast is at least 4.5:1 (checked).
-- **Shapes**: boxes are components (at most 12 per diagram; zones, legend and key do not count). A second outline
-  marks the focus of a view (Kyverno where admission is the point). Zones are clusters, labelled in caps.
-  Dashed + `OPT-IN` chip = on `main`, off by default; dimmed + `PLANNED` chip = not on `main`.
-- **Numbered steps**: an amber disc on an arrow is a step of the flow; an amber ring inside a box is a step that
-  happens at that component (a restore, a rotation, a removal). Every step number appears once: a step that reaches
-  several boxes forks or joins at a dot. Arrows that carry a number keep 80 px of shaft so the disc never hides the
-  direction. The key under every diagram and the lists below are the same text (`build.py` fails when they differ).
-  Arrows follow what moves (config, data, requests, certificates); who opens the connection is said in the step text
-  where it matters ("dials out"). Grey arrows are secondary relations, named in the legend.
+  13, step key 13.5, legend 13. Floor: 13 px for every text except the 12 px uppercase status chips.
+- **Colour**: one accent, amber `#fbbf24`, used only for the numbered flow (arrows, discs, motion). Box and zone
+  colour says one thing per diagram, where it runs: teal management cluster, sky workload cluster, slate outside the
+  clusters (backup uses violet for state that must be restored instead). Text contrast is at least 4.5:1, box detail
+  lines, chips and step numbers included (checked).
+- **Shapes**: boxes are components (at most 12 per diagram; zones, legend and key do not count), each drawn once.
+  Every box is on the numbered flow or marked context (grey, borderless, "context, not a step" in the legend). Zones
+  are clusters, labelled in caps where no arrow crosses their border. Dashed + `OPT-IN` chip = on `main`, off by
+  default; dimmed + `PLANNED` chip = not on `main`. Box titles name the component; detail lines say what it is in
+  plain words; identifiers, abbreviations and resource kinds belong in the owning doc, not on the canvas.
+- **Numbered steps**: an amber disc on an arrow, or at the left of a box for a step that happens at that component
+  (a restore, a check). Numbers increase in reading order: left to right, then the next row down (`columns` diagrams:
+  top to bottom, then the next column). Every number appears once: a step that reaches several boxes forks or joins
+  at a dot. An arrow points from the component that acts (opens the connection, does the work) to the one it acts
+  on, and the step text names that component first: Argo CD reads Git, so its arrow points at Git; the cluster-agent
+  dials out, so its arrow leaves the workload cluster (labelled "dials out"). The key under every diagram and the
+  lists below are the same text (`build.py` fails when they differ).
 - **Motion** only on the numbered flow: a light particle runs along each step's arrow, in step order, then rests.
   `@media (prefers-reduced-motion: reduce)` stops it. Every animated element is an overlay with static opacity 0,
   so a static frame (rsvg-convert, PDF, reduced motion) is the complete diagram.
@@ -57,53 +61,52 @@ The numbered flow of each diagram, word for word.
 
 ### Architecture ([architecture.svg](architecture.svg))
 
-1. Git holds everything: fleet files, the addon catalog, teams and app repos; Argo CD syncs it
-2. Argo CD hands each app's release to OpenChoreo
-3. Argo CD turns each fleet file into a Cluster API cluster
-4. Cluster API creates a workload cluster per fleet file, on docker, AWS or Hetzner
-5. Argo CD installs the addons on every cluster whose labels match: network, mesh, policy, telemetry
-6. The cluster-agent dials out to OpenChoreo (mTLS); the releases come back over that connection
+1. Argo CD reads Git: fleet files, the addon catalog, teams and app repos
+2. Argo CD turns each fleet file into a cluster for Cluster API to build
+3. Argo CD hands each app's release to OpenChoreo
+4. Cluster API creates the cluster's k3s nodes on docker, AWS or Hetzner
+5. Argo CD installs the addons on every cluster whose labels match
+6. The cluster-agent dials out to OpenChoreo and pulls the app releases
 7. The agent deploys the apps
-8. Apps start only after Kyverno admits them: signed images, safe pod settings
+8. Apps start only after Kyverno, one of the addons, admits them: signed images, safe settings
 
 ### Security ([security.svg](security.svg))
 
-1. The build scans the image (Trivy), writes an SBOM and SLSA provenance and hands the digest to cosign
-2. cosign signs and attests the image and stores both next to it in the registry (Harbor or GHCR)
-3. The registry serves image, signature and attestations to Kyverno at admission
-4. Kyverno admits only verified images whose pods meet the Pod Security baseline: it blocks in production and only warns in dev and staging
-5. App pods' system calls are watched by Falco (eBPF on every node)
+1. The build scans the image for known vulnerabilities, records what is inside it and hands it to cosign
+2. cosign signs the image and its build record and stores both next to it in the registry
+3. Kyverno fetches the signature from the registry before any pod starts
+4. Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging
+5. Falco watches what every pod does at runtime, on every node
 6. Falco alerts Falco Talon, which stops or labels the offending pod
-7. Falco escalates critical alerts to the response workflow on the management cluster (falcosidekick, argo-events)
+7. Falco escalates critical alerts to the response workflow on the management cluster
 
 ### Network ([network.svg](network.svg))
 
-1. A client opens the app URL; kgateway (Gateway API) takes the request
-2. kgateway routes it into the service mesh (HTTPRoute; a waypoint adds L7 policy if opted in)
-3. The service mesh delivers it to the app pods: ztunnel encrypts every hop with mTLS and a workload identity, no sidecars
-4. The service mesh rides the cluster network: Cilium (eBPF, WireGuard) or flannel, chosen per cluster
-5. Separately, the cluster-agent dials out to the management cluster on port 8443; cluster-gateway accepts only that cluster's certificate
-6. The collectors (OTel Collector, Fluent Bit, Prometheus agent) dial out too and ship logs, metrics and traces to the observability plane
+1. A client opens the app URL; kgateway takes the request
+2. kgateway routes it into the service mesh
+3. The service mesh delivers it to the app pods and encrypts every hop between pods
+4. The service mesh rides the cluster network: Cilium or flannel, chosen per cluster
+5. Separately, the cluster-agent dials out to the management cluster; cluster-gateway accepts only that cluster's certificate
+6. The collectors dial out too and ship logs, metrics and traces to the observability plane
 
 ### Observability ([observability.svg](observability.svg))
 
-1. Fluent Bit ships container logs, Falco security alerts included, to OpenSearch
-2. The OTel Collector sends app traces and Kubernetes events to OpenSearch and app metrics to Prometheus
-3. The Prometheus agent scrapes container and cluster metrics (cAdvisor, kube-state-metrics) and remote-writes them to Prometheus
-4. OpenSearch and Prometheus answer the observer API: one query API behind one login (Thunder)
-5. The observer API answers Backstage, the promotion gate and the opt-in AI agents
+1. Fluent Bit ships container logs, security alerts included, to OpenSearch
+2. The OpenTelemetry collector sends app traces and cluster events to OpenSearch and app metrics to Prometheus
+3. The Prometheus agent collects container and cluster metrics and sends them to Prometheus
+4. The observer API queries both stores; one login covers all of them
+5. Backstage, the promotion gate and the opt-in AI agents query the observer API
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A push to the app repo starts a build on the OpenChoreo workflow plane (or GitHub Actions)
-2. Build & sign scans the image (Trivy), writes SBOM and SLSA provenance, signs with cosign, pushes it to the registry and commits the new image ref to `deploy/`
-3. The app repo's `deploy/` folder is synced by Argo CD
-4. Argo CD applies it to OpenChoreo, which snapshots an immutable release (ComponentRelease)
+1. A push to the app repo starts a build on the OpenChoreo workflow plane, or GitHub Actions
+2. Build & sign scans and signs the image, pushes it to the registry and commits the new version to `deploy/`
+3. Argo CD reads the `deploy/` folder of the app repo
+4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
 5. The release deploys to development automatically
-6. Development's health (readiness, smoke tests, alerts, freezes) is checked by the promotion gate
-7. The promotion gate opens the pull request that promotes the release to staging; Argo CD applies it once merged
-8. Staging is promoted to production the same way, plus CODEOWNERS approval; only Argo CD may write production
-9. Production admits only signed images pinned by digest: Kyverno blocks the rest (in dev and staging it only warns)
+6. The promotion gate checks development: readiness, smoke tests, alerts, change freezes
+7. The promotion gate opens the pull requests that promote the release: staging first, production only with code-owner approval
+8. Production admits only signed images pinned by digest: Kyverno blocks the rest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
@@ -120,34 +123,34 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 
 ### Trust & certificates ([trust.svg](trust.svg))
 
-1. cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it 30 days before expiry
-2. cert-manager delivers the certificate to the cluster through ESO and a ClusterResourceSet; the CA key stays on the management cluster
-3. cert-manager gives cluster-gateway that cluster's CA: the only one it accepts for it
-4. The cluster-agent dials out with its certificate (mTLS) and restarts by itself when the certificate renews
-5. OpenBao (opt-in) creates a root and an intermediate CA per group of clusters; the keys never leave it, the public root is copied to each member
-6. istio-csr (opt-in) dials out to OpenBao through cert-manager's OpenBao issuer, logs in with its service account and gets mesh certificates signed
-7. istio-csr hands short-lived certificates to the mesh: 24 h for ztunnel and gateways, 48 h for istiod, renewed at half-life
+1. cert-manager issues each cluster's agent certificate from that cluster's own CA and renews it a month before it expires
+2. cert-manager delivers the certificate to the cluster; the CA's private key stays on the management cluster
+3. cert-manager gives cluster-gateway that cluster's CA, the only one it accepts for that cluster
+4. The cluster-agent dials out with its certificate and restarts by itself when the certificate renews
+5. OpenBao (opt-in) creates a root and an intermediate CA for each group of clusters; the keys never leave it
+6. istio-csr (opt-in) dials out to OpenBao, logs in with its service account and gets mesh certificates signed
+7. The mesh proxies get short-lived certificates from istio-csr: 24 hours, renewed at half-life
 
 ### Backup & restore ([backup.svg](backup.svg))
 
-1. The secret backend (AWS Secrets Manager, Vault) lives outside the clusters; locally, re-seed it with `task secrets`
-2. Restore the management cluster's etcd from a k3s snapshot (every 12 h, 5 kept): Cluster API keeps its clusters, the CA keys come back
-3. The secret backend gives OpenBao (opt-in) its unseal key; OpenBao's data comes back from a cold volume copy
-4. Restore Thunder's volumes: users, OAuth clients, signing keys
-5. Git re-creates everything else through Argo CD
-6. Harbor's images come back from its volumes or from new builds; telemetry starts empty
-7. Object storage restores the databases (opt-in CNPG) if a workload cluster is lost too
+1. Restore the management cluster's etcd from its latest snapshot: Cluster API keeps its clusters and the CA keys come back
+2. The secret backend lives outside the clusters; on a laptop, re-seed it with `task secrets`
+3. Restore Thunder's volumes: users, sign-in clients, signing keys
+4. OpenBao (opt-in) restores a cold copy of its data and fetches its unseal key from the secret backend
+5. Harbor's images come back from its volumes or from new builds; telemetry starts empty
+6. Argo CD re-syncs everything else from Git
+7. The databases (opt-in) restore themselves from object storage if a workload cluster is lost too
 
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
-1. Renovate opens a pull request: a Helm chart, a k3s release, an image digest or a tool pin
-2. The pull request runs CI: every chart rendered for every installation; lint, schema, unit and contract tests on Linux (x86, arm), macOS, Windows and the devcontainers
-3. CI gates the merge: once it passes and a maintainer approves, the pull request is squash-merged into main
-4. Main is synced by Argo CD for every cluster that follows it (`addonsRevision: HEAD`)
-5. Argo CD syncs the dev clusters first; sync waves order each app (e.g. istiod before ztunnel)
-6. Dev clusters are verified: every Argo CD app Synced and Healthy, `task status` green
-7. Dev clusters' verified commit reaches the prod clusters through a second pull request that moves their `addonsRevision`
-8. Argo CD hands a `kubernetesVersion` bump to Cluster API, which replaces servers one at a time, dev before prod (3 keep quorum)
+1. Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version
+2. The pull request runs CI: every chart rendered and tested on Linux, macOS and Windows, x86 and arm
+3. CI gates the merge: once it passes and a maintainer approves, the pull request is merged into main
+4. Argo CD reads main for every cluster that follows it
+5. Argo CD syncs the dev clusters first, each app in a fixed order
+6. Dev clusters are verified: every app synced and healthy
+7. Argo CD syncs the prod clusters only after a second pull request moves them to the verified commit
+8. Argo CD hands a Kubernetes version bump to Cluster API, which replaces servers one at a time, dev before prod
 
 ## Editing
 
@@ -165,15 +168,21 @@ planted defects to the checker.
 
 `src/svglib.py` registers every box, label, chip, badge and arrow segment and reports:
 
-- more than 12 boxes, boxes closer than 6 px, a box across a zone border, anything outside the card;
+- more than 12 boxes, boxes closer than 6 px, a box across a zone border, anything outside the card, two boxes with
+  the same title, a title that does not start with a capital (unless the product spells itself in lower case);
 - text overflowing its box (8 px padding, from the generator's own width estimate: Arial metrics plus a margin for
-  wider fallback fonts), overlapping text, text on a box it does not belong to, text below the 13 px floor, text
-  contrast below 4.5:1;
-- arrows crossing text, chips, badges or unrelated boxes, arrows whose ends are not on a box or zone edge;
-- badges on text, boxes or other badges; step numbers that are not 1..n, a badge without a key entry or a key entry
-  without a badge; steps that differ from this README;
-- required components missing (each diagram lists them with `d.require(...)`, e.g. Kyverno), box labels missing from
-  the SVG;
+  wider fallback fonts), overlapping text, text on a box it does not belong to, text below the 13 px floor, contrast
+  below 4.5:1 for any text (box detail lines, chips, step numbers, dimmed boxes composited);
+- jargon in box detail lines (`dp-*`, ESO, CRS, JWT, resource kinds, ...), placeholders such as `<name>` or issue
+  numbers anywhere on the canvas;
+- arrows within 6 px of text, crossing chips, badges or unrelated boxes, running along a zone border (< 10 px), with a
+  cramped bend (inner segment < 24 px), meeting a box closer than 14 px to a corner, or with ends not on a box or zone
+  edge;
+- badges and chips closer than 6 px to text, boxes, chips or zone borders; step numbers that are not 1..n, a badge
+  without a key entry or a key entry without a badge; steps out of reading order; steps that differ from this README;
+- a box neither on the numbered flow nor marked context; a step whose arrow does not start at the first component its
+  text names; a "dials out" step whose arrow does not start inside a cluster and point out of it;
+- required components missing (each diagram lists them with `d.require(...)`), box labels missing from the SVG;
 - no `@keyframes`, an animation without keyframes, no `prefers-reduced-motion` rule, a numbered flow without an
   animated overlay;
 - anything unsafe for a README image (scripts, `foreignObject`, event handlers, external URLs, `<image>`), SVGs over
