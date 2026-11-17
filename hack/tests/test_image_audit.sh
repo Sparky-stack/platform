@@ -80,6 +80,27 @@ assert_eq "$(grep -c . "$TMP/ocp.params")" 2 "installationParameters: one line p
 assert_eq "$(grep -c 'eval_param' "$ROOT/hack/image-audit.sh" || true)" 0 "image-audit has no private template resolver"
 
 
+# istio_proxy_image: the istiod-generated gateway/waypoint proxy from the injector values (Istio chart rules), composed
+# without yq if/then/else (yq < 4.54 rejected it: "lexer: invalid input text"); a broken values blob names the file.
+D=sha256:0000000000000000000000000000000000000000000000000000000000000000
+inj() { printf 'apiVersion: v1\nkind: ConfigMap\nmetadata: { name: istio-sidecar-injector }\ndata:\n  values: %s\n' "$1" > "$TMP/inj.yaml"; }
+inj "'{\"global\":{\"hub\":\"docker.io/istio\",\"proxy\":{\"image\":\"proxyv2\"},\"tag\":\"1.32.0\",\"variant\":\"distroless\"}}'"
+assert_eq "$(istio_proxy_image "$TMP/inj.yaml")" docker.io/istio/proxyv2:1.32.0-distroless "istio_proxy_image: hub/image:tag-variant"
+inj "'{\"global\":{\"hub\":\"docker.io/istio\",\"proxy\":{\"image\":\"proxyv2\"},\"tag\":\"1.32.0\"}}'"
+assert_eq "$(istio_proxy_image "$TMP/inj.yaml")" docker.io/istio/proxyv2:1.32.0 "istio_proxy_image: no variant, no dash"
+inj "'{\"global\":{\"hub\":\"docker.io/istio\",\"proxy\":{\"image\":\"docker.io/istio/proxyv2:1.32.0@$D\"},\"tag\":\"1.32.0\"}}'"
+assert_eq "$(istio_proxy_image "$TMP/inj.yaml")" "docker.io/istio/proxyv2:1.32.0@$D" "istio_proxy_image: a full reference is used verbatim"
+printf 'apiVersion: v1\nkind: ConfigMap\nmetadata: { name: other }\n' > "$TMP/none.yaml"
+assert_eq "$(istio_proxy_image "$TMP/none.yaml")" "" "istio_proxy_image: no injector, no image"
+inj "'{not json'"
+rc=0; out=$(istio_proxy_image "$TMP/inj.yaml" 2>&1) || rc=$?
+assert_eq "$rc" 1 "istio_proxy_image: unreadable injector values fail"
+assert_eq "${out%%values: *}" "ERROR: $TMP/inj.yaml: istio-sidecar-injector " "istio_proxy_image: the failure names the file"
+inj "'{\"global\":{\"hub\":\"docker.io/istio\"}}'"
+rc=0; out=$(istio_proxy_image "$TMP/inj.yaml" 2>&1) || rc=$?
+assert_eq "$rc:$out" "1:ERROR: $TMP/inj.yaml: istio-sidecar-injector values have no global.proxy.image" \
+  "istio_proxy_image: missing proxy image fails, naming the file"
+
 # enabled: catalog default / cluster toggle / --opt-in (OPT_IN)
 CATALOG="$TMP/catalog.yaml"
 printf 'addons:\n  on: { default: true }\n  off: { default: false }\n  plain: { namespace: x }\n' > "$CATALOG"

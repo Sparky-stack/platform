@@ -48,7 +48,9 @@ legacy iptables, which GitHub's amd64 runners need) and runs `mise install` on c
 
 Without mise activated in your shell, prefix commands with `mise exec --` (`mise exec -- task test`) or use
 `make test` (the shim falls back to `mise exec -- task` when `task` is not on `PATH`). `task doctor` reports missing
-tools and version drift against `mise.toml`.
+tools and version drift against `mise.toml`. `mise activate` sets `PATH` for the directory the shell started in and
+only updates it at a prompt: a non-interactive `bash -ic 'cd <clone> && ./hack/test.sh'` started elsewhere (scripts,
+agents) runs your global tool versions, so use `mise exec --` there. `hack/test.sh` prints any `DRIFT` first.
 
 ## Entrypoints
 

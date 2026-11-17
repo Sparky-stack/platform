@@ -82,6 +82,27 @@ extract_images() {
   rm -f "$f"
 }
 
+# istio_proxy_image <rendered manifest>: the proxy image istiod puts into the Deployments it generates (east-west
+# gateway, waypoints). It is in no manifest: resolved from the istio-sidecar-injector values like the Istio charts do,
+# global.proxy.image verbatim when it contains "/" (a full, digest-pinned reference), else
+# global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless). Prints nothing without an
+# injector. Composed in bash on purpose: yq if/then/else needs yq >= 4.54, and a shell whose PATH still holds an older
+# global yq (mise activated outside the repo) failed here with a bare "lexer: invalid input text". Errors name the file.
+istio_proxy_image() {
+  local rf=$1 inj fields hub image tag variant
+  grep -q 'istio-sidecar-injector' "$rf" || return 0
+  inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$rf" 2>/dev/null || true)
+  [[ -n "$inj" ]] || return 0
+  if ! fields=$(printf '%s' "$inj" | yq -p=json -r \
+    '[.global.hub // "", .global.proxy.image // "", .global.tag // "", .global.variant // ""] | join("|")' 2>&1); then
+    echo "ERROR: $rf: istio-sidecar-injector values: $fields" >&2
+    return 1
+  fi
+  IFS='|' read -r hub image tag variant <<<"${fields//$'\r'/}"
+  [[ -n "$image" ]] || { echo "ERROR: $rf: istio-sidecar-injector values have no global.proxy.image" >&2; return 1; }
+  if [[ "$image" == */* ]]; then printf '%s\n' "$image"; else printf '%s/%s:%s%s\n' "$hub" "$image" "$tag" "${variant:+-$variant}"; fi
+}
+
 # enabled <addon> <toggle-from-cluster-file>: catalog default + per-cluster override, as the ApplicationSets do; with
 # OPT_IN=1 an opt-in addon counts as on unless the cluster sets it to "false". Reads the catalog file CATALOG.
 enabled() {
@@ -150,20 +171,9 @@ render() {
     fi
   fi
   extract_images < "$rf" | while IFS= read -r img; do add "$img" "addon $addon ($name)"; done
-  # Proxy image istiod uses for the Deployments it generates (east-west gateway, waypoints): not in any manifest,
-  # resolved from the injector values like the Istio charts do: global.proxy.image verbatim when it contains "/" (a
-  # full, digest-pinned reference), else global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless).
-  if grep -q 'istio-sidecar-injector' "$rf"; then
-    local inj
-    inj=$(yq -N 'select(.kind == "ConfigMap" and .metadata.name == "istio-sidecar-injector") | .data.values // ""' "$rf" 2>/dev/null || true)
-    if [[ -n "$inj" ]]; then
-      # shellcheck disable=SC2016  # $g/$v are yq variables
-      img=$(printf '%s' "$inj" | yq -p=json -oy -r '.global as $g | ($g.variant // "") as $v
-        | if ($g.proxy.image | test("/")) then $g.proxy.image
-          else $g.hub + "/" + $g.proxy.image + ":" + $g.tag + (if $v == "" then "" else "-" + $v end) end')
-      add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"
-    fi
-  fi
+  local img
+  img=$(istio_proxy_image "$rf") || exit 1
+  if [[ -n "$img" ]]; then add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"; fi
 }
 
 
