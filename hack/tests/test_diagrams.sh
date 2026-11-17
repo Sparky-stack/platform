@@ -70,6 +70,42 @@ assert_match "$out" "key step 3 has no badge" "key entry without a badge is repo
 assert_match "$out" "text below 13 px" "type floor is enforced"
 assert_match "$out" "step 2 has 2 badges" "a step number drawn twice is reported"
 
+# 5. v3 reading rules: planted defects of the classes the visual review found
+out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+from svglib import Diagram
+d = Diagram("t", "lede")
+d.zone(16, 100, 400, 300, "cluster a", "workload")
+d.box(40, 160, 140, 80, "workload", "Alpha", ["uses `dp-*` namespaces", "cluster <name>"])
+d.box(500, 160, 140, 80, "mgmt", "Beta")
+d.box(500, 300, 140, 80, "mgmt", "beta")
+d.box(700, 160, 140, 80, "mgmt", "Gamma")
+d.arrow([(500, 180), (180, 180)], step=1)
+d.arrow([(180, 196), (500, 196)], step=2)
+d.arrow([(180, 226), (300, 226), (300, 234), (500, 234)])
+d.arrow([(30, 395), (300, 395)], loose=True)
+d.text(300, 480, "note text")
+d.badge(290, 476, 3)
+d.text(40, 520, "dim note", 13, "#334155")
+d.key("Beta dials out to Alpha", "Beta receives it from Alpha", "three")
+for i in d.check():
+    print(i)
+EOF
+)
+assert_match "$out" "step 2 reads before step 1" "steps out of reading order are reported"
+assert_match "$out" "box 'Gamma' is not on the numbered flow" "a box neither on the flow nor marked context is reported"
+assert_match "$out" "duplicate component box: 'beta'" "duplicate component boxes are reported"
+assert_match "$out" "box title not capitalised: 'beta'" "lower-case box titles are reported"
+assert_match "$out" "step 1 dials out, but arrow" "a dial-out arrow that does not leave its cluster is reported"
+assert_match "$out" "step 2: the text's actor is 'Beta' but the arrow starts at Alpha" "an arrow not starting at the step's actor is reported"
+assert_match "$out" "jargon in a box detail line" "jargon in box detail lines is reported"
+assert_match "$out" "placeholder or issue reference on the canvas" "placeholders on the canvas are reported"
+assert_match "$out" "has a cramped bend" "cramped Z-bends are reported"
+assert_match "$out" "runs along the border of zone" "arrows hugging a zone border are reported"
+assert_match "$out" "badge 3 is closer than 6 px to text 'note text'" "badge clearance from text is enforced"
+assert_match "$out" "text contrast .* 'dim note'" "low text contrast is reported"
+
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"
@@ -77,7 +113,7 @@ printf '<!-- hand edit -->\n' >> "$TMP/stale/network.svg"
 out=$(py "$B" --check --out "$TMP/stale" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a hand-edited SVG fails --check"
 assert_match "$out" "network.svg is not up to date" "stale SVG is named"
-sed 's/^1\. Argo CD syncs git/1. Argo CD reads git/' "$ROOT/docs/diagrams/README.md" > "$TMP/README.md"
+sed 's/^1\. Argo CD reads Git/1. Argo CD pulls Git/' "$ROOT/docs/diagrams/README.md" > "$TMP/README.md"
 out=$(py "$B" --check --readme "$TMP/README.md" architecture 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "README step drift fails --check"
 assert_match "$out" "steps differ from docs/diagrams/README.md" "step drift is named"

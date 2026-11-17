@@ -1,112 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="796" viewBox="0 0 960 796" role="img" aria-label="Observability · every signal lands in one place"><title>Observability · every signal lands in one place</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 8.00s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}33.0%{opacity:1}38.0%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="796" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="780" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
-<rect x="16" y="128" width="224" height="424" rx="14" fill="#102236" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="32.0" y="152.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD CLUSTER</text>
-<rect x="320" y="128" width="616" height="424" rx="14" fill="#0e2430" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
-<text class="s" x="336.0" y="152.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MGMT · OBSERVABILITY PLANE</text>
-<path d="M 224.0 216.0 L 336.0 216.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 224.0 352.0 L 304.0 352.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M 304.0 352.0 L 336.0 352.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 304.0 352.0 L 304.0 472.0 L 336.0 472.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 224.0 504.0 L 336.0 504.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 456.0 284.0 L 470.0 284.0 L 470.0 382.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M 456.0 488.0 L 470.0 488.0 L 470.0 382.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M 470.0 382.0 L 546.0 382.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 686.0 352.0 L 744.0 352.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M 744.0 352.0 L 776.0 352.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 744.0 352.0 L 744.0 216.0 L 776.0 216.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path d="M 744.0 352.0 L 744.0 488.0 L 776.0 488.0" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 224.0 216.0 L 336.0 216.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<path class="fx" d="M 224.0 352.0 L 304.0 352.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 304.0 352.0 L 336.0 352.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 304.0 352.0 L 304.0 472.0 L 336.0 472.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
-<path class="fx" d="M 224.0 504.0 L 336.0 504.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
-<path class="fx" d="M 456.0 284.0 L 470.0 284.0 L 470.0 382.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 456.0 488.0 L 470.0 488.0 L 470.0 382.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 470.0 382.0 L 546.0 382.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
-<path class="fx" d="M 686.0 352.0 L 744.0 352.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 744.0 352.0 L 776.0 352.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 744.0 352.0 L 744.0 216.0 L 776.0 216.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<path class="fx" d="M 744.0 352.0 L 744.0 488.0 L 776.0 488.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
-<rect x="32" y="176" width="192" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="128.0" y="202.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Fluent Bit</text>
-<text class="s" x="128.0" y="222.4" font-size="13" fill="#cbd5e1" text-anchor="middle">container logs,</text>
-<text class="s" x="128.0" y="239.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Falco alerts included</text>
-<rect x="32" y="312" width="192" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="128.0" y="338.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">OTel Collector</text>
-<text class="s" x="128.0" y="358.4" font-size="13" fill="#cbd5e1" text-anchor="middle">OTLP from apps</text>
-<text class="s" x="128.0" y="375.9" font-size="13" fill="#cbd5e1" text-anchor="middle">+ k8s events</text>
-<rect x="32" y="448" width="192" height="80" rx="8" fill="#193951" stroke="#38bdf8" stroke-width="1.5"/>
-<text class="s" x="128.0" y="474.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Prometheus agent</text>
-<text class="s" x="128.0" y="494.4" font-size="13" fill="#cbd5e1" text-anchor="middle">cAdvisor and</text>
-<text class="s" x="128.0" y="511.9" font-size="13" fill="#cbd5e1" text-anchor="middle">kube-state-metrics</text>
-<rect x="336" y="176" width="120" height="216" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
-<text class="s" x="396.0" y="270.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">OpenSearch</text>
-<text class="s" x="396.0" y="290.4" font-size="13" fill="#cbd5e1" text-anchor="middle">logs · traces</text>
-<text class="s" x="396.0" y="307.9" font-size="13" fill="#cbd5e1" text-anchor="middle">k8s events</text>
-<rect x="336" y="448" width="120" height="80" rx="8" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.5"/>
-<text class="s" x="396.0" y="483.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Prometheus</text>
-<text class="s" x="396.0" y="503.2" font-size="13" fill="#cbd5e1" text-anchor="middle">metrics</text>
-<rect x="546" y="176" width="140" height="352" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="616.0" y="338.9" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">observer API</text>
-<text class="s" x="616.0" y="358.4" font-size="13" fill="#cbd5e1" text-anchor="middle">one query API</text>
-<text class="s" x="616.0" y="375.9" font-size="13" fill="#cbd5e1" text-anchor="middle">Thunder auth</text>
-<rect x="776" y="176" width="144" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="848.0" y="211.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">Backstage</text>
-<text class="s" x="848.0" y="231.2" font-size="13" fill="#cbd5e1" text-anchor="middle">logs, metrics</text>
-<rect x="776" y="312" width="144" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5"/>
-<text class="s" x="848.0" y="347.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">promotion gate</text>
-<text class="s" x="848.0" y="367.2" font-size="13" fill="#cbd5e1" text-anchor="middle">alerts, error rate</text>
-<rect x="776" y="448" width="144" height="80" rx="8" fill="#173e45" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="6 4"/>
-<text class="s" x="848.0" y="483.7" font-size="15" fill="#f1f5f9" font-weight="600" text-anchor="middle">AI agents</text>
-<text class="s" x="848.0" y="503.2" font-size="13" fill="#cbd5e1" text-anchor="middle">RCA · FinOps</text>
-<rect x="852.7" y="428" width="57.3" height="17" rx="8.5" fill="#0b1120" stroke="#2dd4bf" stroke-width="1"/>
-<text class="s" x="881.4" y="440.5" font-size="11" font-weight="700" fill="#2dd4bf" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
-<text class="s" x="28.0" y="46.0" font-size="24" fill="#f1f5f9" font-weight="700">Observability · every signal lands in one place</text>
-<text class="s" x="28.0" y="72.0" font-size="14" fill="#94a3b8">Collectors on each workload cluster ship to OpenChoreo&#x27;s observability plane on mgmt; one observer API serves Backstage, the</text>
-<text class="s" x="28.0" y="91.0" font-size="14" fill="#94a3b8">promotion gate and the AI agents.</text>
-<circle cx="264.0" cy="216.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="264.0" y="220.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<circle cx="264.0" cy="352.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="264.0" y="356.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<circle cx="304.0" cy="352.0" r="3.6" fill="#fbbf24"/>
-<circle cx="264.0" cy="504.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="264.0" y="508.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<circle cx="508.0" cy="382.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="508.0" y="386.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<circle cx="470.0" cy="382.0" r="3.6" fill="#fbbf24"/>
-<circle cx="715.0" cy="352.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
-<text class="s" x="715.0" y="356.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<circle cx="744.0" cy="352.0" r="3.6" fill="#fbbf24"/>
-<line x1="28" y1="572" x2="932" y2="572" stroke="#8b9ab0" stroke-width="1.5"/>
-<circle cx="40.0" cy="595.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="600" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
-<text class="s" x="60.0" y="600.0" font-size="13.5" fill="#cbd5e1">Fluent Bit tails container logs, Falco alerts included, into</text>
-<text class="s" x="60.0" y="619.0" font-size="13.5" fill="#cbd5e1">OpenSearch</text>
-<circle cx="506.0" cy="595.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="600" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="526.0" y="600.0" font-size="13.5" fill="#cbd5e1">Both stores feed the observer API, one query API behind</text>
-<text class="s" x="526.0" y="619.0" font-size="13.5" fill="#cbd5e1">Thunder auth</text>
-<circle cx="40.0" cy="643.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="648" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="60.0" y="648.0" font-size="13.5" fill="#cbd5e1">Apps send OTLP to the OTel Collector on their node: traces</text>
-<text class="s" x="60.0" y="667.0" font-size="13.5" fill="#cbd5e1">and k8s events to OpenSearch, metrics to Prometheus</text>
-<circle cx="506.0" cy="643.5" r="11" fill="#fbbf24"/>
-<text class="s" x="506.0" y="648" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
-<text class="s" x="526.0" y="648.0" font-size="13.5" fill="#cbd5e1">It serves Backstage, the promotion gate and the opt-in AI</text>
-<text class="s" x="526.0" y="667.0" font-size="13.5" fill="#cbd5e1">agents</text>
-<circle cx="40.0" cy="691.5" r="11" fill="#fbbf24"/>
-<text class="s" x="40.0" y="696" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
-<text class="s" x="60.0" y="696.0" font-size="13.5" fill="#cbd5e1">The Prometheus agent scrapes cAdvisor and</text>
-<text class="s" x="60.0" y="715.0" font-size="13.5" fill="#cbd5e1">kube-state-metrics and remote-writes</text>
-<rect x="28" y="760" width="20" height="13" rx="3" fill="#173e45" stroke="#2dd4bf" stroke-width="1.3"/>
-<text class="s" x="58.0" y="770.0" font-size="13" fill="#94a3b8">mgmt cluster</text>
-<rect x="162.86294" y="760" width="20" height="13" rx="3" fill="#193951" stroke="#38bdf8" stroke-width="1.3"/>
-<text class="s" x="192.9" y="770.0" font-size="13" fill="#94a3b8">workload cluster</text>
-<rect x="318.40966000000003" y="760" width="20" height="13" rx="3" fill="#2f2f51" stroke="#a78bfa" stroke-width="1.3"/>
-<text class="s" x="348.4" y="770.0" font-size="13" fill="#94a3b8">stateful data</text>
-<path d="M 447.48310000000004 766 L 469.48310000000004 766" stroke="#fbbf24" stroke-width="2.2" marker-end="url(#ahfbbf24)"/>
-<path class="fx" d="M 447.48310000000004 766 L 469.48310000000004 766" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
-<text class="s" x="479.5" y="770.0" font-size="13" fill="#94a3b8">numbered flow (animated)</text>
-<rect x="665.5378000000001" y="760" width="20" height="13" rx="3" fill="none" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="4 3"/>
-<text class="s" x="695.5" y="770.0" font-size="13" fill="#94a3b8">opt-in (off by default)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="828" viewBox="0 0 960 828" role="img" aria-label="Observability · one place to query every signal"><title>Observability · one place to query every signal</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 6.90s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}38.3%{opacity:1}43.3%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ah8b9ab0" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#8b9ab0"/></marker><marker id="as8b9ab0" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#8b9ab0"/></marker><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="828" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="812" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<rect x="28" y="128" width="224" height="464" rx="14" fill="#0f1f31" stroke="#38bdf8" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="44.0" y="152.0" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.0">WORKLOAD CLUSTER</text>
+<rect x="348" y="128" width="584" height="464" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="364.0" y="152.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">MANAGEMENT CLUSTER</text>
+<rect x="364" y="168" width="344" height="408" rx="14" fill="#0e212d" stroke="#2dd4bf" stroke-opacity=".8" stroke-width="1.3"/>
+<text class="s" x="380.0" y="192.0" font-size="13" fill="#2dd4bf" font-weight="700" letter-spacing="1.0">OBSERVABILITY PLANE</text>
+<path d="M 236.0 256.0 L 380.0 256.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 236.0 392.0 L 324.0 392.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M 324.0 392.0 L 380.0 392.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 324.0 392.0 L 324.0 512.0 L 380.0 512.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 236.0 544.0 L 380.0 544.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 572.0 392.0 L 500.0 392.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path d="M 572.0 418.0 L 536.0 418.0 L 536.0 528.0 L 500.0 528.0" fill="none" stroke="#8b9ab0" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#ah8b9ab0)"/>
+<path d="M 784.0 392.0 L 692.0 392.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 784.0 256.0 L 760.0 256.0 L 760.0 392.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M 784.0 528.0 L 760.0 528.0 L 760.0 392.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round"/>
+<path class="fx" d="M 236.0 256.0 L 380.0 256.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 236.0 392.0 L 324.0 392.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 324.0 392.0 L 380.0 392.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 324.0 392.0 L 324.0 512.0 L 380.0 512.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 236.0 544.0 L 380.0 544.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 784.0 392.0 L 692.0 392.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 784.0 256.0 L 760.0 256.0 L 760.0 392.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 784.0 528.0 L 760.0 528.0 L 760.0 392.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<rect x="44" y="216" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="140.0" y="242.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Fluent Bit</text>
+<text class="s" x="140.0" y="262.4" font-size="13" fill="#dde5ef" text-anchor="middle">container logs,</text>
+<text class="s" x="140.0" y="280.4" font-size="13" fill="#dde5ef" text-anchor="middle">security alerts</text>
+<rect x="44" y="352" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="140.0" y="378.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">OpenTelemetry</text>
+<text class="s" x="140.0" y="398.4" font-size="13" fill="#dde5ef" text-anchor="middle">traces, events,</text>
+<text class="s" x="140.0" y="416.4" font-size="13" fill="#dde5ef" text-anchor="middle">app metrics</text>
+<rect x="44" y="488" width="192" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="140.0" y="514.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Prometheus agent</text>
+<text class="s" x="140.0" y="534.4" font-size="13" fill="#dde5ef" text-anchor="middle">container and</text>
+<text class="s" x="140.0" y="552.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster metrics</text>
+<rect x="380" y="216" width="120" height="216" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="440.0" y="310.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">OpenSearch</text>
+<text class="s" x="440.0" y="330.4" font-size="13" fill="#dde5ef" text-anchor="middle">logs, traces</text>
+<text class="s" x="440.0" y="348.4" font-size="13" fill="#dde5ef" text-anchor="middle">and events</text>
+<rect x="380" y="488" width="120" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="440.0" y="523.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Prometheus</text>
+<text class="s" x="440.0" y="543.4" font-size="13" fill="#dde5ef" text-anchor="middle">metrics</text>
+<rect x="572" y="352" width="120" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="632.0" y="378.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Observer API</text>
+<text class="s" x="632.0" y="398.4" font-size="13" fill="#dde5ef" text-anchor="middle">one query API,</text>
+<text class="s" x="632.0" y="416.4" font-size="13" fill="#dde5ef" text-anchor="middle">one login</text>
+<rect x="784" y="216" width="132" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="850.0" y="242.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Backstage</text>
+<text class="s" x="850.0" y="262.4" font-size="13" fill="#dde5ef" text-anchor="middle">developer</text>
+<text class="s" x="850.0" y="280.4" font-size="13" fill="#dde5ef" text-anchor="middle">portal</text>
+<rect x="784" y="352" width="132" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="850.0" y="378.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Promotion gate</text>
+<text class="s" x="850.0" y="398.4" font-size="13" fill="#dde5ef" text-anchor="middle">release</text>
+<text class="s" x="850.0" y="416.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks</text>
+<rect x="784" y="488" width="132" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text class="s" x="850.0" y="514.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">AI agents</text>
+<text class="s" x="850.0" y="534.4" font-size="13" fill="#dde5ef" text-anchor="middle">root cause,</text>
+<text class="s" x="850.0" y="552.4" font-size="13" fill="#dde5ef" text-anchor="middle">cost reports</text>
+<rect x="852.9" y="463" width="63.1" height="19" rx="9.5" fill="#0b1120" stroke="#dde5ef" stroke-width="1.2"/>
+<text class="s" x="884.4" y="476.8" font-size="12" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Observability · one place to query every signal</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">Collectors on every workload cluster ship to OpenChoreo&#x27;s observability plane on the management cluster; Backstage, the promotion</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">gate and the AI agents query it through one API.</text>
+<text class="s" x="784.0" y="196.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">CONSUMERS</text>
+<circle cx="300.0" cy="256.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="300.0" y="260.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="296.0" cy="392.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="296.0" y="396.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="324.0" cy="392.0" r="3.6" fill="#fbbf24"/>
+<circle cx="300.0" cy="544.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="300.0" y="548.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="740.0" cy="392.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="740.0" y="396.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="760.0" cy="392.0" r="3.6" fill="#fbbf24"/>
+<line x1="28" y1="614" x2="932" y2="614" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="637.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="642" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="642.0" font-size="13.5" fill="#dde5ef">Fluent Bit ships container logs, security alerts included, to OpenSearch</text>
+<circle cx="40" cy="665.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="670" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="670.0" font-size="13.5" fill="#dde5ef">The OpenTelemetry collector sends app traces and events to OpenSearch and app metrics to Prometheus</text>
+<circle cx="40" cy="693.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="698" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="698.0" font-size="13.5" fill="#dde5ef">The Prometheus agent collects container and cluster metrics and sends them to Prometheus</text>
+<circle cx="40" cy="721.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="726" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="726.0" font-size="13.5" fill="#dde5ef">Backstage, the promotion gate and the opt-in AI agents query the observer API, which reads both stores behind one login</text>
+<rect x="28" y="766" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="776.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="766" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="776.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<path d="M 511.92409999999995 772 L 555.9241 772" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="527.9241" cy="772" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="527.9241" y="776.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="565.9" y="776.0" font-size="13" fill="#aab6c8">numbered step: arrow from the component that acts</text>
+<path d="M 26 798 L 48 798" stroke="#8b9ab0" stroke-width="1.6" marker-end="url(#ah8b9ab0)"/>
+<text class="s" x="58.0" y="802.0" font-size="13" fill="#aab6c8">the observer API reads both stores</text>
+<g><rect x="298.92856" y="789" width="28" height="18" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.3" stroke-dasharray="4 2.5"/><rect x="334.92856" y="790" width="54.3" height="16" rx="8" fill="none" stroke="#dde5ef" stroke-width="1.2"/><text class="s" x="362.1" y="802" font-size="11" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.4">OPT-IN</text></g>
+<text class="s" x="398.9" y="802.0" font-size="13" fill="#aab6c8">opt-in, off by default</text>
 </svg>
