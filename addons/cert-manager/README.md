@@ -1,0 +1,26 @@
+# cert-manager
+
+## Purpose
+
+Wrapper chart for `cert-manager` (`v1.21.3`). Issues X.509 CAs and leaf certificates for platform control planes, admission webhooks, Gateway API TLS listeners, OpenChoreo per-cluster agent PKI, and Vault/OpenBao issuers.
+
+## Where it runs
+
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: cert-manager`).
+- **Catalog label:** `addons.platform.koorikla.io/cert-manager` (`default: true`, opt-out with `"false"`).
+
+## Key values
+
+- `cert-manager.crds.enabled`: `true` (installs cert-manager CRDs with the chart).
+- `cert-manager.config.enableGatewayAPI`: `true` so Gateway API `Gateway` listeners can request certificates.
+- `cert-manager.{image,webhook.image,cainjector.image,startupapicheck.image,acmesolver.image}`: pinned by multi-arch index digest.
+
+## Day-2 notes
+
+- Inspecting renewal times and rotating CAs or leaf certificates: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#1-cert-manager-cas-and-leaf-certificates).
+- Chart version and digest bumps: [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+
+## Links
+
+- [Architecture](../../docs/architecture.md)
+- [Networking](../../docs/networking.md)
