@@ -93,6 +93,20 @@ workflowStore:
     - promotion-gate                   # Thunder client secret (addon openchoreo-platform promotionGate.clientSecret.key)
     - promotion-gate-github            # gate GitHub App (addon openchoreo-platform promotionGate.github.key)
 
+# installation.yaml (valuesObject): previews.enabled renders templates/preview-token.yaml on mgmt.
+previews:
+  enabled: false
+
+# GitHub token of the PR preview ApplicationSets' pull request generators (charts/tenant templates/previews.yaml
+# previewToken.secretName must match). Installation token of the platform GitHub App (store key below, the promotion
+# gate's App), restricted to `permissions`; Argo CD gets only the token.
+previewToken:
+  secretName: preview-github-token
+  namespace: argocd
+  githubKey: promotion-gate-github
+  permissions: { pull_requests: read }
+  refreshInterval: 30m
+
 repoCreds:
   name: platform-repo-creds
   namespace: argocd
