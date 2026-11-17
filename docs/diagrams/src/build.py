@@ -103,28 +103,28 @@ def security() -> Diagram:
     R0 = 120
     R1 = R0 + H + 80
     R2 = R1 + H + 100
-    ch = R0 + H + 40                            # channel under the top row: badges 2, 3, 4 left to right
-    d.box(X[0], R0, BW, H, "mgmt", "Build & sign", ["scans, then signs", "with cosign"], step=1, aka=("cosign",))
-    d.box(X[1], R0, BW, H, "workload", "Admission control", ["Kyverno"], aka=("Kyverno",))
-    d.box(X[0], R1, BW, H, "mgmt", "Registry", ["images and", "signatures"])
-    d.box(X[1], R1, BW, H, "workload", "Detection", ["Falco"], aka=("Falco",))
-    d.box(X[2], R1, BW, R2 + H - R1, "workload", "App pods", ["your", "services"])
-    d.box(X[0], R2, BW, H, "mgmt", "Incident workflow", ["response", "runbook"])
-    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["Falco Talon"], aka=("Falco Talon",))
-    xb = X[0] + BW / 2
-    d.arrow([(xb, R0 + H), (xb, R1)], step=2, badge=(xb, ch))
-    xr = X[0] + BW + 60                         # Kyverno reads the registry: from its left, down the gutter
-    d.arrow([(X[1], R0 + 60), (xr, R0 + 60), (xr, R1 + 24), (X[0] + BW, R1 + 24)], step=3, badge=(xr, ch))
-    xa = X[2] + 60
-    d.arrow([(X[1] + BW, ymid(R0)), (xa, ymid(R0)), (xa, R1)], step=4, badge=(xa, ch))
-    d.arrow([(X[1] + BW, ymid(R1)), (X[2], ymid(R1))], step=5, badge_at=0.5)
-    xd = X[1] + BW / 2                          # Falco alerts Talon and, if critical, the incident workflow
-    yj = R1 + H + 62
-    d.arrow([(xd, R1 + H), (xd, R2)], step=6, badge=(xd, R1 + H + 32))
-    d.arrow([(xd, yj), (xb, yj), (xb, R2)], step=6, badge=False, label="critical alerts",
-            label_pos=((xb + xd) / 2, yj - 10))
-    d.junction(xd, yj)
-    d.arrow([(X[1] + BW, ymid(R2)), (X[2], ymid(R2))], step=7, badge_at=0.5)
+    d.box(X[0], R0, BW, H, "mgmt", "Build & sign", ["scans and signs", "every image"], step=1, aka=("cosign",))
+    d.box(X[1], R0, BW, H, "mgmt", "Registry", ["images and", "signatures"])
+    d.box(X[2], R0, BW, H, "workload", "Admission control", ["verifies images", "before pods start"],
+          aka=("Kyverno",))
+    d.box(X[0], R1, BW, H, "workload", "Detection", ["watches every pod", "at runtime"], aka=("Falco",))
+    d.box(X[2], R1, BW, R2 + H - R1, "workload", "App pods", ["your services"])
+    d.box(X[0], R2, BW, H, "mgmt", "Incident workflow", ["response runbook"])
+    d.box(X[1], R2, BW, H, "workload", "Auto-response", ["stops or labels", "the offending pod"],
+          aka=("Falco Talon",))
+    d.arrow([(X[0] + BW, ymid(R0)), (X[1], ymid(R0))], step=2, badge_at=0.5)
+    d.arrow([(X[2], ymid(R0)), (X[1] + BW, ymid(R0))], step=3, badge_at=0.5)     # Kyverno reads the registry
+    xa = X[2] + BW / 2
+    d.arrow([(xa, R0 + H), (xa, R1)], step=4)
+    d.arrow([(X[0] + BW, ymid(R1)), (X[2], ymid(R1))], step=5, badge_at=0.5)
+    yb = R1 + H + 50                            # badges 6 and 7 side by side: escalate, then alert Talon
+    xd = X[0] + BW / 2
+    d.arrow([(xd, R1 + H), (xd, R2)], step=6, badge=(xd, yb), label="critical alerts", label_pos=(xd + 20, yb + 5),
+            label_anchor="start")
+    xt = X[1] + 60
+    d.arrow([(X[0] + BW - 30, R1 + H), (X[0] + BW - 30, R1 + H + 24), (xt, R1 + H + 24), (xt, R2)], step=7,
+            badge=(xt, yb))
+    d.arrow([(X[1] + BW, ymid(R2)), (X[2], ymid(R2))], step=8, badge_at=0.5)
     d.require("Admission control", "Build & sign", "Registry", "Detection", "Auto-response",
               "Incident workflow", "App pods")
     d.key("Build & sign scans the image for known vulnerabilities, then cosign signs it with its build record",
@@ -133,7 +133,8 @@ def security() -> Diagram:
           "Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and "
           "staging",
           "Falco watches what every pod does at runtime, on every node",
-          "Falco alerts Falco Talon and escalates critical alerts to an incident workflow on the management cluster",
+          "Falco escalates critical alerts to an incident workflow on the management cluster",
+          "Falco also sends its alerts to Falco Talon",
           "Falco Talon stops or labels the offending pod")
     return d
 

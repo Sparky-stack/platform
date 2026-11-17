@@ -75,8 +75,9 @@ The numbered flow of each diagram, word for word.
 3. Kyverno fetches the signature from the registry before any pod starts
 4. Kyverno admits only signed images with safe pod settings: it blocks in production and warns in dev and staging
 5. Falco watches what every pod does at runtime, on every node
-6. Falco alerts Falco Talon and escalates critical alerts to an incident workflow on the management cluster
-7. Falco Talon stops or labels the offending pod
+6. Falco escalates critical alerts to an incident workflow on the management cluster
+7. Falco also sends its alerts to Falco Talon
+8. Falco Talon stops or labels the offending pod
 
 ### Network ([network.svg](network.svg))
 
