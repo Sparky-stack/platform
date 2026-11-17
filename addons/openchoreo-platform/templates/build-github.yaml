@@ -1,0 +1,61 @@
+{{- /*
+GitHub App credentials of in-cluster builds (values.yaml buildWorkflows.github, docs/build-plane.md "Git
+credentials"), in the run namespace workflows-<org ns> of the workflow plane:
+  ExternalSecret <appSecret>             the platform GitHub App from the scoped store `workflows`; read only by ESO
+                                         (each run's GithubAccessToken generator references it, no pod mounts it)
+  Role + RoleBinding build-github-tokens OpenChoreo's workflow-plane agent may manage GithubAccessToken generators in
+                                         this namespace only (it applies each run's `<run>-git` generator)
+Per run (templates/_build.tpl build.resources): generator `<run>-git` -> an installation token for the run's one
+repository -> Secret `<run>-git`.
+*/ -}}
+{{- $wpEnabled := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) }}
+{{- if and $wpEnabled .Values.buildWorkflows.enabled }}
+{{- $g := .Values.buildWorkflows.github }}
+{{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
+{{- $key := required "buildWorkflows.github.key (store key of the platform GitHub App) is required" $g.key }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $g.appSecret }}
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $g.secretStore }}
+  target:
+    name: {{ $g.appSecret }}
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  data:
+    - secretKey: app-id
+      remoteRef: { key: {{ $key }}, property: githubAppID }
+    - secretKey: installation-id
+      remoteRef: { key: {{ $key }}, property: githubAppInstallationID }
+    - secretKey: private-key
+      remoteRef: { key: {{ $key }}, property: githubAppPrivateKey }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: build-github-tokens
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: [generators.external-secrets.io]
+    resources: [githubaccesstokens]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: build-github-tokens
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: build-github-tokens
+subjects:
+  - kind: ServiceAccount
+    name: {{ $g.agent.serviceAccount }}
+    namespace: {{ $g.agent.namespace }}
+{{- end }}

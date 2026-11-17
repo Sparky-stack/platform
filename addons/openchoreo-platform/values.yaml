@@ -139,7 +139,6 @@ buildWorkflows:
   workflowTemplate: koorikla-build
   ttlAfterCompletion: 1d
   platforms: linux/amd64,linux/arm64         # default per run; a run may narrow it (e.g. the node's arch only)
-  gitAuthor: OpenChoreo build <build@openchoreo.invalid>
   # Signing with the platform key (cosign-platform). transparencyLog false (default): no entry in the public Rekor log
   # (it would publish private repo names and digests); verify with `cosign verify --key cosign.pub
   # --insecure-ignore-tlog=true`. true: also upload to public Rekor (needs egress to Sigstore). Per installation in
@@ -152,10 +151,30 @@ buildWorkflows:
   # prefixes, so the run's token is never sent to any other host or owner.
   git:
     allowedRepositoryPrefixes: []
+  # Git credentials: no long-lived token. Per WorkflowRun, ESO's GithubAccessToken generator mints an installation
+  # token of the platform GitHub App restricted to the run's ONE repository (the repository name of the Component's
+  # repository.url, rendered by OpenChoreo per run) and to `permissions` (component builds: clone + the GitOps commit;
+  # helm-chart builds: `readPermissions`, clone only). Re-minted every tokenRefreshInterval while the run lives
+  # (tokens expire after 1h); the GitOps commit goes through the GitHub API, so GitHub authors and signs it as the
+  # App's bot. The App must be installed on the repository (the run fails at checkout with that message otherwise)
+  # and needs Contents: Read and write. `key`: store key with githubAppID, githubAppInstallationID,
+  # githubAppPrivateKey (must be in addon secret-stores workflowStore.keys); default the platform's existing App (the
+  # promotion gate's, installed on the app repos), a dedicated build App works the same way. Its private key reaches
+  # only ESO: ExternalSecret `appSecret` in workflows-<org ns>, read by the generators (templates/build-github.yaml).
+  github:
+    key: promotion-gate-github
+    appSecret: build-github-app
+    secretStore: workflows                   # == addon openchoreo-workflow-plane clusterWorkflowPlane.secretStore
+    apiURL: ""                               # GitHub Enterprise Server: https://<host>/api/v3 ("" = api.github.com)
+    permissions: { contents: write }
+    readPermissions: { contents: read }
+    tokenRefreshInterval: 30m
+    # OpenChoreo's workflow-plane agent applies the per-run resources: it gets create/update/delete on
+    # GithubAccessToken generators in workflows-<org ns> only (upstream ClusterRole cluster-agent-workflowplane has no
+    # generators.external-secrets.io).
+    agent: { namespace: openchoreo-workflow-plane, serviceAccount: cluster-agent-workflowplane }
   # Per-run Secrets (ExternalSecrets in workflows-<org ns>, store = the ClusterWorkflowPlane's secretStoreRef):
   secrets:
-    git: platform-github-build               # username, token: clone + GitOps push (Contents: Read and write on app
-                                             # repos only); not Argo CD's read-only platform-github
     cosign: cosign-platform                  # cosign.key (encrypted), cosign.password; cosign.pub is public
     harbor:                                  # registry.type harbor
       robot: robot$builder                   # == addons/harbor config.robots[name=builder]

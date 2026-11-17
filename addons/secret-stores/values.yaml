@@ -89,11 +89,11 @@ workflowStore:
   namespaceRegexes:
     - "^workflows-.+$"
   keys:
-    - platform-github-build            # build clone + GitOps push (addon openchoreo-platform buildWorkflows.secrets.git)
     - cosign-platform                  # build signing key (addon openchoreo-platform buildWorkflows.secrets.cosign)
     - harbor                           # Harbor builder robot when registry.type is harbor (buildWorkflows.secrets.harbor.key)
     - promotion-gate                   # Thunder client secret (addon openchoreo-platform promotionGate.clientSecret.key)
-    - promotion-gate-github            # gate GitHub App (addon openchoreo-platform promotionGate.github.key)
+    - promotion-gate-github            # platform GitHub App: promotion gate (openchoreo-platform promotionGate.github.key),
+                                       # per-run build tokens (buildWorkflows.github.key), auto-build (autoBuild.github.key)
 
 # Per-tenant SecretStores on workload clusters (templates/tenant-stores.yaml; installation.yaml
 # secrets.tenantStores.enabled, default off; needs addon openbao on mgmt and the cluster to be a mesh member: OpenBao
