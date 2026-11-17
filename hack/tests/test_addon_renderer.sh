@@ -12,7 +12,7 @@ source hack/lib/addons.sh
 
 echo "== test_addon_renderer =="
 R="$TMP/platform-hetzner.yaml"
-helm template platform charts/platform --namespace argocd --values installations/hetzner-example/installation.yaml > "$R"
+render_platform hetzner-example "$R"
 
 # Release name: the catalog's releaseName (argo-cd's Argo release is `argocd`), else the addon name.
 assert_eq "$(addon_release_name "$R" argo-cd)" argocd "release name from catalog releaseName"
@@ -47,7 +47,7 @@ assert_match "$(printf '%s\n' "${args[@]}")" $'--set-string\nopenchoreo-data-pla
 # Cluster labels (catalog clusterLabelParameters, label-selected value files): resolved from the labels file, else the
 # catalog default / the else-branch; mesh members get values/mesh-member.yaml.
 L="$TMP/platform-local.yaml"
-helm template platform charts/platform --namespace argocd --values installations/local/installation.yaml > "$L"
+render_platform local "$L"
 printf '{"mesh.platform.koorikla.io/group": "local", "mesh.platform.koorikla.io/network": "dev1", "addons.platform.koorikla.io/istio-eastwest": "true"}\n' > "$TMP/labels-member.yaml"
 args=()
 read_lines args addon_helm_args istio-ambient installations/local "$L" workload dev1 docker development local cilium https://192.0.2.10:6443 "$TMP/labels-member.yaml"
