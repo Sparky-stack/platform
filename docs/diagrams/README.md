@@ -75,9 +75,9 @@ The numbered flow of each diagram, word for word.
 3. Admission control (Kyverno) fetches the signature from the registry before any pod starts
 4. Admission control admits only signed images with safe pod settings: it blocks in production and warns in dev and staging
 5. Detection (Falco) watches what every pod does at runtime, on every node
-6. Detection escalates critical alerts to an incident workflow on the management cluster
-7. Detection sends every alert to Auto-response (Falco Talon)
-8. Auto-response stops or labels the offending pod when an alert matches one of its rules
+6. Detection sends every alert to Auto-response (Falco Talon)
+7. Auto-response stops or labels the offending pod when an alert matches one of its rules
+8. Detection also escalates critical alerts to an incident workflow on the management cluster (Argo Events)
 
 ### Network ([network.svg](network.svg))
 
