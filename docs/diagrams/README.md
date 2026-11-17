@@ -84,7 +84,7 @@ The numbered flow of each diagram, word for word.
 1. A client opens the app URL; kgateway takes the request
 2. kgateway routes it into the service mesh
 3. The service mesh delivers it to the app pods and encrypts every hop between pods
-4. The app pods send their logs, metrics and traces to the collectors
+4. The collectors gather the app pods' telemetry: Fluent Bit tails their logs on each node, the Prometheus agent scrapes their metrics, the OpenTelemetry collector receives their traces
 5. The collectors dial out and ship them to the observability plane on the management cluster
 
 ### Observability ([observability.svg](observability.svg))
@@ -101,9 +101,10 @@ The numbered flow of each diagram, word for word.
 3. Argo CD reads the `deploy/` folder of the app repo
 4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
 5. The release deploys to development automatically
-6. The promotion gate checks development (readiness, smoke tests, alerts, change freezes), then opens the promotion pull request in the app repo: staging first, production only with code-owner approval
-7. The release deploys to staging, then to production, as Argo CD applies each merged promotion
-8. Kyverno admits into production only images signed in the registry and pinned by digest
+6. The release deploys to staging once the team merges a staging pull request in the app repo
+7. The promotion gate checks staging (readiness, smoke tests, alerts, error rate, change freezes), then opens the production pull request in the app repo
+8. The release deploys to production only after a code owner approves and merges that pull request
+9. Kyverno admits into production only images signed in the registry and pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
@@ -128,12 +129,14 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 
 ### Backup & restore ([backup.svg](backup.svg))
 
-1. Restore the management cluster's etcd from its latest snapshot copy: Cluster API keeps its clusters and the CA keys come back
+1. Restore the management cluster's etcd from its latest snapshot in the backup copies: the workload clusters' records and the CA keys come back
 2. Restore Thunder's volumes from their copy: users, sign-in clients, signing keys
-3. OpenBao (opt-in) restores its volume copy and fetches its unseal key from the secret backend, which lives outside the clusters (on a laptop, re-seed it with `task secrets`)
-4. Harbor's images come back from its volumes or from new builds; telemetry starts empty
+3. OpenBao (opt-in) restores its volume copy and fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
+4. Harbor's images come back from their volume copy or from new builds
 5. Argo CD re-syncs everything else from Git
-6. The databases (opt-in) restore themselves from object storage if a workload cluster is lost too
+6. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
+
+Telemetry is not backed up: it starts empty.
 
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
