@@ -286,19 +286,12 @@ assert_eq "$(applied platform-github-app)" "" "gate App: does not seed the push 
 run gate_partial "$S" NO_GH=1 GITHUB_GATE_APP_INSTALLATION_ID=6
 assert_eq "$RC" 1 "gate App partial: fails closed"
 
-# --- platform-github-build (in-cluster build git credentials) -----------------------------------------------------
-run build_token "$S" NO_GH=1 PLATFORM_GITHUB_BUILD_TOKEN=github_pat_FAKE PLATFORM_GITHUB_BUILD_USER=builder
-assert_eq "$(keys platform-github-build)" "token,username" "build git: keys"
-assert_eq "$(val platform-github-build token)" github_pat_FAKE "build git: PLATFORM_GITHUB_BUILD_TOKEN"
-assert_eq "$(val platform-github-build username)" builder "build git: PLATFORM_GITHUB_BUILD_USER"
+# --- no build PAT (#34): builds mint per-repository GitHub App tokens (ESO generator), nothing to seed ------------
 run build_gh "$S"
-assert_eq "$(val platform-github-build token)" gho_FAKEGHTOKEN "build git: gh fallback (local)"
-assert_eq "$(has "$OUT" 'platform-github-build: gh CLI token')" yes "build git: gh fallback warns"
-run build_app "$S" GITHUB_APP_ID=1 GITHUB_APP_INSTALLATION_ID=2 GITHUB_APP_PRIVATE_KEY_FILE="$PEM"
-assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read App is never reused for builds"
-assert_eq "$(has "$OUT" 'platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN')" yes "build git: skipped with a hint"
-run build_readtoken "$S" PLATFORM_GITHUB_TOKEN=github_pat_FAKE
-assert_eq "$(applied platform-github-build)" "" "build git: Argo CD's read-only token is never reused for builds"
+assert_eq "$(applied platform-github-build)" "" "builds: the gh CLI token is never seeded as a build credential"
+run build_pat "$S" NO_GH=1 PLATFORM_GITHUB_BUILD_TOKEN=github_pat_FAKE
+assert_eq "$(applied platform-github-build)" "" "builds: a PAT in the environment is ignored (no long-lived build token)"
+assert_eq "$(has "$OUT" 'github_pat_FAKE')" no "builds: the ignored PAT is not echoed"
 
 # --- harbor + cosign-platform ---------------------------------------------------------------------------------------
 run cosign "$S" NO_GH=1

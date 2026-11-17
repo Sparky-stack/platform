@@ -639,7 +639,6 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   fi
 done
 
-
 # 17. PR previews (#168): the pieces of one preview agree across charts - the Component opt-in the ApplicationSet selects
 #     on is the one the auto-build pass re-checks; the pull request generator's token Secret is the one addon
 #     secret-stores mints, in Argo CD's namespace; AppProject previews admits exactly the kinds charts/preview renders;
@@ -680,5 +679,23 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
     "$kp_values" ${ovargs[@]+"${ovargs[@]}"})
   assert_eq "${tier%%/*}" "${tier##*/}" "$inst: preview cells get the development policy tier (imageVerification.defaultAction == development's action: $tier)"
 done
+
+# 18. Build git credentials (#34): no long-lived build token anywhere. Each WorkflowRun mints an installation token of
+#     the platform GitHub App for its one repository (ESO GithubAccessToken generator); the App key is readable through
+#     the ClusterWorkflowPlane's scoped store, and the RoleBinding names the agent ServiceAccount the upstream
+#     workflow-plane chart really runs (it applies the per-run generators).
+pat=$(git -C "$ROOT" grep -n -I -i -E 'platform-github-build|github_build|github-build' -- . \
+  ':!hack/tests/test_gitops_contracts.sh' ':!hack/tests/test_bootstrap_secrets.sh' ':!docs/diagrams/out' || true)
+assert_eq "$pat" "" "no build PAT (platform-github-build) referenced anywhere"
+bw_key=$(yq '.buildWorkflows.github.key' "$ocp_values")
+assert_eq "$(K="$bw_key" yq '.workflowStore.keys[] | select(. == strenv(K))' "$ROOT/addons/secret-stores/values.yaml")" \
+  "$bw_key" "buildWorkflows.github.key is readable through ClusterSecretStore workflows (workflowStore.keys)"
+assert_eq "$(yq '.buildWorkflows.github.secretStore' "$ocp_values")" \
+  "$(yq '.clusterWorkflowPlane.secretStore' "$ROOT/addons/openchoreo-workflow-plane/values.yaml")" \
+  "buildWorkflows.github.secretStore == the ClusterWorkflowPlane's secret store"
+render_standalone_addon openchoreo-workflow-plane "$TMP/wp-all.yaml"
+agent="$(yq '.buildWorkflows.github.agent.namespace + "/" + .buildWorkflows.github.agent.serviceAccount' "$ocp_values")"
+assert_eq "$(A="$agent" yq 'select(.kind == "ServiceAccount" and (.metadata.namespace + "/" + .metadata.name) == strenv(A)) | .metadata.name' \
+  "$TMP/wp-all.yaml")" "${agent#*/}" "buildWorkflows.github.agent is the workflow-plane cluster agent's ServiceAccount"
 
 finish

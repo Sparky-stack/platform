@@ -151,13 +151,34 @@ verification: [#166](https://github.com/koorikla/platform/issues/166).
 ### GitOps hand-off
 
 `gitops` clones the source repo at the built branch, sets `spec.container.image` (`<repo>:<short sha>@sha256:<digest>`)
-and `spec.source.commit` in `deploy/openchoreo/workload.yaml` with yq, commits as `OpenChoreo build`, and pushes with
-rebase retries. Credentials: key `platform-github-build` (fine-grained PAT, app repos only, Contents: Read and write;
-not Argo CD's read-only `platform-github`). Only an OpenChoreo `Workload` at `deploy/openchoreo/<name>.yaml` is ever
-rewritten (schema pattern on `gitops.workloadPath`, plus a script check: no symlink on the path, `kind: Workload`).
-Argo CD (Application
+and `spec.source.commit` in `deploy/openchoreo/workload.yaml` with yq, and commits the file through the GitHub contents
+API (`PUT /repos/<owner>/<repo>/contents/<path>` with the blob `sha` as compare-and-swap; a 409 re-reads the branch and
+retries). GitHub authors, commits and signs that commit as the App's bot (`<app-slug>[bot]`, Verified). Only an
+OpenChoreo `Workload` at `deploy/openchoreo/<name>.yaml` is ever rewritten (schema pattern on `gitops.workloadPath`,
+plus a script check: no symlink on the path, `kind: Workload`). A protected build branch needs the App on the
+branch-protection or ruleset bypass list (hello-world's `main` is unprotected). Argo CD (Application
 `<project>-<app>`) syncs; `autoDeploy` cuts the ComponentRelease and binds development; staging/production stay
 promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
+
+### Git credentials
+
+No long-lived token. Every WorkflowRun renders an ESO `GithubAccessToken` generator `<run>-git` in `workflows-<org ns>`
+that mints an installation token of the platform GitHub App (store key `buildWorkflows.github.key`, default
+`promotion-gate-github`) for exactly one repository, the name of the run's `repository.url` (OpenChoreo CEL, `.git`
+removed), with `permissions` `contents: write` (runs with `gitops.enabled: false`, e.g. PR previews, and helm-chart
+builds: `contents: read`). ExternalSecret `<run>-git` turns
+it into the basic-auth Secret the checkout and gitops pods mount (`x-access-token`), re-minted every
+`tokenRefreshInterval` (30 min; GitHub expires tokens after 1 h); both are deleted with the WorkflowRun. A build can
+therefore neither read nor push to another repository, even one the App is installed on.
+
+The App's private key reaches only ESO: ExternalSecret `build-github-app` (template `build-github.yaml`) reads it
+through the scoped store `workflows`; no pod mounts it. OpenChoreo's workflow-plane agent applies the per-run
+generators, so it gets a Role for `githubaccesstokens` in the run namespace only. Requirements: the App has
+Contents: Read and write and is installed on the repository. If it is not, GitHub refuses the token, the Secret never
+appears, and checkout fails with `no GitHub token for <repo>: Secret <run>-git was not created ...`. The ExternalSecret
+only reports `could not get secret data from provider`; GitHub's answer (`422 ... not accessible to the parent
+installation`) is in the ESO controller log (`kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`). Fix: GitHub → Settings → Applications → the App →
+Configure → Repository access → add the repository.
 
 ### Multi-arch
 
@@ -174,7 +195,8 @@ platform). Narrow `platforms` per Component to build only the node's architectur
   Three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name after a prefix); `BUILD_GUARDS`
   in the checkout and gitops scripts (same check, git config only from the environment, `protocol.allow=never` except
   https); and git's credential helper registered per prefix (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so
-  the token never answers a 401 from another host or owner, redirects included. Branch, commit and path parameters
+  the token never answers a 401 from another host or owner, redirects included. The token itself only works for the
+  run's repository ([Git credentials](#git-credentials)). Branch, commit and path parameters
   have patterns against option injection (`--upload-pack=…`) and traversal; the build step refuses a context or
   Dockerfile that resolves outside the checkout (that pod also mounts the registry push credentials).
   `hack/tests/test_build_guards.sh` exercises all of it with real `git credential fill` (negative cases first).
@@ -356,17 +378,17 @@ audited for architectures by `task images:audit` but not digest-pinned here.
 |---|---|---|
 | `harbor` | `admin-password`, `secret-key` (16), `core-secret`, `csrf-key` (32), `jobservice-secret`, `registry-http-secret`, `registry-password`, `database-password`, `builder-secret`, `nodes-secret` | addon harbor; builds (`builder-secret`); nodes (`nodes-secret`) |
 | `cosign-platform` | `cosign.key` (encrypted), `cosign.pub`, `cosign.password` | build signing; admission policies trust `cosign.pub` |
-| `platform-github-build` | `username`, `token` (fine-grained PAT, app repos only, Contents: Read and write) | clone + GitOps commit, sent only to the allowed repository prefixes |
+| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the platform GitHub App: per-run build tokens for one repository (clone + GitOps commit, [Git credentials](#git-credentials)), auto-build, promotion gate |
 | `platform-ghcr` | `username`, `token` | Harbor GHCR proxy cache + replication; external registry type |
 | `github-webhook` | `secret` | auto-build trigger `webhook` only: HMAC secret of the GitHub App webhook (addon argo-events) |
 
 `task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the
 toolbox image (Docker, no host install; password only through the environment, key files removed on any exit), and
-seeds `platform-github-build` from `PLATFORM_GITHUB_BUILD_TOKEN` (local fallback: the `gh` CLI token, with a warning;
-Argo CD's read-only `platform-github` is never reused). Build and promotion-gate runs in `workflows-*` read their
+seeds `promotion-gate-github` from `GITHUB_GATE_APP_*` ([forking.md](forking.md#3-credentials) (c2)). Builds hold no
+git token of their own. Build and promotion-gate runs in `workflows-*` read their
 keys through `ClusterSecretStore/workflows` (`ClusterWorkflowPlane default` `secretStoreRef`), whose ServiceAccount
-`eso-workflows` has a name-scoped `get` Role in `platform-secrets` for `workflowStore.keys` only (`platform-github-build`,
-`cosign-platform`, `harbor` or `registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`);
+`eso-workflows` has a name-scoped `get` Role in `platform-secrets` for `workflowStore.keys` only (`cosign-platform`,
+`harbor` or `registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`);
 `workflows-*` cannot use `ClusterSecretStore/platform`.
 
 ## Ports and DNS (local)

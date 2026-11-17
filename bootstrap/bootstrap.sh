@@ -360,28 +360,6 @@ seed_cosign_secret() {
   trap - EXIT
 }
 
-# platform-github-build: git credentials of in-cluster builds (clone app repos + GitOps hand-off push), separate from
-# Argo CD's read-only platform-github. The build workflows only ever hand it to the installation's allowed repository
-# prefixes (addon openchoreo-platform buildWorkflows.git.allowedRepositories). Sources, least privilege first:
-#   PLATFORM_GITHUB_BUILD_TOKEN [+ PLATFORM_GITHUB_BUILD_USER]   fine-grained PAT, app repos only, Contents: Read and write
-#   gh CLI login (local backend only, broad OAuth token, warns; NO_GH=1 skips it)
-#   none: builds clone public repos only and the GitOps hand-off cannot push
-# shellcheck disable=SC2034  # build_user/build_token are read by apply_secret through their names
-seed_build_git_secret() {
-  local build_user build_token
-  if [[ -n "${PLATFORM_GITHUB_BUILD_TOKEN:-}" ]]; then
-    build_user="${PLATFORM_GITHUB_BUILD_USER:-git}"; build_token=$PLATFORM_GITHUB_BUILD_TOKEN
-    apply_secret platform-secrets platform-github-build username=build_user token=build_token
-    log "  platform-github-build: PLATFORM_GITHUB_BUILD_TOKEN (user $build_user)"
-  elif [[ "$GH_MODE" == gh ]]; then
-    build_user=$GH_LOGIN; build_token=$GH_SECRET
-    apply_secret platform-secrets platform-github-build username=build_user token=build_token
-    warn "  platform-github-build: gh CLI token of $GH_LOGIN (broad scopes). Least privilege: a fine-grained PLATFORM_GITHUB_BUILD_TOKEN (app repos, Contents: Read and write)"
-  else
-    warn "  platform-github-build: no PLATFORM_GITHUB_BUILD_TOKEN or gh login: skipped (builds clone public repos only; the GitOps hand-off cannot push)"
-  fi
-}
-
 # seed_byo_kubeconfigs: platform store key byo-<name> (property kubeconfig) for every `provider: byo` fleet file of the
 # installation (charts/cluster templates/byo-access.yaml; docs/providers.md "Bring your own cluster (byo)"). Source, first
 # match: the file named by BYO_KUBECONFIG_<NAME> (name upper-cased, '-' -> '_'), else the local k3d cluster <name>
@@ -479,8 +457,10 @@ cmd_secrets() {
     log "  platform-github-app: GitHub App $GITHUB_PUSH_APP_ID, installation $GITHUB_PUSH_APP_INSTALLATION_ID"
   fi
 
-  # promotion-gate-github: the promotion gate's own GitHub App (Contents, Pull requests, Commit statuses: write; app
-  # repos only). The gate mints a token scoped to one repository per run. Optional: without it the gate fails closed.
+  # promotion-gate-github: the platform's GitHub App (Contents, Pull requests, Commit statuses: write; app repos
+  # only). The promotion gate and every in-cluster build mint installation tokens scoped to one repository per run
+  # (builds: ESO GithubAccessToken generator, docs/build-plane.md). Optional: without it the gate fails closed and
+  # builds fail at checkout.
   if [[ -n "${GITHUB_GATE_APP_ID:-}${GITHUB_GATE_APP_INSTALLATION_ID:-}${GITHUB_GATE_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_GATE_APP_ID GITHUB_GATE_APP_INSTALLATION_ID GITHUB_GATE_APP_PRIVATE_KEY_FILE
     apply_secret platform-secrets promotion-gate-github githubAppID=GITHUB_GATE_APP_ID \
@@ -488,7 +468,6 @@ cmd_secrets() {
     log "  promotion-gate-github: GitHub App $GITHUB_GATE_APP_ID, installation $GITHUB_GATE_APP_INSTALLATION_ID"
   fi
 
-  seed_build_git_secret
   seed_openchoreo_secret
   seed_harbor_secret
   seed_cosign_secret

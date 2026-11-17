@@ -94,6 +94,8 @@ EOF
 
 # --- mgmt store `workflows` (ClusterWorkflowPlane secretStoreRef, key-scoped in workflows-*) ------------------------
 # wf_es_records <wp_store> <file>... -> "<ns> <wf>/<es> <store> <dataFrom count> <keys csv>" per workflow ExternalSecret
+# (<store> = generator:<kind> for a store-less ExternalSecret fed by generators; generatorRef entries are not counted
+# as dataFrom extract/find)
 wf_es_records() {
   local wps=$1; shift
   local -a wf_files=()
@@ -105,8 +107,9 @@ wf_es_records() {
     | .spec.resources[]?.template | select(.kind == "ExternalSecret")
     | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " "
       + $k + ":" + $wf + ":" + .metadata.name + " "
-      + (.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) + " "
-      + ((.spec.dataFrom // []) | length | tostring) + " "
+      + ((.spec.secretStoreRef.name // ("generator:" + ([.spec.dataFrom[]?.sourceRef.generatorRef.kind] | unique | join("+"))))
+         | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) + " "
+      + ([.spec.dataFrom[]? | select(.sourceRef.generatorRef == null)] | length | tostring) + " "
       + ([.spec.data[]?.remoteRef.key] | join(","))' "${wf_files[@]}" 2>/dev/null | grep -v '^$' || true
 }
 check_workflows() {   # check_workflows <label> <store render> <render>...
@@ -127,6 +130,8 @@ check_workflows() {   # check_workflows <label> <store render> <render>...
         done
         ;;
       mgmt-harbor) assert_eq "$keys" harbor-ca-bundle "$label: $what reads only harbor-ca-bundle from mgmt-harbor" ;;
+      # per-run GitHub App installation token (#34): generator output only, no store, no store key
+      generator:GithubAccessToken) assert_eq "$keys" "" "$label: $what (GitHub App token generator) reads no store key" ;;
       *) assert_eq "$s" workflows "$label: $what uses store workflows (got $s)" ;;
     esac
   done <<EOF

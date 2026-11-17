@@ -122,10 +122,18 @@ guard "git_access https://github.com/koorikla/x; git ls-remote file://$TMP/bare.
 assert_eq "$([[ "$out" == *LISTED* ]] && echo listed || echo blocked)" blocked "protocol.allow never: file:// blocked"
 guard 'git_access https://github.com/koorikla/x; env | grep -c "^GIT_ASKPASS=" || true'; out=$OUT
 assert_eq "$out" 0 "git_access leaves no GIT_ASKPASS"
+# No token (the platform GitHub App is not installed on the repository, so ESO's generator never wrote <run>-git): the
+# run stops with the reason instead of an anonymous clone and a failing push at the end (#34).
 rm -f "$TMP/git-credential"
-out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/none" GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
-  GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; git_access https://github.com/koorikla/x; echo ok' 2>&1 || true)
-assert_eq "$out:$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" "ok:none" "no git secret: public clone, no helper"
+out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/none" GIT_SECRET_WAIT=0 GIT_SECRET=run-1-git \
+  RUN_NAMESPACE=workflows-default GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+  GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; git_access https://github.com/koorikla/x; echo REACHED' 2>&1 || true)
+assert_eq "$([[ "$out" == *REACHED* ]] && echo reached || echo stopped):$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" \
+  "stopped:none" "no git token: the run stops, no anonymous clone"
+assert_match "$out" 'no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created' "no git token: says which Secret"
+assert_match "$out" 'GitHub App must be installed on this repository' "no git token: says what to fix"
+assert_match "$out" 'kubectl -n workflows-default describe externalsecret run-1-git' "no git token: points at the ExternalSecret"
+assert_match "$out" 'logs deploy/external-secrets \| grep run-1-git' "no git token: points at GitHub's answer (ESO log)"
 
 # --- gitops: only a real Workload under deploy/openchoreo/ is rewritten -------------------------------------------
 GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
@@ -215,8 +223,78 @@ for t in koorikla-build koorikla-helm-chart; do
   done
 done
 bash -n <(printf '%s\n' "$GUARDS") && assert_eq ok ok "BUILD_GUARDS parses"
+
+# --- gitops: the commit goes through the GitHub contents API as the App (#34) ---------------------------------------
+# Runs the rendered gitops script with a fake `git clone` (a local copy) and a fake `curl` that records the request:
+# one PUT to <api>/repos/<owner>/<repo>/contents/<workload> with the token only in a header file, compare-and-swap on
+# the file's blob sha, a 409 re-reads and retries, any other status stops with the reason. Linux toolbox tools
+# (GNU base64 -w0, realpath -e, LF-only jq output); skipped where they are missing and on Windows (Git Bash's jq
+# prints CRLF; the step only ever runs in the Linux toolbox, the Linux and arm CI jobs run these checks).
 GITOPS_SCRIPT=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
-assert_match "$GITOPS_SCRIPT" 'export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME' "gitops: identity also covers rebase retries"
+assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'git push' || true)" 0 "gitops: no git push (the API commits as the App)"
+assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'GIT_AUTHOR' || true)" 0 "gitops: no git identity of its own"
+if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)" != windows ]]; then
+  REAL_GIT=$(command -v git)
+  GX="$TMP/gx"; GB="$TMP/gxbin"; SRC="$TMP/gxsrc"; mkdir -p "$GB"
+  rm -rf "$SRC"; mkdir -p "$SRC/deploy/openchoreo"
+  printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec:\n  container:\n    image: old\n  source:\n    commit: aaa\n' \
+    > "$SRC/deploy/openchoreo/workload.yaml"
+  (cd "$SRC" && "$REAL_GIT" init -q -b main . && "$REAL_GIT" add -A && \
+    "$REAL_GIT" -c user.name=t -c user.email=t@t commit -q -m init)
+  BLOB=$(cd "$SRC" && "$REAL_GIT" rev-parse HEAD:deploy/openchoreo/workload.yaml)
+  printf '#!/bin/bash\nif [ "$1" = clone ]; then cp -R "%s" "${@: -1}"; exit 0; fi\nexec "%s" "$@"\n' "$SRC" "$REAL_GIT" > "$GB/git"
+  # fake curl: record argv (one line per call), keep the body + auth header, answer with the next code of $CODES
+  cat > "$GB/curl" <<'FAKE'
+#!/bin/bash
+n=$(( $(cat "$CALLS" 2>/dev/null | wc -l) + 1 )); printf '%s\n' "$*" >> "$CALLS"
+while [ $# -gt 1 ]; do
+  case "$1" in -o) out=$2; shift ;; --data-binary) cp "${2#@}" "$CALLS.body$n" ;; -H) [[ "$2" == @* ]] && cp "${2#@}" "$CALLS.auth" ;; esac
+  shift
+done
+code=$(printf '%s\n' $CODES | sed -n "${n}p")
+case "$code" in
+  20*) printf '{"commit":{"sha":"c0ffee","author":{"name":"koorikla-promotion-gate[bot]"}}}' > "$out" ;;
+  *) printf '{"message":"Resource not accessible by integration"}' > "$out" ;;
+esac
+printf '%s' "$code"
+FAKE
+  chmod +x "$GB/git" "$GB/curl"
+  gitops() {   # gitops <codes> <image> [source commit] -> RC, OUT; calls in $GX.calls
+    rm -rf "$GX" "$GX.calls"*; mkdir -p "$GX"
+    if env -i PATH="$GB:$WL_PATH" HOME="$GX" TMPDIR="$GX" CALLS="$GX.calls" CODES="$1" GIT_SECRET_DIR="$SEC" \
+        REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+        GITHUB_API_URL=https://api.github.com GITOPS_BRANCH=main WORKLOAD_PATH=deploy/openchoreo/workload.yaml \
+        IMAGE="$2" COMMIT_SHA="${3:-bbb}" SHORT_SHA=bbb COMPONENT=hello PROJECT=demo NAMESPACE=default RUN=run-1 \
+        GUARDS="$GUARDS" S="${GITOPS_SCRIPT//\/tmp/$GX}" \
+        bash -c 'set -euo pipefail; BUILD_GUARDS=$GUARDS; eval "$S"' > "$GX.out" 2>&1; then RC=0; else RC=$?; fi
+    OUT=$(cat "$GX.out")
+  }
+  gitops "201" new:1
+  assert_eq "$RC" 0 "gitops API: committed"
+  assert_match "$OUT" 'committed c0ffee to koorikla/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
+  assert_eq "$(wc -l < "$GX.calls" | tr -d ' ')" 1 "gitops API: one request"
+  call=$(cat "$GX.calls")
+  assert_match "$call" '-X PUT' "gitops API: PUT"
+  assert_match "$call" '--proto =https' "gitops API: https only"
+  assert_match "$call" 'https://api.github.com/repos/koorikla/hello-world/contents/deploy/openchoreo/workload.yaml$' \
+    "gitops API: the run's repository (.git removed) and the Workload path"
+  assert_eq "$([[ "$call" == *TOKEN-FAKE-123* ]] && echo argv || echo header-file)" header-file "gitops API: token not in argv"
+  assert_eq "$(cat "$GX.calls.auth")" "Authorization: Bearer TOKEN-FAKE-123" "gitops API: token in the auth header file"
+  assert_eq "$(jq -r '[.branch, .sha] | join(" ")' "$GX.calls.body1")" "main $BLOB" "gitops API: branch + compare-and-swap blob sha"
+  assert_match "$(jq -r .message "$GX.calls.body1")" '^chore\(deploy\): hello image bbb \[skip ci\]' "gitops API: commit message"
+  body=$(jq -r .content "$GX.calls.body1" | base64 -d)
+  assert_eq "$(printf '%s\n' "$body" | yq -r '.spec.container.image + " " + .spec.source.commit')" "new:1 bbb" "gitops API: new image + source commit"
+  gitops "409 201" new:1
+  assert_eq "$RC:$(wc -l < "$GX.calls" | tr -d ' ')" "0:2" "gitops API: 409 (branch moved) re-reads and retries"
+  gitops "403" new:1
+  assert_eq "$RC" 1 "gitops API: 403 fails the run"
+  assert_match "$OUT" 'HTTP 403 Resource not accessible by integration' "gitops API: shows GitHub's answer"
+  assert_match "$OUT" 'needs Contents: Read and write on koorikla/hello-world' "gitops API: says what to fix"
+  gitops "201" old aaa
+  assert_eq "$RC:$([[ -e "$GX.calls" ]] && echo called || echo none)" "0:none" "gitops API: unchanged Workload, no commit"
+else
+  echo "  SKIP gitops API runtime checks: Linux toolbox tools only (GNU base64/realpath, LF jq output)"
+fi
 
 # --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
 for t in koorikla-build koorikla-helm-chart; do

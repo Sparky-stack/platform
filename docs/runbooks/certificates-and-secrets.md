@@ -10,7 +10,7 @@ Use this runbook to inspect certificate expiry, rotate cert-manager CAs or leaf 
 
 - `Certificate` or `ExternalSecret` shows `READY=False` (`SecretSyncedError`, `Issuing`, or expired `notAfter`).
 - `cluster-agent-dataplane` logs TLS handshake failures after `<cluster>-agent-tls` or `cluster-gateway-ca` renewed.
-- Argo CD fails repository fetches (`platform-repo-creds`), in-cluster builds fail `git push` (`platform-github-build`), or `promotion-gate` fails GitHub App token minting (`promotion-gate-github`).
+- Argo CD fails repository fetches (`platform-repo-creds`), in-cluster builds fail at checkout with `no GitHub token for <repo>` or `promotion-gate` fails GitHub App token minting (both `promotion-gate-github`: App key, permissions, or the App not installed on the repository; `kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`).
 - Workload mesh pods or `cert-manager-istio-csr` fail to sign SPIFFE certificates against `Issuer/openbao-mesh`.
 - Falco Critical escalations return `401 Unauthorized` at `argo-events` after `falco-webhook` changed.
 
@@ -71,7 +71,7 @@ If `openchoreo-control-plane/cluster-gateway-ca` rotates, also force-sync `openc
 
 ### 4. GitHub App keys and registry PATs
 
-Credentials live in `ClusterSecretStore/platform` keys `platform-github`, `platform-github-app`, `promotion-gate-github`, `platform-github-build`, and `platform-ghcr` ([forking.md](../forking.md#3-credentials), [project-templates.md](../project-templates.md#repository-creation)).
+Credentials live in `ClusterSecretStore/platform` keys `platform-github`, `platform-github-app`, `promotion-gate-github`, and `platform-ghcr` ([forking.md](../forking.md#3-credentials), [project-templates.md](../project-templates.md#repository-creation)).
 
 ```bash
 # Local backend (`secrets.backend: kubernetes`): set new env vars (key stays in a 0600 file, never printed) and re-seed
@@ -86,7 +86,7 @@ kubectl --context k3d-platform-mgmt -n argocd annotate externalsecret platform-r
 kubectl --context k3d-platform-mgmt -n argocd get externalsecret platform-repo-creds
 ```
 
-- **`promotion-gate-github` and `platform-github-build`**: fetched per `WorkflowRun` (`refreshInterval: "0"`), so the very next build or promotion gate run uses the rotated credential without restarts.
+- **`promotion-gate-github`**: the gate reads it per `WorkflowRun`; builds mint tokens through ExternalSecret `workflows-default/build-github-app` (refresh 1h; force-sync it to use a rotated key at once).
 - **`platform-ghcr`**: force-sync `harbor/harbor-platform` (and run a Job from `CronJob/harbor-config`) so Harbor proxy-cache/replication picks it up; workload nodes only pick up rotated `fleet/<cluster>-registries` credentials when replaced.
 
 ### 5. `cosign-platform` signing key

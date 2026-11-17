@@ -38,6 +38,15 @@ schema pattern for repository.url (one path segment after a prefix, starting alp
 {{- printf "^(%s)[A-Za-z0-9][A-Za-z0-9._-]*$" (join "|" $q) -}}
 {{- end }}
 
+{{- /*
+CEL (rendered by OpenChoreo per run): the GitHub repository name of the run's repository.url (last path segment, a
+trailing ".git" removed) - what the GithubAccessToken generator scopes the token to. The schema pattern
+(build.repoUrlPattern) guarantees exactly one segment after an allowed prefix.
+*/ -}}
+{{- define "build.repoName" -}}
+${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/') + 1, size(parameters.repository.url) - (parameters.repository.url.endsWith('.git') ? 4 : 0))}
+{{- end }}
+
 {{- /* Repository-relative path (appPath, docker.context, docker.filePath, chart.path): no "..", no absolute path. */ -}}
 {{- define "build.relPathPattern" -}}
 ^(\.|(\./)?\.?[A-Za-z0-9_][A-Za-z0-9._-]*(/\.?[A-Za-z0-9_][A-Za-z0-9._-]*)*/?)$
@@ -53,16 +62,51 @@ schema pattern for repository.url (one path segment after a prefix, starting alp
 {{- end }}
 
 {{- /*
-Per-run Secrets as ClusterWorkflow resources: OpenChoreo renders them into workflows-<org ns> for every WorkflowRun
-(CEL ${...}), ESO materializes them ({{ }} escaped for Helm), the Argo pods mount them by name.
-  <run>-git          kubernetes.io/basic-auth  clone + GitOps push         (platform store key buildWorkflows.secrets.git)
+Per-run resources of a ClusterWorkflow: OpenChoreo renders them into workflows-<org ns> for every WorkflowRun
+(CEL ${...}), ESO materializes them ({{ }} escaped for Helm), the Argo pods mount the Secrets by name.
+  <run>-git          GithubAccessToken         ESO generator: an installation token of the platform GitHub App for the
+                                               run's one repository (build.repoName), `permissions` only
+  <run>-git          kubernetes.io/basic-auth  that token (x-access-token): clone + GitOps commit, re-minted every
+                                               buildWorkflows.github.tokenRefreshInterval
   <run>-registry     dockerconfigjson          push/pull the registry      (harbor robot builder | external credentials)
   <run>-registry-ca  ca.crt                    registry CA public cert     (harbor only, store mgmt-harbor)
   <run>-cosign       cosign.key/password       platform signing key        (key buildWorkflows.secrets.cosign)
+Call: include "build.resources" (dict "root" $ "permissions" <map> ["gitopsAware" true]). gitopsAware: a run with
+gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to write).
 */ -}}
 {{- define "build.resources" -}}
+{{- $root := .root }}
+{{- $g := $root.Values.buildWorkflows.github }}
+{{- $perms := required "build.resources: permissions (buildWorkflows.github.permissions / readPermissions) are required" .permissions }}
+{{- $app := required "buildWorkflows.github.appSecret is required" $g.appSecret }}
+{{- with $root }}
 {{- $s := .Values.buildWorkflows.secrets }}
 {{- $host := include "build.registryHost" . }}
+- id: git-token
+  template:
+    apiVersion: generators.external-secrets.io/v1alpha1
+    kind: GithubAccessToken
+    metadata:
+      name: ${metadata.workflowRunName}-git
+      namespace: ${metadata.namespace}
+    spec:
+      {{- with $g.apiURL }}
+      url: {{ . | quote }}
+      {{- end }}
+      appIDRef: { name: {{ $app }}, key: app-id }
+      installIDRef: { name: {{ $app }}, key: installation-id }
+      repositories: [{{ include "build.repoName" . | quote }}]
+      permissions:
+        {{- range $k, $v := $perms }}
+        {{- if and $.gitopsAware (hasKey $g.readPermissions $k) (ne (toString $v) (toString (get $g.readPermissions $k))) }}
+        {{ $k }}: {{ printf "${parameters.gitops.enabled ? '%s' : '%s'}" $v (get $g.readPermissions $k) | quote }}
+        {{- else }}
+        {{ $k }}: {{ $v | quote }}
+        {{- end }}
+        {{- end }}
+      auth:
+        privateKey:
+          secretRef: { name: {{ $app }}, key: private-key }
 - id: git-secret
   template:
     apiVersion: external-secrets.io/v1
@@ -71,16 +115,22 @@ Per-run Secrets as ClusterWorkflow resources: OpenChoreo renders them into workf
       name: ${metadata.workflowRunName}-git
       namespace: ${metadata.namespace}
     spec:
-      refreshInterval: 1h
-      secretStoreRef: { kind: ClusterSecretStore, name: "${workflowplane.secretStore}" }
+      refreshInterval: {{ required "buildWorkflows.github.tokenRefreshInterval is required (tokens expire after 1h)" $g.tokenRefreshInterval }}
       target:
         name: ${metadata.workflowRunName}-git
         creationPolicy: Owner
         template:
           type: kubernetes.io/basic-auth
-      data:
-        - { secretKey: username, remoteRef: { key: {{ $s.git }}, property: username } }
-        - { secretKey: password, remoteRef: { key: {{ $s.git }}, property: token } }
+          engineVersion: v2
+          data:
+            username: x-access-token
+            password: {{`"{{ .token }}"`}}
+      dataFrom:
+        - sourceRef:
+            generatorRef:
+              apiVersion: generators.external-secrets.io/v1alpha1
+              kind: GithubAccessToken
+              name: ${metadata.workflowRunName}-git
 - id: registry-secret
   template:
     apiVersion: external-secrets.io/v1
@@ -144,4 +194,5 @@ Per-run Secrets as ClusterWorkflow resources: OpenChoreo renders them into workf
       data:
         - { secretKey: cosign.key, remoteRef: { key: {{ $s.cosign }}, property: cosign.key } }
         - { secretKey: cosign.password, remoteRef: { key: {{ $s.cosign }}, property: cosign.password } }
+{{- end }}
 {{- end }}

@@ -1,6 +1,7 @@
 suite: openchoreo-platform - build ClusterWorkflows (workflow plane, koorikla/ci parity)
 templates:
   - templates/build-workflows.yaml
+  - templates/build-github.yaml
   - templates/helm-chart-workflow.yaml
   - templates/upstream-defaults.yaml
 tests:
@@ -49,6 +50,92 @@ tests:
       - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: registry-host, value: ghcr.io } }
       - notExists: { path: 'spec.resources[?(@.id == "registry-ca")]' }
 
+  - it: per run, a GitHub App installation token for the run's one repository with contents write (no PAT)
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.kind', value: GithubAccessToken }
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.apiVersion', value: generators.external-secrets.io/v1alpha1 }
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.metadata.name', value: "${metadata.workflowRunName}-git" }
+      # exactly one repository: the name of this run's repository.url (OpenChoreo CEL, ".git" removed), never a list
+      # from values, never empty (an empty list would mean every repository of the installation)
+      - equal:
+          path: 'spec.resources[?(@.id == "git-token")].template.spec.repositories'
+          value: ["${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/') + 1, size(parameters.repository.url) - (parameters.repository.url.endsWith('.git') ? 4 : 0))}"]
+      # contents write only when this run commits the image ref (gitops.enabled; PR previews run without it)
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.permissions', value: { contents: "${parameters.gitops.enabled ? 'write' : 'read'}" } }
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.appIDRef', value: { name: build-github-app, key: app-id } }
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.installIDRef', value: { name: build-github-app, key: installation-id } }
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.auth.privateKey.secretRef', value: { name: build-github-app, key: private-key } }
+      - notExists: { path: 'spec.resources[?(@.id == "git-token")].template.spec.url' }
+      # the run's Secret holds only that token, re-minted before it expires; no store key is read for git
+      - equal:
+          path: 'spec.resources[?(@.id == "git-secret")].template.spec.dataFrom'
+          value:
+            - sourceRef:
+                generatorRef: { apiVersion: generators.external-secrets.io/v1alpha1, kind: GithubAccessToken, name: "${metadata.workflowRunName}-git" }
+      - notExists: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.data' }
+      - notExists: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.secretStoreRef' }
+      - equal: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.refreshInterval', value: 30m }
+      - equal:
+          path: 'spec.resources[?(@.id == "git-secret")].template.spec.target.template.data'
+          value: { username: x-access-token, password: "{{ .token }}" }
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: github-api-url, value: "https://api.github.com" } }
+      - notContains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-author }, any: true }
+
+  - it: helm-chart builds only clone - their token is read-only
+    template: templates/helm-chart-workflow.yaml
+    asserts:
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.permissions', value: { contents: read } }
+      - lengthEqual: { path: 'spec.resources[?(@.id == "git-token")].template.spec.repositories', count: 1 }
+
+  - it: GitHub Enterprise Server - the generator and the GitOps commit use apiURL
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    set: { buildWorkflows.github.apiURL: "https://ghe.example.com/api/v3" }
+    asserts:
+      - equal: { path: 'spec.resources[?(@.id == "git-token")].template.spec.url', value: "https://ghe.example.com/api/v3" }
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: github-api-url, value: "https://ghe.example.com/api/v3" } }
+
+  - it: fails without token permissions (never an unscoped installation token)
+    template: templates/build-workflows.yaml
+    set: { buildWorkflows.github.permissions: null }
+    asserts:
+      - failedTemplate: { errorPattern: "permissions .* are required" }
+
+  - it: the App's private key reaches only ESO, through the scoped store, in the run namespace
+    template: templates/build-github.yaml
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: metadata, value: { name: build-github-app, namespace: workflows-default } }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: workflows } }
+      - equal:
+          path: spec.data
+          value:
+            - { secretKey: app-id, remoteRef: { key: promotion-gate-github, property: githubAppID } }
+            - { secretKey: installation-id, remoteRef: { key: promotion-gate-github, property: githubAppInstallationID } }
+            - { secretKey: private-key, remoteRef: { key: promotion-gate-github, property: githubAppPrivateKey } }
+
+  - it: OpenChoreo's workflow-plane agent may manage GithubAccessToken generators in the run namespace only
+    template: templates/build-github.yaml
+    asserts:
+      - equal:
+          path: rules
+          value: [{ apiGroups: [generators.external-secrets.io], resources: [githubaccesstokens], verbs: [get, list, watch, create, update, patch, delete] }]
+        documentSelector: { path: kind, value: Role }
+      - equal: { path: metadata.namespace, value: workflows-default }
+        documentSelector: { path: kind, value: Role }
+      - equal:
+          path: subjects
+          value: [{ kind: ServiceAccount, name: cluster-agent-workflowplane, namespace: openchoreo-workflow-plane }]
+        documentSelector: { path: kind, value: RoleBinding }
+
+  - it: no App credentials or agent rights without a workflow plane
+    template: templates/build-github.yaml
+    set: { openchoreo.workflowPlane.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
   - it: the signing key and git credentials come from the platform store, never from values
     template: templates/build-workflows.yaml
     documentSelector: { path: metadata.name, value: dockerfile }
@@ -69,7 +156,6 @@ tests:
           path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
           value: '^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$'
       - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/koorikla/" } }
-      - equal: { path: 'spec.resources[?(@.id == "git-secret")].template.spec.data[0].remoteRef.key', value: platform-github-build }
 
   - it: the allowlist follows installation.githubOrg (trailing slash normalized)
     template: templates/build-workflows.yaml

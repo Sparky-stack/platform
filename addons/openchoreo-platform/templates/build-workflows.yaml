@@ -39,7 +39,7 @@ spec:
       properties:
         repository:
           type: object
-          description: Git repository of the component (allowed repositories authenticate with the platform's build credentials)
+          description: Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only)
           required: [url]
           properties:
             url:
@@ -201,13 +201,13 @@ spec:
           - { name: gitops-enabled, value: "${parameters.gitops.enabled}" }
           - { name: gitops-branch, value: "${parameters.repository.revision.branch}" }
           - { name: workload-path, value: "${parameters.gitops.workloadPath}" }
-          - { name: git-author, value: {{ $b.gitAuthor | quote }} }
           - { name: git-secret, value: "${metadata.workflowRunName}-git" }
+          - { name: github-api-url, value: {{ $b.github.apiURL | default "https://api.github.com" | quote }} }
           - { name: registry-secret, value: "${metadata.workflowRunName}-registry" }
           - { name: registry-ca-secret, value: "${metadata.workflowRunName}-registry-ca" }
           - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
           - { name: tlog-upload, value: {{ $b.signing.transparencyLog | toString | quote }} }
   resources:
-    {{- include "build.resources" $ | nindent 4 }}
+    {{- include "build.resources" (dict "root" $ "permissions" $b.github.permissions "gitopsAware" true) | nindent 4 }}
 {{- end }}
 {{- end }}
