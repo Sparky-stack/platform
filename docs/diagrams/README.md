@@ -97,23 +97,25 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A developer merges reviewed code to main in the app repo
-2. Build & sign polls main every minute and builds each new commit in-cluster, on the management cluster
-3. Build & sign scans the image, signs it with the platform key and pushes it to Harbor
-4. Build & sign commits the image digest to `deploy/` on main; `deploy/` changes never start a build
-5. Argo CD reads the new digest on main and OpenChoreo cuts one immutable release
-6. OpenChoreo deploys the new release to development automatically
-7. The team merges a staging PR that picks the release running in development
-8. Argo CD reads `staging.yaml` on main
-9. OpenChoreo deploys the same release to staging
-10. The promotion gate starts when the staging rollout succeeds and checks staging: readiness, smoke tests, alerts, 5xx error rate, freeze windows
-11. The promotion gate opens a production PR with that release only if every check passes
-12. A code owner approves and merges the production PR
-13. Argo CD reads `production.yaml` on main, outside freeze windows
-14. OpenChoreo submits the same release to production
-15. Kyverno in every environment checks each image's signature, attestations and digest in Harbor against the platform key: it warns in development and staging and blocks unverified pods in production
+1. A developer merges a reviewed PR to main in the app repo
+2. The new commit reaches Build & sign within a minute (it polls main)
+3. Build & sign tests, scans and signs the image with the platform key and pushes it to Harbor
+4. Build & sign commits the image digest to `deploy/` on main, which starts no new build
+5. The digest commit is synced by Argo CD; OpenChoreo cuts one immutable release
+6. OpenChoreo deploys it to development
+7. Kyverno in development checks the image signature and attestations, and only warns
+8. The team opens and merges a staging PR that picks the release verified in development
+9. The merged staging PR is synced by Argo CD
+10. OpenChoreo deploys the same release to staging
+11. Kyverno in staging checks them the same way, and only warns
+12. Staging's finished rollout starts the promotion gate: readiness, smoke tests, alerts, 5xx rate, freeze window
+13. The promotion gate opens a production PR only if every check passes
+14. A code owner approves and merges the production PR
+15. The merged production PR is synced by Argo CD, after the freeze window if one is active
+16. OpenChoreo deploys the same release to production
+17. Kyverno in production blocks any pod whose image signature, attestations or digest do not verify
 
-Roll back by reverting the production PR. A failed scan, gate check or admission check stops the release where it is.
+Freeze window: the gate opens no production PR (re-run it afterwards) and Argo CD holds a production PR merged anyway until the window ends; break glass by changing the window in git. A failed scan stops the build, a failed gate check the promotion. Roll back by reverting the production PR.
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 

@@ -246,116 +246,114 @@ def observability() -> Diagram:
 
 # -------------------------------------------------------------------------------------------------- sdlc
 SDLC_STEPS = (
-    "A developer merges reviewed code to main in the app repo",
-    "Build & sign polls main every minute and builds each new commit in-cluster, on the management cluster",
-    "Build & sign scans the image, signs it with the platform key and pushes it to Harbor",
-    "Build & sign commits the image digest to deploy/ on main; deploy/ changes never start a build",
-    "Argo CD reads the new digest on main and OpenChoreo cuts one immutable release",
-    "OpenChoreo deploys the new release to development automatically",
-    "The team merges a staging PR that picks the release running in development",
-    "Argo CD reads staging.yaml on main",
+    "A developer merges a reviewed PR to main in the app repo",
+    "The new commit reaches Build & sign within a minute (it polls main)",
+    "Build & sign tests, scans and signs the image with the platform key and pushes it to Harbor",
+    "Build & sign commits the image digest to deploy/ on main, which starts no new build",
+    "The digest commit is synced by Argo CD; OpenChoreo cuts one immutable release",
+    "OpenChoreo deploys it to development",
+    "Kyverno in development checks the image signature and attestations, and only warns",
+    "The team opens and merges a staging PR that picks the release verified in development",
+    "The merged staging PR is synced by Argo CD",
     "OpenChoreo deploys the same release to staging",
-    "The promotion gate starts when the staging rollout succeeds and checks staging: readiness, smoke tests, alerts, "
-    "5xx error rate, freeze windows",
-    "The promotion gate opens a production PR with that release only if every check passes",
+    "Kyverno in staging checks them the same way, and only warns",
+    "Staging's finished rollout starts the promotion gate: readiness, smoke tests, alerts, 5xx rate, freeze window",
+    "The promotion gate opens a production PR only if every check passes",
     "A code owner approves and merges the production PR",
-    "Argo CD reads production.yaml on main, outside freeze windows",
-    "OpenChoreo submits the same release to production",
-    "Kyverno in every environment checks each image's signature, attestations and digest in Harbor against the "
-    "platform key: it warns in development and staging and blocks unverified pods in production",
+    "The merged production PR is synced by Argo CD, after the freeze window if one is active",
+    "OpenChoreo deploys the same release to production",
+    "Kyverno in production blocks any pod whose image signature, attestations or digest do not verify",
 )
+SDLC_NOTE = ("Freeze window: the gate opens no production PR (re-run it afterwards) and Argo CD holds a production PR "
+             "merged anyway until the window ends; break glass by changing the window in git. A failed scan stops the "
+             "build, a failed gate check the promotion. Roll back by reverting the production PR.")
 
 
 def sdlc() -> Diagram:
-    """Swimlanes: actors are rows (build, app repo, Argo CD + OpenChoreo, workload, gate), environments are columns.
-    Every environment repeats one vertical pattern (a person merges on main, Argo CD reads it, OpenChoreo deploys it),
-    so the loop back through Argo CD and OpenChoreo is drawn once per environment instead of as a back-arrow."""
-    d = Diagram("SDLC · from git push to production",
-                "Build once, in-cluster. Then every environment repeats one pattern: a person merges a change to main, "
-                "Argo CD reads it, OpenChoreo deploys the same signed release and Kyverno checks it against Harbor.",
+    """Swimlanes: actors are rows, environments are columns. Every environment repeats one vertical pattern down its
+    column (a person merges -> Argo CD syncs -> OpenChoreo deploys -> Kyverno admits), so the loop back through Argo CD
+    and OpenChoreo is drawn once per environment instead of as a back-arrow. Arrows follow the change."""
+    d = Diagram("SDLC · from merged PR to production",
+                "Build once, in-cluster. Then each environment repeats one pattern down its column: a person merges a "
+                "PR, Argo CD syncs it, OpenChoreo deploys the same signed release and Kyverno admits it.",
                 reading="columns")
+    d.flow_label = "numbered step: the change moves along the arrow"
     xb, cw, gap = 150, 196, 68                  # columns: development, staging, production
     cx = [xb, xb + cw + gap, xb + 2 * (cw + gap)]
-    ax = [cx[0] + 150, cx[1] + 95, cx[2] + 36]  # each column's read + deploy arrows
-    BX, BW = 28, cx[2] + cw + 14 - 28           # lane bands; the right channel outside them carries step 15
-    PT, PB, G = 36, 14, 96                      # band padding (top: lane label), gap between neighbouring lanes' boxes
-    RB, HB = 104 + PT, 72                       # build (the lede is two lines)
+    ax = [cx[i] + 50 for i in range(3)]         # each column's spine, right of the step rings
+    PT, PB, G = 36, 14, 96                      # band padding (top: lane label, chips), gap between lanes' boxes
+    RB, HB = 104 + PT, 72                       # build, registry, gate (the lede is two lines)
     RG, HG = RB + HB + G, 72                    # app repo
     RP, HP = RG + HG + G, 72                    # Argo CD + OpenChoreo
     RE, HE = RP + HP + G, 80                    # workload
-    RT, HT = RE + HE + G, 72                    # promotion gate
+    DN = 36                                     # badge offset from the source edge of a downward arrow
 
     def band(y, h, label, plane, sub=()):
-        d.zone(BX, y - PT, BW, h + PT + PB, label, plane)
+        d.zone(28, y - PT, 904, h + PT + PB, label, plane)
         for i, s in enumerate(sub):
             d.text(44, y - PT + 44 + i * 18, s)
 
-    band(RB, HB, "build", "mgmt", ("once per",  "commit"))
-    band(RG, HG, "app repo", "external", ("main branch",))
+    band(RB, HB, "automation", "mgmt", ("build, registry", "and gate"))
+    band(RG, HG, "app repo", "external", ("every change:", "a merge to main"))
     band(RP, HP, "platform", "mgmt", ("Argo CD +", "OpenChoreo"))
-    band(RE, HE, "workload", "workload", ("local default:", "one cluster, one", "namespace per", "environment"))
-    band(RT, HT, "gate", "mgmt", ("staging to", "production"))
+    band(RE, HE, "workload", "workload", ("local default:", "one workload", "cluster, a name-", "space per env"))
 
     d.box(cx[0], RB, cw, HB, "mgmt", "Build & sign", ["in-cluster: tests, scans,", "signs with platform key"])
-    d.box(cx[1], RB, cx[2] + cw - cx[1], HB, "mgmt", "Harbor",
-          ["image registry: one signed image,", "promoted unchanged to every environment"])
-    d.box(cx[0], RG, cw, HG, "external", "Main branch", ["your code, and the", "build's image digest"], step=1,
-          aka=("developer",))
-    d.box(cx[1], RG, cw, HG, "external", "Staging PR", ["merged to main", "by the team"], step=7, aka=("team",))
-    d.box(cx[2], RG, cw, HG, "external", "Production PR", ["opened by the gate,", "a code owner merges"], step=12,
-          aka=("code owner",))
+    d.box(cx[1], RB, cw, HB, "mgmt", "Harbor", ["one signed image per", "build; every env pulls it"])
+    d.box(cx[2], RB, cw, HB, "mgmt", "Promotion gate", ["readiness, smoke, alerts,", "5xx; no PR in a freeze"])
+    d.box(cx[0], RG, cw, HG, "external", "Main branch", ["developers merge", "reviewed code"], step=1,
+          tag="MANUAL", aka=("developer", "new commit", "digest commit"))
+    d.box(cx[1], RG, cw, HG, "external", "Staging PR", ["picks a release,", "the team merges"], step=8,
+          tag="MANUAL", aka=("team", "merged staging PR"))
+    d.box(cx[2], RG, cw, HG, "external", "Production PR", ["opened by the gate,", "a code owner merges"], step=14,
+          tag="MANUAL", aka=("code owner", "merged production PR"))
     d.box(cx[0], RP, cw, HP, "mgmt", "New release", ["Argo CD syncs,", "OpenChoreo cuts it"],
-          aka=("Argo CD reads the new digest", "OpenChoreo deploys the new release"))
+          aka=("OpenChoreo deploys it to development",))
     d.box(cx[1], RP, cw, HP, "mgmt", "Promote to staging", ["Argo CD syncs,", "OpenChoreo deploys"],
-          aka=("Argo CD reads staging.yaml", "OpenChoreo deploys the same release to staging"))
-    d.box(cx[2], RP, cw, HP, "mgmt", "Promote to production", ["Argo CD syncs outside", "freeze windows"],
-          aka=("Argo CD reads production.yaml", "OpenChoreo submits the same release"))
-    d.box(cx[0], RE, cw, HE, "workload", "Development", ["every new release;", "Kyverno warns"])
-    d.box(cx[1], RE, cw, HE, "workload", "Staging", ["the same release;", "Kyverno warns"])
-    d.box(cx[2], RE, cw, HE, "workload", "Production", ["the same release;", "Kyverno blocks"])
-    xt = cx[1] + 52                             # the gate sits between staging and production
-    d.box(xt, RT, 200, HT, "mgmt", "Promotion gate", ["automated: readiness,", "smoke, alerts, 5xx, freeze"])
+          aka=("OpenChoreo deploys the same release to staging",))
+    d.box(cx[2], RP, cw, HP, "mgmt", "Promote to production", ["Argo CD syncs, OpenChoreo", "deploys; never in a freeze"],
+          aka=("OpenChoreo deploys the same release to production",))
+    d.box(cx[0], RE, cw, HE, "workload", "Development", ["every new release;", "Kyverno warns"], step=7,
+          aka=("Kyverno in development",))
+    d.box(cx[1], RE, cw, HE, "workload", "Staging", ["the same release;", "Kyverno warns"], step=11,
+          aka=("Kyverno in staging",))
+    d.box(cx[2], RE, cw, HE, "workload", "Production", ["the same release;", "Kyverno blocks"], step=17,
+          aka=("Kyverno in production",))
 
-    # build once, development column: Build & sign polls main, pushes to Harbor, commits the digest back
-    yb = RB + HB + 38
-    d.arrow([(ax[0] - 30, RB + HB), (ax[0] - 30, RG)], step=2, badge=(ax[0] - 30, yb), label="polls",
-            label_pos=(ax[0] - 50, yb + 5), label_anchor="end")
+    # build once (development column): the merge goes to Build & sign, the image to Harbor, the digest back to main
+    x = ax[0]
+    d.arrow([(x - 30, RG), (x - 30, RB + HB)], step=2, badge=(x - 30, RB + HB + 40), label="builds",
+            label_pos=(x - 50, RB + HB + 45), label_anchor="end")
     d.arrow([(cx[0] + cw, ymid(RB, HB)), (cx[1], ymid(RB, HB))], step=3, badge=(cx[0] + cw + 30, ymid(RB, HB)),
-            label="pushes", label_pos=(cx[0] + cw + 33, ymid(RB, HB) - 22))
-    d.arrow([(ax[0], RB + HB), (ax[0], RG)], step=4, badge=(ax[0], yb), label="commits the digest",
-            label_pos=(ax[0] + 20, yb + 5), label_anchor="start")
-    # one pattern per column: Argo CD reads the merge on main, OpenChoreo deploys it
-    for i, (s_read, s_deploy) in enumerate(((5, 6), (8, 9), (13, 14))):
+            label="pushes", label_pos=(cx[0] + cw + 34, ymid(RB, HB) - 22), label_bg=d.zone_fill("mgmt"))
+    d.arrow([(x, RB + HB), (x, RG)], step=4, badge=(x, RB + HB + DN), label="digest",
+            label_pos=(x + 20, RB + HB + DN + 5), label_anchor="start")
+    # the same spine in every column: the merge on main -> Argo CD + OpenChoreo -> the environment
+    for i, (s_sync, s_deploy) in enumerate(((5, 6), (9, 10), (15, 16))):
         x = ax[i]
-        y1, y2 = RG + HG + 40, RP + HP + 36
-        d.arrow([(x, RP), (x, RG + HG)], step=s_read, badge=(x, y1), label="reads",
-                label_pos=(x + 20, y1 + 5), label_anchor="start")
-        d.arrow([(x, RP + HP), (x, RE)], step=s_deploy, badge=(x, y2), label="deploys",
-                label_pos=(x + 20, y2 + 5), label_anchor="start")
-    # development -> staging: the team promotes the release it saw in development
-    xd = cx[0] + cw + 33
-    d.arrow([(cx[0] + cw, ymid(RE, HE)), (xd, ymid(RE, HE)), (xd, ymid(RG, HG)), (cx[1], ymid(RG, HG))])
-    d.line_label = "the release the team promotes"
-    # staging -> production: the gate checks staging, then opens the production PR
-    y9 = RE + HE + 40
-    x9 = ax[1] + 27
-    d.arrow([(x9, RT), (x9, RE + HE)], step=10, badge=(x9, y9), label="checks",
-            label_pos=(x9 + 20, y9 + 5), label_anchor="start")
-    xg = cx[1] + cw + 33
-    d.arrow([(xg, RT), (xg, ymid(RG, HG)), (cx[2], ymid(RG, HG))], step=11, badge=(xg, y9),
-            label="opens the PR", label_pos=(xg + 20, y9 + 5), label_anchor="start")
-    # Kyverno in every environment checks every image against Harbor: out of the workload lane, up the right side
-    xr = BX + BW + 24
-    d.arrow([(BX + BW, ymid(RE, HE)), (xr, ymid(RE, HE)), (xr, ymid(RB, HB)), (cx[2] + cw, ymid(RB, HB))],
-            step=15, badge=(xr, yb), label="verifies every image", label_pos=(xr - 20, yb + 5), label_anchor="end")
-    d.legend_label("workload", "workload cluster (local default: one cluster, one namespace per environment; "
+        d.arrow([(x, RG + HG), (x, RP)], step=s_sync, badge=(x, RG + HG + DN), label="syncs",
+                label_pos=(x + 20, RG + HG + DN + 5), label_anchor="start")
+        d.arrow([(x, RP + HP), (x, RE)], step=s_deploy, badge=(x, RP + HP + DN), label="deploys",
+                label_pos=(x + 20, RP + HP + DN + 5), label_anchor="start")
+    # staging -> production: staging's finished rollout starts the gate; the gate opens the production PR
+    xc = cx[1] + cw + 34
+    d.arrow([(cx[1] + cw, ymid(RE, HE)), (xc, ymid(RE, HE)), (xc, ymid(RB, HB)), (cx[2], ymid(RB, HB))], step=12,
+            badge=(xc, RB + HB + 40), label="rollout done", label_pos=(xc - 20, RB + HB + 45), label_anchor="end")
+    d.arrow([(ax[2], RB + HB), (ax[2], RG)], step=13, badge=(ax[2], RB + HB + DN), label="opens PR",
+            label_pos=(ax[2] + 20, RB + HB + DN + 5), label_anchor="start")
+    # development -> staging: the team promotes the release it verified in development
+    xd = cx[0] + cw + 34
+    d.arrow([(cx[0] + cw, ymid(RE, HE)), (xd, ymid(RE, HE)), (xd, ymid(RG, HG)), (cx[1], ymid(RG, HG))],
+            label="verified", label_pos=(xd - 14, RP + HP + DN + 5), label_anchor="end")
+    d.line_label = "the release the team verified in development"
+    d.legend_chip("MANUAL", "a person merges a pull request")
+    d.legend_label("workload", "workload cluster (local default: one, with a namespace per environment; "
                                "multicluster: production on its own)")
     d.require("Main branch", "Build & sign", "Harbor", "New release", "Promote to staging", "Promote to production",
               "Staging PR", "Production PR", "Promotion gate", "Development", "Staging", "Production")
     d.stages("Development", "Staging", "Production")
     d.key(*SDLC_STEPS)
-    d.note("Roll back by reverting the production PR. A failed scan, gate check or admission check stops the release "
-           "where it is.")
+    d.note(SDLC_NOTE)
     return d
 
 
