@@ -45,7 +45,9 @@ for bad in "busybox:1.37.0" "busybox@$D" "curlimages/curl@$D" "docker.io/curlima
 done
 
 # Inventory: one hack/image-audit.sh run per installation, in parallel (read-only; dependencies built once here).
-( cd "$ROOT" && ./hack/deps.sh >/dev/null )
+if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
+  ( cd "$ROOT" && ./hack/deps.sh >/dev/null )
+fi
 pids=()
 for inst_dir in "$ROOT"/installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
@@ -93,7 +95,7 @@ done
 if [[ -n "${RENDERED_DIR:-}" && -d "$RENDERED_DIR" ]]; then
   labels=""
   for f in "$RENDERED_DIR"/*.yaml; do
-    [[ -s "$f" ]] || continue
+    if [[ ! -s "$f" ]] || ! grep -q 'labels:' "$f" || ! grep -q '@' "$f"; then continue; fi
     l=$(yq -N '.. | select(tag == "!!map" and has("labels")) | .labels | select(tag == "!!map") | to_entries[]
       | select((.value | tag) == "!!str") | select(.value | test("@")) | .key + "=" + .value' "$f" 2>/dev/null || true)
     if [[ -n "$l" ]]; then labels="$labels$(basename "$f"): $l"$'\n'; fi
