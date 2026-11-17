@@ -39,8 +39,11 @@ tests:
   - it: "reconcile policies: no policy authoring, no key export/import, no verbatim or external CA signing, bounded parameters"
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies?/[^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list|delete|sudo)' }
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/[^"]*" \{\s*capabilities\s*=\s*\["(create|update)' }
+      # the policy reconciler's two exact grants are the only ones (next test); no other identity may touch sys/policies
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policy/[^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list|delete|sudo)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/(?:[^a]|a[^c]|ac[^l]|acl[^/"])[^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list|delete|sudo)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/(?:[^t]|t[^e]|te[^n]|ten[^a]|tena[^n]|tenan[^t]|tenant[^-])[^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list|delete|sudo)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/(?:[^r]|r[^o]|ro[^l]|rol[^e]|role[^/]|role/[^t]|role/t[^e]|role/te[^n]|role/ten[^a]|role/tena[^n]|role/tenan[^t]|role/tenant[^-]|role/tenant-[^cw])[^"]*" \{\s*capabilities\s*=\s*\["(create|update)' }
       - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\*"|path "sys/\*"|path "pki-mesh-\*"|path "\+/\*"|sys/raw|sys/seal|generate-root' }
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/auth/mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "type" = \["jwt"\] \}' }
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/mesh-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "token_policies" = \["mesh-member"\] \}\s+denied_parameters\s+= \{ "policies" = \[\] \}' }
@@ -58,25 +61,25 @@ tests:
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/keys/\*" \{ capabilities = \["deny"\] \}' }
       - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "\+/root/rotate/\*" \{ capabilities = \["deny"\] \}' }
 
-  - it: "tenant policies: static, templated on entity metadata tenant - readers read, writers write, only kv-tenant-<own>"
+  - it: "self-init writes no tenant policy or tenant role (the policy reconciler does, from files/policies/)"
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/tenant-read"\s+data = \{\s+policy = <<EOP\s+path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*" \{ capabilities = \["read"\] \}\s+path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/metadata/\*" \{ capabilities = \["read", "list"\] \}\s+path "auth/token/lookup-self" \{ capabilities = \["read"\] \}\s+path "auth/token/revoke-self" \{ capabilities = \["update"\] \}\s+EOP' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/tenant-write"\s+data = \{\s+policy = <<EOP\s+path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*"' }
-      # every tenant path is keyed on the entity's own tenant: no literal tenant name, no wildcard mount
-      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "kv-tenant-[a-z*][^"]*" \{\s*capabilities\s*=\s*\["(create|update|read|list)' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "sys/policies/acl/tenant-' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/tenant-' }
 
-  - it: "tenant reconcile identity: kv-tenant-* (kv only), jwt tenants-* with roles carrying only tenant-read, entities metadata only; no secrets, policies, mesh or Kubernetes roles"
+  - it: "policy reconciler: only tenant-* policies and the two tenant roles with every parameter pinned; own role bound to one ServiceAccount"
     template: charts/openbao/templates/server-config-configmap.yaml
     asserts:
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/auth/tenants-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "type" = \["jwt"\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/tenants-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "token_policies" = \["tenant-read"\] \}\s+denied_parameters\s+= \{ "policies" = \[\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/mounts/kv-tenant-\*" \{\s+capabilities\s+= \["create", "read", "update"\]\s+allowed_parameters = \{ "\*" = \[\], "type" = \["kv"\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "identity/entity/name/tenant-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "metadata" = \[\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "kv-tenant-\*" \{ capabilities = \["deny"\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/mesh-\*" \{ capabilities = \["deny"\] \}' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-tenant-config"\s+data = \{\s+bound_service_account_names\s+= \["openbao-tenant-config"\]\s+bound_service_account_namespaces = \["openbao"\]' }
-      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/tenant-writer"\s+data = \{\s+bound_service_account_names\s+= \["\*"\]\s+bound_service_account_namespaces = \["openbao-tenants"\]\s+alias_name_source\s+= "serviceaccount_name"\s+audience\s+= "openbao"\s+token_policies\s+= \["tenant-write"\]' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'initialize "policy-reconciler"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/tenant-\*" \{ capabilities = \["create", "read", "update", "delete"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl" \{ capabilities = \["list"\] \}' }
+      # exactly two role paths, create/update only (required_parameters also blocks reads), every value pinned
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/role/tenant-config" \{\s+capabilities\s+= \["create", "update"\]\s+required_parameters = \[[^]]*"token_no_default_policy"[^]]*\]\s+allowed_parameters\s+= \{ "bound_service_account_names" = \["openbao-tenant-config"\], "bound_service_account_namespaces" = \["openbao"\], "audience" = \["openbao"\], "token_policies" = \["tenant-config"\], "token_no_default_policy" = \["true"\], "token_ttl" = \["15m"\], "token_max_ttl" = \["15m"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/role/tenant-writer" \{\s+capabilities\s+= \["create", "update"\]\s+required_parameters = \[[^]]*\]\s+allowed_parameters\s+= \{ "bound_service_account_names" = \["\*"\], "bound_service_account_namespaces" = \["openbao-tenants"\], "alias_name_source" = \["serviceaccount_name"\], "audience" = \["openbao"\], "token_policies" = \["tenant-write"\], "token_no_default_policy" = \["true"\], "token_ttl" = \["15m"\], "token_max_ttl" = \["15m"\] \}' }
+      - notMatchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "auth/kubernetes/role/tenant-\*"' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "pki-\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path "sys/policies/acl/platform-\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["extraconfig-from-values.hcl"]', pattern: 'path\s+= "auth/kubernetes/role/platform-policy-reconciler"\s+data = \{\s+bound_service_account_names\s+= \["openbao-policy-reconciler"\]\s+bound_service_account_namespaces = \["openbao"\]\s+audience\s+= "openbao"\s+token_policies\s+= \["platform-policy-reconciler"\]\s+token_no_default_policy\s+= true\s+token_ttl\s+= "5m"' }
 
   - it: pinned multi-arch image, restricted pod security, seal key and TLS mounted read-only
     template: charts/openbao/templates/server-statefulset.yaml

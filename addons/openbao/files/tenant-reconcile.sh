@@ -3,9 +3,9 @@
 # multicluster.md "Tenant secrets (OpenBao)"). Idempotent; run by the CronJob `tenant-reconcile`
 # (templates/tenant-secrets.yaml). POSIX sh + the bao CLI only (the OpenBao image: busybox, no jq).
 #
-# This script authors NO ACL policy: tenant-read / tenant-write are static templated policies written once by
-# OpenBao's self-initialisation (values.yaml), keyed on the metadata `tenant` of the caller's identity entity. One
-# identity: LOGIN_ROLE (policy platform-tenant-config). Inputs (built by ESO, the pod has no Kubernetes API access):
+# This script authors NO ACL policy: tenant-read / tenant-write are templated policies from git (files/policies/,
+# written by the CronJob policy-reconcile), keyed on the metadata `tenant` of the caller's identity entity. One
+# identity: LOGIN_ROLE (policy tenant-config). Inputs (built by ESO, the pod has no Kubernetes API access):
 #   $IN/tenants/<t>.namespaces   space-separated cell namespaces of tenant <t> on the data planes (charts/tenant
 #                                computes them like OpenChoreo does); rejected.<secret> = a descriptor whose name is not
 #                                <t>-openbao-tenant (templates/tenant-secrets.yaml)
@@ -13,7 +13,7 @@
 # Per tenant <t>:
 #   kv-tenant-<t>                       KV v2 mount (created if missing; never deleted here - data outlives a tenant)
 #   identity entity tenant-<t>          metadata tenant=<t>
-#   alias WRITER_NS/<t>-writer on the mgmt Kubernetes auth mount -> entity tenant-<t> (role tenant-writer, static)
+#   alias WRITER_NS/<t>-writer on the mgmt Kubernetes auth mount -> entity tenant-<t> (role tenant-writer)
 # Per member cluster <c>:
 #   auth/tenants-<c> (jwt)              the member's ServiceAccount signing keys (jwks_url = its API server's
 #                                       /openid/v1/jwks, pinned to its cluster CA), like auth/mesh-<c>
@@ -43,7 +43,7 @@ q() { bao "$@" >/dev/null; }
 if [ -z "${BAO_TOKEN:-}" ]; then
   : "${LOGIN_ROLE:?}" "${TOKEN_FILE:?}"
   BAO_TOKEN=$(bao write -field=token "auth/$K8S_MOUNT/login" role="$LOGIN_ROLE" jwt=@"$TOKEN_FILE") \
-    || die "login as $LOGIN_ROLE failed (is OpenBao up and self-initialised with the tenant policies?)"
+    || die "login as $LOGIN_ROLE failed (is OpenBao up, and has the CronJob policy-reconcile written the role?)"
   export BAO_TOKEN
 fi
 

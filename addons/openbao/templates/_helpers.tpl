@@ -28,9 +28,9 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 
 {{- /* Pod spec of the reconcile Jobs/CronJobs (templates/reconcile.yaml, templates/tenant-secrets.yaml); context: dict
 r env sa img meshClients tlsSecret, optional script (default mesh-reconcile: ConfigMap + files/<script>.sh) and inputs
-(list of {name, secret, path}; default: meshClients at /inputs). */ -}}
+(list of {name, secret, path}, may be empty; default: meshClients at /inputs). */ -}}
 {{- define "openbao-addon.reconcilePod" }}
-{{- $inputs := .inputs | default (list (dict "name" "inputs" "secret" .meshClients "path" "/inputs")) }}
+{{- $inputs := ternary .inputs (list (dict "name" "inputs" "secret" .meshClients "path" "/inputs")) (hasKey . "inputs") }}
 serviceAccountName: {{ .sa }}
 automountServiceAccountToken: false
 restartPolicy: Never

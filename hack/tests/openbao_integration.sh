@@ -12,7 +12,13 @@
 #     policies) all answer 403
 #   - CronJob mode (member token only) configures members but creates no group
 #   - restart: auto-unseals with the static key; prune removes a member's auth
-#   - tenant secrets (files/tenant-reconcile.sh, static templated tenant-read / tenant-write): a tenant namespace's
+#   - nobody can mint a root token later: self-initialisation leaves zero recovery shares, the static seal key is not a
+#     share, generate-root is denied (why a "grant root, then revoke" Job cannot exist; #96)
+#   - policy reconciler (files/policy-reconcile.sh, self-init identity platform-policy-reconciler): writes the
+#     tenant-* policies of files/policies/ and the pinned tenant-config / tenant-writer roles, restores drift, prunes
+#     stale tenant-* policies, is idempotent; 403 for every other policy name, its own policy and role, other or
+#     widened roles, PKI, secrets, auth methods, identities, tokens, generate-root
+#   - tenant secrets (files/tenant-reconcile.sh, templated tenant-read / tenant-write from git): a tenant namespace's
 #     ServiceAccount token reads its own kv-tenant-<t> and nothing else (another tenant's mount, its namespace, wrong
 #     audience / ServiceAccount / cluster key, a namespace two tenants claim), writers write only their own mount, the
 #     tenant reconcile identity cannot read secrets or widen anything, prune removes a departed tenant's access
@@ -79,7 +85,22 @@ initialize "zz-integration-test-only" {
   request "tenantcfg" {
     operation = "update"
     path      = "auth/userpass/users/tenantcfg"
-    data      = { password = "$IT_PW", token_policies = ["platform-tenant-config"], token_no_default_policy = true }
+    data      = { password = "$IT_PW", token_policies = ["tenant-config"], token_no_default_policy = true }
+  }
+  request "rolereader-policy" {
+    operation = "update"
+    path      = "sys/policies/acl/it-role-reader"
+    data      = { policy = "path \"auth/kubernetes/role/*\" { capabilities = [\"read\"] }" }
+  }
+  request "rolereader" {
+    operation = "update"
+    path      = "auth/userpass/users/rolereader"
+    data      = { password = "$IT_PW", token_policies = ["it-role-reader"], token_no_default_policy = true }
+  }
+  request "policyrec" {
+    operation = "update"
+    path      = "auth/userpass/users/policyrec"
+    data      = { password = "$IT_PW", token_policies = ["platform-policy-reconciler"], token_no_default_policy = true }
   }
   request "demowriter" {
     operation = "update"
@@ -197,6 +218,7 @@ probes_run() {
   res=$(bao_in 'T_reconciler=$(bao write -field=token auth/userpass/login/reconciler password=@/w/it-pw)
     T_bootstrapper=$(bao write -field=token auth/userpass/login/bootstrapper password=@/w/it-pw)
     T_careader=$(bao write -field=token auth/userpass/login/careader password=@/w/it-pw)
+    T_policyrec=$(bao write -field=token auth/userpass/login/policyrec password=@/w/it-pw)
     r() { id=$1; eval "t=\$T_$2"; shift 2; c=$(BAO_TOKEN=$t bao "$@" 2>&1 | grep -m1 -oE "Code: [0-9]+|Success|Key|BEGIN" | sed "s/Code: //"); echo "$id ${c:-none}"; }
     . /w/probes.sh')
   for i in "${!P_EXP[@]}"; do
@@ -316,6 +338,74 @@ assert_match "$out" 'prune auth mesh-c2' "removed member: auth mount pruned"
 assert_eq "$(printf '%s\n' "$out" | grep -c 'prune auth mesh-c3' || true)" 0 "failing member still in the inputs is not pruned"
 assert_eq "$(bao_in "bao write -field=token auth/mesh-c2/login role=istio-csr jwt=$other >/dev/null 2>&1 && echo ok || echo denied")" denied "removed member can no longer log in"
 
+# --- no root token, ever: what makes a "generate-root grant" Job impossible (#96) --------------------------------------
+# Self-initialisation creates no recovery keys and the static seal key is not a key share, so generate-root (online or
+# in recovery mode) has nothing to reconstruct the root key from. Policies change through the reconciler below.
+st=$(bao_in 'bao status -format=json')
+assert_match "$st" '"recovery_seal": true' "auto-unseal (static seal): generate-root would need recovery shares"
+assert_match "$(printf '%s' "$st" | tr -d ' \n')" '"t":0,"n":0' "self-initialisation created zero recovery shares"
+assert_match "$(bao_in 'bao read sys/generate-root/attempt 2>&1')" 'Code: 405' "legacy unauthenticated generate-root endpoints are disabled"
+assert_match "$(bao_in 'bao operator generate-root -init 2>&1')" 'Code: 403' "authenticated generate-root without a token: denied"
+
+# --- policy reconciler: tenant-* policies + pinned tenant roles from git ----------------------------------------------
+helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml --set 'mesh.groups={local,prod}' \
+  --set secrets.tenantStores.enabled=true -s templates/policy-reconcile.yaml \
+  | yq -N 'select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec.containers[0].env[] | select(.name != "BAO_ADDR" and .name != "BAO_CACERT" and .name != "POLICY_DIR") | "export " + .name + "=\"" + .value + "\""' > "$W/penv.sh"
+chmod a+r "$W/penv.sh"
+PRECONCILE=". /w/penv.sh; export POLICY_DIR=/scripts/policies BAO_TOKEN=\$($UP/policyrec password=@/w/it-pw); sh /scripts/policy-reconcile.sh"
+assert_eq "$(probe policyrec read sys/policies/acl/tenant-read)" "" "self-initialisation writes no tenant policy (the reconciler does)"
+rc=0; out=$(bao_in "$PRECONCILE" 2>&1) || rc=$?
+assert_eq "$rc" 0 "policy reconcile runs with platform-policy-reconciler only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
+assert_match "$out" 'done: policies=\[tenant-config tenant-read tenant-write\] written=\[tenant-config tenant-read tenant-write\] pruned=\[\] roles=\[tenant-config tenant-writer\]' "first run writes the 3 tenant policies and the 2 roles"
+out=$(bao_in "$PRECONCILE" 2>&1)
+assert_match "$out" 'written=\[\] pruned=\[\] roles=\[tenant-config tenant-writer\]' "second run writes no policy (idempotent; the pinned roles are rewritten as they are)"
+assert_eq "$(bao_in "export BAO_TOKEN=\$($UP/policyrec password=@/w/it-pw); bao read -field=policy sys/policies/acl/tenant-read")" "$(cat addons/openbao/files/policies/tenant-read.hcl)" "stored tenant-read == files/policies/tenant-read.hcl"
+role=$(bao_in "export BAO_TOKEN=\$($UP/rolereader password=@/w/it-pw); bao read auth/kubernetes/role/tenant-writer")
+assert_match "$role" 'bound_service_account_namespaces +\[openbao-tenants\]' "tenant-writer: bound to openbao-tenants"
+assert_match "$role" 'token_policies +\[tenant-write\]' "tenant-writer: policy tenant-write"
+# drift and prune: the reconciler may write any tenant-* policy (documented trust model); the next run restores git
+bao_in "export BAO_TOKEN=\$($UP/policyrec password=@/w/it-pw); bao policy write tenant-read /w/pwn.hcl >/dev/null; bao policy write tenant-stale /w/pwn.hcl >/dev/null; bao write auth/kubernetes/role/tenant-config bound_service_account_names=openbao-tenant-config bound_service_account_namespaces=openbao audience=openbao token_policies=tenant-config token_no_default_policy=true token_ttl=15m token_max_ttl=15m >/dev/null"
+out=$(bao_in "$PRECONCILE" 2>&1)
+assert_match "$out" 'written=\[tenant-read\] pruned=\[tenant-stale\] roles=\[tenant-config tenant-writer\]' "drift: tenant-read restored from git, stale tenant-* policy pruned"
+P_EXP=(); P_LABEL=(); : > "$W/probes.sh"
+pr Success "positive control: the reconciler writes a tenant-* policy" policyrec policy write tenant-probe /w/pwn.hcl
+pr Success "positive control: ... and deletes it" policyrec policy delete tenant-probe
+for n in mesh-pwn pwn default mesh-member mesh-ca-read platform-mesh-config platform-mesh-bootstrap platform-policy-reconciler platform-tenant-config; do
+  pr 403 "policyrec: cannot write policy $n" policyrec policy write $n /w/pwn.hcl
+done
+pr 403 "policyrec: cannot delete a non-tenant policy" policyrec policy delete platform-mesh-bootstrap
+pr 403 "policyrec: cannot read a non-tenant policy" policyrec read sys/policies/acl/platform-mesh-config
+pr 403 "policyrec: no legacy sys/policy path" policyrec write sys/policy/pwn policy=@/w/pwn.hcl
+ROK='bound_service_account_names=openbao-tenant-config bound_service_account_namespaces=openbao audience=openbao token_policies=tenant-config token_no_default_policy=true token_ttl=15m token_max_ttl=15m'
+pr 403 "policyrec: tenant-config role cannot bind its own ServiceAccount" policyrec write auth/kubernetes/role/tenant-config "${ROK/openbao-tenant-config/openbao-policy-reconciler}"
+pr 403 "policyrec: tenant-config role cannot carry another policy" policyrec write auth/kubernetes/role/tenant-config "${ROK/token_policies=tenant-config/token_policies=platform-mesh-bootstrap}"
+pr 403 "policyrec: ... nor an extra one" policyrec write auth/kubernetes/role/tenant-config "${ROK/token_policies=tenant-config/token_policies=tenant-config,platform-mesh-bootstrap}"
+pr 403 "policyrec: ... nor via the legacy policies field" policyrec write auth/kubernetes/role/tenant-config "$ROK" policies=platform-mesh-bootstrap
+pr 403 "policyrec: ... nor with the default policy (token_no_default_policy required)" policyrec write auth/kubernetes/role/tenant-config "${ROK/ token_no_default_policy=true/}"
+pr 403 "policyrec: ... nor a longer token TTL" policyrec write auth/kubernetes/role/tenant-config "${ROK/token_max_ttl=15m/token_max_ttl=768h}"
+pr 403 "policyrec: tenant-writer cannot be bound to namespace openbao" policyrec write auth/kubernetes/role/tenant-writer bound_service_account_names=x bound_service_account_namespaces=openbao alias_name_source=serviceaccount_name audience=openbao token_policies=tenant-write token_no_default_policy=true token_ttl=15m token_max_ttl=15m
+pr 403 "policyrec: no other Kubernetes auth role (tenant-*)" policyrec write auth/kubernetes/role/tenant-pwn "$ROK"
+pr 403 "policyrec: cannot rewrite its own role" policyrec write auth/kubernetes/role/platform-policy-reconciler bound_service_account_names=x bound_service_account_namespaces=openbao token_policies=platform-policy-reconciler
+pr 403 "policyrec: cannot rewrite the mesh bootstrap role" policyrec write auth/kubernetes/role/platform-mesh-bootstrap bound_service_account_names=x bound_service_account_namespaces=openbao token_policies=platform-mesh-bootstrap
+pr 403 "policyrec: cannot reconfigure Kubernetes auth" policyrec write auth/kubernetes/config kubernetes_host=https://evil.example
+pr 403 "policyrec: no PKI sign" policyrec write pki-mesh-local-int/sign/c1 csr=@/w/rogue.csr
+pr 403 "policyrec: no PKI sign-intermediate" policyrec write pki-mesh-local-root/root/sign-intermediate csr=@/w/rogue.csr max_path_length=0
+pr 403 "policyrec: no PKI role" policyrec write pki-mesh-local-int/roles/pwn "$ROLEOK"
+pr 403 "policyrec: no PKI read" policyrec read pki-mesh-local-int/roles/c1
+pr 403 "policyrec: cannot read Kubernetes auth roles" policyrec read auth/kubernetes/role/platform-mesh-bootstrap
+pr 403 "policyrec: cannot mount a PKI engine" policyrec secrets enable -path=pki-mesh-rogue pki
+pr 403 "policyrec: cannot mount anything" policyrec secrets enable -path=kv-tenant-pwn kv
+pr 403 "policyrec: cannot enable an auth method" policyrec auth enable -path=tenants-pwn jwt
+pr 403 "policyrec: cannot touch mesh auth" policyrec write auth/mesh-c1/role/istio-csr role_type=jwt user_claim=sub bound_audiences=x token_policies=mesh-member
+pr 403 "policyrec: cannot write identities" policyrec write identity/entity/name/tenant-demo metadata=tenant=demo
+pr 403 "policyrec: no identity groups" policyrec write identity/group name=pwn policies=tenant-probe
+pr 403 "policyrec: cannot read tenant secrets" policyrec read kv-tenant-demo/data/db
+pr 403 "policyrec: cannot create tokens" policyrec token create -policy=tenant-read
+pr 403 "policyrec: no generate-root" policyrec operator generate-root -init
+pr 403 "policyrec: no recovery-key creation" policyrec write sys/rotate/recovery/init secret_shares=1 secret_threshold=1
+pr 403 "policyrec: no raw storage" policyrec read sys/raw/sys/policy/platform-policy-reconciler
+probes_run
+
 # --- tenant secrets -------------------------------------------------------------------------------------------------------
 # Inputs as ESO builds them: two tenants, one namespace claimed by demo and a rogue descriptor (bound to neither), member
 # c1 (JWKS reachable) and c3 (JWKS 403). Environment = the chart's CronJob; login replaced by the userpass test user.
@@ -330,7 +420,7 @@ helm template openbao addons/openbao --namespace openbao --values installations/
 chmod -R a+rX "$W"
 TRECONCILE=". /w/tenv.sh; export INPUT_DIR=/w/tin BAO_TOKEN=\$($UP/tenantcfg password=@/w/it-pw); sh /scripts/tenant-reconcile.sh"
 rc=0; out=$(bao_in "$TRECONCILE" 2>&1) || rc=$?
-assert_eq "$rc" 0 "tenant reconcile runs with platform-tenant-config only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
+assert_eq "$rc" 0 "tenant reconcile runs with tenant-config (from the policy reconciler) only"; [[ $rc -eq 0 ]] || printf '%s\n' "$out" >&2
 assert_match "$out" 'done: tenants=\[demo other rogue\] failed=\[\] invalid=\[\] clusters=\[c1\] failed-clusters=\[c3\]' "tenants configured on c1; c3 (JWKS 403) reported"
 assert_match "$out" "namespace $STG is claimed by several tenants: bound to none" "a namespace claimed twice is bound to neither tenant"
 out=$(bao_in "$TRECONCILE" 2>&1)
@@ -374,7 +464,7 @@ tp 403 "tenantcfg: cannot write a tenant secret" kv put kv-tenant-demo/db passwo
 tp 403 "tenantcfg: cannot author an ACL policy" policy write tenant-pwn /w/pwn.hcl
 tp 403 "tenantcfg: cannot rewrite tenant-read" policy write tenant-read /w/pwn.hcl
 tp 403 "tenantcfg: a tenant role cannot carry tenant-write" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=tenant-write
-tp 403 "tenantcfg: ... nor its own policy" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=platform-tenant-config
+tp 403 "tenantcfg: ... nor its own policy" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x token_policies=tenant-config
 tp 403 "tenantcfg: ... nor via the legacy policies field" write auth/tenants-c1/role/pwn role_type=jwt user_claim=sub bound_audiences=x policies=tenant-write
 tp 403 "tenantcfg: no non-jwt auth method under tenants-*" auth enable -path=tenants-pwn userpass
 tp 403 "tenantcfg: no non-kv engine under kv-tenant-*" secrets enable -path=kv-tenant-pwn pki

@@ -14,7 +14,8 @@ Wrapper chart for `openbao` (`0.30.7` / `v2.7.2`) on `mgmt`. Runs the Istio mult
 - `mesh.{groups,ca.host,ca.port}`: mesh groups reconciled into PKI mounts and the passthrough endpoint.
 - `unseal.{store,remoteKey,secretName}`: pulls `openbao-unseal` from `ClusterSecretStore/platform` for static auto-unseal.
 - `pki.{trustDomain,allowedDomains,workloadTTL,rootTTL,intermediateTTL}`: X.509 constraints (`cluster.local`, `24h` leaf TTL).
-- `secrets.tenantStores.enabled` + `tenantSecrets.*`: per-tenant KV v2 mounts `kv-tenant-<tenant>`, JWT auth `tenants-<cluster>` per mesh member and the CronJob `tenant-reconcile` (static templated policies `tenant-read` / `tenant-write` from self-initialisation) ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
+- `secrets.tenantStores.enabled` + `tenantSecrets.*`: per-tenant KV v2 mounts `kv-tenant-<tenant>`, JWT auth `tenants-<cluster>` per mesh member and the CronJob `tenant-reconcile`; the CronJob `policy-reconcile` writes the templated policies `files/policies/tenant-*.hcl` and the pinned roles `tenant-config` / `tenant-writer` from git, no re-initialisation needed ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao), [policy reconciler](../../docs/multicluster.md#policies-from-git-the-policy-reconciler)).
+- `policyReconciler.*`: ServiceAccount, login role and pinned role TTL of the policy reconciler (must equal the self-init pins).
 - `caPublic.{store,secretName,namespaces}`: publishes root/CA bundles through `ClusterSecretStore/mgmt-openbao` to `fleet`.
 
 ## Day-2 notes
