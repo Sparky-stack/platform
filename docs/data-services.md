@@ -272,8 +272,10 @@ get the same through the chart values. Metrics: PodMonitor for core + RBAC manag
 every package; `crossplane render` (CLI from `mise.toml`, the addon's own Crossplane image and Function packages, needs
 Docker) of each Composition with the XRs and observed states in `hack/tests/crossplane/` checks the composed resources
 (kubeconform), HA / backup / deletion / Aurora mapping, the identical Secret shape and that no composed object carries a
-password. Admission: `hack/tests/test_kyverno_policies.sh`. Chart: `addons/crossplane/tests`. Live checks:
-[#107](https://github.com/koorikla/platform/issues/107).
+password. The renders share one Docker network and one container per Function per run (removed on exit, or by the next
+run when a run was killed), so concurrent runs on one Docker host do not exhaust its network address pools; at most
+`XP_RENDER_JOBS` (default 4) render at once. Admission: `hack/tests/test_kyverno_policies.sh`. Chart:
+`addons/crossplane/tests`. Live checks: [#107](https://github.com/koorikla/platform/issues/107).
 
 ## PostgreSQL (CloudNativePG)
 
