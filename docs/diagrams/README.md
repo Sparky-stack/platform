@@ -84,7 +84,7 @@ The numbered flow of each diagram, word for word.
 1. A client opens the app URL; kgateway takes the request
 2. kgateway routes it into the service mesh
 3. The service mesh delivers it to the app pods and encrypts every hop between pods
-4. The collectors gather the app pods' telemetry: Fluent Bit tails their logs on each node, the Prometheus agent scrapes their metrics, the OpenTelemetry collector receives their traces
+4. The collectors on each node gather the app pods' telemetry: Fluent Bit tails their logs, the Prometheus agent scrapes their metrics, the OpenTelemetry collector takes their traces
 5. The collectors dial out and ship them to the observability plane on the management cluster
 
 ### Observability ([observability.svg](observability.svg))
@@ -96,15 +96,16 @@ The numbered flow of each diagram, word for word.
 
 ### SDLC ([sdlc.svg](sdlc.svg))
 
-1. A push to the app repo starts a build on OpenChoreo's workflow plane on the management cluster
+1. Build & sign builds every push to the app repo, on OpenChoreo's workflow plane on the management cluster
 2. Build & sign scans and signs the image and pushes it to the registry (it also commits the new version to `deploy/`)
 3. Argo CD reads the `deploy/` folder of the app repo
 4. Argo CD applies it to OpenChoreo, which snapshots an immutable release
 5. The release deploys to development automatically
 6. The release deploys to staging once the team merges a staging pull request in the app repo
-7. The promotion gate checks staging (readiness, smoke tests, alerts, error rate, change freezes), then opens the production pull request in the app repo
-8. The release deploys to production only after a code owner approves and merges that pull request
-9. Kyverno admits into production only images signed in the registry and pinned by digest
+7. The promotion gate checks staging: readiness, smoke tests, alerts, error rate, change freezes
+8. The promotion gate opens the production pull request in the app repo only if every check passes
+9. The release deploys to production only after a code owner approves and merges that pull request
+10. Kyverno admits into production only signed images pinned by digest
 
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
@@ -131,10 +132,11 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 
 1. Restore the management cluster's etcd from its latest snapshot in the backup copies: the workload clusters' records and the CA keys come back
 2. Restore Thunder's volumes from their copy: users, sign-in clients, signing keys
-3. OpenBao (opt-in) restores its volume copy and fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
-4. Harbor's images come back from their volume copy or from new builds
-5. Argo CD re-syncs everything else from Git
-6. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
+3. Restore OpenBao's volume copy (opt-in): secrets and the mesh CA keys
+4. OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
+5. Harbor's images come back from their volume copy or from new builds
+6. Argo CD re-syncs everything else from Git
+7. The databases (opt-in) restore themselves from object storage, only if a workload cluster is lost too
 
 Telemetry is not backed up: it starts empty.
 
