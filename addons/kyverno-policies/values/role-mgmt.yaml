@@ -5,3 +5,8 @@ ambientEnrollment:
 # mgmt has no OpenChoreo cell namespaces.
 imageVerification:
   enabled: false
+
+# PR previews: the Environments live here (expiry, cap, TTL); preview cell namespaces only on data planes.
+previewGuards:
+  environments: true
+  namespaces: false

@@ -1,0 +1,243 @@
+{{- /*
+PR preview environments (installation.yaml `previews`, docs/preview-environments.md). Two halves, by cluster role:
+
+mgmt (previewGuards.environments, values/role-mgmt.yaml) - the OpenChoreo Environments charts/preview renders, matched
+by their label platform.koorikla.io/preview=true:
+  MutatingPolicy   platform-preview-expiry  CREATE: stamps platform.koorikla.io/expires-at = now + previews.ttl (unix
+                                            seconds), once; the chart never renders it, so syncs cannot move it
+  ValidatingPolicy platform-preview-cap     CREATE: at most previews.maxPerTenant live previews per tenant (label
+                                            platform.koorikla.io/tenant); the denied Application keeps retrying, so the
+                                            preview starts when a slot frees up
+  DeletingPolicy   platform-preview-ttl     every previewGuards.schedule: deletes previews ttlGrace past expires-at (or
+                                            past creation + ttl when the stamp is missing). Backstop only: the
+                                            auto-build pass expires the PR first (label previews.expiredLabel, the
+                                            Application renders empty). OpenChoreo's environment finalizer then removes
+                                            the bindings and the cell namespace.
+data planes (previewGuards.namespaces) - the cell namespaces of preview Environments (ProjectReleaseBinding
+namespaceLabels platform.koorikla.io/preview=true on namespaces OpenChoreo's renderedrelease controller creates):
+  GeneratingPolicy platform-preview-guardrails  ResourceQuota + LimitRange (development-sized) and NetworkPolicy
+                                            platform-preview-isolation: egress only inside the namespace, to platform
+                                            namespaces (no openchoreo.dev/environment label: DNS, gateways) and outside
+                                            the cluster - never to another cell (staging, production, other previews).
+                                            Ingress isolation is OpenChoreo's own per-component NetworkPolicy (same
+                                            namespace + system components only). Kept in sync (tampering is reverted).
+Policy tier: preview cell namespaces have an environment name outside imageVerification.environments, so the
+supply-chain gate applies imageVerification.defaultAction (Audit = development tier).
+*/ -}}
+{{- $pv := .Values.previews | default dict }}
+{{- $g := .Values.previewGuards }}
+{{- if $pv.enabled }}
+{{- $ttl := toString ($pv.ttl | default "48h") }}
+{{- if not (regexMatch "^([0-9]+h)?([0-9]+m)?$" $ttl) }}{{ fail (printf "previews.ttl %q: hours and/or minutes, e.g. 48h" $ttl) }}{{ end }}
+{{- if not (regexMatch "^([0-9]+h)?([0-9]+m)?$" (toString $g.ttlGrace)) }}{{ fail (printf "previewGuards.ttlGrace %q: hours and/or minutes, e.g. 1h" (toString $g.ttlGrace)) }}{{ end }}
+{{- $cap := int ($pv.maxPerTenant | default 0) }}
+{{- if lt $cap 1 }}{{ fail "previews.maxPerTenant must be at least 1" }}{{ end }}
+{{- if $g.environments }}
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: platform-preview-expiry
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: PR preview expiry stamp
+    policies.kyverno.io/description: >-
+      Stamps platform.koorikla.io/expires-at (unix seconds, creation + {{ $ttl }}) on preview Environments when they
+      are created. Read by the auto-build pass (expires the pull request) and by platform-preview-ttl (deletes).
+spec:
+  failurePolicy: Ignore              # no stamp: platform-preview-ttl falls back to creation + ttl
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: [CREATE], resources: [environments] }
+    objectSelector:
+      matchLabels: { platform.koorikla.io/preview: "true" }
+      matchExpressions:
+        - { key: platform.koorikla.io/expires-at, operator: DoesNotExist }
+  mutations:
+    # JSONPatch (not ApplyConfiguration): works without a structural schema of the OpenChoreo CRD; the objectSelector
+    # guarantees metadata.labels exists.
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          [JSONPatch{op: "add", path: "/metadata/labels/" + jsonpatch.escapeKey("platform.koorikla.io/expires-at"),
+          value: string(int(time.now() + duration("{{ $ttl }}")))}]
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-preview-cap
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: PR previews per tenant
+    policies.kyverno.io/description: >-
+      A tenant runs at most {{ $cap }} preview Environments at a time; further ones wait (their Argo CD Application
+      retries) until a pull request closes or a preview expires.
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail                # only preview Environments are matched: an outage delays previews, nothing else
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: [CREATE], resources: [environments] }
+    objectSelector:
+      matchLabels: { platform.koorikla.io/preview: "true" }
+  variables:
+    - name: tenant
+      expression: "object.metadata.?labels[?'platform.koorikla.io/tenant'].orValue('')"
+    - name: running
+      expression: >-
+        dyn(resource.List('openchoreo.dev/v1alpha1', 'environments', object.metadata.namespace).items).filter(e,
+        e.metadata.?labels[?'platform.koorikla.io/preview'].orValue('') == 'true' &&
+        e.metadata.?labels[?'platform.koorikla.io/tenant'].orValue('') == variables.tenant &&
+        e.metadata.name != object.metadata.name && !has(e.metadata.deletionTimestamp))
+  validations:
+    - expression: "variables.tenant != ''"
+      message: preview Environments must carry the label platform.koorikla.io/tenant
+    - expression: "size(variables.running) < {{ $cap }}"
+      messageExpression: >-
+        'tenant ' + variables.tenant + ' already runs ' + string(size(variables.running)) +
+        ' preview environment(s), the cap is {{ $cap }}: close a pull request or wait for a preview to expire'
+---
+apiVersion: policies.kyverno.io/v1
+kind: DeletingPolicy
+metadata:
+  name: platform-preview-ttl
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: PR preview TTL
+    policies.kyverno.io/description: >-
+      Deletes preview Environments {{ $g.ttlGrace }} after platform.koorikla.io/expires-at (creation + {{ $ttl }} when
+      unstamped). OpenChoreo's finalizer removes their bindings and cell namespaces.
+spec:
+  schedule: {{ $g.schedule | quote }}
+  deletionPropagationPolicy: Background
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: ["*"], resources: [environments] }
+  variables:
+    - name: stamp
+      expression: "object.metadata.?labels[?'platform.koorikla.io/expires-at'].orValue('')"
+    - name: expiresAt
+      expression: >-
+        variables.stamp.matches('^[0-9]{1,12}$') ? int(variables.stamp) :
+        int(timestamp(object.metadata.creationTimestamp)) + duration("{{ $ttl }}").getSeconds()
+  conditions:
+    - name: is-preview
+      expression: "object.metadata.?labels[?'platform.koorikla.io/preview'].orValue('') == 'true'"
+    - name: expired
+      expression: 'int(time.now()) > variables.expiresAt + duration("{{ $g.ttlGrace }}").getSeconds()'
+---
+# Kyverno's controllers: list Environments for the cap (admission), delete expired ones (cleanup).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:admission-controller:preview-environments
+  labels:
+    rbac.kyverno.io/aggregate-to-admission-controller: "true"
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [environments]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:cleanup-controller:preview-environments
+  labels:
+    rbac.kyverno.io/aggregate-to-cleanup-controller: "true"
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [environments]
+    verbs: [get, list, watch, delete]
+{{- end }}
+{{- if $g.namespaces }}
+{{- if $g.environments }}
+---
+{{- end }}
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: platform-preview-guardrails
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: PR preview cell guardrails
+    policies.kyverno.io/description: >-
+      ResourceQuota, LimitRange and an egress NetworkPolicy (no other OpenChoreo cell, e.g. staging or production) in
+      every preview cell namespace.
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    objectSelector:
+      matchLabels:
+        platform.koorikla.io/preview: "true"
+        openchoreo.dev/managed-by: renderedrelease-controller
+      matchExpressions:
+        - { key: openchoreo.dev/environment, operator: Exists }
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: v1
+          kind: ResourceQuota
+          metadata:
+            name: platform-preview
+            namespace: (( object.metadata.name ))
+            labels: { platform.koorikla.io/preview: "true" }
+          spec:
+            hard: {{- toYaml $g.quota | nindent 14 }}
+          ---
+          apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: platform-preview
+            namespace: (( object.metadata.name ))
+            labels: { platform.koorikla.io/preview: "true" }
+          spec:
+            limits:
+              - type: Container
+                {{- toYaml $g.containerLimits | nindent 16 }}
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: platform-preview-isolation
+            namespace: (( object.metadata.name ))
+            labels: { platform.koorikla.io/preview: "true" }
+          spec:
+            podSelector: {}
+            policyTypes: [Egress]
+            egress:
+              - to:
+                  - podSelector: {}
+                  - namespaceSelector:
+                      matchExpressions:
+                        - { key: openchoreo.dev/environment, operator: DoesNotExist }
+                  # Cilium matches CIDR rules only against peers outside the cluster: no pod or node of any cell.
+                  - ipBlock: { cidr: 0.0.0.0/0 }
+                  - ipBlock: { cidr: "::/0" }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:background-controller:preview-guardrails
+  labels:
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: [resourcequotas, limitranges]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- end }}
+{{- end }}
