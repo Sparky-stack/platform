@@ -1,0 +1,127 @@
+suite: provider gcp-gke - GKE via CAPG (ClusterClass gke-managed), rendered from the fleet file
+templates:
+  - templates/capi-cluster.yaml
+  - templates/argocd-cluster-secret.yaml
+  - templates/capi-registries.yaml
+values: [values/capi-gke.yaml]
+tests:
+  - it: renders a topology Cluster of class gke-managed with the GKE version and no control plane size
+    template: templates/capi-cluster.yaml
+    asserts:
+      - isKind: { of: Cluster }
+      - equal: { path: metadata.name, value: prod-euw1 }
+      - equal: { path: spec.topology.classRef, value: { name: gke-managed, namespace: fleet } }
+      - equal: { path: spec.topology.version, value: v1.35.1 }
+      - notExists: { path: spec.topology.controlPlane }
+      - notExists: { path: spec.topology.workers.machineDeployments }
+      # GKE allocates pod/service ranges (VPC-native); the k3s defaults would only mislead
+      - notExists: { path: spec.clusterNetwork }
+
+  - it: maps workers to GKE node pools (MachinePools) with machine type and zone overrides
+    template: templates/capi-cluster.yaml
+    asserts:
+      - equal:
+          path: spec.topology.workers.machinePools
+          value:
+            - class: default-worker
+              name: pool-a
+              replicas: 2
+              variables:
+                overrides:
+                  - { name: workerMachineType, value: e2-standard-8 }
+                  - { name: workerNodeLocations, value: [europe-west1-b] }
+            - class: default-worker
+              name: pool-b
+              replicas: 1
+
+  - it: sets only gke-managed variables (project, region) - no k3s node file or cni variables
+    template: templates/capi-cluster.yaml
+    set: { secrets.nodeRegistryAuth.enabled: true, registry: { type: harbor, host: harbor.example.test } }
+    asserts:
+      - equal:
+          path: spec.topology.variables
+          value:
+            - { name: project, value: platform-prod-123 }
+            - { name: region, value: europe-west1 }
+
+  - it: passes providerSpec through as class variables
+    template: templates/capi-cluster.yaml
+    set: { providerSpec: { project: platform-prod-123, releaseChannel: stable, network: shared-vpc } }
+    asserts:
+      - contains: { path: spec.topology.variables, content: { name: releaseChannel, value: stable } }
+      - contains: { path: spec.topology.variables, content: { name: network, value: shared-vpc } }
+
+  - it: labels the cluster cni=gke and keeps the cilium addon off
+    template: templates/capi-cluster.yaml
+    asserts:
+      - equal: { path: 'metadata.labels["platform.koorikla.io/provider"]', value: gcp-gke }
+      - equal: { path: 'metadata.labels["platform.koorikla.io/cni"]', value: gke }
+      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/cilium"]', value: "false" }
+
+  - it: renders no node registries Secret (GKE node pools take no k3s registries.yaml)
+    template: templates/capi-registries.yaml
+    set: { secrets.nodeRegistryAuth.enabled: true, registry: { type: harbor, host: harbor.example.test } }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: Argo CD reaches GKE with argocd-k8s-auth gcp (no static token or client cert from the kubeconfig)
+    template: templates/argocd-cluster-secret.yaml
+    asserts:
+      - equal: { path: metadata.name, value: prod-euw1-argocd-cluster }
+      - equal: { path: "spec.data[0].remoteRef", value: { key: prod-euw1-kubeconfig, property: value } }
+      - matchRegex:
+          path: spec.target.template.data.config
+          pattern: '"execProviderConfig":\{"command":"argocd-k8s-auth","args":\["gcp"\],"apiVersion":"client.authentication.k8s.io/v1beta1"\}'
+      - matchRegex: { path: spec.target.template.data.config, pattern: 'certificate-authority-data' }
+      - notMatchRegex: { path: spec.target.template.data.config, pattern: 'client-certificate-data|client-key-data|token' }
+      - equal: { path: 'spec.target.template.metadata.labels["platform.koorikla.io/provider"]', value: gcp-gke }
+
+  # --- render-time guards (capi-registries.yaml renders first and runs capi.validate) -------------------------------
+  - it: rejects cni cilium (CAPG v1.13.1 cannot request GKE Dataplane V2)
+    set: { cni: cilium }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: 'cluster prod-euw1: cni "cilium" is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE''s VPC-native networking)' }
+
+  - it: rejects cni gke on the k3s providers
+    values: [values/capi-hetzner.yaml]
+    set: { cni: gke }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: 'cluster dev-fsn1: cni "gke" must be cilium or flannel' }
+
+  - it: rejects controlPlane.replicas (managed control plane)
+    set: { controlPlane.replicas: 3 }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" }
+
+  - it: rejects controlPlane.machineType (managed control plane)
+    set: { controlPlane.machineType: e2-standard-4 }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" }
+
+  - it: rejects a k3s version
+    set: { kubernetesVersion: v1.35.10+k3s1 }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: 'cluster prod-euw1: kubernetesVersion "v1.35.10+k3s1" is not a GKE version (vX.Y.Z) for provider gcp-gke' }
+
+  - it: rejects a cluster without node pools
+    set: { workers: [] }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: gcp-gke needs at least one entry in workers (a GKE node pool)" }
+
+  - it: requires providerSpec.project
+    set: { providerSpec.project: "" }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: providerSpec.project (GCP project id) is required for gcp-gke" }
+
+  - it: requires CAPG in the installation (capi.providers.gcp)
+    set: { capi.providers.gcp: false }
+    template: templates/capi-registries.yaml
+    asserts:
+      - failedTemplate: { errorMessage: "cluster prod-euw1: provider gcp-gke needs capi.providers.gcp: true in installation.yaml (CAPG)" }
