@@ -309,5 +309,323 @@ class Reconcile(unittest.TestCase):
             reconcile(api)
 
 
+# --- PR previews ----------------------------------------------------------------------------------------------------------
+NOW = dt.datetime(2026, 11, 17, 12, 0, tzinfo=dt.timezone.utc)
+OPT_IN = ("platform.koorikla.io/preview-environments", "enabled")
+APP = "preview-hello-world-pr-7"
+
+
+def preview_app(sha=SHA_B, number="7", comp="hello-world", slug=SLUG, message=None):
+    app = {"metadata": {"name": "preview-%s-pr-%s" % (comp, number),
+                        "labels": {ab.PREVIEW_LABEL: "true", ab.COMPONENT_LABEL: comp, ab.PR_LABEL: number},
+                        "annotations": {ab.COMMIT_ANNOTATION: sha, ab.REPOSITORY_ANNOTATION: slug}}}
+    if message:
+        app["status"] = {"operationState": {"message": message}}
+    return app
+
+
+def opted_in(opt=True, **kw):
+    c = component(**kw)
+    if opt:
+        c["metadata"]["annotations"] = {OPT_IN[0]: OPT_IN[1]}
+    c["status"] = {"latestRelease": {"name": "hello-world-77ff9dc697"}}
+    return c
+
+
+def environment(name="pr-7-hello-world", expires=None, created="2026-11-17T11:00:00Z"):
+    labels = {ab.PREVIEW_LABEL: "true"}
+    if expires is not None:
+        labels[ab.EXPIRES_LABEL] = str(expires)
+    return {"metadata": {"name": name, "uid": "env-uid", "labels": labels, "creationTimestamp": created}}
+
+
+BASE_RELEASE = {"metadata": {"name": "hello-world-77ff9dc697"},
+                "spec": {"owner": {"projectName": "demo", "componentName": "hello-world"},
+                         "componentType": {"kind": "ClusterComponentType", "name": "deployment/service", "spec": {}},
+                         "workload": {"container": {"image": "harbor/apps/demo/hello-world:13b19ed@sha256:" + "1" * 64},
+                                      "source": {"branch": "main", "commit": SHA_A}}}}
+PR_IMAGE = "harbor/apps/demo/hello-world:bbbbbbb@sha256:" + "2" * 64
+
+
+def pull(sha=SHA_B, state="open", head_repo=SLUG, labels=()):
+    return {"state": state, "head": {"sha": sha, "ref": "feat/x", "repo": {"full_name": head_repo} if head_repo else None},
+            "labels": [{"name": n} for n in labels]}
+
+
+def run_obj(name, done=False, ok=True):
+    conds = []
+    if done:
+        conds = [{"type": "WorkflowCompleted", "status": "True"},
+                 {"type": "WorkflowSucceeded", "status": "True" if ok else "False"}]
+    return {"metadata": {"name": name, "labels": {}}, "status": {"conditions": conds,
+                                                                 "runReference": {"name": name}}}
+
+
+def argo_wf(image=PR_IMAGE):
+    nodes = {"n1": {"templateName": "checkout", "type": "Retry", "phase": "Succeeded"}}
+    if image:
+        nodes["n2"] = {"templateName": "build", "type": "Pod", "phase": "Succeeded",
+                       "outputs": {"parameters": [{"name": "digest-ref", "value": "x@sha256:" + "2" * 64},
+                                                  {"name": "image", "value": image}]}}
+    return {"status": {"nodes": nodes}}
+
+
+def binding(release="hello-world-pr-7-bbbbbbbbbbbb", ready_=True):
+    return {"metadata": {"name": "hello-world-pr-7", "generation": 2}, "spec": {"releaseName": release},
+            "status": {"conditions": [{"type": "Ready", "status": "True" if ready_ else "False", "observedGeneration": 2}],
+                       "endpoints": [{"name": "http", "externalURLs": {"http": {
+                           "host": "pr-7-hello-world-default.dev1.apps.localhost", "path": "/hello-world-http",
+                           "port": 19080, "scheme": "http"}}}]}}
+
+
+class FakePreviewApi(FakeApi):
+    def __init__(self, apps, comps, pulls, objects=None, workflows=None):
+        super().__init__(comps, {})
+        self.apps = apps
+        self.pulls = pulls                 # number -> pull
+        self.objects = objects or {}       # (resource, name) -> object
+        self.workflows = workflows or {}
+        self.statuses = []
+        self.labels_added = []
+        self.releases = []
+
+    def preview_apps(self):
+        return self.apps
+
+    def get(self, resource, name):
+        if resource == "components":
+            return next((c for c in self._components if c["metadata"]["name"] == name), None)
+        if resource == "workflowruns":
+            return self.runs.get(name) or self.objects.get((resource, name))
+        return self.objects.get((resource, name))
+
+    def argo_workflow(self, name):
+        return self.workflows.get(name)
+
+    def create_release(self, release):
+        self.releases.append(release)
+        self.objects[("componentreleases", release["metadata"]["name"])] = release
+
+    def pull(self, slug, number):
+        self.calls.append(("pull", slug, number))
+        return self.pulls[number]
+
+    def set_status(self, slug, sha, state, description, url, context):
+        self.statuses.append((sha, state, description, url, context))
+
+    def add_label(self, slug, number, label):
+        self.labels_added.append((slug, number, label))
+
+
+def previews(api, state=None, **kw):
+    pv = ab.Previews(api, "default", PREFIXES, state if state is not None else {}, OPT_IN, "preview-expired",
+                     48 * 3600, now=kw.pop("now", NOW), **kw)
+    pv.run()
+    return pv
+
+
+class PreviewHelpers(unittest.TestCase):
+    def test_names_match_charts_preview(self):
+        self.assertEqual(ab.preview_names("hello-world", "7", SHA_B),
+                         ("pr-7-hello-world", "hello-world-pr-7", "hello-world-pr-7-bbbbbbbbbbbb",
+                          "hello-world-pr7-bbbbbbbbbbbb"))
+
+    def test_preview_run_name_differs_from_the_main_build_of_the_same_commit(self):
+        # a PR head that later lands on main unchanged must still get its GitOps build there
+        self.assertNotEqual(ab.preview_names("hello-world", "7", SHA_B)[3], ab.run_name("hello-world", SHA_B))
+
+    def test_build_image(self):
+        self.assertEqual(ab.build_image(argo_wf()), PR_IMAGE)
+        self.assertIsNone(ab.build_image(argo_wf(image=None)))
+        self.assertIsNone(ab.build_image(argo_wf(image="harbor/x:tag-without-digest")))
+        self.assertIsNone(ab.build_image(None))
+
+    def test_endpoint_url(self):
+        self.assertEqual(ab.endpoint_url(binding()),
+                         "http://pr-7-hello-world-default.dev1.apps.localhost:19080/hello-world-http")
+        self.assertEqual(ab.endpoint_url({"status": {}}), "")
+
+    def test_ready_needs_the_pinned_release_and_current_generation(self):
+        self.assertTrue(ab.ready(binding(), "hello-world-pr-7-bbbbbbbbbbbb"))
+        self.assertFalse(ab.ready(binding(), "hello-world-pr-7-aaaaaaaaaaaa"))
+        self.assertFalse(ab.ready(binding(ready_=False), "hello-world-pr-7-bbbbbbbbbbbb"))
+        stale = binding()
+        stale["metadata"]["generation"] = 3
+        self.assertFalse(ab.ready(stale, "hello-world-pr-7-bbbbbbbbbbbb"))
+
+    def test_expires_at(self):
+        self.assertEqual(ab.expires_at(environment(expires=1800000000), 3600), 1800000000)
+        created = int(dt.datetime(2026, 11, 17, 11, 0, tzinfo=dt.timezone.utc).timestamp())
+        self.assertEqual(ab.expires_at(environment(), 3600), created + 3600)
+        self.assertEqual(ab.expires_at(environment(expires="soon"), 3600), created + 3600)
+
+    def test_duration_seconds(self):
+        self.assertEqual(ab.duration_seconds("48h"), 172800)
+        self.assertEqual(ab.duration_seconds("1h30m"), 5400)
+        for bad in ["", "2d", "h", "48"]:
+            with self.assertRaises(ValueError):
+                ab.duration_seconds(bad)
+
+    def test_preview_release_swaps_image_and_commit_and_is_owned_by_the_environment(self):
+        rel = ab.preview_release(BASE_RELEASE, "hello-world-pr-7-bbbbbbbbbbbb", "default", PR_IMAGE, SHA_B, "feat/x",
+                                 environment(), {"x": "y"})
+        self.assertEqual(rel["spec"]["workload"]["container"]["image"], PR_IMAGE)
+        self.assertEqual(rel["spec"]["workload"]["source"], {"branch": "feat/x", "commit": SHA_B})
+        self.assertEqual(rel["spec"]["componentType"], BASE_RELEASE["spec"]["componentType"])
+        self.assertEqual(rel["metadata"]["ownerReferences"],
+                         [{"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Environment", "name": "pr-7-hello-world",
+                           "uid": "env-uid"}])
+        self.assertEqual(BASE_RELEASE["spec"]["workload"]["container"]["image"][-64:], "1" * 64)   # base untouched
+
+
+class PreviewReconcile(unittest.TestCase):
+    def api(self, objects=None, pulls=None, comps=None, apps=None, workflows=None, runs=None):
+        objs = {("environments", "pr-7-hello-world"): environment(expires=int(NOW.timestamp()) + 3600),
+                ("componentreleases", "hello-world-77ff9dc697"): BASE_RELEASE}
+        objs.update(objects or {})
+        api = FakePreviewApi(apps if apps is not None else [preview_app()], comps or [opted_in()],
+                             pulls or {"7": pull()}, objs, workflows)
+        api.runs.update(runs or {})
+        return api
+
+    def test_new_pr_head_is_built_without_gitops(self):
+        api = self.api()
+        pv = previews(api)
+        self.assertEqual([r["metadata"]["name"] for r in api.created], ["hello-world-pr7-bbbbbbbbbbbb"])
+        run = api.created[0]
+        params = run["spec"]["workflow"]["parameters"]
+        self.assertEqual(params["repository"]["revision"], {"branch": "main", "commit": SHA_B})   # never the PR branch
+        self.assertEqual(params["gitops"], {"enabled": False})
+        self.assertEqual(run["metadata"]["labels"]["platform.koorikla.io/trigger"], "preview")
+        self.assertEqual(run["metadata"]["labels"][ab.PR_LABEL], "7")
+        self.assertEqual(pv.created, ["hello-world-pr7-bbbbbbbbbbbb"])
+        self.assertEqual(api.statuses[-1][:2], (SHA_B, "pending"))
+        self.assertEqual(api.statuses[-1][4], "openchoreo/preview")
+
+    def test_running_build_waits_and_posts_the_same_status_once(self):
+        api = self.api(runs={"hello-world-pr7-bbbbbbbbbbbb": run_obj("hello-world-pr7-bbbbbbbbbbbb")})
+        state = {}
+        previews(api, state)
+        previews(api, state)
+        self.assertEqual(api.created, [])
+        self.assertEqual(len(api.statuses), 1)
+
+    def test_finished_build_cuts_the_release_from_the_latest_main_release(self):
+        api = self.api(runs={"hello-world-pr7-bbbbbbbbbbbb": run_obj("hello-world-pr7-bbbbbbbbbbbb", done=True)},
+                       workflows={"hello-world-pr7-bbbbbbbbbbbb": argo_wf()})
+        previews(api)
+        self.assertEqual(len(api.releases), 1)
+        rel = api.releases[0]
+        self.assertEqual(rel["metadata"]["name"], "hello-world-pr-7-bbbbbbbbbbbb")
+        self.assertEqual(rel["spec"]["workload"]["container"]["image"], PR_IMAGE)
+        self.assertEqual(rel["metadata"]["labels"]["openchoreo.dev/component"], "hello-world")
+
+    def test_head_without_build_output_previews_the_main_image(self):
+        api = self.api(runs={"hello-world-pr7-bbbbbbbbbbbb": run_obj("hello-world-pr7-bbbbbbbbbbbb", done=True)},
+                       workflows={"hello-world-pr7-bbbbbbbbbbbb": argo_wf(image=None)})
+        previews(api)
+        self.assertEqual(api.releases[0]["spec"]["workload"]["container"]["image"],
+                         BASE_RELEASE["spec"]["workload"]["container"]["image"])
+
+    def test_failed_build_reports_failure_and_cuts_nothing(self):
+        api = self.api(runs={"hello-world-pr7-bbbbbbbbbbbb": run_obj("hello-world-pr7-bbbbbbbbbbbb", done=True,
+                                                                     ok=False)})
+        previews(api)
+        self.assertEqual(api.releases, [])
+        self.assertEqual(api.statuses[-1][1], "failure")
+
+    def test_ready_binding_posts_success_with_the_preview_url(self):
+        api = self.api(objects={("componentreleases", "hello-world-pr-7-bbbbbbbbbbbb"): {"metadata": {}},
+                                ("releasebindings", "hello-world-pr-7"): binding()})
+        previews(api)
+        sha, state, desc, url, ctx = api.statuses[-1]
+        self.assertEqual((sha, state), (SHA_B, "success"))
+        self.assertEqual(url, "http://pr-7-hello-world-default.dev1.apps.localhost:19080/hello-world-http")
+        self.assertIn("pr-7-hello-world", desc)
+        self.assertEqual(api.created, [])
+
+    def test_binding_not_ready_is_pending(self):
+        api = self.api(objects={("componentreleases", "hello-world-pr-7-bbbbbbbbbbbb"): {"metadata": {}},
+                                ("releasebindings", "hello-world-pr-7"): binding(ready_=False)})
+        previews(api)
+        self.assertEqual(api.statuses[-1][1], "pending")
+
+    def test_ttl_over_labels_the_pr_and_builds_nothing(self):
+        api = self.api(objects={("environments", "pr-7-hello-world"): environment(expires=int(NOW.timestamp()) - 1)})
+        previews(api)
+        self.assertEqual(api.labels_added, [(SLUG, "7", "preview-expired")])
+        self.assertEqual(api.created, [])
+        self.assertEqual(api.statuses[-1][1], "error")
+
+    def test_unstamped_environment_expires_from_its_creation(self):
+        api = self.api(objects={("environments", "pr-7-hello-world"): environment(created="2026-11-15T11:00:00Z")})
+        previews(api)
+        self.assertEqual(api.labels_added, [(SLUG, "7", "preview-expired")])
+
+    def test_already_expired_pr_is_left_alone(self):
+        api = self.api(pulls={"7": pull(labels=["preview-expired"])})
+        previews(api)
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(api.created, [])
+
+    def test_missing_environment_waits_and_reports_argo_cds_message(self):
+        api = self.api(apps=[preview_app(message="admission webhook denied: tenant demo already runs 2 preview")],
+                       objects={("environments", "pr-7-hello-world"): None})
+        previews(api)
+        self.assertEqual(api.created, [])
+        self.assertIn("already runs 2 preview", api.statuses[-1][2])
+
+    def test_fork_prs_are_never_built(self):
+        for head in ["someone/hello-world", None]:
+            api = self.api(pulls={"7": pull(head_repo=head)})
+            previews(api)
+            self.assertEqual(api.created, [])
+            self.assertEqual(api.statuses[-1][1], "failure")
+
+    def test_opt_in_is_rechecked_on_the_component(self):
+        api = self.api(comps=[opted_in(opt=False)])
+        previews(api)
+        self.assertEqual(api.created, [])
+        self.assertEqual(api.statuses, [])
+        self.assertNotIn(("pull", SLUG, "7"), api.calls)
+
+    def test_repository_must_be_the_components_build_repository(self):
+        api = self.api(apps=[preview_app(slug="koorikla/other")])
+        previews(api)
+        self.assertEqual(api.created, [])
+        self.assertEqual(api.statuses, [])
+
+    def test_stale_application_waits_for_argo_cd(self):
+        for pr in [pull(sha=SHA_C), pull(state="closed")]:
+            api = self.api(pulls={"7": pr})
+            previews(api)
+            self.assertEqual(api.created, [])
+            self.assertEqual(api.statuses, [])
+
+    def test_malformed_application_is_skipped(self):
+        for app in [preview_app(sha="main"), preview_app(number="7; rm"), preview_app(comp="Hello"),
+                    preview_app(slug="not a slug")]:
+            api = self.api(apps=[app])
+            previews(api)
+            self.assertEqual(api.created, [])
+            self.assertEqual(api.calls, [])
+
+    def test_budget_is_shared_with_the_build_pass(self):
+        api = self.api()
+        previews(api, max_runs=0)
+        self.assertEqual(api.created, [])
+
+    def test_state_of_closed_prs_is_dropped(self):
+        api = self.api(apps=[])
+        state = {"previews": {APP: {"status": "x"}}}
+        previews(api, state)
+        self.assertEqual(state["previews"], {})
+
+    def test_webhook_repository_filter(self):
+        api = self.api()
+        previews(api, repository="koorikla/other")
+        self.assertEqual(api.created, [])
+
+
 if __name__ == "__main__":
     unittest.main()
