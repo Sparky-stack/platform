@@ -132,7 +132,7 @@ render_bg azure-minimal "$TMP/composition-azure-flexible.yaml" "$FIX/xr-minimal.
 render_bg azure-production "$TMP/composition-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
 wait
 
-# render <case> <composition> <xr> [observed]: composed resources -> $TMP/out-<case>.yaml, XR -> $TMP/xr-<case>.yaml
+# render <case>: the render_bg result of that case -> composed resources $TMP/out-<case>.yaml, XR $TMP/xr-<case>.yaml
 render() {
   local c=$1
   if [[ ! -f "$TMP/render-$c.ok" ]]; then
@@ -165,7 +165,7 @@ assert_mrap() {   # assert_mrap <case> <backend>: every composed managed resourc
 }
 
 # cnpg
-render cnpg-minimal "$TMP/composition-cnpg.yaml" "$FIX/xr-minimal.yaml"
+render cnpg-minimal
 assert_eq "$(kinds "$TMP/out-cnpg-minimal.yaml")" "Cluster=1 PodMonitor=1 " "cnpg minimal: a CNPG Cluster + its PodMonitor"
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.instances' "$TMP/out-cnpg-minimal.yaml")" 1 "cnpg minimal: 1 instance"
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.imageCatalogRef.name + ":" + (.spec.imageCatalogRef.major | tostring)' "$TMP/out-cnpg-minimal.yaml")" \
@@ -175,7 +175,7 @@ assert_eq "$(q 'select(.kind == "Cluster") | .spec.bootstrap.initdb.database + "
 assert_eq "$(q '.status.secretName + " " + .status.endpoint + " " + (.status.port | tostring) + " " + .status.backup' "$TMP/xr-cnpg-minimal.yaml")" \
   "orders-db-app orders-db-rw.dp-default-shop-development-1a2b3c4d.svc 5432 disabled" \
   "cnpg minimal: XR status points at the operator's <name>-app Secret and the -rw Service"
-render cnpg-production "$TMP/composition-cnpg.yaml" "$FIX/xr-production.yaml"
+render cnpg-production
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.instances' "$TMP/out-cnpg-production.yaml")" 3 "cnpg HA: 3 instances"
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.imageCatalogRef.major' "$TMP/out-cnpg-production.yaml")" 18 "cnpg: version 18 -> major 18"
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.storage.size + " " + .spec.resources.requests.memory' "$TMP/out-cnpg-production.yaml")" \
@@ -183,7 +183,7 @@ assert_eq "$(q 'select(.kind == "Cluster") | .spec.storage.size + " " + .spec.re
 assert_eq "$(q '.status.backup' "$TMP/xr-cnpg-production.yaml")" unavailable \
   "cnpg: backup asked for on a cluster without an object store -> status.backup unavailable, no ScheduledBackup"
 assert_eq "$(kinds "$TMP/out-cnpg-production.yaml")" "Cluster=1 PodMonitor=1 " "cnpg without object store: no backup objects"
-render cnpg-backup "$TMP/composition-cnpg-backup.yaml" "$FIX/xr-production.yaml"
+render cnpg-backup
 assert_eq "$(kinds "$TMP/out-cnpg-backup.yaml")" "Cluster=1 ObjectStore=1 PodMonitor=1 ScheduledBackup=1 " \
   "cnpg with object store: Barman Cloud ObjectStore + ScheduledBackup"
 assert_eq "$(q 'select(.kind == "ObjectStore") | .spec.configuration.destinationPath + " " + .spec.retentionPolicy' "$TMP/out-cnpg-backup.yaml")" \
@@ -195,7 +195,7 @@ assert_eq "$(q 'select(.kind == "Cluster") | .spec.plugins[0].name + " " + .spec
 assert_eq "$(q '.status.backup' "$TMP/xr-cnpg-backup.yaml")" enabled "cnpg backup: status.backup enabled"
 
 # aws-rds
-render aws-minimal "$TMP/composition-aws-rds.yaml" "$FIX/xr-minimal.yaml"
+render aws-minimal
 assert_eq "$(kinds "$TMP/out-aws-minimal.yaml")" "Instance=1 Key=1 SecurityGroup=1 SecurityGroupIngressRule=1 SubnetGroup=1 " \
   "aws minimal: instance, KMS key, security group + rule, subnet group; no connection Secret before the endpoint exists"
 assert_mrap aws-minimal aws-rds
@@ -212,7 +212,7 @@ ext=$(q 'select(.kind == "Instance") | .metadata.annotations["crossplane.io/exte
 assert_match "$ext" '^pg-[a-z0-9]+(-[a-z0-9]+)*-[0-9a-f]{8}$' "aws: RDS identifier pg-<namespace>-<name>-<hash>, no double hyphens"
 assert_match "${#ext}" '^([1-4][0-9]|5[0-2])$' "aws: RDS identifier <= 52 characters ($ext)"
 assert_eq "$(q '.status.secretName // "none"' "$TMP/xr-aws-minimal.yaml")" none "aws: no secretName before RDS reports the endpoint"
-render aws-production "$TMP/composition-aws-rds.yaml" "$FIX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
+render aws-production
 f="$TMP/out-aws-production.yaml"
 assert_eq "$(q 'select(.kind == "Instance") | [.spec.forProvider.multiAz, .spec.forProvider.backupRetentionPeriod, .spec.forProvider.engineVersion, .spec.forProvider.instanceClass, .spec.forProvider.skipFinalSnapshot] | join(" ")' "$f")" \
   "true 14 18 db.m7g.large false" "aws HA: Multi-AZ instance, 14 days backups, version 18, size M, final snapshot"
@@ -223,7 +223,7 @@ assert_eq "$(q 'select(.kind == "ExternalSecret") | .spec.data[0].remoteRef.key 
   "aws: ESO reads the RDS-managed master secret through ClusterSecretStore default"
 assert_eq "$(q '.status.secretName + " " + .status.endpoint' "$TMP/xr-aws-production.yaml")" \
   "orders-db-app pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com" "aws: XR status endpoint + secretName"
-render aws-aurora "$TMP/composition-aws-rds.yaml" "$FIX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
+render aws-aurora
 assert_eq "$(kinds "$TMP/out-aws-aurora.yaml")" "Cluster=1 ClusterInstance=2 ExternalSecret=1 Key=1 SecurityGroup=1 SecurityGroupIngressRule=1 SubnetGroup=1 " \
   "aws engine aurora + HA: Aurora cluster with writer + reader, no RDS instance"
 assert_mrap aws-aurora aws-rds
@@ -232,14 +232,14 @@ assert_eq "$(q 'select(.kind == "Cluster") | .spec.forProvider.engine + " " + (.
 assert_eq "$(secret_shape aws-aurora)" "$SHAPE" "aurora: same connection Secret shape"
 
 # gcp-cloudsql
-render gcp-minimal "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-minimal.yaml"
+render gcp-minimal
 f="$TMP/out-gcp-minimal.yaml"
 assert_eq "$(kinds "$f")" "Database=1 DatabaseInstance=1 Password=1 " "gcp minimal: instance, database, password generator; user + Secret wait for the IP"
 assert_mrap gcp-minimal gcp-cloudsql
 assert_eq "$(q 'select(.kind == "DatabaseInstance") | [.spec.forProvider.databaseVersion, .spec.forProvider.settings.availabilityType, .spec.forProvider.settings.tier, .spec.forProvider.settings.ipConfiguration.ipv4Enabled, .spec.forProvider.settings.ipConfiguration.sslMode, .spec.forProvider.settings.databaseFlags[0].name] | join(" ")' "$f")" \
   "POSTGRES_17 ZONAL db-custom-1-3840 false ENCRYPTED_ONLY cloudsql.iam_authentication" \
   "gcp minimal: POSTGRES_17, zonal, size S, private IP only, TLS required, IAM database authentication"
-render gcp-production "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
+render gcp-production
 f="$TMP/out-gcp-production.yaml"
 assert_eq "$(q 'select(.kind == "DatabaseInstance") | [.spec.forProvider.databaseVersion, .spec.forProvider.settings.availabilityType, .spec.forProvider.settings.backupConfiguration.pointInTimeRecoveryEnabled, .spec.forProvider.settings.backupConfiguration.backupRetentionSettings.retainedBackups] | join(" ")' "$f")" \
   "POSTGRES_18 REGIONAL true 14" "gcp HA: REGIONAL, PITR, 14 backups"
@@ -251,7 +251,7 @@ assert_eq "$(q 'select(.kind == "User") | .spec.forProvider.passwordSecretRef.na
   "orders-db-app/password" "gcp: the provider reads the owner password from the connection Secret"
 
 # azure-flexible
-render azure-minimal "$TMP/composition-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
+render azure-minimal
 f="$TMP/out-azure-minimal.yaml"
 assert_eq "$(kinds "$f")" "ExternalSecret=1 FlexibleServer=1 FlexibleServerDatabase=1 Password=1 " \
   "azure minimal: server, database, password generator + Secret (the server needs the password at creation)"
@@ -259,7 +259,7 @@ assert_mrap azure-minimal azure-flexible
 assert_eq "$(q 'select(.kind == "FlexibleServer") | [.spec.forProvider.version, .spec.forProvider.storageMb, .spec.forProvider.publicNetworkAccessEnabled, .spec.forProvider.authentication.activeDirectoryAuthEnabled, (.spec.forProvider.highAvailability // "none")] | join(" ")' "$f")" \
   "17 32768 false true none" "azure minimal: v17, smallest storage (32 GiB), VNet only, Entra auth on, no HA"
 assert_eq "$(secret_shape azure-minimal)" "$SHAPE" "azure: connection Secret keys host, port, dbname, username, password, uri"
-render azure-production "$TMP/composition-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
+render azure-production
 f="$TMP/out-azure-production.yaml"
 assert_eq "$(q 'select(.kind == "FlexibleServer") | [.spec.forProvider.highAvailability.mode, .spec.forProvider.storageMb, .spec.forProvider.backupRetentionDays, .spec.forProvider.skuName] | join(" ")' "$f")" \
   "ZoneRedundant 65536 14 GP_Standard_D4ds_v5" "azure HA: zone-redundant, 50 GiB -> 64 GiB tier, 14 days, size M"
