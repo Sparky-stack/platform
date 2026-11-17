@@ -1,0 +1,55 @@
+suite: openbao - policy reconciler (tenant-* policies and pinned tenant roles from git)
+release: { name: openbao, namespace: openbao }
+templates:
+  - templates/policy-reconcile.yaml
+set:
+  mesh: { groups: [local], ca: { host: openbao.example.test, port: 8200 } }
+tests:
+  - it: off by default (secrets.tenantStores.enabled)
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: every files/policies/*.hcl goes into the ConfigMap next to the script; nothing but tenant-* policies
+    set: { secrets.tenantStores.enabled: true }
+    documentSelector: { path: kind, value: ConfigMap }
+    asserts:
+      - equal: { path: metadata.name, value: policy-reconcile }
+      - exists: { path: 'data["policy-reconcile.sh"]' }
+      - matchRegex: { path: 'data["tenant-read.hcl"]', pattern: 'path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*" \{ capabilities = \["read"\] \}' }
+      - matchRegex: { path: 'data["tenant-write.hcl"]', pattern: 'path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*" \{ capabilities = \["create", "update", "patch", "read", "delete"\] \}' }
+      - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "auth/tenants-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "token_policies" = \["tenant-read"\] \}' }
+      - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "sys/policies/\*" \{ capabilities = \["deny"\] \}' }
+      - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "kv-tenant-\*" \{ capabilities = \["deny"\] \}' }
+      # every tenant path is keyed on the entity's own tenant: no literal tenant name, no wildcard mount
+      - notMatchRegex: { path: 'data["tenant-read.hcl"]', pattern: 'path "kv-tenant-[a-z*][^"]*" \{\s*capabilities' }
+      - notMatchRegex: { path: 'data["tenant-write.hcl"]', pattern: 'path "kv-tenant-[a-z*][^"]*" \{\s*capabilities' }
+
+  - it: CronJob logs in as platform-policy-reconciler with a short projected token, no Kubernetes API access, no inputs
+    set: { secrets.tenantStores.enabled: true }
+    documentSelector: { path: kind, value: CronJob }
+    asserts:
+      - equal: { path: metadata.name, value: policy-reconcile }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+      - equal: { path: spec.concurrencyPolicy, value: Forbid }
+      - equal: { path: spec.jobTemplate.spec.template.spec.serviceAccountName, value: openbao-policy-reconciler }
+      - equal: { path: spec.jobTemplate.spec.template.spec.automountServiceAccountToken, value: false }
+      - equal: { path: 'spec.jobTemplate.spec.template.spec.containers[0].command', value: [/bin/sh, /scripts/policy-reconcile.sh] }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: LOGIN_ROLE, value: platform-policy-reconciler } }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: POLICY_DIR, value: /scripts } }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: CONFIG_SA, value: openbao-tenant-config } }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: CONFIG_NS, value: openbao } }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: WRITER_NS, value: openbao-tenants } }
+      - contains: { path: 'spec.jobTemplate.spec.template.spec.containers[0].env', content: { name: ROLE_TTL, value: 15m } }
+      - lengthEqual: { path: spec.jobTemplate.spec.template.spec.volumes, count: 4 }    # scripts, token, tls-ca, tmp
+      - contains: { path: spec.jobTemplate.spec.template.spec.volumes, content: { name: scripts, configMap: { name: policy-reconcile } } }
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.volumes
+          content: { name: token, projected: { sources: [{ serviceAccountToken: { audience: openbao, expirationSeconds: 600, path: token } }] } }
+      - equal: { path: 'spec.jobTemplate.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem', value: true }
+
+  - it: the reconciler's ServiceAccount mounts no token by default
+    set: { secrets.tenantStores.enabled: true }
+    documentSelector: { path: kind, value: ServiceAccount }
+    asserts:
+      - equal: { path: metadata.name, value: openbao-policy-reconciler }
+      - equal: { path: automountServiceAccountToken, value: false }

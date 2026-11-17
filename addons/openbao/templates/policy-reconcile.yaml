@@ -1,0 +1,85 @@
+{{- /*
+Policy reconciler (#96; docs/multicluster.md "Policies from git: the policy reconciler"): tenant ACL policies and the
+tenant identities' Kubernetes auth roles from git, at any time, without re-initialising OpenBao.
+  ServiceAccount policyReconciler.serviceAccount   self-init role platform-policy-reconciler (policy: sys/policies/acl/
+                                                   tenant-* + the roles tenant-config / tenant-writer, every
+                                                   parameter pinned; nothing else)
+  ConfigMap policy-reconcile                       files/policy-reconcile.sh + every files/policies/*.hcl (tenant-*
+                                                   only: the render fails otherwise, and OpenBao would answer 403)
+  CronJob policy-reconcile                         final wave, like tenant-reconcile: a failing run never fails a sync
+*/ -}}
+{{- if (((.Values.secrets).tenantStores).enabled) }}
+{{- $p := .Values.policyReconciler }}
+{{- $t := .Values.tenantSecrets }}
+{{- $ns := .Release.Namespace }}
+{{- $r := .Values.reconcile }}
+{{- $files := .Files.Glob "files/policies/*.hcl" }}
+{{- if not $files }}{{ fail "openbao: files/policies/ has no policy" }}{{ end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $p.serviceAccount }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-reconcile
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+data:
+  policy-reconcile.sh: |
+    {{- .Files.Get "files/policy-reconcile.sh" | nindent 4 }}
+  {{- range $path, $_ := $files }}
+  {{- $name := base $path }}
+  {{- if not (regexMatch "^tenant-[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\\.hcl$" $name) }}
+  {{- fail (printf "openbao: files/policies/%s: the policy reconciler may only write tenant-* policies (others: self-initialisation)" $name) }}
+  {{- end }}
+  {{ $name }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- $env := list
+  (dict "name" "BAO_ADDR" "value" (printf "https://%s-active.%s.svc:8200" .Release.Name $ns))
+  (dict "name" "BAO_CACERT" "value" "/openbao/tls/ca.crt")
+  (dict "name" "HOME" "value" "/tmp")
+  (dict "name" "POLICY_DIR" "value" "/scripts")
+  (dict "name" "TOKEN_FILE" "value" "/var/run/secrets/openbao/token")
+  (dict "name" "LOGIN_ROLE" "value" $p.loginRole)
+  (dict "name" "CONFIG_SA" "value" $t.serviceAccount)
+  (dict "name" "CONFIG_NS" "value" $ns)
+  (dict "name" "WRITER_NS" "value" $t.inputsNamespace)
+  (dict "name" "AUDIENCE" "value" $r.audience)
+  (dict "name" "ROLE_TTL" "value" $p.roleTTL)
+}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: policy-reconcile
+  namespace: {{ $ns }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"    # final wave: a failing run (e.g. no reconciler identity yet) never fails the sync
+spec:
+  schedule: {{ $t.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: policy-reconcile }
+          annotations:
+            checksum/config: {{ printf "%s%s%s" (.Files.Get "files/policy-reconcile.sh") (toJson $env) (toJson $files) | sha256sum | trunc 16 }}
+        spec:
+          {{- include "openbao-addon.reconcilePod" (dict "r" $r "env" $env "sa" $p.serviceAccount "img" .Values.openbao.server.image "tlsSecret" .Values.tls.secretName "script" "policy-reconcile" "inputs" list) | nindent 10 }}
+{{- end }}

@@ -6,7 +6,7 @@
 # (alias bound before the role), audience and policy tenant-read; contested namespaces bound to nobody; invalid and
 # rejected inputs; prune (roles + entity, never the data mount; departed clusters) and its fail-safe; exit codes.
 # The same script runs against a real OpenBao in hack/tests/openbao_integration.sh (opt-in, docker). Also the name
-# contracts between addon openbao, addon secret-stores, charts/tenant and OpenBao's self-initialisation.
+# contracts between addon openbao, addon secret-stores, charts/tenant and the policies in files/policies/.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -98,16 +98,16 @@ tenant Bad_Name "dp-x"; tenant empty ""; printf 'tenant "demo" does not match' >
 cluster dev1; cluster prod1
 rc=0; run || rc=$?
 assert_eq "$rc" 0 "tenant reconcile exits 0"; [[ $rc -eq 0 ]] || cat "$TMP/out" >&2
-assert_match "$(sed -n 1p "$S/calls")" '^none write -field=token auth/kubernetes/login role=platform-tenant-config jwt=@' "logs in as platform-tenant-config with the projected token"
+assert_match "$(sed -n 1p "$S/calls")" '^none write -field=token auth/kubernetes/login role=tenant-config jwt=@' "logs in as tenant-config with the projected token"
 assert_match "$(cat "$TMP/out")" 'done: tenants=\[demo other rogue\] failed=\[\] invalid=\[evil-openbao-tenant Bad_Name empty\] clusters=\[dev1 prod1\]' "summary: valid tenants, invalid inputs, clusters"
 
 # never: policies, Kubernetes auth roles, mesh objects, secret values, data mount deletion
 assert_eq "$(grep -cE '(^| )policy ' "$S/calls" || true)" 0 "no ACL policy is written, deleted or listed"
-assert_eq "$(grep -c 'auth/kubernetes/role' "$S/calls" || true)" 0 "no Kubernetes auth role is written (tenant-writer is static)"
+assert_eq "$(grep -c 'auth/kubernetes/role' "$S/calls" || true)" 0 "no Kubernetes auth role is written (the policy reconciler owns tenant-writer)"
 assert_eq "$(grep -cE 'mesh-|pki-' "$S/calls" || true)" 0 "nothing of the mesh CA is touched"
 assert_eq "$(grep -cE 'kv-tenant-[a-z-]+/(data|metadata)' "$S/calls" || true)" 0 "no secret value is read or written"
 # per tenant: kv v2 mount, entity with metadata only, writer alias on the Kubernetes mount
-assert_match "$(cat "$S/calls")" 'tok-platform-tenant-config secrets enable -path=kv-tenant-demo -version=2 ' "demo: kv v2 mount kv-tenant-demo"
+assert_match "$(cat "$S/calls")" 'tok-tenant-config secrets enable -path=kv-tenant-demo -version=2 ' "demo: kv v2 mount kv-tenant-demo"
 assert_eq "$(wr identity/entity/name/tenant-demo | tr '\n' ' ')" "metadata=tenant=demo " "demo entity: metadata tenant=demo, no policies"
 assert_match "$(tr '\n' ' ' < "$S/aliases")" 'name=openbao-tenants/demo-writer canonical_id=id-tenant-demo mount_accessor=auth_kubernetes_a1' "demo writer alias: openbao-tenants/demo-writer on the Kubernetes mount"
 # per cluster: JWT mount with the member's JWKS; per tenant aliases before the role; role binds exactly its namespaces
@@ -165,11 +165,7 @@ assert_eq "$(yq .tenantSecrets.audience $V)" "$(yq .tenantStores.audience $SS)" 
 assert_eq "$(yq .tenantSecrets.inputsNamespace $V)" "$(yq .tenantSecrets.namespace $TV)" "descriptor namespace: addon openbao == charts/tenant"
 assert_eq "$(yq .tenantSecrets.label $V)" "$(yq .tenantSecrets.label $TV)" "descriptor label: addon openbao == charts/tenant"
 assert_eq "$(yq .tenantStoreName addons/openchoreo-platform/values.yaml)" "$(yq .tenantStores.storeName $SS)" "store name: component types == generated SecretStore"
-cfg=$(helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
-  -s charts/openbao/templates/server-config-configmap.yaml | yq '.data["extraconfig-from-values.hcl"]')
-role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k {sub(/.*= /, ""); print; exit}'; }
-assert_eq "$(role_field "$(yq .tenantSecrets.loginRole $V)" bound_service_account_names)" "[\"$(yq .tenantSecrets.serviceAccount $V)\"]" "self-init: tenant reconcile role bound to tenantSecrets.serviceAccount"
-assert_eq "$(role_field tenant-writer bound_service_account_namespaces)" "[\"$(yq .tenantSecrets.inputsNamespace $V)\"]" "self-init: tenant-writer bound to the descriptor namespace"
-assert_match "$cfg" "path += \"sys/policies/acl/$(yq .tenantSecrets.readerPolicy $V)\"" "self-init: writes tenantSecrets.readerPolicy"
+assert_eq "$([[ -f addons/openbao/files/policies/$(yq .tenantSecrets.readerPolicy $V).hcl ]] && echo yes)" yes "tenantSecrets.readerPolicy has its file in files/policies/ (written by the policy reconciler)"
+# login role / ServiceAccount of this CronJob == the role the policy reconciler writes (test_openbao_policy_reconcile.sh)
 
 finish
