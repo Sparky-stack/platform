@@ -43,10 +43,6 @@ spec:
   template:
     metadata:
       name: '{{ $addon }}-{{ "{{" }} .name {{ "}}" }}'
-      {{- if hasKey $cfg "syncWave" }}
-      annotations:
-        argocd.argoproj.io/sync-wave: {{ $cfg.syncWave | quote }}
-      {{- end }}
     spec:
       project: platform
       source:
