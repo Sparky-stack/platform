@@ -39,6 +39,9 @@ done
 a=" \$* "
 case "\$a" in
   *" get secret "*"-kubeconfig "*) printf '%s' "$KUBECONFIG_B64"; exit 0 ;;
+  *" get secret -n platform-secrets cosign-platform "*) k=cosign-pub ;;
+  *" get secret -n harbor harbor-ca-bundle "*) k=registry-ca ;;
+  *" get secret -n platform-secrets harbor "*) k=harbor-robot ;;
   *" apply "*)
     body=\$(cat)
     case "\$a" in *" --dry-run=server "*) ;; *) echo "stub: apply without --dry-run=server" >&2; exit 98 ;; esac
@@ -262,6 +265,30 @@ run addons-not-vault
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "negative: Issuer without a vault server fails"
 assert_eq "$RC" 1 "addons: a FAIL exits 1"
 
+# ---- in-cluster build: the Workload image is under <registry.host>/<appsProject>/ -> platform key ----------------------
+cp -R "$TMP/fix/green" "$TMP/fix/platform"; FIX="$TMP/fix/platform"
+HARBOR_IMG=harbor.openchoreo.localhost:9443/apps/demo/hello-world:fd6bd2c@sha256:95cf0fe890fe4ed7b7d2ab9acc977b7891cf8c0c671dcaa75a952725eafb3f4b
+ROBOT_SENTINEL=SentinelRobotSecret0815
+printf 'hello-world %s\n' "$HARBOR_IMG" > "$FIX/k3d-platform-mgmt.workloads"
+printf -- '-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n' | base64 | tr -d '\n' > "$FIX/k3d-platform-mgmt.cosign-pub"
+printf -- '-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n' | base64 | tr -d '\n' > "$FIX/k3d-platform-mgmt.registry-ca"
+printf '%s' "$ROBOT_SENTINEL" | base64 | tr -d '\n' > "$FIX/k3d-platform-mgmt.harbor-robot"
+run platform
+assert_eq "$(result_of 'latest image signed (cosign, pinned identity)')" PASS "platform: in-cluster build verified"
+assert_eq "$(detail_of 'latest image signed (cosign, pinned identity)')" "harbor.openchoreo.localhost:9443/apps/demo/hello-world:fd6bd2c@sha256:95cf0fe890fe... signed by the platform key (in-cluster build)" "platform: detail"
+cos=$(printf '%s\n' "$CALLS" | grep '^cosign verify ' || true)
+assert_match "$cos" "--key [^ ]+/cosign.pub --insecure-ignore-tlog=true --registry-cacert [^ ]+/ca.crt $HARBOR_IMG\$" "platform: cosign with the platform key, registry CA, no tlog"
+assert_eq "$(printf '%s\n' "$cos" | grep -c -- '--certificate-identity' || true)" 0 "platform: no keyless identity for a platform-key image"
+assert_eq "$(printf '%s\n%s\n' "$OUT" "$CALLS" | grep -c "$ROBOT_SENTINEL" || true)" 0 "platform: the robot secret never reaches output or a command line"
+printf '1' > "$FIX/cosign.rc"
+run platform-unsigned
+assert_eq "$(result_of 'latest image signed (cosign, pinned identity)')" FAIL "platform: unverifiable in-cluster image fails"
+assert_match "$(detail_of 'latest image signed (cosign, pinned identity)')" "NOT verified: Error: no matching signatures" "platform: error shown"
+rm "$FIX/cosign.rc" "$FIX/k3d-platform-mgmt.cosign-pub"
+run platform-no-key
+assert_eq "$(result_of 'latest image signed (cosign, pinned identity)')" FAIL "platform: missing cosign.pub fails"
+assert_eq "$(detail_of 'latest image signed (cosign, pinned identity)')" "cannot read cosign.pub (platform-secrets/cosign-platform)" "platform: says what is missing"
+
 # ---- broken stack ---------------------------------------------------------------------------------------------------
 cp -R "$TMP/fix/green" "$TMP/fix/red"; FIX="$TMP/fix/red"
 {
@@ -299,11 +326,11 @@ assert_match "$(detail_of 'hello-world 200 in staging')" "^000 http://staging" "
 assert_eq "$(result_of 'hello-world 200 in production')" "PENDING #54" "red: production known-pending (#54)"
 assert_eq "$(result_of 'latest promotion gate passed')" "PENDING #54" "red: failed gate known-pending (#54)"
 assert_eq "$(detail_of 'latest promotion gate passed')" "gate-new: failed" "red: failed gate detail"
-assert_eq "$(result_of 'in-cluster build succeeded')" "PENDING #17" "red: no build run -> known-pending (#17)"
+assert_eq "$(result_of 'in-cluster build succeeded')" FAIL "red: no build run -> FAIL (no PENDING since #17 closed)"
 assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-falcosidekick 0/1" "red: falco not ready"
 assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
-assert_match "$OUT" $'\n14 PASS, 12 FAIL, 3 PENDING$' "red: summary"
+assert_match "$OUT" $'\n14 PASS, 13 FAIL, 2 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
