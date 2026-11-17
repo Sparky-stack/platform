@@ -18,7 +18,7 @@ flowchart LR
   git[(github: platform, app repos)]
   subgraph mgmt["mgmt (k3d locally; any conformant k8s in prod)"]
     argo["Argo CD + ApplicationSets"]
-    capi["CAPI operator: core, k3s, docker | aws | hetzner"]
+    capi["CAPI operator: core, k3s, docker | aws | hetzner | gcp"]
     eso["ESO + ClusterSecretStore 'platform'"]
     cm[cert-manager]
     occp["OpenChoreo control plane + cluster-gateway"]
@@ -137,8 +137,9 @@ rendered consumer is missing from that list or a listed namespace has no consume
 ### Installations
 `installations/<inst>/` is one mgmt cluster and its fleet: `installation.yaml` (domain, secret backend, enabled CAPI
 providers, OpenChoreo endpoints, registry, promotion), `clusters/`, `addons/` overrides, `tenants/`. `local` is the
-booted one; `aws-example` and `hetzner-example` are reference installations that render but have not been booted
-([#26](https://github.com/koorikla/platform/issues/26)).
+booted one; `aws-example`, `hetzner-example` and `gcp-example` (GKE) are reference installations that render but have
+not been booted ([#26](https://github.com/koorikla/platform/issues/26),
+[#87](https://github.com/koorikla/platform/issues/87)).
 
 Local: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind` (shared with CAPD), docker.sock mounted for
 CAPD. The workload cluster is the CAPD k3s cluster `dev1`, hosting the environments development, staging and production
