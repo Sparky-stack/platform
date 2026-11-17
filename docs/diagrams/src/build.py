@@ -321,26 +321,25 @@ def cluster_lifecycle() -> Diagram:
     d.arrow([(AX + AW, m[0]), (xj, m[0])], step=2, head=False, badge=(AX + AW + 30, m[0]))
     d.arrow([(xj, m[0]), (A, m[0])], step=2, badge=False)
     d.arrow([(xj, m[0]), (xj, m[1]), (A, m[1])], step=2, badge=False)
-    d.arrow([(xj, m[1]), (xj, m[2]), (WX, m[2])], step=2, badge=False)
-    d.arrow([(xj, m[2]), (xj, m[3]), (A, m[3])], step=2, badge=False)
-    for y in m[:3]:
-        d.junction(xj, y)
+    d.junction(xj, m[0])
     d.arrow([(A + AWD, m[0]), (WX, m[0])], step=3, badge=(xz, m[0]))
-    d.arrow([(A + AWD / 2, L[1]), (A + AWD / 2, L[0] + H)], label="certificate", label_pos=(A + AWD / 2 + 8, L[0] + H + 40),
+    d.arrow([(A + AWD / 2, L[0] + H), (A + AWD / 2, L[1])], label="certificate", label_pos=(A + AWD / 2 + 8, L[0] + H + 40),
             label_anchor="start")
     d.line_label = "Cluster API picks up the agent certificate"
     xc = ZR + 34
     d.arrow([(A + AWD, L[0] + 64), (xc, L[0] + 64), (xc, L[2] + 20), (WX, L[2] + 20)], step=4, badge=(xc, m[1]))
+    d.arrow([(AX + AW, m[2] + 12), (WX, m[2] + 12)], step=5, badge=(xj, m[2] + 12))   # only once the nodes exist
     xg = WX + WW / 2
-    d.arrow([(xg, L[2] + H), (xg, m[3]), (A + AWD, m[3])], step=5, badge=(xz, m[3]), label="dials out",
+    d.arrow([(xg, L[2] + H), (xg, m[3]), (A + AWD, m[3])], step=6, badge=(xz, m[3]), label="dials out",
             label_pos=(xz, m[3] + 32))
     d.legend_label("workload", "runs on the new cluster")
     d.require("Fleet file", "Argo CD", "Cluster API", "k3s nodes", "cert-manager", "OpenChoreo", "cluster-agent")
     d.key("Argo CD reads the fleet file clusters/<name>.yaml",
-          "Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager, "
-          "the data plane for OpenChoreo, and the addons, cluster-agent included, for the new cluster",
+          "Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager "
+          "(and the data plane record for OpenChoreo)",
           "Cluster API creates the machines and installs k3s",
           "Cluster API copies the agent certificate into the cluster; the CA key stays on the management cluster",
+          "Once the cluster is up, Argo CD installs its addons, cluster-agent included",
           "The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA")
     d.note("Upgrade: bump kubernetesVersion in the fleet file; Cluster API replaces the nodes one at a time. "
            "Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.")

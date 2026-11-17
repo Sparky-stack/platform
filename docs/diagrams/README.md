@@ -108,10 +108,11 @@ The numbered flow of each diagram, word for word.
 ### Cluster lifecycle ([cluster-lifecycle.svg](cluster-lifecycle.svg))
 
 1. Argo CD reads the fleet file `clusters/<name>.yaml`
-2. Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager, the data plane for OpenChoreo, and the addons, cluster-agent included, for the new cluster
+2. Argo CD renders the cluster chart: the cluster for Cluster API, the agent certificate for cert-manager (and the data plane record for OpenChoreo)
 3. Cluster API creates the machines and installs k3s
 4. Cluster API copies the agent certificate into the cluster; the CA key stays on the management cluster
-5. The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA
+5. Once the cluster is up, Argo CD installs its addons, cluster-agent included
+6. The cluster-agent dials out to OpenChoreo, which accepts only this cluster's CA
 
 Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the nodes one at a time. Remove: delete the file; Argo CD prunes, Cluster API deletes the cluster and its CA goes with it.
 
