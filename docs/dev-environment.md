@@ -190,6 +190,9 @@ One installation (`installations/local`), two profiles. The fleet files are the 
 | lean (default) | `dev1.yaml`, `prod1.yaml.disabled` | `dev1`: development, staging, production | mgmt ~8.1 GiB + dev1 ~4.3 GiB = **~12.4 GiB** |
 | multicluster | `dev1.yaml`, `prod1.yaml` | `dev1`: development, staging; `prod1`: production | + prod1 ~3.4 GiB = **~15.8 GiB** |
 
+`byo1.yaml.disabled` is a separate opt-in, not part of either profile: a plain k3d cluster registered as
+`provider: byo` (~2.3 GiB; [providers.md](providers.md#bring-your-own-cluster-byo)).
+
 Measured on 2026-11-16 on one stack before and after prod1 was removed (#115; single-server CAPD nodes,
 `controlPlane.replicas: 1`): host memory in use (`free`) fell from 26.3-26.8 GB to 22.6-22.8 GB. dev1 grew from 3.8 to
 4.1-4.3 GiB when it took production over; prod1, running with no environment, held 3.3-3.6 GiB (+ 18 MiB for its load

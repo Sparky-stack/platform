@@ -192,8 +192,12 @@ for inst_dir in installations/*; do
   done
 done
 assert_eq "$((profiles >= 4))" 1 "default profiles of every installation and local's multicluster profile were checked ($profiles)"
-ndis=0; for d in installations/local/clusters/*.yaml.disabled; do [[ -f "$d" ]] && ndis=$((ndis + 1)); done
-assert_eq "$ndis" 1 "local keeps exactly one disabled fleet file (the multicluster switch)"
+# byo1.yaml.disabled is an independent opt-in (an existing k3d cluster, docs/providers.md "Bring your own cluster (byo)"),
+# not part of the switch
+ndis=0; for d in installations/local/clusters/*.yaml.disabled; do
+  [[ -f "$d" && "$(yq -r '.provider // "docker"' "$d")" != byo ]] && ndis=$((ndis + 1))
+done
+assert_eq "$ndis" 1 "local keeps exactly one disabled CAPI fleet file (the multicluster switch)"
 
 # --- negatives ---------------------------------------------------------------------------------------------------
 L=installations/local
