@@ -1,0 +1,8 @@
+# Freshly applied: no status until the first scheduled run.
+apiVersion: policies.kyverno.io/v1
+kind: DeletingPolicy
+metadata:
+  name: fresh
+  generation: 1
+spec:
+  schedule: "0 3 * * *"

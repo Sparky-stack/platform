@@ -75,7 +75,9 @@ component. The installation switch is `installation.yaml` `previews`:
   `preview-expired`: the Application renders empty and Argo CD prunes the preview (the desired state itself says
   "gone", so neither self-heal nor a platform commit brings it back). Remove the label for a fresh 48h. Backstop:
   DeletingPolicy `platform-preview-ttl` deletes any preview Environment one hour past its stamp (or past creation +
-  `ttl` without one), e.g. when GitHub was unreachable or an Application was orphaned.
+  `ttl` without one), e.g. when GitHub was unreachable or an Application was orphaned. Kyverno never reports
+  `ready` for DeletingPolicies (only `lastExecutionTime`), so `addons/argo-cd` overrides Argo CD's built-in health
+  check for them in `argocd-cm`: Healthy unless Kyverno reports a failed condition.
 - **Per-tenant cap**: ValidatingPolicy `platform-preview-cap` denies a tenant's preview Environment beyond
   `maxPerTenant`. The Application retries without a limit (every 5 minutes at most), so the next PR's preview starts
   when a slot frees up; the commit status shows the denial meanwhile.
