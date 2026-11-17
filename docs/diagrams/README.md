@@ -19,8 +19,6 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
 | [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → merge → Argo CD, dev before prod | [runbooks/upgrades.md](../runbooks/upgrades.md) |
 
-`../images/hero.png` is the README banner, generated with Gemini's image model; it is abstract and has no text in it.
-
 ## Visual system
 
 Audience: a demo for the team and management, and engineers doing day-2 operations. Surface: **Decide / Learn**:

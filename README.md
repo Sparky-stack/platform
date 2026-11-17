@@ -1,7 +1,5 @@
 # platform
 
-<p align="center"><img src="docs/images/hero.png" alt="Clusters on several clouds, connected to one management hub" width="100%"></p>
-
 A cloud-agnostic Kubernetes developer platform reconciled from Git with zero imperative steps after bootstrap:
 
 - **Cluster API (CAPI)** provisions and upgrades k3s workload clusters locally on Docker (`k3d` + CAPD) and is ready for AWS (CAPA) and Hetzner Cloud (CAPH) from one file per cluster.

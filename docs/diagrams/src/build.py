@@ -403,8 +403,8 @@ def trust() -> Diagram:
 # ---------------------------------------------------------------------------------------- backup & restore
 def backup() -> Diagram:
     d = Diagram("Backup & restore · the restore order",
-                "Git rebuilds everything declarative. The numbers are the restore order after losing the management "
-                "cluster; the boxes they touch hold state that Git cannot recreate.")
+                "The restore order after losing the management cluster: first the state Git cannot recreate, then "
+                "Argo CD rebuilds everything declarative from Git.")
     M1, M2, MW = 44, 348, 224
     ZR = 588
     OZ = ZR + 96
@@ -464,7 +464,7 @@ def upgrade() -> Diagram:
     d.arrow([(c[0] + w / 2, R1), (c[0] + w / 2, y0), (c[1] + 120, y0), (c[1] + 120, R0 + H)], step=3)
     d.arrow([(c[0] + w, ymid(R1)), (c[1], ymid(R1))], step=4, badge_at=0.4)
     d.arrow([(c[0] + w / 2, R1 + H), (c[0] + w / 2, y1), (c[2] + w / 2, y1), (c[2] + w / 2, R1 + H)], step=6,
-            badge=(c[0] + w / 2 + 80, y1), label="after a second pull request", label_pos=(c[1] + 40, y1 - 10), label_anchor="start")
+            badge=(c[0] + w / 2 + 80, y1), label="after a second pull request", label_pos=(c[0] + w / 2 + 104, y1 - 10), label_anchor="start")
     d.legend_label("workload", "workload clusters")
     d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",

@@ -40,8 +40,8 @@
 <text class="s" x="262.5" y="252.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <circle cx="234.0" cy="336.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="234.0" y="340.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<rect x="318.0" y="392.0" width="170.4" height="20.0" rx="3" fill="#0b1120"/>
-<text class="s" x="322.0" y="406.0" font-size="13" fill="#aab6c8">after a second pull request</text>
+<rect x="223.0" y="392.0" width="170.4" height="20.0" rx="3" fill="#0b1120"/>
+<text class="s" x="227.0" y="406.0" font-size="13" fill="#aab6c8">after a second pull request</text>
 <circle cx="203.0" cy="416.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
 <text class="s" x="203.0" y="420.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
 <line x1="28" y1="450" x2="932" y2="450" stroke="#7c8aa0" stroke-width="1.2"/>
