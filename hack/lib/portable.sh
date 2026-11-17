@@ -75,6 +75,9 @@ sha256_file() {
 # free_gb <path> -> free space in GiB (POSIX `df -P`, 1K blocks; GNU `df -BG --output` does not exist on macOS).
 free_gb() { df -Pk "${1:-.}" 2>/dev/null | awk 'NR==2 { print int($4 / 1048576) }'; }
 
+# cpu_count -> logical CPU count (getconf on Linux/macOS, sysctl on BSD/macOS, fallback 4).
+cpu_count() { getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4; }
+
 # native_path <path>: path as native programs see it. On Windows, Go/Python binaries (helm, kubeconform, python)
 # do not understand MSYS paths like /c/Users/x; cygpath -m gives C:/Users/x, which bash accepts as well.
 native_path() {
