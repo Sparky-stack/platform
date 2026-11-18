@@ -1,36 +1,9 @@
-{{- /*
-k3s node registry config: Secret <name>-registries in ns fleet, written to every node by the ClusterClass
-(KThreesConfig files[].contentFrom.secret, variables registryAuth / registryCA):
-  registries.yaml   k3s' private registry config (/etc/rancher/k3s/registries.yaml):
-                    - configs.<nodeRegistryAuth.registry>.auth        private GHCR (key platform-ghcr)
-                    - configs.<registry.host>.{auth,tls.ca_file}      Harbor (robot `nodes`, CA below)
-                    - mirrors.<upstream> -> https://<registry.host> with rewrite "^(.*)$" -> "<project>/$1"
-                      (Harbor proxy-cache projects, registry.proxyCache); containerd falls back to the upstream
-                      endpoint when Harbor fails, so a Harbor outage slows pulls instead of breaking them
-  registry-ca.crt   the registry CA's PUBLIC cert (ca.crt of harbor/harbor-ca-bundle via ClusterSecretStore
-                    mgmt-harbor, name-scoped read); the CA key never leaves mgmt (ns cert-manager)
-Ordering: sync wave -1, before the Cluster (wave 0). cluster-api-k3s v0.5.0's bootstrap controller watches only
-KThreesConfigs, not the Secrets their files[].contentFrom reference: a KThreesConfig reconciled before this Secret
-exists fails with "secret not found" and is retried only on controller backoff or the 10 min resync. Argo applies the
-Cluster - and any change to it, e.g. registryAuth/registryCA turning on - only once this ExternalSecret is Ready (Argo
-CD's built-in ExternalSecret health check); until then (e.g. the Harbor CA is not issued yet) the sync fails and Argo
-retries, so no Machine is created before its registry config exists.
-Not rendered for gcp-gke (no node bootstrap files on GKE node pools) nor byo (nodes owned by the cluster's owner).
-Bootstrap data is rendered once per Machine (cluster-api-k3s v0.5.0 returns early once a KThreesConfig is Ready; seen on
-CAPD dev1: the bootstrap Secret is never updated): rotated tokens, robot secrets or mirror changes reach machines created
-afterwards only. Rolling them (docs/providers.md "Node registry config"): workers via topology
-`workers.machineDeployments[].rollout.after`; NOT the control plane via `controlPlane.rollout.after` (CAPI 1.13 writes
-spec.rollout.after, which KThreesControlPlane v0.5.0 lacks, so the topology reconcile fails).
-*/ -}}
+{{- /* k3s node registry config (ExternalSecret fleet/<name>-registries, wave -1); skipped on gcp-gke and byo. */ -}}
 {{- include "capi.validate" . }}
 {{- $auth := .Values.secrets.nodeRegistryAuth }}
 {{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
 {{- $reg := .Values.registry }}
 {{- $nr := .Values.nodeRegistry }}
-{{- /* gcp-gke: GKE nodes take no k3s registries.yaml (CAPG v1.13.1 exposes no node containerd config), so nothing
-would read this Secret; registry auth there is per workload (imagePullSecrets) - docs/providers.md "GKE". */ -}}
-{{- /* byo: the platform does not own the nodes; trusting/pulling from the registry is the cluster owner's node config
-(docs/portability.md "Per-provider infrastructure layer"). */ -}}
 {{- if and (or $auth.enabled $harbor) (ne (include "capi.gke" .) "true") (ne (include "capi.byo" .) "true") }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret

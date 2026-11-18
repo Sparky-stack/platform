@@ -1,26 +1,4 @@
-{{- /*
-Public trust material for this mesh member, delivered into istio-system like the OpenChoreo agent identity
-(openchoreo-agent-crs): ExternalSecret <name>-mesh-trust (store mgmt-openbao: name-scoped GET of
-openbao/openbao-ca-bundle, PUBLIC certificates only) templates a ClusterResourceSet payload:
-  Namespace istio-system, labelled topology.istio.io/network=<name>: ambient istiod reads its cluster's network from
-    this label (and a peer's network from the peer's label, via the remote secret).
-  Secret openbao-ca     ca.crt = OpenBao's CA: addon istio-csr's Vault Issuer verifies OpenBao's listener with it.
-  Secret mesh-root-ca   root-cert.pem = this group's root CA certificate (generated inside OpenBao, key never exported):
-                        istio-csr pins it (rootCAFile) and publishes it as istio-ca-root-cert.
-ConfigMap <name>-mesh-oidc (rendered here, no ESO, no OpenBao: applied as soon as the cluster's API is up, so it is in
-place before the mesh reconcile on mgmt configures this member):
-  ClusterRoleBinding platform-oidc-discovery: ClusterRole system:service-account-issuer-discovery (GET on
-    /.well-known/openid-configuration and /openid/v1/jwks only) for system:unauthenticated. OpenBao (addon openbao,
-    auth/mesh-<name>) verifies this cluster's ServiceAccount tokens offline with these PUBLIC signing keys, fetched
-    without any credential and pinned to the cluster CA. Upstream's documented way for an external relying party
-    ("Service account issuer discovery"); the alternatives put a credential for every member on mgmt (TokenReview, or
-    reading the JWKS with the CAPI admin kubeconfig into static jwt_validation_pubkeys) - OpenBao's JWT auth has no
-    authenticated JWKS fetch. The JWKS holds public keys only; issuing a token still needs the signing key.
-  ClusterResourceSet <name>-mesh-trust applies both to exactly this Cluster (ConfigMap first; CAPI applies each listed
-  resource that exists, so the binding does not wait for ESO). Strategy Reconcile: re-applied on change.
-No private key of any kind is in this payload (contract test): the member's certificates are signed in OpenBao on mgmt
-(addon openbao) through istio-csr + cert-manager's Vault Issuer with per-member JWT auth (addon istio-csr).
-*/ -}}
+{{- /* Delivers public mesh trust material (root CA, OpenBao CA, OIDC discovery) into istio-system via ClusterResourceSet. */ -}}
 {{- if include "mesh.group" . }}
 {{- $name := .Values.name }}
 apiVersion: external-secrets.io/v1

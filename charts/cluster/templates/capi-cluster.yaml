@@ -97,28 +97,81 @@ addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
 {{- end }}
 
+{{- define "capi.variables" -}}
+{{- $gke := eq (include "capi.gke" .) "true" -}}
+{{- $harbor := and (not $gke) (eq (include "capi.registry.harbor" .) "true") -}}
+{{- $vars := dict -}}
+{{- if not $gke -}}
+{{- $vars = dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni -}}
+{{- if $harbor -}}
+{{- $_ := set $vars "registryCA" true -}}
+{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias -}}
+{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") -}}
+{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if ne .Values.provider "docker" -}}
+{{- $_ := set $vars "region" .Values.region -}}
+{{- with (.Values.controlPlane | default dict).machineType -}}
+{{- $_ := set $vars "controlPlaneMachineType" . -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := mergeOverwrite $vars (.Values.providerSpec | default dict) -}}
+{{- range $k := keys $vars | sortAlpha }}
+- name: {{ $k }}
+  value: {{ index $vars $k | toJson }}
+{{- end }}
+{{- end }}
+
+{{- define "capi.topology.gke" -}}
+workers:
+  machinePools:
+    {{- range .Values.workers }}
+    - class: default-worker
+      name: {{ .name }}
+      replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
+      {{- if or .machineType .failureDomain }}
+      variables:
+        overrides:
+          {{- with .machineType }}
+          - name: workerMachineType
+            value: {{ . | quote }}
+          {{- end }}
+          {{- with .failureDomain }}
+          - name: workerNodeLocations
+            value: [{{ . | quote }}]
+          {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "capi.topology.k3s" -}}
+controlPlane:
+  replicas: {{ (.Values.controlPlane | default dict).replicas | default 1 }}
+{{- if .Values.workers }}
+workers:
+  machineDeployments:
+    {{- range .Values.workers }}
+    - class: default-worker
+      name: {{ .name }}
+      replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
+      {{- with .failureDomain }}
+      failureDomain: {{ . | quote }}
+      {{- end }}
+      {{- if and .machineType (ne $.Values.provider "docker") }}
+      variables:
+        overrides:
+          - name: workerMachineType
+            value: {{ .machineType | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
 {{- include "capi.validate" . }}
 {{- if ne (include "capi.byo" .) "true" }}
 {{- $gke := eq (include "capi.gke" .) "true" }}
-{{- $harbor := and (not $gke) (eq (include "capi.registry.harbor" .) "true") }}
-{{- $vars := dict }}
-{{- if not $gke }}
-{{- $vars = dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni }}
-{{- if $harbor }}
-{{- $_ := set $vars "registryCA" true }}
-{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias }}
-{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") }}
-{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- if ne .Values.provider "docker" }}
-{{- $_ := set $vars "region" .Values.region }}
-{{- with (.Values.controlPlane | default dict).machineType }}
-{{- $_ := set $vars "controlPlaneMachineType" . }}
-{{- end }}
-{{- end }}
-{{- $_ := mergeOverwrite $vars (.Values.providerSpec | default dict) }}
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
@@ -142,51 +195,7 @@ spec:
       name: {{ ternary "gke-managed" (printf "k3s-%s" .Values.provider) $gke }}
       namespace: fleet
     version: {{ .Values.kubernetesVersion }}
-    {{- if $gke }}
-    workers:
-      machinePools:
-        {{- range .Values.workers }}
-        - class: default-worker
-          name: {{ .name }}
-          replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
-          {{- if or .machineType .failureDomain }}
-          variables:
-            overrides:
-              {{- with .machineType }}
-              - name: workerMachineType
-                value: {{ . | quote }}
-              {{- end }}
-              {{- with .failureDomain }}
-              - name: workerNodeLocations
-                value: [{{ . | quote }}]
-              {{- end }}
-          {{- end }}
-        {{- end }}
-    {{- else }}
-    controlPlane:
-      replicas: {{ (.Values.controlPlane | default dict).replicas | default 1 }}
-    {{- if .Values.workers }}
-    workers:
-      machineDeployments:
-        {{- range .Values.workers }}
-        - class: default-worker
-          name: {{ .name }}
-          replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
-          {{- with .failureDomain }}
-          failureDomain: {{ . | quote }}
-          {{- end }}
-          {{- if and .machineType (ne $.Values.provider "docker") }}
-          variables:
-            overrides:
-              - name: workerMachineType
-                value: {{ .machineType | quote }}
-          {{- end }}
-        {{- end }}
-    {{- end }}
-    {{- end }}
+    {{- include (ternary "capi.topology.gke" "capi.topology.k3s" $gke) . | nindent 4 }}
     variables:
-      {{- range $k := keys $vars | sortAlpha }}
-      - name: {{ $k }}
-        value: {{ index $vars $k | toJson }}
-      {{- end }}
+      {{- include "capi.variables" . | nindent 6 }}
 {{- end }}

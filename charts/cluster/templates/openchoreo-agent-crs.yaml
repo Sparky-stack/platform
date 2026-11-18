@@ -1,18 +1,4 @@
-{{- /*
-Delivery of the agent identity into the workload cluster, without scripts and without hub->worker writes outside CAPI:
-  ExternalSecret <name>-openchoreo-agent (store mgmt-fleet: read-only, in-cluster, namespace fleet) templates a
-  ClusterResourceSet payload Secret from <name>-agent-tls: Namespace openchoreo-data-plane + Secret cluster-agent-tls.
-  ClusterResourceSet <name>-openchoreo-agent applies it, plus the shared openchoreo-gateway-ca payload (addon
-  openchoreo-control-plane: ConfigMap cluster-gateway-ca, public CA cert only), to exactly this Cluster.
-Strategy Reconcile: CAPI re-applies a payload whenever its content changes (cert renewal, CA rotation).
-provider byo (no CAPI Cluster, so no CRS): the same two objects by PushSecret (byo-access.yaml byo.pushSecret):
-  PushSecret <name>-push-agent-tls   fleet/<name>-agent-tls (cert-manager: tls.crt, tls.key, ca.crt = this cluster's
-                                     agent CA cert, public) -> openchoreo-data-plane/cluster-agent-tls
-  ExternalSecret <name>-gateway-ca   ca.crt of the gateway CA (store mgmt-openchoreo, public cert only), pushed by
-  PushSecret <name>-push-gateway-ca  -> platform-delivery/cluster-gateway-ca; addon openchoreo-data-plane
-                                     (values/provider-byo.yaml) turns it into ConfigMap cluster-gateway-ca there, as
-                                     PushSecret writes only Secrets.
-*/ -}}
+{{- /* Delivers OpenChoreo agent TLS identity and gateway CA to the workload cluster via ClusterResourceSet or byo PushSecret. */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
 {{- $name := include "openchoreo.name" . }}
 {{- $ns := include "openchoreo.fleetNamespace" . }}
@@ -66,7 +52,6 @@ spec:
         labels:
           {{- include "openchoreo.labels" . | nindent 10 }}
       data:   # gitleaks:allow: ESO template of the CRS payload Secret; values come from the store, none in git
-        # One key, two documents in order: CAPI applies them top to bottom (Namespace first).
         openchoreo-agent.yaml: |
           apiVersion: v1
           kind: Namespace
@@ -106,8 +91,6 @@ spec:
   strategy: Reconcile
   clusterSelector:
     matchLabels:
-      # On the CAPI Cluster by docs/conventions.md (capi-cluster template). CAPI does not label a Cluster with
-      # cluster.x-k8s.io/cluster-name itself, so that label is not used here.
       platform.koorikla.io/name: {{ $name }}
   resources:
     - kind: Secret
