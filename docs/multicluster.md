@@ -189,7 +189,9 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   istio-csr answers ztunnel's and gateways' CSRs (ztunnel is a trusted node account, as ambient requires) and issues
   istiod's serving certificate (`Certificate istiod`, 48h, renewed after 24h). istiod decides once at start whether it
   has serving certs, so the pod mounts `Secret istiod-tls` and `ConfigMap istio-ca-root-cert` as non-optional volumes
-  and stays in `ContainerCreating` until istio-csr has both: no silent fallback to a self-signed root.
+  and stays in `ContainerCreating` until istio-csr has both: no silent fallback to a self-signed root. istiod reads the
+  certificate from that mount (`--tlsCertFile`/`--tlsKeyFile`/`--caCertFile`): the chart's own mount of the Secret is
+  optional, and kubelet can fill it only after the container started, leaving istiod without xDS TLS on `:15012`.
 
 ### Configuration as code, no root token
 OpenBao's [self-initialisation](https://openbao.org/docs/configuration/self-init/) (`initialize` blocks in the
