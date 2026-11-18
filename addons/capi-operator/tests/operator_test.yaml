@@ -1,0 +1,13 @@
+suite: capi-operator wrapper chart
+templates:
+  - charts/cluster-api-operator/templates/deployment.yaml
+values:
+  - ../values.yaml
+tests:
+  - it: runs the operator with 60s/40s/10s leader election (#192, as mgmt's k3s controllers in #94)
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leader-elect=true }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leader-elect-lease-duration=60s }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leader-elect-renew-deadline=40s }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leader-elect-retry-period=10s }

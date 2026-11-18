@@ -19,6 +19,17 @@ capi:
     workloadIdentityProvider: ""   # projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
     serviceAccount: ""             # <name>@<project>.iam.gserviceaccount.com
 
+# --- leader election ----------------------------------------------------------------------------------------------
+# Lease timings of the provider managers that have the flags (leaseFlags: true below; cluster-api-k3s v0.5.0 and CAPH
+# v1.1.12 only have --enable-leader-election / --leader-elect). Upstream defaults 15s/10s/2s: under clean-bootstrap
+# load the mgmt API server answered too slowly, capi-controller-manager lost its lease and exited, and its webhook was
+# gone while Argo CD applied Cluster/dev1 (#192). Same headroom as mgmt's own k3s controllers (bootstrap/k3d-mgmt.yaml,
+# #94). Cost: a crashed single-replica manager is replaced on a new lease after <= 60s instead of 15s.
+leaderElection:
+  leaseDuration: 60s
+  renewDeadline: 40s
+  retryPeriod: 10s
+
 # --- providers ----------------------------------------------------------------------------------------------------
 core:
   version: v1.13.8
@@ -27,6 +38,7 @@ core:
   # longer exists - an unknown gate in --feature-gates makes the manager exit at startup.
   featureGates:
     ClusterTopology: true
+  leaseFlags: true
 
 k3s:
   version: v0.5.0
@@ -38,6 +50,7 @@ infrastructure:
     version: v1.13.8           # CAPD is released with core (infrastructure-components-development.yaml)
     featureGates:
       ClusterTopology: true    # CAPD shares core's gate set; matches the upstream quickstart (CLUSTER_TOPOLOGY=true)
+    leaseFlags: true
   aws:
     version: v2.13.1
     # Secret (ns capa-system) holding CAPA's clusterctl variables. AWS_B64ENCODED_CREDENTIALS has no default in
@@ -50,6 +63,7 @@ infrastructure:
     credentialsFromStore: true
     # CAPA feature gates are CAPA's own (EKS, MachinePool, ...); ClusterTopology is not one of them - do not add it.
     featureGates: {}
+    leaseFlags: true
   hetzner:
     version: v1.1.12
     # CAPH takes no provider-level credentials: every HetznerCluster names its token secret (hetznerSecretRef). That
@@ -69,6 +83,7 @@ infrastructure:
     featureGates:
       GKE: true
       MachinePool: true
+    leaseFlags: true
 
 externalSecrets:
   store: platform              # ClusterSecretStore name (docs/conventions.md)

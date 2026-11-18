@@ -26,6 +26,8 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # after its Issuer (wave 0): docs/providers.md "Sync waves of a cluster app"
 spec:
   isCA: true
   commonName: {{ $name }}-agent-ca
@@ -49,6 +51,8 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # after Certificate <name>-agent-ca, whose Secret it signs with
 spec:
   ca:
     secretName: {{ $name }}-agent-ca
@@ -60,6 +64,8 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"   # after Issuer <name>-agent-ca
 spec:
   commonName: {{ $name }}
   subject:
