@@ -194,7 +194,18 @@ tests:
       # app-to-component: the writer must be exactly the gated Application <project>-<component>-<environment>
       - matchRegex: { path: "spec.variables[3].expression", pattern: "has\\(variables.binding.spec.owner.componentName\\)" }
       - matchRegex: { path: "spec.variables[3].expression", pattern: "\\? variables.binding.spec.owner.projectName \\+ '-' \\+ variables.binding.spec.owner.componentName \\+ '-' \\+ variables.binding.spec.environment : ''$" }
-      - equal: { path: "spec.variables[4]", value: { name: gatedApp, expression: "variables.componentApp != '' && variables.trackingApp == variables.componentApp" } }
+      - equal:
+          path: "spec.variables[5]"
+          value:
+            name: gatedApp
+            expression: >-
+              variables.binding.kind == 'ResourceReleaseBinding' ? variables.projectGatedApp
+              : variables.componentApp != '' && variables.trackingApp == variables.componentApp
+      # ResourceReleaseBindings (#70): a gated Application <project>-<app>-<environment> of the binding's project
+      - equal: { path: "spec.variables[4].name", value: projectGatedApp }
+      - matchRegex: { path: "spec.variables[4].expression", pattern: "variables.trackingApp.startsWith\\(variables.binding.spec.owner.projectName \\+ '-'\\)" }
+      - matchRegex: { path: "spec.variables[4].expression", pattern: "variables.trackingApp.endsWith\\('-' \\+ variables.binding.spec.environment\\)" }
+      - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [releasebindings, resourcereleasebindings] }
 
   - it: binding denies (not audits)
     template: templates/promotion-git-only.yaml

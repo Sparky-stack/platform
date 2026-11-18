@@ -215,7 +215,9 @@ ApplicationSet `tenants` (charts/platform) -> Application `tenant-<project>` (Ap
 
 - AppProject `tenant-<project>`: `sourceRepos` = exactly the tenant's app repos; destination = mgmt
   (`https://kubernetes.default.svc`), org namespace only; no cluster-scoped kinds; namespaced kinds limited to
-  `openchoreo.dev` `Component`, `Workload`, `ReleaseBinding`, `ComponentRelease`, `SecretReference`.
+  `openchoreo.dev` `Component`, `Workload`, `ReleaseBinding`, `ComponentRelease`, `SecretReference`, `Resource`,
+  `ResourceReleaseBinding` (databases and other managed infrastructure:
+  [data-services.md](data-services.md#postgresql-from-openchoreo)).
 - OpenChoreo `Project <project>` (type `ClusterProjectType/default`, pipeline `default`) and one
   `ProjectReleaseBinding <project>-<env>` per pipeline environment (provisions the project's namespace on each data
   plane). Platform-owned: app repos cannot create or edit Projects.

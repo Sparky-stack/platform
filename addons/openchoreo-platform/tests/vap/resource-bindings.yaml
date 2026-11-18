@@ -1,0 +1,22 @@
+# ResourceReleaseBindings (#70) of gated environments: only from a gated Application <project>-<app>-<env> of their
+# project. 1. From hello-world's gated Application (release-bindings/production.yaml): allowed for Argo CD.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-production
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: demo-hello-world-production:openchoreo.dev/ResourceReleaseBinding:default/orders-db-production
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: production
+  resourceRelease: orders-db-1a2b3c4d
+---
+# Staging: out of scope (not matched).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata: { name: orders-db-staging, namespace: default }
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: staging
+  resourceRelease: orders-db-1a2b3c4d

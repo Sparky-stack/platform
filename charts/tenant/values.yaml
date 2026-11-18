@@ -62,6 +62,8 @@ developerKinds:
   - ReleaseBinding
   - ComponentRelease
   - SecretReference
+  - Resource                 # managed infrastructure from a platform (Cluster)ResourceType, e.g. postgresql (#70)
+  - ResourceReleaseBinding   # binds a Resource to an environment; gated environments like ReleaseBindings
 # Promotion gates (docs/promotion.md); installation.yaml `promotion` overrides (shared with addon openchoreo-platform).
 promotion:
   # Each gated environment's binding file syncs through its own Application <project>-<app>-<env> (excluded from the

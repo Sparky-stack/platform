@@ -3,7 +3,8 @@
 #   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
 #                              bindings from the component's gated Argo CD Application pass; from openchoreo-api, from
 #                              the app's main Application, another tenant's Application, another app's gated
-#                              Application (either direction) or without tracking-id are denied; staging is out of scope
+#                              Application (either direction) or without tracking-id are denied; staging is out of scope;
+#                              production ResourceReleaseBindings only from a gated Application of their project (#70)
 #   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
 #                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
 #                              cluster scope (even clusterScope: false), spec overrides (serviceAccountName, executor,
@@ -105,9 +106,10 @@ ocp="$ROOT/addons/openchoreo-platform"
 cp_chart="$ROOT/addons/openchoreo-control-plane"
 [[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
 (
-  helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
+  helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev" or .metadata.name == "resourcereleasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
   helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
-  for c in argocd:resources api:resources argocd:smuggled; do
+  for c in argocd:resources api:resources argocd:smuggled argocd:resource-bindings api:resource-bindings \
+    argocd:resource-bindings-smuggled; do
     who=${c%%:*}; res=${c#*:}
     "$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
       --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" > "$TMP/ocp-$who-$res.out" 2>&1 || true
@@ -239,7 +241,8 @@ done
 
 # who:resources:expected  (staging bindings are out of scope and not counted)
 for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'pass: 0, fail: 1, warn: 0, error: 0' \
-  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0'; do
+  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0' argocd:resource-bindings:'pass: 1, fail: 0, warn: 0, error: 0' \
+  api:resource-bindings:'pass: 0, fail: 1, warn: 0, error: 0' argocd:resource-bindings-smuggled:'pass: 0, fail: 4, warn: 0, error: 0'; do
   who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/ocp-$who-$res.out")
   assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"

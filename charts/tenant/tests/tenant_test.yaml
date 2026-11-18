@@ -61,6 +61,9 @@ tests:
       - equal: { path: spec.clusterResourceWhitelist, value: [] }
       - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Component } }
       - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: ReleaseBinding } }
+      - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Resource } }
+      - contains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: ResourceReleaseBinding } }
+      - notContains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: ResourceRelease } }
       - notContains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Project } }
       - notContains: { path: spec.namespaceResourceWhitelist, content: { group: openchoreo.dev, kind: Environment } }
       - notContains: { path: spec.namespaceResourceWhitelist, content: { group: "*", kind: "*" } }

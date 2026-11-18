@@ -12,6 +12,9 @@ Component per app repo: docs/openchoreo.md "App repo contract"; freeze windows, 
 smuggled into any other file of the app repo syncs through the main Application <project>-<app> and is denied, and so
 is a binding for another component from any other app's gated Application (another app repo cannot promote it);
 charts/tenant rejects app names that end in -<gated environment>.
+ResourceReleaseBindings (a Resource such as a database bound to an environment, #70) are gated the same way; they have
+no component, so the writer must be a gated Application of the binding's project (<owner.projectName>-<app>-<env>,
+committed to that app repo's release-bindings/<env>.yaml through a reviewed pull request).
 */ -}}
 {{- $g := .Values.promotion }}
 {{- if and $g.gatedEnvironments $g.gitOnly.enabled }}
@@ -26,7 +29,7 @@ spec:
       - apiGroups: [openchoreo.dev]
         apiVersions: ["*"]
         operations: [CREATE, UPDATE, DELETE]
-        resources: [releasebindings]
+        resources: [releasebindings, resourcereleasebindings]
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: {{ .Values.openchoreo.orgNamespace }}
@@ -51,8 +54,16 @@ spec:
         && has(variables.binding.spec.owner.componentName)
         ? variables.binding.spec.owner.projectName + '-' + variables.binding.spec.owner.componentName + '-'
         + variables.binding.spec.environment : ''
+    - name: projectGatedApp         # ResourceReleaseBindings: any gated Application <project>-<app>-<env> of the project
+      expression: >-
+        has(variables.binding.spec.owner) && has(variables.binding.spec.owner.projectName)
+        && variables.trackingApp.startsWith(variables.binding.spec.owner.projectName + '-')
+        && variables.trackingApp.endsWith('-' + variables.binding.spec.environment)
+        && size(variables.trackingApp) > size(variables.binding.spec.owner.projectName) + size(variables.binding.spec.environment) + 2
     - name: gatedApp
-      expression: "variables.componentApp != '' && variables.trackingApp == variables.componentApp"
+      expression: >-
+        variables.binding.kind == 'ResourceReleaseBinding' ? variables.projectGatedApp
+        : variables.componentApp != '' && variables.trackingApp == variables.componentApp
     - name: breakGlass
       expression: 'request.userInfo.groups.exists(g, g in {{ $g.gitOnly.breakGlassGroups | default list | toJson }})'
   validations:
@@ -64,10 +75,13 @@ spec:
             && object.spec == oldObject.spec)
       messageExpression: >-
         variables.user in {{ $g.gitOnly.writers | toJson }}
-        ? 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through the gated Argo CD
-        Application <project>-<component>-<environment> of their component (docs/promotion.md); want ' +
-        (variables.componentApp == '' ? '(owner incomplete)' : variables.componentApp) + ', denied for Application ' +
-        (variables.trackingApp == '' ? '(no tracking-id)' : variables.trackingApp)
+        ? (variables.binding.kind == 'ResourceReleaseBinding'
+          ? 'ResourceReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through a gated
+          Argo CD Application <project>-<app>-<environment> of their project (docs/promotion.md), denied for Application '
+          : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through the gated Argo CD
+          Application <project>-<component>-<environment> of their component (docs/promotion.md); want ' +
+          (variables.componentApp == '' ? '(owner incomplete)' : variables.componentApp) + ', denied for Application ')
+        + (variables.trackingApp == '' ? '(no tracking-id)' : variables.trackingApp)
         : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' change only through a reviewed pull
         request synced by Argo CD (docs/promotion.md); denied for ' + variables.user
       reason: Forbidden
