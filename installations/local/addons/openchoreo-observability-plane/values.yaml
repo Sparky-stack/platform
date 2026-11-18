@@ -1,0 +1,17 @@
+# Local installation: OpenSearch's PersistentVolume is a local-path directory on the k3d host's disk, so its disk
+# watermarks (default 85/90/95 % used) measure the developer's whole disk, not the volume. Above 90 % OpenSearch blocks
+# index creation (`cluster create-index blocked`) and the logs setup fails although gigabytes are free. Absolute free-space
+# watermarks instead; they still protect a host disk that is really nearly full. extraEnvs is a list (Helm replaces lists):
+# the first entry repeats addons/openchoreo-observability-plane/values.yaml. The OpenSearch image turns env names with
+# dots into settings.
+observability-logs-opensearch:
+  openSearch:
+    extraEnvs:
+      - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: opensearch-admin-credentials
+            key: password
+      - { name: cluster.routing.allocation.disk.watermark.low, value: 5gb }
+      - { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }
+      - { name: cluster.routing.allocation.disk.watermark.flood_stage, value: 2gb }

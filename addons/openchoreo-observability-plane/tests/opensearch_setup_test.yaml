@@ -2,6 +2,8 @@ suite: openchoreo-observability-plane - logs setup Job as an Argo CD hook (#192)
 templates:
   - templates/opensearch-setup-logs.yaml
   - charts/observability-logs-opensearch/templates/opensearch-setup-logs/job.yaml
+  - charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+  - charts/observability-logs-opensearch/charts/openSearch/templates/configmap.yaml
 tests:
   - it: runs the logs module's setup as a PostSync hook that Argo CD recreates on every retry
     template: templates/opensearch-setup-logs.yaml
@@ -43,3 +45,26 @@ tests:
     set: { observability-logs-opensearch.openSearchSetup.run: false }
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: "local: OpenSearch disk watermarks are absolute free space (the PV is a directory on the host's disk)"
+    template: charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+    values: [../../../installations/local/addons/openchoreo-observability-plane/values.yaml]
+    asserts:
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.flood_stage, value: 2gb }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content:
+            name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+            valueFrom: { secretKeyRef: { name: opensearch-admin-credentials, key: password } }
+
+  - it: "default: OpenSearch keeps its percentage watermarks (dedicated volumes)"
+    template: charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+    asserts:
+      - notContains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }
