@@ -131,7 +131,7 @@ installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, operations + runbooks/, one doc per area, diagrams
 templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each
 hack/                           tests and helper scripts (task test); hack/lib/portable.sh
-mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints (Makefile = shim)
+mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints
 ```
 
 Adding things:
@@ -147,7 +147,7 @@ Adding things:
 
 ## Tooling
 - OS/arch-agnostic ([dev-environment.md](dev-environment.md)): tools only via `mise.toml` (aqua backends;
-  `task tools:lock` after a bump), entrypoints in `Taskfile.yml` (keep the Makefile shim in step).
+  `task tools:lock` after a bump), entrypoints in `Taskfile.yml`.
 - Scripts: bash 3.2 + GNU/BSD/MSYS portable; use `hack/lib/portable.sh`; `${arr[@]+"${arr[@]}"}` for maybe-empty
   arrays.
 - Images: multi-arch (`task images:audit`). The only exceptions are listed, with an expiry, in `hack/image-audit.sh`

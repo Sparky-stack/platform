@@ -1,4 +1,4 @@
-# Cross-platform entrypoint (macOS, Linux, Windows). `task --list` shows every target; `make <target>` is a shim.
+# Cross-platform entrypoint (macOS, Linux, Windows). `task --list` shows every target.
 # Commands run in Task's built-in shell; repo scripts run under `bash` (Git Bash on Windows: docs/dev-environment.md).
 # Variables: task up INST=aws-example | task set-repo REPO=https://github.com/<you>/platform.git | task kubeconfig CLUSTER=dev1
 version: "3"

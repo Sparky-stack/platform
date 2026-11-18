@@ -7,7 +7,7 @@ the docs of the repositories they become; hack/tests/test_project_templates.sh r
   - `doc.md "Section"` cross-references (in prose or code spans) match a heading of that doc;
   - repo paths in code spans (`addons/...`, `charts/...`, `hack/...`, `docs/...`, `installations/...`,
     `bootstrap/...`, `.github/...`, `.devcontainer/...`) exist, unless they hold a placeholder (<x>, *, {a,b}, $x, ...);
-  - `task <name>` / `make <name>` in code spans and code blocks name a Taskfile task / Makefile target;
+  - `task <name>` in code spans and code blocks names a Taskfile task (`make <name>` is rejected; use `task`);
   - never `--context koorikla` / `use-context koorikla`; `docs/runbooks/*.md` are linked from `docs/operations.md`,
     carry the standard headings, and pass `--context` or `--kubeconfig` on every `kubectl` block command;
   - every `addons/*` and `charts/*` directory carries a `README.md` (<= 40 lines) with the standard headings.
@@ -93,21 +93,13 @@ def tasks():
                     m = re.match(r"^  ([A-Za-z0-9_:-]+):\s*$", line)
                     if m:
                         names.add(m.group(1))
-    targets = set()
-    mf = os.path.join(ROOT, "Makefile")
-    if os.path.exists(mf):
-        with open(mf, encoding="utf-8") as fh:
-            for line in fh:
-                m = re.match(r"^([a-z][a-z0-9-]*)\s*:", line)
-                if m:
-                    targets.add(m.group(1))
-    return names, targets
+    return names
 
 
 def main():
     problems = []
     ops_links, runbooks = set(), []
-    task_names, make_targets = tasks()
+    task_names = tasks()
     for group in ("addons", "charts"):
         gdir = os.path.join(ROOT, group)
         if os.path.isdir(gdir):
@@ -161,8 +153,8 @@ def main():
                     kind, name = m.groups()
                     if kind == "task" and task_names and name not in task_names and not name.startswith("-"):
                         problems.append("%s: `task %s` is not a Taskfile task" % (where, name))
-                    if kind == "make" and make_targets and name not in make_targets:
-                        problems.append("%s: `make %s` is not a Makefile target" % (where, name))
+                    if kind == "make":
+                        problems.append("%s: `make %s` is not supported (use `task`)" % (where, name))
             if fence:
                 if is_ops and not line.lstrip().startswith("#") and KUBECTL_CMD.search(line) \
                         and "--context" not in line and "--kubeconfig" not in line:

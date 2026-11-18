@@ -42,7 +42,7 @@ registry:
     enabled: true
 
 # --- platform glue -----------------------------------------------------------------------------------------------
-# Secrets (never committed; seeded by `make secrets` locally, created by the operator in aws/vault):
+# Secrets (never committed; seeded by `task secrets` locally, created by the operator in aws/vault):
 #   key `harbor`: admin-password, secret-key (16 chars), core-secret, csrf-key (32 chars), jobservice-secret,
 #                 registry-http-secret, registry-password, database-password, builder-secret, nodes-secret
 #                 (robot secrets: >= 8 chars with upper, lower and digit - Harbor's password policy)
