@@ -1,0 +1,34 @@
+# Offline: digest-only images in workflow run namespaces (#36, templates/workflow-image-digests.yaml). Run by
+# hack/tests/test_kyverno_policies.sh against the rendered template (policies.yaml is written there).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: platform-workflow-image-digests
+policies: [policies.yaml]
+resources: [resources.yaml]
+results:
+  - policy: platform-workflow-image-digests
+    kind: Pod
+    resources:
+      - workflows-default/build-pinned                # argoexec init/wait + toolbox, all image@sha256
+      - workflows-default/check-tag-and-digest        # tag kept for humans, digest decides
+      - workflows-acme/gate-pinned                    # any org's run namespace
+    result: pass
+  - policy: platform-workflow-image-digests
+    kind: Pod
+    resources:
+      - workflows-default/check-tag-only              # Component checks.image override by tag
+      - workflows-default/init-tag-only               # initContainer
+      - workflows-default/debug-tag-only              # kubectl debug (ephemeral container)
+      - workflows-default/implicit-latest             # no tag, no digest
+      - workflows-default/short-digest                # not a sha256 digest
+      - workflows-default/digest-in-tag               # "sha256" in the tag, no @
+      - workflows-acme/tag-only
+    result: fail
+  - policy: platform-workflow-image-digests
+    kind: Pod
+    resources:
+      - default/tag-only                              # not a workflow run namespace
+      - workflows/tag-only                            # prefix is workflows- (with the dash)
+      - openchoreo-workflow-plane/tag-only            # platform namespace
+    result: skip

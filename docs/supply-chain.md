@@ -197,6 +197,9 @@ the digest reference:
 - hello-world's `bump` job still writes the tag-only `needs.go.outputs.image`; switching it to `image_digest_ref` is
   [#16](https://github.com/koorikla/platform/issues/16). Development and staging keep working meanwhile (Audit).
 
+Builds themselves follow the same rule on mgmt: pods in the workflow run namespaces `workflows-*` admit only digest
+references (Kyverno `platform-workflow-image-digests`, Deny; [build plane](build-plane.md#security-posture-of-build-pods)).
+
 ## Git commit signatures
 
 Argo CD 3.5+ verifies sources through `AppProject.spec.sourceIntegrity`. The old `signatureKeys` is deprecated and
