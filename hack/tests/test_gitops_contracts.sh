@@ -17,7 +17,7 @@ mgmt_rev=$(yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .m
 assert_eq "$mgmt_rev" "HEAD" "in-cluster addons-revision defaults to HEAD"
 
 # 2. If capi-cluster.yaml is present, verify cluster secret labels match CAPI Cluster labels
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" \
     --values "$ROOT/installations/local/clusters/dev1.yaml" > "$TMP/dev1.yaml"
@@ -29,7 +29,7 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
 fi
 
 # 2b. networking: the cilium addon follows the cluster's cni and reaches the API server via the cluster secret's server
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   dev1_cni=$(yq 'select(.kind == "Cluster" and .metadata.name == "dev1") | .metadata.labels["platform.koorikla.io/cni"]' "$TMP/dev1.yaml")
   dev1_cil=$(yq 'select(.kind == "Cluster" and .metadata.name == "dev1") | .metadata.labels["addons.platform.koorikla.io/cilium"]' "$TMP/dev1.yaml")
   assert_eq "$dev1_cil" "$([[ "$dev1_cni" == cilium ]] && echo true || echo false)" "dev1 cilium addon label follows cni ($dev1_cni)"
@@ -48,7 +48,7 @@ PV="$ROOT/charts/platform/values.yaml"
 OB="$ROOT/addons/openbao/values.yaml"
 IC="$ROOT/addons/mesh/values.yaml"
 MM="$ROOT/addons/mesh/values/mesh-member.yaml"
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" --values "$ROOT/installations/local/clusters/dev1.yaml" \
     --set mesh.group=contract --set 'mesh.groups={contract}' --set mgmt.addons.openbao=true > "$TMP/dev1-mesh.yaml"
@@ -310,8 +310,10 @@ assert_eq "$fleet_ssd" "ServerSideDiff=true" "fleet appset enables ServerSideDif
 # 5. Catalog alignment checks
 odp_param=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-openchoreo-data-plane") | .spec.template.spec.source.helm.parameters[0].name' "$TMP/platform.yaml")
 assert_eq "$odp_param" "openchoreo-data-plane.clusterAgent.planeID" "openchoreo-data-plane sets planeID parameter"
-cc_ssd=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-clusterclasses") | .spec.template.spec.syncPolicy.syncOptions[] | select(. == "ServerSideDiff=true")' "$TMP/platform.yaml")
-assert_eq "$cc_ssd" "ServerSideDiff=true" "clusterclasses enables ServerSideDiff"
+cc_ssd=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-cluster-fleet") | .spec.template.spec.syncPolicy.syncOptions[] | select(. == "ServerSideDiff=true")' "$TMP/platform.yaml")
+assert_eq "$cc_ssd" "ServerSideDiff=true" "cluster-fleet (ClusterClasses) enables ServerSideDiff"
+cf_src=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-cluster-fleet") | .spec.template.spec.source | .path + " " + (.helm.parameters[] | select(.name == "scope") | .value)' "$TMP/platform.yaml")
+assert_eq "$cf_src" "charts/cluster fleet" "cluster-fleet renders charts/cluster in scope fleet"
 kgw_ns=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-kgateway") | .spec.template.spec.destination.namespace' "$TMP/platform.yaml")
 assert_eq "$kgw_ns" "kgateway-system" "kgateway deploys into kgateway-system"
 coredns_roles=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-coredns-local") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == "platform.koorikla.io/role") | .values | join(",")' "$TMP/platform.yaml")
@@ -339,7 +341,7 @@ assert_eq "$wl_store" "default" "workload secret-stores creates ClusterSecretSto
 # ClusterClass patches: CAPI's webhook rejects replace/remove ops on array elements (".../files/0/content"); the
 # offline simulator does not, so guard it here for every installation's classes.
 for inst_file in "$ROOT"/installations/*/installation.yaml; do
-  idx_paths=$(helm template cc "$ROOT/addons/clusterclasses" --values "$inst_file" 2>/dev/null \
+  idx_paths=$(helm template cc "$ROOT/charts/cluster" --values "$inst_file" --set scope=fleet 2>/dev/null \
     | yq 'select(.kind == "ClusterClass") | .spec.patches[].definitions[].jsonPatches[] | select(.op == "replace" or .op == "remove") | .path' \
     | grep -E '/[0-9]+(/|$)' || true)
   assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
@@ -410,12 +412,12 @@ k3d_le_missing() {   # k3d_le_missing <k3d file> -> the --kube-<component>-arg=<
       [[ -n "$v" ]] || continue
       FLAG="--$comp-arg=$v" yq -e '[.options.k3s.extraArgs[] | select(.arg == strenv(FLAG))] | length > 0' "$1" >/dev/null 2>&1 \
         || miss="$miss --$comp-arg=$v"
-    done < <(yq '.k3s.dockerLeaderElectionArgs[]' "$ROOT/addons/clusterclasses/values.yaml")
+    done < <(yq '.k3s.dockerLeaderElectionArgs[]' "$ROOT/charts/cluster/values.yaml")
   done
   printf '%s' "$miss"
 }
-assert_eq "$(yq '.k3s.dockerLeaderElectionArgs | length' "$ROOT/addons/clusterclasses/values.yaml")" 3 \
-  "clusterclasses k3s.dockerLeaderElectionArgs sets lease duration, renew deadline and retry period"
+assert_eq "$(yq '.k3s.dockerLeaderElectionArgs | length' "$ROOT/charts/cluster/values.yaml")" 3 \
+  "charts/cluster k3s.dockerLeaderElectionArgs sets lease duration, renew deadline and retry period"
 assert_eq "$(k3d_le_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-mgmt.yaml passes the CAPD leader election to every embedded controller"
 yq 'del(.options.k3s.extraArgs[] | select(.arg == "--kube-scheduler-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-nole.yaml"
 assert_match "$(k3d_le_missing "$TMP/k3d-nole.yaml")" "kube-scheduler-arg=leader-elect-lease-duration" "contract catches a k3d config without the scheduler leader election"

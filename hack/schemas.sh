@@ -38,20 +38,20 @@ for dir in charts/* addons/*; do
   fi
 done
 
-# 2. Fetch CAPI & provider CRDs (versions read from addons/capi-providers/values.yaml if present)
+# 2. Fetch CAPI & provider CRDs (versions read from charts/cluster/values.yaml if present)
 read_ver() {
   local path="$1" fallback="$2" v=""
-  if [[ -f addons/capi-providers/values.yaml ]]; then
-    v=$(yq "$path // \"\"" addons/capi-providers/values.yaml 2>/dev/null || true)
+  if [[ -f charts/cluster/values.yaml ]]; then
+    v=$(yq "$path // \"\"" charts/cluster/values.yaml 2>/dev/null || true)
   fi
   echo "${v:-$fallback}"
 }
 
 CAPI_VER=$(read_ver '.core.version' 'v1.13.8')
 K3S_VER=$(read_ver '.k3s.version' 'v0.5.0')
-AWS_VER=$(read_ver '.infrastructure.aws.version' 'v2.13.1')
-HZ_VER=$(read_ver '.infrastructure.hetzner.version' 'v1.1.12')
-GCP_VER=$(read_ver '.infrastructure.gcp.version' 'v1.13.1')
+AWS_VER=$(read_ver '.aws.version' 'v2.13.1')
+HZ_VER=$(read_ver '.hetzner.version' 'v1.1.12')
+GCP_VER=$(read_ver '.gcp.version' 'v1.13.1')
 
 fetch_crd() {
   local name="$1" url="$2"

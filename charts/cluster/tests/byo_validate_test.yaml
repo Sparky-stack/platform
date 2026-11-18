@@ -1,6 +1,6 @@
 suite: provider byo - fleet file guards (charts/cluster capi.validate)
 templates:
-  - templates/capi-cluster.yaml
+  - templates/common/capi-cluster.yaml
 values: [values/byo.yaml]
 tests:
   - it: does not need capi.providers (not a CAPI provider) and renders no Cluster

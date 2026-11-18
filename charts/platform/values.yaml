@@ -44,7 +44,7 @@ sourceIntegrity:
 # Optional extra value files, selected by installation facts rather than cluster labels:
 #   installationValueFiles:  [<tpl>]                   -> tpl over installation values, rendered once here; layered after
 #                                                         values/cni-*.yaml, before installations/<inst>/addons/<name>/*
-# Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
+# Chart path: addons/<name>, or `path` (e.g. charts/cluster). Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
   # -- Installation-wide OpenChoreo toggles (`openchoreo.*`) passed into catalog parameters.
@@ -78,8 +78,9 @@ addons:
   external-secrets:         { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   secret-stores:            { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   capi-operator:            { namespace: capi-operator-system,     roles: [mgmt],           default: true }
-  capi-providers:           { namespace: capi-system,              roles: [mgmt],           default: true }
-  clusterclasses:           { namespace: fleet,                    roles: [mgmt],           default: true, serverSideDiff: true }
+  # charts/cluster in scope fleet: CAPI providers, credentials and ClusterClasses, once on mgmt (each workload cluster
+  # is the same chart in scope cluster, ApplicationSet fleet).
+  cluster-fleet:            { namespace: fleet,                    roles: [mgmt],           default: true, serverSideDiff: true, path: charts/cluster, installationParameters: { scope: fleet } }
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
   kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that every Secret a cluster's bootstrap files reference exists before the Cluster is applied.
 
-Usage: bootstrap_file_sources.py <clusterclasses.jsonl> <cluster.jsonl>
+Usage: bootstrap_file_sources.py <fleet-scope.jsonl> <cluster.jsonl>
 Both files hold one JSON document per line (yq -o=json -I=0); in the ClusterClass documents every
 jsonPatches[].valueFrom.template is also present parsed as valueFrom.parsed (yq from_yaml).
 

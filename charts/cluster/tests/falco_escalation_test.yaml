@@ -1,6 +1,6 @@
 suite: falco escalation identity (per-cluster token -> ClusterResourceSet, #47)
 templates:
-  - templates/falco-escalation-crs.yaml
+  - templates/common/falco-escalation-crs.yaml
 set:
   name: dev1
 tests:

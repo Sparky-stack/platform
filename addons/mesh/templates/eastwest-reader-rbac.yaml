@@ -65,7 +65,7 @@ roleRef:
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
-    name: {{ .Values.reader.user }}    # = charts/cluster templates/mesh-helpers.yaml "mesh.readerUser" (contract test)
+    name: {{ .Values.reader.user }}    # = charts/cluster templates/common/_mesh.tpl "mesh.readerUser" (contract test)
 {{- if .Values.reader.remoteCredentialsSecrets }}
 {{- if ne .Values.cluster.provider "docker" }}
 {{- fail (printf "mesh (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}

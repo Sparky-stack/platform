@@ -160,7 +160,7 @@ imageVerification:
     publicKey: ""                          # PEM: cosign.pub of store key cosign-platform, inline (stable or KMS-backed
                                            # installations: installations/<inst>/addons/kyverno-policies/values.yaml)
     # Without publicKey and with registry.type harbor: the key, the registry CA and pull credentials come from mgmt per
-    # workload cluster (charts/cluster templates/image-verification-crs.yaml, a ClusterResourceSet) into Kyverno's
+    # workload cluster (charts/cluster templates/common/image-verification-crs.yaml, a ClusterResourceSet) into Kyverno's
     # namespace; the policy reads the key at admission (CEL resource.Get). Locally a fresh key per mgmt bootstrap, so no
     # committed key could match. A missing ConfigMap fails the check (denied where Deny), never skips it.
     # docs/supply-chain.md "Wiring the key".

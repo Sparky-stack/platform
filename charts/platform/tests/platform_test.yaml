@@ -179,7 +179,7 @@ tests:
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
-          name: addon-clusterclasses
+          name: addon-cluster-fleet
           any: true
 
   # --- examples (templates/appset-examples.yaml, AppProject examples) ----------------------------------------------

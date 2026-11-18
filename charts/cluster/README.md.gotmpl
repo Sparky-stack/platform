@@ -1,13 +1,17 @@
 {{- define "chart.purpose" -}}
-Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`, or `gke-managed` for `gcp-gke`; none for `byo`, an existing cluster registered from its kubeconfig, whose payloads go by `PushSecret` instead of `ClusterResourceSet`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
+The one Cluster API chart (`addons/capi-operator` only installs the upstream operator). Folders: `templates/<provider>/` (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`: provider install, credentials, ClusterClass or byo access) and `templates/common/` (CAPI core + k3s providers, namespace `fleet`, and everything every cluster gets). Value `scope` picks what renders:
+
+- `scope: fleet`: provider installs (cluster-api-operator CRs), their credentials, and the ClusterClasses `k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed` for the providers `installation.yaml` `capi.providers` enables.
+- `scope: cluster` (default): onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: renders its Cluster API topology `Cluster` (`k3s-<provider>`, or `gke-managed` for `gcp-gke`; none for `byo`, an existing cluster registered from its kubeconfig, whose payloads go by `PushSecret` instead of `ClusterResourceSet`), Argo CD cluster secret (via ESO), OpenChoreo per-cluster agent CA/cert + `ClusterDataPlane` + `Environment`s, Falco escalation token, Kyverno image-verification material for Harbor-built images (platform `cosign.pub`, Harbor CA, pull-only robot), and optional multicluster mesh trust.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
-- **Target:** `mgmt` cluster (`fleet`, `argocd`, and `openchoreo.orgNamespace`), rendered by `ApplicationSet/fleet` as `Application/cluster-<name>`.
+- **Target:** `mgmt` cluster only. `scope: fleet`: once per installation by catalog entry `cluster-fleet` (`ApplicationSet/addon-cluster-fleet`, `Application/cluster-fleet-<mgmt>`; namespaces `fleet` and `cap*-system`). `scope: cluster`: `ApplicationSet/fleet` renders `Application/cluster-<name>` per fleet file (`fleet`, `argocd`, and `openchoreo.orgNamespace`).
 - **Selection:** `provider: docker | aws | hetzner | gcp-gke | byo`, `role: workload` (stamped onto the CAPI `Cluster` and Argo CD cluster secret alongside `addons.platform.koorikla.io/<addon>`, `platform.koorikla.io/cni`, and `mesh.platform.koorikla.io/{group,network}`).
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
+- Provider and ClusterClass upgrades (`core.version`, `<provider>.version`, `docker.kindImage`): [upgrades](../../docs/runbooks/upgrades.md); a ClusterClass template change rolls every cluster of that class.
 - Adding/removing clusters, worker scaling, and `1` vs `3` server HA: [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md) and [upgrades](../../docs/runbooks/upgrades.md).
 - Unreachable clusters or disconnected agents: [incidents](../../docs/runbooks/incidents.md#cluster-unreachable) and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md).
 {{- end -}}

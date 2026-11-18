@@ -19,7 +19,7 @@ Cilium or Istio.
 The fleet file key `cni: cilium | flannel` (default `cilium`, `charts/cluster/values.yaml`) picks the pod network when
 the cluster is created. It flows to three places:
 
-1. **ClusterClass variable `cni`** (`addons/clusterclasses`, all three classes). The control-plane template carries the
+1. **ClusterClass variable `cni`** (`charts/cluster` (scope fleet), all three classes). The control-plane template carries the
    k3s drop-in `/etc/rancher/k3s/config.yaml.d/10-cni.yaml`. k3s merges it over the `config.yaml` that the bootstrap
    provider writes. A drop-in is needed because the `KThreesServerConfig` API has no field for these flags.
    - `cilium`: `flannel-backend: none`, `disable-network-policy: true`, `disable-kube-proxy: true`.
@@ -264,5 +264,5 @@ No upgrade or experimental channel is needed.
 Measured on dev1 (single node, idle, `kubectl top`, #52): cilium-agent 232Mi, cilium-operator 40Mi, hubble-relay
 25Mi, ztunnel 11Mi, istio-cni 24Mi, istiod 55Mi, Kyverno 343Mi (admission 178Mi): ~730Mi, below the requests.
 
-Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/mesh addons/kyverno* addons/clusterclasses`):
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/mesh addons/kyverno* charts/cluster`):
 [#52](https://github.com/koorikla/platform/issues/52).

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for `cluster-api-operator` (`0.30.0`). Runs the Cluster API lifecycle operator on `mgmt`; provider custom resources are declared separately in `addons/capi-providers`.
+Wrapper chart for `cluster-api-operator` (`0.30.0`). Runs the Cluster API lifecycle operator on `mgmt`; provider custom resources are declared separately in `charts/cluster`.
 
 ## Where it runs
 
@@ -16,7 +16,7 @@ Wrapper chart for `cluster-api-operator` (`0.30.0`). Runs the Cluster API lifecy
 | cluster-api-operator.addon | object | `{}` |  |
 | cluster-api-operator.bootstrap | object | `{}` |  |
 | cluster-api-operator.controlPlane | object | `{}` |  |
-| cluster-api-operator.core | object | `{}` | `{}` (kept empty alongside `bootstrap`, `controlPlane`, `infrastructure`, `addon`, `ipam` so `addons/capi-providers` owns provider CRs). |
+| cluster-api-operator.core | object | `{}` | `{}` (kept empty alongside `bootstrap`, `controlPlane`, `infrastructure`, `addon`, `ipam` so `charts/cluster` (scope fleet) owns provider CRs). |
 | cluster-api-operator.image.manager.repository | string | `"registry.k8s.io/capi-operator/cluster-api-operator"` |  |
 | cluster-api-operator.image.manager.tag | string | `"v0.30.0@sha256:2dd577d7bd9cf65deb45b8cd6444f5c89c3de3237ed8e150bd3d34df24fbce10"` | `v0.30.0` pinned by multi-arch index digest. |
 | cluster-api-operator.infrastructure | object | `{}` |  |

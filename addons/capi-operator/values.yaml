@@ -1,9 +1,9 @@
 # Cluster API operator only. cert-manager (webhook serving cert) is the cert-manager addon; providers (core, k3s,
-# docker/aws/hetzner) are CRs rendered by addons/capi-providers so they can be toggled per installation.
+# docker/aws/hetzner) are CRs rendered by charts/cluster so they can be toggled per installation.
 
 cluster-api-operator:
-  # Leave the chart's provider maps empty: providers live in addons/capi-providers.
-  # -- `{}` (kept empty alongside `bootstrap`, `controlPlane`, `infrastructure`, `addon`, `ipam` so `addons/capi-providers` owns provider CRs).
+  # Leave the chart's provider maps empty: providers live in charts/cluster.
+  # -- `{}` (kept empty alongside `bootstrap`, `controlPlane`, `infrastructure`, `addon`, `ipam` so `charts/cluster` (scope fleet) owns provider CRs).
   core: {}
   bootstrap: {}
   controlPlane: {}
@@ -13,7 +13,7 @@ cluster-api-operator:
   # Re-reconcile a provider when its configSecret changes (CAPA's credentials come from an ExternalSecret).
   # -- `true` so provider controllers re-reconcile when ESO rotates `configSecret` credentials (such as CAPA's `capa-variables`).
   watchConfigSecret: true
-  # Lease headroom like the provider managers (addons/capi-providers values.yaml leaderElection, #192) and mgmt's k3s
+  # Lease headroom like the provider managers (charts/cluster values.yaml leaderElection, #192) and mgmt's k3s
   # controllers (#94): the 15s/10s/2s defaults are lost when the mgmt API server stalls during a clean bootstrap.
   leaderElection:
     enabled: true

@@ -17,7 +17,7 @@ The owner decided that the (untested) Hetzner Cloud CAPI example should use immu
 - Keep `k3s-hetzner` until that upstream tag exists.
 
 ## Alternatives rejected
-- **Pinning an unreleased `main` commit image of CACPPT:** Violates our pinned-release and supply-chain standards and couples `addons/capi-providers` to an unstable CAPI `v1.14` development branch.
+- **Pinning an unreleased `main` commit image of CACPPT:** Violates our pinned-release and supply-chain standards and couples `charts/cluster` to an unstable CAPI `v1.14` development branch.
 - **Dropping `ClusterClass` on Hetzner:** Breaks the repo contract that every CAPI cluster is stamped from a `ClusterClass` via `charts/cluster`.
 - **Flatcar Linux + kubeadm Ignition:** Still behind an experimental feature gate upstream (`flatcar#2166`).
 

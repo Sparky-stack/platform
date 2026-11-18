@@ -1,9 +1,9 @@
 suite: mesh (opt-in Istio ambient multicluster) - OpenBao inputs, public trust payload and remote-secret delivery
 templates:
-  - templates/mesh-openbao.yaml
-  - templates/mesh-trust.yaml
-  - templates/mesh-remote-secret.yaml
-  - templates/mesh-helpers.yaml
+  - templates/common/mesh-openbao.yaml
+  - templates/common/mesh-trust.yaml
+  - templates/common/mesh-remote-secret.yaml
+  - templates/common/_mesh.tpl
 values: [values/capi-docker.yaml]
 set:
   mesh: { group: local, groups: [local, prod], ca: { host: openbao.example.test, port: 8200 } }
@@ -14,14 +14,14 @@ tests:
       mesh: { group: "" }
     asserts:
       - hasDocuments: { count: 0 }
-        template: templates/mesh-openbao.yaml
+        template: templates/common/mesh-openbao.yaml
       - hasDocuments: { count: 0 }
-        template: templates/mesh-trust.yaml
+        template: templates/common/mesh-trust.yaml
       - hasDocuments: { count: 0 }
-        template: templates/mesh-remote-secret.yaml
+        template: templates/common/mesh-remote-secret.yaml
 
   - it: publishes this member's PUBLIC auth inputs for OpenBao (API server + cluster CA from the CAPI kubeconfig)
-    template: templates/mesh-openbao.yaml
+    template: templates/common/mesh-openbao.yaml
     asserts:
       - hasDocuments: { count: 1 }
       - isKind: { of: ExternalSecret }
@@ -36,14 +36,14 @@ tests:
       - equal: { path: spec.data, value: [{ secretKey: kubeconfig, remoteRef: { key: dev1-kubeconfig, property: value } }] }
 
   - it: "negative: never templates the kubeconfig's client credentials into the OpenBao inputs"
-    template: templates/mesh-openbao.yaml
+    template: templates/common/mesh-openbao.yaml
     asserts:
       - notMatchRegex: { path: spec.target.template.data.server, pattern: 'client-(key|certificate)-data' }
       - notMatchRegex: { path: spec.target.template.data.ca, pattern: 'client-(key|certificate)-data' }
       - notExists: { path: spec.target.template.data.kubeconfig }
 
   - it: delivers only public trust (OpenBao CA, group root) + the network label to exactly this cluster
-    template: templates/mesh-trust.yaml
+    template: templates/common/mesh-trust.yaml
     asserts:
       - hasDocuments: { count: 3 }
       - isKind: { of: ExternalSecret }
@@ -76,7 +76,7 @@ tests:
         documentIndex: 2
 
   - it: "publishes the member's issuer discovery (public JWKS) before the mesh reconcile: static CRS ConfigMap, no ESO"
-    template: templates/mesh-trust.yaml
+    template: templates/common/mesh-trust.yaml
     documentIndex: 1
     asserts:
       - isKind: { of: ConfigMap }
@@ -101,7 +101,7 @@ tests:
                 name: system:unauthenticated
 
   - it: "a group is a cryptographic boundary: another group's member pins another root"
-    template: templates/mesh-trust.yaml
+    template: templates/common/mesh-trust.yaml
     documentIndex: 0
     set:
       mesh: { group: prod }
@@ -109,7 +109,7 @@ tests:
       - equal: { path: 'spec.data[1].remoteRef.property', value: mesh-root-prod.pem }
 
   - it: issues a short-lived reader client cert from the cluster's k3s client CA (CAPI secret <name>-cca)
-    template: templates/mesh-remote-secret.yaml
+    template: templates/common/mesh-remote-secret.yaml
     asserts:
       - isKind: { of: Issuer }
         documentIndex: 0
@@ -131,7 +131,7 @@ tests:
         documentIndex: 1
 
   - it: templates an Istio remote secret with the reader cert (not the admin cert, no token) from mgmt only
-    template: templates/mesh-remote-secret.yaml
+    template: templates/common/mesh-remote-secret.yaml
     documentIndex: 2
     asserts:
       - isKind: { of: ExternalSecret }
@@ -145,7 +145,7 @@ tests:
       - equal: { path: 'spec.data[2].remoteRef', value: { key: dev1-mesh-reader, property: tls.key } }
 
   - it: publishes the remote secret to every other member of the group, never to itself
-    template: templates/mesh-remote-secret.yaml
+    template: templates/common/mesh-remote-secret.yaml
     documentIndex: 3
     asserts:
       - isKind: { of: ClusterResourceSet }
@@ -158,7 +158,7 @@ tests:
   # #192: Issuer <name>-client-ca needs <name>-cca, which CAPI creates for the Cluster (wave 0). In the Cluster's wave a
   # failed Cluster apply (CAPI webhook down) left the Certificate Progressing and the Argo CD operation hung forever.
   - it: syncs the remote-secret chain after the Cluster, one wave per link; its CRS (peers only) in the final wave
-    template: templates/mesh-remote-secret.yaml
+    template: templates/common/mesh-remote-secret.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
         documentSelector: { path: kind, value: Issuer }
@@ -170,12 +170,12 @@ tests:
         documentSelector: { path: kind, value: ClusterResourceSet }
 
   - it: reads the CAPI kubeconfig for OpenBao one wave after the Cluster (#192)
-    template: templates/mesh-openbao.yaml
+    template: templates/common/mesh-openbao.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
 
   - it: applies the trust payload after it is templated (wave 0) and the Cluster is up (#192)
-    template: templates/mesh-trust.yaml
+    template: templates/common/mesh-trust.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
         documentSelector: { path: kind, value: ClusterResourceSet }
