@@ -227,6 +227,8 @@ observability-logs-opensearch:
       image: docker.io/library/busybox       # upstream busybox:latest
       imageTag: 1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
   openSearchSetup:
+    enabled: false                           # platform: the module's Job is terminal once failed; the same setup runs
+    run: true                                # as an Argo CD PostSync hook (templates/opensearch-setup-logs.yaml, #192)
     image:
       tag: 0.7.0@sha256:4c1b5bef4e4eee94ad965146371fbc81e123bc1e435c530d177f42024bb257f3   # index: amd64, arm64
     openSearchSecretName: opensearch-admin-credentials
