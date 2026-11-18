@@ -212,7 +212,11 @@ observability-logs-opensearch:
           secretKeyRef:
             name: opensearch-admin-credentials
             key: password
-    opensearchJavaOpts: "-Xms512m -Xmx512m"
+    # ActiveProcessorCount = the CPU limit (templates/validate.yaml). Inside k3d the JVM finds no cgroup controllers
+    # ("System not containerized") and sizes GC threads and OpenSearch's thread pools (write, search, ml, grpc ...) for
+    # every host CPU; the pools grow lazily and native memory crossed the 1536Mi limit after ~45 min (OOMKilled,
+    # traces in flight dropped). A container-aware JVM gets the same value from the CPU quota.
+    opensearchJavaOpts: "-Xms512m -Xmx512m -XX:ActiveProcessorCount=1"
     resources:                               # platform: upstream requests 1 CPU / 100Mi
       requests: { cpu: 200m, memory: 1Gi }
       limits: { cpu: "1", memory: 1536Mi }

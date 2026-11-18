@@ -426,6 +426,9 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
 - Local installation: OpenSearch's volume is a directory on the host's disk, so its percentage disk watermarks would
   block index creation once the developer's disk is 90 % full; `installations/local/addons/openchoreo-observability-plane`
   sets absolute free-space watermarks (5/3/2 GB).
+- OpenSearch's JVM runs with `-XX:ActiveProcessorCount` = its CPU limit (`templates/validate.yaml` enforces it). In k3d
+  the JVM finds no cgroup controllers ("System not containerized") and sizes GC threads and thread pools for every host
+  CPU; the pools grow lazily until the pod is OOMKilled (~45 min at 1536Mi), dropping the traces in flight.
 
 ## Resource budget (requests, local)
 
@@ -440,5 +443,6 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
 Disk: OpenSearch 8 GiB, Prometheus 8 GiB, observer 128 MiB (local-path). OpenSearch needs `vm.max_map_count >= 262144`
 on the host kernel (k3d shares it; Arch/systemd default 1048576).
 
-Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-observability-plane addons/telemetry addons/obi addons/falco`):
+Values inferred but not yet confirmed live: `grep -rn VERIFY addons/openchoreo-observability-plane addons/telemetry
+addons/obi addons/falco` (the AI agent routes' TLS, [ai-agents.md](ai-agents.md)); the rest was confirmed live in
 [#49](https://github.com/koorikla/platform/issues/49).

@@ -68,3 +68,12 @@ tests:
       - notContains:
           path: 'spec.template.spec.containers[0].env'
           content: { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }
+
+  # #49: in k3d the JVM sees every host CPU; unpinned, the thread pools outgrew the 1536Mi limit (OOMKilled).
+  - it: "OpenSearch's JVM processor count is pinned to its CPU limit"
+    template: charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+    asserts:
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: OPENSEARCH_JAVA_OPTS, value: "-Xms512m -Xmx512m -XX:ActiveProcessorCount=1" }
+      - equal: { path: 'spec.template.spec.containers[0].resources.limits.cpu', value: "1" }
