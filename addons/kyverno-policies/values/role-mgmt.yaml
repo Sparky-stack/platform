@@ -1,4 +1,4 @@
-# mgmt runs no Istio (catalog istio-ambient: roles [workload]) and no OpenChoreo data plane.
+# mgmt runs no Istio (catalog mesh: roles [workload]) and no OpenChoreo data plane.
 ambientEnrollment:
   enabled: false
 

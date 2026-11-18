@@ -35,7 +35,7 @@ kubectl --kubeconfig dev1.kubeconfig get certificate -A
   ```
 - **Rotate a namespaced CA** (`harbor-ca`, `openbao-ca`, `cluster-gateway-ca`) `(not yet verified live)`: deleting the CA `Secret` mints a new CA and requires deleting its leaf `Secret`s plus forcing ESO refresh on the `*-ca-bundle` `ExternalSecret`s. Rotating `harbor-ca` also changes `/etc/rancher/k3s/registry-ca.crt` in `fleet/<cluster>-registries`, which reaches workload nodes only when CAPI rolls their `Machine`s.
 
-### 2. OpenBao mesh CA (`openbao` + `istio-csr`)
+### 2. OpenBao mesh CA (`openbao` + `mesh`)
 
 - **Automatic leaf renewals**: `ztunnel` renews `24h` workload certs at half-life (~`12h`), and `cert-manager` renews `istio-system/istiod` (`48h` TTL) at `24h` through Vault `Issuer/openbao-mesh` ([multicluster.md](../multicluster.md#mesh-ca-openbao)).
 - **Cut off a compromised mesh member immediately**: remove `mesh.group` from `installations/<inst>/clusters/<name>.yaml` and merge. Within 5 minutes `CronJob/mesh-reconcile` deletes `auth/mesh-<name>` and entity `mesh-<name>` in OpenBao, blocking new certificates; then delete leftover peer discovery secrets ([multicluster.md](../multicluster.md#removing-a-member-decommissioning)):

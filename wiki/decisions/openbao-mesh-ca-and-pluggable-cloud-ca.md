@@ -14,7 +14,7 @@ Invariant 4 in [docs/conventions.md](../../docs/conventions.md#invariants) requi
 
 ## Decision
 - Run **OpenBao** (the open-source Vault fork) on `mgmt` (`addons/openbao`) as the local mesh PKI (`pki-mesh-<group>-root` and `pki-mesh-<group>-int`), generating and keeping all CA private keys inside OpenBao.
-- Workload clusters run **cert-manager** + **istio-csr** (`addons/istio-csr`); `istio-csr` authenticates to `mgmt` OpenBao using a per-cluster Kubernetes/JWT identity and requests workload/istiod certificates via a standard cert-manager `Issuer` (`openbao-mesh`).
+- Workload clusters run **cert-manager** + **istio-csr** (`addons/mesh`, on mesh members); `istio-csr` authenticates to `mgmt` OpenBao using a per-cluster Kubernetes/JWT identity and requests workload/istiod certificates via a standard cert-manager `Issuer` (`openbao-mesh`).
 - Keep the CA backend **pluggable**: in cloud deployments, the same cert-manager `Issuer` contract on workload clusters can point at AWS Private CA, Google CAS, Azure Key Vault, or an existing enterprise Vault/OpenBao without changing Istio or OpenChoreo templates.
 
 ## Alternatives rejected

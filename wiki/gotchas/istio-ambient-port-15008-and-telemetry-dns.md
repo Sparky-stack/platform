@@ -22,7 +22,7 @@ confidence: high
 - Keep the `telemetry` namespace **out** of the ambient mesh (`addons/telemetry`, PR #208; see #209 for `PodMonitor` scraping into `STRICT` cells).
 
 ## Where enforced
-- `addons/istio-ambient`, `addons/telemetry`, `addons/kyverno-policies`, and `hack/tests/test_mesh_admission.sh`.
+- `addons/mesh`, `addons/telemetry`, `addons/kyverno-policies`, and `hack/tests/test_mesh_admission.sh`.
 
 ## Links
 - Issues #53, #104, #209, #210; PRs #206, #208

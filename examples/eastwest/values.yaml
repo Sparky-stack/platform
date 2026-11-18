@@ -1,5 +1,5 @@
 # Cross-cluster example (docs/multicluster.md "Example"). Applied by ApplicationSet example-eastwest (charts/platform,
-# installation.yaml examples.eastwest.enabled) to every mesh member (addons.platform.koorikla.io/istio-eastwest=true).
+# installation.yaml examples.eastwest.enabled) to every mesh member (cluster label mesh.platform.koorikla.io/group set).
 # Values layering: this file < installations/<inst>/examples/eastwest/{values,cluster-<name>}.yaml < cluster.*.
 #
 # Every member gets namespace eastwest-demo (ambient) with Service echo labelled istio.io/global=true: the Service

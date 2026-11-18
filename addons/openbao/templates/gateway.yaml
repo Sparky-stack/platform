@@ -5,7 +5,7 @@ TLS itself with openbao-tls, so the gateway never sees a token or a CSR. kgatewa
 Service (type LoadBalancer; klipper binds the listener port as a hostPort on mgmt, k3d publishes it on the serverlb:
 bootstrap/k3d-mgmt.yaml, bound to 127.0.0.1 on the host). Real installations: a DNS name for mesh.ca.host (external-dns
 gateway-tlsroute source) and gateway.loadBalancerSourceRanges = the members' egress CIDRs, REQUIRED outside docker
-(the render fails, same rule as addon istio-eastwest): the listener exposes the whole OpenBao API, including the
+(the render fails, same rule as addon mesh east-west gateway): the listener exposes the whole OpenBao API, including the
 unauthenticated sys/health, sys/seal-status and the login endpoints. kgateway applies the ranges to the proxy Service
 through GatewayParameters (spec.infrastructure.parametersRef).
 */ -}}
