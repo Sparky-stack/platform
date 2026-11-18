@@ -20,8 +20,18 @@ T='del(.spec.allowedWorkflows) | (select(.spec.allowedTraits) | .spec.allowedTra
 yq "$T" samples/getting-started/component-types/service.yaml > files/cluster-component-types/service.yaml
 ```
 
-Not taken: `ClusterResourceType`s (postgres/valkey/nats; need operators on data planes), upstream `ClusterWorkflow`s and
+Not taken: `ClusterResourceType`s (postgres/valkey/nats: plain StatefulSets; the platform's `postgresql` type below
+renders the Crossplane XR instead), upstream `ClusterWorkflow`s and
 workflow templates (replaced by templates/build-workflows.yaml + addon openchoreo-workflow-plane: rootless BuildKit,
 koorikla/ci scripts, GitOps hand-off instead of writing Workloads through the API), `vertical-pod-autoscaler` (not installed), the sample `Project default` and
 its `ProjectReleaseBinding`s (projects come from tenants), `Environment`s (charts/cluster renders them per cluster),
 `DeploymentPipeline` (templates/deployment-pipeline.yaml, from values).
+
+## Platform types (`platform/`)
+
+Not upstream: `platform/cluster-traits/keda-scaler.yaml` and `platform/cluster-resource-types/postgresql.yaml`, the
+OpenChoreo types of the data-service addons (#70, docs/data-services.md "Consuming them from OpenChoreo"), rendered by
+`templates/platform-types.yaml` (`dataServices.enabled`). `templates/upstream-defaults.yaml` adds `keda-scaler` to the
+`allowedTraits` of the Deployment-based component types. Their annotation `platform.koorikla.io/requires-addons` names
+the addons a data plane must announce (ClusterDataPlane annotations from the fleet file); checked by
+hack/tests/test_openchoreo_types.sh.
