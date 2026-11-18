@@ -10,7 +10,7 @@ confidence: high
 # Merge capi-providers and clusterclasses into charts/cluster with Provider Folders
 
 ## Context
-During the #116 simplification, everything Cluster API lived in three charts: provider installs in `addons/capi-providers`, fleet-wide `ClusterClass`es in `addons/clusterclasses`, and per-cluster CAPI/Argo/OpenChoreo/CRS objects in `charts/cluster`. Finding everything one provider (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`) needs meant jumping between all three.
+During the #116 simplification, everything Cluster API lived in three charts: provider installs in the `capi-providers` addon, fleet-wide `ClusterClass`es in the `clusterclasses` addon (both deleted), and per-cluster CAPI/Argo/OpenChoreo/CRS objects in `charts/cluster`. Finding everything one provider (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`) needs meant jumping between all three.
 
 ## Decision
 - One chart, `charts/cluster`, owns everything CAPI except the upstream operator (`addons/capi-operator` stays).
