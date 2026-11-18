@@ -46,7 +46,7 @@ mesh:
   groups: []                  # from installation.yaml: the installation's mesh groups (one root CA each in OpenBao)
   ca: {}                      # from installation.yaml: {host, port} where members reach OpenBao
 addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
-addons: {}                    # <addon>: true|false -> label addons.platform.koorikla.io/<addon>
+addons: {}                    # <addon>: true|false -> label (and ClusterDataPlane annotation) addons.platform.koorikla.io/<addon>
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:

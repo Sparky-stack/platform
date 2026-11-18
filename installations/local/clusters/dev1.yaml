@@ -26,7 +26,10 @@ openchoreo:
 mesh:
   group: local              # east-west connectivity with the other members (docs/multicluster.md)
 addonsRevision: HEAD
-# PostgreSQL as a service (docs/data-services.md): Crossplane + the cnpg Composition, live test of #107.
+# Data services (docs/data-services.md): PostgreSQL as a service (Crossplane + the cnpg Composition, #107) and KEDA
+# (~160Mi requests). Also the capabilities OpenChoreo checks: ClusterDataPlane annotations addons.platform.koorikla.io/*
+# let the keda-scaler trait and postgresql resource type target this cluster's environments (#70).
 addons:
   cloudnative-pg: true
   crossplane: true
+  keda: true

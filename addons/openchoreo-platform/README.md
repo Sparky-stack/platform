@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, upstream `ClusterComponentType`/`ClusterTrait`/`ClusterProjectType` defaults, stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
+Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, upstream `ClusterComponentType`/`ClusterTrait`/`ClusterProjectType` defaults, the data-service types `ClusterTrait keda-scaler` and `ClusterResourceType postgresql` (docs/data-services.md), stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
 
 ## Where it runs
 
@@ -12,6 +12,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 ## Key values
 
 - `deploymentPipeline.{name,environments}`: `[development, staging, production]`.
+- `dataServices.enabled`: platform types for the data-service addons (`files/platform/`); usable only where the data plane announces the addon (`platform.koorikla.io/requires-addons`).
 - `promotion.{gatedEnvironments,restrictedGroups,gitOnly,freezeWindows}`: restricts `production` binding writes to Argo CD and enforces sync freeze windows.
 - `promotionGate.{enabled,smoke,observe,statusContext}`: HTTP smoke + 15-minute Prometheus 5xx SLO gate posting `openchoreo/promotion-gate` on PRs.
 - `buildWorkflows.{stacks,platforms,secrets}` and `helmChartWorkflow`: language stack build workflows (`go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow.

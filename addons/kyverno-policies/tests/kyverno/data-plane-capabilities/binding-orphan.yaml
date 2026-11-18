@@ -1,0 +1,7 @@
+# Its Resource does not exist.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata: {name: ghost-development, namespace: default}
+spec:
+  owner: {projectName: demo, resourceName: ghost}
+  environment: development

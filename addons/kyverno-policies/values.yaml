@@ -199,6 +199,13 @@ previews:
   enabled: false
   ttl: 48h
   maxPerTenant: 2
+# --- Data-plane capabilities of OpenChoreo resource types (#70, docs/data-services.md) ---------------------------------
+# templates/data-plane-capabilities.yaml: ValidatingPolicy platform-data-plane-capabilities (Deny) on mgmt - a
+# ResourceReleaseBinding only to an environment whose data plane runs the addons its type names in
+# platform.koorikla.io/requires-addons.
+dataPlaneCapabilities:
+  enabled: false                     # values/role-mgmt.yaml: the OpenChoreo control plane runs on mgmt
+
 previewGuards:
   environments: false                # mgmt (values/role-mgmt.yaml): expiry stamp, per-tenant cap, TTL deletion
   namespaces: true                   # data planes: quota, limits, isolation of preview cell namespaces

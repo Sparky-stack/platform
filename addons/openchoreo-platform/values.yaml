@@ -33,6 +33,13 @@ deploymentPipeline:
 upstreamDefaults:
   enabled: true
 
+# Platform types for the data-service addons (files/platform/, templates/platform-types.yaml, docs/data-services.md):
+# ClusterTrait keda-scaler (added to the allowedTraits of the Deployment-based component types) and ClusterResourceType
+# postgresql (the Crossplane PostgreSQL XR). Usable only in environments whose data plane runs the addon they name in
+# platform.koorikla.io/requires-addons (fleet file `addons`, ClusterDataPlane annotations).
+dataServices:
+  enabled: true
+
 # installation.yaml secrets.tenantStores.enabled (#96): component types' ExternalSecrets reference the cell namespace's
 # SecretStore tenantStoreName (== addon secret-stores tenantStores.storeName) instead of ${dataplane.secretStore}.
 secrets:

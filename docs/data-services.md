@@ -75,67 +75,58 @@ Argo CD honours (seen live).
 
 ## Consuming them from OpenChoreo
 
-Apps reach workload clusters only through OpenChoreo (no Argo CD there), so the native path is an OpenChoreo
-`ClusterResourceType` that renders the operator CR into the cell namespace; components bind its outputs with
-`Workload.spec.dependencies.resources[].envBindings`, as upstream's sample `postgres` resource type does with a plain
-StatefulSet. A CNPG-backed type (sketch; not installed - it only works on data planes that opted in to the addon,
-follow-up [#70](https://github.com/koorikla/platform/issues/70)):
+Apps reach workload clusters only through OpenChoreo (no Argo CD there), so developers use the operators through
+platform-owned OpenChoreo types (addon openchoreo-platform `files/platform/`, OpenChoreo 1.3.3 API):
 
-```yaml
-apiVersion: openchoreo.dev/v1alpha1
-kind: ClusterResourceType
-metadata:
-  name: cnpg-postgres
-spec:
-  parameters:
-    openAPIV3Schema:
-      type: object
-      properties:
-        database: { type: string, default: appdb }
-  environmentConfigs:
-    openAPIV3Schema:
-      type: object
-      properties:
-        instances: { type: integer, default: 1, minimum: 1 }
-        storageSize: { type: string, default: 1Gi }
-  retainPolicy: Retain
-  outputs:
-    - name: host
-      value: "${metadata.name}-rw.${metadata.namespace}.svc.cluster.local"
-    - name: port
-      value: "5432"
-    - name: database
-      value: "${parameters.database}"
-    - name: username
-      secretKeyRef: { name: "${metadata.name}-app", key: username }
-    - name: password
-      secretKeyRef: { name: "${metadata.name}-app", key: password }
-    - name: url
-      secretKeyRef: { name: "${metadata.name}-app", key: uri }
-  resources:
-    - id: cluster
-      template:
-        apiVersion: postgresql.cnpg.io/v1
-        kind: Cluster
-        metadata:
-          name: ${metadata.name}
-          namespace: ${metadata.namespace}
-          labels: ${metadata.labels}
-        spec:
-          instances: ${environmentConfigs.instances}
-          storage:
-            size: ${environmentConfigs.storageSize}
-          bootstrap:
-            initdb:
-              database: ${parameters.database}
-              owner: ${parameters.database}
-```
+| Type | Renders into the cell namespace | Data plane needs |
+|---|---|---|
+| `ClusterTrait keda-scaler` | KEDA `ScaledObject` for the component's Deployment; removes `/spec/replicas` from it | `keda` |
+| `ClusterResourceType postgresql` | `platform.koorikla.io/v1alpha1 PostgreSQL` ([below](#postgresql-as-a-service)); never a raw CNPG `Cluster` | `crossplane` (+ `cloudnative-pg` where the backend is cnpg) |
 
-CNPG writes `<cluster>-app` (keys `username`, `password`, `host`, `port`, `dbname`, `uri`, `jdbc-uri`) next to the
-cluster, so the password is generated on the data plane and never reaches the control plane. A Kafka type works the
-same way (renders `KafkaNodePool` + `Kafka`, outputs `<name>-kafka-bootstrap.<ns>.svc:9092`; `KafkaUser` Secrets for
-authenticated listeners). The examples below are what such types render; on a dev cluster you can also apply them
-directly to try the operators.
+Kafka has no type: the event bus as a service (Crossplane XR across Strimzi / MSK / Managed Kafka) is
+[#113](https://github.com/koorikla/platform/issues/113) / [#114](https://github.com/koorikla/platform/issues/114),
+and no local cluster runs Strimzi (host RAM). `keda-scaler` is in the `allowedTraits` of the Deployment-based component
+types (`service`, `web-application`, `worker`); `scheduled-task` (CronJob) does not get it. The data-plane cluster agent
+may apply and observe both kinds (addon openchoreo-data-plane `templates/cluster-agent-data-services.yaml`; upstream's
+ClusterRole knows neither).
+
+### Only on data planes that run the operator
+
+Declarative, no cluster names: the **data plane announces** what it runs, the **type declares** what it needs.
+
+- The fleet file's `addons` reach the cluster's `ClusterDataPlane` as annotations `addons.platform.koorikla.io/<addon>:
+  "true"` (charts/cluster, same keys as the CAPI / Argo CD cluster labels the addon ApplicationSet selects on).
+- Each type lists its needs in `platform.koorikla.io/requires-addons` (`keda`, `crossplane`).
+- **Traits** check it themselves. OpenChoreo 1.3.3 exposes a data plane's annotations to component and trait CEL as
+  `dataplane.annotations` (`internal/pipeline/component/context/types.go` `DataPlaneData.Annotations`; carried over for
+  `ClusterDataPlane`s in `internal/controller/reference.go`), so `keda-scaler`'s first `preRenderValidation` fails the
+  ReleaseBinding of an environment whose data plane lacks `keda` with a message naming the fleet-file switch. An
+  environment can also turn the trait off (`traitEnvironmentConfigs.<instance>.enabled: false`).
+- **Resource types** cannot: 1.3.3 gives `ResourceType`s no validations, and the resource pipeline's `dataplane.*` has
+  only `secretStore`, `gateway` and `observabilityPlaneRef` (`internal/pipeline/resource/types.go`). The Kyverno
+  `ValidatingPolicy` `platform-data-plane-capabilities` on mgmt (addon kyverno-policies) denies a
+  `ResourceReleaseBinding` whose Resource's type requires an addon the environment's data plane does not announce;
+  Argo CD shows the denial on the app's sync. A binding of a Resource that does not exist yet is denied too (apply the
+  Resource in an earlier sync wave; Argo CD retries).
+- Why not an environment allow list: 1.3.3's `Environment` has only `dataPlaneRef`, `isProduction` and `gateway`, and
+  `allowedTraits` is per component type, cluster-wide. A list of environment names per type would restate what the fleet
+  file already says about the cluster, and drift when an environment moves. The capability belongs to the data plane.
+- Backstop: on a data plane without the CRD the apply fails anyway (`no matches for kind`).
+
+### Readiness and replicas
+
+- OpenChoreo's RenderedRelease health knows Deployments, StatefulSets, Pods and CronJobs; any other kind is healthy as
+  soon as it exists (`internal/controller/renderedrelease/controller_status.go`, `getUnknownResourceHealth`). The
+  `postgresql` type therefore sets `readyWhen` on the XR's `Ready` condition, and its `host` / `port` outputs read the
+  XR status (`applied.postgresql.status.endpoint` / `.port`), so `OutputsResolved` waits for the backend too. A
+  consumer's ReleaseBinding stays not synced (`ResourceDependenciesReady`) until the `ResourceReleaseBinding` is Ready:
+  the workload never starts without its database. A `ScaledObject` counts as healthy when present (KEDA's own `Ready`
+  condition is not consulted).
+- The cluster agent applies every rendered object with server-side apply, `ForceOwnership`, field manager
+  `renderedrelease-controller` (`internal/controller/renderedrelease/controller.go`). `keda-scaler` removes
+  `/spec/replicas` from the rendered Deployment (like upstream's `horizontal-pod-autoscaler` trait), so that manager no
+  longer owns the field; KEDA's HPA writes it through the scale subresource and later applies leave it alone. Argo CD
+  does not run on data planes, so nothing else fights over it.
 
 ## PostgreSQL as a service
 
@@ -180,7 +171,7 @@ kubectl -n demo get postgresql orders-db     # BACKEND, ENDPOINT, SECRET, READY
 `status.backend`, `status.endpoint`, `status.port`, `status.secretName`, `status.backup` (`enabled`, `disabled`, or
 `unavailable` when asked for on a cluster without a backup target) and the `Ready` condition (all composed resources
 ready). On cloud backends `secretName` appears once the database exists (minutes); bind env vars with `secretKeyRef`.
-OpenChoreo wiring (a resource type that renders the XR for a component): [#70](https://github.com/koorikla/platform/issues/70).
+Apps on OpenChoreo get the XR through the resource type `postgresql` ([below](#postgresql-from-openchoreo)).
 
 Rules enforced at admission (Kyverno `ValidatingPolicy`, also emitted as native `ValidatingAdmissionPolicy`):
 
@@ -192,6 +183,55 @@ Rules enforced at admission (Kyverno `ValidatingPolicy`, also emitted as native 
 - **Production is HA and backed up.** XRs in OpenChoreo cells labelled `openchoreo.dev/environment: production` must
   set `highAvailability: true` and `backup.enabled: true` (Deny; Audit on local docker clusters, which have neither an
   object store nor more than one node).
+
+### PostgreSQL from OpenChoreo
+
+Apps on OpenChoreo do not write the XR: they declare a `Resource` of `ClusterResourceType postgresql` in their app repo
+(`deploy/openchoreo/`, synced by the tenant's Argo CD Application), bind it per environment and wire its outputs into
+the Workload. OpenChoreo renders the XR into the environment's cell namespace (name `<resource>-<env>-<hash>`), so the
+connection Secret `<that name>-app` sits next to the workload.
+
+```yaml
+apiVersion: openchoreo.dev/v1alpha1
+kind: Resource
+metadata:
+  name: orders-db
+spec:
+  owner: { projectName: demo }
+  type: { kind: ClusterResourceType, name: postgresql }
+  parameters: { database: orders, version: "17" }       # immutable: database; version can only be raised
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-development
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"                    # after the Resource (the admission check reads it)
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: development
+  resourceRelease: orders-db-6c9d7b8f4                   # from: kubectl get resource orders-db -o jsonpath='{.status.latestRelease.name}'
+  retainPolicy: Delete                                   # default (type): Retain - unbinding keeps the database
+  resourceTypeEnvironmentConfigs: { size: S, storageGiB: 10 }   # + highAvailability, backup, deletionPolicy
+```
+
+```yaml
+# workload.yaml
+spec:
+  dependencies:
+    resources:
+      - ref: orders-db
+        envBindings: { host: PGHOST, port: PGPORT, database: PGDATABASE, username: PGUSER, password: PGPASSWORD, uri: DATABASE_URL }
+```
+
+`host`, `port` and `database` arrive as plain env values (from the XR status), `username`, `password` and `uri` as
+`secretKeyRef`s to `<name>-app`: the credentials never leave the data plane. OpenChoreo 1.3.3 has no auto-deploy for
+Resources: a binding stays `ResourceReleaseNotSet` until `resourceRelease` names a release. The release name is a
+deterministic hash of the type's spec and the parameters (stable across a clean bootstrap); a platform change to the
+type cuts a new release, which an app adopts by bumping the pin. Every environment the component is promoted to needs
+its own binding (the Workload's dependency is shared): ReleaseBindings there wait for it. Production bindings belong in
+`release-bindings/production.yaml` (gated Application, reviewed pull request, docs/promotion.md) and must ask for
+`highAvailability: true` and `backup: { enabled: true }` (policy above).
 
 ### Operator view
 
@@ -454,8 +494,8 @@ exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`. The operator
 
 ## KEDA and OpenChoreo workloads
 
-A `ScaledObject` targets the Deployment OpenChoreo renders for a component (same name as the component, in its cell
-namespace). KEDA then owns an HPA `keda-hpa-<name>` and scales 0 <-> 1 itself:
+A `ScaledObject` targets a Deployment; KEDA then owns an HPA `keda-hpa-<name>` and scales 0 <-> 1 itself. Outside
+OpenChoreo (platform namespaces, a dev cluster) write one directly:
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
@@ -479,51 +519,40 @@ spec:
 
 Ownership rules on OpenChoreo-rendered Deployments:
 
-- **One autoscaler per Deployment.** Do not combine with the `horizontal-pod-autoscaler` trait: KEDA's admission
-  webhook rejects a ScaledObject whose target already has an HPA (and two HPAs would fight).
-- **`spec.replicas` must not be rendered.** OpenChoreo's component types render `replicas:
-  ${environmentConfigs.replicas}` and the cluster agent re-applies it, resetting whatever KEDA scaled to. The
-  `horizontal-pod-autoscaler` trait solves this with a patch that removes `/spec/replicas`; a KEDA trait needs the same.
-  Sketch (not installed, [#70](https://github.com/koorikla/platform/issues/70)):
+- **Use the `keda-scaler` trait**, not a hand-written ScaledObject: app repos cannot sync KEDA objects (tenant
+  AppProject), and the trait also removes `spec.replicas` from the rendered Deployment. Without that, the component
+  types' `replicas: ${environmentConfigs.replicas}` would be re-applied by the cluster agent and reset what KEDA scaled
+  to ([above](#readiness-and-replicas)).
+- **One autoscaler per Deployment.** `keda-scaler` refuses to render next to the `horizontal-pod-autoscaler` trait (a
+  `postRenderValidation`); KEDA's admission webhook would reject the ScaledObject anyway.
+- **Triggers** are KEDA scalers as in the KEDA docs (`type`, `metadata` strings, optional `name`, `metricType`,
+  `authenticationRef`). `authenticationRef` names a `TriggerAuthentication` in the cell namespace; the platform offers
+  no `ClusterTriggerAuthentication` to tenants (it would hand them platform credentials).
 
 ```yaml
-apiVersion: openchoreo.dev/v1alpha1
-kind: ClusterTrait
-metadata:
-  name: keda-scaler
+# component.yaml (app repo)
 spec:
-  parameters:
-    openAPIV3Schema:
-      type: object
-      properties:
-        minReplicas: { type: integer, default: 0, minimum: 0 }
-        maxReplicas: { type: integer, default: 5, minimum: 1 }
+  traits:
+    - kind: ClusterTrait
+      name: keda-scaler
+      instanceName: scaler
+      parameters:
+        minReplicas: 1
+        maxReplicas: 4
         triggers:
-          type: array
-          items: { type: object, x-kubernetes-preserve-unknown-fields: true }
-  creates:
-    - template:
-        apiVersion: keda.sh/v1alpha1
-        kind: ScaledObject
-        metadata:
-          name: ${metadata.name}-${trait.instanceName}
-          namespace: ${metadata.namespace}
-          labels: ${metadata.labels}
-        spec:
-          scaleTargetRef:
-            name: ${metadata.name}
-          minReplicaCount: ${parameters.minReplicas}
-          maxReplicaCount: ${parameters.maxReplicas}
-          triggers: ${parameters.triggers}
-  patches:
-    - target:
-        group: apps
-        version: v1
-        kind: Deployment
-      operations:
-        - op: remove
-          path: /spec/replicas
+          - type: cpu
+            metricType: Utilization
+            metadata: { value: "75" }
+          - type: cron
+            metadata: { timezone: Europe/Tallinn, start: "0 8 * * 1-5", end: "0 18 * * 1-5", desiredReplicas: "2" }
+# release-bindings/<env>.yaml: per-environment bounds, or off where the data plane has no KEDA
+spec:
+  traitEnvironmentConfigs:
+    scaler: { minReplicas: 2, maxReplicas: 8 }   # or { enabled: false }
 ```
+
+The rendered ScaledObject is `<component>-<env>-<hash>-<instanceName>` next to the Deployment; KEDA owns an HPA
+`keda-hpa-<that name>`.
 
 - **Istio ambient.** Cell namespaces are ambient-enrolled and refuse plaintext (`STRICT`,
   [networking.md](networking.md#strict-mtls-in-cell-namespaces)), so the operator namespaces `keda`, `strimzi` and
@@ -549,4 +578,9 @@ kubectl --context <dev1> -n keda get apiservice v1beta1.external.metrics.k8s.io
 kubectl --context <dev1> get providers.pkg.crossplane.io,functions.pkg.crossplane.io   # INSTALLED/HEALTHY True
 kubectl --context <dev1> get xrd postgresqls.platform.koorikla.io                       # ESTABLISHED True
 kubectl --context <dev1> -n demo get postgresql orders-db                               # READY True, SECRET orders-db-app
+# OpenChoreo types (mgmt) and what they rendered (dev1 cell namespace)
+kubectl --context k3d-platform-mgmt get clustertrait keda-scaler; kubectl --context k3d-platform-mgmt get clusterresourcetype postgresql
+kubectl --context k3d-platform-mgmt get clusterdataplane <dev1> -o jsonpath='{.metadata.annotations}'   # addons.platform.koorikla.io/*
+kubectl --context k3d-platform-mgmt -n default get resourcereleasebinding <resource>-<env>              # Ready True, status.outputs
+kubectl --context <dev1> -n <cell ns> get scaledobject,hpa,postgresql
 ```

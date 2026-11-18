@@ -4,6 +4,7 @@ templates:
   - charts/openchoreo-data-plane/templates/cluster-agent/deployment.yaml
   - charts/openchoreo-data-plane/templates/cluster-agent/certificate.yaml
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
+  - templates/cluster-agent-data-services.yaml
 set:
   cluster.name: dev1
   openchoreo-data-plane.clusterAgent.planeID: dev1
@@ -91,3 +92,20 @@ tests:
             configmap.reloader.stakater.com/reload: wrong-ca
     asserts:
       - failedTemplate: {}
+
+  - it: the agent may apply and observe the kinds of the platform's data-service types (ScaledObject, PostgreSQL XR)
+    template: templates/cluster-agent-data-services.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - contains:
+          path: rules
+          content: { apiGroups: [keda.sh], resources: [scaledobjects], verbs: [get, list, watch, create, update, patch, delete] }
+        documentIndex: 0
+      - contains:
+          path: rules
+          content: { apiGroups: [platform.koorikla.io], resources: [postgresqls], verbs: [get, list, watch, create, update, patch, delete] }
+        documentIndex: 0
+      - equal:
+          path: subjects
+          value: [{ kind: ServiceAccount, name: cluster-agent-dataplane, namespace: NAMESPACE }]
+        documentIndex: 1

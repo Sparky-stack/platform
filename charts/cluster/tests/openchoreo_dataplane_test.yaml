@@ -132,3 +132,19 @@ tests:
       openchoreo.observability.enabled: false
     asserts:
       - notExists: { path: spec.observabilityPlaneRef }
+
+  - it: ClusterDataPlane carries the fleet file's addon opt-ins as annotations (dataplane.annotations in OpenChoreo CEL)
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    set:
+      addons: { keda: true, crossplane: true, strimzi: false }
+    asserts:
+      - equal: { path: 'metadata.annotations["addons.platform.koorikla.io/keda"]', value: "true" }
+      - equal: { path: 'metadata.annotations["addons.platform.koorikla.io/crossplane"]', value: "true" }
+      - equal: { path: 'metadata.annotations["addons.platform.koorikla.io/strimzi"]', value: "false" }
+
+  - it: no addon annotation for an addon the fleet file does not mention (opt-in types refuse that data plane)
+    template: templates/openchoreo-dataplane.yaml
+    documentIndex: 0
+    asserts:
+      - notExists: { path: 'metadata.annotations["addons.platform.koorikla.io/keda"]' }

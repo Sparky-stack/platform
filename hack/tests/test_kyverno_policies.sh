@@ -3,7 +3,8 @@
 #   addons/openchoreo-platform ValidatingAdmissionPolicy openchoreo-gated-bindings-from-git (offline): production
 #                              bindings from the component's gated Argo CD Application pass; from openchoreo-api, from
 #                              the app's main Application, another tenant's Application, another app's gated
-#                              Application (either direction) or without tracking-id are denied; staging is out of scope
+#                              Application (either direction) or without tracking-id are denied; staging is out of scope;
+#                              production ResourceReleaseBindings only from a gated Application of their project (#70)
 #   addons/argo-events          ValidatingAdmissionPolicy argo-events-workflows-falco-response-only (offline): the
 #                              Workflow Sensor falco-escalation renders passes; inline templates, other templates,
 #                              cluster scope (even clusterScope: false), spec overrides (serviceAccountName, executor,
@@ -24,6 +25,11 @@
 #                              offline (#36, templates/workflow-image-digests.yaml): in workflows-* every container,
 #                              initContainer and ephemeral container image is image@sha256:<64 hex>; tag-only, implicit
 #                              latest and malformed digests are denied, other namespaces are not matched
+#   tests/kyverno/data-plane-capabilities
+#                              offline (#70, templates/data-plane-capabilities.yaml, mgmt): a ResourceReleaseBinding of a
+#                              type with platform.koorikla.io/requires-addons passes only to a data plane annotated with
+#                              that addon (absent or "false" is denied, with the addon named); types without a requirement
+#                              pass anywhere; a binding of a missing Resource is denied
 #   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy and a
 #                              STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
 #                              non-cells and platform namespaces get neither
@@ -100,9 +106,10 @@ ocp="$ROOT/addons/openchoreo-platform"
 cp_chart="$ROOT/addons/openchoreo-control-plane"
 [[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
 (
-  helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
+  helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev" or .metadata.name == "resourcereleasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
   helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
-  for c in argocd:resources api:resources argocd:smuggled; do
+  for c in argocd:resources api:resources argocd:smuggled argocd:resource-bindings api:resource-bindings \
+    argocd:resource-bindings-smuggled; do
     who=${c%%:*}; res=${c#*:}
     "$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
       --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" > "$TMP/ocp-$who-$res.out" 2>&1 || true
@@ -195,6 +202,21 @@ pvt="$addon/tests/kyverno/previews"
   "$KYVERNO" apply "$TMP/pv-DeletingPolicy.yaml" --resource "$TMP/pv-environments-ttl.yaml" "${crd[@]}" > "$TMP/pv-ttl.out" 2>&1 || true
   "$KYVERNO" apply "$TMP/pv-GeneratingPolicy.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails.out" 2>&1 || true
 ) &
+# Data-plane capabilities of resource types (templates/data-plane-capabilities.yaml, #70): resource.List context.
+dpct="$addon/tests/kyverno/data-plane-capabilities"
+(
+  helm show crds "$cp_chart" | yq 'select(.metadata.name | test("^(resourcereleasebindings|resources|clusterresourcetypes|environments|clusterdataplanes)\\.openchoreo\\.dev$"))' > "$TMP/rrb-crd.yaml"
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/data-plane-capabilities.yaml \
+    -f "$addon/values/role-mgmt.yaml" | yq 'select(.kind == "ValidatingPolicy")' > "$TMP/dpc.yaml"
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/data-plane-capabilities.yaml \
+    > "$TMP/dpc-workload.yaml" 2>&1 || true
+  for c in capable incapable opted-out; do
+    for b in bindings binding-cache binding-orphan; do
+      "$KYVERNO" apply "$TMP/dpc.yaml" --resource "$dpct/$b.yaml" --context-file "$dpct/context-$c.yaml" \
+        --crd-paths "$TMP/rrb-crd.yaml" > "$TMP/dpc-$c-$b.out" 2>&1 || true
+    done
+  done
+) &
 # Mesh policy of ambient cells (templates/cell-mesh.yaml, #53): HBONE NetworkPolicy and STRICT PeerAuthentication.
 cmt="$addon/tests/kyverno/cell-mesh"
 (
@@ -219,7 +241,8 @@ done
 
 # who:resources:expected  (staging bindings are out of scope and not counted)
 for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'pass: 0, fail: 1, warn: 0, error: 0' \
-  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0'; do
+  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0' argocd:resource-bindings:'pass: 1, fail: 0, warn: 0, error: 0' \
+  api:resource-bindings:'pass: 0, fail: 1, warn: 0, error: 0' argocd:resource-bindings-smuggled:'pass: 0, fail: 4, warn: 0, error: 0'; do
   who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/ocp-$who-$res.out")
   assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"
@@ -275,6 +298,20 @@ assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: guardrails 
 for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolation'; do
   assert_match "$out" "$k" "previews: preview cell namespace gets $k"
 done
+
+# data-plane capabilities: context:binding:expected
+pass='pass: 1, fail: 0, warn: 0, error: 0'; fail='pass: 0, fail: 1, warn: 0, error: 0'
+for c in capable:bindings:"$pass" incapable:bindings:"$fail" opted-out:bindings:"$fail" \
+  capable:binding-cache:"$pass" incapable:binding-cache:"$pass" capable:binding-orphan:"$fail"; do
+  ctx=${c%%:*}; rest=${c#*:}; b=${rest%%:*}; want=${rest#*:}
+  assert_match "$(cat "$TMP/dpc-$ctx-$b.out")" "$want" "data-plane capabilities: $b.yaml with data plane $ctx -> $want"
+done
+assert_match "$(cat "$TMP/dpc-incapable-bindings.out")" \
+  'ClusterResourceType postgresql needs addon\(s\) crossplane on the data plane of environment development, but ClusterDataPlane dev1 does not run crossplane' \
+  "data-plane capabilities: the denial names type, addon, environment and data plane"
+assert_match "$(cat "$TMP/dpc-capable-binding-orphan.out")" 'Resource ghost does not exist in namespace default' \
+  "data-plane capabilities: a binding of a missing Resource is denied"
+assert_eq "$(grep -c 'kind:' "$TMP/dpc-workload.yaml" || true)" 0 "data-plane capabilities: not rendered on workload clusters"
 
 # cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
 for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy'; do

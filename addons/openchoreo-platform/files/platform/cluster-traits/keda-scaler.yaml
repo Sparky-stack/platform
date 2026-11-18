@@ -1,0 +1,172 @@
+# Platform ClusterTrait keda-scaler (#70, docs/data-services.md "KEDA and OpenChoreo workloads"): a KEDA ScaledObject
+# for the component's Deployment. Like upstream's horizontal-pod-autoscaler trait it removes /spec/replicas from the
+# rendered Deployment, so the cluster agent's server-side apply stops owning the field and KEDA's HPA keeps it.
+# Only on data planes that run addon keda: the ClusterDataPlane carries the fleet file's addon opt-ins as annotations
+# (charts/cluster), OpenChoreo 1.3.3 exposes them to CEL as dataplane.annotations, and the pre-render validation fails
+# the ReleaseBinding elsewhere with a message instead of an apply error.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterTrait
+metadata:
+  name: keda-scaler
+  annotations:
+    openchoreo.dev/display-name: KEDA scaler
+    openchoreo.dev/description: >-
+      Event-driven autoscaling with KEDA (cron, cpu, memory, prometheus, kafka, ... triggers), including scale to zero.
+      Needs a data plane that runs addon keda. Do not combine with horizontal-pod-autoscaler.
+    # Addons the data plane must run (== ClusterDataPlane annotations addons.platform.koorikla.io/<addon>: "true").
+    # Enforced by the first preRenderValidation below; read by hack/tests/test_openchoreo_types.sh.
+    platform.koorikla.io/requires-addons: keda
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      x-openchoreo-backstage-portal:
+        ui:order:
+          - minReplicas
+          - maxReplicas
+          - triggers
+          - pollingInterval
+          - cooldownPeriod
+      properties:
+        minReplicas:
+          type: integer
+          default: 1
+          minimum: 0
+          title: Minimum replicas
+          description: "0 scales the component to zero while no trigger is active (requests to it fail until KEDA scales it up: there is no HTTP activator)."
+        maxReplicas:
+          type: integer
+          default: 5
+          minimum: 1
+          title: Maximum replicas
+        pollingInterval:
+          type: integer
+          default: 30
+          minimum: 5
+          title: Polling interval (s)
+          description: How often KEDA checks each trigger.
+        cooldownPeriod:
+          type: integer
+          default: 300
+          minimum: 0
+          title: Cooldown period (s)
+          description: Wait after the last active trigger before scaling to minReplicas 0 (only used with minReplicas 0).
+        triggers:
+          type: array
+          minItems: 1
+          maxItems: 10
+          title: Triggers
+          description: "KEDA scalers (https://keda.sh/docs/latest/scalers/), e.g. {type: cpu, metricType: Utilization, metadata: {value: \"80\"}} or {type: cron, metadata: {timezone: Europe/Tallinn, start: \"0 8 * * 1-5\", end: \"0 18 * * 1-5\", desiredReplicas: \"3\"}}."
+          items:
+            type: object
+            required:
+              - type
+              - metadata
+            properties:
+              type:
+                type: string
+                minLength: 1
+              name:
+                type: string
+              metricType:
+                type: string
+                enum:
+                  - AverageValue
+                  - Value
+                  - Utilization
+              metadata:
+                type: object
+                additionalProperties:
+                  type: string
+              authenticationRef:
+                type: object
+                description: A TriggerAuthentication in the component's namespace (ClusterTriggerAuthentication is not offered to tenants).
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+                    minLength: 1
+      required:
+        - triggers
+
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      x-openchoreo-backstage-portal:
+        ui:order:
+          - enabled
+          - minReplicas
+          - maxReplicas
+      properties:
+        enabled:
+          type: boolean
+          default: true
+          description: "When disabled, no ScaledObject is created and the component type's replicas apply again."
+          x-openchoreo-backstage-portal:
+            ui:widget: radio
+        minReplicas:
+          type: integer
+          minimum: 0
+          description: Optional per-environment override for the lower replica bound.
+        maxReplicas:
+          type: integer
+          minimum: 1
+          description: Optional per-environment override for the upper replica bound.
+
+  preRenderValidations:
+    - rule: >-
+        ${!environmentConfigs.enabled || (has(dataplane.annotations)
+        && "addons.platform.koorikla.io/keda" in dataplane.annotations
+        && dataplane.annotations["addons.platform.koorikla.io/keda"] == "true")}
+      message: >-
+        keda-scaler needs addon keda on the environment's data plane: set addons.keda: true in that cluster's fleet file
+        (docs/data-services.md "Opt in"), or disable the trait for this environment (environmentConfigs.enabled: false).
+    - rule: "${(has(environmentConfigs.maxReplicas) ? environmentConfigs.maxReplicas : parameters.maxReplicas) >= (has(environmentConfigs.minReplicas) ? environmentConfigs.minReplicas : parameters.minReplicas)}"
+      message: maxReplicas must be greater than or equal to minReplicas.
+
+  # One autoscaler per Deployment: KEDA's admission webhook would reject the ScaledObject next to an HPA anyway, this
+  # says why before anything is applied.
+  postRenderValidations:
+    - when: ${environmentConfigs.enabled}
+      target:
+        group: autoscaling
+        version: v2
+        kind: HorizontalPodAutoscaler
+        mustMatch: false
+      rule: "${false}"
+      message: keda-scaler and horizontal-pod-autoscaler cannot both scale the component; keep one of them.
+
+  creates:
+    - includeWhen: ${environmentConfigs.enabled}
+      template:
+        apiVersion: keda.sh/v1alpha1
+        kind: ScaledObject
+        metadata:
+          name: ${metadata.name}-${trait.instanceName}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          scaleTargetRef:
+            apiVersion: apps/v1
+            kind: Deployment
+            name: ${metadata.name}
+          minReplicaCount: |
+            ${has(environmentConfigs.minReplicas) ? environmentConfigs.minReplicas : parameters.minReplicas}
+          maxReplicaCount: |
+            ${has(environmentConfigs.maxReplicas) ? environmentConfigs.maxReplicas : parameters.maxReplicas}
+          pollingInterval: ${parameters.pollingInterval}
+          cooldownPeriod: ${parameters.cooldownPeriod}
+          triggers: ${parameters.triggers}
+
+  # The component type renders replicas: ${environmentConfigs.replicas}; without this patch every apply by the cluster
+  # agent (server-side apply, field manager of the renderedrelease controller) would reset what KEDA scaled to.
+  patches:
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+        where: ${environmentConfigs.enabled}
+      operations:
+        - op: remove
+          path: /spec/replicas

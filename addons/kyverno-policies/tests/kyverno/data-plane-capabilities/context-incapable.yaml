@@ -1,0 +1,31 @@
+# resource.List context: Resource orders-db (ClusterResourceType postgresql, requires crossplane), Resource cache
+# (ClusterResourceType valkey, no requirement), environment development on ClusterDataPlane dev1 (crossplane: absent).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Context
+metadata: {name: incapable}
+spec:
+  resources:
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Resource
+      metadata: {name: orders-db, namespace: default}
+      spec: {owner: {projectName: demo}, type: {kind: ClusterResourceType, name: postgresql}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Resource
+      metadata: {name: cache, namespace: default}
+      spec: {owner: {projectName: demo}, type: {kind: ClusterResourceType, name: valkey}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: ClusterResourceType
+      metadata: {name: postgresql, annotations: {platform.koorikla.io/requires-addons: crossplane}}
+      spec: {resources: [{id: x, template: {}}]}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: ClusterResourceType
+      metadata: {name: valkey}
+      spec: {resources: [{id: x, template: {}}]}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: Environment
+      metadata: {name: development, namespace: default}
+      spec: {dataPlaneRef: {kind: ClusterDataPlane, name: dev1}}
+    - apiVersion: openchoreo.dev/v1alpha1
+      kind: ClusterDataPlane
+      metadata: {name: dev1, annotations: {addons.platform.koorikla.io/keda: "true"}}
+      spec: {planeID: dev1}

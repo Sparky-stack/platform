@@ -1,0 +1,113 @@
+{{- /*
+Data-plane capabilities of OpenChoreo resource types (mgmt, values/role-mgmt.yaml; #70, docs/data-services.md).
+
+A (Cluster)ResourceType that needs an operator on the data plane names the addons in its annotation
+platform.koorikla.io/requires-addons (comma-separated, e.g. `crossplane` on ClusterResourceType postgresql of addon
+openchoreo-platform). The ClusterDataPlane (or DataPlane) of every environment carries the fleet file's opt-ins as
+annotations addons.platform.koorikla.io/<addon>: "true" (charts/cluster). This policy denies a ResourceReleaseBinding
+(create, or a spec change) whose Resource's type requires an addon the environment's data plane does not run, so
+binding a database to an environment without Crossplane fails at git sync with a message instead of as an apply error
+on the data plane ("no matches for kind PostgreSQL").
+
+Why admission and not OpenChoreo: 1.3.3 gives ResourceTypes neither validations nor dataplane.annotations (traits get
+both: keda-scaler checks the same annotation in a preRenderValidation). No cluster names anywhere: the requirement lives
+on the type, the capability on the data plane, both declarative.
+Bindings whose Resource does not exist (yet) are denied too (nothing to check against); Argo CD retries the sync, and
+an app repo orders them with sync waves (docs/data-services.md).
+*/ -}}
+{{- if .Values.dataPlaneCapabilities.enabled }}
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-data-plane-capabilities
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Resource types only on data planes that run their operators
+    policies.kyverno.io/description: >-
+      A ResourceReleaseBinding binds a Resource to an environment only if that environment's data plane runs every
+      addon the Resource's (Cluster)ResourceType lists in platform.koorikla.io/requires-addons (ClusterDataPlane
+      annotations addons.platform.koorikla.io/<addon>: "true", from the cluster's fleet file).
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail                # only ResourceReleaseBindings are matched: an outage delays bindings, nothing else
+  evaluation:
+    background:
+      enabled: false                 # an admission check of git syncs; no reports (and no reports RBAC)
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: [CREATE, UPDATE], resources: [resourcereleasebindings] }
+  matchConditions:
+    # Metadata-only updates (the OpenChoreo controller's finalizers) always pass, so a binding can always be deleted.
+    - name: spec-written
+      expression: "request.operation == 'CREATE' || object.spec != oldObject.spec"
+  variables:
+    - name: ns
+      expression: object.metadata.namespace
+    - name: owners
+      expression: >-
+        dyn(resource.List('openchoreo.dev/v1alpha1', 'resources', variables.ns).items).filter(r,
+        r.metadata.name == object.spec.owner.resourceName)
+    - name: typeKind
+      expression: >-
+        size(variables.owners) == 0 ? '' : variables.owners[0].spec.type.?kind.orValue('ResourceType')
+    - name: typeName
+      expression: "size(variables.owners) == 0 ? '' : variables.owners[0].spec.type.name"
+    - name: types
+      expression: >-
+        variables.typeKind == 'ClusterResourceType'
+        ? dyn(resource.List('openchoreo.dev/v1alpha1', 'clusterresourcetypes', '').items).filter(t, t.metadata.name == variables.typeName)
+        : variables.typeKind == 'ResourceType'
+        ? dyn(resource.List('openchoreo.dev/v1alpha1', 'resourcetypes', variables.ns).items).filter(t, t.metadata.name == variables.typeName)
+        : []
+    - name: required
+      expression: >-
+        size(variables.types) == 0 ? [] :
+        variables.types[0].metadata.?annotations[?'platform.koorikla.io/requires-addons'].orValue('').split(',')
+        .map(a, a.trim()).filter(a, a != '')
+    - name: envs
+      expression: >-
+        dyn(resource.List('openchoreo.dev/v1alpha1', 'environments', variables.ns).items).filter(e,
+        e.metadata.name == object.spec.environment)
+    - name: dpKind
+      expression: "size(variables.envs) == 0 ? '' : variables.envs[0].spec.?dataPlaneRef.?kind.orValue('')"
+    - name: dpName
+      expression: "size(variables.envs) == 0 ? '' : variables.envs[0].spec.?dataPlaneRef.?name.orValue('')"
+    - name: dataPlanes
+      expression: >-
+        variables.dpKind == 'ClusterDataPlane'
+        ? dyn(resource.List('openchoreo.dev/v1alpha1', 'clusterdataplanes', '').items).filter(d, d.metadata.name == variables.dpName)
+        : variables.dpKind == 'DataPlane'
+        ? dyn(resource.List('openchoreo.dev/v1alpha1', 'dataplanes', variables.ns).items).filter(d, d.metadata.name == variables.dpName)
+        : []
+    - name: missing
+      expression: >-
+        size(variables.dataPlanes) == 0 ? variables.required :
+        variables.required.filter(a,
+        variables.dataPlanes[0].metadata.?annotations[?('addons.platform.koorikla.io/' + a)].orValue('') != 'true')
+  validations:
+    - expression: size(variables.owners) > 0
+      messageExpression: >-
+        'ResourceReleaseBinding ' + object.metadata.name + ': Resource ' + object.spec.owner.resourceName
+        + ' does not exist in namespace ' + variables.ns + ' (apply it before its bindings).'
+    - expression: size(variables.missing) == 0
+      messageExpression: >-
+        'ResourceReleaseBinding ' + object.metadata.name + ': ' + variables.typeKind + ' ' + variables.typeName
+        + ' needs addon(s) ' + variables.required.join(', ') + ' on the data plane of environment '
+        + object.spec.environment + ', but '
+        + (size(variables.dataPlanes) == 0 ? 'the environment or its data plane was not found'
+        : variables.dpKind + ' ' + variables.dpName + ' does not run ' + variables.missing.join(', ')
+        + ' (fleet file addons.<addon>: true sets annotation addons.platform.koorikla.io/<addon>; docs/data-services.md)')
+        + '.'
+---
+# Kyverno's admission controller resolves the binding's Resource, its type, the environment and its data plane.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:admission-controller:data-plane-capabilities
+  labels:
+    rbac.kyverno.io/aggregate-to-admission-controller: "true"
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [resources, resourcetypes, clusterresourcetypes, environments, dataplanes, clusterdataplanes]
+    verbs: [get, list, watch]
+{{- end }}

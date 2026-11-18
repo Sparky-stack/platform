@@ -1,0 +1,44 @@
+# Production ResourceReleaseBindings from outside a gated Application of their project: all denied, even for Argo CD.
+# 1. Through the app's main Application (any file but release-bindings/production.yaml).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-production
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: demo-hello-world:openchoreo.dev/ResourceReleaseBinding:default/orders-db-production
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: production
+---
+# 2. From another project's gated Application.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-production-2
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: acme-app-production:openchoreo.dev/ResourceReleaseBinding:default/orders-db-production-2
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: production
+---
+# 3. Without a tracking annotation.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata: { name: orders-db-production-3, namespace: default }
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: production
+---
+# 4. From an Application named exactly <project>-<env> (no app part).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-production-4
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: demo-production:openchoreo.dev/ResourceReleaseBinding:default/orders-db-production-4
+spec:
+  owner: { projectName: demo, resourceName: orders-db }
+  environment: production
