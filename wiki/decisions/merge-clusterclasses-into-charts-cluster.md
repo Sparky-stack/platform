@@ -14,7 +14,7 @@ During the #116 repo-wide simplification scan, CAPI cluster templates were split
 
 ## Decision
 - Fold `addons/clusterclasses` into `charts/cluster` so one chart owns everything cluster-related (#116 owner comment).
-- Organize provider-specific templates under `charts/cluster/templates/providers/{docker,aws,hetzner,gcp-gke,byo}/` (holding each provider's `ClusterClass` and per-cluster templates) while keeping shared templates (Argo cluster secret, OpenChoreo data plane, mesh, CRS payloads) at the top level of `charts/cluster/templates/`.
+- Organize provider-specific templates under per-provider folders (`providers/docker/`, `providers/aws/`, `providers/hetzner/`, `providers/gcp-gke/`, `providers/byo/`) inside `charts/cluster/templates/` (holding each provider's `ClusterClass` and per-cluster templates) while keeping shared templates (Argo cluster secret, OpenChoreo data plane, mesh, CRS payloads) at the top level of `charts/cluster/templates/`.
 - Render `ClusterClass` objects once fleet-wide via a `classes` mode on `charts/cluster` (used by the existing `mgmt` Application) rather than duplicating `ClusterClass` objects per cluster.
 
 ## Alternatives rejected

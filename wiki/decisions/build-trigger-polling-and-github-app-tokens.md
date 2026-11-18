@@ -10,11 +10,11 @@ confidence: high
 # Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens
 
 ## Context
-OpenChoreo's built-in auto-build webhook names `WorkflowRun`s randomly and requires public webhook ingress. Meanwhile, static personal access tokens (`platform-github-build` PAT) violated least-privilege repository scoping (#34), and fresh local bootstraps had no image in stack-local Harbor for the digest committed in `koorikla/hello-world` (#200).
+OpenChoreo's built-in auto-build webhook names `WorkflowRun`s randomly and requires public webhook ingress. Meanwhile, static personal access tokens (PATs) violated least-privilege repository scoping (#34), and fresh local bootstraps had no image in stack-local Harbor for the digest committed in `koorikla/hello-world` (#200).
 
 ## Decision
 - **Platform-owned auto-build trigger (#164, #200):** Poll tenant repositories on `mgmt` in local installations (no external tunnel required) and accept HMAC-verified GitHub App push webhooks (`github-webhook` via `addons/argo-events`) in cloud installations. Name runs deterministically (`<component>-<sha12>`) and trigger a rebuild automatically whenever the stack-local Harbor registry is missing the digest pinned in GitOps.
-- **GitHub App installation tokens, no PATs (#10, #34):** Eliminate `platform-github-build`. Use the platform GitHub App (`promotion-gate-github`) and ESO generators to mint short-lived, per-repository installation tokens (`contents: read` for polling, `contents: write` scoped to the single target repo for builds and promotion gate PRs).
+- **GitHub App installation tokens, no PATs (#10, #34):** Eliminate static build PATs. Use the platform GitHub App (`promotion-gate-github`) and ESO generators to mint short-lived, per-repository installation tokens (`contents: read` for polling, `contents: write` scoped to the single target repo for builds and promotion gate PRs).
 
 ## Alternatives rejected
 - **OpenChoreo built-in auto-build webhook:** Random run names prevented idempotent deduplication across restarts and required a public tunnel locally.
