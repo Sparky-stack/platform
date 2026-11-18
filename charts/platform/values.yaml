@@ -153,21 +153,3 @@ addons:
   # picks the Composition (cnpg needs cloudnative-pg on the same cluster). ServerSideDiff: Crossplane fills its TLS
   # Secrets and defaults its package / XRD objects.
   crossplane:               { namespace: crossplane-system,        roles: [workload],       default: false, serverSideDiff: true }
-
-# AppProject examples (templates/projects.yaml): namespaced kinds the example charts may create (cluster-scoped: Namespace).
-examplesProject:
-  namespaceResources:
-    - { group: "", kind: Service }
-    - { group: "", kind: ServiceAccount }
-    - { group: apps, kind: Deployment }
-    - { group: security.istio.io, kind: AuthorizationPolicy }
-
-# Examples (examples/<name>; charts/platform templates/appset-examples.yaml): off unless an installation enables them.
-examples:
-  eastwest:                 # cross-cluster call over Istio ambient east-west gateways (docs/multicluster.md)
-    enabled: false
-    namespace: eastwest-demo
-    selector:               # every mesh member
-      matchLabels:
-        platform.koorikla.io/role: workload
-        addons.platform.koorikla.io/istio-eastwest: "true"

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`, `fleet`, `previews`, `examples`), the `mgmt` cluster secret, and `ApplicationSet`s for workload clusters (`fleet`), the addon catalog (`addons/*`), tenants (`tenants`), and opt-in examples.
+Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`, `fleet`, `previews`), the `mgmt` cluster secret, and `ApplicationSet`s for workload clusters (`fleet`), the addon catalog (`addons/*`), and tenants (`tenants`).
 
 ## Where it runs
 
@@ -173,18 +173,6 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.thunder.roles[0] | string | `"mgmt"` |  |
 | dns.domainFilters | list | `[]` |  |
 | dns.provider | string | `"none"` |  |
-| examples.eastwest.enabled | bool | `false` |  |
-| examples.eastwest.namespace | string | `"eastwest-demo"` |  |
-| examples.eastwest.selector.matchLabels."addons.platform.koorikla.io/istio-eastwest" | string | `"true"` |  |
-| examples.eastwest.selector.matchLabels."platform.koorikla.io/role" | string | `"workload"` |  |
-| examplesProject.namespaceResources[0].group | string | `""` |  |
-| examplesProject.namespaceResources[0].kind | string | `"Service"` |  |
-| examplesProject.namespaceResources[1].group | string | `""` |  |
-| examplesProject.namespaceResources[1].kind | string | `"ServiceAccount"` |  |
-| examplesProject.namespaceResources[2].group | string | `"apps"` |  |
-| examplesProject.namespaceResources[2].kind | string | `"Deployment"` |  |
-| examplesProject.namespaceResources[3].group | string | `"security.istio.io"` |  |
-| examplesProject.namespaceResources[3].kind | string | `"AuthorizationPolicy"` |  |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | installation.name | string | `"local"` | GitOps repository and org scope (`installation.{name,repoURL,revision,githubOrg}`) layered from `installations/<inst>/installation.yaml`. |
 | installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |

@@ -9,9 +9,7 @@
 #   3. the production policy follows the environment, not the cluster: addon kyverno-policies renders the same policies
 #      on every workload cluster whatever its name or cluster-level `environment`, and the cluster that hosts production
 #      gets the Deny pair scoped to cell namespaces labelled openchoreo.dev/environment=production
-#   4. the cross-cluster example (examples.eastwest) is enabled only with two or more mesh members, and the multicluster
-#      profile has them (its switch may turn the example on)
-# Negative cases: a duplicated or missing placement, an Audit-only production and the example on a lone member fail.
+# Negative cases: a duplicated or missing placement and an Audit-only production fail.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
@@ -95,14 +93,6 @@ deny_errors() {
   done
 }
 
-# eastwest_errors <enabled true|false> <fleet file>... -> violation of check 4 (empty: ok)
-eastwest_errors() {
-  local on=$1 cf n=0; shift
-  [[ "$on" == true ]] || return 0
-  for cf in "$@"; do [[ -n "$(yq -r '.mesh.group // ""' "$cf")" ]] && n=$((n + 1)); done
-  (( n >= 2 )) || echo "examples.eastwest is enabled with $n mesh member(s); it needs two (echo and callers on different clusters)"
-}
-
 # kyverno_render <inst> <inst dir> <platform render> <fleet file> [helm args...] -> addon kyverno-policies as Argo renders it there
 kyverno_render() {
   local inst=$1 inst_dir=$2 prender=$3 cf=$4 n args=(); shift 4
@@ -142,13 +132,6 @@ for inst_dir in installations/*; do
 
     # 1. placement
     assert_eq "$(placement_errors "$inst_dir" "${files[@]}")" "" "$tag: every environment on exactly one enabled cluster"
-
-    # 4. cross-cluster example
-    ew=$(yq -r '.examples.eastwest.enabled // false' "$inst_dir/installation.yaml")
-    assert_eq "$(eastwest_errors "$ew" "${files[@]}")" "" "$tag: examples.eastwest only with two mesh members (enabled: $ew)"
-    if [[ "$profile" == multicluster ]]; then
-      assert_eq "$(eastwest_errors true "${files[@]}")" "" "$tag: the multicluster profile can run examples.eastwest"
-    fi
 
     # 2. rendered Environments
     envs=""
@@ -209,5 +192,4 @@ yq -i '.openchoreo.dataPlane.environments = ["development", "staging"]' "$neg/de
 assert_match "$(placement_errors "$L" "$neg"/*.yaml)" 'environment production is on no enabled cluster' "neg: production placed nowhere fails"
 kyverno_render local "$L" "$TMP/platform-local.yaml" "$L/clusters/dev1.yaml" --set imageVerification.environments.production=Audit > "$TMP/kyverno-audit.yaml"
 assert_match "$(deny_errors "$TMP/kyverno-audit.yaml")" 'openchoreo-verify-images-enforce: validationActions' "neg: production Audit-only fails the Deny check"
-assert_match "$(eastwest_errors true "$L"/clusters/*.yaml)" 'with 1 mesh member' "neg: examples.eastwest on the lean profile (one member) fails"
 finish
