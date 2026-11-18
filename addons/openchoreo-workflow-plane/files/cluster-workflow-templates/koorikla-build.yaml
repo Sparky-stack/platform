@@ -468,8 +468,17 @@ spec:
           - |
             mkdir -p "$HOME/.config/buildkit" "$HOME/.docker"
             cp /registry-auth/config.json "$HOME/.docker/config.json"
+            cfg="$HOME/.config/buildkit/buildkitd.toml"
+            : > "$cfg"
             if [ -f /registry-ca/ca.crt ]; then
-              printf '[registry."%s"]\n  ca = ["/registry-ca/ca.crt"]\n' "$REGISTRY_HOST" > "$HOME/.config/buildkit/buildkitd.toml"
+              # Base images through the Harbor proxy caches (ConfigMap buildkitd-config, addon openchoreo-workflow-plane
+              # values buildkitMirrors, #38): registry mirrors that need the Harbor CA, so only together with it.
+              if [ -f /buildkitd/buildkitd.toml ]; then
+                cat /buildkitd/buildkitd.toml > "$cfg"
+                echo ">> registry mirrors (BuildKit falls back to the upstream when a mirror fails):"
+                awk -F'"' '/^\[registry\./ { h = $2 } /^ *mirrors = / { print "   " h " -> " $2 }' "$cfg"
+              fi
+              grep -qF "[registry.\"$REGISTRY_HOST\"]" "$cfg" || printf '[registry."%s"]\n  ca = ["/registry-ca/ca.crt"]\n' "$REGISTRY_HOST" >> "$cfg"
               # buildkitd.toml covers buildkitd's registry requests only: buildctl fetches the registry's bearer token
               # itself (session auth provider) with Go's system roots, so it must trust the CA too ("failed to fetch
               # oauth token: ... x509: certificate signed by unknown authority" otherwise).
@@ -543,9 +552,14 @@ spec:
           - { name: work, mountPath: /work, readOnly: true }
           - { name: registry-auth, mountPath: /registry-auth, readOnly: true }
           - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+          - { name: buildkitd-config, mountPath: /buildkitd, readOnly: true }
           - { name: buildkitd, mountPath: /home/user/.local/share/buildkit }
       volumes:
         - { name: buildkitd, emptyDir: {} }
+        # registry mirrors to the Harbor proxy caches (addon openchoreo-workflow-plane templates/buildkitd-config.yaml);
+        # absent with an external registry: direct pulls
+        - name: buildkitd-config
+          configMap: { name: buildkitd-config, optional: true }
       outputs:
         parameters:
           - { name: digest-ref, valueFrom: { path: /tmp/digest-ref } }
