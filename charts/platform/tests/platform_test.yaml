@@ -129,6 +129,25 @@ tests:
       - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
       - equal: { path: spec.template.spec.syncPolicy.retry.backoff.maxDuration, value: 5m }
 
+  # #192: an addon/tenant/example sync that gives up stays failed until the next commit (a manual step); live, addons
+  # needed 5 attempts while another app installed the CRDs they reference
+  - it: retries every generated Application without a limit on the latest revision
+    set: { examples.eastwest.enabled: true }
+    asserts:
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: appset-addons.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
+        template: appset-addons.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: appset-examples.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: tenants.yaml
+      - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
+        template: tenants.yaml
+
   - it: renders catalog ApplicationSets including clusterNameParameters and serverSideDiff
     template: appset-addons.yaml
     asserts:
