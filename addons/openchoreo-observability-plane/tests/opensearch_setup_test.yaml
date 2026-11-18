@@ -1,0 +1,70 @@
+suite: openchoreo-observability-plane - logs setup Job as an Argo CD hook (#192)
+templates:
+  - templates/opensearch-setup-logs.yaml
+  - charts/observability-logs-opensearch/templates/opensearch-setup-logs/job.yaml
+  - charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+  - charts/observability-logs-opensearch/charts/openSearch/templates/configmap.yaml
+tests:
+  - it: runs the logs module's setup as a PostSync hook that Argo CD recreates on every retry
+    template: templates/opensearch-setup-logs.yaml
+    asserts:
+      - isKind: { of: Job }
+      - equal: { path: metadata.name, value: opensearch-setup-logs }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: PostSync }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook-delete-policy"]', value: BeforeHookCreation }
+      - matchRegex:
+          path: 'spec.template.spec.containers[0].image'
+          pattern: '^cr\.openchoreo\.dev/openchoreo/observability-logs-opensearch-setup:0\.7\.0@sha256:[0-9a-f]{64}$'
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: CONTAINER_LOGS_MIN_INDEX_AGE, value: 7d }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: AUDIT_LOGS_INDEX_PREFIX, value: audit-logs- }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content:
+            name: OPENSEARCH_PASSWORD
+            valueFrom: { secretKeyRef: { name: opensearch-admin-credentials, key: password } }
+      - equal: { path: 'spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem', value: true }
+      - equal: { path: spec.template.spec.automountServiceAccountToken, value: false }
+
+  - it: the module's own (terminal once failed) setup Job does not render
+    template: charts/observability-logs-opensearch/templates/opensearch-setup-logs/job.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: refuses the module's Job next to the hook (two setup Jobs)
+    template: templates/opensearch-setup-logs.yaml
+    set: { observability-logs-opensearch.openSearchSetup.enabled: true }
+    asserts:
+      - failedTemplate: { errorPattern: "openSearchSetup.enabled must stay false" }
+
+  - it: run false renders no setup Job
+    template: templates/opensearch-setup-logs.yaml
+    set: { observability-logs-opensearch.openSearchSetup.run: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: "local: OpenSearch disk watermarks are absolute free space (the PV is a directory on the host's disk)"
+    template: charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+    values: [../../../installations/local/addons/openchoreo-observability-plane/values.yaml]
+    asserts:
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.flood_stage, value: 2gb }
+      - contains:
+          path: 'spec.template.spec.containers[0].env'
+          content:
+            name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+            valueFrom: { secretKeyRef: { name: opensearch-admin-credentials, key: password } }
+
+  - it: "default: OpenSearch keeps its percentage watermarks (dedicated volumes)"
+    template: charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
+    asserts:
+      - notContains:
+          path: 'spec.template.spec.containers[0].env'
+          content: { name: cluster.routing.allocation.disk.watermark.high, value: 3gb }

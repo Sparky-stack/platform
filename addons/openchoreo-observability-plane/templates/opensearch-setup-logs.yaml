@@ -1,0 +1,64 @@
+{{- /*
+Setup Job of the logs module (index templates, ISM retention policies, alerting webhook): the module's own Job
+(observability-logs-opensearch 0.7.0 templates/opensearch-setup-logs/job.yaml) is a plain resource. When it fails
+(restartPolicy OnFailure, backoffLimit 6: about 13 minutes of retries, e.g. OpenSearch slow on a clean bootstrap) the
+failed Job is terminal: Argo CD re-applies the unchanged manifest, nothing runs again and the app stays Degraded (#192).
+So the module's Job is off (openSearchSetup.enabled: false in values.yaml) and the same container runs here as an Argo
+CD PostSync hook, like the tracing module's setup Job: after every sync, once OpenSearch is Healthy; a failure fails the
+operation, Argo CD's unlimited retry recreates the Job (BeforeHookCreation). The setup is idempotent.
+Values: observability-logs-opensearch.openSearchSetup (image, openSearchSecretName, dataRetentionTime); `run: true`
+renders it (the module's `enabled` must stay false, else two Jobs).
+*/ -}}
+{{- $sub := index .Values "observability-logs-opensearch" }}
+{{- $s := $sub.openSearchSetup }}
+{{- if $s.enabled }}
+{{- fail "observability-logs-opensearch.openSearchSetup.enabled must stay false: templates/opensearch-setup-logs.yaml runs the setup as an Argo CD hook (set openSearchSetup.run)" }}
+{{- end }}
+{{- if $s.run }}
+{{- $secret := required "observability-logs-opensearch.openSearchSetup.openSearchSecretName is required" $s.openSearchSecretName }}
+{{- $prefix := $sub.auditLogs.indexPrefix }}
+{{- if not (regexMatch "^[a-z0-9][a-z0-9._-]*$" ($prefix | default "")) }}
+{{- fail (printf "observability-logs-opensearch.auditLogs.indexPrefix %q is not an OpenSearch index name prefix" $prefix) }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-setup-logs
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: opensearch-setup
+          env:
+            - { name: OPENSEARCH_ADDRESS, value: "https://opensearch:9200" }
+            - name: OPENSEARCH_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $secret }}, key: username } }
+            - name: OPENSEARCH_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $secret }}, key: password } }
+            - { name: OBSERVER_ALERTING_WEBHOOK_URL, value: {{ $s.alertingWebhookUrl | quote }} }
+            - { name: CONTAINER_LOGS_MIN_INDEX_AGE, value: {{ $s.dataRetentionTime.containerLogs | quote }} }
+            - { name: K8S_EVENTS_MIN_INDEX_AGE, value: {{ $s.dataRetentionTime.k8sEvents | quote }} }
+            - { name: AUDIT_LOGS_MIN_INDEX_AGE, value: {{ $s.dataRetentionTime.auditLogs | quote }} }
+            - { name: AUDIT_LOGS_INDEX_PREFIX, value: {{ $prefix | quote }} }
+          image: {{ printf "%s:%s" $s.image.repository (required "observability-logs-opensearch.openSearchSetup.image.tag is required (tag@digest)" $s.image.tag) | quote }}
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests: { memory: 50Mi, cpu: 50m }
+            limits: { memory: 75Mi, cpu: 75m }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsGroup: 10500
+            runAsUser: 10500
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+{{- end }}

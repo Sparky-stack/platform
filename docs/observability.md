@@ -420,7 +420,12 @@ credentials by design. Footprint and knobs: `addons/argo-events/values.yaml` (re
 - ESO on mgmt with generic targets for ConfigMaps (`genericTargets.enabled: true` in addon external-secrets, role mgmt)
   for the agent's `cluster-gateway-ca` ConfigMap.
 - Helm hooks: the module setup Jobs run on every sync under Argo (idempotent index/template setup); prometheus-operator
-  admission webhooks use cert-manager (no hook Jobs).
+  admission webhooks use cert-manager (no hook Jobs). The logs module's setup Job is no hook upstream (a failed one is
+  terminal, the app stays Degraded): the wrapper turns it off and runs the same container as an Argo CD PostSync hook
+  (`templates/opensearch-setup-logs.yaml`), recreated on every retry.
+- Local installation: OpenSearch's volume is a directory on the host's disk, so its percentage disk watermarks would
+  block index creation once the developer's disk is 90 % full; `installations/local/addons/openchoreo-observability-plane`
+  sets absolute free-space watermarks (5/3/2 GB).
 
 ## Resource budget (requests, local)
 
