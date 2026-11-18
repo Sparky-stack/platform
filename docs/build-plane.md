@@ -429,7 +429,6 @@ Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build
 ([#32](https://github.com/koorikla/platform/issues/32)), scoped workflow-plane agent RBAC
 ([#33](https://github.com/koorikla/platform/issues/33)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
-([#35](https://github.com/koorikla/platform/issues/35)), digest-pinned images in `workflows-*`
-([#36](https://github.com/koorikla/platform/issues/36)). BuildKit pulls base images
+([#35](https://github.com/koorikla/platform/issues/35)). BuildKit pulls base images
 directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
 [#40](https://github.com/koorikla/platform/issues/40).
