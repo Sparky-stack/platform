@@ -260,13 +260,17 @@ done
 
 # 2b5. Istio ambient, STRICT mTLS in cell namespaces (#53): while addon kyverno-policies generates STRICT
 # PeerAuthentications into the cells (templates/cell-mesh.yaml), ztunnel refuses plaintext there, so every in-cluster
-# client of cell pods has to be in the mesh: the data-plane gateway proxy (ingress), the Prometheus agent (PodMonitors
-# in cells) and the data-service operators (instance / broker / scaler endpoints in cells).
+# client of cell pods has to be in the mesh: the data-plane gateway proxy (ingress) and the data-service operators
+# (instance / broker / scaler endpoints in cells). Addon telemetry must stay out: ztunnel's DNS proxy answers the local
+# installation's *.localhost ingest hosts with loopback, which cut every remote write to mgmt on dev1.
 if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$ROOT/addons/kyverno-policies/values.yaml")" == true ]]; then
   render_standalone_addon openchoreo-data-plane "$TMP/mc-odp.yaml"
   gw=$(yq 'select(.kind == "Gateway" and .metadata.name == "gateway-default") | .spec.infrastructure.labels["istio.io/dataplane-mode"]' "$TMP/mc-odp.yaml")
   assert_eq "$gw" ambient "STRICT cells: the data-plane gateway proxy pods are in the ambient mesh"
-  for a in telemetry cloudnative-pg keda strimzi; do
+  render_standalone_addon telemetry "$TMP/mc-telemetry.yaml"
+  tl=$(yq 'select(.kind == "Namespace") | .metadata.labels["istio.io/dataplane-mode"]' "$TMP/mc-telemetry.yaml")
+  assert_eq "$tl" none "addon telemetry stays out of the ambient mesh (ztunnel DNS resolves *.localhost ingest hosts to loopback)"
+  for a in cloudnative-pg keda strimzi; do
     render_standalone_addon "$a" "$TMP/mc-$a.yaml"
     ns=$(yq ".addons[\"$a\"].namespace" "$ROOT/charts/platform/values.yaml")
     l=$(yq "select(.kind == \"Namespace\" and .metadata.name == \"$ns\") | .metadata.labels[\"istio.io/dataplane-mode\"]" "$TMP/mc-$a.yaml")

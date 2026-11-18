@@ -8,19 +8,14 @@ templates:
 set:
   cluster.name: dev1
 tests:
-  - it: "the namespace is an Istio ambient mesh client (#53: the Prometheus agent scrapes PodMonitors in STRICT cells)"
+  - it: "the namespace stays out of the ambient mesh (#53: ztunnel DNS answers *.localhost with loopback) and is never pruned"
     template: templates/namespace.yaml
     release: { namespace: telemetry }
     asserts:
       - isKind: { of: Namespace }
       - equal: { path: metadata.name, value: telemetry }
-      - equal: { path: metadata.labels, value: { istio.io/dataplane-mode: ambient } }
-
-  - it: no Namespace object outside the mesh
-    template: templates/namespace.yaml
-    set: { namespace.ambient: false }
-    asserts:
-      - hasDocuments: { count: 0 }
+      - equal: { path: metadata.labels, value: { istio.io/dataplane-mode: none } }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: "Prune=false,Delete=false" }
 
   - it: derives the collector endpoints and the cluster name from cluster/installation values
     template: templates/env.yaml
