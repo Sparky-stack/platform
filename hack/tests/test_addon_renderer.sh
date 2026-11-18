@@ -48,20 +48,28 @@ assert_match "$(printf '%s\n' "${args[@]}")" $'--set-string\nopenchoreo-data-pla
 # catalog default / the else-branch; mesh members get values/mesh-member.yaml.
 L="$TMP/platform-local.yaml"
 render_platform local "$L"
-printf '{"mesh.platform.koorikla.io/group": "local", "mesh.platform.koorikla.io/network": "dev1", "addons.platform.koorikla.io/istio-eastwest": "true"}\n' > "$TMP/labels-member.yaml"
+printf '{"mesh.platform.koorikla.io/group": "local", "mesh.platform.koorikla.io/network": "dev1"}\n' > "$TMP/labels-member.yaml"
 args=()
-read_lines args addon_helm_args istio-ambient installations/local "$L" workload dev1 docker development local cilium https://192.0.2.10:6443 "$TMP/labels-member.yaml"
+read_lines args addon_helm_args mesh installations/local "$L" workload dev1 docker development local cilium https://192.0.2.10:6443 "$TMP/labels-member.yaml"
 all=$(printf '%s\n' "${args[@]}")
-assert_match "$all" $'--values\naddons/istio-ambient/values/mesh-member.yaml' "mesh member: values/mesh-member.yaml"
+assert_match "$all" $'--values\naddons/mesh/values/mesh-member.yaml' "mesh member: values/mesh-member.yaml"
 assert_match "$all" $'--set-string\nglobal.network=dev1' "clusterLabelParameters: label value"
-assert_match "$all" $'--set-string\nistiod.env.AMBIENT_ENABLE_MULTI_NETWORK=true' "clusterLabelParameters: label value over default"
 args=()
-read_lines args addon_helm_args istio-ambient installations/local "$L" workload dev2 docker development local cilium https://192.0.2.10:6443 /dev/null
+read_lines args addon_helm_args mesh installations/local "$L" workload dev2 docker development local cilium https://192.0.2.10:6443 /dev/null
 all=$(printf '%s\n' "${args[@]}")
 assert_eq "$(printf '%s\n' "$all" | grep -c 'values/mesh-member.yaml' || true)" 0 "no mesh group: no values/mesh-member.yaml (mesh-none.yaml, absent = ignored)"
 assert_match "$all" $'--set-string\nglobal.network=\n' "missing label: empty"
-assert_match "$all" $'--set-string\nistiod.env.AMBIENT_ENABLE_MULTI_NETWORK=false' "missing label: catalog default"
 assert_eq "$(printf '%s\n' "$all" | grep -c '{{' || true)" 0 "no goTemplate left in any argument"
+# label-with-default entries ({label, default}): no catalog entry uses one today, so add one for the test.
+LD="$TMP/platform-label-default.yaml"
+helm template platform charts/platform --namespace argocd --values installations/local/installation.yaml \
+  --set-string 'addons.mesh.clusterLabelParameters.example\.flag.label=example.test/flag' \
+  --set-string 'addons.mesh.clusterLabelParameters.example\.flag.default=false' > "$LD"
+printf '{"example.test/flag": "true"}\n' > "$TMP/labels-flag.yaml"
+args=(); read_lines args addon_helm_args mesh installations/local "$LD" workload dev1 docker development local cilium https://192.0.2.10:6443 "$TMP/labels-flag.yaml"
+assert_match "$(printf '%s\n' "${args[@]}")" $'--set-string\nexample.flag=true' "clusterLabelParameters: label value over default"
+args=(); read_lines args addon_helm_args mesh installations/local "$LD" workload dev2 docker development local cilium https://192.0.2.10:6443 /dev/null
+assert_match "$(printf '%s\n' "${args[@]}")" $'--set-string\nexample.flag=false' "missing label: catalog default"
 
 # clusterNameFormats (string with the cluster name inside) and fleetParameters (every cluster of the installation,
 # sorted helm list), as the ApplicationSet renders them (falco: customfields; argo-events: Falco endpoints).

@@ -10,8 +10,8 @@ Cilium or Istio.
 | Pod network, Services (no kube-proxy), NetworkPolicy, node-to-node encryption, flow visibility | Cilium | `cilium` (`kube-system`, opt-in by label, set from `cni`) | workload, `cni: cilium` |
 | Gateway API CRDs (standard channel) | Gateway API v1.5.1 | `gateway-api-crds` | all |
 | North-south ingress (`GatewayClass kgateway`, OpenChoreo's `gateway-default`) | kgateway | `kgateway` | all |
-| East-west mTLS, L4 authz, optional L7 waypoints | Istio ambient (base, istiod, istio-cni, ztunnel) | `istio-ambient` (`istio-system`) | workload |
-| Cluster-to-cluster (multi-network ambient, east-west gateways, mesh CA in OpenBao) | Istio ambient multicluster | `istio-eastwest` + `istio-csr`, mesh CA `openbao` on mgmt (opt-in, docs/multicluster.md) | fleet files with `mesh.group` |
+| East-west mTLS, L4 authz, optional L7 waypoints | Istio ambient (base, istiod, istio-cni, ztunnel) | `mesh` (`istio-system`) | workload |
+| Cluster-to-cluster (multi-network ambient, east-west gateways, mesh CA in OpenBao) | Istio ambient multicluster | `mesh` (`values/mesh-member.yaml`: east-west gateway + istio-csr), mesh CA `openbao` on mgmt (opt-in, docs/multicluster.md) | fleet files with `mesh.group` |
 | Admission: PSS baseline audit, ambient enrollment | Kyverno + policies | `kyverno`, `kyverno-policies` (`kyverno`) | all (enrollment: workload) |
 | Runtime detection / response | Falco + Talon | `falco` | all (docs/observability.md) |
 
@@ -37,7 +37,7 @@ the cluster is created. It flows to three places:
    catalog `default: false` and is selected by that label, so it lands exactly on `cni: cilium` clusters. Setting
    `addons.cilium` in a fleet file is redundant; a value that contradicts `cni` fails the render.
 3. **Value layer** `addons/<addon>/values/cni-<cni>.yaml`, plus `cluster.cni` in every addon Application (mgmt's
-   secret says `flannel`). `istio-ambient` uses this to pick its CNI directories (below).
+   secret says `flannel`). `mesh` uses this to pick its CNI directories (below).
 
 GKE (`provider: gcp-gke`) takes only `cni: gke`: GKE's own VPC-native networking, no Cilium addon (CAPG v1.13.1
 cannot request Dataplane V2; [providers.md](providers.md#gke-capg---untested-example)).
@@ -114,7 +114,11 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   containers mount bpffs and cgroup2 themselves, as on kind. dev1 and prod1 share the host kernel, but socket LB is
   scoped per cgroup namespace and CAPD node containers use private cgroupns.
 
-## Istio ambient (`addons/istio-ambient`)
+## Istio ambient (`addons/mesh`)
+- One Argo app per workload cluster (`mesh-<cluster>`). Mesh members (fleet file `mesh.group`) also get
+  `values/mesh-member.yaml`: cert-manager istio-csr (Vault Issuer to OpenBao on mgmt) and the east-west gateway +
+  reader RBAC (docs/multicluster.md). Sync waves: istio-csr's Issuer prerequisites -2, Issuer -1, istio-csr + istiod 0,
+  ztunnel 1.
 - Charts `base`, `istiod`, `cni`, `ztunnel` 1.32.0 from upstream's OCI registry `oci://ghcr.io/istio/release/charts`
   (same tarballs as `https://blob.istio.io/istio-release/charts`; the GCS bucket and `gcr.io/istio-release` stop at
   1.30.x and go away on 2026-12-16, see Istio's
@@ -260,5 +264,5 @@ No upgrade or experimental channel is needed.
 Measured on dev1 (single node, idle, `kubectl top`, #52): cilium-agent 232Mi, cilium-operator 40Mi, hubble-relay
 25Mi, ztunnel 11Mi, istio-cni 24Mi, istiod 55Mi, Kyverno 343Mi (admission 178Mi): ~730Mi, below the requests.
 
-Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/istio-ambient addons/kyverno* charts/cluster`):
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/mesh addons/kyverno* charts/cluster`):
 [#52](https://github.com/koorikla/platform/issues/52).

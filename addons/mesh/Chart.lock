@@ -11,5 +11,8 @@ dependencies:
 - name: ztunnel
   repository: oci://ghcr.io/istio/release/charts
   version: 1.32.0
-digest: sha256:ec58eba64e03f52d6489ce2f79850a4249b8e27091fb136cec58da7d06ad6745
-generated: "2026-11-18T09:11:24.861094776+02:00"
+- name: cert-manager-istio-csr
+  repository: https://charts.jetstack.io
+  version: v0.19.1
+digest: sha256:2d7aea63b4c90a3e20fcc1ee5f0e559e42e4e67dc9f6392f86f30eba2d66d6db
+generated: "2026-11-19T01:29:34.981619648+02:00"

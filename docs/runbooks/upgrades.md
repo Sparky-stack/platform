@@ -80,9 +80,9 @@ kubectl --context k3d-platform-mgmt -n argocd get applications -l app.kubernetes
 kubectl --context k3d-platform-mgmt -n thunder logs job/thunder-setup --tail=50
 ```
 
-### 5. Istio ambient (`istio-ambient`, `istio-csr`, `istio-eastwest`)
+### 5. Istio ambient (`mesh`)
 
-`addons/istio-ambient/values.yaml` orders control plane before dataplane: `istiod` updates in sync wave `0`, and `DaemonSet/ztunnel` rolls in sync wave `1` ([networking.md](../networking.md#istio-ambient-addonsistio-ambient)). Ambient workloads keep running across `istiod` upgrades and re-establish HBONE sockets as `ztunnel` pods roll.
+`addons/mesh/values.yaml` orders control plane before dataplane: `istiod` updates in sync wave `0`, and `DaemonSet/ztunnel` rolls in sync wave `1` ([networking.md](../networking.md#istio-ambient-addonsmesh)). Ambient workloads keep running across `istiod` upgrades and re-establish HBONE sockets as `ztunnel` pods roll.
 
 ```bash
 task kubeconfig CLUSTER=dev1
@@ -127,7 +127,7 @@ kubectl --kubeconfig dev1.kubeconfig -n openchoreo-data-plane get pods
 - [Cluster API providers and rollouts](../providers.md#control-plane-size-and-rollouts)
 - [Build plane and digest pinning](../build-plane.md#images-and-architectures)
 - [OpenChoreo Argo CD requirements](../openchoreo.md#argo-cd-requirements)
-- [Istio ambient networking](../networking.md#istio-ambient-addonsistio-ambient)
+- [Istio ambient networking](../networking.md#istio-ambient-addonsmesh)
 - [Supply-chain admission policies](../supply-chain.md#image-signatures-and-attestations-at-admission)
 - [Backup and restore](backup-restore.md)
 - [Scaling and capacity](scaling-and-capacity.md)

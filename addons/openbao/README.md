@@ -137,7 +137,7 @@ Wrapper chart for `openbao` (`0.30.7` / `v2.7.2`) on `mgmt`. Runs the Istio mult
 ## Day-2 notes
 
 - Raft backup/restore, sealed recovery, and local re-init: [backup and restore](../../docs/runbooks/backup-restore.md#3-openbao-raft-storage-and-unseal-key), [incidents](../../docs/runbooks/incidents.md#openbao-sealed), and [break-glass](../../docs/runbooks/break-glass.md#openbao-local-re-initialization).
-- Mesh CA rotation: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--istio-csr).
+- Mesh CA rotation: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--mesh).
 
 ## Links
 

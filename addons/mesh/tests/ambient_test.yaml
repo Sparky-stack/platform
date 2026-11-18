@@ -1,6 +1,6 @@
-suite: istio-ambient - base CRDs + istiod + istio-cni + ztunnel (ambient), CNI dirs per cluster CNI
+suite: mesh (ambient) - base CRDs + istiod + istio-cni + ztunnel (ambient), CNI dirs per cluster CNI
 release:
-  name: istio-ambient
+  name: mesh
   namespace: istio-system
 tests:
   - it: renders the Istio ambient security CRDs from base
@@ -139,11 +139,9 @@ tests:
     asserts:
       - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
 
-  - it: "non-member (catalog defaults: network/meshID empty, flags false) - no NETWORK on ztunnel, no meshId"
+  - it: "non-member (catalog defaults: network/meshID empty; values.yaml: multi-network off) - no NETWORK on ztunnel, no meshId"
     set:
       global: { network: "", meshID: "", multiCluster: { clusterName: prod-euc1 } }
-      istiod:
-        env: { AMBIENT_ENABLE_MULTI_NETWORK: "false", AMBIENT_ENABLE_BAGGAGE: "false" }
       ztunnel:
         podAnnotations: { mesh.platform.koorikla.io/group: "" }
     asserts:
@@ -177,8 +175,6 @@ tests:
     values: [../values/mesh-member.yaml]
     set:
       global: { network: dev1, meshID: local, multiCluster: { clusterName: dev1 } }
-      istiod:
-        env: { AMBIENT_ENABLE_MULTI_NETWORK: "true", AMBIENT_ENABLE_BAGGAGE: "true" }
       ztunnel:
         podAnnotations: { mesh.platform.koorikla.io/group: local }
     asserts:
@@ -285,3 +281,31 @@ tests:
     template: charts/istiod/templates/deployment.yaml
     asserts:
       - notMatchRegex: { path: 'spec.template.spec.volumes[*].name', pattern: '^cacerts-gate$' }
+
+  - it: "non-member default: csr and eastwest templates render 0 documents when mesh.csr.enabled and mesh.eastwest.enabled are false"
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: templates/csr-issuer.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/csr-admission.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/eastwest-gateway.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/eastwest-reader-rbac.yaml
+
+  - it: "member: values/mesh-member.yaml turns on istio-csr (Issuer, admission, chart) and the east-west gateway + reader RBAC"
+    values: [../values/mesh-member.yaml]
+    set:
+      cluster: { name: dev1 }
+      mesh: { group: local, network: dev1 }
+    asserts:
+      - containsDocument: { kind: Issuer, apiVersion: cert-manager.io/v1, name: openbao-mesh, any: true }
+        template: templates/csr-issuer.yaml
+      - hasDocuments: { count: 6 }
+        template: templates/csr-admission.yaml
+      - containsDocument: { kind: Deployment, apiVersion: apps/v1, name: cert-manager-istio-csr }
+        template: charts/cert-manager-istio-csr/templates/deployment.yaml
+      - containsDocument: { kind: Gateway, apiVersion: gateway.networking.k8s.io/v1, name: istio-eastwestgateway, any: true }
+        template: templates/eastwest-gateway.yaml
+      - containsDocument: { kind: ClusterRole, apiVersion: rbac.authorization.k8s.io/v1, name: platform-istio-reader, any: true }
+        template: templates/eastwest-reader-rbac.yaml

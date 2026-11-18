@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync order of the mesh CA addons (openbao on mgmt, istio-csr on members) under Argo CD's rules (gitops-engine sync_context.go): resources run in steps ordered by
+# Sync order of the mesh CA addons (openbao on mgmt, addon mesh istio-csr part on members) under Argo CD's rules (gitops-engine sync_context.go): resources run in steps ordered by
 # (phase PreSync < Sync < PostSync, sync-wave). Between steps Argo waits for every resource of the step to be Healthy and
 # FAILS the sync if one is Degraded; a step holding a hook waits for the hook; only the final step, when it holds no
 # hook, succeeds even if its resources degrade later. PostSync therefore needs every resource Healthy.
@@ -106,12 +106,12 @@ to_json "$TMP/cron0.yaml" "$TMP/cron0.json"
 assert_match "$(model "$TMP/cron0.json")" 'FAIL fresh install: deadlock .*CronJob/mesh-reconcile' \
   "negative: CronJob before the bootstrap Job is caught"
 
-# --- addon istio-csr (members) --------------------------------------------------------------------------------------
+# --- addon mesh, istio-csr part (members) -----------------------------------------------------------------------------------
 # Issuer openbao-mesh: cert-manager's Ready check builds the Vault client, i.e. mints a token for ServiceAccount
 # istio-csr-openbao (TokenRequest, allowed by Role/RoleBinding <sa>-tokenrequest) and logs in. Live after #4 the Issuer
 # was in wave -1 and those in wave 0: the Issuer could never turn Ready, the sync failed, wave 0 was never applied.
-helm template istio-csr addons/istio-csr --namespace istio-system --values installations/local/installation.yaml \
-  --set cluster.name=dev1 --set mesh.group=local > "$TMP/istio-csr.yaml"
+helm template mesh addons/mesh --namespace istio-system --values addons/mesh/values/mesh-member.yaml \
+  --values installations/local/installation.yaml --set cluster.name=dev1 --set mesh.group=local > "$TMP/istio-csr.yaml"
 cat > "$TMP/issuer.py" <<'EOF'
 import json, sys
 docs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
@@ -142,4 +142,9 @@ to_json "$TMP/istio-csr-pr4.yaml" "$TMP/istio-csr-pr4.json"
 assert_match "$(py "$TMP/issuer.py" "$TMP/istio-csr-pr4.json")" 'FAIL ServiceAccount/istio-csr-openbao \(wave 0\) is not before Issuer' \
   "negative: the #4 layout (Issuer -1, its ServiceAccount 0) is caught"
 
+
+# One app now holds istio-csr and the ambient mesh: Issuer (-1) < istio-csr + istiod (0) < ztunnel (1, after istiod).
+w() { yq "select(.kind == \"$1\" and .metadata.name == \"$2\") | .metadata.annotations[\"argocd.argoproj.io/sync-wave\"] // \"0\"" "$TMP/istio-csr.yaml"; }
+assert_eq "$(w Issuer openbao-mesh) $(w Deployment cert-manager-istio-csr) $(w Deployment istiod) $(w DaemonSet ztunnel)" "-1 0 0 1" \
+  "mesh: Vault Issuer, then istio-csr + istiod, then ztunnel"
 finish

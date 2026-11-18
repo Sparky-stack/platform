@@ -77,11 +77,11 @@ gateway:
 
 # Mesh PKI applied by files/mesh-reconcile.sh. TTLs follow the outage budget (docs/multicluster.md "When OpenBao is
 # down"): workload certificates 24h (ztunnel renews at half-life, so running pods survive >= 12h without OpenBao),
-# istiod / istio-csr serving certs requested by addon istio-csr within workloadMaxTTL.
+# istiod / istio-csr serving certs requested by addon mesh (istio-csr) within workloadMaxTTL.
 pki:
   # -- X.509 constraints (`pki.{trustDomain,allowedDomains,workloadTTL,rootTTL,intermediateTTL}`: `cluster.local`, `24h` leaf TTL).
   trustDomain: cluster.local
-  allowedDomains:                  # == addon istio-csr: istiod cert (CN + SAN) and istio-csr's own serving cert
+  allowedDomains:                  # == addon mesh (istio-csr): istiod cert (CN + SAN) and istio-csr's own serving cert
     - istiod.istio-system.svc
     - cert-manager-istio-csr.istio-system.svc
   workloadTTL: 24h
@@ -92,7 +92,7 @@ pki:
   rootKeyBits: 384
   intermediateKeyBits: 256
 
-# How members authenticate (== addon istio-csr values): the cert-manager Vault Issuer `openbao-mesh` in istio-system
+# How members authenticate (== addon mesh issuer.* values): the cert-manager Vault Issuer `openbao-mesh` in istio-system
 # logs in with a 10-minute token of ServiceAccount istio-system/istio-csr-openbao; cert-manager always adds the
 # audience vault://<issuer namespace>/<issuer name>, which is the only audience accepted here.
 memberAuth:
@@ -166,7 +166,7 @@ secrets:
 admission:
   enabled: true
   readerNamespace: fleet                      # = charts/cluster: <name>-mesh-reader, <name>-client-ca
-  readerUser: platform:istio-reader           # = charts/cluster mesh.readerUser, addon istio-eastwest reader.user
+  readerUser: platform:istio-reader           # = charts/cluster mesh.readerUser, addon mesh reader.user
   readerMaxDuration: 168h                     # = charts/cluster mesh-remote-secret.yaml (7d)
   requestCreators: [system:serviceaccount:cert-manager:cert-manager]
 

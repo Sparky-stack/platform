@@ -345,7 +345,7 @@ Fleet file differences (render-time guards in `charts/cluster`, `tests/gke_test.
 - `controlPlane` must be absent (`replicas` / `machineType` fail the render); `workers` needs >= 1 entry.
 - `cni: gke` is the only value. CAPG v1.13.1's API has no `datapathProvider` / network-policy field, so Dataplane V2
   (GKE's Cilium) cannot be requested and the cilium addon stays off (`addons.platform.koorikla.io/cilium: "false"`).
-  `istio-ambient` layers `values/provider-gcp-gke.yaml` (Istio's `gke` platform profile).
+  `mesh` layers `values/provider-gcp-gke.yaml` (Istio's `gke` platform profile).
 - `providerSpec.project` is required; `network`, `releaseChannel` optional.
 - No node registry config: CAPG v1.13.1 exposes no node containerd config, so `<name>-registries` is not rendered and
   nodes pull directly (private images: `imagePullSecrets` or Artifact Registry with the node service account).
@@ -457,4 +457,4 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
 
 Open checks: AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
 [#87](https://github.com/koorikla/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
-charts/cluster addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).
+charts/cluster addons/*-ccm addons/mesh installations/*-example`).

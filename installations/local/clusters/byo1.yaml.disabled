@@ -16,5 +16,5 @@ openchoreo:
     environments: [byo]     # an environment appears in exactly one cluster file
 addonsRevision: HEAD
 addons:
-  istio-ambient: false      # host RAM; no mesh.group on byo yet (#174)
+  mesh: false               # host RAM; no mesh.group on byo yet (#174)
   telemetry: false

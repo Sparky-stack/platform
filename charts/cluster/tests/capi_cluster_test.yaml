@@ -67,11 +67,11 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: "cluster dev1: addons.istio-eastwest=true contradicts mesh.group=\"\" (the addon follows mesh.group; drop addons.istio-eastwest)" }
 
-  - it: rejects a mesh member without istio-ambient
+  - it: rejects a mesh member without the mesh addon
     values: [values/capi-docker.yaml]
-    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { istio-ambient: false } }
+    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { mesh: false } }
     asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" }
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh addon (addons.mesh is false)" }
 
   - it: "negative: rejects a mesh group without its own root (not in installation.yaml mesh.groups)"
     values: [values/capi-docker.yaml]

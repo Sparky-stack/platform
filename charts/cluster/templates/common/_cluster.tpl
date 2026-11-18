@@ -45,7 +45,7 @@ Shared helpers: capi.validate, capi.gke, capi.byo, capi.labels, capi.registry.ha
 {{- $checks = concat $checks (list
   (list (and $byo (not (empty $mg))) (printf "cluster %s: mesh.group is not available on provider byo yet (#174): drop mesh.group" $v.name))
   (list (and (not (empty $mg)) (not (regexMatch $dns (toString $mg)))) (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mg))
-  (list (and (not (empty $mg)) (eq (toString (index $addons "istio-ambient")) "false")) (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name))
+  (list (and (not (empty $mg)) (eq (toString (index $addons "mesh")) "false")) (printf "cluster %s: mesh.group needs the mesh addon (addons.mesh is false)" $v.name))
   (list (and (not (empty $mg)) (not (index (($v.mgmt | default dict).addons | default dict) "openbao"))) (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name))
   (list (and (not (empty $mg)) (not (has $mg ($mesh.groups | default list)))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
   (list (and (not (empty $mg)) (not (($mesh.ca | default dict).host))) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))

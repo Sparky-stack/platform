@@ -239,7 +239,7 @@ sourceIntegrity:
 - Best available today:
   - Exact chart versions, reviewed through Renovate PRs, signed git commits (above), so Argo CD only renders reviewed
     chart pins.
-  - Istio's charts (`addons/istio-ambient`) are also pinned by tarball sha256 (`Chart.yaml` annotation
+  - Istio's charts and cert-manager-istio-csr (`addons/mesh`) are also pinned by tarball sha256 (`Chart.yaml` annotation
     `platform.koorikla.io/dependency-digests`, checked by `hack/deps.sh` locally and in CI, not by the Argo CD repo
     server).
   - Images, whatever chart deploys them into cell namespaces, are verified at admission.

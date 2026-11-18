@@ -109,16 +109,16 @@
   ],
   "packageRules": [
     {
-      "description": "Istio charts (addons/istio-ambient, OCI ghcr.io/istio/release/charts): one PR for all four. Helm cannot pin dependency digests, so the tarball sha256s in the Chart.yaml annotation platform.koorikla.io/dependency-digests move in the same PR (hack/deps.sh fails until they match)",
+      "description": "Mesh charts (addons/mesh: the four Istio charts from OCI ghcr.io/istio/release/charts + cert-manager-istio-csr): one PR. Helm cannot pin dependency digests, so the tarball sha256s in the Chart.yaml annotation platform.koorikla.io/dependency-digests move in the same PR (hack/deps.sh fails until they match)",
       "matchManagers": [
         "helmv3"
       ],
       "matchFileNames": [
-        "addons/istio-ambient/Chart.yaml"
+        "addons/mesh/Chart.yaml"
       ],
       "groupName": "istio charts",
       "prBodyNotes": [
-        "Update `platform.koorikla.io/dependency-digests` in `addons/istio-ambient/Chart.yaml`: `sha256sum addons/istio-ambient/charts/*.tgz` after `helm dependency build addons/istio-ambient` (= each chart's OCI layer digest; cross-check `crane manifest ghcr.io/istio/release/charts/<chart>:<version>`). CI fails until they match."
+        "Update `platform.koorikla.io/dependency-digests` in `addons/mesh/Chart.yaml`: `sha256sum addons/mesh/charts/*.tgz` after `helm dependency build addons/mesh` (Istio: = each chart's OCI layer digest; cross-check `crane manifest ghcr.io/istio/release/charts/<chart>:<version>`). CI fails until they match."
       ]
     }
   ]

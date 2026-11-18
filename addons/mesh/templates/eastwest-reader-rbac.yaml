@@ -23,7 +23,7 @@ cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
                                             explicit, separate grant (docs/multicluster.md "Reader RBAC").
   tokenreviews/SARs/serviceexports          primary-remote proxy auth / ENABLE_MCS_AUTO_EXPORT (off): not used.
 */ -}}
-{{- if .Values.reader.enabled }}
+{{- if and .Values.mesh.eastwest.enabled .Values.reader.enabled }}
 {{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -65,10 +65,10 @@ roleRef:
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
-    name: {{ .Values.reader.user }}    # = charts/cluster templates/mesh-helpers.yaml "mesh.readerUser" (contract test)
+    name: {{ .Values.reader.user }}    # = charts/cluster templates/common/_mesh.tpl "mesh.readerUser" (contract test)
 {{- if .Values.reader.remoteCredentialsSecrets }}
 {{- if ne .Values.cluster.provider "docker" }}
-{{- fail (printf "istio-eastwest (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}
+{{- fail (printf "mesh (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}
 {{- end }}
 ---
 # OPT-IN (reader.remoteCredentialsSecrets, an installation decision, docker/local only - the render fails elsewhere):
