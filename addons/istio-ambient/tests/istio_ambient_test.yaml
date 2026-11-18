@@ -259,6 +259,27 @@ tests:
           content: { name: istiod-tls-gate, mountPath: /var/run/secrets/platform/istiod-tls-gate, readOnly: true }
       - notMatchRegex: { path: 'spec.template.spec.volumes[?(@.name == "istiod-tls-gate")].secret.optional', pattern: 'true' }
 
+  - it: "member: istiod reads its serving cert from the non-optional gate mount, never the chart's optional one"
+    values: [../values/mesh-member.yaml]
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --tlsCertFile=/var/run/secrets/platform/istiod-tls-gate/tls.crt
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --tlsKeyFile=/var/run/secrets/platform/istiod-tls-gate/tls.key
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --caCertFile=/var/run/secrets/platform/istiod-tls-gate/ca.crt
+
+  - it: "non-member: istiod keeps its own CA (no istio-csr cert args)"
+    template: charts/istiod/templates/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].args
+          content: --tlsCertFile=/var/run/secrets/platform/istiod-tls-gate/tls.crt
+
   - it: "member: no plugged-in CA material is expected (no cacerts gate, istiod reads the istio-csr cert)"
     values: [../values/mesh-member.yaml]
     template: charts/istiod/templates/deployment.yaml
