@@ -312,5 +312,5 @@ Apps built by the ci/ workflows must publish multi-arch images too, or arm64 hos
 
 1. Edit the version in `mise.toml` (or merge the Renovate PR).
 2. `task tools:lock` (writes the six platform URLs + checksums into `mise.lock`), `mise install`, `task test`.
-3. The `portability` workflow re-runs on any change to `mise.toml`, `mise.lock`, `Taskfile.yml`, `hack/**`,
-   `bootstrap/**` or `.devcontainer/**`, and weekly.
+3. The `portability` workflow runs nightly on `main`, not on PRs; for a toolchain change trigger it on your branch
+   with `gh workflow run portability --ref <branch>`.

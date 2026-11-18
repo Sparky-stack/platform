@@ -4,22 +4,11 @@
 name: portability
 
 on:
-  push:
-    branches: [main, agent/portable]
-    paths: &paths
-      - mise.toml
-      - mise.lock
-      - Taskfile.yml
-      - .gitattributes
-      - prek.toml
-      - .devcontainer/**
-      - bootstrap/**
-      - hack/**
-      - .github/workflows/portability.yaml
-  pull_request:
-    paths: *paths
+  # Not on PRs or pushes: the matrix is slow (4 OS/arch + 2 devcontainer jobs) and PR feedback for parallel agents
+  # must stay fast; `ci` already runs `task lint test` on Linux. Nightly catches portability regressions on main and
+  # upstream asset/registry drift; run it by hand (`gh workflow run portability`) for a toolchain change.
   schedule:
-    - cron: "17 4 * * 1"   # weekly: catches upstream asset/registry drift
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
