@@ -1,6 +1,8 @@
 suite: openchoreo-platform - auto-build trigger (poll CronWorkflow / webhook WorkflowTemplate, #164)
 templates:
   - templates/auto-build.yaml
+set:
+  secrets.githubGateApp.enabled: true   # platform GitHub App seeded (charts/platform values.yaml, #192)
 tests:
   - it: poll (default) runs one reconcile pass per minute, never overlapping
     documentSelector: { path: kind, value: CronWorkflow }
@@ -124,3 +126,13 @@ tests:
     documentSelector: { path: kind, value: CronWorkflow }
     asserts:
       - equal: { path: metadata.namespace, value: workflows-acme }
+
+  - it: "negative: nothing without the platform GitHub App (no token generators failing on a fork without it, #192)"
+    set: { secrets.githubGateApp.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: "negative: nothing when the installation does not say the App is there (charts/platform default false)"
+    set: { secrets: null }
+    asserts:
+      - hasDocuments: { count: 0 }

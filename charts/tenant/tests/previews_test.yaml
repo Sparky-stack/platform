@@ -15,6 +15,7 @@ set:
     dataPlane: dev1
     requeueAfterSeconds: 120
     expiredLabel: preview-expired
+  secrets.githubGateApp.enabled: true   # platform GitHub App seeded (charts/platform values.yaml, #192)
 tests:
   - it: renders nothing while previews are off (the default)
     set:
@@ -110,3 +111,8 @@ tests:
       previews.expiredLabel: 'x" .labels }}{{ "'
     asserts:
       - failedTemplate: { errorMessage: 'previews.expiredLabel "x\" .labels }}{{ \"": letters, digits, space, . _ - only' }
+
+  - it: "negative: no preview ApplicationSet without the platform GitHub App (its token comes from the App; #192)"
+    set: { secrets.githubGateApp.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }

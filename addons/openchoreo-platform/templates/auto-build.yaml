@@ -25,7 +25,10 @@ Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-pl
 {{- fail (printf "openchoreo.workflowPlane.autoBuild: %q is not poll, webhook or none" $trigger) }}
 {{- end }}
 {{- $wpEnabled := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) }}
-{{- if and (ne $trigger "none") $wpEnabled .Values.buildWorkflows.enabled }}
+{{- /* Every pass needs an installation token of the platform GitHub App: off without it (secrets.githubGateApp.enabled,
+charts/platform values.yaml), else the token ExternalSecrets fail and degrade this app (#192). */ -}}
+{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
+{{- if and (ne $trigger "none") $wpEnabled .Values.buildWorkflows.enabled $gate }}
 {{- $a := .Values.autoBuild }}
 {{- $org := .Values.openchoreo.orgNamespace }}
 {{- $ns := printf "workflows-%s" $org }}

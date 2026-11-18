@@ -3,6 +3,7 @@ templates:
   - templates/preview-token.yaml
 set:
   previews.enabled: true
+  secrets.githubGateApp.enabled: true   # platform GitHub App seeded (charts/platform values.yaml, #192)
 tests:
   - it: renders nothing while previews are off (the default)
     set:
@@ -50,3 +51,8 @@ tests:
       previewToken.permissions: null
     asserts:
       - failedTemplate: { errorMessage: "previewToken.permissions is required (least privilege: pull_requests: read)" }
+
+  - it: "negative: no preview token chain without the platform GitHub App: the generator would fail and degrade the app (#192)"
+    set: { secrets.githubGateApp.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }

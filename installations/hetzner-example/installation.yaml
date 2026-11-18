@@ -21,6 +21,8 @@ mgmt:
 
 secrets:
   backend: vault                              # ClusterSecretStore/platform -> Vault / OpenBao (no native manager)
+  githubGateApp:                              # platform GitHub App (store key promotion-gate-github, docs/forking.md)
+    enabled: false                            # true once the key is in the store: auto-build, PR previews
   vault:
     server: https://vault.hetzner.example.com # VERIFY shape vs addons/secret-stores
     path: platform                            # KV v2 mount
