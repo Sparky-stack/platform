@@ -182,8 +182,9 @@ def network() -> Diagram:
     d.line_label = "the cluster-agent's control link, not telemetry (context)"
     d.require("Ingress gateway", "cluster-gateway", "cluster-agent", "Collectors", "App pods")
     d.key("A client opens the app URL; kgateway takes the request",
-          "kgateway routes it to the app pods",
-          "Inside the Istio ambient service mesh, ztunnel encrypts every hop between the app pods",
+          "kgateway, itself in the service mesh, routes it to the app pods",
+          "Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and "
+          "between them; app namespaces refuse unencrypted traffic",
           "The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the "
           "Prometheus agent scrapes their metrics",
           "The app pods send their traces to the OpenTelemetry collector",

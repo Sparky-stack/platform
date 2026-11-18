@@ -1,0 +1,43 @@
+# templates/cell-mesh.yaml (#53): which namespaces get NetworkPolicy platform-mesh-hbone (openchoreo-cell-hbone) and
+# PeerAuthentication default STRICT (openchoreo-cell-mtls). hack/tests/test_kyverno_policies.sh counts per policy.
+#   dp-...-development  enrolled cell                              hbone + mtls
+#   dp-...-production   cell before the enrollment label lands     hbone + mtls
+#   dp-...-legacy       cell opted out of STRICT (permissive)      hbone + mtls PERMISSIVE
+#   dp-...-nomesh       cell opted out of ambient (none)           neither
+#   not-a-cell          ambient namespace not created by OpenChoreo neither
+#   telemetry           platform namespace carrying cell labels    neither
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-development-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: development, openchoreo.dev/project: demo, istio.io/dataplane-mode: ambient}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-production-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: production, openchoreo.dev/project: demo}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-legacy-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: legacy, openchoreo.dev/project: demo, istio.io/dataplane-mode: ambient, platform.koorikla.io/mtls: permissive}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dp-default-demo-nomesh-1234abcd
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: nomesh, openchoreo.dev/project: demo, istio.io/dataplane-mode: none}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: not-a-cell
+  labels: {istio.io/dataplane-mode: ambient}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: telemetry
+  labels: {openchoreo.dev/managed-by: renderedrelease-controller, openchoreo.dev/environment: development, openchoreo.dev/project: demo}

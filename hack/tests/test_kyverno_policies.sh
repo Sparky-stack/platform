@@ -24,6 +24,9 @@
 #                              offline (#36, templates/workflow-image-digests.yaml): in workflows-* every container,
 #                              initContainer and ephemeral container image is image@sha256:<64 hex>; tag-only, implicit
 #                              latest and malformed digests are denied, other namespaces are not matched
+#   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy and a
+#                              STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
+#                              non-cells and platform namespaces get neither
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
 #   tests/kyverno/signatures-transition
@@ -192,6 +195,15 @@ pvt="$addon/tests/kyverno/previews"
   "$KYVERNO" apply "$TMP/pv-DeletingPolicy.yaml" --resource "$TMP/pv-environments-ttl.yaml" "${crd[@]}" > "$TMP/pv-ttl.out" 2>&1 || true
   "$KYVERNO" apply "$TMP/pv-GeneratingPolicy.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails.out" 2>&1 || true
 ) &
+# Mesh policy of ambient cells (templates/cell-mesh.yaml, #53): HBONE NetworkPolicy and STRICT PeerAuthentication.
+cmt="$addon/tests/kyverno/cell-mesh"
+(
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/cell-mesh.yaml > "$TMP/cm.yaml"
+  for p in openchoreo-cell-hbone openchoreo-cell-mtls; do
+    yq "select(.kind == \"GeneratingPolicy\" and .metadata.name == \"$p\")" "$TMP/cm.yaml" > "$TMP/cm-$p.yaml"
+    "$KYVERNO" apply "$TMP/cm-$p.yaml" --resource "$cmt/namespaces.yaml" > "$TMP/cm-$p.out" 2>&1 || true
+  done
+) &
 wait
 
 for s in "${suites[@]}"; do
@@ -263,5 +275,18 @@ assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: guardrails 
 for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolation'; do
   assert_match "$out" "$k" "previews: preview cell namespace gets $k"
 done
+
+# cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
+for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy'; do
+  p=${c%%:*}; rest=${c#*:}; n=${rest%%:*}; want=${rest#*:}
+  out=$(cat "$TMP/cm-$p.out")
+  assert_match "$out" "pass: $n, fail: 0, warn: 0, error: 0" "cell mesh: $p generates into $n of 6 namespaces"
+  got=$(printf '%s\n' "$out" | sed -n "s|^policy $p applied to /Namespace/dp-default-demo-\([a-z]*\)-1234abcd:.*|\1|p" | tr '\n' ' ')
+  assert_eq "${got% }" "$want" "cell mesh: $p matches exactly the cells: $want"
+done
+assert_match "$(cat "$TMP/cm-openchoreo-cell-hbone.out")" 'port: 15008' "cell mesh: HBONE NetworkPolicy opens tcp 15008"
+# PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
+modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
+assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"
 
 finish

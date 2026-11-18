@@ -237,7 +237,8 @@ http/dns/kafka with L7 visibility) off and use Istio for mTLS, authorization and
 ## HTTP metrics
 
 **Gateway response codes (promotion gate).** Every data plane's kgateway Envoy (`gateway-default`, namespace
-`openchoreo-data-plane`) terminates north-south HTTP, independent of the CNI and of Istio ambient mTLS. Addon telemetry
+`openchoreo-data-plane`) terminates north-south HTTP, independent of the CNI and of Istio ambient mTLS (it counts responses before ztunnel
+encrypts the upstream hop). Addon telemetry
 PodMonitor `kgateway-http` (`gatewayMetrics`) scrapes its pods on port `http-monitoring` (:9091) `/metrics` (the path
 the pods advertise) and keeps only `envoy_cluster_upstream_rq`: one counter per upstream cluster x response code,
 `envoy_cluster_name="kube_<namespace>_<service>_<port>"` (e.g. `kube_dp-default-demo-staging-ba410b48_hello-world_8080`),
@@ -260,9 +261,9 @@ observability-metrics-prometheus adapter 0.8.0, which reads only Cilium Hubble s
 3. The agent's remote write to the observability plane, as for every other metric.
 
 Limits: data planes on flannel (local prod1) have no Hubble, so no HTTP metrics there. Only plaintext traffic is
-parsed, today the gateway's traffic into app pods (Istio `PERMISSIVE`); with STRICT mTLS for the gateway
-([#53](https://github.com/koorikla/platform/issues/53)) the source has to move to a waypoint or OBI, and the adapter
-reads neither. Enabling OBI with its overlap policy above (Hubble L7 off: cilium `l7Visibility.enabled: false`) empties
+parsed, and since the gateway is in the mesh and cells enforce STRICT mTLS
+([networking.md](networking.md#strict-mtls-in-cell-namespaces)) there is none into app pods: the source has to move
+to a waypoint or OBI, and the adapter reads neither. Enabling OBI with its overlap policy above (Hubble L7 off: cilium `l7Visibility.enabled: false`) empties
 the observer's HTTP metrics for the same reason.
 
 ## Falco

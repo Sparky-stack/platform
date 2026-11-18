@@ -45,6 +45,15 @@ openchoreo-data-plane:
     httpsPort: 19443
     tls:
       enabled: false        # HTTPS needs a real wildcard cert for the gateway host; v1 serves HTTP only
+    # platform: the proxy pod joins the Istio ambient mesh (#53, docs/networking.md "Strict mTLS in cell namespaces").
+    # kgateway copies spec.infrastructure.labels onto the pods it renders; a pod label enrolls only the proxy, not the
+    # cluster-agent next to it (namespace openchoreo-data-plane stays out of the mesh). ztunnel then carries the
+    # proxy's upstream connections to component pods as HBONE mTLS, so cells can enforce STRICT; the proxy itself has
+    # no PeerAuthentication (PERMISSIVE) and keeps accepting plaintext from klipper/the cloud LB and the Prometheus
+    # agent. Upstream: kgateway "Ingress" for ambient (label the proxy's namespace or pod). Inert without Istio.
+    infrastructure:
+      labels:
+        istio.io/dataplane-mode: ambient
 
   clusterAgent:
     image:   # fully qualified (chart default) and pinned by multi-arch index digest (docs/conventions.md invariant 9)

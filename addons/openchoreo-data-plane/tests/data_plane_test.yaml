@@ -34,6 +34,13 @@ tests:
           path: spec.listeners
           value: [{ name: http, protocol: HTTP, port: 19080, allowedRoutes: { namespaces: { from: All } } }]
 
+  - it: "the gateway proxy pods join the ambient mesh (#53: STRICT cells need mTLS from ingress), platform labels kept"
+    template: charts/openchoreo-data-plane/templates/gateway/gateway.yaml
+    asserts:
+      - equal: { path: 'spec.infrastructure.labels["istio.io/dataplane-mode"]', value: ambient }
+      - equal: { path: 'spec.infrastructure.labels["openchoreo.dev/system-component"]', value: gateway }
+      - equal: { path: 'spec.infrastructure.labels["openchoreo.dev/plane-id"]', value: dev1 }
+
   - it: fails when planeID differs from the cluster name
     template: templates/validate.yaml
     set:

@@ -6,6 +6,8 @@
 #   templates/ambient-enrollment.yaml
 #                                MutatingPolicy: OpenChoreo cell namespaces get istio.io/dataplane-mode=ambient
 #                                (workload clusters; values/role-mgmt.yaml turns it off on mgmt).
+#   templates/cell-mesh.yaml     GeneratingPolicies: in every ambient cell namespace a NetworkPolicy admitting HBONE
+#                                (tcp 15008) from OpenChoreo's peers and a STRICT PeerAuthentication (#53).
 #   templates/workflow-image-digests.yaml
 #                                ValidatingPolicy (Deny): Pods in workflows-* (OpenChoreo workflow runs) only with
 #                                image@sha256 references (mgmt only, values/role-mgmt.yaml).
@@ -67,6 +69,14 @@ ambientEnrollment:
     matchExpressions:
       - { key: openchoreo.dev/project, operator: Exists }
       - { key: openchoreo.dev/environment, operator: Exists }
+  # Mesh policy of enrolled cells (templates/cell-mesh.yaml, #53). Always: NetworkPolicy platform-mesh-hbone (HBONE
+  # tcp 15008 from the peers OpenChoreo admits). mtls.strict: PeerAuthentication `default` STRICT, so plaintext from
+  # outside the mesh is refused. Needs the data-plane gateway and every in-cluster client of cell pods in the mesh
+  # (hack/tests/test_gitops_contracts.sh checks the gateway and the platform clients). A cell keeps PERMISSIVE with
+  # the namespace label <optOutLabel>=permissive (ProjectReleaseBinding namespaceLabels).
+  mtls:
+    strict: true
+    optOutLabel: platform.koorikla.io/mtls
 
 # --- Supply-chain gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md) -----------------------
 # templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`,

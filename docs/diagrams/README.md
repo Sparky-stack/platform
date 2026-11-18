@@ -84,8 +84,8 @@ The numbered flow of each diagram, word for word.
 ### Network ([network.svg](network.svg))
 
 1. A client opens the app URL; kgateway takes the request
-2. kgateway routes it to the app pods
-3. Inside the Istio ambient service mesh, ztunnel encrypts every hop between the app pods
+2. kgateway, itself in the service mesh, routes it to the app pods
+3. Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and between them; app namespaces refuse unencrypted traffic
 4. The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the Prometheus agent scrapes their metrics
 5. The app pods send their traces to the OpenTelemetry collector
 6. The collectors dial out and ship everything to the observability plane on the management cluster

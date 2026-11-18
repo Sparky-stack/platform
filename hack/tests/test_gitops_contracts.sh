@@ -258,6 +258,22 @@ for a in istio-eastwest istio-csr; do
   assert_eq "$sel" "In" "addon-$a is opt-in by label"
 done
 
+# 2b5. Istio ambient, STRICT mTLS in cell namespaces (#53): while addon kyverno-policies generates STRICT
+# PeerAuthentications into the cells (templates/cell-mesh.yaml), ztunnel refuses plaintext there, so every in-cluster
+# client of cell pods has to be in the mesh: the data-plane gateway proxy (ingress), the Prometheus agent (PodMonitors
+# in cells) and the data-service operators (instance / broker / scaler endpoints in cells).
+if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$ROOT/addons/kyverno-policies/values.yaml")" == true ]]; then
+  render_standalone_addon openchoreo-data-plane "$TMP/mc-odp.yaml"
+  gw=$(yq 'select(.kind == "Gateway" and .metadata.name == "gateway-default") | .spec.infrastructure.labels["istio.io/dataplane-mode"]' "$TMP/mc-odp.yaml")
+  assert_eq "$gw" ambient "STRICT cells: the data-plane gateway proxy pods are in the ambient mesh"
+  for a in telemetry cloudnative-pg keda strimzi; do
+    render_standalone_addon "$a" "$TMP/mc-$a.yaml"
+    ns=$(yq ".addons[\"$a\"].namespace" "$ROOT/charts/platform/values.yaml")
+    l=$(yq "select(.kind == \"Namespace\" and .metadata.name == \"$ns\") | .metadata.labels[\"istio.io/dataplane-mode\"]" "$TMP/mc-$a.yaml")
+    assert_eq "$l" ambient "STRICT cells: addon $a (namespace $ns) reaches cell pods from inside the mesh"
+  done
+fi
+
 # 2c. Kyverno: the platform namespaces outside Kyverno's webhooks are exactly the ones the policies exclude
 kyv_ns=$(yq -o=json -I=0 '.kyverno.config.webhooks.namespaceSelector.matchExpressions[0].values' "$ROOT/addons/kyverno/values.yaml")
 kp_ns=$(yq -o=json -I=0 '.platformNamespaces' "$ROOT/addons/kyverno-policies/values.yaml")
