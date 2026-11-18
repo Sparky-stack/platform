@@ -5,6 +5,7 @@
 #                                         cluster-agent (planeType workflowplane), in-cluster to the cluster-gateway
 #   templates/cluster-workflow-plane.yaml ClusterWorkflowPlane `default` (on the control plane, same cluster)
 #   templates/agent-server-ca.yaml        ConfigMap cluster-gateway-ca: the control plane's gateway CA PUBLIC cert
+#   templates/cluster-agent-rbac.yaml     least-privilege agent RBAC (replaces the upstream cluster-admin-like ClusterRole)
 #   templates/cluster-workflow-templates.yaml  Argo ClusterWorkflowTemplates from files/cluster-workflow-templates/
 #                                         (koorikla-build: the pipeline behind the per-stack ClusterWorkflows of addon
 #                                         openchoreo-platform; koorikla-helm-chart: chart packaging)
@@ -84,6 +85,15 @@ runExecutorToken:
   enabled: true
   serviceAccount: workflow-sa     # == executor.serviceAccountName of every ClusterWorkflow(Template); OpenChoreo's name
 
+# Least-privilege RBAC of the cluster-agent (templates/cluster-agent-rbac.yaml, #33) instead of the upstream ClusterRole
+# (openchoreo-workflow-plane.clusterAgent.rbac.create: false below): namespaces get/create cluster-wide (an admission
+# policy limits creation to <runNamespacePrefix>*), everything a run needs namespaced to workflows-<org ns>, no Secrets,
+# no ClusterSecretStores, no RBAC escalate/bind. hack/tests/test_gitops_contracts.sh pins it.
+clusterAgentRBAC:
+  enabled: true
+  serviceAccount: cluster-agent-workflowplane   # == the upstream chart's agent ServiceAccount (contract-tested)
+  runNamespacePrefix: workflows-                # OpenChoreo 1.3.3: run namespace = workflows-<org namespace>
+
 # Images substituted into files/cluster-workflow-templates/*.yaml (@@NAME@@). Multi-arch, pinned by digest.
 images:
   TOOLBOX_IMAGE: ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79   # koorikla/ci scripts + trivy, syft, cosign, crane, helm, yq, jq, git
@@ -132,6 +142,8 @@ openchoreo-workflow-plane:
         create: false                         # OpenChoreo creates workflow-sa per run namespace
 
   clusterAgent:
+    rbac:
+      create: false                           # upstream ClusterRole = `*` on secrets, namespaces, RBAC, ...: clusterAgentRBAC
     image:
       tag: v1.3.3@sha256:de4907fcf4ffa6822dcbcaff876b02861bae0804c3aa86db6df64f918ef8451c
     # platform: co-located with the control plane -> in-cluster cluster-gateway URL (upstream default)

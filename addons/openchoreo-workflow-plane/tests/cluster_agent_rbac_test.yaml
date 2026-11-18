@@ -1,0 +1,89 @@
+suite: openchoreo-workflow-plane - least-privilege cluster-agent RBAC (#33)
+templates:
+  - templates/cluster-agent-rbac.yaml
+  - charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrole.yaml
+  - charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrolebinding.yaml
+release:
+  name: openchoreo-workflow-plane
+  namespace: openchoreo-workflow-plane
+tests:
+  - it: drops the upstream cluster-admin-like ClusterRole and its binding
+    template: charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrole.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no upstream ClusterRoleBinding either
+    template: charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrolebinding.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: cluster-wide only namespaces get/create, bound to the agent
+    template: templates/cluster-agent-rbac.yaml
+    asserts:
+      - hasDocuments: { count: 6 }
+      - equal:
+          path: rules
+          value: [{ apiGroups: [""], resources: [namespaces], verbs: [get, create] }]
+        documentSelector: { path: kind, value: ClusterRole }
+      - equal:
+          path: subjects
+          value: [{ kind: ServiceAccount, name: cluster-agent-workflowplane, namespace: openchoreo-workflow-plane }]
+        documentSelector: { path: kind, value: ClusterRoleBinding }
+
+  - it: the agent may create only namespaces workflows-* (native admission, fail closed)
+    template: templates/cluster-agent-rbac.yaml
+    documentSelector: { path: kind, value: ValidatingAdmissionPolicy }
+    asserts:
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: "spec.matchConstraints.resourceRules[0].operations", value: [CREATE] }
+      - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [namespaces] }
+      - equal:
+          path: "spec.matchConditions[0].expression"
+          value: "request.userInfo.username == 'system:serviceaccount:openchoreo-workflow-plane:cluster-agent-workflowplane'"
+      - equal: { path: "spec.validations[0].expression", value: "object.metadata.name.startsWith('workflows-')" }
+
+  - it: the policy binding denies
+    template: templates/cluster-agent-rbac.yaml
+    documentSelector: { path: kind, value: ValidatingAdmissionPolicyBinding }
+    asserts:
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: spec.policyName, value: cluster-agent-workflowplane-namespaces }
+
+  - it: run permissions live in the run namespace only, without secrets, stores or RBAC escalation
+    template: templates/cluster-agent-rbac.yaml
+    documentSelector: { path: kind, value: Role }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - contains: { path: rules, content: { apiGroups: [argoproj.io], resources: [workflows], verbs: [get, list, watch, create, update, patch, delete] } }
+      - contains: { path: rules, content: { apiGroups: [argoproj.io], resources: [workflowtaskresults], verbs: [create, patch] } }
+      - contains: { path: rules, content: { apiGroups: [external-secrets.io], resources: [externalsecrets], verbs: [get, list, watch, create, update, patch, delete] } }
+      - contains: { path: rules, content: { apiGroups: [rbac.authorization.k8s.io], resources: [roles, rolebindings], verbs: [get, create] } }
+      - notMatchRegex: { path: "rules[*].resources[*]", pattern: '^(secrets|secretstores|clustersecretstores|pushsecrets|\*)$' }
+      - notMatchRegex: { path: "rules[*].verbs[*]", pattern: '^(escalate|bind|impersonate|\*)$' }
+
+  - it: follows the org namespace
+    template: templates/cluster-agent-rbac.yaml
+    set: { openchoreo.orgNamespace: acme }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-acme }
+        documentSelector: { path: kind, value: RoleBinding }
+
+  - it: renders the run namespace itself when neither the NetworkPolicy nor the executor token does
+    template: templates/cluster-agent-rbac.yaml
+    set: { runNetworkPolicy.enabled: false, runExecutorToken.enabled: false }
+    asserts:
+      - hasDocuments: { count: 7 }
+      - equal: { path: metadata.name, value: workflows-default }
+        documentSelector: { path: kind, value: Namespace }
+
+  - it: refuses the upstream ClusterRole next to the platform's
+    template: templates/cluster-agent-rbac.yaml
+    set: { openchoreo-workflow-plane.clusterAgent.rbac.create: true }
+    asserts:
+      - failedTemplate: { errorPattern: "set openchoreo-workflow-plane.clusterAgent.rbac.create=false" }
+
+  - it: refuses a run namespace prefix that would let the agent create any namespace
+    template: templates/cluster-agent-rbac.yaml
+    set: { clusterAgentRBAC.runNamespacePrefix: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "clusterAgentRBAC.runNamespacePrefix .* must be a namespace name prefix ending in -" }
