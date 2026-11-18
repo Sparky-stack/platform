@@ -89,8 +89,8 @@ platformStore:
   # -- Explicit `mgmt` namespaces permitted to reference `ClusterSecretStore/platform`.
   namespaces:
     - argocd                           # platform-repo-creds (this chart)
-    - fleet                            # <cluster>-registries, <cluster>-seed-* (charts/cluster); hetzner (addon clusterclasses)
-    - capa-system                      # capa-variables (addon capi-providers, AWS)
+    - fleet                            # <cluster>-registries, <cluster>-seed-* (charts/cluster); hetzner (charts/cluster scope fleet)
+    - capa-system                      # capa-variables (charts/cluster scope fleet, AWS)
     - thunder                          # thunder-bootstrap (addon thunder)
     - openchoreo-control-plane         # backstage-secrets (addon openchoreo-control-plane)
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)

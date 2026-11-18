@@ -86,8 +86,8 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 | mgmt, `openbao` | OpenBao (StatefulSet, raft, TLS), Gateway + TLSRoute `openbao`, reconcile Job/CronJob `mesh-reconcile`, ExternalSecrets `openbao-unseal`, `mesh-clients`, `openbao-ca-bundle`, ClusterSecretStore `mgmt-openbao`; ValidatingAdmissionPolicies `platform-mesh-*` (reader certs) | addon `openbao` (mgmt, opt-in) |
 | mgmt, OpenBao | static (self-initialisation, once): policies `mesh-member` (templated), `mesh-ca-read`, `platform-mesh-config`, `platform-mesh-bootstrap` and their Kubernetes auth roles | `addons/openbao/values.yaml` |
 | mgmt, OpenBao | per group: mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`; per member: role `<name>` in its group's intermediate, identity entity `mesh-<name>` (metadata `cluster`, `group`), JWT auth mount `auth/mesh-<name>` | `addons/openbao/files/mesh-reconcile.sh` |
-| mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ConfigMap <name>-mesh-oidc` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label, issuer-discovery binding) | `charts/cluster` `templates/mesh-openbao.yaml`, `mesh-trust.yaml` |
-| mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/mesh-remote-secret.yaml` |
+| mgmt, `fleet` | `ExternalSecret <name>-mesh-openbao` (the member's API server URL + cluster CA certificate for OpenBao); `ExternalSecret` + `ConfigMap <name>-mesh-oidc` + `ClusterResourceSet <name>-mesh-trust` (public certificates, network label, issuer-discovery binding) | `charts/cluster` `templates/common/mesh-openbao.yaml`, `mesh-trust.yaml` |
+| mgmt, `fleet` | `Issuer <name>-client-ca` (over `<name>-cca`), `Certificate <name>-mesh-reader`, `ExternalSecret` + `ClusterResourceSet <name>-mesh-remote-secret` | `charts/cluster` `templates/common/mesh-remote-secret.yaml` |
 | member, `istio-system` | istio-csr, `Issuer openbao-mesh` (cert-manager Vault issuer), ServiceAccount `istio-csr-openbao`, `Certificate istiod`; ValidatingAdmissionPolicies `platform-mesh-ca-*` | addon `istio-csr` |
 | member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRole`/`ClusterRoleBinding`/`Role`/`RoleBinding platform-istio-reader` | addon `istio-eastwest` |
 | member, `istio-system` | istiod/ztunnel multicluster values, istiod CA off (`values/mesh-member.yaml`) | addon `istio-ambient` (catalog parameters) |
@@ -587,4 +587,4 @@ Production unseal and HA: [#31](https://github.com/koorikla/platform/issues/31).
 `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false`: fixed upstream on `master` (istio/istio#62295), not yet in a
 release; the Secret opt-in goes with a 1.32 backport or 1.33 ("Reader RBAC"). Values inferred but not yet confirmed
 live (`grep -rn VERIFY docs/multicluster.md addons/openbao addons/istio-csr addons/istio-eastwest addons/istio-ambient
-charts/cluster/templates/mesh-*`): [#72](https://github.com/koorikla/platform/issues/72).
+charts/cluster/templates/common/mesh-*`): [#72](https://github.com/koorikla/platform/issues/72).

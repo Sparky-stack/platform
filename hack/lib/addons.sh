@@ -108,7 +108,8 @@ addon_values_object() {
 # <platform render> (the caller's temp dir).
 addon_helm_args() {
   local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10} labels=${11:-}
-  local dir="addons/$addon" vf p v fs part fleet vo="$3.values-$1.yaml"
+  local dir vf p v fs part fleet vo="$3.values-$1.yaml"
+  dir=$(yq -r ".addons[\"$addon\"].path // \"addons/$addon\"" "$ADDONS_CATALOG" | tr -d '\r')
   local name_expr='{{ index .metadata.labels "platform.koorikla.io/name" }}'
   local -a files=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
   while IFS= read -r vf; do

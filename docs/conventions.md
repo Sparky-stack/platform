@@ -122,7 +122,7 @@ Workload-cluster keys (store `default`): `openchoreo-observability`, optional `d
 ```
 bootstrap/                      k3d config, bootstrap.sh (task up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
-charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
+charts/cluster/                 CAPI: templates/<provider>/ + common/; scope fleet (providers, ClusterClasses) | cluster
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
 charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)

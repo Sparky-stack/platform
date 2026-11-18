@@ -28,9 +28,6 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.capi-operator.default | bool | `true` |  |
 | addons.capi-operator.namespace | string | `"capi-operator-system"` |  |
 | addons.capi-operator.roles[0] | string | `"mgmt"` |  |
-| addons.capi-providers.default | bool | `true` |  |
-| addons.capi-providers.namespace | string | `"capi-system"` |  |
-| addons.capi-providers.roles[0] | string | `"mgmt"` |  |
 | addons.cert-manager.default | bool | `true` |  |
 | addons.cert-manager.namespace | string | `"cert-manager"` |  |
 | addons.cert-manager.roles[0] | string | `"mgmt"` |  |
@@ -44,10 +41,12 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.cloudnative-pg.namespace | string | `"cnpg-system"` |  |
 | addons.cloudnative-pg.roles[0] | string | `"workload"` |  |
 | addons.cloudnative-pg.serverSideDiff | bool | `true` |  |
-| addons.clusterclasses.default | bool | `true` |  |
-| addons.clusterclasses.namespace | string | `"fleet"` |  |
-| addons.clusterclasses.roles[0] | string | `"mgmt"` |  |
-| addons.clusterclasses.serverSideDiff | bool | `true` |  |
+| addons.cluster-fleet.default | bool | `true` |  |
+| addons.cluster-fleet.installationParameters.scope | string | `"fleet"` |  |
+| addons.cluster-fleet.namespace | string | `"fleet"` |  |
+| addons.cluster-fleet.path | string | `"charts/cluster"` |  |
+| addons.cluster-fleet.roles[0] | string | `"mgmt"` |  |
+| addons.cluster-fleet.serverSideDiff | bool | `true` |  |
 | addons.coredns-local.default | bool | `true` |  |
 | addons.coredns-local.namespace | string | `"kube-system"` |  |
 | addons.coredns-local.providers[0] | string | `"docker"` |  |

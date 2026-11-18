@@ -17,7 +17,7 @@ jsonl() {
       | select(.valueFrom.template != null); .valueFrom.parsed = (.valueFrom.template | from_yaml))' "$1" > "$2"
 }
 
-check() {   # check <label> <clusterclasses.jsonl> <cluster.jsonl> <expect: pass|fail>
+check() {   # check <label> <fleet-scope.jsonl> <cluster.jsonl> <expect: pass|fail>
   local label=$1 cc=$2 cl=$3 expect=$4 out rc=0
   out=$(py "$ROOT/hack/tests/bootstrap_file_sources.py" "$cc" "$cl" 2>&1) || rc=$?
   if [[ "$expect" == pass && $rc -eq 0 ]] || [[ "$expect" == fail && $rc -ne 0 ]]; then
@@ -32,8 +32,8 @@ refs_total=0
 for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir")
-  helm template clusterclasses addons/clusterclasses --namespace fleet \
-    --values "$inst_dir/installation.yaml" > "$TMP/cc-$inst.yaml"
+  helm template cluster-fleet charts/cluster --namespace fleet \
+    --values "$inst_dir/installation.yaml" --set scope=fleet > "$TMP/cc-$inst.yaml"
   jsonl "$TMP/cc-$inst.yaml" "$TMP/cc-$inst.jsonl"
   for cf in "$inst_dir"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue

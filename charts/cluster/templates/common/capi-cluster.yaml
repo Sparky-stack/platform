@@ -1,0 +1,33 @@
+{{- if eq .Values.scope "cluster" }}
+{{- /* CAPI topology Cluster (class per provider: templates/<provider>/clusterclass.yaml); none for byo. */ -}}
+{{- include "capi.validate" . }}
+{{- if ne (include "capi.byo" .) "true" }}
+{{- $gke := eq (include "capi.gke" .) "true" }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: {{ .Values.name }}
+  namespace: fleet
+  labels:
+    {{- include "capi.labels" . | nindent 4 }}
+  annotations:
+    {{- include "capi.annotations" . | nindent 4 }}
+spec:
+  {{- if not $gke }}
+  clusterNetwork:
+    pods:
+      cidrBlocks: [10.42.0.0/16]
+    services:
+      cidrBlocks: [10.43.0.0/16]
+    serviceDomain: cluster.local
+  {{- end }}
+  topology:
+    classRef:
+      name: {{ ternary "gke-managed" (printf "k3s-%s" .Values.provider) $gke }}
+      namespace: fleet
+    version: {{ .Values.kubernetesVersion }}
+    {{- include (ternary "capi.topology.gke" "capi.topology.k3s" $gke) . | nindent 4 }}
+    variables:
+      {{- include "capi.variables" . | nindent 6 }}
+{{- end }}
+{{- end }}

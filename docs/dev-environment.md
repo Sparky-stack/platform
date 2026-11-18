@@ -85,7 +85,7 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
 | helm | 4.3.2 | aqua:helm/helm | charts, lint, template; plugin `helm-unittest` 1.2.1 (postinstall hook) |
 | helm-docs | 1.14.2 | aqua:norwoodj/helm-docs | generated chart `README.md` values tables (`task lint`, git hooks) |
 | k3d | 5.8.3 | aqua:k3d-io/k3d | local mgmt cluster (5.9.0 exists; 5.8.3 is the version the live boot proved) |
-| clusterctl | 1.13.8 | aqua:kubernetes-sigs/cluster-api | = CAPI core of `addons/capi-providers` |
+| clusterctl | 1.13.8 | aqua:kubernetes-sigs/cluster-api | = CAPI core of `charts/cluster` |
 | argocd | 3.6.1 | aqua:argoproj/argo-cd | = Argo CD server |
 | yq / jq | 4.54.3 / 1.8.2 | aqua:mikefarah/yq / aqua:jqlang/jq | YAML/JSON in scripts |
 | kubeconform | 0.8.0 | aqua:yannh/kubeconform | schema validation |

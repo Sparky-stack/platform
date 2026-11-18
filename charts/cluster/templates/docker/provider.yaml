@@ -1,0 +1,15 @@
+{{- /* CAPD InfrastructureProvider (scope fleet, capi.providers.docker). */ -}}
+{{- if and (eq .Values.scope "fleet") .Values.capi.providers.docker }}
+{{ include "providers.namespace" "capd-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: docker
+  namespace: capd-system
+  annotations:
+    {{- include "providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.docker.version }}
+  {{- include "providers.manager" (dict "p" .Values.docker "le" .Values.leaderElection) | nindent 2 }}
+{{- end }}

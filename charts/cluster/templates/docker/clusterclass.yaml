@@ -1,0 +1,229 @@
+{{- /* k3s on CAPD (local tests). Rendered unless the installation sets capi.providers.docker=false: without CAPD the
+     Docker*Template CRDs do not exist and the sync would fail (aws-example, hetzner-example). */ -}}
+
+{{- define "k3s-docker.cluster" -}}
+template:
+  spec: {}
+{{- end }}
+
+{{- define "k3s-docker.machine" -}}
+template:
+  spec: {}   # customImage comes from variable kindImage
+{{- end }}
+
+{{- define "k3s-docker.controlPlane" -}}
+template:
+  spec:
+    kthreesConfigSpec:
+      files:
+        {{- include "clusterclass.cniFile" . | nindent 8 }}
+      preK3sCommands:
+        # CAPD execs the bootstrap as soon as systemd is up, while kindest/node's entrypoint may still be fixing DNS.
+        # The install is `curl get.k3s.io | sh` (exit status = sh's), so a failed download would "succeed" without k3s.
+        - until curl -sfI --max-time 5 https://get.k3s.io >/dev/null; do sleep 2; done
+      serverConfig:
+        tlsSan: [0.0.0.0]
+        disableComponents: {{ toJson $.Values.k3s.disableComponents }}
+        kubeControllerManagerArgs: {{ toJson $.Values.k3s.dockerLeaderElectionArgs }}
+        kubeSchedulerArgs: {{ toJson $.Values.k3s.dockerLeaderElectionArgs }}
+        # defaults kept: disableCloudController=true + kubelet --cloud-provider=external. CAPD acts as the cloud
+        # provider: it sets the Node's providerID and removes the uninitialized taint.
+{{- end }}
+
+{{- define "k3s-docker.worker" -}}
+template:
+  spec:
+    preK3sCommands:
+      - until curl -sfI --max-time 5 https://get.k3s.io >/dev/null; do sleep 2; done
+      # k3s-agent (Type=notify) only reports READY once CAPD removed the cloud-provider taint, but CAPD sets the
+      # providerID only after this bootstrap returns -> the installer's `systemctl restart` would block until timeout.
+      - mkdir -p /etc/systemd/system/k3s-agent.service.d && printf '[Service]\nType=exec\n' > /etc/systemd/system/k3s-agent.service.d/capd.conf
+{{- end }}
+
+{{- /*
+Local registry name resolution for containerd on CAPD nodes: Harbor's token realm is its externalURL, so the node
+must resolve the registry hostname itself. Docker's embedded DNS knows the k3d serverlb container (which publishes the
+registry port on network kind) but not *.localhost names: append "<serverlb IP> <registry host>" to /etc/hosts before
+k3s starts. CAPI evaluates the {{ .registryHostAlias* }} template per cluster.
+*/ -}}
+{{- define "k3s-docker.hostAliasCommand" -}}
+{{`for i in $(seq 1 60); do ip=$(getent hosts {{ .registryHostAliasTarget }} | cut -d' ' -f1); [ -n "$ip" ] && break; sleep 2; done; if [ -n "$ip" ] && ! grep -q ' {{ .registryHostAlias }}$' /etc/hosts; then echo "$ip {{ .registryHostAlias }}" >> /etc/hosts; fi`}}
+{{- end }}
+
+{{- if and (eq .Values.scope "fleet") (ne (toString .Values.capi.providers.docker) "false") }}
+{{- $ns := "fleet" }}   {{- /* ClusterClasses live next to the Clusters (docs/conventions.md) */}}
+{{- $clusterName := include "clusterclass.templateName" (list "k3s-docker" (include "k3s-docker.cluster" .)) }}
+{{- $cpMachineName := include "clusterclass.templateName" (list "k3s-docker-control-plane" (include "k3s-docker.machine" .)) }}
+{{- $workerMachineName := include "clusterclass.templateName" (list "k3s-docker-worker" (include "k3s-docker.machine" .)) }}
+{{- $cpName := include "clusterclass.templateName" (list "k3s-docker-control-plane" (include "k3s-docker.controlPlane" .)) }}
+{{- $workerName := include "clusterclass.templateName" (list "k3s-docker-worker" (include "k3s-docker.worker" .)) }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: ClusterClass
+metadata:
+  name: k3s-docker
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  infrastructure:
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+      kind: DockerClusterTemplate
+      name: {{ $clusterName }}
+  controlPlane:
+    templateRef:
+      apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+      kind: KThreesControlPlaneTemplate
+      name: {{ $cpName }}
+    machineInfrastructure:
+      templateRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+        kind: DockerMachineTemplate
+        name: {{ $cpMachineName }}
+  workers:
+    machineDeployments:
+      - class: default-worker
+        bootstrap:
+          templateRef:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+            kind: KThreesConfigTemplate
+            name: {{ $workerName }}
+        infrastructure:
+          templateRef:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+            kind: DockerMachineTemplate
+            name: {{ $workerMachineName }}
+  variables:
+    - name: kindImage
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: {{ .Values.docker.kindImage }}
+          description: Node container image (OS only; k3s is installed at boot with version = topology.version).
+    - name: registryHostAlias
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: ""
+          description: Registry hostname (no port) that nodes resolve to registryHostAliasTarget via /etc/hosts.
+    - name: registryHostAliasTarget
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: ""
+          description: Docker container name (network kind) whose IP the registry hostname resolves to (k3d serverlb).
+    {{- include "clusterclass.commonVariables" . | nindent 4 }}
+  patches:
+    - name: kindImage
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+            kind: DockerMachineTemplate
+            matchResources:
+              controlPlane: true
+              machineDeploymentClass:
+                names: [default-worker]
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/customImage
+              valueFrom:
+                variable: kindImage
+    # cni-flannel replaces the whole control-plane files list: it must run before every patch that appends files.
+    {{- include "clusterclass.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
+    - name: registryAuth
+      enabledIf: {{`"{{ .registryAuth }}"`}}
+      definitions:
+        - selector:
+            apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+            kind: KThreesControlPlaneTemplate
+            matchResources:
+              controlPlane: true
+          jsonPatches:
+            {{- include "clusterclass.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" true) | nindent 12 }}
+        - selector:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+            kind: KThreesConfigTemplate
+            matchResources:
+              machineDeploymentClass:
+                names: [default-worker]
+          jsonPatches:
+            {{- include "clusterclass.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
+    {{- include "clusterclass.registryCAPatch" . | nindent 4 }}
+    - name: registryHostAlias
+      enabledIf: {{`'{{ if .registryHostAliasTarget }}true{{ end }}'`}}
+      definitions:
+        - selector:
+            apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+            kind: KThreesControlPlaneTemplate
+            matchResources:
+              controlPlane: true
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/kthreesConfigSpec/preK3sCommands/-
+              valueFrom:
+                template: {{ include "k3s-docker.hostAliasCommand" . | quote }}
+        - selector:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+            kind: KThreesConfigTemplate
+            matchResources:
+              machineDeploymentClass:
+                names: [default-worker]
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/preK3sCommands/-
+              valueFrom:
+                template: {{ include "k3s-docker.hostAliasCommand" . | quote }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: DockerClusterTemplate
+metadata:
+  name: {{ $clusterName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "k3s-docker.cluster" . | nindent 2 }}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KThreesControlPlaneTemplate
+metadata:
+  name: {{ $cpName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "k3s-docker.controlPlane" . | nindent 2 }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: DockerMachineTemplate
+metadata:
+  name: {{ $cpMachineName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "k3s-docker.machine" . | nindent 2 }}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KThreesConfigTemplate
+metadata:
+  name: {{ $workerName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "k3s-docker.worker" . | nindent 2 }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: DockerMachineTemplate
+metadata:
+  name: {{ $workerMachineName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "k3s-docker.machine" . | nindent 2 }}
+{{- end }}

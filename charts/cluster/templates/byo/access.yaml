@@ -1,0 +1,52 @@
+{{- if eq .Values.scope "cluster" }}
+{{- /* provider byo: ExternalSecret fleet/<name>-kubeconfig (wave -1), ClusterSecretStore byo-<name>, and byo.pushSecret helper. */ -}}
+{{- if eq (include "capi.byo" .) "true" }}
+{{- include "capi.validate" . }}
+{{- $name := .Values.name }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-kubeconfig
+  namespace: fleet
+  labels:
+    platform.koorikla.io/name: {{ $name | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # before the stores and PushSecrets that read it
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: {{ $name }}-kubeconfig
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: Opaque
+      metadata:
+        labels:
+          platform.koorikla.io/name: {{ $name | quote }}
+  data:
+    - secretKey: value
+      remoteRef:
+        key: {{ include "byo.secretKey" . }}
+        property: kubeconfig
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ include "byo.store" . }}
+  labels:
+    platform.koorikla.io/name: {{ $name | quote }}
+spec:
+  conditions:
+    - namespaces: [fleet]
+  provider:
+    kubernetes:
+      remoteNamespace: default   # every PushSecret names its namespace (PushSecretMetadata remoteNamespace)
+      authRef:
+        name: {{ $name }}-kubeconfig
+        namespace: fleet
+        key: value
+{{- end }}
+{{- end }}
