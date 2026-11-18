@@ -35,6 +35,7 @@ openchoreo:
   controlPlane:
     host: openchoreo.localhost
   observability:
+    # -- HTTP (`httpPort: 11080`) and OpenSearch TLS passthrough (`tlsPort: 11085`) Gateway ports.
     enabled: true
     httpPort: 11080           # obs-plane Gateway HTTP listener == k3d published port
     tlsPort: 11085            # obs-plane Gateway TLS passthrough listener (OpenSearch) == k3d published port
@@ -46,6 +47,7 @@ openchoreo:
 # workflows-<orgNamespace> (promotion-gate; #104). Upstream's observability-plane-ingress blocks cross-namespace ingress
 # to every pod except gateway-default and opentelemetry-collector.
 prometheusIngress:
+  # -- `NetworkPolicy` allowing `promotion-gate` pods (`platform.koorikla.io/egress: openchoreo`) to query Prometheus.
   enabled: true
   podLabels: { app.kubernetes.io/name: prometheus, operator.prometheus.io/name: openchoreo-observability }
   fromPodLabels: { platform.koorikla.io/egress: openchoreo }   # == openchoreo-platform promotionGate.podLabels
@@ -55,6 +57,7 @@ prometheusIngress:
 # (Secret cluster-agent-tls in this namespace, CN = planeID); the plane trusts exactly that certificate (ca.crt of a
 # self-signed cert == the cert). Same cluster as the cluster-gateway, so nothing leaves mgmt.
 clusterObservabilityPlane:
+  # -- Registers `ClusterObservabilityPlane/default` (`clusterObservabilityPlane.{name,planeID}`) and syncs `cluster-gateway-ca` (`agentServerCA`).
   name: default
   planeID: default            # == openchoreo-observability-plane.clusterAgent.planeID (validated)
 
@@ -79,6 +82,7 @@ agentServerCA:
 #     finops-llm-api-key          provider key, or any placeholder when llmBaseUrl is the agentgateway
 #     finops-oauth-client-secret  == Thunder client openchoreo-finops-agent's secret (addon thunder reads it too)
 secrets:
+  # -- Pulls OpenSearch/observer (`openchoreo-observability`) and optional AI agent (`openchoreo-ai`) credentials (`secrets.{store,remoteKey,aiRemoteKey}`) from `ClusterSecretStore/platform`.
   store: platform
   remoteKey: openchoreo-observability
   aiRemoteKey: openchoreo-ai

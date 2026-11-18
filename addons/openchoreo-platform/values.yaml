@@ -27,6 +27,7 @@ openchoreo:
 # and charts/tenant renders one ProjectReleaseBinding per environment listed here (keep both lists in sync).
 deploymentPipeline:
   name: default
+  # -- `[development, staging, production]`.
   environments: [development, staging, production]
 
 # Upstream defaults from files/ (see files/README.md); set false to manage them elsewhere.
@@ -38,6 +39,7 @@ upstreamDefaults:
 # postgresql (the Crossplane PostgreSQL XR). Usable only in environments whose data plane runs the addon they name in
 # platform.koorikla.io/requires-addons (fleet file `addons`, ClusterDataPlane annotations).
 dataServices:
+  # -- Platform types for the data-service addons (`files/platform/`); usable only where the data plane announces the addon (`platform.koorikla.io/requires-addons`).
   enabled: true
 
 # installation.yaml secrets.tenantStores.enabled (#96): component types' ExternalSecrets reference the cell namespace's
@@ -53,6 +55,7 @@ tenantStoreName: openbao-tenant
 promotion:
   # Environments whose ReleaseBinding changes only through a reviewed pull request: their binding file syncs through
   # its own Argo CD Application (charts/tenant) and in OpenChoreo only `approverGroups` may write their bindings.
+  # -- Restricts `production` binding writes to Argo CD (`promotion.{gatedEnvironments,restrictedGroups,gitOnly,freezeWindows}`) and enforces sync freeze windows.
   gatedEnvironments: [production]
   # Groups (JWT claim `groups`) denied releasebinding, projectreleasebinding and resourcereleasebinding
   # create/update/delete in gated environments through console, openchoreo-api, occ and MCP (an explicit deny wins over
@@ -80,6 +83,7 @@ promotion:
 # (occ / console Workflows / MCP / kubectl create of a WorkflowRun). Runs in the workflow plane (namespace
 # workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
 promotionGate:
+  # -- HTTP `smoke` + 15-minute Prometheus 5xx SLO gate (`observe`) posting `statusContext` (`openchoreo/promotion-gate`) on PRs.
   enabled: true
   workflowPlane: default             # ClusterWorkflowPlane (addon openchoreo-workflow-plane)
   # Pod labels of the gate pod: opt-in to the run namespace's NetworkPolicy platform-workflows-openchoreo (egress to the
@@ -141,6 +145,7 @@ registry:
 # (addon openchoreo-workflow-plane). One component workflow per stack, same koorikla/ci scripts as the GitHub Actions
 # wrappers; the stack's ClusterComponentTypes list them in allowedWorkflows (templates/upstream-defaults.yaml).
 buildWorkflows:
+  # -- Language stack build workflows (`buildWorkflows.{stacks,platforms,secrets}`: `go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow (`helmChartWorkflow`).
   enabled: true
   workflowPlane: default                     # ClusterWorkflowPlane
   workflowTemplate: koorikla-build
@@ -169,6 +174,7 @@ buildWorkflows:
   # promotion gate's, installed on the app repos), a dedicated build App works the same way. Its private key reaches
   # only ESO: ExternalSecret `appSecret` in workflows-<org ns>, read by the generators (templates/build-github.yaml).
   github:
+    # -- Per-run GitHub App installation tokens (`buildWorkflows.github`) for the run's one repository (ESO `GithubAccessToken` generator; `contents: write` for builds, `read` for charts), no PAT.
     key: promotion-gate-github
     appSecret: build-github-app
     secretStore: workflows                   # == addon openchoreo-workflow-plane clusterWorkflowPlane.secretStore
@@ -241,6 +247,7 @@ buildWorkflows:
 # server, public 443).
 autoBuild:
   workflowTemplate: auto-build               # == addon argo-events autoBuild.workflowTemplate (Sensor target)
+  # -- Builds Components with `autoBuild: true` once per new commit (`autoBuild.{pollSchedule,resyncSchedule,github}`); trigger per installation `openchoreo.workflowPlane.autoBuild` (`poll` | `webhook` | `none`).
   pollSchedule: "* * * * *"                  # trigger poll (cron, UTC); GitHub cost: one conditional request per
                                              # repo/branch, 304s are free; a pass that overlaps the next is skipped
   resyncSchedule: "*/30 * * * *"             # trigger webhook: reconcile missed deliveries ("" = off)
@@ -276,6 +283,7 @@ autoBuild:
   previews:
     github:
       permissions: { statuses: write, pull_requests: write }
+    # -- With `installation.yaml` `previews.enabled`, builds PR heads, cuts the preview `ComponentRelease`, posts `openchoreo/preview` and expires previews ([preview environments](../../docs/preview-environments.md)).
     statusContext: openchoreo/preview          # commit status on the PR head (Details = the preview URL)
     optIn:                                     # == charts/tenant previewOptIn (the ApplicationSet's selector)
       annotation: platform.koorikla.io/preview-environments

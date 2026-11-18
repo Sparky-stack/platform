@@ -16,6 +16,7 @@
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
 openchoreo:
+  # -- Org namespace (`default`), console/API hostnames (`controlPlane.host`), and agent WebSocket endpoint (`controlPlane.clusterGatewayURL`).
   orgNamespace: default
   controlPlane:
     host: openchoreo.localhost
@@ -27,6 +28,7 @@ openchoreo:
 # Secret backstage-secrets (templates/backstage-secrets.yaml) from ClusterSecretStore `platform`, key `openchoreo`
 # (properties backstage-client-secret == Thunder's Backstage client secret, backstage-backend-secret).
 backstageSecrets:
+  # -- Pulls Backstage secrets (`openchoreo`) and optional `scaffolder.githubApp` credentials from `ClusterSecretStore/platform`.
   store: platform
   remoteKey: openchoreo
 
@@ -47,6 +49,7 @@ scaffolder:
 # openchoreo-data-plane/cluster-gateway-ca with the gateway CA's PUBLIC certificate, read through ClusterSecretStore
 # `mgmt-openchoreo` (read-only on this namespace). Every workload cluster's CRS (charts/cluster) lists it.
 gatewayCA:
+  # -- Exports `cluster-gateway-ca` (`gatewayCA.{enabled,store,namespace,sourceSecret}`) via `ClusterSecretStore/mgmt-openchoreo` to `fleet` for workload agent trust.
   enabled: true
   store: mgmt-openchoreo
   namespace: fleet
@@ -83,6 +86,7 @@ openchoreo-control-plane:
       workflows:
         # platform: Build tab, WorkflowRuns + logs (workflow plane on mgmt, docs/build-plane.md). Set per installation by
         # the catalog from installation.yaml openchoreo.workflowPlane.enabled.
+        # -- Wired from `installation.yaml` via `installationParameters` (alongside `features.observability.enabled`).
         enabled: true
       observability:
         # platform: Metrics/Traces/Runtime Logs tabs + RuntimeHealthCard. Backstage asks openchoreo-api for the

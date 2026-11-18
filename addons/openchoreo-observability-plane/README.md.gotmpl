@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `openchoreo-observability-plane` (`1.3.3`) plus OpenSearch logs (`0.7.0`), OpenSearch traces (`0.8.0`), and Prometheus metrics (`0.8.0`) on `mgmt`. Runs `ClusterObservabilityPlane/default`, the `observer` API, Alertmanager, and ingress `Gateway`s receiving telemetry from workload clusters.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: openchoreo-observability-plane`).
+- **Catalog label:** `addons.platform.koorikla.io/openchoreo-observability-plane` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Querying Prometheus/OpenSearch and checking observability readiness: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Observability and runtime security](../../docs/observability.md)
+{{- end -}}

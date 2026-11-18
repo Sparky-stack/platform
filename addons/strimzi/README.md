@@ -11,10 +11,27 @@ Wrapper chart for `strimzi-kafka-operator` (`1.3.1`) on workload clusters. Manag
 
 ## Key values
 
-- `namespace.podSecurity`: `restricted` Pod Security admission label on namespace `strimzi`.
-- `strimzi-kafka-operator.watchAnyNamespace`: `true` so dynamically created OpenChoreo cell namespaces are reconciled.
-- `monitoring.podMonitor`: `true` (scrapes operator metrics via `addons/telemetry`).
-- `strimzi-kafka-operator.{image,topicOperator.image,userOperator.image,kafkaInit.image}`: `1.3.1` pinned by multi-arch index digest.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| monitoring.podMonitor | bool | `true` | `true` (scrapes operator metrics via `addons/telemetry`). |
+| namespace.ambient | bool | `true` |  |
+| namespace.podSecurity | string | `"restricted"` | `restricted` Pod Security admission label on namespace `strimzi`. |
+| strimzi-kafka-operator.buildah.image.tag | string | `"1.3.1@sha256:7a2f75ee2a66b5cd83ebadf9be5efdf452e31cf006714e8f46f8ce16b3806b98"` |  |
+| strimzi-kafka-operator.extraEnvs[0].name | string | `"STRIMZI_POD_SECURITY_PROVIDER_CLASS"` |  |
+| strimzi-kafka-operator.extraEnvs[0].value | string | `"restricted"` |  |
+| strimzi-kafka-operator.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` | `1.3.1` pinned by multi-arch index digest (alongside `topicOperator.image`, `userOperator.image`, `kafkaInit.image`). |
+| strimzi-kafka-operator.kafkaBridge.image.tag | string | `"1.2.1@sha256:4597700f87ab33b7768863728730bc2eb68a0d7fa9633ab2a4cebb3a2730cfa9"` |  |
+| strimzi-kafka-operator.kafkaInit.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` |  |
+| strimzi-kafka-operator.mavenBuilder.image.tag | string | `"1.3.1@sha256:ce67465a4df0fa0a684e64962d6d4fff0b767636ae18e2ee7834bba14f5e4813"` |  |
+| strimzi-kafka-operator.podSecurityContext.runAsNonRoot | bool | `true` |  |
+| strimzi-kafka-operator.podSecurityContext.seccompProfile.type | string | `"RuntimeDefault"` |  |
+| strimzi-kafka-operator.resources.limits.cpu | string | `"1000m"` |  |
+| strimzi-kafka-operator.resources.limits.memory | string | `"384Mi"` |  |
+| strimzi-kafka-operator.resources.requests.cpu | string | `"50m"` |  |
+| strimzi-kafka-operator.resources.requests.memory | string | `"384Mi"` |  |
+| strimzi-kafka-operator.topicOperator.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` |  |
+| strimzi-kafka-operator.userOperator.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` |  |
+| strimzi-kafka-operator.watchAnyNamespace | bool | `true` | `true` so dynamically created OpenChoreo cell namespaces are reconciled. |
 
 ## Day-2 notes
 

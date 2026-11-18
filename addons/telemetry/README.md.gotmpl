@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collector (`0.163.2`), Fluent Bit logs (`0.7.0`), Prometheus agent metrics (`0.8.0`), and Kubernetes events (`0.1.2`), shipping signals to `mgmt`'s observability plane (and optionally Datadog).
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: telemetry`).
+- **Catalog label:** `addons.platform.koorikla.io/telemetry` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Checking shipper readiness and the Prometheus agent active-series budget: [observability first look](../../docs/runbooks/observability-first-look.md#1-first-5-minute-triage-order-where-to-look-first).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Observability and runtime security](../../docs/observability.md)
+{{- end -}}
