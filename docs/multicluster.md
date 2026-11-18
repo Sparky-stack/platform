@@ -17,8 +17,6 @@ mgmt:
 mesh:
   groups: [local]               # one root + one intermediate per group, keys generated inside OpenBao
   ca: { host: openbao.openchoreo.localhost, port: 8200 }   # where members reach OpenBao (TLS passthrough)
-examples:
-  eastwest: { enabled: true }   # optional demo (examples/eastwest)
 
 # installations/<inst>/clusters/<name>.yaml (every member)
 mesh:
@@ -48,7 +46,7 @@ not spread evenly (one remote endpoint can take a large share; istio/istio#58039
 ```
 dev1                                                    prod1
 client pod --(captured)--> ztunnel(dev1) ==HBONE in HBONE==> east-west gw (prod1) --HBONE--> ztunnel(prod1) --> echo pod
-   echo.eastwest-demo:8080        outer mTLS: ztunnel(dev1) <-> gateway (15008)
+   echo.<ns>:8080                 outer mTLS: ztunnel(dev1) <-> gateway (15008)
                                   inner mTLS: ztunnel(dev1) <-> ztunnel(prod1), end to end (client identity kept)
 ```
 - `echo` exists as a Service in **both** clusters, so DNS resolves in dev1. It carries the label `istio.io/global=true`.
@@ -56,7 +54,7 @@ client pod --(captured)--> ztunnel(dev1) ==HBONE in HBONE==> east-west gw (prod1
   sit on network `prod1`, dev1's ztunnel sends the call to prod1's east-west gateway instead of to the pod IP. Pod CIDRs
   may overlap.
 - The gateway terminates only the outer tunnel. Authorization at the destination sees
-  `cluster.local/ns/eastwest-demo/sa/client`, the caller's identity, not the gateway's.
+  `cluster.local/ns/<ns>/sa/client`, the caller's identity, not the gateway's.
 - Each cluster's network = its name. ztunnel's `NETWORK`, the istio-system label `topology.istio.io/network` and the
   Gateway label must agree, and they all come from one label (below).
 
@@ -68,7 +66,7 @@ selects or reads those labels; no template names a cluster.
 |---|---|
 | `mesh.platform.koorikla.io/group: <group>` | catalog `clusterLabelParameters` → istio-ambient `global.meshID`; CRS selector of the peers' remote secrets |
 | `mesh.platform.koorikla.io/network: <name>` | istio-ambient `global.network` (ztunnel `NETWORK`); istio-eastwest Gateway label |
-| `addons.platform.koorikla.io/istio-eastwest: "true"` (`"false"` without a group) | selects addon `istio-eastwest` and the example; istiod env `AMBIENT_ENABLE_MULTI_NETWORK`, `AMBIENT_ENABLE_BAGGAGE` |
+| `addons.platform.koorikla.io/istio-eastwest: "true"` (`"false"` without a group) | selects addon `istio-eastwest`; istiod env `AMBIENT_ENABLE_MULTI_NETWORK`, `AMBIENT_ENABLE_BAGGAGE` |
 | `addons.platform.koorikla.io/istio-csr: "true"` (`"false"` without a group) | selects addon `istio-csr`; istio-ambient layers `values/mesh-member.yaml` on clusters with a group label (istiod CA off) |
 
 `global.multiCluster.clusterName` = cluster name on **every** cluster (catalog `clusterNameParameters`), so istiod and
@@ -92,7 +90,6 @@ clusterLabelParameters: { <helm param>: { label: <cluster secret label>, default
 | member, `istio-system` | `Gateway istio-eastwestgateway` (+ params ConfigMap), `ClusterRole`/`ClusterRoleBinding`/`Role`/`RoleBinding platform-istio-reader` | addon `istio-eastwest` |
 | member, `istio-system` | istiod/ztunnel multicluster values, istiod CA off (`values/mesh-member.yaml`) | addon `istio-ambient` (catalog parameters) |
 | member, `istio-system` | `Secret openbao-ca`, `Secret mesh-root-ca` (public certificates), label on the namespace, `Secret istio-remote-secret-<peer>` per peer; cluster-scoped `ClusterRoleBinding platform-oidc-discovery` | CAPI ClusterResourceSets (from mgmt) |
-| member, `eastwest-demo` | example | `examples/eastwest` via ApplicationSet `example-eastwest` |
 
 ## Mesh CA (OpenBao)
 Every member of a group must chain to the same root so that a dev1 workload certificate verifies in prod1. The CA is
@@ -443,7 +440,7 @@ below):
 
 So the choice is per installation (`installations/<inst>/addons/istio-eastwest/values.yaml`). **Decision: off in every
 installation, `installations/local` included** (the opt-in is not approved): on istiod 1.32.0 east-west discovery stays
-non-functional (peers `timeout`, the `examples/eastwest` `client` logs `FAILED`) until istio/istio#62295 ships. The
+non-functional (peers `timeout`, cross-cluster calls fail) until istio/istio#62295 ships. The
 mesh CA path does not depend on it: istiod and ztunnel on every member get their certificates from istio-csr, signed by
 the group intermediate in OpenBao, and that is what the live run proves.
 - `reader.remoteCredentialsSecrets: false` (default, the B1 position): peers read no Secret; on istiod 1.32.0
@@ -482,37 +479,19 @@ file) revokes OpenBao issuance (`auth/mesh-<name>` and entity `mesh-<name>`) whi
 on remaining peers and `fleet/<gone>-mesh-reader` on `mgmt` (reader certs expire within 7d; workload/istiod certs within
 24h/48h). Exact cleanup commands: [runbooks/scaling-and-capacity.md](runbooks/scaling-and-capacity.md#2-remove-decommission-a-workload-cluster).
 
-## Example (`examples/eastwest`)
-The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
-`installation.yaml` sets `examples.eastwest.enabled` (locally: multicluster profile only; it needs two members, which
-`hack/tests/test_local_profiles.sh` checks). It targets clusters labelled
-`addons.platform.koorikla.io/istio-eastwest=true`, and values layer as
-`examples/eastwest/values.yaml` < `installations/<inst>/examples/eastwest/{values,cluster-<name>}.yaml`.
+## Verifying east-west with an OpenChoreo Component
+Apps reach members as OpenChoreo objects, never as custom charts (the old `examples/eastwest` chart is gone, #116).
+The hello-world Component (docs/demo.md) is bound to `development` on dev1 and, in the multicluster profile, to
+`production` on prod1; its cell namespaces carry `istio.io/dataplane-mode=ambient`. Read-only checks:
 
-- Namespace `eastwest-demo`: `istio.io/dataplane-mode=ambient`, Pod Security `restricted` enforced.
-- `Service echo` (global) on every member. The `echo` Deployment (`hashicorp/http-echo`, answers
-  `hello from <cluster>`) runs on prod1 only (`installations/local/examples/eastwest/cluster-dev1.yaml` disables it).
-- Callers `client` and `stranger` run on dev1 only. Each curls `echo.eastwest-demo.svc.cluster.local:8080` every 10s
-  and logs `OK: hello from prod1` or `FAILED: ...`.
-- `AuthorizationPolicy echo-allow-client` (`security.istio.io/v1`, ALLOW, enforced by prod1's ztunnel at L4, no
-  waypoint) admits only `cluster.local/ns/eastwest-demo/sa/client` on port 8080. `client` succeeds and `stranger` is
-  reset, which proves the identity crossed the clusters.
-- Images are multi-arch and pinned by digest. Requests are 5m CPU / 8Mi each, limit 32Mi.
-- AppProject `examples` (charts/platform `templates/projects.yaml`) admits only the catalog's example namespaces and
-  is rendered whether or not an example is enabled, in sync wave `-1`. The generated Applications carry the resources
-  finalizer, which Argo CD can only run while their project exists (the live boot left them stuck with
-  `DeletionError: project not found` when the project went first). Turning an example off prunes just its
-  ApplicationSet, foreground, so its Applications and their resources are deleted under an unchanged project; if the
-  project is ever removed, Argo CD prunes in reverse wave order and waits for the ApplicationSets to be gone first
-  (`hack/tests/test_appprojects.sh`).
-- On istiod 1.32.0 the cross-cluster call needs the installation's `reader.remoteCredentialsSecrets` decision
-  ("Reader RBAC"); with the default the peer is not served and `client` logs `FAILED`.
+```sh
+kubectl --kubeconfig dev1.kubeconfig -n istio-system get gateway istio-eastwestgateway   # PROGRAMMED=True
+istioctl --kubeconfig dev1.kubeconfig ztunnel-config workloads | grep hello-world        # prod1's pods, NETWORK prod1
+```
 
-The example is a platform smoke test delivered like an addon (Argo CD push). Tenant apps still reach clusters through
-OpenChoreo (invariant 3). Making an OpenChoreo component cross-cluster takes the same two things: its namespace is
-ambient (Kyverno already enrolls cell namespaces), and its Service carries `istio.io/global=true` on every member. Cell
-namespaces are named per data plane, so a cross-cluster call needs the same namespace and Service name on both sides:
-that is an OpenChoreo ComponentType/trait design question, left open here.
+prod1's hello-world pods listed on dev1 with network `prod1` prove discovery through the remote secret. An end-to-end
+call needs a Service with the same name and namespace on both members plus `istio.io/global=true`, which per-environment
+cell namespaces do not give; that demo is #232. On istiod 1.32.0 discovery also needs the "Reader RBAC" decision.
 
 ## Reachability per provider
 | | east-west gateway (Service type LoadBalancer, tcp 15008 + 15021 status) | peer API servers (tcp 6443) |

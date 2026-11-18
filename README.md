@@ -72,7 +72,6 @@ charts/                 platform (root catalog + ApplicationSets), cluster (one 
 addons/                 38 platform and wrapper charts (each with its own README.md, Chart.yaml, and values.yaml)
 installations/          per-installation overlays, fleet files (clusters/*.yaml), and tenant files (tenants/*.yaml)
 templates/              Backstage golden-path scaffolder templates + app repo skeletons
-examples/               opt-in smoke workloads (such as cross-cluster Istio east-west)
 docs/                   concept guides, day-2 operations handbook (docs/operations.md), runbooks/, and diagrams/
 hack/                   portable tooling, linters, and offline contract tests (hack/tests/)
 mise.toml, Taskfile.yml pinned cross-platform CLI versions and Task entrypoints

@@ -91,7 +91,7 @@ only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements
 | Mesh CA / remote secrets (opt-in) | ns `openbao`: OpenBao mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`, role `<name>`, auth `mesh-<name>`, identity entity `mesh-<name>` (static policy `mesh-member`); ns `fleet`: `<name>-mesh-openbao`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-trust` (+ ConfigMap `<name>-mesh-oidc`), `<name>-mesh-remote-secret` |
 | On mesh members, ns `istio-system` | Secrets `openbao-ca`, `mesh-root-ca` (public), Issuer `openbao-mesh`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
-| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `examples` (opt-in examples; always present), `tenant-<project>`; charts/platform projects sit in sync wave `-1`, before the ApplicationSets using them (Argo CD prunes in reverse) |
+| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>`; charts/platform projects sit in sync wave `-1`, before the ApplicationSets using them (Argo CD prunes in reverse) |
 
 ## Secret keys
 Keys in the `platform` store (flat, backend-agnostic). The doc in the last column owns the details.
@@ -126,7 +126,6 @@ charts/cluster/                 one workload cluster: templates/capi-*.yaml, arg
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
 charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
-examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, operations + runbooks/, one doc per area, diagrams
 templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each
