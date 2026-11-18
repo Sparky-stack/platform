@@ -1,0 +1,47 @@
+{{- /*
+BuildKit registry mirrors for the build runs (#38). ConfigMap buildkitd-config in the run namespace workflows-<org ns>
+(rendered by run-network-policy.yaml / run-executor-token.yaml): a buildkitd.toml that sends each upstream of
+installation.yaml registry.proxyCache to its Harbor proxy-cache project first, the same projects node containerd pulls
+through (charts/cluster capi-registries.yaml). BuildKit maps `<upstream>/<repo>` to `<registry.host>/<project>/<repo>`
+(mirror with a path), so Dockerfile FROM lines keep their upstream names and digests; when Harbor fails it falls back to
+the upstream registry (its own host entry after the mirrors). The build step of koorikla-build mounts this ConfigMap
+(optional: no mirrors, direct pulls) and adds the Harbor CA entry when it is missing; its docker config (the run's
+registry credentials, robot$builder: pull on every proxy-cache project) authenticates the mirror pulls.
+Only for registry.type harbor: external registries have no proxy cache.
+*/ -}}
+{{- $m := .Values.buildkitMirrors }}
+{{- $reg := .Values.registry | default dict }}
+{{- if and $m.enabled (eq (toString $reg.type) "harbor") $reg.proxyCache }}
+{{- $host := required "registry.host is required for BuildKit mirrors (registry.type harbor)" $reg.host }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" $host) }}
+{{- fail (printf "registry.host %q must be <hostname>[:port]" $host) }}
+{{- end }}
+{{- $seen := dict }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $m.configMapName }}
+  namespace: {{ printf "workflows-%s" .Values.openchoreo.orgNamespace }}
+data:
+  buildkitd.toml: |
+    # Rendered by addon openchoreo-workflow-plane from installation.yaml registry.proxyCache (#38).
+    {{- range $pc := $reg.proxyCache }}
+    {{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" (toString $pc.upstream)) }}
+    {{- fail (printf "registry.proxyCache upstream %q must be <hostname>[:port]" (toString $pc.upstream)) }}
+    {{- end }}
+    {{- if not (regexMatch "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$" (toString $pc.project)) }}
+    {{- fail (printf "registry.proxyCache project %q for %s must be a Harbor project name" (toString $pc.project) $pc.upstream) }}
+    {{- end }}
+    {{- if eq $pc.upstream $host }}
+    {{- fail (printf "registry.proxyCache upstream %s is the registry itself (registry.host)" $host) }}
+    {{- end }}
+    {{- if hasKey $seen $pc.upstream }}
+    {{- fail (printf "registry.proxyCache lists upstream %s twice" $pc.upstream) }}
+    {{- end }}
+    {{- $_ := set $seen $pc.upstream true }}
+    [registry.{{ $pc.upstream | quote }}]
+      mirrors = [{{ printf "%s/%s" $host $pc.project | quote }}]
+    {{- end }}
+    [registry.{{ $host | quote }}]
+      ca = [{{ $m.caFile | quote }}]
+{{- end }}

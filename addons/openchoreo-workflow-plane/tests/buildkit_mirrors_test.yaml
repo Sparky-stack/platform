@@ -1,0 +1,131 @@
+suite: openchoreo-workflow-plane - BuildKit pulls base images through the Harbor proxy caches (#38)
+templates:
+  - templates/buildkitd-config.yaml
+  - templates/cluster-workflow-templates.yaml
+release:
+  name: openchoreo-workflow-plane
+  namespace: openchoreo-workflow-plane
+tests:
+  - it: renders buildkitd.toml with a Harbor proxy-cache mirror per upstream and the Harbor CA, in the run namespace
+    template: templates/buildkitd-config.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: ConfigMap }
+      - equal: { path: metadata.name, value: buildkitd-config }
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal:
+          path: data["buildkitd.toml"]
+          value: |
+            # Rendered by addon openchoreo-workflow-plane from installation.yaml registry.proxyCache (#38).
+            [registry."docker.io"]
+              mirrors = ["harbor.openchoreo.localhost:9443/dockerhub"]
+            [registry."ghcr.io"]
+              mirrors = ["harbor.openchoreo.localhost:9443/ghcr"]
+            [registry."quay.io"]
+              mirrors = ["harbor.openchoreo.localhost:9443/quay"]
+            [registry."registry.k8s.io"]
+              mirrors = ["harbor.openchoreo.localhost:9443/k8s"]
+            [registry."cr.openchoreo.dev"]
+              mirrors = ["harbor.openchoreo.localhost:9443/openchoreo"]
+            [registry."gcr.io"]
+              mirrors = ["harbor.openchoreo.localhost:9443/gcr"]
+            [registry."harbor.openchoreo.localhost:9443"]
+              ca = ["/registry-ca/ca.crt"]
+
+  - it: follows the installation (registry.host, registry.proxyCache, org namespace)
+    template: templates/buildkitd-config.yaml
+    set:
+      openchoreo.orgNamespace: acme
+      registry.host: registry.example.com
+      registry.proxyCache: [{ upstream: docker.io, project: hub }]
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-acme }
+      - equal:
+          path: data["buildkitd.toml"]
+          value: |
+            # Rendered by addon openchoreo-workflow-plane from installation.yaml registry.proxyCache (#38).
+            [registry."docker.io"]
+              mirrors = ["registry.example.com/hub"]
+            [registry."registry.example.com"]
+              ca = ["/registry-ca/ca.crt"]
+
+  - it: no mirrors with an external registry (no proxy cache)
+    template: templates/buildkitd-config.yaml
+    set: { registry.type: external }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no mirrors without proxy-cache projects
+    template: templates/buildkitd-config.yaml
+    set: { registry.proxyCache: [] }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: no mirrors when disabled
+    template: templates/buildkitd-config.yaml
+    set: { buildkitMirrors.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: refuses an upstream listed twice (duplicate TOML table, buildkitd would not start)
+    template: templates/buildkitd-config.yaml
+    set:
+      registry.proxyCache: [{ upstream: docker.io, project: a }, { upstream: docker.io, project: b }]
+    asserts:
+      - failedTemplate: { errorPattern: "lists upstream docker.io twice" }
+
+  - it: refuses the registry as its own upstream (duplicate table with the CA entry, a mirror loop)
+    template: templates/buildkitd-config.yaml
+    set:
+      registry.proxyCache: [{ upstream: "harbor.openchoreo.localhost:9443", project: self }]
+    asserts:
+      - failedTemplate: { errorPattern: "is the registry itself" }
+
+  - it: refuses values that would break out of the TOML string (project, upstream, host)
+    template: templates/buildkitd-config.yaml
+    set:
+      registry.proxyCache: [{ upstream: docker.io, project: 'x"]' }]
+    asserts:
+      - failedTemplate: { errorPattern: "must be a Harbor project name" }
+
+  - it: refuses a malformed upstream
+    template: templates/buildkitd-config.yaml
+    set:
+      registry.proxyCache: [{ upstream: "https://docker.io", project: dockerhub }]
+    asserts:
+      - failedTemplate: { errorPattern: "upstream .* must be <hostname>\\[:port\\]" }
+
+  - it: refuses a malformed registry host
+    template: templates/buildkitd-config.yaml
+    set: { registry.host: 'harbor"]' }
+    asserts:
+      - failedTemplate: { errorPattern: "registry.host .* must be <hostname>\\[:port\\]" }
+
+  - it: the build step mounts the mirror config (optional, read-only) from the ConfigMap this chart renders
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - contains:
+          path: 'spec.templates[?(@.name == "build")].volumes'
+          content: { name: buildkitd-config, configMap: { name: buildkitd-config, optional: true } }
+      - contains:
+          path: 'spec.templates[?(@.name == "build")].container.volumeMounts'
+          content: { name: buildkitd-config, mountPath: /buildkitd, readOnly: true }
+      # the CA path the rendered config trusts is where the build step mounts the run's registry CA
+      - contains:
+          path: 'spec.templates[?(@.name == "build")].container.volumeMounts'
+          content: { name: registry-ca, mountPath: /registry-ca, readOnly: true }
+
+  - it: buildkitd.toml starts from the mirror config and adds the CA entry only for a registry it does not cover
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - matchRegex:
+          path: 'spec.templates[?(@.name == "build")].container.args[0]'
+          pattern: 'if \[ -f /buildkitd/buildkitd\.toml \]; then\n\s+cat /buildkitd/buildkitd\.toml > "\$cfg"'
+      - matchRegex:
+          path: 'spec.templates[?(@.name == "build")].container.args[0]'
+          pattern: 'grep -qF "\[registry\.\\"\$REGISTRY_HOST\\"\]" "\$cfg" \|\| printf .* >> "\$cfg"'
+      - matchRegex:
+          path: 'spec.templates[?(@.name == "build")].container.args[0]'
+          pattern: 'cfg="\$HOME/\.config/buildkit/buildkitd\.toml"'
