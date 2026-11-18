@@ -70,6 +70,10 @@ On a PR preview's Environment, bindings and Argo CD Application (charts/preview,
 seconds) to the Environment; a Component opts in with annotation `platform.koorikla.io/preview-environments: enabled`
 ([preview-environments.md](preview-environments.md)).
 
+On an OpenChoreo cell namespace, label `platform.koorikla.io/mtls: permissive` (set per environment through
+`ProjectReleaseBinding` `namespaceLabels`) keeps Istio's `PERMISSIVE` mode instead of the generated `STRICT`
+`PeerAuthentication` ([networking.md](networking.md#strict-mtls-in-cell-namespaces)).
+
 On a PersistentVolumeClaim, annotation `platform.koorikla.io/delete-protection: enabled` means a ValidatingAdmissionPolicy
 of the owning addon denies its deletion; every PVC that Argo CD runs as a hook must carry it (with `hook-failed` as its
 only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements).

@@ -1,5 +1,6 @@
 {{- /* The operator namespace enforces Pod Security restricted (operator and Barman Cloud plugin meet it; PostgreSQL pods live in the app namespaces). Argo CD creates
-the namespace (CreateNamespace=true); this object only adds the labels. namespace.ambient: Istio ambient mesh client (#53), see values.yaml. */ -}}
+the namespace (CreateNamespace=true); this object only adds the labels.
+namespace.ambient: Istio ambient mesh client (#53), see values.yaml. */ -}}
 {{- if or .Values.namespace.podSecurity .Values.namespace.ambient }}
 apiVersion: v1
 kind: Namespace

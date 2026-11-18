@@ -20,8 +20,9 @@
 
 namespace:
   podSecurity: restricted           # Pod Security admission level enforced on the operator namespace ("" = no labels)
-  # Istio ambient mesh client (#53): the cluster operator reaches Kafka pods in cell namespaces, and those enforce STRICT mTLS (addon kyverno-policies
-  # templates/cell-mesh.yaml), so plaintext from outside the mesh is refused. Inert on clusters without Istio.
+  # Istio ambient mesh client (#53): the cluster operator reaches Kafka pods in
+  # cell namespaces, which enforce STRICT mTLS (addon
+  # kyverno-policies templates/cell-mesh.yaml) and refuse plaintext from outside the mesh. Inert without Istio.
   ambient: true
 
 monitoring:

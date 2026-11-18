@@ -96,9 +96,9 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   `http: [{}]` rule on port 8080 of every pod with an `openchoreo.dev/component` label, with `enableDefaultDeny: false`
   on both directions, so it never denies anything. Hubble only emits `hubble_http_*` for traffic Cilium's L7 proxy
   parses, and that takes an L7 rule. Only list ports that serve HTTP on every component pod: the proxy rejects other
-  protocols on a listed port (Cilium rejects L7 rules without a port). It sees plaintext only, i.e. the out-of-mesh
-  gateway's traffic into the app; HBONE between ambient pods stays opaque, and so would the gateway's traffic after
-  [#53](https://github.com/koorikla/platform/issues/53) (STRICT mTLS).
+  protocols on a listed port (Cilium rejects L7 rules without a port). It sees plaintext only: since the gateway is in
+  the mesh ([Strict mTLS in cell namespaces](#strict-mtls-in-cell-namespaces)) all traffic into component pods is
+  HBONE on 15008 and stays opaque, so this would no longer yield HTTP metrics (the gateway's own Envoy metrics do).
 - **Gateway API, Ingress, standalone Envoy: off.** kgateway owns north-south Gateway API; Istio owns waypoints.
 - **Istio ambient compatibility** (from Istio's Cilium prerequisites):
   - `cni.exclusive: false`: Cilium must not delete istio-cni's chained config.
@@ -106,6 +106,10 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   - `bpf.masquerade: false`: BPF masquerading breaks ambient's link-local `169.254.7.127` health-probe SNAT.
   - With default-deny `CiliumNetworkPolicy`, also allow ingress from `169.254.7.127/32` and HBONE `15008/tcp` between
     ambient pods.
+  - Any NetworkPolicy that restricts ingress ports must also open HBONE `15008/tcp` from the same peers: ztunnel
+    tunnels every mesh connection to the destination pod's 15008, so the CNI never sees the app port. For OpenChoreo's
+    per-component policies the platform generates that rule
+    ([Strict mTLS in cell namespaces](#strict-mtls-in-cell-namespaces)).
 - **CAPD / kindest/node**: no extra mounts. The node image's entrypoint makes `/` shared, and Cilium's privileged init
   containers mount bpffs and cgroup2 themselves, as on kind. dev1 and prod1 share the host kernel, but socket LB is
   scoped per cgroup namespace and CAPD node containers use private cgroupns.
@@ -123,8 +127,9 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
     (`/var/lib/rancher/k3s/agent/etc/cni/net.d`, `/var/lib/rancher/k3s/data/cni`).
 - `base` installs only `*.istio.io` CRDs. Gateway API CRDs come from `gateway-api-crds`. istiod uses them for its own
   GatewayClasses (`istio`, `istio-waypoint`) and ignores `gatewayClassName: kgateway`.
-- Workloads join the mesh through the namespace label `istio.io/dataplane-mode=ambient`. A pod can opt out with
-  `istio.io/dataplane-mode=none`. Enrollment happens live: running pods join without restarts.
+- Workloads join the mesh through the label `istio.io/dataplane-mode=ambient` on their namespace or on the pod (the pod
+  label wins). A pod can opt out with `istio.io/dataplane-mode=none`. Enrollment happens live: running pods join
+  without restarts.
 
 ### Ambient enrollment of OpenChoreo namespaces
 On the data plane, OpenChoreo creates one cell namespace per project x environment (e.g.
@@ -151,12 +156,46 @@ every tenant would have to repeat it. The platform default is a Kyverno `Mutatin
   addon aggregates the RBAC this needs.
 - `failurePolicy: Ignore`: a Kyverno outage only delays enrollment; it never blocks OpenChoreo.
 - Platform namespaces are excluded twice: by Kyverno's webhook `namespaceSelector` and by a `matchConditions` name
-  list. `kgateway-system` and `openchoreo-data-plane` (OpenChoreo's `gateway-default`) stay out of the mesh.
+  list. The platform's own mesh members are enrolled by their addons instead (next section).
 
-Ingress into enrolled namespaces: the gateway pods are not in the mesh and send plaintext. ztunnel accepts it under
-Istio's default `PERMISSIVE` mode, while traffic between enrolled pods is HBONE mTLS. A namespace-wide
-`PeerAuthentication` set to `STRICT` would cut off ingress until the gateway itself joins the mesh, via kgateway's
-ambient integration or a waypoint ([#53](https://github.com/koorikla/platform/issues/53)).
+### Strict mTLS in cell namespaces
+Every ambient cell namespace refuses plaintext: Kyverno generates a `PeerAuthentication` `default` with
+`mtls.mode: STRICT` into it ([#53](https://github.com/koorikla/platform/issues/53)). That only works because every
+in-cluster client of cell pods is itself in the mesh:
+
+| Client | Reaches in the cells | Enrolled by |
+|---|---|---|
+| data-plane gateway `gateway-default` (kgateway Envoy, `openchoreo-data-plane`) | component endpoints (ingress) | pod label through `Gateway.spec.infrastructure.labels` (addon `openchoreo-data-plane`) |
+| Prometheus agent (`telemetry`) | PodMonitors in cells, e.g. CloudNativePG's `:9187` | namespace label (addon `telemetry`, `namespace.ambient`) |
+| CNPG / Strimzi / KEDA operators (`cnpg-system`, `strimzi`, `keda`) | instance, broker and scaler endpoints | namespace label (each addon, `namespace.ambient`) |
+
+The gateway follows upstream's ambient ingress setup (kgateway docs "Ingress" for ambient: put the proxy in the mesh,
+ztunnel carries its upstream connections as HBONE). Only the proxy pod is labelled, so the cluster-agent next to it
+stays out. kgateway's own ambient settings (`KGW_ENABLE_ISTIO_INTEGRATION`, waypoint routing) are for DestinationRules
+and waypoints and aren't needed for L4 mTLS. The mesh clients carry no `PeerAuthentication`: they keep accepting
+plaintext from outside the mesh (the cloud LB / klipper into the gateway, the Prometheus agent's scrape of the
+gateway, kube-apiserver into operator webhooks). `hack/tests/test_gitops_contracts.sh` fails if one of them leaves
+the mesh while STRICT is on.
+
+`addons/kyverno-policies/templates/cell-mesh.yaml`, two `GeneratingPolicy`s on the same cell selector as the
+enrollment (synchronized: an edited or deleted object is restored, generated for existing cells too):
+- `openchoreo-cell-hbone`: NetworkPolicy `platform-mesh-hbone` admitting `15008/tcp` to pods with an
+  `openchoreo.dev/component` label, from the peers OpenChoreo's per-component NetworkPolicy admits: pods of the same
+  namespace and `openchoreo.dev/system-component` pods anywhere (the gateway). OpenChoreo's policy opens only the
+  endpoint ports, and ambient tunnels every mesh connection to 15008, so without it the CNI drops ingress (and
+  pod-to-pod traffic inside a cell). The peer set is unchanged, so a staging pod still can't reach production; inside
+  the tunnel the CNI no longer checks the endpoint port.
+- `openchoreo-cell-mtls`: the STRICT `PeerAuthentication`, off with `ambientEnrollment.mtls.strict: false`.
+
+Unaffected: kubelet probes (ambient SNATs them to `169.254.7.127`, which ztunnel exempts), cAdvisor and
+kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API server only), the promotion gate
+(queries the gateway's Envoy metrics in the observability plane), and traffic between pods of one cell.
+
+**Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an
+operator not listed above) is refused. Either enroll the client, or keep one environment `PERMISSIVE` with the
+namespace label `platform.koorikla.io/mtls=permissive` through
+`ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels` (the policy then skips it and removes its generated
+`PeerAuthentication`). `istio.io/dataplane-mode=none` takes a cell out of the mesh entirely (neither object).
 
 A Kubernetes-native MutatingAdmissionPolicy was considered and rejected. It can't label namespaces that already
 exist, and in Kubernetes 1.35 it is beta and off by default (needs a feature gate on k3s). Kyverno was wanted anyway.

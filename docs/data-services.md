@@ -525,13 +525,16 @@ spec:
           path: /spec/replicas
 ```
 
-- **Istio ambient.** Cell namespaces are ambient-enrolled; keda, strimzi and cnpg-system are not. Pod CPU/memory
-  targets are exact in ambient (no sidecar inflating the pod's usage). The KEDA operator queries scaler endpoints
-  (Kafka bootstrap, Prometheus, an app's metrics URL) as a non-mesh client: that works while the target accepts
-  plaintext (ambient's default `PERMISSIVE`); with a `STRICT` PeerAuthentication enroll namespace keda in ambient
-  (`istio.io/dataplane-mode: ambient`) or scale on a source outside the mesh. The same applies to the CNPG / Strimzi
-  operators reaching instance pods in enrolled namespaces (VERIFY with STRICT). The kube-apiserver -> KEDA metrics
-  apiserver and admission webhook paths are outside the mesh. Scaled to zero, requests to the component fail until
+- **Istio ambient.** Cell namespaces are ambient-enrolled and refuse plaintext (`STRICT`,
+  [networking.md](networking.md#strict-mtls-in-cell-namespaces)), so the operator namespaces `keda`, `strimzi` and
+  `cnpg-system` are mesh clients too (namespace label `istio.io/dataplane-mode: ambient`, `namespace.ambient` in each
+  addon): the CNPG operator reaches instance pods (`:8000`), the Strimzi operator the brokers, KEDA its scaler
+  endpoints (Kafka bootstrap, Prometheus, an app's metrics URL) over HBONE mTLS. The Prometheus agent (addon telemetry)
+  is enrolled as well for the per-cluster PodMonitors. Verified live with CNPG; Strimzi and KEDA follow the same path
+  (VERIFY). An app's metrics URL on a component pod is also behind OpenChoreo's per-component NetworkPolicy (same cell
+  and system components only). Pod CPU/memory targets are exact in ambient (no sidecar inflating the pod's usage).
+  The kube-apiserver -> KEDA metrics apiserver and admission webhook paths come from outside the mesh and stay
+  accepted (no `PeerAuthentication` in the operator namespaces). Scaled to zero, requests to the component fail until
   KEDA scales it up (no HTTP activator; the KEDA HTTP add-on is not installed).
 
 ## Verify on a cluster
