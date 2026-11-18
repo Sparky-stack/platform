@@ -27,7 +27,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | imageVerification.attestationTypes.vuln | string | `"https://cosign.sigstore.dev/attestation/vuln/v1"` |  |
 | imageVerification.cellNamespaceSelector.matchLabels."openchoreo.dev/managed-by" | string | `"renderedrelease-controller"` |  |
 | imageVerification.defaultAction | string | `"Audit"` |  |
-| imageVerification.enabled | bool | `true` | `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures. |
+| imageVerification.enabled | bool | `true` | `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures. |
 | imageVerification.environments.development | string | `"Audit"` |  |
 | imageVerification.environments.production | string | `"Deny"` |  |
 | imageVerification.environments.staging | string | `"Audit"` |  |
@@ -45,8 +45,8 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | imageVerification.github.repositories[0] | string | `"koorikla/hello-world"` |  |
 | imageVerification.github.transitionWorkflowRefs | list | `[]` |  |
 | imageVerification.github.triggers[0] | string | `"push"` |  |
-| imageVerification.github.workflow | string | `"https://github.com/koorikla/ci/.github/workflows/container.yaml"` |  |
-| imageVerification.github.workflowRef | string | `"a31c2341b1effdd084d1dd4c715d65e97ade895f"` |  |
+| imageVerification.github.workflow | string | `"https://github.com/koorikla/platform/.github/workflows/app-container.yaml"` |  |
+| imageVerification.github.workflowRef | string | `"3311f541a8eab72a2649b6f1eda4fe05efa3142e"` |  |
 | imageVerification.platformKey.attestations[0] | string | `"sbom"` |  |
 | imageVerification.platformKey.attestations[1] | string | `"vuln"` |  |
 | imageVerification.platformKey.cluster.configMap | string | `"platform-image-verification"` |  |

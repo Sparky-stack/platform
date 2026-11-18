@@ -659,7 +659,7 @@ spec:
               chmod 0755 /tmp/bin/cosign; export PATH="/tmp/bin:$PATH"
             fi
             IMAGE_DIGEST_REF="$DIGEST_REF" VULN_PREDICATE=/work/out/trivy-vuln.json sign-image.sh
-            # Predicate type https://spdx.dev/Document/v2.3 (syft writes SPDX 2.3), the type koorikla/ci's GitHub path attests:
+            # Predicate type https://spdx.dev/Document/v2.3 (syft writes SPDX 2.3), the type the app-container.yaml GitHub path attests:
             # admission (addon kyverno-policies attestationTypes.sbom) checks one SBOM type for both build paths.
             # (the cosign type shorthand spdxjson would record https://spdx.dev/Document)
             echo ">> cosign attest --type https://spdx.dev/Document/v2.3 $DIGEST_REF"

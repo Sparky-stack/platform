@@ -218,7 +218,7 @@ App repo changes (koorikla/hello-world, outside this repo):
 - `CODEOWNERS` + branch ruleset as in gate 1.
 - Builds write the image **by digest** into `workload.yaml`: the in-cluster build does it for every Component with
   `autoBuild: true` ([build-plane.md](build-plane.md#auto-build-poll-or-webhook)); on the optional GitHub Actions path
-  koorikla/ci outputs `image_digest_ref`. Production denies tag-only references
+  the app-* workflows output `image_digest_ref`. Production denies tag-only references
   ([#16](https://github.com/koorikla/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push`
   if `sourceIntegrity` is enabled ([supply-chain.md](supply-chain.md#git-commit-signatures)).
 - Optional `/` health endpoint for the smoke test (`promotionGate.smoke.path`).

@@ -5,11 +5,11 @@ kind: Template
 metadata:
   name: rust-service
   title: Rust service (axum)
-  description: HTTP service in Rust (axum, tokio) as a static binary on distroless static, CI via koorikla/ci, deployed by OpenChoreo.
+  description: HTTP service in Rust (axum, tokio) as a static binary on distroless static, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, rust, axum, service]
   annotations:
     platform.koorikla.io/stack: rust
-    platform.koorikla.io/ci-workflow: rust.yaml
+    platform.koorikla.io/ci-workflow: app-rust.yaml
 spec:
   owner: group:default/openchoreo-users
   type: service

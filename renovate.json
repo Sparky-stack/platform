@@ -59,16 +59,16 @@
     },
     {
       "customType": "regex",
-      "description": "koorikla/ci reusable workflow commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag v1); bump together with the app repos' `uses: koorikla/ci/...@<sha> # v1`",
+      "description": "koorikla/platform app-container.yaml commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag ci-v1); bump together with the app repos' `uses: koorikla/platform/.github/workflows/app-*.yaml@<sha> # ci-v1`",
       "managerFilePatterns": [
         "/^addons/kyverno-policies/values\\.yaml$/",
         "/^installations/[^/]+/addons/kyverno-policies/[^/]+\\.ya?ml$/"
       ],
       "matchStrings": [
-        "workflowRef:\\s*\"?(?<currentDigest>[0-9a-f]{40})\"?\\s*#\\s*(?<currentValue>v[0-9][^\\s]*)"
+        "workflowRef:\\s*\"?(?<currentDigest>[0-9a-f]{40})\"?\\s*#\\s*(?<currentValue>ci-v[0-9][^\\s]*)"
       ],
       "datasourceTemplate": "github-tags",
-      "depNameTemplate": "koorikla/ci"
+      "depNameTemplate": "koorikla/platform"
     },
     {
       "customType": "regex",

@@ -93,10 +93,10 @@ ambientEnrollment:
 # every policy here. Pods (all container kinds, kubectl debug through pods/ephemeralcontainers) and their controllers
 # (Deployment, StatefulSet, CronJob, ... via Kyverno autogen) are checked, so a denied Deployment shows up as an apply
 # failure on the RenderedRelease. No digest mutation (it would fight OpenChoreo's agent re-applying the rendered
-# Deployment): where requireDigest is on (production) the Workload must already carry image@sha256 (koorikla/ci output
+# Deployment): where requireDigest is on (production) the Workload must already carry image@sha256 (app-container.yaml output
 # image_digest_ref); elsewhere tag references are only reported.
 imageVerification:
-  # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures.
+  # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures.
   enabled: true
   # environment -> Audit (PolicyReport only) | Deny (blocked at admission).
   environments:
@@ -119,23 +119,23 @@ imageVerification:
   cellNamespaceSelector:
     matchLabels:
       openchoreo.dev/managed-by: renderedrelease-controller
-  # Images built by GitHub Actions through the shared reusable workflow koorikla/ci container.yaml: Sigstore keyless
+  # Images built by GitHub Actions through the shared reusable workflow app-container.yaml (this repo, .github/workflows): Sigstore keyless
   # (cosign v3 bundle format, verified by Kyverno 1.20). The certificate subject is the REUSABLE workflow, which
-  # anyone can call (koorikla/ci is public): the GitHub workflow extensions pin the calling repository, ref and trigger,
+  # anyone can call (koorikla/platform is public): the GitHub workflow extensions pin the calling repository, ref and trigger,
   # so every allowed (repository, ref, trigger) becomes one attestor (Kyverno matches extensions exactly, no regex),
   # tried in order: an image matching the n-th attestor pays n-1 failed verifications per check and admission.
-  # koorikla/ci also attaches signed SPDX SBOM, SLSA provenance and vulnerability-scan attestations: all required.
+  # app-container.yaml also attaches signed SPDX SBOM, SLSA provenance and vulnerability-scan attestations: all required.
   github:
     enabled: true
     prefixes: ["ghcr.io/koorikla/"]        # image reference prefixes this source covers
     issuer: https://token.actions.githubusercontent.com
-    # Certificate subject = <workflow>@<workflowRef>: the reusable workflow at one exact commit. App repos call koorikla/ci
-    # by commit SHA (`uses: koorikla/ci/.github/workflows/go.yaml@<sha> # v1`); its nested container.yaml call keeps that
+    # Certificate subject = <workflow>@<workflowRef>: the reusable workflow at one exact commit. App repos call app-<stack>.yaml
+    # by commit SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1`); its nested container.yaml call keeps that
     # ref, so the signing certificate names the SHA. A tag or branch is mutable (whoever moves `v1` changes what is
     # trusted): rendering fails unless workflowRef is a 40-hex commit SHA. Renovate bumps it with the app repos' pins
-    # (renovate.json: tag v1 of koorikla/ci, the comment below is the tracked tag).
-    workflow: https://github.com/koorikla/ci/.github/workflows/container.yaml
-    workflowRef: "a31c2341b1effdd084d1dd4c715d65e97ade895f" # v1
+    # (renovate.json: tag ci-v1 of koorikla/platform, the comment below is the tracked tag).
+    workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml
+    workflowRef: "3311f541a8eab72a2649b6f1eda4fe05efa3142e" # ci-v1
     # Moving the pin without breaking admission: images already running were signed at the previous commit. Keep that
     # commit here (40-hex, at most one: workflowRef + this list <= 2) until every allowed repository's production image
     # is rebuilt at workflowRef, then empty it (docs/supply-chain.md "Moving the workflow pin"). Not tracked by Renovate.
@@ -178,7 +178,7 @@ imageVerification:
     provenance: https://slsa.dev/provenance/v1
     vuln: https://cosign.sigstore.dev/attestation/vuln/v1
   # Image references must carry a digest (current practice: images pinned by digest). Per action: production (Deny)
-  # denies tag-only references, development/staging only report them. koorikla/ci outputs image_digest_ref; app repos'
+  # denies tag-only references, development/staging only report them. app-container.yaml outputs image_digest_ref; app repos'
   # Workload bump must write it (docs/supply-chain.md "Digest references").
   requireDigest:
     Audit: false

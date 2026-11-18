@@ -1,4 +1,4 @@
-# Golden-path CI (koorikla/platform templates/java-quarkus-service). Thin caller: the pipeline lives in koorikla/ci, pinned by
+# Golden-path CI (koorikla/platform templates/java-quarkus-service). Thin caller: the pipeline lives in koorikla/platform (.github/workflows/app-*), pinned by
 # commit SHA (Renovate bumps it, renovate.json); the same SHA is what the platform's Kyverno policy trusts for
 # keyless signatures.
 name: ci
@@ -34,7 +34,7 @@ jobs:
   # signature).
   build:
     needs: validate-manifests
-    uses: koorikla/ci/.github/workflows/java.yaml@a31c2341b1effdd084d1dd4c715d65e97ade895f # v1
+    uses: koorikla/platform/.github/workflows/app-java.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1
     permissions:
       contents: read
       actions: read

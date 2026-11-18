@@ -7,7 +7,7 @@ WORKDIR /src
 COPY go.mod go.sum* ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
-# Unit tests gate the image (CI also runs them, with -race, in koorikla/ci go.yaml).
+# Unit tests gate the image (CI also runs them, with -race, in koorikla/platform app-go.yaml).
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go test ./...
 ARG VERSION=dev

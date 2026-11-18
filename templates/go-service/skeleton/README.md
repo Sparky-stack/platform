@@ -24,7 +24,7 @@ docker build -t ${{ values.name }}:dev .   # runs the unit tests in the build st
 
 ## CI and delivery
 
-`.github/workflows/ci.yaml` calls the reusable `koorikla/ci` workflow `go.yaml`, pinned by commit SHA (`# v1`,
+`.github/workflows/ci.yaml` calls the reusable workflow `app-go.yaml` (koorikla/platform), pinned by commit SHA (`# ci-v1`,
 Renovate keeps it current):
 
 1. `validate-manifests`: `deploy/openchoreo/` against the OpenChoreo CRD schemas (`hack/validate-manifests.py`).

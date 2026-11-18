@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Node.js API on distroless Node.js 26 (Debian 13), non-root (uid 65532). pnpm installs from pnpm-lock.yaml
 # (--frozen-lockfile fails on a stale lock); eslint and vitest gate the image; only production dependencies ship.
-# Builds natively per architecture (koorikla/ci native runners). Base images pinned by multi-arch index digest.
+# Builds natively per architecture (app-* workflows on native runners). Base images pinned by multi-arch index digest.
 
 FROM docker.io/library/node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
 ENV CI=true PNPM_HOME=/pnpm PATH=/pnpm:$PATH

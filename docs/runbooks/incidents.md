@@ -120,8 +120,8 @@ Identify the matching failure mode below and execute its **Steps**, **Verify**, 
   kubectl --kubeconfig dev1.kubeconfig get policyreport -A
   ```
   Fix the underlying cause (never weaken `production` to `Audit`):
-  - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (`koorikla/ci` output `image_digest_ref`, [#16](https://github.com/koorikla/platform/issues/16)) and cut a new `ComponentRelease`.
-  - **Repository or `workflowRef` mismatch**: add `owner/repo` to `imageVerification.github.repositories` in `installations/<inst>/addons/kyverno-policies/values.yaml` or align `workflowRef` with `koorikla/ci` `v1`.
+  - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (the app-* workflows output `image_digest_ref`, [#16](https://github.com/koorikla/platform/issues/16)) and cut a new `ComponentRelease`.
+  - **Repository or `workflowRef` mismatch**: add `owner/repo` to `imageVerification.github.repositories` in `installations/<inst>/addons/kyverno-policies/values.yaml` or align `workflowRef` with koorikla/platform tag `ci-v1`.
   - **Harbor `apps/` image without `platformKey.publicKey`**: wire `cosign.pub` per [certificates-and-secrets.md](certificates-and-secrets.md) ([#15](https://github.com/koorikla/platform/issues/15)).
   - **Webhook timeout (`context deadline exceeded`)**: a check of a digest not yet in Kyverno's verification cache takes ~5-10 s ([supply-chain.md "Admission latency"](../supply-chain.md#admission-latency)); much slower means the cluster's egress to `ghcr.io` / `tuf-repo-cdn.sigstore.dev` is degraded. The rollout retries; successful checks are cached per digest.
   - **Kyverno webhook down (`failurePolicy: Fail`)**: running production pods stay up and platform namespaces are excluded; restore `deploy/kyverno-admission-controller` in `kyverno`.

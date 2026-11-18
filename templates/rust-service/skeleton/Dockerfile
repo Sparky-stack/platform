@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Rust service as a static (musl) binary on distroless static, non-root (uid 65532). rustfmt, clippy and the unit tests
-# gate the image; Cargo.lock is enforced (--locked). Builds natively per architecture (koorikla/ci native runners).
+# gate the image; Cargo.lock is enforced (--locked). Builds natively per architecture (app-* workflows on native runners).
 # Base images pinned by multi-arch index digest (Renovate).
 
 FROM docker.io/library/rust:1.100.0-alpine3.24@sha256:de1e0058543a81ed7b046629167db587c67a94bdf37cce14eb27f0ec83baaffb AS build

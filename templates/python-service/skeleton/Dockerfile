@@ -2,7 +2,7 @@
 # Python service on distroless python3 (Debian 13, Python 3.13), non-root (uid 65532). The build stage is the same
 # distroless image's :debug variant (busybox shell), so the virtualenv links the exact interpreter the runtime ships.
 # uv installs from uv.lock (--locked fails on a stale lock); ruff and pytest gate the image. Builds natively per
-# architecture (koorikla/ci native runners). Base images pinned by multi-arch index digest (Renovate).
+# architecture (app-* workflows on native runners). Base images pinned by multi-arch index digest (Renovate).
 
 FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
