@@ -4,9 +4,24 @@ templates:
   - templates/secrets.yaml
   - templates/validate.yaml
   - templates/prometheus-agent-token.yaml
+  - templates/namespace.yaml
 set:
   cluster.name: dev1
 tests:
+  - it: "the namespace is an Istio ambient mesh client (#53: the Prometheus agent scrapes PodMonitors in STRICT cells)"
+    template: templates/namespace.yaml
+    release: { namespace: telemetry }
+    asserts:
+      - isKind: { of: Namespace }
+      - equal: { path: metadata.name, value: telemetry }
+      - equal: { path: metadata.labels, value: { istio.io/dataplane-mode: ambient } }
+
+  - it: no Namespace object outside the mesh
+    template: templates/namespace.yaml
+    set: { namespace.ambient: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
   - it: derives the collector endpoints and the cluster name from cluster/installation values
     template: templates/env.yaml
     asserts:

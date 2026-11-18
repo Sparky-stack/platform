@@ -1,0 +1,14 @@
+{{- /* Argo CD creates the namespace (CreateNamespace=true); this object only adds the labels.
+namespace.ambient (#53): the Prometheus agent scrapes PodMonitors in every namespace, including the ones in cell
+namespaces (e.g. CloudNativePG's per-cluster :9187), and cells enforce STRICT mTLS (addon kyverno-policies
+templates/cell-mesh.yaml): the agent has to be a mesh client. The other pods here gain mTLS to mesh destinations and
+keep accepting plaintext (no PeerAuthentication here); Fluent Bit runs on the host network (not captured).
+Inert on clusters without Istio. */ -}}
+{{- if .Values.namespace.ambient }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    istio.io/dataplane-mode: ambient
+{{- end }}

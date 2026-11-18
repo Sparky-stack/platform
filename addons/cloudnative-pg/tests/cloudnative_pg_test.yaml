@@ -113,10 +113,23 @@ tests:
           path: 'metadata.labels["pod-security.kubernetes.io/enforce"]'
           value: restricted
 
-  - it: no Namespace object without a Pod Security level
+  - it: "the operator namespace is an Istio ambient mesh client (#53: cell namespaces enforce STRICT mTLS)"
+    template: templates/namespace.yaml
+    asserts:
+      - equal: { path: 'metadata.labels["istio.io/dataplane-mode"]', value: ambient }
+
+  - it: without a Pod Security level the Namespace carries only the mesh label
     template: templates/namespace.yaml
     set:
       namespace.podSecurity: ""
+    asserts:
+      - equal: { path: metadata.labels, value: { istio.io/dataplane-mode: ambient } }
+
+  - it: no Namespace object without a Pod Security level and outside the mesh
+    template: templates/namespace.yaml
+    set:
+      namespace.podSecurity: ""
+      namespace.ambient: false
     asserts:
       - hasDocuments: { count: 0 }
 
