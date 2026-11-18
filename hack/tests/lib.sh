@@ -51,7 +51,7 @@ render_platform() {
     cp "$RENDERED_DIR/platform-$inst.yaml" "$out"
   else
     helm template platform "$ROOT/charts/platform" --namespace argocd \
-      --values "$ROOT/installations/$inst/installation.yaml" > "$out"
+      --values "$ROOT/installations/$inst/installation.yaml" --set secrets.githubGateApp.enabled=true > "$out"   # = hack/test.sh
   fi
 }
 

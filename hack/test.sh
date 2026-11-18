@@ -113,7 +113,10 @@ for inst_dir in installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
   inst=$(basename "$inst_dir")
   helm lint charts/platform --values "$inst_dir/installation.yaml" >/dev/null
-  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" > "$TMP/platform-$inst.yaml"
+  # Full feature set, as with the platform GitHub App seeded (bootstrap.sh sets this on the root app; default false):
+  # the addon renders below then include auto-build and the preview token for kubeconform and the contract tests.
+  helm template platform charts/platform --namespace argocd --values "$inst_dir/installation.yaml" \
+    --set secrets.githubGateApp.enabled=true > "$TMP/platform-$inst.yaml"
   check_kubeconform "charts/platform ($inst)" "$TMP/platform-$inst.yaml"
 done
 
