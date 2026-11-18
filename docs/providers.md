@@ -48,6 +48,15 @@ combination (k3s v1.35.10+k3s1 on kindest/node v1.35.8, cluster-api-k3s v0.5.0, 
 - CAPG: `GKE` (the GCPManaged* controllers, default off) and `MachinePool` (GKE node pools) on its own manager; while
   `gcp` is enabled core's `MachinePool` gate (default on in 1.13) is listed explicitly too.
 
+### Leader election
+The provider managers (core, CAPD, CAPA, CAPG) and the operator run with 60s/40s/10s leases (lease/renew/retry) instead
+of upstream's 15s/10s/2s: during a clean local bootstrap the mgmt API server stalls long enough that
+capi-controller-manager lost its lease, exited, and took the CAPI webhook with it while Argo CD applied the Cluster
+(#192). Same headroom as mgmt's own k3s controllers (#94). The operator turns `spec.manager.leaderElection` into
+`--leader-elect-*` flags; cluster-api-k3s v0.5.0 and CAPH v1.1.12 lack them, so they keep their defaults
+(`leaseFlags` in `addons/capi-providers/values.yaml`). Check: `kubectl -n capi-system get lease
+controller-leader-election-capi -o jsonpath='{.spec.leaseDurationSeconds}'` prints `60`.
+
 ## Adding a cluster
 
 One file: `installations/<inst>/clusters/<name>.yaml` (schema and defaults: `charts/cluster/values.yaml`). The `fleet`

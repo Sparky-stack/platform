@@ -11,6 +11,13 @@ cluster-api-operator:
   ipam: {}
   # Re-reconcile a provider when its configSecret changes (CAPA's credentials come from an ExternalSecret).
   watchConfigSecret: true
+  # Lease headroom like the provider managers (addons/capi-providers values.yaml leaderElection, #192) and mgmt's k3s
+  # controllers (#94): the 15s/10s/2s defaults are lost when the mgmt API server stalls during a clean bootstrap.
+  leaderElection:
+    enabled: true
+    leaseDuration: 60s
+    renewDeadline: 40s
+    retryPeriod: 10s
   image:
     manager:
       repository: registry.k8s.io/capi-operator/cluster-api-operator
