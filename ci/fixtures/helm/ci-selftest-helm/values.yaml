@@ -1,0 +1,5 @@
+image:
+  repository: ghcr.io/koorikla/hello-world
+  tag: main
+replicas: 1
+port: 8080

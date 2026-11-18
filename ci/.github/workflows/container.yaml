@@ -1,0 +1,501 @@
+name: container
+
+# Shared building block: multi-arch build (native arm64 + amd64 runners pushed
+# by digest and merged into one manifest list, or buildx + QEMU) -> Trivy scan
+# of every platform -> SPDX SBOM -> GitHub attestations (SLSA provenance, SBOM)
+# -> cosign keyless sign of the manifest list and each platform manifest
+# (+ cosign vuln attestation). PRs build linux/amd64 only, scan, never push. Called by every stack workflow; can also be
+# called directly for repos that only ship a Dockerfile.
+#
+# Required caller permissions (job that `uses:` this workflow):
+#   contents: read, packages: write, id-token: write, attestations: write,
+#   security-events: write
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Image name (default: repository name)'
+        required: false
+        type: string
+        default: ''
+      registry:
+        description: 'Registry prefix, e.g. ghcr.io/koorikla or harbor.example.com/apps (default ghcr.io/<owner>)'
+        required: false
+        type: string
+        default: ''
+      context:
+        description: 'Docker build context'
+        required: false
+        type: string
+        default: '.'
+      dockerfile:
+        description: 'Path to the Dockerfile'
+        required: false
+        type: string
+        default: 'Dockerfile'
+      platforms:
+        description: 'Comma-separated target platforms (PR builds are linux/amd64 only)'
+        required: false
+        type: string
+        default: 'linux/amd64,linux/arm64'
+      build_args:
+        description: 'Newline-separated extra build-args (VERSION=<short sha> is always set)'
+        required: false
+        type: string
+        default: ''
+      push:
+        description: 'Push, attest and sign on non-PR events'
+        required: false
+        type: boolean
+        default: true
+      trivy_severity:
+        description: 'Comma-separated severities that fail the Trivy scan'
+        required: false
+        type: string
+        default: 'CRITICAL'
+      trivy_ignore_unfixed:
+        description: 'Ignore vulnerabilities without a fixed version'
+        required: false
+        type: boolean
+        default: true
+      trivy_fail:
+        description: 'Fail the job on findings at trivy_severity (false = report only)'
+        required: false
+        type: boolean
+        default: true
+      trivy_ignore_file:
+        description: 'Repo-relative .trivyignore(.yaml) with accepted risks (empty = none)'
+        required: false
+        type: string
+        default: ''
+      upload_sarif:
+        description: 'Upload Trivy SARIF to GitHub code scanning'
+        required: false
+        type: boolean
+        default: true
+      sarif_category:
+        description: 'Code-scanning category (default container-<image>)'
+        required: false
+        type: string
+        default: ''
+      artifact_name:
+        description: 'If set, download this workflow artifact into <context> before building (e.g. a prebuilt binary or xpkg inputs)'
+        required: false
+        type: string
+        default: ''
+      multiarch_strategy:
+        description: 'native = one runner per arch (ubuntu-24.04 + ubuntu-24.04-arm) merged into one manifest list; qemu = single amd64 runner with buildx + QEMU'
+        required: false
+        type: string
+        default: 'native'
+      runner_amd64:
+        description: 'Runner label for linux/amd64 builds'
+        required: false
+        type: string
+        default: 'ubuntu-24.04'
+      runner_arm64:
+        description: 'Runner label for linux/arm64 builds (native strategy)'
+        required: false
+        type: string
+        default: 'ubuntu-24.04-arm'
+    secrets:
+      registry_username:
+        description: 'Registry username (default github.actor; needed for non-GHCR registries)'
+        required: false
+      registry_password:
+        description: 'Registry password/token (default GITHUB_TOKEN)'
+        required: false
+    outputs:
+      image:
+        description: 'Image reference tagged with the short SHA (<repo>:<short_sha>)'
+        value: ${{ jobs.prepare.outputs.image }}
+      image_ref:
+        description: 'Alias of image'
+        value: ${{ jobs.prepare.outputs.image }}
+      image_repo:
+        description: 'Image repository without tag'
+        value: ${{ jobs.prepare.outputs.repo }}
+      digest:
+        description: 'Manifest-list (index) digest sha256:... (empty on PRs)'
+        value: ${{ jobs.publish.outputs.digest }}
+      image_digest_ref:
+        description: 'Immutable reference <repo>@sha256:... (empty on PRs)'
+        value: ${{ jobs.publish.outputs.image_digest_ref }}
+      short_sha:
+        description: '7-character commit SHA used as tag'
+        value: ${{ jobs.prepare.outputs.short_sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Image coordinates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      image_name: ${{ steps.vars.outputs.image_name }}
+      repo: ${{ steps.vars.outputs.repo }}
+      registry_host: ${{ steps.vars.outputs.registry_host }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      should_push: ${{ steps.vars.outputs.should_push }}
+      sarif_cat: ${{ steps.vars.outputs.sarif_cat }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Compute image coordinates
+        id: vars
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          INPUT_PUSH: ${{ inputs.push }}
+          EVENT_NAME: ${{ github.event_name }}
+          SARIF_CATEGORY: ${{ inputs.sarif_category }}
+        run: bash "$CI_SCRIPTS/common/image-meta.sh"
+
+      - name: Build matrix
+        id: matrix
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+          STRATEGY: ${{ inputs.multiarch_strategy }}
+          SHOULD_PUSH: ${{ steps.vars.outputs.should_push }}
+          RUNNER_AMD64: ${{ inputs.runner_amd64 }}
+          RUNNER_ARM64: ${{ inputs.runner_arm64 }}
+        run: bash "$CI_SCRIPTS/common/build-matrix.sh"
+
+  build:
+    name: Build ${{ matrix.slug }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    concurrency:
+      group: container-build-${{ github.repository }}-${{ needs.prepare.outputs.image_name }}-${{ matrix.slug }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Download build artifact
+        if: inputs.artifact_name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.context }}
+
+      - name: Set up QEMU
+        if: contains(matrix.platforms, ',')
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker metadata (tags/labels/annotations)
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ needs.prepare.outputs.repo }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.short_sha }}
+            type=sha,format=long,prefix=
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Log in to registry
+        if: needs.prepare.outputs.should_push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ needs.prepare.outputs.registry_host }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: Build (push by digest)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ needs.prepare.outputs.should_push != 'true' && needs.prepare.outputs.image || '' }}
+          outputs: ${{ needs.prepare.outputs.should_push == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', needs.prepare.outputs.repo) || 'type=docker' }}
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.short_sha }}
+            ${{ inputs.build_args }}
+          cache-from: type=gha,scope=${{ needs.prepare.outputs.image_name }}-${{ matrix.slug }}
+          cache-to: type=gha,mode=max,scope=${{ needs.prepare.outputs.image_name }}-${{ matrix.slug }}
+
+      - name: Record digest
+        if: needs.prepare.outputs.should_push == 'true'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        if: needs.prepare.outputs.should_push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          # `~` cannot occur in image names: the download pattern below must not match
+          # another image of the same run whose name extends this one (app vs app-native).
+          name: digests-${{ needs.prepare.outputs.image_name }}~${{ matrix.slug }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Install Trivy
+        if: needs.prepare.outputs.should_push != 'true'
+        uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          cache: true
+
+      - name: Trivy DB cache key
+        if: needs.prepare.outputs.should_push != 'true'
+        id: trivy_key
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy DB
+        if: needs.prepare.outputs.should_push != 'true'
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ runner.arch }}-${{ steps.trivy_key.outputs.date }}
+          restore-keys: trivy-db-${{ runner.arch }}-
+
+      - name: Trivy scan (local image, PR)
+        id: scan
+        if: needs.prepare.outputs.should_push != 'true'
+        env:
+          IMAGE_REF: ${{ needs.prepare.outputs.image }}
+          IMAGE_SRC: docker
+          FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
+          IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
+          FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: bash "$CI_SCRIPTS/common/scan-image.sh"
+
+      - name: Upload Trivy SARIF
+        if: always() && inputs.upload_sarif && steps.scan.outputs.sarif != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: ${{ needs.prepare.outputs.sarif_cat }}
+
+  publish:
+    name: Manifest list, scan, SBOM, attest, sign
+    needs: [prepare, build]
+    if: needs.prepare.outputs.should_push == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: container-publish-${{ github.repository }}-${{ needs.prepare.outputs.image_name }}-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
+      image_digest_ref: ${{ steps.merge.outputs.image_digest_ref }}
+    steps:
+      - name: Checkout (trivy ignore file)
+        if: inputs.trivy_ignore_file != ''
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.trivy_ignore_file }}
+          sparse-checkout-cone-mode: false
+
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: digests-${{ needs.prepare.outputs.image_name }}~*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker metadata (tags/labels/annotations)
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ needs.prepare.outputs.repo }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.short_sha }}
+            type=sha,format=long,prefix=
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Log in to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ needs.prepare.outputs.registry_host }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: Create and push manifest list
+        id: merge
+        env:
+          REPO: ${{ needs.prepare.outputs.repo }}
+          DIGESTS_DIR: ${{ runner.temp }}/digests
+          TAGS: ${{ steps.meta.outputs.tags }}
+          ANNOTATIONS: ${{ steps.meta.outputs.annotations }}
+        run: bash "$CI_SCRIPTS/common/merge-manifest.sh"
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          cache: true
+
+      - name: Trivy DB cache key
+        id: trivy_key
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ runner.arch }}-${{ steps.trivy_key.outputs.date }}
+          restore-keys: trivy-db-${{ runner.arch }}-
+
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0.24.3
+
+      - name: Trivy scan (every platform)
+        id: scan
+        env:
+          IMAGE_REF: ${{ steps.merge.outputs.image_digest_ref }}
+          IMAGE_SRC: remote
+          PLATFORMS: ${{ inputs.platforms }}
+          FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
+          IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
+          FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
+          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: bash "$CI_SCRIPTS/common/scan-image.sh"
+
+      - name: Upload Trivy SARIF
+        if: always() && inputs.upload_sarif && steps.scan.outputs.sarif != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: ${{ needs.prepare.outputs.sarif_cat }}
+
+      - name: SBOM (SPDX JSON, syft)
+        id: sbom
+        env:
+          SYFT_CMD: ${{ steps.syft.outputs.cmd }}
+          IMAGE_REF: ${{ steps.merge.outputs.image_digest_ref }}
+          SOURCE: registry
+          PLATFORM: linux/amd64
+        run: PATH="$(dirname "$SYFT_CMD"):$PATH" bash "$CI_SCRIPTS/common/sbom.sh"
+
+      - name: Attest SLSA build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ needs.prepare.outputs.repo }}
+          subject-digest: ${{ steps.merge.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest SBOM
+        uses: actions/attest@v4
+        with:
+          create-storage-record: false
+          subject-name: ${{ needs.prepare.outputs.repo }}
+          subject-digest: ${{ steps.merge.outputs.digest }}
+          sbom-path: ${{ steps.sbom.outputs.sbom }}
+          push-to-registry: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.3
+
+      - name: Cosign keyless sign + vuln attestation
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.merge.outputs.image_digest_ref }}
+          VULN_PREDICATE: ${{ steps.scan.outputs.vuln_predicate }}
+        run: bash "$CI_SCRIPTS/common/sign-image.sh"
+
+      - name: Upload reports
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-reports-${{ needs.prepare.outputs.image_name }}
+          path: ${{ env.CI_OUT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,266 @@
+name: go
+
+# Go service: go vet, golangci-lint, go test -race + coverage, govulncheck,
+# CodeQL (go), then container.yaml (multi-arch build, scan, SBOM, sign).
+#
+# Required caller permissions:
+#   contents: read, actions: read, packages: write, id-token: write,
+#   attestations: write, security-events: write
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: 'Go module directory'
+        required: false
+        type: string
+        default: '.'
+      go_version_file:
+        description: 'go.mod / .go-version used by setup-go (default <working_directory>/go.mod)'
+        required: false
+        type: string
+        default: ''
+      run_lint:
+        description: 'Run golangci-lint'
+        required: false
+        type: boolean
+        default: true
+      golangci_lint_version:
+        description: 'golangci-lint version'
+        required: false
+        type: string
+        default: 'latest'
+      run_vulncheck:
+        description: 'Run govulncheck'
+        required: false
+        type: boolean
+        default: true
+      run_codeql:
+        description: 'Run CodeQL (go)'
+        required: false
+        type: boolean
+        default: true
+      extra_test_cmd:
+        description: 'Extra shell command run in working_directory after tests'
+        required: false
+        type: string
+        default: ''
+      build_container:
+        description: 'Build/scan/sign the container image after checks'
+        required: false
+        type: boolean
+        default: true
+      image_name:
+        description: 'Image name (default: repository name)'
+        required: false
+        type: string
+        default: ''
+      registry:
+        description: 'Registry prefix (default ghcr.io/<owner>)'
+        required: false
+        type: string
+        default: ''
+      context:
+        description: 'Docker build context (default working_directory)'
+        required: false
+        type: string
+        default: ''
+      dockerfile:
+        description: 'Dockerfile (default <working_directory>/Dockerfile)'
+        required: false
+        type: string
+        default: ''
+      platforms:
+        description: 'Comma-separated image platforms'
+        required: false
+        type: string
+        default: 'linux/amd64,linux/arm64'
+      multiarch_strategy:
+        description: 'native (per-arch runners) or qemu'
+        required: false
+        type: string
+        default: 'native'
+      build_args:
+        description: 'Newline-separated extra build-args'
+        required: false
+        type: string
+        default: ''
+      push:
+        description: 'Push, attest and sign on non-PR events'
+        required: false
+        type: boolean
+        default: true
+      trivy_severity:
+        description: 'Severities that fail the image scan'
+        required: false
+        type: string
+        default: 'CRITICAL'
+      trivy_ignore_unfixed:
+        description: 'Ignore unfixed vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      trivy_ignore_file:
+        description: 'Repo-relative .trivyignore(.yaml) with accepted risks'
+        required: false
+        type: string
+        default: ''
+      trivy_fail:
+        description: 'Fail on findings at trivy_severity'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      registry_username:
+        description: 'Registry username (non-GHCR registries)'
+        required: false
+      registry_password:
+        description: 'Registry password/token (non-GHCR registries)'
+        required: false
+    outputs:
+      image:
+        description: 'Image reference tagged with the short SHA'
+        value: ${{ jobs.container.outputs.image }}
+      image_ref:
+        description: 'Alias of image'
+        value: ${{ jobs.container.outputs.image_ref }}
+      image_repo:
+        description: 'Image repository without tag'
+        value: ${{ jobs.container.outputs.image_repo }}
+      digest:
+        description: 'Manifest-list digest'
+        value: ${{ jobs.container.outputs.digest }}
+      image_digest_ref:
+        description: 'Immutable <repo>@sha256:... reference'
+        value: ${{ jobs.container.outputs.image_digest_ref }}
+      short_sha:
+        description: '7-character commit SHA'
+        value: ${{ jobs.container.outputs.short_sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: vet, lint, test, govulncheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: go-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+
+      - name: golangci-lint
+        if: inputs.run_lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ inputs.golangci_lint_version }}
+          working-directory: ${{ inputs.working_directory }}
+
+      - name: go vet, go test -race, govulncheck
+        env:
+          WORKDIR: ${{ inputs.working_directory }}
+          RUN_LINT: 'false'
+          RUN_VULNCHECK: ${{ inputs.run_vulncheck }}
+        run: bash "$CI_SCRIPTS/go/check.sh"
+
+      - name: Extra test command
+        if: inputs.extra_test_cmd != ''
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          EXTRA_CMD: ${{ inputs.extra_test_cmd }}
+        run: bash -euo pipefail -c "$EXTRA_CMD"
+
+  codeql:
+    name: CodeQL (go)
+    if: inputs.run_codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: go-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+
+      - name: CodeQL init
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
+          source-root: ${{ inputs.working_directory }}
+
+      - name: go build
+        working-directory: ${{ inputs.working_directory }}
+        run: go build ./...
+
+      - name: CodeQL analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:go/${{ inputs.working_directory }}
+
+  container:
+    name: image
+    needs: [test, codeql]
+    if: >-
+      always() && inputs.build_container &&
+      needs.test.result == 'success' &&
+      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
+    uses: $/.github/workflows/container.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      image_name: ${{ inputs.image_name }}
+      registry: ${{ inputs.registry }}
+      context: ${{ inputs.context != '' && inputs.context || inputs.working_directory }}
+      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.working_directory) }}
+      platforms: ${{ inputs.platforms }}
+      multiarch_strategy: ${{ inputs.multiarch_strategy }}
+      build_args: ${{ inputs.build_args }}
+      push: ${{ inputs.push }}
+      trivy_severity: ${{ inputs.trivy_severity }}
+      trivy_ignore_unfixed: ${{ inputs.trivy_ignore_unfixed }}
+      trivy_fail: ${{ inputs.trivy_fail }}
+      trivy_ignore_file: ${{ inputs.trivy_ignore_file }}
+    secrets:
+      registry_username: ${{ secrets.registry_username }}
+      registry_password: ${{ secrets.registry_password }}
