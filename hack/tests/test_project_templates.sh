@@ -160,11 +160,11 @@ for t in "${TEMPLATES[@]}"; do
   assert_eq "$r" refused "$t: bump-workload refuses an image without digest"
   cp "$TMP/wl.yaml" "$R/deploy/openchoreo/workload.yaml"
 
-  # CI caller: koorikla/platform app-* workflow by SHA (# ci-v1); every action pinned by SHA; actionlint
+  # CI caller: koorikla/platform app-* workflow by SHA (# ci-v1.0.0); every action pinned by SHA; actionlint
   wf="$R/.github/workflows/ci.yaml"
   ci_uses=$(yq -r '.jobs[] | select(.uses) | .uses' "$wf")
   assert_match "$ci_uses" '^koorikla/platform/\.github/workflows/app-[a-z-]+\.yaml@[0-9a-f]{40}$' "$t: build job calls an app-* workflow by commit SHA"
-  assert_eq "$(grep -cE 'uses: koorikla/platform/[^ ]+@[0-9a-f]{40} # ci-v1$' "$wf")" 1 "$t: workflow SHA carries the '# ci-v1' tag comment (Renovate)"
+  assert_eq "$(grep -cE 'uses: koorikla/platform/[^ ]+@[0-9a-f]{40} # ci-v[0-9]+\.[0-9]+\.[0-9]+$' "$wf")" 1 "$t: workflow SHA carries a '# ci-vX.Y.Z' release tag comment (Renovate)"
   assert_eq "${ci_uses##*@}" "$TRUSTED_CI_SHA" "$t: workflow SHA == the commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef)"
   bad=""
   for u in $(yq -r '.jobs[].steps[]?.uses // ""' "$wf"); do [[ "$u" =~ $SHA_USES_RE ]] || bad="$bad $u"; done

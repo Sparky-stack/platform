@@ -33,7 +33,7 @@ jobs:
   # signature. No language toolchain.
   build:
     needs: validate-manifests
-    uses: koorikla/platform/.github/workflows/app-container.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1
+    uses: koorikla/platform/.github/workflows/app-container.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1.0.0
     permissions:
       contents: read
       packages: write

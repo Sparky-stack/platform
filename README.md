@@ -82,7 +82,7 @@ mise.toml, Taskfile.yml pinned cross-platform CLI versions and Task entrypoints 
 
 - **Core design & contracts**: [Architecture](docs/architecture.md), [Conventions and contracts](docs/conventions.md), [AGENTS.md](AGENTS.md), [LLM wiki (decisions, gotchas & concepts)](wiki/index.md)
 - **Clusters & networking**: [Portability (what differs per provider)](docs/portability.md), [Cluster API providers and bring-your-own clusters](docs/providers.md), [Networking and Kyverno](docs/networking.md), [Multicluster mesh & OpenBao CA](docs/multicluster.md), [External DNS](docs/dns.md)
-- **Developer platform & delivery**: [OpenChoreo](docs/openchoreo.md), [Golden-path templates](docs/project-templates.md), [Build plane & Harbor](docs/build-plane.md), [Promotion gates](docs/promotion.md), [PR preview environments](docs/preview-environments.md), [Supply chain](docs/supply-chain.md)
+- **Developer platform & delivery**: [OpenChoreo](docs/openchoreo.md), [Golden-path templates](docs/project-templates.md), [Build plane & Harbor](docs/build-plane.md), [Promotion gates](docs/promotion.md), [PR preview environments](docs/preview-environments.md), [Supply chain](docs/supply-chain.md), [Releases](docs/releases.md)
 - **Observability, data & AI**: [Observability & Falco](docs/observability.md), [Data services (Crossplane, CNPG, Strimzi, KEDA)](docs/data-services.md), [AI agents](docs/ai-agents.md)
 - **Contributing & forks**: [Developer environment](docs/dev-environment.md), [Running from a fork](docs/forking.md)
 

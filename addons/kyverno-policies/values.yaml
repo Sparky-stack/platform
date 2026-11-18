@@ -126,12 +126,12 @@ imageVerification:
     prefixes: ["ghcr.io/koorikla/"]        # image reference prefixes this source covers
     issuer: https://token.actions.githubusercontent.com
     # Certificate subject = <workflow>@<workflowRef>: the reusable workflow at one exact commit. App repos call app-<stack>.yaml
-    # by commit SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1`); its nested container.yaml call keeps that
+    # by commit SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`); its nested container.yaml call keeps that
     # ref, so the signing certificate names the SHA. A tag or branch is mutable (whoever moves `v1` changes what is
     # trusted): rendering fails unless workflowRef is a 40-hex commit SHA. Renovate bumps it with the app repos' pins
     # (renovate.json: tag ci-v1 of koorikla/platform, the comment below is the tracked tag).
     workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml
-    workflowRef: "3311f541a8eab72a2649b6f1eda4fe05efa3142e" # ci-v1
+    workflowRef: "3311f541a8eab72a2649b6f1eda4fe05efa3142e" # ci-v1.0.0
     # Moving the pin without breaking admission: images already running were signed at the previous commit. Keep that
     # commit here (40-hex, at most one: workflowRef + this list <= 2) until every allowed repository's production image
     # is rebuilt at workflowRef, then empty it (docs/supply-chain.md "Moving the workflow pin"). Not tracked by Renovate.

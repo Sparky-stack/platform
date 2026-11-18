@@ -9,7 +9,7 @@ deployed by Argo CD + OpenChoreo ([openchoreo.md](openchoreo.md#tenants)).
 
 ## Templates
 
-| Template | Stack | CI (koorikla/platform app-*, pinned by SHA `# ci-v1`) | Runtime image |
+| Template | Stack | CI (koorikla/platform app-*, pinned by SHA `# ci-v1.0.0`) | Runtime image |
 |---|---|---|---|
 | `go-service` | Go, stdlib `net/http` | `go.yaml` | distroless static |
 | `python-service` | Python 3.13, FastAPI, uv, ruff, pytest | `python.yaml` | distroless python3 |
