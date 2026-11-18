@@ -1,0 +1,147 @@
+{{- /*
+Least-privilege RBAC of OpenChoreo's workflow-plane cluster-agent (#33, docs/build-plane.md "Cluster-agent RBAC").
+The agent is a plain HTTP tunnel: the control plane's controllers and openchoreo-api send Kubernetes API requests
+through cluster-gateway and the agent replays them with ITS ServiceAccount token (OpenChoreo 1.3.3,
+internal/cluster-agent/router.go). Its RBAC is therefore the control plane's reach into mgmt. The upstream ClusterRole
+(openchoreo-workflow-plane.clusterAgent.rbac.create, off here) grants `*` on secrets, pods, namespaces, deployments,
+ClusterSecretStores, roles/rolebindings, ... cluster-wide. What 1.3.3 actually sends to a workflow plane:
+  WorkflowRun controller (internal/controller/workflowrun)
+    ensurePrerequisites   CREATE Namespace workflows-<org ns> (AlreadyExists is fine, but RBAC is checked first),
+                          ServiceAccount workflow-sa, Role workflow-sa-role (workflowtaskresults create/patch) and
+                          RoleBinding workflow-sa-role-binding in it
+    run resources         GET then CREATE or UPDATE of the rendered Argo Workflow and of every ClusterWorkflow
+                          `resources` entry (ExternalSecrets; GithubAccessToken generators: Role build-github-tokens of
+                          addon openchoreo-platform), GET of the Workflow for status, GET + DELETE on finalize
+  openchoreo-api (internal/openchoreo-api/services/workflowrun)
+    run logs and tasks    GET Workflow, LIST Pods (by workflow label), pods/log through the gateway
+Rendered here:
+  ClusterRole + ClusterRoleBinding <agent>-namespaces  namespaces get + create only (create cannot be limited by name)
+  ValidatingAdmissionPolicy <agent>-namespaces         ...so the agent may create only namespaces named
+                                                       <runNamespacePrefix>*; any other name is denied
+  Role + RoleBinding <agent>-runs                      everything else, namespaced to workflows-<org ns>
+Not granted (unused by the platform; OpenChoreo features that need them fail with Forbidden instead of running with
+cluster-admin): Secrets of any kind (git secrets / secret management through openchoreo-api: builds get credentials from
+ESO and per-run GitHub App tokens), PushSecrets, SecretStores, ClusterSecretStores, workloads outside the run
+namespaces, RBAC escalate/bind/update. The agent can create the run Role/RoleBinding only because it holds every
+permission they grant (workflowtaskresults create/patch): no escalate, no bind.
+*/ -}}
+{{- $r := .Values.clusterAgentRBAC }}
+{{- if $r.enabled }}
+{{- $wp := index .Values "openchoreo-workflow-plane" }}
+{{- if $wp.clusterAgent.rbac.create }}
+{{- fail "clusterAgentRBAC.enabled: set openchoreo-workflow-plane.clusterAgent.rbac.create=false (the upstream ClusterRole is cluster-admin in all but name, #33)" }}
+{{- end }}
+{{- $prefix := toString $r.runNamespacePrefix }}
+{{- if not (regexMatch "^[a-z0-9][-a-z0-9]*-$" $prefix) }}{{ fail (printf "clusterAgentRBAC.runNamespacePrefix %q must be a namespace name prefix ending in - (OpenChoreo: workflows-)" $prefix) }}{{ end }}
+{{- $ns := printf "%s%s" $prefix .Values.openchoreo.orgNamespace }}
+{{- $name := $r.serviceAccount }}
+{{- if not (or .Values.runNetworkPolicy.enabled .Values.runExecutorToken.enabled) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-namespaces
+  labels:
+    app.kubernetes.io/component: cluster-agent
+rules:
+  # WorkflowRun controller: CREATE workflows-<org ns> before every run; names are checked by the admission policy below.
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-namespaces
+  labels:
+    app.kubernetes.io/component: cluster-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}-namespaces
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}-namespaces
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE]
+        resources: [namespaces]
+  matchConditions:
+    - name: cluster-agent
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace $name | quote }}
+  validations:
+    - expression: {{ printf "object.metadata.name.startsWith('%s')" $prefix | quote }}
+      messageExpression: {{ printf "'the workflow-plane cluster-agent may only create run namespaces %s*, not ' + object.metadata.name" $prefix | quote }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}-namespaces
+spec:
+  policyName: {{ $name }}-namespaces
+  validationActions: [Deny]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-runs
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/component: cluster-agent
+rules:
+  # ensurePrerequisites: ServiceAccount workflow-sa, its Role and RoleBinding (create-if-absent, never updated)
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [get, create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, create]
+  # What that Role grants: RBAC lets the agent create and bind it only if it holds these itself (no escalate, no bind)
+  - apiGroups: [argoproj.io]
+    resources: [workflowtaskresults]
+    verbs: [create, patch]
+  # The run (Argo Workflow) and its per-run ExternalSecrets: get -> create | update, status, delete on finalize
+  - apiGroups: [argoproj.io]
+    resources: [workflows]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # openchoreo-api: run tasks and logs (Backstage)
+  - apiGroups: [""]
+    resources: [pods, pods/log, events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-runs
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/component: cluster-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}-runs
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -218,6 +218,22 @@ platform). Narrow `platforms` per Component to build only the node's architectur
   already pinned (toolbox, BuildKit, PostgreSQL, the stack check images, Argo's executor), so there are no exceptions.
   A developer's `checks.image` override by tag is rejected by the ClusterWorkflow schema (`pattern`) before the run
   starts; a run that still reaches a tag-only pod fails that step with the Kyverno denial.
+- **Cluster-agent RBAC** (addon openchoreo-workflow-plane `clusterAgentRBAC`,
+  [#33](https://github.com/koorikla/platform/issues/33)): the agent replays the control plane's API calls with its own
+  ServiceAccount, so its RBAC is OpenChoreo's reach into mgmt. The upstream ClusterRole (`*` on secrets, namespaces,
+  roles/rolebindings, ClusterSecretStores, workloads, cluster-wide) is off (`clusterAgent.rbac.create: false`). What
+  OpenChoreo 1.3.3 sends to a workflow plane, and what is granted for it:
+
+  | Caller | Requests | Grant |
+  | --- | --- | --- |
+  | WorkflowRun controller, before each run | CREATE Namespace `workflows-<org ns>`, ServiceAccount `workflow-sa`, Role `workflow-sa-role` (workflowtaskresults create/patch) + RoleBinding | ClusterRole: namespaces get/create, names limited to `workflows-*` by ValidatingAdmissionPolicy `cluster-agent-workflowplane-namespaces`; Role in the run namespace: serviceaccounts, roles, rolebindings get/create, workflowtaskresults create/patch (held, so no `escalate`/`bind`) |
+  | WorkflowRun controller, run | GET then CREATE/UPDATE of the Argo Workflow and the ClusterWorkflow `resources` (ExternalSecrets, GithubAccessToken generators), GET for status, DELETE on finalize | Role in the run namespace: workflows, externalsecrets; githubaccesstokens: Role `build-github-tokens` (addon openchoreo-platform) |
+  | openchoreo-api (Backstage run view) | GET Workflow, LIST Pods, `pods/log` | Role in the run namespace: pods, pods/log, events get/list/watch |
+
+  Not granted: Secrets, SecretStores, ClusterSecretStores, PushSecrets, anything outside `workflows-<org ns>`. OpenChoreo
+  features that write Secrets through the agent (openchoreo-api git secrets and secret management on a workflow plane)
+  get Forbidden; builds use ESO and per-run GitHub App tokens instead. `hack/tests/test_cluster_agent_rbac.sh` fails on
+  any wildcard, escalation verb, store access, cluster-wide Secret grant or grant outside `workflows-*`.
 - **No ServiceAccount token in run containers**: both ClusterWorkflowTemplates (and the ClusterWorkflows' run
   templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
   init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
@@ -426,8 +442,7 @@ per run a 5Gi workspace PVC (deleted with the workflow).
 ## Open work
 
 Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build nodes
-([#32](https://github.com/koorikla/platform/issues/32)), scoped workflow-plane agent RBAC
-([#33](https://github.com/koorikla/platform/issues/33)), per-repository git credentials and branch protection for the
+([#32](https://github.com/koorikla/platform/issues/32)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
 ([#35](https://github.com/koorikla/platform/issues/35)). BuildKit pulls base images
 directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:

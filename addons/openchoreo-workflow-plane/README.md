@@ -14,6 +14,7 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 - `clusterWorkflowPlane.{name,planeID,secretStore}`: binds `ClusterWorkflowPlane/default` to the key-scoped `ClusterSecretStore/workflows`.
 - `agentServerCA.{enabled,store,sourceSecret}`: syncs `cluster-gateway-ca` from `ClusterSecretStore/mgmt-openchoreo`.
 - `runNetworkPolicy.{enabled,registry,apiServer}`: restricts build/gate pod egress in `workflows-*` namespaces.
+- `clusterAgentRBAC.{enabled,serviceAccount,runNamespacePrefix}`: least-privilege agent RBAC instead of the upstream ClusterRole (`openchoreo-workflow-plane.clusterAgent.rbac.create: false`): namespaces get/create (only `workflows-*`, admission policy), run resources namespaced to `workflows-<org ns>`, no Secrets or secret stores ([build plane](../../docs/build-plane.md#security-posture-of-build-pods)).
 
 ## Day-2 notes
 
