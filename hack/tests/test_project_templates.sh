@@ -174,7 +174,7 @@ for t in "${TEMPLATES[@]}"; do
   assert_eq "$ci_wf" "$want_wf" "$t: CI calls $want_wf (annotation platform.koorikla.io/ci-workflow)"
   assert_eq "$(grep -c 'TODO(koorikla/ci#' "$wf")" 0 "$t: no interim TODO(koorikla/ci#...) left in the CI caller"
   assert_eq "$(grep -c 'actions: read' "$wf")" "$([[ "$want_wf" == app-container.yaml ]] && echo 0 || echo 1)" "$t: caller grants actions: read exactly when the stack workflow runs CodeQL"
-  if [[ "$want_wf" == rust.yaml ]]; then   # rust.yaml installs the toolchain rust-toolchain.toml names (rustup)
+  if [[ "$want_wf" == app-rust.yaml ]]; then   # app-rust.yaml installs the toolchain rust-toolchain.toml names (rustup)
     chan=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$R/rust-toolchain.toml" 2>/dev/null | tr -d '\r' || true)
     assert_match "$chan" '^[0-9]+\.[0-9]+\.[0-9]+$' "$t: rust-toolchain.toml pins an exact Rust release"
     assert_eq "$chan" "$(sed -n 's/^rust *= *"\(.*\)"/\1/p' "$R/mise.toml" | tr -d '\r')" "$t: rust-toolchain.toml == mise.toml rust"
