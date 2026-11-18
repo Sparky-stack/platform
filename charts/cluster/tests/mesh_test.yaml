@@ -157,7 +157,7 @@ tests:
 
   # #192: Issuer <name>-client-ca needs <name>-cca, which CAPI creates for the Cluster (wave 0). In the Cluster's wave a
   # failed Cluster apply (CAPI webhook down) left the Certificate Progressing and the Argo CD operation hung forever.
-  - it: syncs the remote-secret chain after the Cluster, one wave per link; the CRS stays in the Cluster's wave
+  - it: syncs the remote-secret chain after the Cluster, one wave per link; its CRS (peers only) in the final wave
     template: templates/mesh-remote-secret.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
@@ -166,10 +166,18 @@ tests:
         documentSelector: { path: kind, value: Certificate }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
         documentSelector: { path: kind, value: ExternalSecret }
-      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "10" }
         documentSelector: { path: kind, value: ClusterResourceSet }
 
   - it: reads the CAPI kubeconfig for OpenBao one wave after the Cluster (#192)
     template: templates/mesh-openbao.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+
+  - it: applies the trust payload after it is templated (wave 0) and the Cluster is up (#192)
+    template: templates/mesh-trust.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentSelector: { path: kind, value: ClusterResourceSet }
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+        documentSelector: { path: kind, value: ExternalSecret }

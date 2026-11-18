@@ -216,17 +216,23 @@ leader lease under bootstrap load) while `Certificate/dev1-mesh-reader` waited f
 | Wave | Resources |
 |------|-----------|
 | -1 | `ExternalSecret/<name>-registries` (bootstrap data, above); byo: kubeconfig access (`byo-access.yaml`) |
-| 0 | `Cluster`, every `ClusterResourceSet`, payload ExternalSecrets from the `platform`/`mgmt-openbao` stores, `Issuer/<name>-agent-selfsigned` |
-| 1 | consumers of CAPI's `<name>-kubeconfig` / `<name>-cca`: `ExternalSecret/<name>-argocd-cluster`, `<name>-mesh-openbao`, `Issuer/<name>-client-ca`; `Certificate/<name>-agent-ca` |
+| 0 | `Cluster`, payload ExternalSecrets from the `platform`/`mgmt-openbao` stores, `ConfigMap/<name>-mesh-oidc`, `Issuer/<name>-agent-selfsigned` |
+| 1 | consumers of CAPI's `<name>-kubeconfig` / `<name>-cca`: `ExternalSecret/<name>-argocd-cluster`, `<name>-mesh-openbao`, `Issuer/<name>-client-ca`; the ClusterResourceSets of the wave-0 payloads; `Certificate/<name>-agent-ca` |
 | 2 | `Certificate/<name>-mesh-reader`, `Issuer/<name>-agent-ca` |
 | 3 | `ExternalSecret/<name>-mesh-remote-secret`, `Certificate/<name>-agent-tls` |
 | 4 | `ExternalSecret/<name>-openchoreo-agent` |
-| 9, 10 | OpenChoreo Environments, ClusterDataPlane ([openchoreo.md](openchoreo.md)) |
+| 5 | `ClusterResourceSet/<name>-openchoreo-agent` |
+| 9, 10 | OpenChoreo Environments, ClusterDataPlane ([openchoreo.md](openchoreo.md)); `ClusterResourceSet/<name>-mesh-remote-secret` (final wave) |
 
 A failed apply then leaves nothing waiting in its wave: the operation fails and the fleet ApplicationSet retries it
-without limit. Wave 1 starts once the Cluster is Healthy (phase `Provisioned`). `hack/tests/test_cluster_sync_order.sh`
-checks the rule (Certificate -> Issuer, Issuer -> CA Secret, ExternalSecret -> Secret, CAPI outputs -> Cluster) for every
-installation and cluster file. Argo CD's `controller.sync.timeout.seconds` is no substitute: a timed-out operation is
+without limit. Wave 1 starts once the Cluster is Healthy (phase `Provisioned`). A ClusterResourceSet comes after its
+payload and its Cluster: it is Healthy only once CAPI applied it (`ResourcesApplied`), Degraded while the payload is
+missing. `<name>-mesh-remote-secret` applies to the other mesh members, so its health is theirs: final wave, where Argo
+CD does not wait for health. Matching no cluster at all (the only member, lean local profile), CAPI sets no
+`ResourcesApplied`; Argo CD's built-in check calls that Progressing forever, addons/argo-cd's override calls it Healthy
+(`hack/tests/test_argocd_health.sh`). `hack/tests/test_cluster_sync_order.sh` checks the rule (Certificate -> Issuer,
+Issuer -> CA Secret, ExternalSecret -> Secret, ClusterResourceSet -> payload + Cluster, CAPI outputs -> Cluster; peers'
+CRS in the final wave) for every installation and cluster file. Argo CD's `controller.sync.timeout.seconds` is no substitute: a timed-out operation is
 terminated without retry, and auto-sync does not retry a failed revision (`appcontroller.go` `alreadyAttemptedSync`).
 
 ## Docker (CAPD) - local

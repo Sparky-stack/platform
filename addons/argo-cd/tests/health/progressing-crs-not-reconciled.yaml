@@ -1,0 +1,16 @@
+# Spec changed (generation 2), conditions still from generation 1.
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: dev1-x
+  namespace: fleet
+  generation: 2
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels: { platform.koorikla.io/name: dev1 }
+  resources:
+    - { kind: Secret, name: dev1-x }
+status:
+  conditions:
+    - { type: Paused, status: "False", reason: NotPaused, message: "", observedGeneration: 1, lastTransitionTime: "2026-11-18T08:03:47Z" }

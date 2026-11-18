@@ -58,3 +58,10 @@ tests:
       addons: { falco: true }
     asserts:
       - hasDocuments: { count: 2 }
+
+  - it: applies the payload one wave after it is templated, once the Cluster is up (#192)
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentSelector: { path: kind, value: ClusterResourceSet }
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+        documentSelector: { path: kind, value: ExternalSecret }
