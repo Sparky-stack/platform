@@ -207,3 +207,40 @@ tests:
     set: { prometheusIngress.fromPodLabels: null }
     asserts:
       - failedTemplate: { errorPattern: "fromPodLabels must not be empty" }
+
+  - it: renders with the OpenSearch processor count equal to its CPU limit
+    template: templates/validate.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails when OpenSearch's JVM processor count is not pinned
+    template: templates/validate.yaml
+    set:
+      observability-logs-opensearch.openSearch.opensearchJavaOpts: "-Xms512m -Xmx512m"
+    asserts:
+      - failedTemplate:
+          errorMessage: "observability-logs-opensearch.openSearch.opensearchJavaOpts must contain -XX:ActiveProcessorCount=1 (= resources.limits.cpu 1, rounded up)"
+
+  - it: fails when the OpenSearch CPU limit moves without the processor count (millicores round up)
+    template: templates/validate.yaml
+    set:
+      observability-logs-opensearch.openSearch.resources.limits.cpu: 1500m
+    asserts:
+      - failedTemplate:
+          errorMessage: "observability-logs-opensearch.openSearch.opensearchJavaOpts must contain -XX:ActiveProcessorCount=2 (= resources.limits.cpu 1500m, rounded up)"
+
+  - it: accepts a moved CPU limit with the matching processor count
+    template: templates/validate.yaml
+    set:
+      observability-logs-opensearch.openSearch.resources.limits.cpu: 2
+      observability-logs-opensearch.openSearch.opensearchJavaOpts: "-Xms512m -Xmx512m -XX:ActiveProcessorCount=2"
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: fails without an OpenSearch CPU limit
+    template: templates/validate.yaml
+    set:
+      observability-logs-opensearch.openSearch.resources.limits: null
+    asserts:
+      - failedTemplate:
+          errorMessage: "observability-logs-opensearch.openSearch.resources.limits.cpu is required (the JVM's -XX:ActiveProcessorCount pins to it)"

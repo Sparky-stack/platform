@@ -45,6 +45,26 @@ subcharts' literal hostnames/ports must match, and the plane CR's planeID must e
 {{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $obs.clusterAgent.tls.serverCAConfigMap) }}
 {{- fail "agentServerCA.configMapName must equal openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap" }}
 {{- end }}
+{{- /* OpenSearch: the JVM's processor count is pinned to the CPU limit (a JVM that does not see its cgroup, as in k3d,
+sizes GC threads and thread pools for every host CPU and outgrows the memory limit). */}}
+{{- $os := index .Values "observability-logs-opensearch" "openSearch" }}
+{{- if $os.enabled }}
+{{- $limits := (($os.resources | default dict).limits | default dict) }}
+{{- $cpu := toString ($limits.cpu | default "") }}
+{{- if not $cpu }}
+{{- fail "observability-logs-opensearch.openSearch.resources.limits.cpu is required (the JVM's -XX:ActiveProcessorCount pins to it)" }}
+{{- end }}
+{{- $n := 0 }}
+{{- if hasSuffix "m" $cpu }}
+{{- $n = divf (trimSuffix "m" $cpu | float64) 1000 | ceil | int }}
+{{- else }}
+{{- $n = $cpu | float64 | ceil | int }}
+{{- end }}
+{{- $flag := printf "-XX:ActiveProcessorCount=%d" $n }}
+{{- if not (has $flag (splitList " " (toString $os.opensearchJavaOpts))) }}
+{{- fail (printf "observability-logs-opensearch.openSearch.opensearchJavaOpts must contain %s (= resources.limits.cpu %s, rounded up)" $flag $cpu) }}
+{{- end }}
+{{- end }}
 {{- /* AI agents (docs/ai-agents.md): a model is required, the published URL host is ours, the API URL is real. */}}
 {{- if $obs.rca.enabled }}
 {{- if not $obs.rca.llm.modelName }}
