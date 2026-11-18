@@ -1,0 +1,125 @@
+# Platform ClusterResourceType postgresql (#70, docs/data-services.md "PostgreSQL from OpenChoreo"): renders the
+# platform's PostgreSQL API (platform.koorikla.io/v1alpha1 PostgreSQL, a namespaced Crossplane v2 XR of addon
+# crossplane) into the cell namespace. Never a raw CNPG Cluster: Kyverno denies those to everyone but the platform, and
+# the XR picks the backend of the data plane's cluster (CloudNativePG locally, RDS / Cloud SQL / Flexible Server in the
+# cloud). The connection Secret <name>-app (host, port, dbname, username, password, uri) is created on the data plane
+# by the backend; only its name and keys reach the control plane.
+# Only on data planes that run addon crossplane: OpenChoreo 1.3.3 gives ResourceTypes no validations and no
+# dataplane.annotations, so the check is the mgmt admission policy platform-data-plane-capabilities (addon
+# kyverno-policies) on ResourceReleaseBindings, keyed on the annotation below.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterResourceType
+metadata:
+  name: postgresql
+  annotations:
+    openchoreo.dev/display-name: PostgreSQL
+    openchoreo.dev/description: >-
+      PostgreSQL through the platform API (Crossplane PostgreSQL XR): CloudNativePG in-cluster, RDS / Aurora, Cloud SQL
+      or Azure Flexible Server in the cloud, chosen by the cluster. Needs a data plane that runs addon crossplane.
+    # Addons the data plane must run (== ClusterDataPlane annotations addons.platform.koorikla.io/<addon>: "true").
+    platform.koorikla.io/requires-addons: crossplane
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties:
+        version:
+          type: string
+          enum: ["16", "17", "18"]
+          default: "17"
+          description: PostgreSQL major version. Upgrades only (no downgrade).
+        database:
+          type: string
+          default: app
+          maxLength: 63
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Database to create; its owner role has the same name (output username). Immutable.
+
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        size:
+          type: string
+          enum: [S, M, L]
+          default: S
+          description: Compute of each instance (CNPG resources, RDS / Cloud SQL / Flexible Server class).
+        storageGiB:
+          type: integer
+          minimum: 10
+          maximum: 16384
+          default: 10
+          description: Storage per instance in GiB; can grow, never shrink.
+        highAvailability:
+          type: boolean
+          default: false
+          description: Standby in another zone with automatic failover. Required in production (admission policy).
+        backup:
+          type: object
+          default: {}
+          properties:
+            enabled:
+              type: boolean
+              default: false
+              description: Automated backups with point-in-time recovery. Required in production (admission policy).
+            retentionDays:
+              type: integer
+              minimum: 7
+              maximum: 35
+              default: 7
+        deletionPolicy:
+          type: string
+          enum: [Retain, Delete]
+          default: Retain
+          description: Cloud backends - Retain keeps the database when the XR is deleted (deletion protection on).
+
+  # Removing the binding leaves the XR (and with it the data) on the data plane; set retainPolicy: Delete on the
+  # ResourceReleaseBinding of throwaway environments.
+  retainPolicy: Retain
+
+  outputs:
+    # Non-sensitive values from the XR's status (OutputsResolved waits until the backend reports them).
+    - name: host
+      value: ${applied.postgresql.status.endpoint}
+    - name: port
+      value: ${string(applied.postgresql.status.port)}
+    - name: database
+      value: ${parameters.database}
+    # Credentials stay on the data plane: consumers get secretKeyRefs to the backend's connection Secret.
+    - name: username
+      secretKeyRef:
+        name: ${metadata.name}-app
+        key: username
+    - name: password
+      secretKeyRef:
+        name: ${metadata.name}-app
+        key: password
+    - name: uri
+      secretKeyRef:
+        name: ${metadata.name}-app
+        key: uri
+
+  resources:
+    - id: postgresql
+      # The XR is an unknown kind to OpenChoreo's health inference (present = healthy): readiness is its Ready condition
+      # (every composed resource ready, connection Secret written).
+      readyWhen: >-
+        ${has(applied.postgresql.status.conditions)
+        && applied.postgresql.status.conditions.exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: platform.koorikla.io/v1alpha1
+        kind: PostgreSQL
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          version: ${parameters.version}
+          database: ${parameters.database}
+          size: ${environmentConfigs.size}
+          storageGiB: ${environmentConfigs.storageGiB}
+          highAvailability: ${environmentConfigs.highAvailability}
+          backup:
+            enabled: ${environmentConfigs.backup.enabled}
+            retentionDays: ${environmentConfigs.backup.retentionDays}
+          deletionPolicy: ${environmentConfigs.deletionPolicy}

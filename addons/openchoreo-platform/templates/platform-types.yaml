@@ -1,0 +1,13 @@
+{{- /* Platform-owned OpenChoreo types for the data-service addons (#70, files/platform/, docs/data-services.md):
+ClusterTrait keda-scaler and ClusterResourceType postgresql. Each needs operators on the data plane
+(platform.koorikla.io/requires-addons): keda-scaler checks dataplane.annotations itself, postgresql bindings are checked
+at admission (addon kyverno-policies platform-data-plane-capabilities). Cluster-scoped. */ -}}
+{{- if .Values.dataServices.enabled }}
+{{- range $path, $_ := .Files.Glob "files/platform/*/*.yaml" }}
+---
+# Source: {{ $.Chart.Name }}/{{ $path }}
+{{- $obj := $.Files.Get $path | fromYaml }}
+{{- $_ := set $obj.metadata "annotations" (merge (default dict $obj.metadata.annotations) (dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true")) }}
+{{ toYaml $obj }}
+{{- end }}
+{{- end }}
