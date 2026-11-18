@@ -381,6 +381,25 @@ ClusterClass patches rolls every machine of the class ([providers.md](providers.
 Patch order matters: `cni-flannel` replaces the control plane's whole `files` list, so it runs before every patch that
 appends files (`registries.yaml`, the registry CA).
 
+### Build pulls: BuildKit mirrors
+
+Dockerfile `FROM` images (and `# syntax=` frontends) are pulled by BuildKit inside the `build` step, not by containerd,
+so the node mirrors do not cover them. Addon openchoreo-workflow-plane renders ConfigMap `buildkitd-config` in
+`workflows-<org ns>` from the same `registry.proxyCache` list (`buildkitMirrors`, registry type `harbor` only):
+
+```toml
+[registry."docker.io"]
+  mirrors = ["harbor.openchoreo.localhost:9443/dockerhub"]   # same for ghcr.io, quay.io, registry.k8s.io, cr.openchoreo.dev, gcr.io
+[registry."harbor.openchoreo.localhost:9443"]
+  ca = ["/registry-ca/ca.crt"]                               # the run's <run>-registry-ca
+```
+
+The `build` step mounts it (optional) as its `buildkitd.toml`. A mirror with a path maps `docker.io/library/golang` to
+`<host>/dockerhub/library/golang`, so `FROM` lines keep their upstream names and digests (a digest-pinned base resolves
+to the same digest through the proxy). The run's registry credentials (`robot$builder`, pull on every proxy-cache
+project) authenticate the mirror. BuildKit tries Harbor first and falls back to the upstream registry, like containerd.
+Cold and warm build timings: [#38](https://github.com/koorikla/platform/issues/38).
+
 ### Images and architectures
 
 Harbor 2.15 publishes linux/amd64 images only (arm64 arrives as separate `-arm64` tags in 2.16, not as a manifest
@@ -456,6 +475,5 @@ per run a 5Gi workspace PVC (deleted with the workflow).
 Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build nodes
 ([#32](https://github.com/koorikla/platform/issues/32)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
-([#35](https://github.com/koorikla/platform/issues/35)). BuildKit pulls base images
-directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
+([#35](https://github.com/koorikla/platform/issues/35)). Values not yet confirmed live:
 [#40](https://github.com/koorikla/platform/issues/40).
