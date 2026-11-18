@@ -139,6 +139,13 @@ def main():
             nlines = sum(1 for l in body if not l.lstrip().startswith("|"))
             if nlines > CHART_README_MAX_LINES:
                 problems.append("%s: README is %d lines (max %d)" % (rel, nlines, CHART_README_MAX_LINES))
+            vfile = os.path.join(base, "values.yaml")
+            if os.path.isfile(vfile):
+                with open(vfile, encoding="utf-8") as vfh:
+                    vdescs = [m.group(1).strip() for m in re.finditer(r"^\s*#\s*--\s+(.+)$", vfh.read(), re.M)]
+                raw = "\n".join(lines)
+                if any(d not in raw for d in vdescs):
+                    problems.append("%s: stale README.md (out of sync with values.yaml; run helm-docs)" % rel)
         fence = False
         for no, line in enumerate(lines, 1):
             where = "%s:%d" % (rel, no)

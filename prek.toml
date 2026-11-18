@@ -126,6 +126,15 @@ require_serial = true
 verbose = true
 priority = "check"
 
+[[repos.hooks]]
+id = "helm-docs"
+name = "chart README.md in sync with helm-docs"
+language = "system"
+entry = "bash hack/hooks.sh helm-docs"
+files = '^(charts|addons)/[^/]+/(Chart\.yaml|values\.yaml|README\.md(\.gotmpl)?)$|^hack/helm-docs/'
+require_serial = true
+priority = "check"
+
 # helm lint + template + kubeconform (+ helm unittest) of the changed charts only (CHARTS=... hack/test.sh). CI skips
 # it in `task hooks:run` because `task test` runs the whole suite right after.
 [[repos.hooks]]

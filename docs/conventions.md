@@ -138,7 +138,7 @@ Adding things:
 - **Workload cluster**: `installations/<inst>/clusters/<name>.yaml` (schema: `charts/cluster/values.yaml`;
   [providers.md](providers.md#adding-a-cluster); an existing cluster: `provider: byo`,
   [providers.md](providers.md#bring-your-own-cluster-byo)).
-- **Addon**: `addons/<name>/` (wrapper `Chart.yaml`, `values.yaml`, `README.md` <= 40 lines checked by
+- **Addon**: `addons/<name>/` (wrapper `Chart.yaml`, `values.yaml` with `# --` comments, `README.md.gotmpl` + `helm-docs`-generated `README.md` <= 40 non-table lines checked by
   `hack/check-docs.py`, optional `values/role-*.yaml`, `values/provider-*.yaml`, `values/cni-*.yaml`), registered in
   the catalog in `charts/platform/values.yaml` ([architecture.md](architecture.md#addons-catalog--labels-gitops-bridge-style)).
 - **Tenant**: `installations/<inst>/tenants/<project>.yaml` ([openchoreo.md](openchoreo.md#tenants)).

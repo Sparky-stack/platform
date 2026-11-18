@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for bin in helm yq; do
+for bin in helm helm-docs yq; do
   command -v "$bin" >/dev/null || { echo "missing tool: $bin" >&2; exit 1; }
 done
 
@@ -43,5 +43,11 @@ echo "==> Checking Markdown links, paths and commands"
 # shellcheck source=lib/portable.sh
 source hack/lib/portable.sh
 py hack/check-docs.py
+
+echo "==> Checking chart READMEs are in sync with helm-docs"
+for root in charts addons; do
+  helm-docs --chart-search-root "$root" --template-files ../hack/helm-docs/README.md.gotmpl --template-files README.md.gotmpl >/dev/null 2>&1
+done
+git diff --exit-code -- '*/README.md'
 
 echo "lint OK"
