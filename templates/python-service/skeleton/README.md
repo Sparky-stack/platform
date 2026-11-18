@@ -29,7 +29,7 @@ Add a dependency with `uv add <pkg>` (commit `uv.lock`; the image build uses `--
 
 ## CI and delivery
 
-`.github/workflows/ci.yaml` calls the reusable `app-*` workflows (koorikla/platform), pinned by commit SHA (`# ci-v1`, Renovate keeps
+`.github/workflows/ci.yaml` calls the reusable `app-*` workflows (koorikla/platform), pinned by commit SHA (`# ci-v1.0.0`, Renovate keeps
 them current): manifest validation, multi-arch image build + scan (pull requests) or build, push, SBOM, provenance and
 keyless signature (`main`), then the `bump` job pins the new image digest in `deploy/openchoreo/workload.yaml` and
 OpenChoreo deploys it to `development`. Until koorikla/platform ships its Python workflow the image build is the test gate.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Golden-path defaults: base images and GitHub Actions pinned by digest; the koorikla/platform app-* reusable workflow SHA (# ci-v1) follows its tag.",
+  "description": "Golden-path defaults: base images and GitHub Actions pinned by digest; the koorikla/platform app-* reusable workflow SHA (# ci-v1.0.0) follows its tag.",
   "extends": [
     "config:recommended",
     "docker:pinDigests",

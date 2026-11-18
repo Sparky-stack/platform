@@ -26,7 +26,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   - subject = the reusable workflow at one commit: `github.workflow` + `@` + `github.workflowRef`
     (`https://github.com/koorikla/platform/.github/workflows/app-container.yaml@<40-hex SHA>`). Rendering fails for anything but
     a full commit SHA: a tag such as `v1` is mutable, so whoever can move it would decide what is trusted. App repos
-    call the app-* workflows by the same SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1`); the nested
+    call the app-* workflows by the same SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`); the nested
     `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
     `workflowRef` (custom manager in `renovate.json`, tag `ci-v1` of koorikla/platform) and the app repos' `uses:` pins
     (github-actions digest pinning) to the same commit;
