@@ -53,7 +53,8 @@ spec:
           prune: true
           selfHeal: true
         retry:
-          limit: 20               # OpenChoreo CRDs may not exist yet on a fresh mgmt
+          limit: -1               # OpenChoreo CRDs may not exist yet on a fresh mgmt: never give up (#192)
+          refresh: true
           backoff:
             duration: 15s
             factor: 2

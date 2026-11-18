@@ -164,8 +164,13 @@ spec:
           {{- if $cfg.serverSideDiff }}
           - ServerSideDiff=true
           {{- end }}
+        # Retry without limit (every 5m at most) on the latest revision: an addon can wait on another app for longer than
+        # any fixed budget on a clean bootstrap (e.g. ServiceMonitors of cloudnative-pg/crossplane before telemetry's
+        # monitoring.coreos.com CRDs exist: 5 failed attempts live, #192), and an operation that gives up stays failed
+        # until the next commit - a manual step. Same policy as the fleet ApplicationSet.
         retry:
-          limit: 10
+          limit: -1
+          refresh: true
           backoff:
             duration: 10s
             factor: 2

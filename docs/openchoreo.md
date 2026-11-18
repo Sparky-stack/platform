@@ -64,7 +64,8 @@ ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist lon
     end
     hs.status = "Progressing"; hs.message = "Waiting for PVC"; return hs
   ```
-- Retries with backoff on every generated Application (CRDs from other Applications).
+- Retries with backoff on every generated Application (CRDs from other Applications), without a limit and on the
+  latest revision: a sync that gives up stays failed until the next commit (#192).
 - Helm hooks run on every sync under Argo (Helm: install only). Thunder's setup Job is idempotent and replaced on
   every sync (`setup.preserveJob`: Argo's default BeforeHookCreation, so a failed run never blocks the next one and
   `kubectl -n thunder logs job/thunder-setup` shows the last run); the control plane's authz bootstrap Job (PostSync)

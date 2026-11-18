@@ -572,7 +572,7 @@ events:
    applies it only after the wave-0 resources, istiod included, are Healthy. The ztunnel rollout is the restart: the
    new pods fetch workload certificates from istio-csr, chained to the group root, so in-mesh mTLS never mixes roots.
    Leaving or changing a group changes the pod annotation, so that rollout happens as well.
-   If istiod is not Healthy within `progressDeadlineSeconds` (600s) the sync fails and Argo retries (limit 10, backoff
+   If istiod is not Healthy within `progressDeadlineSeconds` (600s) the sync fails and Argo retries (no limit, backoff
    up to 5m); ztunnel stays on the old config meanwhile. Watch `kubectl -n argocd get application
    istio-ambient-<cluster>`.
 
