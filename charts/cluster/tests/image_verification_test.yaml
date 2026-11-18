@@ -65,3 +65,8 @@ tests:
       imageVerification.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: applies the payload one wave after it is templated, once the Cluster is up (#192)
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentSelector: { path: kind, value: ClusterResourceSet }

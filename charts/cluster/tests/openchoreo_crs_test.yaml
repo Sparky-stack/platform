@@ -68,10 +68,10 @@ tests:
             - { kind: Secret, name: dev1-openchoreo-agent }
             - { kind: Secret, name: openchoreo-gateway-ca }
 
-  - it: templates the agent payload after the client certificate it reads (wave 4 > Certificate wave 3, #192)
+  - it: templates the agent payload after the client certificate it reads (wave 4 > Certificate 3), applies it after (5)
     template: templates/openchoreo-agent-crs.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "4" }
         documentSelector: { path: kind, value: ExternalSecret }
-      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "5" }
         documentSelector: { path: kind, value: ClusterResourceSet }

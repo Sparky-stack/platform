@@ -5,6 +5,7 @@
 #   DeletingPolicy / NamespacedDeletingPolicy: Kyverno never sets conditionStatus.ready on them, Argo CD's built-in
 #   check reads that as Degraded; ours is Healthy unless Kyverno reports a False condition or ready=false.
 #   PersistentVolumeClaim: Pending (WaitForFirstConsumer) is Healthy.
+#   ClusterResourceSet: reconciled without ResourcesApplied (no Cluster matches) is Healthy, not Progressing (#192).
 # The argocd CLI comes from mise.toml; skips only when it is missing (ARGOCD=/path/to/argocd overrides).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -32,6 +33,6 @@ for f in "$ROOT"/addons/argo-cd/tests/health/*.yaml; do
   got=$(printf '%s\n' "$out" | sed -n 's/^STATUS: //p' | tr -d '\r' | tr '[:upper:]' '[:lower:]')
   assert_eq "$got" "$want" "health of $base"
 done
-assert_eq "$([[ $n -ge 6 ]] && echo yes)" yes "health fixtures present ($n)"
+assert_eq "$([[ $n -ge 11 ]] && echo yes)" yes "health fixtures present ($n)"
 
 finish

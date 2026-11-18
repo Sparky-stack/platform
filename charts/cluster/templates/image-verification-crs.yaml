@@ -148,6 +148,7 @@ metadata:
   namespace: fleet
   annotations:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"   # after its payload (wave 0) and the Cluster: docs/providers.md "Sync waves of a cluster app"
 spec:
   strategy: Reconcile
   clusterSelector:
