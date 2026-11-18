@@ -8,20 +8,18 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'toolbox/**'
-      - 'scripts/**'
-      - '.github/workflows/toolbox.yaml'
-      - '.github/workflows/container.yaml'
+      - '.github/workflows/ci-toolbox.yaml'
+      - 'ci/toolbox/**'
+      - 'ci/scripts/**'
   push:
     # Moving the v1 tag (re)publishes ghcr.io/koorikla/ci-toolbox:v1 (paths are not
     # evaluated for tag pushes).
     tags: ['v*']
     branches: [main]
     paths:
-      - 'toolbox/**'
-      - 'scripts/**'
-      - '.github/workflows/toolbox.yaml'
-      - '.github/workflows/container.yaml'
+      - '.github/workflows/ci-toolbox.yaml'
+      - 'ci/toolbox/**'
+      - 'ci/scripts/**'
 
 concurrency:
   group: toolbox-${{ github.ref }}
@@ -32,7 +30,7 @@ permissions:
 
 jobs:
   image:
-    uses: ./.github/workflows/container.yaml
+    uses: ./.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write
@@ -41,8 +39,8 @@ jobs:
       security-events: write
     with:
       image_name: ci-toolbox
-      context: .
-      dockerfile: toolbox/Dockerfile
+      context: ci
+      dockerfile: ci/toolbox/Dockerfile
 
   smoke:
     name: smoke ${{ matrix.runner }}

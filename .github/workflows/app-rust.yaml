@@ -1,58 +1,61 @@
-name: elixir
+name: rust
 
-# Elixir / Phoenix app: erlef/setup-beam (.tool-versions or inputs), deps +
-# _build cache, compile --warnings-as-errors, format check, credo, mix test
-# (optional Postgres service), sobelow, hex.audit + mix_audit, Trivy fs on
-# mix.lock, then container.yaml.
-# CodeQL does not support Elixir; static analysis is credo + sobelow.
+# Rust service: pinned toolchain (rust-toolchain.toml), cargo fmt --check,
+# clippy -D warnings, cargo-nextest (+ doctests), cargo-deny (advisories,
+# bans, licenses, sources) + cargo-audit + Trivy fs on Cargo.lock, CodeQL
+# (rust), then container.yaml: static musl binary per arch on native runners
+# into distroless/static, scan, SBOM, provenance, keyless cosign. Build cache:
+# Swatinem/rust-cache (registry + target, keyed on toolchain and Cargo.lock).
+# Expects a Dockerfile like templates/dockerfiles/rust.Dockerfile.
 #
 # Required caller permissions:
-#   contents: read, packages: write, id-token: write, attestations: write,
-#   security-events: write
+#   contents: read, actions: read, packages: write, id-token: write,
+#   attestations: write, security-events: write
+# Bump the OpenChoreo Workload afterwards with workload-bump.yaml.
 
 on:
   workflow_call:
     inputs:
       working_directory:
-        description: 'Directory containing mix.exs'
+        description: 'Crate / workspace directory (Cargo.toml, Cargo.lock, rust-toolchain.toml)'
         required: false
         type: string
         default: '.'
-      otp_version:
-        description: 'OTP version (default: from .tool-versions)'
-        required: false
-        type: string
-        default: ''
-      elixir_version:
-        description: 'Elixir version (default: from .tool-versions)'
-        required: false
-        type: string
-        default: ''
-      postgres:
-        description: 'Start a Postgres service for tests (DATABASE_URL, PG* env are set)'
-        required: false
-        type: boolean
-        default: false
-      postgres_image:
-        description: 'Postgres service image'
-        required: false
-        type: string
-        default: 'postgres:17'
-      run_credo:
-        description: 'Run credo (only if it is a dependency)'
+      run_fmt:
+        description: 'Run cargo fmt --check'
         required: false
         type: boolean
         default: true
-      run_sobelow:
-        description: 'Run sobelow (only if it is a dependency)'
+      run_clippy:
+        description: 'Run cargo clippy (warnings are errors)'
         required: false
         type: boolean
         default: true
+      clippy_args:
+        description: 'cargo clippy arguments'
+        required: false
+        type: string
+        default: '--all-targets --all-features --locked -- -D warnings'
       test_args:
-        description: 'Extra mix test arguments'
+        description: 'cargo nextest / cargo test arguments'
         required: false
         type: string
-        default: ''
+        default: '--workspace --all-features --locked'
+      run_deny:
+        description: 'Run cargo-deny (licenses only with a deny.toml)'
+        required: false
+        type: boolean
+        default: true
+      run_audit:
+        description: 'Run cargo-audit'
+        required: false
+        type: boolean
+        default: true
+      run_codeql:
+        description: 'Run CodeQL (rust)'
+        required: false
+        type: boolean
+        default: true
       build_container:
         description: 'Build/scan/sign the container image after checks'
         required: false
@@ -150,79 +153,64 @@ permissions:
 
 jobs:
   test:
-    name: compile, format, credo, test, sobelow, audit
+    name: fmt, clippy, test, deny, audit
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     concurrency:
-      group: elixir-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      group: rust-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
       security-events: write
-    services:
-      postgres:
-        # An empty image disables the service.
-        image: ${{ inputs.postgres && inputs.postgres_image || '' }}
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      MIX_ENV: test
-      PGHOST: localhost
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      DATABASE_URL: ecto://postgres:postgres@localhost/test
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+      - name: Fetch platform ci/scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
           CI_SHA: ${{ job.workflow_sha }}
         run: |
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
-          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
           echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
-      - name: Set up BEAM
-        id: beam
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: ${{ inputs.otp_version }}
-          elixir-version: ${{ inputs.elixir_version }}
-          version-file: ${{ inputs.elixir_version == '' && format('{0}/.tool-versions', inputs.working_directory) || '' }}
-          version-type: ${{ inputs.elixir_version == '' && 'strict' || 'loose' }}
+      - name: Install pinned toolchain (rust-toolchain.toml)
+        working-directory: ${{ inputs.working_directory }}
+        run: rustup toolchain install && rustup show active-toolchain
 
-      - name: Cache deps and _build
-        uses: actions/cache@v6
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ${{ inputs.working_directory }}/deps
-            ${{ inputs.working_directory }}/_build
-          key: mix-${{ runner.os }}-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles(format('{0}/mix.lock', inputs.working_directory)) }}
-          restore-keys: |
-            mix-${{ runner.os }}-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
+          workspaces: ${{ inputs.working_directory }} -> target
 
-      - name: Compile, format, credo, test, sobelow, audit
+      - name: Install cargo-nextest, cargo-deny, cargo-audit (prebuilt, checksummed)
+        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        with:
+          tool: cargo-nextest,cargo-deny,cargo-audit
+
+      - name: fmt, clippy, test, cargo-deny, cargo-audit
         env:
           WORKDIR: ${{ inputs.working_directory }}
-          RUN_CREDO: ${{ inputs.run_credo }}
-          RUN_SOBELOW: ${{ inputs.run_sobelow }}
+          RUN_FMT: ${{ inputs.run_fmt }}
+          RUN_CLIPPY: ${{ inputs.run_clippy }}
+          CLIPPY_ARGS: ${{ inputs.clippy_args }}
           TEST_ARGS: ${{ inputs.test_args }}
-        run: bash "$CI_SCRIPTS/elixir/check.sh"
+          RUN_DENY: ${{ inputs.run_deny }}
+          RUN_AUDIT: ${{ inputs.run_audit }}
+          INSTALL_TOOLS: 'false'
+        run: bash "$CI_SCRIPTS/rust/check.sh"
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           cache: true
 
@@ -234,24 +222,55 @@ jobs:
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
           IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
-          SKIP_DIRS: "**/deps,**/_build"
+          SKIP_DIRS: "**/target"
         run: bash "$CI_SCRIPTS/common/scan-fs.sh"
 
       - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
-          category: trivy-fs-elixir-${{ inputs.working_directory }}
+          category: trivy-fs-rust-${{ inputs.working_directory }}
+
+  codeql:
+    name: CodeQL (rust)
+    if: inputs.run_codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: rust-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: CodeQL init
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: rust
+          build-mode: none
+          source-root: ${{ inputs.working_directory }}
+
+      - name: CodeQL analyze
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:rust/${{ inputs.working_directory }}
 
   container:
     name: image
-    needs: [test]
+    needs: [test, codeql]
     if: >-
       always() && inputs.build_container &&
-      needs.test.result == 'success'
-    uses: $/.github/workflows/container.yaml
+      needs.test.result == 'success' &&
+      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
+    uses: $/.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write

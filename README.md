@@ -41,7 +41,7 @@ Full walkthrough (~30 minutes) and talking points: **[docs/demo.md](docs/demo.md
 1. **Clean bootstrap**: `task up` brings up `mgmt` and reconciles the entire platform from `bootstrap/root-app.yaml`.
 2. **Add a cluster by adding a file**: commit `installations/<inst>/clusters/<name>.yaml`; CAPI boots the cluster, Argo CD installs its addons, and OpenChoreo connects its data-plane agent.
 3. **Developer self-service**: scaffold a new repository from a Backstage golden-path template under a tenant project.
-4. **Build and supply chain**: build multi-arch container images on the OpenChoreo workflow plane (or [koorikla/ci](https://github.com/koorikla/ci)), attach SBOM and SLSA provenance, and sign with Cosign.
+4. **Build and supply chain**: build multi-arch container images on the OpenChoreo workflow plane (or [`ci/`](ci/)), attach SBOM and SLSA provenance, and sign with Cosign.
 5. **Deploy and promote**: roll out [koorikla/hello-world](https://github.com/koorikla/hello-world) across `development -> staging -> production`, gated on `production` by automated HTTP + 5xx SLO checks and a reviewed Git PR.
 6. **Observe**: query logs, traces (OpenSearch), metrics (Prometheus), and Hubble network flows from `mgmt`.
 7. **Runtime security**: detect container anomalies with modern-eBPF Falco, quarantine or terminate pods with Talon, and escalate critical alerts to Argo Events.

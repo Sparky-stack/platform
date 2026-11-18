@@ -190,16 +190,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+      - name: Fetch platform ci/scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
           CI_SHA: ${{ job.workflow_sha }}
         run: |
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
-          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
           echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
       - name: Detect package manager
@@ -305,7 +305,7 @@ jobs:
       always() && inputs.build_container &&
       needs.test.result == 'success' &&
       (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
-    uses: $/.github/workflows/container.yaml
+    uses: $/.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write

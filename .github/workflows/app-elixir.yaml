@@ -1,69 +1,58 @@
-name: python
+name: elixir
 
-# Python service (uv): uv lock --check + uv sync --frozen, ruff check + format,
-# mypy (if locked), pytest + coverage, pip-audit + Trivy fs on uv.lock,
-# CodeQL (python), then container.yaml (multi-arch build on native runners,
-# scan, SBOM, provenance, keyless cosign). Expects a Dockerfile like
-# templates/dockerfiles/python.Dockerfile (distroless Python).
+# Elixir / Phoenix app: erlef/setup-beam (.tool-versions or inputs), deps +
+# _build cache, compile --warnings-as-errors, format check, credo, mix test
+# (optional Postgres service), sobelow, hex.audit + mix_audit, Trivy fs on
+# mix.lock, then container.yaml.
+# CodeQL does not support Elixir; static analysis is credo + sobelow.
 #
 # Required caller permissions:
-#   contents: read, actions: read, packages: write, id-token: write,
-#   attestations: write, security-events: write
-# Bump the OpenChoreo Workload afterwards with workload-bump.yaml.
+#   contents: read, packages: write, id-token: write, attestations: write,
+#   security-events: write
 
 on:
   workflow_call:
     inputs:
       working_directory:
-        description: 'Directory containing pyproject.toml and uv.lock'
+        description: 'Directory containing mix.exs'
         required: false
         type: string
         default: '.'
-      python_version:
-        description: 'Python version (default: .python-version / requires-python, installed by uv)'
+      otp_version:
+        description: 'OTP version (default: from .tool-versions)'
         required: false
         type: string
         default: ''
-      uv_version:
-        description: 'uv version (default: [tool.uv] required-version or latest)'
+      elixir_version:
+        description: 'Elixir version (default: from .tool-versions)'
         required: false
         type: string
         default: ''
-      run_lint:
-        description: 'Run ruff check + ruff format --check'
+      postgres:
+        description: 'Start a Postgres service for tests (DATABASE_URL, PG* env are set)'
+        required: false
+        type: boolean
+        default: false
+      postgres_image:
+        description: 'Postgres service image'
+        required: false
+        type: string
+        default: 'postgres:17'
+      run_credo:
+        description: 'Run credo (only if it is a dependency)'
         required: false
         type: boolean
         default: true
-      run_typecheck:
-        description: "Run mypy: 'auto' (when locked), 'true' or 'false'"
-        required: false
-        type: string
-        default: 'auto'
-      run_test:
-        description: 'Run pytest (coverage with pytest-cov)'
+      run_sobelow:
+        description: 'Run sobelow (only if it is a dependency)'
         required: false
         type: boolean
         default: true
       test_args:
-        description: 'Extra pytest arguments'
+        description: 'Extra mix test arguments'
         required: false
         type: string
         default: ''
-      run_audit:
-        description: 'Run pip-audit on the runtime dependencies'
-        required: false
-        type: boolean
-        default: true
-      audit_ignore:
-        description: 'Space-separated vulnerability IDs pip-audit ignores (accepted risks)'
-        required: false
-        type: string
-        default: ''
-      run_codeql:
-        description: 'Run CodeQL (python)'
-        required: false
-        type: boolean
-        default: true
       build_container:
         description: 'Build/scan/sign the container image after checks'
         required: false
@@ -161,55 +150,79 @@ permissions:
 
 jobs:
   test:
-    name: ruff, pytest, pip-audit
+    name: compile, format, credo, test, sobelow, audit
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
-      group: python-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      group: elixir-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
       security-events: write
+    services:
+      postgres:
+        # An empty image disables the service.
+        image: ${{ inputs.postgres && inputs.postgres_image || '' }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIX_ENV: test
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      DATABASE_URL: ecto://postgres:postgres@localhost/test
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+      - name: Fetch platform ci/scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
           CI_SHA: ${{ job.workflow_sha }}
         run: |
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
-          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
           echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Set up BEAM
+        id: beam
+        uses: erlef/setup-beam@v1
         with:
-          version: ${{ inputs.uv_version }}
-          python-version: ${{ inputs.python_version }}
-          working-directory: ${{ inputs.working_directory }}
-          enable-cache: true
-          cache-dependency-glob: ${{ inputs.working_directory }}/uv.lock
+          otp-version: ${{ inputs.otp_version }}
+          elixir-version: ${{ inputs.elixir_version }}
+          version-file: ${{ inputs.elixir_version == '' && format('{0}/.tool-versions', inputs.working_directory) || '' }}
+          version-type: ${{ inputs.elixir_version == '' && 'strict' || 'loose' }}
 
-      - name: uv sync, ruff, mypy, pytest, pip-audit
+      - name: Cache deps and _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ inputs.working_directory }}/deps
+            ${{ inputs.working_directory }}/_build
+          key: mix-${{ runner.os }}-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles(format('{0}/mix.lock', inputs.working_directory)) }}
+          restore-keys: |
+            mix-${{ runner.os }}-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-
+
+      - name: Compile, format, credo, test, sobelow, audit
         env:
           WORKDIR: ${{ inputs.working_directory }}
-          RUN_LINT: ${{ inputs.run_lint }}
-          RUN_TYPECHECK: ${{ inputs.run_typecheck }}
-          RUN_TEST: ${{ inputs.run_test }}
+          RUN_CREDO: ${{ inputs.run_credo }}
+          RUN_SOBELOW: ${{ inputs.run_sobelow }}
           TEST_ARGS: ${{ inputs.test_args }}
-          RUN_AUDIT: ${{ inputs.run_audit }}
-          AUDIT_IGNORE: ${{ inputs.audit_ignore }}
-        run: bash "$CI_SCRIPTS/python/check.sh"
+        run: bash "$CI_SCRIPTS/elixir/check.sh"
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        uses: aquasecurity/setup-trivy@v0.3.1
         with:
           cache: true
 
@@ -221,55 +234,24 @@ jobs:
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
           IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
-          SKIP_DIRS: "**/.venv,**/node_modules"
+          SKIP_DIRS: "**/deps,**/_build"
         run: bash "$CI_SCRIPTS/common/scan-fs.sh"
 
       - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
-          category: trivy-fs-python-${{ inputs.working_directory }}
-
-  codeql:
-    name: CodeQL (python)
-    if: inputs.run_codeql
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    concurrency:
-      group: python-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: CodeQL init
-        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        with:
-          languages: python
-          build-mode: none
-          source-root: ${{ inputs.working_directory }}
-
-      - name: CodeQL analyze
-        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        with:
-          category: /language:python/${{ inputs.working_directory }}
+          category: trivy-fs-elixir-${{ inputs.working_directory }}
 
   container:
     name: image
-    needs: [test, codeql]
+    needs: [test]
     if: >-
       always() && inputs.build_container &&
-      needs.test.result == 'success' &&
-      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
-    uses: $/.github/workflows/container.yaml
+      needs.test.result == 'success'
+    uses: $/.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write

@@ -1,4 +1,4 @@
-suite: openchoreo-platform - build ClusterWorkflows (workflow plane, koorikla/ci parity)
+suite: openchoreo-platform - build ClusterWorkflows (workflow plane, ci/ parity)
 templates:
   - templates/build-workflows.yaml
   - templates/build-github.yaml

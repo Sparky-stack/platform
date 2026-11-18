@@ -16,7 +16,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
   annotations:
     openchoreo.dev/display-name: {{ printf "Workflow plane (%s)" .Values.cluster.name | quote }}
-    openchoreo.dev/description: "Argo Workflows on the management cluster: in-cluster builds (rootless BuildKit, koorikla/ci scripts)"
+    openchoreo.dev/description: "Argo Workflows on the management cluster: in-cluster builds (rootless BuildKit, ci/scripts)"
     argocd.argoproj.io/sync-wave: "10"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: openchoreo-workflow-plane
-description: OpenChoreo workflow plane on mgmt (Argo Workflows + in-cluster cluster-agent), ClusterWorkflowPlane default, build ClusterWorkflowTemplates running koorikla/ci scripts with rootless BuildKit
+description: OpenChoreo workflow plane on mgmt (Argo Workflows + in-cluster cluster-agent), ClusterWorkflowPlane default, build ClusterWorkflowTemplates running ci/scripts with rootless BuildKit
 type: application
 version: 0.1.0
 dependencies:

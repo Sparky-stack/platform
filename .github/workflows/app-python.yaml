@@ -1,17 +1,10 @@
-name: java
+name: python
 
-# JVM service - Quarkus (recommended) or Spring Boot (plain Java works too):
-# Maven or Gradle (wrapper preferred, auto-detected), pinned Temurin JDK 25 LTS,
-# compile + tests + JaCoCo coverage, CycloneDX SBOM of the resolved runtime
-# dependencies scanned with Trivy and osv-scanner, CodeQL (java-kotlin), then
-# container.yaml: multi-arch image on native runners, scan, SBOM, provenance,
-# keyless cosign. Images (templates/dockerfiles/):
-#   - quarkus.Dockerfile: Quarkus JVM mode on distroless Java (default)
-#   - quarkus-native.Dockerfile: opt-in Quarkus native executable (Mandrel builder,
-#     built per arch on native runners); select with `native: true`
-#   - spring-boot.Dockerfile: layered Spring Boot jar on distroless Java (no buildpacks)
-# Caches: Maven repository (setup-java) or Gradle home (setup-gradle, which
-# also validates the Gradle wrapper checksum).
+# Python service (uv): uv lock --check + uv sync --frozen, ruff check + format,
+# mypy (if locked), pytest + coverage, pip-audit + Trivy fs on uv.lock,
+# CodeQL (python), then container.yaml (multi-arch build on native runners,
+# scan, SBOM, provenance, keyless cosign). Expects a Dockerfile like
+# templates/dockerfiles/python.Dockerfile (distroless Python).
 #
 # Required caller permissions:
 #   contents: read, actions: read, packages: write, id-token: write,
@@ -22,55 +15,55 @@ on:
   workflow_call:
     inputs:
       working_directory:
-        description: 'Project directory (pom.xml or build.gradle[.kts])'
+        description: 'Directory containing pyproject.toml and uv.lock'
         required: false
         type: string
         default: '.'
-      build_tool:
-        description: 'auto, maven or gradle'
-        required: false
-        type: string
-        default: 'auto'
-      java_version:
-        description: 'JDK version for setup-java'
-        required: false
-        type: string
-        default: '25'
-      java_distribution:
-        description: 'JDK distribution for setup-java'
-        required: false
-        type: string
-        default: 'temurin'
-      run_tests:
-        description: 'Run tests (JaCoCo coverage)'
-        required: false
-        type: boolean
-        default: true
-      build_tool_args:
-        description: 'Extra Maven/Gradle arguments for the check build (e.g. -Pci)'
+      python_version:
+        description: 'Python version (default: .python-version / requires-python, installed by uv)'
         required: false
         type: string
         default: ''
-      native:
-        description: 'Quarkus native image (Mandrel, per-arch native build); default Dockerfile becomes <working_directory>/Dockerfile.native'
-        required: false
-        type: boolean
-        default: false
-      run_osv:
-        description: 'Run osv-scanner on the CycloneDX SBOM (gated like Trivy, on CVSS)'
-        required: false
-        type: boolean
-        default: true
-      run_codeql:
-        description: 'Run CodeQL (java-kotlin)'
-        required: false
-        type: boolean
-        default: true
-      codeql_build_mode:
-        description: "CodeQL build mode: none (Java) or autobuild (needed for Kotlin)"
+      uv_version:
+        description: 'uv version (default: [tool.uv] required-version or latest)'
         required: false
         type: string
-        default: 'none'
+        default: ''
+      run_lint:
+        description: 'Run ruff check + ruff format --check'
+        required: false
+        type: boolean
+        default: true
+      run_typecheck:
+        description: "Run mypy: 'auto' (when locked), 'true' or 'false'"
+        required: false
+        type: string
+        default: 'auto'
+      run_test:
+        description: 'Run pytest (coverage with pytest-cov)'
+        required: false
+        type: boolean
+        default: true
+      test_args:
+        description: 'Extra pytest arguments'
+        required: false
+        type: string
+        default: ''
+      run_audit:
+        description: 'Run pip-audit on the runtime dependencies'
+        required: false
+        type: boolean
+        default: true
+      audit_ignore:
+        description: 'Space-separated vulnerability IDs pip-audit ignores (accepted risks)'
+        required: false
+        type: string
+        default: ''
+      run_codeql:
+        description: 'Run CodeQL (python)'
+        required: false
+        type: boolean
+        default: true
       build_container:
         description: 'Build/scan/sign the container image after checks'
         required: false
@@ -92,7 +85,7 @@ on:
         type: string
         default: ''
       dockerfile:
-        description: 'Dockerfile (default <working_directory>/Dockerfile, or Dockerfile.native with native: true)'
+        description: 'Dockerfile (default <working_directory>/Dockerfile)'
         required: false
         type: string
         default: ''
@@ -168,11 +161,11 @@ permissions:
 
 jobs:
   test:
-    name: build, test, JaCoCo, SBOM, dependency scan
+    name: ruff, pytest, pip-audit
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     concurrency:
-      group: java-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ inputs.native }}-${{ github.ref }}
+      group: python-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
@@ -183,105 +176,69 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+      - name: Fetch platform ci/scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
           CI_SHA: ${{ job.workflow_sha }}
         run: |
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
-          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
           echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
-      - name: Detect build tool and framework
-        id: detect
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ inputs.uv_version }}
+          python-version: ${{ inputs.python_version }}
+          working-directory: ${{ inputs.working_directory }}
+          enable-cache: true
+          cache-dependency-glob: ${{ inputs.working_directory }}/uv.lock
+
+      - name: uv sync, ruff, mypy, pytest, pip-audit
         env:
           WORKDIR: ${{ inputs.working_directory }}
-          BUILD_TOOL: ${{ inputs.build_tool }}
-          NATIVE: ${{ inputs.native }}
-        run: |
-          bash "$CI_SCRIPTS/java/detect.sh"
-          slug="$(printf '%s' "${WORKDIR}" | tr -c 'A-Za-z0-9._-' '-')"
-          echo "artifact=java-reports-${slug}-$([ "$NATIVE" = true ] && echo native || echo jvm)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up JDK
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: ${{ inputs.java_distribution }}
-          java-version: ${{ inputs.java_version }}
-          cache: ${{ steps.detect.outputs.build_tool == 'maven' && 'maven' || '' }}
-          cache-dependency-path: ${{ steps.detect.outputs.build_tool == 'maven' && format('{0}/**/pom.xml', inputs.working_directory) || '' }}
-
-      - name: Set up Gradle (cache, wrapper validation)
-        if: steps.detect.outputs.build_tool == 'gradle'
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-        with:
-          add-job-summary: on-failure
-
-      - name: Build, test, JaCoCo, CycloneDX SBOM
-        id: check
-        env:
-          WORKDIR: ${{ inputs.working_directory }}
-          BUILD_TOOL: ${{ steps.detect.outputs.build_tool }}
-          RUN_TESTS: ${{ inputs.run_tests }}
-          BUILD_ARGS: ${{ inputs.build_tool_args }}
-        run: bash "$CI_SCRIPTS/java/check.sh"
-
-      - name: Upload SBOM and coverage reports
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ steps.detect.outputs.artifact }}
-          path: |
-            ${{ env.CI_OUT_DIR }}/bom.cdx.json
-            ${{ inputs.working_directory }}/**/site/jacoco/
-            ${{ inputs.working_directory }}/**/reports/jacoco/
-          if-no-files-found: ignore
-          retention-days: 14
+          RUN_LINT: ${{ inputs.run_lint }}
+          RUN_TYPECHECK: ${{ inputs.run_typecheck }}
+          RUN_TEST: ${{ inputs.run_test }}
+          TEST_ARGS: ${{ inputs.test_args }}
+          RUN_AUDIT: ${{ inputs.run_audit }}
+          AUDIT_IGNORE: ${{ inputs.audit_ignore }}
+        run: bash "$CI_SCRIPTS/python/check.sh"
 
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           cache: true
 
-      - name: Trivy scan of the SBOM (or lockfiles)
+      - name: Trivy fs scan of lockfiles
         id: fsscan
         env:
-          SBOM_FILE: ${{ steps.check.outputs.sbom }}
           SCAN_PATH: ${{ inputs.working_directory }}
           FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
           IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
           FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
           IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
-          SKIP_DIRS: ${{ steps.check.outputs.sbom == '' && '**/target,**/build,**/.gradle' || '' }}
+          SKIP_DIRS: "**/.venv,**/node_modules"
         run: bash "$CI_SCRIPTS/common/scan-fs.sh"
 
-      - name: Upload Trivy SARIF
+      - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
-          category: trivy-deps-java-${{ inputs.working_directory }}-${{ inputs.native && 'native' || 'jvm' }}
-
-      - name: osv-scanner (SBOM or manifests)
-        if: inputs.run_osv
-        env:
-          SCAN_TARGET: ${{ steps.check.outputs.sbom != '' && steps.check.outputs.sbom || inputs.working_directory }}
-          FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
-          FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
-        run: bash "$CI_SCRIPTS/common/osv-scan.sh"
+          category: trivy-fs-python-${{ inputs.working_directory }}
 
   codeql:
-    name: CodeQL (java-kotlin)
+    name: CodeQL (python)
     if: inputs.run_codeql
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     concurrency:
-      group: java-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ inputs.native }}-${{ github.ref }}
+      group: python-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
@@ -293,29 +250,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up JDK
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: ${{ inputs.java_distribution }}
-          java-version: ${{ inputs.java_version }}
-
       - name: CodeQL init
         uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
-          languages: java-kotlin
-          build-mode: ${{ inputs.codeql_build_mode }}
+          languages: python
+          build-mode: none
           source-root: ${{ inputs.working_directory }}
-
-      - name: CodeQL autobuild
-        if: inputs.codeql_build_mode == 'autobuild'
-        uses: github/codeql-action/autobuild@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        with:
-          working-directory: ${{ inputs.working_directory }}
 
       - name: CodeQL analyze
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
-          category: /language:java-kotlin/${{ inputs.working_directory }}
+          category: /language:python/${{ inputs.working_directory }}
 
   container:
     name: image
@@ -324,7 +269,7 @@ jobs:
       always() && inputs.build_container &&
       needs.test.result == 'success' &&
       (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
-    uses: $/.github/workflows/container.yaml
+    uses: $/.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write
@@ -335,7 +280,7 @@ jobs:
       image_name: ${{ inputs.image_name }}
       registry: ${{ inputs.registry }}
       context: ${{ inputs.context != '' && inputs.context || inputs.working_directory }}
-      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format(inputs.native && '{0}/Dockerfile.native' || '{0}/Dockerfile', inputs.working_directory) }}
+      dockerfile: ${{ inputs.dockerfile != '' && inputs.dockerfile || format('{0}/Dockerfile', inputs.working_directory) }}
       platforms: ${{ inputs.platforms }}
       multiarch_strategy: ${{ inputs.multiarch_strategy }}
       build_args: ${{ inputs.build_args }}

@@ -1,4 +1,4 @@
-# ClusterWorkflowTemplate koorikla-helm-chart: package a Helm chart as an OCI artifact with koorikla/ci scripts
+# ClusterWorkflowTemplate koorikla-helm-chart: package a Helm chart as an OCI artifact with ci/scripts
 # (helm/check.sh: dependency build, lint --strict, helm-unittest; helm/package-push.sh), push it to the installation's
 # registry and cosign-sign it with the platform key. Behind the generic (non-component) ClusterWorkflow `helm-chart`
 # of addon openchoreo-platform. Source checkout reuses koorikla-build's checkout template.
@@ -7,7 +7,7 @@ kind: ClusterWorkflowTemplate
 metadata:
   name: koorikla-helm-chart
   annotations:
-    workflows.argoproj.io/description: Lint, test, package, push and sign a Helm chart (OCI) with koorikla/ci scripts
+    workflows.argoproj.io/description: Lint, test, package, push and sign a Helm chart (OCI) with ci/scripts
 spec:
   entrypoint: pipeline
   arguments:
@@ -150,7 +150,7 @@ spec:
             if [ "$TLOG_UPLOAD" != true ]; then
               # Private by default (installation switch buildWorkflows.signing.transparencyLog): no public Rekor entry
               # leaking repo names and digests. cosign v3 takes a signing config without a transparency log;
-              # koorikla/ci sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
+              # ci/scripts sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
               printf '{ "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json", "rekorTlogConfig": {}, "tsaConfig": {} }\n' > /tmp/signing-config.json
               real=$(command -v cosign); mkdir -p /tmp/bin
               printf '#!/bin/sh\ncase "$1" in sign|attest) c=$1; shift; exec %s "$c" --signing-config /tmp/signing-config.json "$@" ;; esac\nexec %s "$@"\n' \

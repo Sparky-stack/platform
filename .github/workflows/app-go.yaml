@@ -1,9 +1,7 @@
-name: nextjs
+name: go
 
-# Next.js app: package-manager detection (npm/pnpm/yarn via lockfile), lint,
-# typecheck, test, next build (cached), dependency audit + Trivy fs, CodeQL
-# (javascript-typescript), then container.yaml. Expects `output: "standalone"`
-# and a Dockerfile like templates/dockerfiles/nextjs.Dockerfile.
+# Go service: go vet, golangci-lint, go test -race + coverage, govulncheck,
+# CodeQL (go), then container.yaml (multi-arch build, scan, SBOM, sign).
 #
 # Required caller permissions:
 #   contents: read, actions: read, packages: write, id-token: write,
@@ -13,45 +11,40 @@ on:
   workflow_call:
     inputs:
       working_directory:
-        description: 'Directory containing package.json'
+        description: 'Go module directory'
         required: false
         type: string
         default: '.'
-      node_version:
-        description: 'Node.js version (overrides .nvmrc/.node-version/.tool-versions/package.json engines)'
+      go_version_file:
+        description: 'go.mod / .go-version used by setup-go (default <working_directory>/go.mod)'
         required: false
         type: string
         default: ''
       run_lint:
-        description: 'Run the lint script'
+        description: 'Run golangci-lint'
         required: false
         type: boolean
         default: true
-      run_typecheck:
-        description: 'Run the typecheck script (or tsc --noEmit)'
-        required: false
-        type: boolean
-        default: true
-      run_test:
-        description: 'Run the test script'
-        required: false
-        type: boolean
-        default: true
-      run_audit:
-        description: 'Run npm/pnpm/yarn audit of production deps'
-        required: false
-        type: boolean
-        default: true
-      audit_level:
-        description: 'Audit failure level: low, moderate, high, critical'
+      golangci_lint_version:
+        description: 'golangci-lint version'
         required: false
         type: string
-        default: 'critical'
-      run_codeql:
-        description: 'Run CodeQL (javascript-typescript)'
+        default: 'latest'
+      run_vulncheck:
+        description: 'Run govulncheck'
         required: false
         type: boolean
         default: true
+      run_codeql:
+        description: 'Run CodeQL (go)'
+        required: false
+        type: boolean
+        default: true
+      extra_test_cmd:
+        description: 'Extra shell command run in working_directory after tests'
+        required: false
+        type: string
+        default: ''
       build_container:
         description: 'Build/scan/sign the container image after checks'
         required: false
@@ -98,7 +91,7 @@ on:
         type: boolean
         default: true
       trivy_severity:
-        description: 'Severities that fail the Trivy scans (image and lockfiles)'
+        description: 'Severities that fail the image scan'
         required: false
         type: string
         default: 'CRITICAL'
@@ -113,7 +106,7 @@ on:
         type: string
         default: ''
       trivy_fail:
-        description: 'Fail on Trivy findings at trivy_severity'
+        description: 'Fail on findings at trivy_severity'
         required: false
         type: boolean
         default: true
@@ -149,107 +142,65 @@ permissions:
 
 jobs:
   test:
-    name: lint, typecheck, test, build, audit
+    name: vet, lint, test, govulncheck
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     concurrency:
-      group: nextjs-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      group: go-test-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Fetch koorikla/ci scripts (same commit as this workflow)
+      - name: Fetch platform ci/scripts (same commit as this workflow)
         env:
           CI_REPO: ${{ job.workflow_repository }}
           CI_SHA: ${{ job.workflow_sha }}
         run: |
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/ci}.git" "${CI_SHA:-v1}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
-          echo "CI_SCRIPTS=$d/scripts" >> "$GITHUB_ENV"
-          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
 
-      - name: Detect package manager
-        id: detect
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+
+      - name: golangci-lint
+        if: inputs.run_lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ inputs.golangci_lint_version }}
+          working-directory: ${{ inputs.working_directory }}
+
+      - name: go vet, go test -race, govulncheck
         env:
           WORKDIR: ${{ inputs.working_directory }}
-        run: bash "$CI_SCRIPTS/nextjs/detect.sh"
+          RUN_LINT: 'false'
+          RUN_VULNCHECK: ${{ inputs.run_vulncheck }}
+        run: bash "$CI_SCRIPTS/go/check.sh"
 
-      - name: Set up pnpm
-        if: steps.detect.outputs.pm == 'pnpm'
-        uses: pnpm/action-setup@v6
-        with:
-          package_json_file: ${{ inputs.working_directory }}/package.json
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ inputs.node_version }}
-          node-version-file: ${{ inputs.node_version == '' && steps.detect.outputs.node_version_file || '' }}
-          cache: ${{ steps.detect.outputs.pm != 'yarn' && steps.detect.outputs.lockfile != '' && steps.detect.outputs.pm || '' }}
-          cache-dependency-path: ${{ inputs.working_directory }}/${{ steps.detect.outputs.lockfile }}
-
-      - name: Enable corepack (yarn)
-        if: steps.detect.outputs.pm == 'yarn'
-        run: corepack enable || npm install -g corepack && corepack enable
-
-      - name: Cache Next.js build
-        uses: actions/cache@v6
-        with:
-          path: ${{ inputs.working_directory }}/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.working_directory, steps.detect.outputs.lockfile)) }}-${{ hashFiles(format('{0}/**/*.[jt]s', inputs.working_directory), format('{0}/**/*.[jt]sx', inputs.working_directory)) }}
-          restore-keys: |
-            nextjs-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.working_directory, steps.detect.outputs.lockfile)) }}-
-
-      - name: Install, lint, typecheck, test, build, audit
+      - name: Extra test command
+        if: inputs.extra_test_cmd != ''
+        working-directory: ${{ inputs.working_directory }}
         env:
-          WORKDIR: ${{ inputs.working_directory }}
-          PM: ${{ steps.detect.outputs.pm }}
-          RUN_LINT: ${{ inputs.run_lint }}
-          RUN_TYPECHECK: ${{ inputs.run_typecheck }}
-          RUN_TEST: ${{ inputs.run_test }}
-          RUN_AUDIT: ${{ inputs.run_audit }}
-          AUDIT_LEVEL: ${{ inputs.audit_level }}
-        run: bash "$CI_SCRIPTS/nextjs/check.sh"
-
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
-        with:
-          cache: true
-
-      - name: Trivy fs scan of lockfiles
-        id: fsscan
-        env:
-          SCAN_PATH: ${{ inputs.working_directory }}
-          FAIL_SEVERITIES: ${{ inputs.trivy_severity }}
-          IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
-          FAIL_ON_FINDINGS: ${{ inputs.trivy_fail }}
-          IGNORE_FILE: ${{ inputs.trivy_ignore_file }}
-          SKIP_DIRS: "**/.next,**/node_modules/.cache"
-        run: bash "$CI_SCRIPTS/common/scan-fs.sh"
-
-      - name: Upload Trivy fs SARIF
-        if: always() && steps.fsscan.outputs.fs_sarif != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
-          category: trivy-fs-nextjs-${{ inputs.working_directory }}
+          EXTRA_CMD: ${{ inputs.extra_test_cmd }}
+        run: bash -euo pipefail -c "$EXTRA_CMD"
 
   codeql:
-    name: CodeQL (javascript-typescript)
+    name: CodeQL (go)
     if: inputs.run_codeql
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
-      group: nextjs-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
+      group: go-codeql-${{ github.repository }}-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
@@ -261,25 +212,36 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.go_version_file != '' && inputs.go_version_file || format('{0}/go.mod', inputs.working_directory) }}
+          cache-dependency-path: ${{ inputs.working_directory }}/go.*
+
       - name: CodeQL init
         uses: github/codeql-action/init@v4
         with:
-          languages: javascript-typescript
-          build-mode: none
+          languages: go
+          build-mode: manual
           source-root: ${{ inputs.working_directory }}
+
+      - name: go build
+        working-directory: ${{ inputs.working_directory }}
+        run: go build ./...
 
       - name: CodeQL analyze
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:javascript-typescript/${{ inputs.working_directory }}
+          category: /language:go/${{ inputs.working_directory }}
 
   container:
     name: image
     needs: [test, codeql]
     if: >-
       always() && inputs.build_container &&
-      needs.test.result == 'success' && (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
-    uses: $/.github/workflows/container.yaml
+      needs.test.result == 'success' &&
+      (needs.codeql.result == 'success' || needs.codeql.result == 'skipped')
+    uses: $/.github/workflows/app-container.yaml
     permissions:
       contents: read
       packages: write
