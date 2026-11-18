@@ -206,6 +206,9 @@ tests:
       - matchRegex: { path: "spec.variables[4].expression", pattern: "variables.trackingApp.startsWith\\(variables.binding.spec.owner.projectName \\+ '-'\\)" }
       - matchRegex: { path: "spec.variables[4].expression", pattern: "variables.trackingApp.endsWith\\('-' \\+ variables.binding.spec.environment\\)" }
       - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [releasebindings, resourcereleasebindings] }
+      # A more-indented line in a folded scalar keeps its newline, which breaks a CEL string literal (the API server
+      # rejects the policy; the kyverno CLI does not notice).
+      - notMatchRegex: { path: "spec.validations[0].messageExpression", pattern: "\n" }
 
   - it: binding denies (not audits)
     template: templates/promotion-git-only.yaml

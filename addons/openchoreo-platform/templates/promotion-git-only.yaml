@@ -76,11 +76,11 @@ spec:
       messageExpression: >-
         variables.user in {{ $g.gitOnly.writers | toJson }}
         ? (variables.binding.kind == 'ResourceReleaseBinding'
-          ? 'ResourceReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through a gated
-          Argo CD Application <project>-<app>-<environment> of their project (docs/promotion.md), denied for Application '
-          : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through the gated Argo CD
-          Application <project>-<component>-<environment> of their component (docs/promotion.md); want ' +
-          (variables.componentApp == '' ? '(owner incomplete)' : variables.componentApp) + ', denied for Application ')
+        ? 'ResourceReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through a gated
+        Argo CD Application <project>-<app>-<environment> of their project (docs/promotion.md), denied for Application '
+        : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' sync only through the gated Argo CD
+        Application <project>-<component>-<environment> of their component (docs/promotion.md); want ' +
+        (variables.componentApp == '' ? '(owner incomplete)' : variables.componentApp) + ', denied for Application ')
         + (variables.trackingApp == '' ? '(no tracking-id)' : variables.trackingApp)
         : 'ReleaseBindings of ' + {{ join ", " $g.gatedEnvironments | squote }} + ' change only through a reviewed pull
         request synced by Argo CD (docs/promotion.md); denied for ' + variables.user
