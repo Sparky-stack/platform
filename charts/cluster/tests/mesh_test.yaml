@@ -154,3 +154,22 @@ tests:
           path: spec.clusterSelector.matchExpressions
           value: [{ key: platform.koorikla.io/name, operator: NotIn, values: [dev1] }]
       - equal: { path: spec.resources, value: [{ kind: Secret, name: dev1-mesh-remote-secret }] }
+
+  # #192: Issuer <name>-client-ca needs <name>-cca, which CAPI creates for the Cluster (wave 0). In the Cluster's wave a
+  # failed Cluster apply (CAPI webhook down) left the Certificate Progressing and the Argo CD operation hung forever.
+  - it: syncs the remote-secret chain after the Cluster, one wave per link; the CRS stays in the Cluster's wave
+    template: templates/mesh-remote-secret.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentSelector: { path: kind, value: Issuer }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+        documentSelector: { path: kind, value: Certificate }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+        documentSelector: { path: kind, value: ClusterResourceSet }
+
+  - it: reads the CAPI kubeconfig for OpenBao one wave after the Cluster (#192)
+    template: templates/mesh-openbao.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }

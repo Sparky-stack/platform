@@ -49,6 +49,8 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"   # reads Secret <name>-agent-tls (Certificate, wave 3)
 spec:
   refreshInterval: 1h
   secretStoreRef:

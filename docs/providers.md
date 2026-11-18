@@ -196,6 +196,30 @@ Because `ExternalSecret/<name>-registries` refreshes every `1h` in sync wave `-1
 blocks wave `0` (`Cluster/<name>`) under `retry.limit: -1` even when an older `Secret/<name>-registries` exists.
 Diagnosis and declarative unblock steps: [runbooks/break-glass.md](runbooks/break-glass.md#blocked-cluster-sync-on-node-registry-secret).
 
+### Sync waves of a cluster app
+Argo CD applies one sync wave, then waits while any resource of that wave is still Progressing, and only then fails the
+operation for resources that did not apply (gitops-engine `sync_context.go`). A resource that stays Progressing until
+another object exists therefore hangs the operation for good when that object's apply fails in the same wave: no
+failure, so no retry. Live (#192): `Cluster/dev1` failed on the CAPI webhook (capi-controller-manager had lost its
+leader lease under bootstrap load) while `Certificate/dev1-mesh-reader` waited for its Issuer, which needs CAPI's
+`dev1-cca` for that Cluster. So in `charts/cluster` every consumer syncs in a later wave than what it consumes:
+
+| Wave | Resources |
+|------|-----------|
+| -1 | `ExternalSecret/<name>-registries` (bootstrap data, above); byo: kubeconfig access (`byo-access.yaml`) |
+| 0 | `Cluster`, every `ClusterResourceSet`, payload ExternalSecrets from the `platform`/`mgmt-openbao` stores, `Issuer/<name>-agent-selfsigned` |
+| 1 | consumers of CAPI's `<name>-kubeconfig` / `<name>-cca`: `ExternalSecret/<name>-argocd-cluster`, `<name>-mesh-openbao`, `Issuer/<name>-client-ca`; `Certificate/<name>-agent-ca` |
+| 2 | `Certificate/<name>-mesh-reader`, `Issuer/<name>-agent-ca` |
+| 3 | `ExternalSecret/<name>-mesh-remote-secret`, `Certificate/<name>-agent-tls` |
+| 4 | `ExternalSecret/<name>-openchoreo-agent` |
+| 9, 10 | OpenChoreo Environments, ClusterDataPlane ([openchoreo.md](openchoreo.md)) |
+
+A failed apply then leaves nothing waiting in its wave: the operation fails and the fleet ApplicationSet retries it
+without limit. Wave 1 starts once the Cluster is Healthy (phase `Provisioned`). `hack/tests/test_cluster_sync_order.sh`
+checks the rule (Certificate -> Issuer, Issuer -> CA Secret, ExternalSecret -> Secret, CAPI outputs -> Cluster) for every
+installation and cluster file. Argo CD's `controller.sync.timeout.seconds` is no substitute: a timed-out operation is
+terminated without retry, and auto-sync does not retry a failed revision (`appcontroller.go` `alreadyAttemptedSync`).
+
 ## Docker (CAPD) - local
 
 - Prerequisites: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind`, docker.sock mounted (`bootstrap/`).
