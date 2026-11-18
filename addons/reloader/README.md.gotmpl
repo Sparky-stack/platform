@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to explicit namespaces (no `ClusterRole`). Rolls `openchoreo-data-plane` `cluster-agent-dataplane` on TLS renewal on workload clusters, and `openchoreo-control-plane` Backstage on `ConfigMap` changes on `mgmt`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: reloader`).
+- **Catalog label:** `addons.platform.koorikla.io/reloader` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Agent certificate rotation and reload checks: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#3-openchoreo-agent-certificates) and [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [OpenChoreo: Trust model](../../docs/openchoreo.md#trust-model)
+{{- end -}}

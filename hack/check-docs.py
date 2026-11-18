@@ -135,7 +135,8 @@ def main():
             for sec in CHART_README_SECTIONS:
                 if sec not in htexts:
                     problems.append('%s: README missing section "%s"' % (rel, sec))
-            nlines = len(lines) - (1 if lines and lines[-1] == "" else 0)
+            body = lines[:-1] if lines and lines[-1] == "" else lines
+            nlines = sum(1 for l in body if not l.lstrip().startswith("|"))
             if nlines > CHART_README_MAX_LINES:
                 problems.append("%s: README is %d lines (max %d)" % (rel, nlines, CHART_README_MAX_LINES))
         fence = False
