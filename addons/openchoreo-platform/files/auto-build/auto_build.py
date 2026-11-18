@@ -14,7 +14,12 @@
 #   - "already built" is read from git, not from cluster state: the Workload file at the head commit carries
 #     spec.source.commit (written by the build's GitOps hand-off); if every change since that commit is inside the
 #     GitOps directory (the hand-off commit itself, promotions) there is nothing to build;
-#   - while an auto-build run of the component is still running, no second one starts (no out-of-order image bumps).
+#   - while an auto-build run of the component is still running, no second one starts (no out-of-order image bumps);
+#   - "built" also means the image is still there: when the Workload pins an image of the platform registry
+#     (REGISTRY_HOST) whose digest that registry does not have (a clean bootstrap: git pins an artifact of the previous
+#     stack's Harbor), the Workload's own spec.source.commit is rebuilt (never the branch head, which is a GitOps-only
+#     commit the build's checkout skips) as WorkflowRun <component>-<sha[:12]>-<digest[:8]>: one rebuild per missing
+#     digest. The hand-off then commits the new digest. Unknown answers (registry down, no credentials) never rebuild.
 # The ConfigMap STATE_CONFIGMAP is only a cache (branch ETags, last handled head per component): GitHub answers a
 # conditional request with 304 when nothing changed, which does not count against the rate limit. Losing it costs API
 # calls, never a duplicate build.
@@ -22,6 +27,8 @@
 # GitHub: a short-lived installation token (contents: read) minted and rotated by ESO (GithubAccessToken generator
 # from the platform's GitHub App), mounted at TOKEN_FILE. This script never sees the App's private key.
 # Kubernetes: the pod's ServiceAccount (list Components, get ClusterWorkflows, create WorkflowRuns, one ConfigMap).
+# Registry: a pull-only robot (REGISTRY_AUTH_DIR username/password) and the registry CA (REGISTRY_CA_FILE); one manifest
+# HEAD per up-to-date component and pass.
 #
 # PR previews (PREVIEWS=true, docs/preview-environments.md): the same pass then walks the preview Applications Argo CD
 # generated for open pull requests (ApplicationSet previews-<project>, charts/tenant) and, per PR head commit, builds it
@@ -34,6 +41,7 @@
 #
 # Stdlib only. The WorkflowTemplate embeds this file in an Argo template: the source must not contain two opening
 # braces (hack/tests/test_workflow_scripts.sh).
+import base64
 import datetime as dt
 import json
 import os
@@ -49,6 +57,12 @@ EXT = "x-openchoreo-component-parameter-repository-"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 GITHUB_URL_RE = re.compile(r"^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+?)(\.git)?/?$")
 COMMIT_LINE_RE = re.compile(r"^\s+commit:\s*[\"']?([0-9a-f]{7,40})[\"']?\s*(#.*)?$", re.M)
+IMAGE_LINE_RE = re.compile(r"^\s+image:\s*[\"']?([^\s\"'#]+)[\"']?\s*(#.*)?$", re.M)
+IMAGE_REF_RE = re.compile(r"^([A-Za-z0-9.-]+(?::[0-9]{1,5})?)/([a-z0-9]+(?:[._/-][a-z0-9]+)*)"
+                          r"(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@(sha256:[0-9a-f]{64})$")
+MANIFEST_TYPES = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
+                            "application/vnd.docker.distribution.manifest.list.v2+json",
+                            "application/vnd.docker.distribution.manifest.v2+json"])
 TRIGGER_LABEL = "platform.koorikla.io/trigger"
 COMMIT_ANNOTATION = "platform.koorikla.io/commit"
 DEFAULT_WORKLOAD_PATH = "deploy/openchoreo/workload.yaml"
@@ -148,6 +162,30 @@ def workload_commit(text):
     return m.group(1) if m else None
 
 
+def workload_image(text):
+    """spec.container.image of a Workload manifest (first `image:` line), or None."""
+    m = IMAGE_LINE_RE.search(text or "")
+    return m.group(1) if m else None
+
+
+def image_parts(ref):
+    """(registry host, repository, digest) of a <host>/<repository>[:tag]@sha256:<digest> reference, else None."""
+    m = IMAGE_REF_RE.match(ref or "")
+    return (m.group(1).lower(), m.group(2), m.group(3)) if m else None
+
+
+def rebuild_name(component, sha, digest):
+    """WorkflowRun that rebuilds `sha` because `digest` is missing: one per (commit, missing digest)."""
+    return "%s-%s-%s" % (component[:40].rstrip("-"), sha[:12], digest.split(":")[-1][:8])
+
+
+def bearer_challenge(header):
+    """{realm, service, scope} of a `WWW-Authenticate: Bearer ...` challenge, or None."""
+    if not (header or "").lower().startswith("bearer "):
+        return None
+    return dict((k.lower(), v) for k, v in re.findall(r'([A-Za-z]+)="([^"]*)"', header[7:]))
+
+
 def only_under(files, directory):
     """True when every changed path is inside directory (and there is at least one)."""
     directory = directory.strip("/")
@@ -201,8 +239,9 @@ class Reconciler:
     """One pass over the Components. `api` provides the cluster and GitHub calls (fake in tests)."""
 
     def __init__(self, api, namespace, allowed_prefixes, state, repository="", max_runs=5, stale_seconds=7200,
-                 labels=None, now=None):
+                 labels=None, now=None, registry_host=""):
         self.api = api
+        self.registry_host = registry_host.lower()
         self.namespace = namespace
         self.allowed = allowed_prefixes
         self.state = state
@@ -249,9 +288,40 @@ class Reconciler:
             out.append(run["metadata"]["name"])
         return out
 
-    def record(self, name, sha, result, run=""):
+    def record(self, name, sha, result, run="", image=""):
         self.state["components"][name] = {"sha": sha, "result": result, "run": run,
                                           "at": self.now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+        if image:
+            self.state["components"][name]["image"] = image
+
+    def missing(self, image):
+        """True only when the platform registry says the image's digest does not exist (False: present, unknown, or
+        not an image of the platform registry)."""
+        parts = image_parts(image)
+        if not self.registry_host or not parts or parts[0] != self.registry_host:
+            return False
+        return self.api.image_exists(*parts) is False
+
+    def up_to_date(self, comp, paths, slug, sha, built, image):
+        """The head needs no build of its own. Rebuild the Workload's commit `built` if its pinned image is gone."""
+        name = comp["metadata"]["name"]
+        if not self.missing(image):
+            self.record(name, sha, "up-to-date", image=image or "")
+            return
+        commit = built if SHA_RE.match(built) else self.api.commit_sha(slug, built)
+        rn = rebuild_name(name, commit, image_parts(image)[2])
+        if self.api.run_exists(rn):
+            log("%s: %s is not in the registry; rebuild %s exists" % (name, image, rn))
+            self.record(name, sha, "rebuilt", rn)
+            return
+        if len(self.created) >= self.max_runs:
+            log("%s: build budget of this pass (%d) used, next pass" % (name, self.max_runs))
+            return
+        created = self.api.create_run(build_run(comp, self.namespace, paths, commit, self.labels, name=rn))
+        log("%s: %s is not in the registry: rebuild of %s %s -> WorkflowRun %s%s"
+            % (name, image, slug, commit[:12], rn, "" if created else " (already existed)"))
+        self.created.append(rn)
+        self.record(name, sha, "rebuilt", rn)
 
     def component(self, comp):
         name = comp["metadata"]["name"]
@@ -282,8 +352,8 @@ class Reconciler:
             return
         sha = self.head(slug, branch)
         last = self.state["components"].get(name) or {}
-        if last.get("sha") == sha:
-            return                                  # nothing new since the last pass
+        if last.get("sha") == sha and not (last.get("result") == "up-to-date" and self.missing(last.get("image"))):
+            return                                  # nothing new since the last pass, the image is still there
         rn = run_name(name, sha)
         if self.api.run_exists(rn):
             log("%s: %s@%s %s already has WorkflowRun %s" % (name, slug, branch, sha[:12], rn))
@@ -296,10 +366,11 @@ class Reconciler:
         workload_path = get_path(params, "gitops.workloadPath") or schema_default(schema, "gitops.workloadPath")
         if not isinstance(workload_path, str) or not workload_path:
             workload_path = DEFAULT_WORKLOAD_PATH
-        built = workload_commit(self.api.file_at(slug, workload_path, sha))
+        text = self.api.file_at(slug, workload_path, sha)
+        built, image = workload_commit(text), workload_image(text)
         if built and (sha.startswith(built) or built.startswith(sha)):
             log("%s: %s %s is the built commit" % (name, slug, sha[:12]))
-            self.record(name, sha, "up-to-date")
+            self.up_to_date(comp, paths, slug, sha, built, image)
             return
         if built:
             files = self.api.changed_files(slug, built, sha)
@@ -307,7 +378,7 @@ class Reconciler:
             if files is not None and only_under(files, gitops_dir):
                 log("%s: %s %s changes only %s/ since built %s: nothing to build"
                     % (name, slug, sha[:12], gitops_dir, built[:12]))
-                self.record(name, sha, "up-to-date")
+                self.up_to_date(comp, paths, slug, sha, built, image)
                 return
         if len(self.created) >= self.max_runs:
             log("%s: build budget of this pass (%d) used, next pass" % (name, self.max_runs))
@@ -591,7 +662,8 @@ class Api:
     SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 
     def __init__(self, namespace, state_namespace, state_configmap, token_file, github_api="https://api.github.com",
-                 min_remaining=100, preview_token_file="", argocd_namespace="argocd"):
+                 min_remaining=100, preview_token_file="", argocd_namespace="argocd", registry_auth_dir="",
+                 registry_ca_file=""):
         self.namespace = namespace
         self.state_namespace = state_namespace
         self.state_configmap = state_configmap
@@ -605,6 +677,13 @@ class Api:
         self.kube_url = "https://%s:%s" % (env("KUBERNETES_SERVICE_HOST"), env("KUBERNETES_SERVICE_PORT", "443"))
         self.kube_ctx = ssl.create_default_context(cafile=os.path.join(self.SA, "ca.crt"))
         self.remaining = None
+        self.registry_auth = None
+        if registry_auth_dir:
+            with open(os.path.join(registry_auth_dir, "username")) as f, \
+                    open(os.path.join(registry_auth_dir, "password")) as g:
+                self.registry_auth = (f.read().strip(), g.read().strip())
+        self.registry_ctx = ssl.create_default_context(cafile=registry_ca_file or None)
+        self._registry_tokens = {}
 
     @staticmethod
     def read_token(path):
@@ -698,6 +777,42 @@ class Api:
             cm["metadata"]["resourceVersion"] = current["metadata"]["resourceVersion"]
             self.kube("PUT", base + "/" + self.state_configmap, body=cm, ok=(200, 409))   # 409: a parallel pass won
 
+    # Registry (Distribution API: anonymous, then the Bearer token flow or Basic with the pull-only robot)
+    def image_exists(self, host, repository, digest):
+        """True/False when the registry answers 200/404 for the manifest, None when it cannot tell."""
+        url = "https://%s/v2/%s/manifests/%s" % (host, repository, digest)
+        headers = {"Accept": MANIFEST_TYPES}
+        scope = "repository:%s:pull" % repository
+        try:
+            if scope in self._registry_tokens:
+                headers["Authorization"] = self._registry_tokens[scope]
+            status, hdrs, _ = http("HEAD", url, headers=headers, context=self.registry_ctx)
+            if status == 401 and self.registry_auth:
+                challenge = (hdrs or {}).get("WWW-Authenticate") or ""
+                basic = "Basic " + base64.b64encode(("%s:%s" % self.registry_auth).encode()).decode()
+                bearer = bearer_challenge(challenge)
+                if bearer and bearer.get("realm", "").startswith("https://"):
+                    query = urllib.parse.urlencode({"service": bearer.get("service", ""), "scope": scope})
+                    tstatus, _, raw = http("GET", bearer["realm"] + "?" + query, headers={"Authorization": basic},
+                                           context=self.registry_ctx)
+                    body = json.loads(raw) if tstatus == 200 else {}
+                    token = body.get("token") or body.get("access_token")
+                    if not token:
+                        log("registry %s: token endpoint answered HTTP %d" % (host, tstatus))
+                        return None
+                    self._registry_tokens[scope] = "Bearer " + token
+                else:
+                    self._registry_tokens[scope] = basic
+                headers["Authorization"] = self._registry_tokens[scope]
+                status, _, _ = http("HEAD", url, headers=headers, context=self.registry_ctx)
+        except (OSError, ValueError) as e:
+            log("registry %s: %s" % (host, e))
+            return None
+        if status in (200, 404):
+            return status == 200
+        log("registry %s: HEAD %s/manifests/%s -> HTTP %d" % (host, repository, digest[:19], status))
+        return None
+
     # GitHub
     def gh(self, path, accept="application/vnd.github+json", etag="", ok=(200,), method="GET", body=None, token=""):
         headers = {"Authorization": "Bearer " + (token or self.gh_token), "Accept": accept,
@@ -723,6 +838,15 @@ class Api:
         if status == 304:
             return None, etag
         return raw.decode().strip(), hdrs.get("ETag", "")
+
+    def commit_sha(self, slug, ref):
+        """Full SHA of a (short) commit ref."""
+        _, _, raw = self.gh("/repos/%s/commits/%s" % (slug, urllib.parse.quote(ref, safe="")),
+                            accept="application/vnd.github.sha")
+        sha = raw.decode().strip()
+        if not SHA_RE.match(sha):
+            raise Failed("%s: no commit SHA for %s" % (slug, ref))
+        return sha
 
     def file_at(self, slug, path, sha):
         status, _, raw = self.gh("/repos/%s/contents/%s?ref=%s" % (slug, urllib.parse.quote(path), sha),
@@ -774,12 +898,13 @@ def main():
     api = Api(namespace, env("STATE_NAMESPACE"), env("STATE_CONFIGMAP", "auto-build-state"), env("TOKEN_FILE"),
               env("GITHUB_API", "https://api.github.com"), int(env("MIN_RATE_REMAINING", "100")),
               preview_token_file=env("PREVIEW_TOKEN_FILE") if previews else "",
-              argocd_namespace=env("ARGOCD_NAMESPACE", "argocd"))
+              argocd_namespace=env("ARGOCD_NAMESPACE", "argocd"), registry_auth_dir=env("REGISTRY_AUTH_DIR"),
+              registry_ca_file=env("REGISTRY_CA_FILE"))
     state, current = api.load_state()
     slug = "%s/%s" % (m.group(1), m.group(2)) if m else ""
     max_runs = int(env("MAX_RUNS", "5"))
     rec = Reconciler(api, namespace, env("ALLOWED_PREFIXES").split(), state, repository=slug, max_runs=max_runs,
-                     stale_seconds=int(env("STALE_SECONDS", "7200")))
+                     stale_seconds=int(env("STALE_SECONDS", "7200")), registry_host=env("REGISTRY_HOST"))
     errors = []
     created = []
     try:

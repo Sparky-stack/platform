@@ -13,7 +13,7 @@ tests:
           path: "spec.templates[0].script.env"
           content: { name: PREVIEWS, value: "true" }
         documentSelector: { path: kind, value: WorkflowTemplate }
-      - hasDocuments: { count: 12 }
+      - hasDocuments: { count: 14 }   # 12 + the registry check (#200)
 
   - it: the pass gets the preview settings (opt-in == charts/tenant previewOptIn, TTL and label == installation.yaml)
     documentSelector: { path: kind, value: WorkflowTemplate }
