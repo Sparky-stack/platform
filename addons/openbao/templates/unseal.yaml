@@ -12,6 +12,11 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    # Before the StatefulSet (wave 0) that mounts this Secret: if ESO's webhook is not ready yet on a fresh bootstrap,
+    # this wave fails and Argo CD retries, instead of applying the StatefulSet and waiting forever on a pod stuck on
+    # the missing volume.
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   refreshInterval: 1h
   secretStoreRef:
