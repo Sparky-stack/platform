@@ -177,7 +177,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -194,7 +194,7 @@ jobs:
           echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
 
       - name: Set up Ruby (bundler cache)
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@20eb24b0d509e2b9ed9b6d42ddfeb992915e0564 # v1.341.0
         with:
           ruby-version: ${{ inputs.ruby_version != '' && inputs.ruby_version || 'default' }}
           working-directory: ${{ inputs.working_directory }}
@@ -209,7 +209,7 @@ jobs:
         run: bash "$CI_SCRIPTS/ruby/check.sh"
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           cache: true
 
@@ -227,7 +227,7 @@ jobs:
       - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
           category: trivy-fs-ruby-${{ inputs.working_directory }}
@@ -246,19 +246,19 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: CodeQL init
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ruby
           build-mode: none
           source-root: ${{ inputs.working_directory }}
 
       - name: CodeQL analyze
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:ruby/${{ inputs.working_directory }}
 

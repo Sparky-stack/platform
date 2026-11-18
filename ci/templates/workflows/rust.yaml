@@ -1,5 +1,5 @@
-# Copy to .github/workflows/ci.yaml. Docs: https://github.com/koorikla/ci
-# Platform repos pin koorikla/ci by commit SHA (`@<sha> # v1`, tracked by Renovate);
+# Copy to .github/workflows/ci.yaml. Docs: https://github.com/koorikla/platform/tree/main/ci
+# Platform repos pin the koorikla/platform app-* workflows by commit SHA (`@<sha> # ci-vX.Y.Z`, tracked by Renovate);
 # the platform's admission policy verifies signatures against that commit.
 name: ci
 
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   rust:
-    uses: koorikla/ci/.github/workflows/rust.yaml@v1
+    uses: koorikla/platform/.github/workflows/app-rust.yaml@<sha> # ci-v1.0.0
     permissions:
       contents: read
       actions: read
@@ -36,7 +36,7 @@ jobs:
   bump:
     needs: rust
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: koorikla/ci/.github/workflows/workload-bump.yaml@v1
+    uses: koorikla/platform/.github/workflows/app-workload-bump.yaml@<sha> # ci-v1.0.0
     permissions:
       contents: write
     with:

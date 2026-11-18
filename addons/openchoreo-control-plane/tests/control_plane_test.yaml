@@ -4,6 +4,8 @@ templates:
   - templates/gateway-ca-crs.yaml
   - templates/backstage-secrets.yaml
   - templates/backstage-github-app.yaml
+  - templates/mcp-service-role.yaml
+  - charts/openchoreo-control-plane/templates/authz/bootstrap-configmap.yaml
   - charts/openchoreo-control-plane/templates/backstage/extra-config-configmap.yaml
   - charts/openchoreo-control-plane/templates/backstage/deployment.yaml
   - charts/openchoreo-control-plane/templates/cluster-gateway/certificate.yaml
@@ -163,3 +165,28 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: "scaffolder.githubApp.enabled needs openchoreo-control-plane.backstage.extraEnv GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY from Secret backstage-github-app"
+
+  # Headless MCP client (docs/ai-agents.md "OpenChoreo MCP servers"): read-only role, upstream binding re-pointed to it.
+  - it: mcp-service role grants view actions and workflowrun:create only
+    template: templates/mcp-service-role.yaml
+    asserts:
+      - isKind: { of: ClusterAuthzRole }
+      - equal: { path: metadata.name, value: mcp-service }
+      - contains: { path: spec.actions, content: workflowrun:create }
+      - notContains: { path: spec.actions, content: secret:view }
+      - notContains: { path: spec.actions, content: resource:read-secrets }
+      - notContains: { path: spec.actions, content: component:exec }
+      - notContains: { path: spec.actions, content: "*" }
+
+  - it: service_mcp_client binds to mcp-service (not admin) and all 10 upstream bindings are kept
+    template: charts/openchoreo-control-plane/templates/authz/bootstrap-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["manifests.yaml"]
+          pattern: 'name: mcp-tryout-client-binding(\n.*){1,12}\n\s+name: mcp-service\n\s+kind: ClusterAuthzRole'
+      - matchRegex:
+          path: data["manifests.yaml"]
+          pattern: '(kind: ClusterAuthzRoleBinding[\s\S]*){10}'
+      - notMatchRegex:
+          path: data["manifests.yaml"]
+          pattern: '(kind: ClusterAuthzRoleBinding[\s\S]*){11}'

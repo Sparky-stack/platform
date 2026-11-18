@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Quarkus native executable (Mandrel) on the Quarkus distroless base, non-root.
 # GraalVM/Mandrel cannot cross-compile: this builds on the target platform, i.e.
-# one native runner per arch (koorikla/ci java.yaml native: true). Expect a few
+# one native runner per arch (app-java.yaml native: true). Expect a few
 # minutes and several GiB of RAM per arch.
 ARG BUILDER_IMAGE=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25.0.5@sha256:38f943afcae3218771546a99b41156dd3efa8315483eaf74f88f33d232bb3c8d
 
