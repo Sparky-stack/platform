@@ -3,6 +3,7 @@
 
 cluster-api-operator:
   # Leave the chart's provider maps empty: providers live in addons/capi-providers.
+  # -- `{}` (kept empty alongside `bootstrap`, `controlPlane`, `infrastructure`, `addon`, `ipam` so `addons/capi-providers` owns provider CRs).
   core: {}
   bootstrap: {}
   controlPlane: {}
@@ -10,6 +11,7 @@ cluster-api-operator:
   addon: {}
   ipam: {}
   # Re-reconcile a provider when its configSecret changes (CAPA's credentials come from an ExternalSecret).
+  # -- `true` so provider controllers re-reconcile when ESO rotates `configSecret` credentials (such as CAPA's `capa-variables`).
   watchConfigSecret: true
   # Lease headroom like the provider managers (addons/capi-providers values.yaml leaderElection, #192) and mgmt's k3s
   # controllers (#94): the 15s/10s/2s defaults are lost when the mgmt API server stalls during a clean bootstrap.
@@ -21,4 +23,5 @@ cluster-api-operator:
   image:
     manager:
       repository: registry.k8s.io/capi-operator/cluster-api-operator
+      # -- `v0.30.0` pinned by multi-arch index digest.
       tag: v0.30.0@sha256:2dd577d7bd9cf65deb45b8cd6444f5c89c3de3237ed8e150bd3d34df24fbce10   # index: amd64, arm64, arm, ppc64le, s390x

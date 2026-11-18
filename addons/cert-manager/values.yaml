@@ -4,10 +4,13 @@
 # must update the digests together with the version (hack/tests/test_image_pins.sh fails on a missing one).
 cert-manager:
   crds:
+    # -- `true` (installs cert-manager CRDs with the chart).
     enabled: true
   config:
+    # -- `true` so Gateway API `Gateway` listeners can request certificates.
     enableGatewayAPI: true
   image:
+    # -- `v1.21.3` pinned by multi-arch index `digest` (alongside `webhook.image`, `cainjector.image`, `startupapicheck.image`, `acmesolver.image`).
     tag: v1.21.3
     digest: sha256:9f4f96a33c7774cef24466fcd85031997531a03a8d117f151126baa8d1290dcc   # controller v1.21.3; amd64, arm64
   resources:

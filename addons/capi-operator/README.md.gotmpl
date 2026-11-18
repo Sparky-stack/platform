@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `cluster-api-operator` (`0.30.0`). Runs the Cluster API lifecycle operator on `mgmt`; provider custom resources are declared separately in `addons/capi-providers`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: capi-operator-system`).
+- **Catalog label:** `addons.platform.koorikla.io/capi-operator` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Upgrading the CAPI operator and providers: [upgrades](../../docs/runbooks/upgrades.md#2-capi-operator-and-providers).
+- Triaging unreachable workload clusters: [incidents](../../docs/runbooks/incidents.md#cluster-unreachable).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Cluster API providers](../../docs/providers.md)
+{{- end -}}

@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Creates namespace `fleet`, CAPI `ClusterClass`es (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`) with their bootstrap/machine (or GKE managed) templates, and the Hetzner token `ExternalSecret` (`fleet/hetzner`) for enabled `capi.providers`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: fleet`, `serverSideDiff: true`).
+- **Catalog label:** `addons.platform.koorikla.io/clusterclasses` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- `ClusterClass` template changes, k3s bumps, and `1` vs `3` server rollouts: [upgrades](../../docs/runbooks/upgrades.md#1-kubernetes--k3s-and-clusterclass-rollouts-1-vs-3-servers) and [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Cluster API providers](../../docs/providers.md)
+{{- end -}}
