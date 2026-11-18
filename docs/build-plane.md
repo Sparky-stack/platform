@@ -101,15 +101,24 @@ Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org
 2. Reads the branch head (`GET /repos/<owner>/<repo>/commits/<branch>`), conditionally with the cached ETag.
 3. Stops if WorkflowRun `<component>-<sha[:12]>` exists, or while an earlier auto-build run of the component is still
    running (no out-of-order image bumps; a run unfinished after 2 h no longer blocks).
-4. Reads `spec.source.commit` from the Workload file at the head commit: when every change since that commit is inside
-   the GitOps directory (the hand-off commit itself, promotion merges), there is nothing to build.
-5. Otherwise creates WorkflowRun `<component>-<sha[:12]>` (labels `openchoreo.dev/component`, `openchoreo.dev/project`,
+4. Reads `spec.source.commit` and `spec.container.image` from the Workload file at the head commit: when every change
+   since that commit is inside the GitOps directory (the hand-off commit itself, promotion merges), there is nothing to
+   build, as long as the image is still there (step 5).
+5. Registry check (`registry.type: harbor`): `HEAD /v2/<repo>/manifests/<digest>` of the pinned image in Harbor. When
+   Harbor answers 404 (a clean bootstrap: git pins a digest of the previous stack's Harbor; or a garbage-collected
+   artifact), it rebuilds the Workload's own `spec.source.commit` as WorkflowRun `<component>-<sha[:12]>-<digest[:8]>`.
+   Never the branch head: that is the GitOps-only hand-off commit the build's checkout skips. The hand-off then commits
+   the new digest and Argo CD rolls development out again, about 6 minutes after the first pass. An unknown answer
+   (Harbor still starting, any other status) never rebuilds; the next pass asks again. Images outside the platform
+   registry are not checked.
+6. Otherwise creates WorkflowRun `<component>-<sha[:12]>` (labels `openchoreo.dev/component`, `openchoreo.dev/project`,
    `platform.koorikla.io/trigger: auto-build`; annotation `platform.koorikla.io/commit`) from the Component's workflow
    with `repository.revision.commit` set to the head. From there it is an ordinary build: hand-off commit, Argo CD,
    `autoDeploy` to development.
 
-**Idempotent per commit.** The run name is derived from the SHA (a second create is `AlreadyExists`), and "already
-built" is read from git (step 4), not from cluster state. ConfigMap `auto-build-state` (ETags, last handled head per
+**Idempotent per commit.** The run name is derived from the SHA (a second create is `AlreadyExists`; a rebuild's from
+the SHA and the missing digest, so one rebuild per missing digest), and "already built" is read from git (step 4) plus
+the registry (step 5), never from cluster state such as WorkflowRuns or ComponentReleases. ConfigMap `auto-build-state` (ETags, last handled head per
 Component) is only a cache: restarts, a lost cache, garbage-collected runs (`ttlAfterCompletion`) and redelivered or
 replayed webhooks never build a commit twice. A webhook payload only selects the repository; the head always comes from
 GitHub, so a forged push can at most cause one extra reconcile.
@@ -125,12 +134,15 @@ of an opted-in Component (WorkflowRun `<component>-pr<n>-<sha[:12]>`, label `pla
 
 **Least privilege.** ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create`
 WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and
-Argo's task results. Network: the run namespace's default-deny policy (DNS, API server, public 443), no ingress. Webhook
+Argo's task results. Registry: the pull-only robot `robot$nodes` (`autoBuild.registry`, the nodes' and Kyverno's) and
+the registry CA (store `mgmt-harbor`, name-scoped), never the builder robot. Network: the run namespace's default-deny
+policy (DNS, API server, the Harbor Gateway proxy, public 443), no ingress. Webhook
 mode: the Sensor may only create Workflows in the run namespace, and ValidatingAdmissionPolicy
 `argo-events-auto-build-workflows` pins them to WorkflowTemplate `auto-build` with only the `repository` argument.
 
 **Rate limits.** Per pass one conditional request per repository and branch (a 304 does not count against GitHub's
-limit), two more (Workload file, compare) only when the head moved; a pass pauses when fewer than `minRateRemaining`
+limit), two more (Workload file, compare) only when the head moved, plus one manifest `HEAD` to Harbor per up-to-date
+Component; a pass pauses when fewer than `minRateRemaining`
 requests are left and creates at most `maxRunsPerPass` runs. Values: addon openchoreo-platform `autoBuild`, addon
 argo-events `autoBuildWebhook`.
 
