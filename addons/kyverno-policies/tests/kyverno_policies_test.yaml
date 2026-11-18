@@ -43,6 +43,60 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
+  - it: "cell mesh (#53): HBONE NetworkPolicy into ambient cells, peers = OpenChoreo's (same namespace, system components)"
+    template: templates/cell-mesh.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-cell-hbone }
+    asserts:
+      - isKind: { of: GeneratingPolicy }
+      - equal: { path: spec.evaluation, value: { synchronize: { enabled: true }, generateExisting: { enabled: true } } }
+      - contains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+      - equal: { path: 'spec.matchConstraints.objectSelector.matchLabels["openchoreo.dev/managed-by"]', value: renderedrelease-controller }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: '"kgateway-system","istio-system"' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'kind: NetworkPolicy\n' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: '\{ port: 15008, protocol: TCP \}' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'key: openchoreo.dev/system-component, operator: Exists' }
+      # never 15008 from everywhere: that would let any mesh pod (another cell) past OpenChoreo's isolation
+      - notMatchRegex: { path: "spec.generate[0].template.value", pattern: 'ipBlock' }
+
+  - it: "cell mesh (#53): STRICT PeerAuthentication in ambient cells unless opted out (platform.koorikla.io/mtls=permissive)"
+    template: templates/cell-mesh.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-cell-mtls }
+    asserts:
+      - isKind: { of: GeneratingPolicy }
+      - equal: { path: spec.evaluation.synchronize.enabled, value: true }
+      - contains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: platform.koorikla.io/mtls, operator: NotIn, values: [permissive] }
+      - contains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'kind: PeerAuthentication\n' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'mode: STRICT' }
+
+  - it: "cell mesh (#53): Kyverno's background controller may manage NetworkPolicies and PeerAuthentications"
+    template: templates/cell-mesh.yaml
+    documentSelector: { path: kind, value: ClusterRole }
+    asserts:
+      - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-background-controller"]', value: "true" }
+      - contains: { path: rules, content: { apiGroups: [networking.k8s.io], resources: [networkpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
+      - contains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications], verbs: [get, list, watch, create, update, patch, delete] } }
+
+  - it: "cell mesh: mtls.strict false keeps the HBONE policy, drops STRICT"
+    template: templates/cell-mesh.yaml
+    set: { ambientEnrollment.mtls.strict: false }
+    asserts:
+      - hasDocuments: { count: 2 }
+      - notContains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications], verbs: [get, list, watch, create, update, patch, delete] } }
+        documentSelector: { path: kind, value: ClusterRole }
+
+  - it: "cell mesh: nothing on mgmt (values/role-mgmt.yaml)"
+    template: templates/cell-mesh.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }
+
   - it: verifies images per environment - Audit everywhere but production (defaultAction), Deny (fail closed, digest) in production
     template: templates/image-verification.yaml
     asserts:

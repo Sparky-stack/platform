@@ -1,0 +1,152 @@
+{{- /*
+Mesh policy of ambient-enrolled OpenChoreo cell namespaces (docs/networking.md "Strict mTLS in cell namespaces", #53).
+The data-plane gateway is in the mesh (addon openchoreo-data-plane: gateway pod label istio.io/dataplane-mode=ambient),
+so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
+
+  GeneratingPolicy openchoreo-cell-hbone    NetworkPolicy platform-mesh-hbone in every enrolled cell: HBONE (tcp 15008)
+                                            to component pods from the same peers OpenChoreo's per-component policy
+                                            admits (same namespace, openchoreo.dev/system-component pods). Ambient
+                                            tunnels every mesh connection to the destination pod's 15008, and
+                                            OpenChoreo's policy only opens the endpoint ports, so without this the
+                                            gateway (and pod-to-pod traffic within a cell) is dropped by the CNI.
+                                            Peers, not ports: inside the tunnel the endpoint port is no longer checked
+                                            by the CNI, the peer set stays the same (staging never reaches production).
+  GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` (mtls STRICT) in every enrolled cell, unless the
+                                            namespace carries <mtls.optOutLabel>=permissive (set per environment through
+                                            ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels). ztunnel then
+                                            rejects plaintext from clients outside the mesh; kubelet probes are exempt.
+Both: kept in sync (tampering is reverted, an opted-out or unenrolled namespace loses the object), existing cells
+included (generateExisting). Cells opted out of ambient (istio.io/dataplane-mode=none) get neither.
+*/ -}}
+{{- $ae := .Values.ambientEnrollment }}
+{{- if $ae.enabled }}
+{{- $sel := $ae.cellNamespaceSelector }}
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: openchoreo-cell-hbone
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: HBONE into ambient OpenChoreo cells
+    policies.kyverno.io/description: >-
+      NetworkPolicy platform-mesh-hbone in every ambient-enrolled cell namespace: Istio HBONE (tcp 15008) to component
+      pods from the peers OpenChoreo's per-component NetworkPolicy admits (same namespace, platform system components).
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    objectSelector:
+      {{- with $sel.matchLabels }}
+      matchLabels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      matchExpressions:
+        {{- with $sel.matchExpressions }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        - { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: platform-mesh-hbone
+            namespace: (( object.metadata.name ))
+            labels: { app.kubernetes.io/managed-by: kyverno }
+          spec:
+            podSelector:
+              matchExpressions:
+                - { key: openchoreo.dev/component, operator: Exists }
+            policyTypes: [Ingress]
+            ingress:
+              - from:
+                  - podSelector: {}
+                  - namespaceSelector: {}
+                    podSelector:
+                      matchExpressions:
+                        - { key: openchoreo.dev/system-component, operator: Exists }
+                ports:
+                  - { port: 15008, protocol: TCP }
+{{- if $ae.mtls.strict }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: openchoreo-cell-mtls
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Strict mTLS in ambient OpenChoreo cells
+    policies.kyverno.io/description: >-
+      PeerAuthentication default (STRICT) in every ambient-enrolled cell namespace, so ztunnel accepts only mesh mTLS.
+      A cell opts out with the namespace label {{ $ae.mtls.optOutLabel }}=permissive.
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    objectSelector:
+      {{- with $sel.matchLabels }}
+      matchLabels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      matchExpressions:
+        {{- with $sel.matchExpressions }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        - { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+        - { key: {{ $ae.mtls.optOutLabel }}, operator: NotIn, values: [permissive] }
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: security.istio.io/v1
+          kind: PeerAuthentication
+          metadata:
+            name: default
+            namespace: (( object.metadata.name ))
+            labels: { app.kubernetes.io/managed-by: kyverno }
+          spec:
+            mtls:
+              mode: STRICT
+{{- end }}
+---
+# Kyverno's background controller creates, updates and deletes the generated objects.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:background-controller:cell-mesh
+  labels:
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  {{- if $ae.mtls.strict }}
+  - apiGroups: [security.istio.io]
+    resources: [peerauthentications]
+    verbs: [get, list, watch, create, update, patch, delete]
+  {{- end }}
+{{- end }}
