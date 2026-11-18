@@ -11,8 +11,11 @@ Wrapper chart for `hcloud-cloud-controller-manager` (`1.39.3`). Initializes Hetz
 
 ## Key values
 
-- `hcloud-cloud-controller-manager.networking.enabled`: `false` (overlay CNI routing by default).
-- `hcloud-cloud-controller-manager.image`: `v1.39.3` pinned by multi-arch index digest.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| hcloud-cloud-controller-manager.image.repository | string | `"docker.io/hetznercloud/hcloud-cloud-controller-manager"` |  |
+| hcloud-cloud-controller-manager.image.tag | string | `"v1.39.3@sha256:9d739ba54a13f1de79d6dbb93cbda5a2ed4a5bdb9bf2936e2687e24fa9ccfaf7"` | `v1.39.3` pinned by multi-arch index digest. |
+| hcloud-cloud-controller-manager.networking.enabled | bool | `false` | `false` (overlay CNI routing by default). |
 
 ## Day-2 notes
 

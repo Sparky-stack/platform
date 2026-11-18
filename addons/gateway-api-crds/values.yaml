@@ -8,7 +8,9 @@
 gateway-crds-helm:
   crds:
     gatewayAPI:
+      # -- `true` on the `standard` `channel`.
       enabled: true
       channel: standard     # chart default is experimental
     envoyGateway:
+      # -- `false` (Envoy Gateway CRDs are omitted; `kgateway` provides the Gateway controller).
       enabled: false        # gateway.envoyproxy.io CRDs: we do not run Envoy Gateway

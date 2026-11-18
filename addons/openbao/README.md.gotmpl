@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `openbao` (`0.30.7` / `v2.7.2`) on `mgmt`. Runs the Istio multicluster mesh CA and, opt-in, the per-tenant secret backend (one root + intermediate PKI mount per `mesh.groups` entry with private keys generated inside OpenBao), per-member Kubernetes JWT auth, static auto-unseal via ESO, and a TLS-passthrough `Gateway`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: openbao`).
+- **Catalog label:** `addons.platform.koorikla.io/openbao` (`default: false`, opt-in via `installation.yaml` `mgmt.addons.openbao: "true"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Raft backup/restore, sealed recovery, and local re-init: [backup and restore](../../docs/runbooks/backup-restore.md#3-openbao-raft-storage-and-unseal-key), [incidents](../../docs/runbooks/incidents.md#openbao-sealed), and [break-glass](../../docs/runbooks/break-glass.md#openbao-local-re-initialization).
+- Mesh CA rotation: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--istio-csr).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Multicluster: Mesh CA (OpenBao)](../../docs/multicluster.md#mesh-ca-openbao)
+{{- end -}}

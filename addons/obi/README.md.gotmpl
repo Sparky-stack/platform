@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for OpenTelemetry eBPF Instrumentation (`0.16.1` / `v1.0.0`) on workload clusters. Captures zero-code L7 RED metrics and traces for OpenChoreo `dp-*` cell namespaces via eBPF and exports OTLP HTTP to the node-local `telemetry` collector.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: obi`).
+- **Catalog label:** `addons.platform.koorikla.io/obi` (`default: false`, opt-in with `"true"` per cluster via `addons.obi: true`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Verifying L7 metrics and collector ingestion: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Observability: OBI](../../docs/observability.md#obi)
+{{- end -}}

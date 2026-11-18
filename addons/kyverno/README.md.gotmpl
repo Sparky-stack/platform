@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Kyverno (`3.10.0` / `v1.20.0`). Runs the admission, background, cleanup, and reports controllers on every cluster; policy definitions live in `addons/kyverno-policies`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: kyverno`; layers `values/role-mgmt.yaml` on `mgmt`, `values/role-workload.yaml` on workload clusters).
+- **Catalog label:** `addons.platform.koorikla.io/kyverno` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Investigating blocked image admissions and upgrading Kyverno: [incidents](../../docs/runbooks/incidents.md#kyverno-denying-an-image) and [upgrades](../../docs/runbooks/upgrades.md#6-kyverno-and-supply-chain-policy-pins).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking](../../docs/networking.md)
+- [Supply chain](../../docs/supply-chain.md)
+{{- end -}}

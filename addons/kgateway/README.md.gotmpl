@@ -1,0 +1,18 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `kgateway-crds` and `kgateway` (`v2.3.1`). Implements Gateway API ingress for OpenChoreo control-plane, observability, and Harbor `Gateway`s on `mgmt` and workload data-plane `Gateway`s on workload clusters.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: kgateway-system`).
+- **Catalog label:** `addons.platform.koorikla.io/kgateway` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Upgrading `kgateway` alongside Gateway API CRDs and OpenChoreo: [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+- Ingress triage on `mgmt` and workload clusters: [observability first look](../../docs/runbooks/observability-first-look.md).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking: Gateway API versions](../../docs/networking.md#gateway-api-versions)
+- [OpenChoreo: Local networking](../../docs/openchoreo.md#local-networking)
+{{- end -}}

@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, digest-only images in workflow run namespaces on `mgmt`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: kyverno`; layers `values/role-mgmt.yaml` on `mgmt`).
+- **Catalog label:** `addons.platform.koorikla.io/kyverno-policies` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Debugging denied images and moving CI workflow SHA or `cosign` pins: [incidents](../../docs/runbooks/incidents.md#kyverno-denying-an-image), [upgrades](../../docs/runbooks/upgrades.md#6-kyverno-and-supply-chain-policy-pins), and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#5-cosign-platform-signing-key).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Supply chain](../../docs/supply-chain.md)
+- [Networking](../../docs/networking.md)
+{{- end -}}
