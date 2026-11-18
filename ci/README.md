@@ -160,7 +160,7 @@ stack workflow (go, python, node, rust, java, nextjs, elixir, ruby) signs throug
 
 So the identity `https://github.com/koorikla/<repo>/.github/workflows/<file>@refs/heads/main`
 is the *caller*; it is carried in the extensions, not the SAN. **Always pin the caller
-repository/ref as well as the subject:** `koorikla/ci` is public, so any repository can call
+repository/ref as well as the subject:** `koorikla/platform` is public, so any repository can call
 its workflows and obtain a certificate with the same SAN.
 
 ```sh
@@ -212,7 +212,7 @@ Kyverno (illustrative only; the real policy lives in koorikla/platform):
 #               entries:
 #                 - keyless:
 #                     issuer: https://token.actions.githubusercontent.com
-#                     subjectRegExp: '^https://github\.com/koorikla/ci/\.github/workflows/container\.yaml@refs/tags/v[0-9]+$'
+#                     subjectRegExp: '^https://github\.com/koorikla/platform/\.github/workflows/app-container\.yaml@[0-9a-f]{40}$'
 #                     additionalExtensions:
 #                       githubWorkflowRepository: koorikla/hello-world
 #                       githubWorkflowRef: refs/heads/main
@@ -226,7 +226,7 @@ Kyverno (illustrative only; the real policy lives in koorikla/platform):
 #                 - entries:
 #                     - keyless:
 #                         issuer: https://token.actions.githubusercontent.com
-#                         subjectRegExp: '^https://github\.com/koorikla/ci/\.github/workflows/container\.yaml@refs/tags/v[0-9]+$'
+#                         subjectRegExp: '^https://github\.com/koorikla/platform/\.github/workflows/app-container\.yaml@[0-9a-f]{40}$'
 #                         additionalExtensions:
 #                           githubWorkflowRepository: koorikla/hello-world
 #               conditions:
@@ -338,7 +338,7 @@ ClusterWorkflow lives in koorikla/platform):
 ## Script contract (both runners)
 
 Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.sh`, fetched from
-`koorikla/ci` at **the same commit as the running reusable workflow** (`job.workflow_sha`).
+`koorikla/platform` (`ci/scripts`) at **the same commit as the running reusable workflow** (`job.workflow_sha`).
 
 - **Env in, files out.** Inputs are environment variables documented in each script header.
   File outputs go to `$CI_OUT_DIR` (default `./.ci-out`); every scalar output is also written to

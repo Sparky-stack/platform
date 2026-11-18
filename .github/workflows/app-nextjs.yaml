@@ -160,7 +160,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -184,12 +184,12 @@ jobs:
 
       - name: Set up pnpm
         if: steps.detect.outputs.pm == 'pnpm'
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: ${{ inputs.working_directory }}/package.json
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ inputs.node_version }}
           node-version-file: ${{ inputs.node_version == '' && steps.detect.outputs.node_version_file || '' }}
@@ -201,7 +201,7 @@ jobs:
         run: corepack enable || npm install -g corepack && corepack enable
 
       - name: Cache Next.js build
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ inputs.working_directory }}/.next/cache
           key: nextjs-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.working_directory, steps.detect.outputs.lockfile)) }}-${{ hashFiles(format('{0}/**/*.[jt]s', inputs.working_directory), format('{0}/**/*.[jt]sx', inputs.working_directory)) }}
@@ -220,7 +220,7 @@ jobs:
         run: bash "$CI_SCRIPTS/nextjs/check.sh"
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           cache: true
 
@@ -238,7 +238,7 @@ jobs:
       - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
           category: trivy-fs-nextjs-${{ inputs.working_directory }}
@@ -257,19 +257,19 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: CodeQL init
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: javascript-typescript
           build-mode: none
           source-root: ${{ inputs.working_directory }}
 
       - name: CodeQL analyze
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:javascript-typescript/${{ inputs.working_directory }}
 

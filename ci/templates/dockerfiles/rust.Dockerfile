@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Rust service: static musl binary on distroless static, non-root.
-# Builds on the target platform (koorikla/ci builds each arch on a native
+# Builds on the target platform (the app-* workflows build each arch on a native
 # runner), so no cross toolchain is needed; the Alpine Rust image targets musl,
 # which links statically by default. rust-toolchain.toml is honoured (rustup
 # installs the pinned channel if it differs from the image): keep RUST_IMAGE on

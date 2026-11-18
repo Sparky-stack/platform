@@ -178,7 +178,7 @@ jobs:
       DATABASE_URL: ecto://postgres:postgres@localhost/test
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -196,7 +196,7 @@ jobs:
 
       - name: Set up BEAM
         id: beam
-        uses: erlef/setup-beam@v1
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           otp-version: ${{ inputs.otp_version }}
           elixir-version: ${{ inputs.elixir_version }}
@@ -204,7 +204,7 @@ jobs:
           version-type: ${{ inputs.elixir_version == '' && 'strict' || 'loose' }}
 
       - name: Cache deps and _build
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ${{ inputs.working_directory }}/deps
@@ -222,7 +222,7 @@ jobs:
         run: bash "$CI_SCRIPTS/elixir/check.sh"
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           cache: true
 
@@ -240,7 +240,7 @@ jobs:
       - name: Upload Trivy fs SARIF
         if: always() && steps.fsscan.outputs.fs_sarif != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ steps.fsscan.outputs.fs_sarif }}
           category: trivy-fs-elixir-${{ inputs.working_directory }}
