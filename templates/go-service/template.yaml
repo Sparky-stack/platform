@@ -5,11 +5,11 @@ kind: Template
 metadata:
   name: go-service
   title: Go service
-  description: HTTP service in Go (stdlib net/http) on distroless static, CI via koorikla/ci go.yaml, deployed by OpenChoreo.
+  description: HTTP service in Go (stdlib net/http) on distroless static, CI via koorikla/platform app-go.yaml, deployed by OpenChoreo.
   tags: [golden-path, go, service, recommended]
   annotations:
     platform.koorikla.io/stack: go
-    platform.koorikla.io/ci-workflow: go.yaml
+    platform.koorikla.io/ci-workflow: app-go.yaml
 spec:
   owner: group:default/openchoreo-users
   type: service

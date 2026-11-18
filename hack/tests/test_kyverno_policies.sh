@@ -47,10 +47,10 @@ source "$ROOT/hack/lib/portable.sh"
 
 echo "== test_kyverno_policies =="
 
-# Keyless identity (#41): the trusted koorikla/ci workflow is a commit SHA, and Renovate's custom manager
+# Keyless identity (#41): the trusted app-container.yaml workflow is a commit SHA, and Renovate's custom manager
 # (renovate.json) really matches that line - otherwise the pin would silently never be bumped.
 wf_ref=$(yq -r '.imageVerification.github.workflowRef' "$ROOT/addons/kyverno-policies/values.yaml" | tr -d '\r')
-assert_match "$wf_ref" '^[0-9a-f]{40}$' "kyverno-policies trusts koorikla/ci by commit SHA"
+assert_match "$wf_ref" '^[0-9a-f]{40}$' "kyverno-policies trusts the app-container.yaml workflow by commit SHA"
 renovated=$(py - "$ROOT/renovate.json" "$ROOT/addons/kyverno-policies/values.yaml" <<'PY'
 import json, re, sys
 cfg = json.load(open(sys.argv[1]))
@@ -60,7 +60,7 @@ for m in cfg.get("customManagers", []):
         continue
     for ms in m.get("matchStrings", []):
         hit = re.search(ms.replace("(?<", "(?P<"), text)
-        if hit and m.get("depNameTemplate") == "koorikla/ci":
+        if hit and m.get("depNameTemplate") == "koorikla/platform":
             print(hit.group("currentDigest"), hit.group("currentValue"))
 PY
 )
@@ -71,9 +71,9 @@ wf_refs=$(yq -r '[.imageVerification.github.workflowRef] + (.imageVerification.g
   "$ROOT/addons/kyverno-policies/values.yaml" | tr -d '\r')
 bad=""; n=0
 for r in $wf_refs; do n=$((n + 1)); [[ "$r" =~ ^[0-9a-f]{40}$ ]] || bad="$bad $r"; done
-assert_eq "$bad" "" "every trusted koorikla/ci workflow commit is a 40-hex SHA"
-assert_eq "$([[ $n -ge 1 && $n -le 2 ]] && echo yes)" yes "at most 2 trusted koorikla/ci workflow commits during a pin move ($n)"
-assert_eq "$(printf '%s\n' "$wf_refs" | sort -u | grep -c .)" "$n" "trusted koorikla/ci workflow commits are unique"
+assert_eq "$bad" "" "every trusted app-container.yaml workflow commit is a 40-hex SHA"
+assert_eq "$([[ $n -ge 1 && $n -le 2 ]] && echo yes)" yes "at most 2 trusted app-container.yaml workflow commits during a pin move ($n)"
+assert_eq "$(printf '%s\n' "$wf_refs" | sort -u | grep -c .)" "$n" "trusted app-container.yaml workflow commits are unique"
 
 KYVERNO=${KYVERNO:-kyverno}
 if ! command -v "$KYVERNO" >/dev/null 2>&1; then

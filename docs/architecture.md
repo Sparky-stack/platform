@@ -154,7 +154,7 @@ is one file in the platform repo; deploying and promoting are commits in the app
 
 ### Builds in the cluster, not in a CI provider
 Components name a ClusterWorkflow; the OpenChoreo workflow plane on mgmt builds, scans, signs and commits the new image
-ref to the app repo, and Argo CD deploys it. GitHub Actions ([koorikla/ci](https://github.com/koorikla/ci)) run the
+ref to the app repo, and Argo CD deploys it. GitHub Actions ([`ci/`](https://github.com/koorikla/platform/tree/main/ci)) run the
 same scripts as an optional path. This keeps CI providers thin and the build path identical on every installation
 ([build-plane.md](build-plane.md)).
 
@@ -163,7 +163,6 @@ same scripts as an optional path. This keeps CI providers thin and the build pat
 |---|---|---|
 | `koorikla/platform` | platform team | bootstrap, charts, addons, installations (fleet, tenants), OpenChoreo platform config |
 | `koorikla/hello-world` | app team | code, Dockerfile, CI, `deploy/openchoreo/` |
-| `koorikla/ci` | platform team | reusable GitHub workflows and the build scripts the ClusterWorkflows run |
 
 All three are public. Private forks work with repo credentials from `platform-github` (ESO -> Argo CD `repo-creds`);
 nodes pull private GHCR images with `platform-ghcr` ([forking.md](forking.md#3-credentials)).

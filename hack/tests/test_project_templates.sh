@@ -7,7 +7,7 @@
 #     integration credential, no PAT), protectDefaultBranch false and nothing else that sets repo governance;
 #   - every template renders offline (hack/tests/render_template.py, the subset of nunjucks skeletons may use) with
 #     and without a new tenant; the result: YAML/JSON parse, deploy/openchoreo passes kubeconform -strict with the
-#     OpenChoreo CRD schemas, the tenant file renders through charts/tenant, the CI caller pins koorikla/ci by SHA,
+#     OpenChoreo CRD schemas, the tenant file renders through charts/tenant, the CI caller pins the app-* workflow by SHA,
 #     Dockerfiles pin every base by digest and run non-root on distroless/Chainguard, the Workload bump script works;
 #   - TEMPLATES_BUILD=1 (CI workflow templates.yaml; needs docker): `docker build` of every rendered skeleton (the
 #     build stage runs its linters and unit tests) and a smoke test of GET /healthz on a read-only, non-root container.
@@ -160,20 +160,20 @@ for t in "${TEMPLATES[@]}"; do
   assert_eq "$r" refused "$t: bump-workload refuses an image without digest"
   cp "$TMP/wl.yaml" "$R/deploy/openchoreo/workload.yaml"
 
-  # CI caller: koorikla/ci by SHA (# v1); every action pinned by SHA; actionlint
+  # CI caller: koorikla/platform app-* workflow by SHA (# ci-v1); every action pinned by SHA; actionlint
   wf="$R/.github/workflows/ci.yaml"
   ci_uses=$(yq -r '.jobs[] | select(.uses) | .uses' "$wf")
-  assert_match "$ci_uses" '^koorikla/ci/\.github/workflows/[a-z-]+\.yaml@[0-9a-f]{40}$' "$t: build job calls koorikla/ci by commit SHA"
-  assert_eq "$(grep -cE 'uses: koorikla/ci/[^ ]+@[0-9a-f]{40} # v1$' "$wf")" 1 "$t: koorikla/ci SHA carries the '# v1' tag comment (Renovate)"
-  assert_eq "${ci_uses##*@}" "$TRUSTED_CI_SHA" "$t: koorikla/ci SHA == the commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef)"
+  assert_match "$ci_uses" '^koorikla/platform/\.github/workflows/app-[a-z-]+\.yaml@[0-9a-f]{40}$' "$t: build job calls an app-* workflow by commit SHA"
+  assert_eq "$(grep -cE 'uses: koorikla/platform/[^ ]+@[0-9a-f]{40} # ci-v1$' "$wf")" 1 "$t: workflow SHA carries the '# ci-v1' tag comment (Renovate)"
+  assert_eq "${ci_uses##*@}" "$TRUSTED_CI_SHA" "$t: workflow SHA == the commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef)"
   bad=""
   for u in $(yq -r '.jobs[].steps[]?.uses // ""' "$wf"); do [[ "$u" =~ $SHA_USES_RE ]] || bad="$bad $u"; done
   assert_eq "$bad" "" "$t: every action pinned by commit SHA"
-  ci_wf=${ci_uses#koorikla/ci/.github/workflows/}; ci_wf=${ci_wf%@*}
+  ci_wf=${ci_uses#koorikla/platform/.github/workflows/}; ci_wf=${ci_wf%@*}
   want_wf=$(yq -r '.metadata.annotations["platform.koorikla.io/ci-workflow"]' "templates/$t/template.yaml")
-  assert_eq "$ci_wf" "$want_wf" "$t: CI calls koorikla/ci $want_wf (annotation platform.koorikla.io/ci-workflow)"
+  assert_eq "$ci_wf" "$want_wf" "$t: CI calls $want_wf (annotation platform.koorikla.io/ci-workflow)"
   assert_eq "$(grep -c 'TODO(koorikla/ci#' "$wf")" 0 "$t: no interim TODO(koorikla/ci#...) left in the CI caller"
-  assert_eq "$(grep -c 'actions: read' "$wf")" "$([[ "$want_wf" == container.yaml ]] && echo 0 || echo 1)" "$t: caller grants actions: read exactly when the stack workflow runs CodeQL"
+  assert_eq "$(grep -c 'actions: read' "$wf")" "$([[ "$want_wf" == app-container.yaml ]] && echo 0 || echo 1)" "$t: caller grants actions: read exactly when the stack workflow runs CodeQL"
   if [[ "$want_wf" == rust.yaml ]]; then   # rust.yaml installs the toolchain rust-toolchain.toml names (rustup)
     chan=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$R/rust-toolchain.toml" 2>/dev/null | tr -d '\r' || true)
     assert_match "$chan" '^[0-9]+\.[0-9]+\.[0-9]+$' "$t: rust-toolchain.toml pins an exact Rust release"

@@ -5,11 +5,11 @@ kind: Template
 metadata:
   name: node-fastify-service
   title: Node.js API (Fastify)
-  description: HTTP API in Node.js 26 (Fastify, pnpm, eslint, vitest) on distroless Node.js, CI via koorikla/ci, deployed by OpenChoreo.
+  description: HTTP API in Node.js 26 (Fastify, pnpm, eslint, vitest) on distroless Node.js, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, nodejs, fastify, service]
   annotations:
     platform.koorikla.io/stack: node
-    platform.koorikla.io/ci-workflow: node.yaml
+    platform.koorikla.io/ci-workflow: app-node.yaml
 spec:
   owner: group:default/openchoreo-users
   type: service

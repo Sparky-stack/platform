@@ -21,7 +21,7 @@ Splitting reusable CI workflows, build scripts, and the `ci-toolbox` image into 
 - **Per-OS package manager installs in CI (`apt`/`brew`/`choco`):** Drifts across runner updates and breaks offline tests.
 
 ## Consequences
-- While migrating #213, `addons/kyverno-policies` will temporarily trust both old (`koorikla/ci`) and new (`koorikla/platform`) workflow signer identities until `hello-world` cuts a release signed by the in-repo workflow.
+- Owner chose a hard cut (nobody else used koorikla/ci): Kyverno switched straight to `koorikla/platform/.github/workflows/app-container.yaml@<sha>` (tag `ci-v1`), hello-world rebuilt once; images signed by the old repo stop being admitted in production.
 - Agents and scripts must always execute via `mise exec --` from inside the worktree ([mise global vs repo tool versions](../gotchas/mise-global-vs-repo-tool-versions.md)).
 
 ## Links

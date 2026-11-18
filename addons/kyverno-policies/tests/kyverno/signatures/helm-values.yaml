@@ -1,0 +1,6 @@
+# Images in this suite were signed by the archived koorikla/ci repo (container.yaml@a31c234). The policy mechanics
+# are identity-agnostic, so the suite pins that identity explicitly; the platform default is app-container.yaml (#213).
+imageVerification:
+  github:
+    workflow: https://github.com/koorikla/ci/.github/workflows/container.yaml
+    workflowRef: "a31c2341b1effdd084d1dd4c715d65e97ade895f"
