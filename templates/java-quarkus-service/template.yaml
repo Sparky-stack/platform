@@ -5,11 +5,11 @@ kind: Template
 metadata:
   name: java-quarkus-service
   title: Java service (Quarkus)
-  description: Recommended Java path - Quarkus REST service (health, metrics) on distroless Java 25, CI via koorikla/ci, deployed by OpenChoreo.
+  description: Recommended Java path - Quarkus REST service (health, metrics) on distroless Java 25, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, java, quarkus, service, recommended]
   annotations:
     platform.koorikla.io/stack: java
-    platform.koorikla.io/ci-workflow: java.yaml
+    platform.koorikla.io/ci-workflow: app-java.yaml
 spec:
   owner: group:default/openchoreo-users
   type: service

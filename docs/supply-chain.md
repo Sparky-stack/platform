@@ -5,7 +5,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 
 | Stage | Control | State |
 |---|---|---|
-| Image build (GitHub) | koorikla/ci reusable workflow `container.yaml`: multi-arch build, Trivy scan, Sigstore keyless signature, SPDX SBOM, SLSA provenance, vuln attestation (cosign v3 bundles) | on (app repos) |
+| Image build (GitHub) | koorikla/platform reusable workflow `app-container.yaml`: multi-arch build, Trivy scan, Sigstore keyless signature, SPDX SBOM, SLSA provenance, vuln attestation (cosign v3 bundles) | on (app repos) |
 | Image build (in-cluster) | OpenChoreo workflow plane: cosign with the platform key (`cosign-platform`), Trivy vuln + SPDX SBOM attestations, no public tlog (docs/build-plane.md) | on (mgmt); admission trust per installation (below) |
 | Admission, data planes | Kyverno `ImageValidatingPolicy` + `ValidatingPolicy` per environment | on: Audit dev/staging, Deny production |
 | Git sources (Argo CD) | AppProject `sourceIntegrity` GnuPG policy | example, off (`sourceIntegrity.enabled`) |
@@ -24,11 +24,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **GitHub-built images** (`github.prefixes`, default `ghcr.io/koorikla/`):
   - issuer `https://token.actions.githubusercontent.com`;
   - subject = the reusable workflow at one commit: `github.workflow` + `@` + `github.workflowRef`
-    (`https://github.com/koorikla/ci/.github/workflows/container.yaml@<40-hex SHA>`). Rendering fails for anything but
+    (`https://github.com/koorikla/platform/.github/workflows/app-container.yaml@<40-hex SHA>`). Rendering fails for anything but
     a full commit SHA: a tag such as `v1` is mutable, so whoever can move it would decide what is trusted. App repos
-    call koorikla/ci by the same SHA (`uses: koorikla/ci/.github/workflows/go.yaml@<sha> # v1`); the nested
+    call the app-* workflows by the same SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1`); the nested
     `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
-    `workflowRef` (custom manager in `renovate.json`, tag `v1` of koorikla/ci) and the app repos' `uses:` pins
+    `workflowRef` (custom manager in `renovate.json`, tag `ci-v1` of koorikla/platform) and the app repos' `uses:` pins
     (github-actions digest pinning) to the same commit;
   - **moving the pin**: running production images were signed at the previous commit, so a bare bump of
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
@@ -75,7 +75,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 Evidence (Kyverno CLI v1.20.0 against the real image
 `ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
 - `hack/tests/test_kyverno_policies.sh` with `KYVERNO_ONLINE=1`:
-  - that image was built through `koorikla/ci@v1`, before the commit pin: it now fails in production ("expected SAN
+  - that image was built through `koorikla/ci@v1` (the archived predecessor repo), before the commit pin: it now fails in production ("expected SAN
     value …container.yaml@<sha>, got …container.yaml@refs/tags/v1") and is reported in staging. With the subject at
     `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
   - the tag-only reference fails in production.
@@ -83,7 +83,7 @@ Evidence (Kyverno CLI v1.20.0 against the real image
     in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d` (the previous pin), fails since
     `transitionWorkflowRefs` is empty again.
   - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
-    koorikla/ci's own pipeline) fails in production.
+    the archived koorikla/ci repo's own pipeline) fails in production.
 - Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
   and ephemeral containers are denied in production; the in-cluster registry without a platform key is denied in
   production (`registries` suite, `prod-platform-unsigned`); with a key only `<host>:<port>/<appsProject>/` is trusted
@@ -181,7 +181,7 @@ Two key sources for the workflow-plane prefix (addon kyverno-policies `imageVeri
   needs a Kyverno controller restart (Go reads the roots once; the CA lives 10 years).
 
 Required platform-key attestations (`platformKey.attestations`): `sbom` and `vuln`. The workflow plane attests its SBOM
-with predicate `https://spdx.dev/Document/v2.3`, the type koorikla/ci's GitHub path emits (`attestationTypes.sbom`), and
+with predicate `https://spdx.dev/Document/v2.3`, the type the app-container.yaml GitHub path emits (`attestationTypes.sbom`), and
 the Trivy scan as `https://cosign.sigstore.dev/attestation/vuln/v1`. Provenance is BuildKit's unsigned SLSA attestation
 manifest, so it is not required for this source.
 
@@ -192,7 +192,7 @@ when the release was cut, so a tag-only Workload makes the first production prom
 RenderedRelease shows the Kyverno denial; nothing already running is touched). App repos must bump the Workload with
 the digest reference:
 
-- koorikla/ci already outputs it: `go.yaml` / `container.yaml` / `elixir.yaml` output `image_digest_ref`
+- The app-* workflows already output it: `go.yaml` / `container.yaml` / `elixir.yaml` output `image_digest_ref`
   (`<image>:<tag>@sha256:<digest>`).
 - hello-world's `bump` job still writes the tag-only `needs.go.outputs.image`; switching it to `image_digest_ref` is
   [#16](https://github.com/koorikla/platform/issues/16). Development and staging keep working meanwhile (Audit).

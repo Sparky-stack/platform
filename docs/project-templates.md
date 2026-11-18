@@ -9,7 +9,7 @@ deployed by Argo CD + OpenChoreo ([openchoreo.md](openchoreo.md#tenants)).
 
 ## Templates
 
-| Template | Stack | CI (koorikla/ci, pinned by SHA `# v1`) | Runtime image |
+| Template | Stack | CI (koorikla/platform app-*, pinned by SHA `# ci-v1`) | Runtime image |
 |---|---|---|---|
 | `go-service` | Go, stdlib `net/http` | `go.yaml` | distroless static |
 | `python-service` | Python 3.13, FastAPI, uv, ruff, pytest | `python.yaml` | distroless python3 |
@@ -28,12 +28,12 @@ Every generated repository contains:
 
 - the app with unit tests, `GET /healthz` and `GET /version`, listening on `PORT` (8080);
 - a multi-arch `Dockerfile`: bases pinned by index digest, non-root runtime on distroless, tests in the build stage;
-- `.github/workflows/ci.yaml`: manifest validation, the koorikla/ci build (PRs build + scan; `main` pushes, signs and
+- `.github/workflows/ci.yaml`: manifest validation, the app-* build (PRs build + scan; `main` pushes, signs and
   attests), then `bump` pins `<image>:<sha>@sha256:<digest>` in the Workload, which OpenChoreo deploys to
   `development`;
 - `deploy/openchoreo/`: `Component` (autoDeploy), `Workload`, `release-bindings/{development,staging,production}.yaml`
   ([openchoreo.md](openchoreo.md#app-repo-contract)); staging and production move by PR ([promotion.md](promotion.md));
-- `catalog-info.yaml`, `.github/CODEOWNERS`, `renovate.json` (bases, actions and the koorikla/ci SHA), `SECURITY.md`,
+- `catalog-info.yaml`, `.github/CODEOWNERS`, `renovate.json` (bases, actions and the app-* workflow SHA), `SECURITY.md`,
   a README with the golden-path workflow.
 
 `catalog-info.yaml` declares a `Resource` (type `repository`, `dependencyOf` the component), not a `Component`:
@@ -58,9 +58,9 @@ entity with the same ref would conflict.
 
 Merging the PR lets Argo CD sync the tenant: the app's Application syncs `deploy/openchoreo/`, and the first CI run on
 `main` bumps the Workload, so the service serves in `development`. Production admits only images signed by the
-koorikla/ci workflow for listed repositories: before the first production promotion the new repo goes into addon
+app-container.yaml workflow for listed repositories: before the first production promotion the new repo goes into addon
 kyverno-policies `imageVerification.github.repositories` (installation overlay; the PR description says so,
-[#108](https://github.com/koorikla/platform/issues/108)). The skeletons pin koorikla/ci at the same commit Kyverno
+[#108](https://github.com/koorikla/platform/issues/108)). The skeletons pin the app-* workflows at the same commit Kyverno
 trusts (`imageVerification.github.workflowRef`; the test fails when they drift).
 
 ## Backstage wiring

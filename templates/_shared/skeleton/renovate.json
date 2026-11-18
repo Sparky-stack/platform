@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Golden-path defaults: base images and GitHub Actions pinned by digest; the koorikla/ci reusable workflow SHA (# v1) follows its tag.",
+  "description": "Golden-path defaults: base images and GitHub Actions pinned by digest; the koorikla/platform app-* reusable workflow SHA (# ci-v1) follows its tag.",
   "extends": [
     "config:recommended",
     "docker:pinDigests",
@@ -8,14 +8,14 @@
   ],
   "packageRules": [
     {
-      "description": "koorikla/ci: the reusable workflow commit is also the identity the platform's Kyverno policy trusts for keyless signatures; bump it as one PR",
+      "description": "koorikla/platform app-* workflows: the reusable workflow commit is also the identity the platform's Kyverno policy trusts for keyless signatures; bump it as one PR",
       "matchManagers": [
         "github-actions"
       ],
       "matchPackageNames": [
-        "koorikla/ci"
+        "koorikla/platform"
       ],
-      "groupName": "koorikla/ci reusable workflows"
+      "groupName": "koorikla/platform reusable workflows"
     }
   ]
 }

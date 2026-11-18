@@ -202,7 +202,7 @@ tests:
       - failedTemplate:
           errorPattern: 'policy name "openchoreo-attest-supercalifragilistic-audit" is longer than 40 characters'
 
-  - it: pins the reusable workflow identity AND the calling repository/ref (koorikla/ci is public)
+  - it: pins the reusable workflow identity AND the calling repository/ref (koorikla/platform is public)
     template: templates/image-verification.yaml
     documentSelector: { path: metadata.name, value: openchoreo-attest-sbom-enforce }
     asserts:
@@ -211,7 +211,7 @@ tests:
           value:
             identities:
               - issuer: https://token.actions.githubusercontent.com
-                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@a31c2341b1effdd084d1dd4c715d65e97ade895f
+                subject: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e
             additionalExtensions:
               githubWorkflowRepository: koorikla/hello-world
               githubWorkflowRef: refs/heads/main
@@ -231,7 +231,7 @@ tests:
       - lengthEqual: { path: "spec.attestors[0].cosign.keyless.identities", count: 1 }
       - equal:
           path: spec.attestors[0].cosign.keyless.identities[0].subject
-          value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
+          value: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@0123456789abcdef0123456789abcdef01234567
 
   - it: "during a pin move the previous commit stays trusted through its own attestors, tried after every current one (#136)"
     template: templates/image-verification.yaml
@@ -251,14 +251,14 @@ tests:
           value:
             identities:
               - issuer: https://token.actions.githubusercontent.com
-                subject: https://github.com/koorikla/ci/.github/workflows/container.yaml@fedcba9876543210fedcba9876543210fedcba98
+                subject: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@fedcba9876543210fedcba9876543210fedcba98
             additionalExtensions:
               githubWorkflowRepository: koorikla/hello-world
               githubWorkflowRef: refs/heads/main
               githubWorkflowTrigger: push
       - equal:
           path: "spec.attestors[1].cosign.keyless.identities[0].subject"
-          value: https://github.com/koorikla/ci/.github/workflows/container.yaml@0123456789abcdef0123456789abcdef01234567
+          value: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@0123456789abcdef0123456789abcdef01234567
       # one attestor per call, ||-chained in that order: CEL stops at the first that verifies and Kyverno caches a
       # single-attestor success (a list call is cached only when EVERY attestor verifies, i.e. never during a move)
       - equal:
@@ -338,7 +338,7 @@ tests:
   - it: a ref smuggled into the workflow URL is refused
     template: templates/image-verification.yaml
     set:
-      imageVerification.github.workflow: https://github.com/koorikla/ci/.github/workflows/container.yaml@refs/heads/main
+      imageVerification.github.workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@refs/heads/main
     asserts:
       - failedTemplate:
           errorPattern: 'imageVerification.github.workflow .* without a ref'
