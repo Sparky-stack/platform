@@ -166,7 +166,6 @@ in-cluster client of cell pods is itself in the mesh:
 | Client | Reaches in the cells | Enrolled by |
 |---|---|---|
 | data-plane gateway `gateway-default` (kgateway Envoy, `openchoreo-data-plane`) | component endpoints (ingress) | pod label through `Gateway.spec.infrastructure.labels` (addon `openchoreo-data-plane`) |
-| Prometheus agent (`telemetry`) | PodMonitors in cells, e.g. CloudNativePG's `:9187` | namespace label (addon `telemetry`, `namespace.ambient`) |
 | CNPG / Strimzi / KEDA operators (`cnpg-system`, `strimzi`, `keda`) | instance, broker and scaler endpoints | namespace label (each addon, `namespace.ambient`) |
 
 The gateway follows upstream's ambient ingress setup (kgateway docs "Ingress" for ambient: put the proxy in the mesh,
@@ -193,7 +192,13 @@ kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API 
 (queries the gateway's Envoy metrics in the observability plane), and traffic between pods of one cell.
 
 **Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an
-operator not listed above) is refused. Either enroll the client, or keep one environment `PERMISSIVE` with the
+operator not listed above) is refused. That includes the Prometheus agent (addon `telemetry`), which stays outside
+(its namespace pins `istio.io/dataplane-mode: none`): ztunnel's DNS proxy (`AMBIENT_DNS_CAPTURE`, Istio's default)
+answers `*.localhost` names with loopback, so enrolled, the agent and the collectors lost the local installation's
+ingest hosts (`*.observability.openchoreo.localhost`, seen live). PodMonitors whose targets sit in a STRICT cell
+(CloudNativePG's per-cluster `:9187`) are therefore refused; the platform's own metrics (cAdvisor,
+kube-state-metrics, the gateway's Envoy) are unaffected. The same DNS behaviour applies to any ambient pod that
+calls a `*.localhost` host. Either enroll the client, or keep one environment `PERMISSIVE` with the
 namespace label `platform.koorikla.io/mtls=permissive` through
 `ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels`: the generated `PeerAuthentication` switches to
 `PERMISSIVE` (a mode, not a selector: Kyverno never deletes a synchronized object whose trigger stops matching, but

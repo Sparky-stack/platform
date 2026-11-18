@@ -1,14 +1,13 @@
-{{- /* Argo CD creates the namespace (CreateNamespace=true); this object only adds the labels.
-namespace.ambient (#53): the Prometheus agent scrapes PodMonitors in every namespace, including the ones in cell
-namespaces (e.g. CloudNativePG's per-cluster :9187), and cells enforce STRICT mTLS (addon kyverno-policies
-templates/cell-mesh.yaml): the agent has to be a mesh client. The other pods here gain mTLS to mesh destinations and
-keep accepting plaintext (no PeerAuthentication here); Fluent Bit runs on the host network (not captured).
-Inert on clusters without Istio. */ -}}
-{{- if .Values.namespace.ambient }}
+{{- /* Argo CD creates the namespace (CreateNamespace=true); this object pins it out of the Istio ambient mesh (#53).
+ztunnel's DNS proxy (istio-cni AMBIENT_DNS_CAPTURE, on by default) answers *.localhost names with loopback (RFC 6761):
+enrolled, every exporter here lost the local installation's ingest hosts (*.observability.openchoreo.localhost ->
+"dial tcp [::1]:11080: connection refused", seen live on dev1). `none` also wins over a stray namespace-level label.
+Prune/Delete=false: removing this template or the app must never delete the namespace (Argo CD tracks it now). */ -}}
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
-    istio.io/dataplane-mode: ambient
-{{- end }}
+    istio.io/dataplane-mode: none

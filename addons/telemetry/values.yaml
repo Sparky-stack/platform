@@ -42,10 +42,11 @@ datadog:
   remoteKey: datadog
   property: api-key
 
-# Istio ambient mesh client (#53, templates/namespace.yaml): the Prometheus agent scrapes PodMonitors in cell
-# namespaces, which enforce STRICT mTLS (addon kyverno-policies templates/cell-mesh.yaml). Inert without Istio.
-namespace:
-  ambient: true
+# Not in the Istio ambient mesh (#53): ztunnel's DNS proxy (istio-cni AMBIENT_DNS_CAPTURE, on by default) answers
+# *.localhost names with loopback (RFC 6761), so enrolled pods lose the local installation's ingest hosts
+# (*.observability.openchoreo.localhost -> "dial tcp [::1]:11080: connection refused"; seen live on dev1). Consequence:
+# PodMonitors whose targets sit in STRICT cell namespaces are refused (docs/networking.md "Strict mTLS in cell
+# namespaces", exceptions). templates/namespace.yaml pins istio.io/dataplane-mode=none (contract-tested).
 
 # Images: every image below is fully qualified and pinned by multi-arch index digest (docs/conventions.md invariant 9,
 # hack/tests/test_image_pins.sh), including the init containers and the Prometheus config reloader the operator injects.
