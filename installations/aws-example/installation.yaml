@@ -1,6 +1,6 @@
 # UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only). README.md next to this file.
 # Installation "aws-example": reference only - renders and schema-checks, never booted (no credentials).
-# mgmt is any conformant cluster in the AWS account (e.g. EKS), installed with `make up`-equivalent bootstrap;
+# mgmt is any conformant cluster in the AWS account (e.g. EKS), installed with `task up`-equivalent bootstrap;
 # workload clusters are CAPA k3s clusters (ClusterClass k3s-aws). Adding a cluster: docs/providers.md.
 installation:
   name: aws-example

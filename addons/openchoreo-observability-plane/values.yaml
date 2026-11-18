@@ -71,7 +71,7 @@ agentServerCA:
   sourceSecret: cluster-gateway-ca
   configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap
 
-# Secrets from ClusterSecretStore `platform` (never committed; seeded by `make secrets` locally):
+# Secrets from ClusterSecretStore `platform` (never committed; seeded by `task secrets` locally):
 #   key `openchoreo-observability`:
 #     opensearch-username     must be `admin` (OpenSearch demo security config user)
 #     opensearch-password     >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)

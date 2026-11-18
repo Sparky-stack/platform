@@ -64,7 +64,7 @@ rewrites:
 | `APPS_ORG` | `ORG` | org of the tenant app repos. `APPS_ORG=https://github.com/koorikla` keeps the upstream hello-world when you did not fork it |
 | `DOCS=1` | off | also rewrite links in `README.md`, `docs/*.md` (except this page: its fork and mirror steps must keep naming upstream) and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`): `koorikla/platform` URLs and `[koorikla/platform]` link texts become `REPO` (a renamed fork gets its own name), `koorikla/hello-world` and `ghcr.io/koorikla/` follow `APPS_ORG` |
 
-`make set-repo REPO=... ORG=... APPS_ORG=... DOCS=1` works too.
+`task set-repo REPO=... ORG=... APPS_ORG=... DOCS=1` passes optional overrides on the same command.
 
 What it deliberately leaves alone, and what you edit by hand if it applies:
 
