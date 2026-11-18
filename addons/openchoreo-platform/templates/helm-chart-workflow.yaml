@@ -1,6 +1,6 @@
 {{- /*
 Generic ClusterWorkflow `helm-chart` (no component: run it with a WorkflowRun, e.g. from Backstage's workflows page):
-koorikla/ci helm/check.sh + helm/package-push.sh, push to <registry>/charts/<chart> (OCI), cosign-sign with the platform
+ci/scripts/helm/check.sh + helm/package-push.sh, push to <registry>/charts/<chart> (OCI), cosign-sign with the platform
 key. Argo template koorikla-helm-chart (addon openchoreo-workflow-plane).
 */ -}}
 {{- if .Values.helmChartWorkflow.enabled }}

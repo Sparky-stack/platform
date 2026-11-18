@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ci-selftest-helm
+description: Minimal chart used by the koorikla/ci helm-chart.yaml self-test.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

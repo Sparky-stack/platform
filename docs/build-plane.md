@@ -3,13 +3,13 @@
 In-cluster builds are the **primary, CI-provider-agnostic build path**: a Component names a ClusterWorkflow, a
 WorkflowRun (Backstage "Build", `occ`, or the platform's auto-build trigger on every push) runs it on the OpenChoreo
 workflow plane, the image lands in Harbor signed and scanned, and the new image ref is **committed to the app repo** so
-Argo CD deploys it. GitHub Actions ([koorikla/ci](https://github.com/koorikla/ci) reusable workflows) remain an
+Argo CD deploys it. GitHub Actions ([`ci/`](../ci/) reusable workflows) remain an
 optional path that runs the same scripts. Teams choose per Component.
 
 ```
 WorkflowRun (Backstage / occ / auto-build)         mgmt
   └ ClusterWorkflow <stack> (control plane) ──► Argo Workflow in workflows-<org ns> (workflow plane, via cluster-agent)
-       checkout ─┬ check (toolchain image + koorikla/ci scripts/<stack>/check.sh) ─┐
+       checkout ─┬ check (toolchain image + ci/scripts/<stack>/check.sh) ─┐
                  └ scan-fs (scan-fs.sh) ────────────────────────────────────────────┴ build (rootless BuildKit,
        multi-arch, push by digest, SLSA provenance) ─┬ scan-image (scan-image.sh) ─┬ sign (sign-image.sh + SBOM attest,
                                                      └ sbom (sbom.sh) ─────────────┘  platform cosign key) ─ gitops
@@ -33,11 +33,11 @@ the OpenChoreo API; here the Workload changes only by commit).
 ## Build ClusterWorkflows
 
 One ClusterWorkflow per stack (`addons/openchoreo-platform/values.yaml` `buildWorkflows.stacks`), all running
-`koorikla-build` with the [koorikla/ci](https://github.com/koorikla/ci) toolbox
+`koorikla-build` with the [`ci/`](../ci/) toolbox
 `ghcr.io/koorikla/ci-toolbox:v1@sha256:d950…6b79` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
 the GitOps commit, and the official toolchain image for the stack checks:
 
-| ClusterWorkflow | Checks (koorikla/ci script) | Toolchain image (default, override per Component) |
+| ClusterWorkflow | Checks (ci/scripts) | Toolchain image (default, override per Component) |
 |---|---|---|
 | `go` | `go/check.sh`: vet, golangci-lint if present, `go test -race`, govulncheck | `golang:1.27.4-trixie` |
 | `nextjs` | `nextjs/check.sh`: install, lint, typecheck, test, `next build`, audit | `node:24.22.3-trixie-slim` |
@@ -281,12 +281,12 @@ one of them. The GitHub Actions path stays keyless.
   instead of a key file, so no key material sits in the secret backend
   ([#37](https://github.com/koorikla/platform/issues/37)).
 - **No public transparency log by default**: `buildWorkflows.signing.transparencyLog: false` makes the sign steps use a
-  cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest`; koorikla/ci
+  cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest`; ci/scripts
   `sign-image.sh` has no switch yet, [#37](https://github.com/koorikla/platform/issues/37)), so private repo names and digests never reach public Rekor and signing needs no
   egress to Sigstore. Set it `true` per installation (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to
   upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
-  vuln` / `--type https://spdx.dev/Document/v2.3`: the SBOM uses the predicate type of koorikla/ci's GitHub path, so
+  vuln` / `--type https://spdx.dev/Document/v2.3`: the SBOM uses the predicate type of the ci/ GitHub path, so
   admission checks one SBOM type for both). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
 - Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
   only with this `cosign.pub` (tlog ignored, `rekor: false`) and the signed SBOM + vuln attestations: inline

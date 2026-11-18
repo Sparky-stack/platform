@@ -63,9 +63,8 @@ rewrites:
 | `ORG` | `REPO` minus `/<name>.git` | repo-creds prefix, if your app repos live in another org than the platform repo |
 | `APPS_ORG` | `ORG` | org of the tenant app repos. `APPS_ORG=https://github.com/koorikla` keeps the upstream hello-world when you did not fork it |
 | `DOCS=1` | off | also rewrite links in `README.md`, `docs/*.md` (except this page: its fork and mirror steps must keep naming upstream) and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`): `koorikla/platform` URLs and `[koorikla/platform]` link texts become `REPO` (a renamed fork gets its own name), `koorikla/hello-world` and `ghcr.io/koorikla/` follow `APPS_ORG` |
-| `CI_ORG` | unset | with `DOCS=1`: org of your `koorikla/ci` fork. Unset, `koorikla/ci` links stay upstream |
 
-`make set-repo REPO=... ORG=... APPS_ORG=... DOCS=1 CI_ORG=...` works too.
+`make set-repo REPO=... ORG=... APPS_ORG=... DOCS=1` works too.
 
 What it deliberately leaves alone, and what you edit by hand if it applies:
 

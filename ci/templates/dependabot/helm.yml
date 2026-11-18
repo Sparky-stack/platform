@@ -1,0 +1,17 @@
+# Copy to .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: helm
+    directory: "/charts/my-chart"
+    schedule:
+      interval: weekly
+    groups:
+      helm:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

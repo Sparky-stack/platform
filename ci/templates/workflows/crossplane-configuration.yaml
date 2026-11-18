@@ -1,0 +1,27 @@
+# Copy to .github/workflows/ci.yaml. Docs: https://github.com/koorikla/ci
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    uses: koorikla/ci/.github/workflows/crossplane-configuration.yaml@v1
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    # Layout: crossplane.yaml, apis/**, examples/*.yaml (XRs),
+    # tests/render/functions.yaml, tests/render/expected/<example>.yaml

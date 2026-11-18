@@ -1,0 +1,11 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-ci-selftest
+  annotations:
+    meta.crossplane.io/maintainer: koorikla
+    meta.crossplane.io/source: github.com/koorikla/ci
+    meta.crossplane.io/description: Tiny native provider skeleton used by the koorikla/ci self-test.
+spec:
+  crossplane:
+    version: ">=v2.0.0"

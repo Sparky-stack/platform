@@ -1,0 +1,243 @@
+name: selftest
+
+# Exercises every reusable workflow against ci/fixtures/<stack>. Images go to
+# ghcr.io/koorikla/ci-selftest-<stack>.
+# Third-party actions and images in this file are pinned by commit SHA / digest.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/app-*.yaml'
+      - '.github/workflows/ci-selftest.yaml'
+      - 'ci/fixtures/**'
+      - 'ci/scripts/**'
+      - 'ci/tests/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/app-*.yaml'
+      - '.github/workflows/ci-selftest.yaml'
+      - 'ci/fixtures/**'
+      - 'ci/scripts/**'
+      - 'ci/tests/**'
+
+concurrency:
+  group: selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: actionlint + shellcheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: shellcheck scripts (bash 3.2 portable)
+        run: |
+          shellcheck --version
+          find ci/scripts ci/tests -name '*.sh' -print0 | xargs -0 shellcheck -x -S style
+      - name: bash 3.2 (macOS /bin/bash) syntax check + script unit tests
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w \
+            docker.io/library/bash:3.2@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719 \
+            sh -euc 'apk add -q --no-cache git >/dev/null
+              bash --version | head -1
+              find ci/scripts ci/tests -name "*.sh" | while read -r f; do bash -n "$f"; done
+              for t in ci/tests/scripts/*.test.sh; do bash "$t"; done'
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+  go:
+    uses: ./.github/workflows/app-go.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/go
+      image_name: ci-selftest-go
+
+  nextjs:
+    uses: ./.github/workflows/app-nextjs.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/nextjs
+      image_name: ci-selftest-nextjs
+
+  elixir:
+    uses: ./.github/workflows/app-elixir.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/elixir
+      image_name: ci-selftest-elixir
+      build_args: |
+        APP_NAME=ci_selftest
+
+  ruby:
+    uses: ./.github/workflows/app-ruby.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/ruby
+      image_name: ci-selftest-ruby
+      trivy_ignore_file: ci/fixtures/ruby/.trivyignore.yaml
+
+  crossplane-configuration:
+    uses: ./.github/workflows/app-crossplane-configuration.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: ci/fixtures/crossplane-configuration
+      package_name: ci-selftest-crossplane-configuration
+
+  helm-chart:
+    uses: ./.github/workflows/app-helm-chart.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      chart_path: ci/fixtures/helm/ci-selftest-helm
+      registry: ghcr.io/koorikla
+
+  crossplane-provider:
+    uses: ./.github/workflows/app-crossplane-provider.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/crossplane-provider
+      package_name: ci-selftest-crossplane-provider
+
+  python:
+    uses: ./.github/workflows/app-python.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/python
+      image_name: ci-selftest-python
+
+  node:
+    uses: ./.github/workflows/app-node.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/node
+      image_name: ci-selftest-node
+      start_entry: dist/server.js
+
+  rust:
+    uses: ./.github/workflows/app-rust.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/rust
+      image_name: ci-selftest-rust
+
+  java-quarkus:
+    uses: ./.github/workflows/app-java.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/java-quarkus
+      image_name: ci-selftest-java-quarkus
+
+  java-quarkus-native:
+    uses: ./.github/workflows/app-java.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/java-quarkus
+      image_name: ci-selftest-java-quarkus-native
+      native: true
+      run_codeql: false
+
+  java-spring:
+    uses: ./.github/workflows/app-java.yaml
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      working_directory: ci/fixtures/java-spring
+      image_name: ci-selftest-java-spring
+
+  workload-bump:
+    # Dry run (push: false): edits and commits ci/fixtures/openchoreo/workload.yaml
+    # in the runner's checkout only.
+    uses: ./.github/workflows/app-workload-bump.yaml
+    permissions:
+      contents: write
+    with:
+      image: ghcr.io/koorikla/ci-selftest-go:selftest
+      digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+      workload_file: ci/fixtures/openchoreo/workload.yaml
+      branch: ${{ github.head_ref || github.ref_name }}
+      validate_command: >-
+        grep -q 'image: ghcr.io/koorikla/ci-selftest-go:selftest@sha256:1111' ci/fixtures/openchoreo/workload.yaml
+      push: false

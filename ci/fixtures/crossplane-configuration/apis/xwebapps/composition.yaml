@@ -1,0 +1,62 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: webapps.ci.koorikla.dev
+spec:
+  compositeTypeRef:
+    apiVersion: ci.koorikla.dev/v1alpha1
+    kind: WebApp
+  mode: Pipeline
+  pipeline:
+    - step: render-resources
+      functionRef:
+        name: crossplane-contrib-function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        options: ["missingkey=error"]
+        inline:
+          template: |
+            {{- $spec := .observed.composite.resource.spec -}}
+            {{- $xr := .observed.composite.resource.metadata.name -}}
+            ---
+            apiVersion: v1
+            kind: ConfigMap
+            metadata:
+              name: {{ $xr }}-config
+              annotations:
+                {{ setResourceNameAnnotation "config" }}
+            data:
+              GREETING: {{ if hasKey $spec "greeting" }}{{ $spec.greeting | quote }}{{ else }}"hello"{{ end }}
+            ---
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: {{ $xr }}
+              annotations:
+                {{ setResourceNameAnnotation "deployment" }}
+            spec:
+              replicas: {{ $spec.replicas | default 1 }}
+              selector:
+                matchLabels:
+                  app: {{ $xr }}
+              template:
+                metadata:
+                  labels:
+                    app: {{ $xr }}
+                spec:
+                  containers:
+                    - name: app
+                      image: {{ $spec.image | quote }}
+                      envFrom:
+                        - configMapRef:
+                            name: {{ $xr }}-config
+            ---
+            apiVersion: ci.koorikla.dev/v1alpha1
+            kind: WebApp
+            status:
+              configMapName: {{ $xr }}-config
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: crossplane-contrib-function-auto-ready

@@ -1,0 +1,171 @@
+name: helm-chart
+
+# Helm chart: helm lint --strict, helm-unittest (when <chart>/tests exists),
+# package, push as OCI artifact, cosign keyless sign + SLSA provenance.
+# Version: chart_version input, else the tag (refs/tags/vX.Y.Z -> X.Y.Z), else
+# Chart.yaml version (pushes from main overwrite that version's tag).
+# One chart per call; use a matrix for several charts.
+#
+# Required caller permissions:
+#   contents: read, packages: write, id-token: write, attestations: write
+
+on:
+  workflow_call:
+    inputs:
+      chart_path:
+        description: 'Chart directory'
+        required: false
+        type: string
+        default: '.'
+      chart_version:
+        description: 'Chart version override'
+        required: false
+        type: string
+        default: ''
+      app_version:
+        description: 'appVersion override'
+        required: false
+        type: string
+        default: ''
+      lint_args:
+        description: 'Extra helm lint arguments'
+        required: false
+        type: string
+        default: ''
+      helm_version:
+        description: 'Helm version for azure/setup-helm'
+        required: false
+        type: string
+        default: 'latest'
+      registry:
+        description: 'OCI registry prefix for charts (default ghcr.io/<owner>/charts)'
+        required: false
+        type: string
+        default: ''
+      push:
+        description: 'Push and sign on non-PR events'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      registry_username:
+        description: 'Registry username (non-GHCR registries)'
+        required: false
+      registry_password:
+        description: 'Registry password/token (non-GHCR registries)'
+        required: false
+    outputs:
+      chart:
+        description: 'Pushed chart reference oci://<registry>/<name>:<version>'
+        value: ${{ jobs.chart.outputs.chart }}
+      digest:
+        description: 'Pushed chart digest (empty on PRs)'
+        value: ${{ jobs.chart.outputs.digest }}
+      chart_digest_ref:
+        description: 'Immutable <registry>/<name>@sha256:... (empty on PRs)'
+        value: ${{ jobs.chart.outputs.chart_digest_ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  chart:
+    name: lint, unittest, package, push, sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: helm-${{ github.repository }}-${{ inputs.chart_path }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      chart: ${{ steps.pkg.outputs.repo != '' && format('oci://{0}:{1}', steps.pkg.outputs.repo, steps.pkg.outputs.chart_version) || '' }}
+      digest: ${{ steps.pkg.outputs.digest }}
+      chart_digest_ref: ${{ steps.pkg.outputs.image_digest_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch platform ci/scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: ${{ inputs.helm_version }}
+
+      - name: Registry coordinates
+        id: vars
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REGISTRY: ${{ inputs.registry }}
+          INPUT_PUSH: ${{ inputs.push }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: bash "$CI_SCRIPTS/helm/registry-meta.sh"
+
+      - name: helm lint + unittest
+        env:
+          CHART_PATH: ${{ inputs.chart_path }}
+          LINT_ARGS: ${{ inputs.lint_args }}
+        run: bash "$CI_SCRIPTS/helm/check.sh"
+
+      - name: Log in to registry (docker config for attestations and cosign)
+        if: steps.vars.outputs.should_push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.vars.outputs.registry_host }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: Log in to registry (helm)
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          REGISTRY_HOST: ${{ steps.vars.outputs.registry_host }}
+          REGISTRY_USER: ${{ secrets.registry_username || github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password || github.token }}
+        run: printf '%s' "$REGISTRY_PASSWORD" | helm registry login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+
+      - name: helm package (+ push)
+        id: pkg
+        env:
+          CHART_PATH: ${{ inputs.chart_path }}
+          CHART_VERSION: ${{ inputs.chart_version }}
+          APP_VERSION: ${{ inputs.app_version }}
+          GIT_REF: ${{ github.ref }}
+          OCI_REGISTRY: ${{ steps.vars.outputs.registry }}
+          PUSH: ${{ steps.vars.outputs.should_push }}
+        run: bash "$CI_SCRIPTS/helm/package-push.sh"
+
+      - name: Attest SLSA build provenance
+        if: steps.vars.outputs.should_push == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.pkg.outputs.repo }}
+          subject-digest: ${{ steps.pkg.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Install cosign
+        if: steps.vars.outputs.should_push == 'true'
+        uses: sigstore/cosign-installer@v4.1.3
+
+      - name: Cosign keyless sign
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.pkg.outputs.image_digest_ref }}
+          RECURSIVE: 'false'
+        run: bash "$CI_SCRIPTS/common/sign-image.sh"

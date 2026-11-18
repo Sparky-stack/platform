@@ -2,7 +2,7 @@
 # Point a fork of koorikla/platform at itself (docs/forking.md). Idempotent; prints every file it changed.
 #
 # Usage: hack/set-repo.sh https://github.com/<you>/platform.git
-#        task set-repo REPO=https://github.com/<you>/platform.git [ORG=...] [APPS_ORG=...] [DOCS=1 [CI_ORG=...]]
+#        task set-repo REPO=https://github.com/<you>/platform.git [ORG=...] [APPS_ORG=...] [DOCS=1]
 #
 #   REPO      GitOps repo Argo CD reads (https, ends in .git)               -> root app, installation.repoURL
 #   ORG       repo-creds URL prefix, default: REPO minus /<name>.git        -> installation.githubOrg
@@ -10,8 +10,7 @@
 #             (APPS_ORG=https://github.com/koorikla keeps the upstream example app)
 #   DOCS=1    also rewrite links in README.md, docs/*.md (not docs/forking.md: its fork steps must keep pointing at
 #             upstream) and diagram sources: <old>/platform URLs + [owner/name] link texts -> REPO, <old>/hello-world
-#             and ghcr.io/<old>/ -> APPS_ORG, <old>/ci only when CI_ORG is given (default: keep upstream koorikla/ci)
-#   CI_ORG    with DOCS=1: org of your koorikla/ci fork
+#             and ghcr.io/<old>/ -> APPS_ORG (ci/ lives in this repo, so it follows REPO)
 #
 # Never touched: label/annotation keys `platform.koorikla.io/*` (an API contract, not an org name), chart defaults
 # under addons/ (installation.yaml overrides them), tests.
@@ -30,9 +29,7 @@ url_re='^https://[A-Za-z0-9.-]+/[A-Za-z0-9_.-]+'
   || { echo "REPO must look like https://<host>/<owner>/<name>.git, e.g. https://github.com/you/platform.git (got: $REPO)" >&2; exit 2; }
 ORG="${ORG:-${REPO%/*}}"; ORG="${ORG%/}"
 APPS_ORG="${APPS_ORG:-$ORG}"; APPS_ORG="${APPS_ORG%/}"
-CI_ORG="${CI_ORG:-}"; CI_ORG="${CI_ORG%/}"
-for v in ORG APPS_ORG CI_ORG; do
-  [[ "$v" == CI_ORG && -z "$CI_ORG" ]] && continue
+for v in ORG APPS_ORG; do
   [[ "${!v}" =~ ${url_re}$ ]] || { echo "$v must look like https://<host>/<owner>, e.g. https://github.com/you (got: ${!v})" >&2; exit 2; }
 done
 DOCS="${DOCS:-0}"
@@ -125,16 +122,12 @@ if [[ "$DOCS" == 1 ]]; then
         rewrite "s|ghcr\\.io/$(re_esc "$(lower "${o##*/}")")/|ghcr.io/$(rep_esc "$(lower "${APPS_ORG##*/}")")/|g" "${doc_files[@]}"
       fi
     fi
-    if [[ -n "$CI_ORG" && "$o" != "$CI_ORG" ]]; then
-      rewrite "$(ref_expr "${o#https://}/ci" "${CI_ORG#https://}/ci")" "${doc_files[@]}"
-    fi
   done
 fi
 
 echo "repoURL    $REPO"
 echo "githubOrg  $ORG"
 echo "app repos  $APPS_ORG"
-[[ "$DOCS" == 1 ]] && echo "ci repo    ${CI_ORG:-$UPSTREAM_ORG (CI_ORG not set: links kept)}"
 if (( ${#CHANGED[@]} == 0 )); then
   echo "Nothing to change: already pointing there."
   exit 0

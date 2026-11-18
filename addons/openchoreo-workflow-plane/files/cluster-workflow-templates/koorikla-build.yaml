@@ -1,7 +1,7 @@
 # ClusterWorkflowTemplate koorikla-build: the build pipeline behind the per-stack OpenChoreo ClusterWorkflows (addon
-# openchoreo-platform, files/cluster-workflows). Same scripts and toolbox as koorikla/ci's GitHub Actions (parity):
+# openchoreo-platform, files/cluster-workflows). Same scripts and toolbox as the ci/ GitHub Actions workflows (parity):
 #
-#   checkout ─┬─ check (stack toolchain image + koorikla/ci scripts/<stack>/check.sh) ─┐
+#   checkout ─┬─ check (stack toolchain image + ci/scripts/<stack>/check.sh) ─┐
 #             └─ scan-fs (scan-fs.sh: Trivy on lockfiles) ──────────────────────────────┴─ build (rootless BuildKit,
 #   multi-arch, push by digest, SLSA provenance) ─┬─ scan-image (scan-image.sh, every platform) ─┬─ sign (sign-image.sh:
 #                                                 └─ sbom (sbom.sh, syft SPDX) ──────────────────┘  cosign signature +
@@ -18,7 +18,7 @@ kind: ClusterWorkflowTemplate
 metadata:
   name: koorikla-build
   annotations:
-    workflows.argoproj.io/description: Build, check, scan, sign an image with koorikla/ci scripts and hand it to GitOps
+    workflows.argoproj.io/description: Build, check, scan, sign an image with ci/scripts and hand it to GitOps
 spec:
   entrypoint: pipeline
   arguments:
@@ -291,7 +291,7 @@ spec:
           - { name: short-sha, valueFrom: { path: /tmp/short-sha } }
           - { name: skip, valueFrom: { path: /tmp/skip } }
 
-    # --- stack checks: koorikla/ci scripts/<stack>/check.sh in the official toolchain image ------------------------
+    # --- stack checks: ci/scripts/<stack>/check.sh in the official toolchain image ------------------------
     # The toolbox (init container) copies the scripts and turns check-env (JSON object of the script's env flags) into
     # an env file: toolchain images carry neither the scripts nor jq. Caches live on the run's volume.
     - name: check
@@ -319,7 +319,7 @@ spec:
             export WORKDIR="/work/source/${APP_PATH#./}"
             cd "$WORKDIR"
             if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
-            echo ">> koorikla/ci scripts/${STACK}/check.sh"
+            echo ">> ci/scripts/${STACK}/check.sh"
             bash "/ci/scripts/${STACK}/check.sh"
         env:
           - { name: STACK, value: "{{workflow.parameters.stack}}" }
@@ -364,7 +364,7 @@ spec:
             export WORKDIR="/work/source/${APP_PATH#./}"
             cd "$WORKDIR"
             if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
-            echo ">> koorikla/ci scripts/${STACK}/check.sh"
+            echo ">> ci/scripts/${STACK}/check.sh"
             bash "/ci/scripts/${STACK}/check.sh"
         env:
           - { name: STACK, value: "{{workflow.parameters.stack}}" }
@@ -565,7 +565,7 @@ spec:
           - { name: digest-ref, valueFrom: { path: /tmp/digest-ref } }
           - { name: image, valueFrom: { path: /tmp/image } }
 
-    # --- supply chain: koorikla/ci common scripts in the toolbox -----------------------------------------------------
+    # --- supply chain: ci/scripts common scripts in the toolbox -----------------------------------------------------
     # Registry trust: Go tools (trivy, syft, cosign, crane) read SSL_CERT_FILE; the registry CA is appended to the
     # system bundle so public registries (Trivy DB, Sigstore) keep working. Registry auth: DOCKER_CONFIG.
     # HOME and TRIVY_CACHE_DIR live in the pod's own /tmp emptyDir, never on the run volume the tenant check step
@@ -651,7 +651,7 @@ spec:
             if [ "$TLOG_UPLOAD" != true ]; then
               # Private by default (installation switch buildWorkflows.signing.transparencyLog): no public Rekor entry
               # leaking repo names and digests. cosign v3 takes a signing config without a transparency log;
-              # koorikla/ci sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
+              # ci/scripts sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
               printf '{ "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json", "rekorTlogConfig": {}, "tsaConfig": {} }\n' > /tmp/signing-config.json
               real=$(command -v cosign); mkdir -p /tmp/bin
               printf '#!/bin/sh\ncase "$1" in sign|attest) c=$1; shift; exec %s "$c" --signing-config /tmp/signing-config.json "$@" ;; esac\nexec %s "$@"\n' \
