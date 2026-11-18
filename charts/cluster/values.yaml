@@ -4,7 +4,9 @@
 # Template files are split by concern: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml.
 
 # --- from the fleet file -------------------------------------------------------------------------------------------
+# -- Cluster identity (`ClusterDataPlane` name and `planeID`).
 name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
+# -- Cluster provider (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`) selecting `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`).
 provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
                               # byo -> no CAPI object: an existing cluster, kubeconfig from platform store key byo-<name>
                               #   (templates/byo-access.yaml; no kubernetesVersion/controlPlane/workers/providerSpec;
@@ -13,7 +15,9 @@ provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<prov
                               #   capi.providers.gcp; docs/providers.md "GKE")
 region: local
 environment: development      # development | staging | production (never prod; docs/conventions.md)
+# -- k3s version (or GKE `vX.Y.Z` version on `gcp-gke`).
 kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1 (gcp-gke: GKE version vX.Y.Z, e.g. v1.35.1)
+# -- `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`); `gke` only on `gcp-gke`.
 cni: cilium                   # cilium | flannel - pod network, fixed at birth (switching = rebuild; docs/networking.md).
                               # gcp-gke: gke only (GKE's VPC-native networking; CAPG cannot request Dataplane V2).
                               # -> ClusterClass variable cni, label platform.koorikla.io/cni, and
@@ -22,21 +26,26 @@ controlPlane:
   # replicas: 1               # k3s servers = embedded etcd voters: odd only (1, 3, 5), default 1; production on aws/hetzner >= 3.
                               # 1 = disposable: every control plane rollout ends with a 2 -> 1 etcd member removal that
                               # can lose quorum (docs/providers.md "Control plane size and rollouts")
+  # -- Server instance type (`controlPlane.replicas` is odd, `>= 3` for cloud production; none on `gcp-gke`).
   machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
                               # gcp-gke: no controlPlane at all (Google runs it; setting either key fails the render)
+# -- Node pools (`[{name, replicas, machineType, failureDomain}]`; GKE: MachinePools).
 workers: []                   # [{name, replicas, machineType, failureDomain}] (gcp-gke: GKE node pools, >= 1; failureDomain
                               #  = the pool's zone, replicas = nodes per zone)
+# -- Extra `ClusterClass` provider variables passed as-is.
 providerSpec: {}              # extra ClusterClass variables, passed as-is (docs/providers.md):
                               #   docker: kindImage | aws: ami (required), sshKeyName | hetzner: sshKey, image, networkZone
                               #   gcp-gke: project (required), network, releaseChannel
                               # `region` comes from the key above; machine types from controlPlane/workers[].machineType
 openchoreo:
   dataPlane:
+    # -- Registers the `ClusterDataPlane` and binds `openchoreo.dataPlane.{gatewayHost,gatewayPort,environments}`.
     enabled: false
     gatewayHost: ""           # base host for app endpoints on this cluster
     gatewayPort: 19080         # data-plane Gateway HTTP listener (klipper hostPort on the node)
     environments: []          # OpenChoreo Environments bound to this cluster's ClusterDataPlane
 mesh:
+  # -- Opt-in Istio ambient multicluster mesh membership.
   group: ""                   # opt-in cluster-to-cluster connectivity (Istio ambient multicluster, docs/multicluster.md).
                               # Set -> labels mesh.platform.koorikla.io/{group,network} (meshID = group, network = name)
                               # and addons.platform.koorikla.io/{istio-eastwest,istio-csr}: "true" (do not set them);
@@ -45,7 +54,9 @@ mesh:
                               # mesh.ca (installation.yaml).
   groups: []                  # from installation.yaml: the installation's mesh groups (one root CA each in OpenBao)
   ca: {}                      # from installation.yaml: {host, port} where members reach OpenBao
+# -- Git revision pin (`platform.koorikla.io/addons-revision`).
 addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
+# -- Per-cluster addon overrides (`addons.platform.koorikla.io/<addon>`).
 addons: {}                    # <addon>: true|false -> label (and ClusterDataPlane annotation) addons.platform.koorikla.io/<addon>
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------

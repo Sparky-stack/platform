@@ -11,9 +11,17 @@ Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<co
 
 ## Key values
 
-- `project`, `component`, `pullRequest`, `commit`, `repository`, `branch`: from the pull request generator; malformed values fail the render.
-- `expired`: `"true"` when the PR carries the expiry label; renders nothing, so Argo CD prunes the preview.
-- `previews.dataPlane`, `openchoreo.orgNamespace`: from `installation.yaml`.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| branch | string | `""` |  |
+| commit | string | `""` |  |
+| component | string | `""` |  |
+| expired | string | `"false"` | `"true"` when the PR carries the expiry label; renders nothing, so Argo CD prunes the preview. |
+| openchoreo.orgNamespace | string | `"default"` | OpenChoreo organization namespace (from `installation.yaml`). |
+| previews.dataPlane | string | `"dev1"` | `ClusterDataPlane` every preview lands on (from `installation.yaml`). |
+| project | string | `""` | OpenChoreo `Project` (from the pull request generator alongside `component`, `pullRequest`, `commit`, `repository`, `branch`; malformed values fail the render). |
+| pullRequest | string | `""` |  |
+| repository | string | `""` |  |
 
 ## Day-2 notes
 

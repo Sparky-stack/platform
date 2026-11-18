@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `aws-cloud-controller-manager` (`0.0.12` / `v1.35.0`). Initializes AWS EC2 nodes, populates provider IDs and topology labels, and reconciles AWS LoadBalancers on `k3s-aws` workload clusters.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, `providers: [aws]` (`namespace: kube-system`).
+- **Catalog label:** `addons.platform.koorikla.io/aws-ccm` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Node readiness and cluster scaling on AWS: [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Cluster API providers](../../docs/providers.md)
+{{- end -}}

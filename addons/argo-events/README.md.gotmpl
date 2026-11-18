@@ -1,0 +1,18 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `argo-events` (`2.4.28` / `v1.9.11`) on `mgmt`. Runs the platform's JetStream `EventBus`, `EventSource`s, and `Sensor`s receiving per-cluster Falco `critical` escalations and OpenChoreo `staging` rollout events to trigger `falco-response` and `promotion-gate` workflows.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: argo-events`).
+- **Catalog label:** `addons.platform.koorikla.io/argo-events` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Triaging Falco critical escalations and blocked promotion triggers: [incidents](../../docs/runbooks/incidents.md#falco-critical-alert) and [promotion gate failing closed](../../docs/runbooks/incidents.md#promotion-gate-failing-closed).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Observability: Falco](../../docs/observability.md#falco)
+- [Promotion gates](../../docs/promotion.md)
+- [Build plane: auto-build](../../docs/build-plane.md#auto-build-poll-or-webhook)
+{{- end -}}

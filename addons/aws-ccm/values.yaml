@@ -5,15 +5,18 @@
 # clusterawsadm) - no secret. Cluster ID comes from the instance's kubernetes.io/cluster/<name> tag set by CAPA.
 
 aws-cloud-controller-manager:
+  # -- `v1.35.0` pinned by multi-arch index digest.
   image:
     repository: registry.k8s.io/provider-aws/cloud-controller-manager
     # minor follows the workload Kubernetes minor (k3s v1.35); pinned by multi-arch index digest
     tag: v1.35.0@sha256:bf5a41be5f0dd5049cc1f69e1a23ff2691f2f46483546204676cea78796e75cd   # index: amd64, arm64
+  # -- Passes `--cloud-provider=aws` and `--configure-cloud-routes=false` (pod networking uses overlay VXLAN rather than VPC route tables).
   args:
     - --v=2
     - --cloud-provider=aws
     - --configure-cloud-routes=false   # pod network is k3s flannel (VXLAN), no VPC routes
   # k3s labels servers node-role.kubernetes.io/control-plane=true (kubeadm: ""), so the chart default never matches.
+  # -- Schedules on `node-role.kubernetes.io/control-plane: "true"` with `hostNetworking: true`.
   nodeSelector:
     node-role.kubernetes.io/control-plane: "true"
   # Run before CNI/CoreDNS are usable on a node that is still uninitialized.

@@ -1,0 +1,18 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `argo-cd` (`10.18.0` / `v3.6.1`) on the management cluster. Adopts the bootstrap `argocd` Helm release and reconciles `Application/root`, `ApplicationSet`s, and every workload cluster in push mode.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: argocd`, `releaseName: argocd`).
+- **Catalog label:** `addons.platform.koorikla.io/argo-cd` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Stuck or `OutOfSync` applications: [incidents](../../docs/runbooks/incidents.md#argo-app-stuck-or-outofsync).
+- Emergency controller freeze (`selfHeal` pause): [break-glass](../../docs/runbooks/break-glass.md#freezing-argo-cd-self-heal) and [upgrades](../../docs/runbooks/upgrades.md).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Architecture](../../docs/architecture.md)
+- [Supply chain](../../docs/supply-chain.md)
+{{- end -}}

@@ -12,15 +12,18 @@ argo-cd:
   configs:
     params:
       server.insecure: true
+      # -- `true` so CAPI, ESO, cert-manager, and OpenChoreo CRD defaults do not cause permanent diffs.
       controller.diff.server.side: true   # prevent permanent diff on CAPI/ESO/cert-manager/OpenChoreo CRD defaults
       controller.status.processors: 10
       controller.operation.processors: 5
     cm:
+      # -- `"true"` so `repo-server` builds HTTPS and OCI wrapper dependencies (`ARGOCD_EXEC_TIMEOUT=180s`).
       helm.dependencies.enabled: "true"   # repo-server runs helm dependency build for wrapper charts (https + OCI)
       timeout.reconciliation: 300s
       timeout.reconciliation.jitter: 60s
       # Thunder's PreSync setup Job mounts a PVC; k3s local-path binds on first consumer (WaitForFirstConsumer).
       # Treat Pending PVCs as Healthy so the hook Job can start and bind the volume.
+      # -- Treats `Pending` `WaitForFirstConsumer` PVCs as `Healthy` so hook Jobs can bind volumes.
       resource.customizations.health.PersistentVolumeClaim: |
         hs = {}
         if obj.status ~= nil and obj.status.phase ~= nil then
@@ -108,6 +111,7 @@ argo-cd:
         return hs
   controller:
     image:
+      # -- Argo CD image tag pinned by multi-arch index digest (shared across `controller`, `server`, `repoServer`, `applicationSet`, `dex`, `notifications`).
       tag: &argocdTag v3.6.1@sha256:296e3d74f449b2ce45265613fcb68c18ed7366488360c8ea32f5f2a93d2e5c54   # index: amd64, arm64, ppc64le, s390x
     resources:
       requests:

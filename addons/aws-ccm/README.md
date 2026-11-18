@@ -11,9 +11,12 @@ Wrapper chart for `aws-cloud-controller-manager` (`0.0.12` / `v1.35.0`). Initial
 
 ## Key values
 
-- `aws-cloud-controller-manager.args`: passes `--cloud-provider=aws` and `--configure-cloud-routes=false` (pod networking uses overlay VXLAN rather than VPC route tables).
-- `aws-cloud-controller-manager.nodeSelector`: schedules on `node-role.kubernetes.io/control-plane: "true"` with `hostNetworking: true`.
-- `aws-cloud-controller-manager.image`: `v1.35.0` pinned by multi-arch index digest.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| aws-cloud-controller-manager.args | list | `["--v=2","--cloud-provider=aws","--configure-cloud-routes=false"]` | Passes `--cloud-provider=aws` and `--configure-cloud-routes=false` (pod networking uses overlay VXLAN rather than VPC route tables). |
+| aws-cloud-controller-manager.hostNetworking | bool | `true` |  |
+| aws-cloud-controller-manager.image | object | `{"repository":"registry.k8s.io/provider-aws/cloud-controller-manager","tag":"v1.35.0@sha256:bf5a41be5f0dd5049cc1f69e1a23ff2691f2f46483546204676cea78796e75cd"}` | `v1.35.0` pinned by multi-arch index digest. |
+| aws-cloud-controller-manager.nodeSelector | object | `{"node-role.kubernetes.io/control-plane":"true"}` | Schedules on `node-role.kubernetes.io/control-plane: "true"` with `hostNetworking: true`. |
 
 ## Day-2 notes
 

@@ -3,6 +3,7 @@
 # comes from that generator or from installation.yaml `previews`; nothing here is tenant-controlled.
 # docs/preview-environments.md.
 
+# -- OpenChoreo `Project` (from the pull request generator alongside `component`, `pullRequest`, `commit`, `repository`, `branch`; malformed values fail the render).
 project: ""                # OpenChoreo Project (tenant file `project`)
 component: ""              # Component name (== tenant app name == the app repo's Component)
 pullRequest: ""            # pull request number
@@ -11,10 +12,13 @@ repository: ""             # owner/name of the app repo (annotation only)
 branch: ""                 # PR head branch (annotation only)
 # "true" when the PR carries the label previews.expiredLabel: the TTL ran out (the auto-build pass sets it). Renders
 # nothing, so Argo CD prunes the Environment and OpenChoreo's finalizers remove bindings and the cell namespace.
+# -- `"true"` when the PR carries the expiry label; renders nothing, so Argo CD prunes the preview.
 expired: "false"
 
 # --- from installation.yaml ------------------------------------------------------------------------------------------
 openchoreo:
+  # -- OpenChoreo organization namespace (from `installation.yaml`).
   orgNamespace: default
 previews:
+  # -- `ClusterDataPlane` every preview lands on (from `installation.yaml`).
   dataPlane: dev1          # ClusterDataPlane every preview lands on (the development tier)
