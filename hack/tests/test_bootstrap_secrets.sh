@@ -15,6 +15,7 @@ R="$TMP/root"; BIN="$TMP/bin"
 mkdir -p "$R/bootstrap" "$R/hack" "$BIN"
 cp -R "$ROOT/hack/lib" "$R/hack/"
 cp -R "$ROOT/installations" "$R/"
+cp "$ROOT/bootstrap/root-app.yaml" "$R/bootstrap/"   # root_app_manifest
 # bootstrap.sh minus its dispatcher, plus a hook that runs $HARNESS_CALL after load_inst.
 sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
 # shellcheck disable=SC2016  # literal code for the generated script
@@ -285,6 +286,26 @@ assert_eq "$(val promotion-gate-github githubAppPrivateKey | grep -c FAKEPEMBODY
 assert_eq "$(applied platform-github-app)" "" "gate App: does not seed the push App"
 run gate_partial "$S" NO_GH=1 GITHUB_GATE_APP_INSTALLATION_ID=6
 assert_eq "$RC" 1 "gate App partial: fails closed"
+run gate_none "$S" NO_GH=1
+assert_eq "$(applied promotion-gate-github)" "" "gate App unset: nothing seeded"
+assert_eq "$(has "$OUT" 'no GITHUB_GATE_APP_\*: auto-build and PR previews stay off')" yes "gate App unset: says what stays off"
+
+# --- root app: secrets.githubGateApp.enabled follows the seeded key (#192) -------------------------------------------
+mkdir -p "$TMP/gate-seeded"; printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: promotion-gate-github\n' > "$TMP/gate-seeded/promotion-gate-github.yaml"
+gate_param() { printf '%s\n' "$OUT" | yq -r '.spec.source.helm.parameters // [] | map(select(.name == "secrets.githubGateApp.enabled")) | .[0].value // "none"'; }
+run root_gate_on "root_app_manifest" FAKE_SECRET_DIR="$TMP/gate-seeded"
+assert_eq "$(gate_param)" true "root app: gate App seeded -> secrets.githubGateApp.enabled=true"
+assert_eq "$(printf '%s\n' "$OUT" | yq -r '.spec.source.helm.valueFiles[0]')" ../../installations/local/installation.yaml "root app: value file of the installation"
+run root_gate_off "root_app_manifest" FAKE_SECRET_DIR="$TMP/empty"
+assert_eq "$(gate_param)" false "root app: no gate App -> secrets.githubGateApp.enabled=false (fork without the App converges)"
+yq -i '.secrets.githubGateApp.enabled = false' "$LOCAL_INST"
+run root_gate_forced "root_app_manifest" FAKE_SECRET_DIR="$TMP/gate-seeded"
+assert_eq "$(gate_param)" false "root app: installation.yaml false wins over a seeded key"
+yq -i '.secrets.backend = "aws" | del(.secrets.githubGateApp)' "$LOCAL_INST"
+run root_gate_aws "root_app_manifest" FAKE_SECRET_DIR="$TMP/gate-seeded"
+assert_eq "$(gate_param)" none "root app: other backends -> no parameter, installation.yaml decides"
+assert_eq "$(grep -c 'get secret promotion-gate-github' "$HLOG/calls" || true)" 0 "root app: other backends -> no secret lookup"
+nra true
 
 # --- no build PAT (#34): builds mint per-repository GitHub App tokens (ESO generator), nothing to seed ------------
 run build_gh "$S"

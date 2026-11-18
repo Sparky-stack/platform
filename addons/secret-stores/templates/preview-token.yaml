@@ -8,7 +8,9 @@ Argo CD's namespace on mgmt:
 The ApplicationSets' pull request generators use it through tokenRef. No PAT; Argo CD never sees the App key.
 */ -}}
 {{- $pv := .Values.previews | default dict }}
-{{- if and (eq .Values.role "mgmt") $pv.enabled }}
+{{- /* Needs the platform GitHub App (secrets.githubGateApp.enabled, charts/platform values.yaml): without the key the
+generator fails and degrades this app (#192). */ -}}
+{{- if and (eq .Values.role "mgmt") $pv.enabled (dig "githubGateApp" "enabled" false (.Values.secrets | default dict)) }}
 {{- $t := .Values.previewToken }}
 {{- $name := required "previewToken.secretName is required" $t.secretName }}
 apiVersion: external-secrets.io/v1

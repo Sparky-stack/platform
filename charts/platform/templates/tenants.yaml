@@ -42,6 +42,9 @@ spec:
           valueFiles:
             - ../../installations/{{ $inst }}/installation.yaml
             - {{ `'../../{{ .path.path }}/{{ .path.filename }}'` }}
+          parameters:   # root app value (bootstrap.sh sets it from the seeded key), not in installation.yaml
+            - name: secrets.githubGateApp.enabled
+              value: {{ dig "githubGateApp" "enabled" false (.Values.secrets | default dict) | toString | quote }}
       destination:
         server: https://kubernetes.default.svc
         namespace: {{ $orgNs }}
@@ -50,7 +53,8 @@ spec:
           prune: true
           selfHeal: true
         retry:
-          limit: 20               # OpenChoreo CRDs may not exist yet on a fresh mgmt
+          limit: -1               # OpenChoreo CRDs may not exist yet on a fresh mgmt: never give up (#192)
+          refresh: true
           backoff:
             duration: 15s
             factor: 2

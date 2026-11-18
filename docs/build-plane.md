@@ -66,7 +66,7 @@ spec:
         appPath: "."
       docker: { context: ".", filePath: Dockerfile }
       # platforms: linux/amd64        # default linux/amd64,linux/arm64
-      # checks: { image: docker.io/library/golang:1.27.4-trixie@sha256:…, env: { RUN_LINT: "false" } }
+      # checks: { image: docker.io/library/golang:1.27.4-trixie@sha256:…, env: { RUN_LINT: "false" } }  # by digest only
       # scan: { failSeverities: "CRITICAL,HIGH", ignoreFile: .trivyignore.yaml }
       # gitops: { workloadPath: deploy/openchoreo/workload.yaml }
 ```
@@ -211,6 +211,13 @@ platform). Narrow `platforms` per Component to build only the node's architectur
   emptyDir to a gid the user namespace does not map). Snapshotter `overlayfs` (rootless overlay mounts, Linux >= 5.11):
   `auto` picked the copying `native` snapshotter on the k3d node and a hello-world build took over 15 minutes. No
   privileged container, no Docker daemon, no DinD. Kyverno's Pod Security policies (Audit) report that pod.
+- **Digest-pinned images only** in `workflows-*` (addon kyverno-policies, ValidatingPolicy
+  `platform-workflow-image-digests`, Deny, fail closed, mgmt; [#36](https://github.com/koorikla/platform/issues/36)):
+  every container, initContainer and ephemeral container image of a run pod must be `image@sha256:<digest>`. A tag is
+  mutable, and run pods sit next to the push credentials and the signing key. Every image the platform puts there is
+  already pinned (toolbox, BuildKit, PostgreSQL, the stack check images, Argo's executor), so there are no exceptions.
+  A developer's `checks.image` override by tag is rejected by the ClusterWorkflow schema (`pattern`) before the run
+  starts; a run that still reaches a tag-only pod fails that step with the Kyverno denial.
 - **Cluster-agent RBAC** (addon openchoreo-workflow-plane `clusterAgentRBAC`,
   [#33](https://github.com/koorikla/platform/issues/33)): the agent replays the control plane's API calls with its own
   ServiceAccount, so its RBAC is OpenChoreo's reach into mgmt. The upstream ClusterRole (`*` on secrets, namespaces,
@@ -437,7 +444,6 @@ per run a 5Gi workspace PVC (deleted with the workflow).
 Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build nodes
 ([#32](https://github.com/koorikla/platform/issues/32)), per-repository git credentials and branch protection for the
 hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
-([#35](https://github.com/koorikla/platform/issues/35)), digest-pinned images in `workflows-*`
-([#36](https://github.com/koorikla/platform/issues/36)). BuildKit pulls base images
+([#35](https://github.com/koorikla/platform/issues/35)). BuildKit pulls base images
 directly from upstream ([#38](https://github.com/koorikla/platform/issues/38)). Values not yet confirmed live:
 [#40](https://github.com/koorikla/platform/issues/40).

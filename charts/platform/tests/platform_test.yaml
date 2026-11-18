@@ -5,6 +5,7 @@ templates:
   - appset-fleet.yaml
   - appset-addons.yaml
   - appset-examples.yaml
+  - tenants.yaml
 values:
   - ../../../installations/local/installation.yaml
 tests:
@@ -127,6 +128,25 @@ tests:
       - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
       - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
       - equal: { path: spec.template.spec.syncPolicy.retry.backoff.maxDuration, value: 5m }
+
+  # #192: an addon/tenant/example sync that gives up stays failed until the next commit (a manual step); live, addons
+  # needed 5 attempts while another app installed the CRDs they reference
+  - it: retries every generated Application without a limit on the latest revision
+    set: { examples.eastwest.enabled: true }
+    asserts:
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: appset-addons.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
+        template: appset-addons.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: appset-examples.yaml
+        documentSelector: { path: kind, value: ApplicationSet, matchMany: true }
+      - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
+        template: tenants.yaml
+      - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
+        template: tenants.yaml
 
   - it: renders catalog ApplicationSets including clusterNameParameters and serverSideDiff
     template: appset-addons.yaml
@@ -403,3 +423,30 @@ tests:
       - equal: { path: spec.template.spec.source.path, value: addons/cloudnative-pg }
       - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideApply=true }
       - contains: { path: spec.template.spec.syncPolicy.syncOptions, content: ServerSideDiff=true }
+
+  # #192: bootstrap.sh sets secrets.githubGateApp.enabled on the root app from the seeded key; it must reach the addons
+  # (valuesObject) and the tenants (parameter: they render installation.yaml directly), default false
+  - it: passes secrets.githubGateApp.enabled (default false) to the tenants and the addons
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: secrets.githubGateApp.enabled, value: "false" }
+        template: tenants.yaml
+      - equal:
+          path: spec.template.spec.source.helm.valuesObject.secrets.githubGateApp.enabled
+          value: false
+        template: appset-addons.yaml
+        documentSelector: { path: metadata.name, value: addon-openchoreo-platform }
+
+  - it: passes the bootstrap's root-app parameter through when the App is seeded
+    set: { secrets.githubGateApp.enabled: true }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content: { name: secrets.githubGateApp.enabled, value: "true" }
+        template: tenants.yaml
+      - equal:
+          path: spec.template.spec.source.helm.valuesObject.secrets.githubGateApp.enabled
+          value: true
+        template: appset-addons.yaml
+        documentSelector: { path: metadata.name, value: addon-secret-stores }

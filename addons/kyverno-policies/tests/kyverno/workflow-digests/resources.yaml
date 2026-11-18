@@ -1,0 +1,108 @@
+# Sample workflow run Pods (Argo executor init/wait + a main container, as the workflow-controller creates them).
+apiVersion: v1
+kind: Pod
+metadata: { name: build-pinned, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  initContainers:
+    - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: check-tag-and-digest, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/golang:1.27.4-trixie@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  initContainers:
+    - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: gate-pinned, namespace: workflows-acme }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/python@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  initContainers:
+    - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: check-tag-only, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/golang:1.27.4-trixie" }
+    - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  initContainers:
+    - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: init-tag-only, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  initContainers:
+    - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: debug-tag-only, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  ephemeralContainers:
+    - { name: debugger, image: "docker.io/library/busybox:1.37" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: implicit-latest, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "busybox" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: short-digest, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/busybox@sha256:abc123" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: digest-in-tag, namespace: workflows-default }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/busybox:sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: tag-only, namespace: workflows-acme }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/nginx:1.29" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: tag-only, namespace: default }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/nginx:1.29" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: tag-only, namespace: workflows }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/nginx:1.29" }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: tag-only, namespace: openchoreo-workflow-plane }
+spec:
+  containers:
+    - { name: main, image: "docker.io/library/nginx:1.29" }

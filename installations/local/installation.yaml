@@ -20,6 +20,8 @@ secrets:
   backend: kubernetes                         # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets               # seeded by `make secrets` (stand-in for a real vault)
+  # githubGateApp.enabled (auto-build, PR previews): not set here - `task up`/`task secrets` put it on the root app from
+  # whether promotion-gate-github (GITHUB_GATE_APP_*) is seeded; `false` here keeps them off (docs/forking.md, #192).
   workloadSeed:                               # local backend: copied from mgmt `platform` into each workload cluster
     keys: [openchoreo-observability]          # falco-webhook stays on mgmt (per-cluster tokens: charts/cluster falcoEscalation)
   # No k3s registries.yaml / platform-ghcr: every image this installation pulls from ghcr.io is public (koorikla/

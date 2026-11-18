@@ -197,6 +197,9 @@ the digest reference:
 - hello-world's `bump` job still writes the tag-only `needs.go.outputs.image`; switching it to `image_digest_ref` is
   [#16](https://github.com/koorikla/platform/issues/16). Development and staging keep working meanwhile (Audit).
 
+Builds themselves follow the same rule on mgmt: pods in the workflow run namespaces `workflows-*` admit only digest
+references (Kyverno `platform-workflow-image-digests`, Deny; [build plane](build-plane.md#security-posture-of-build-pods)).
+
 ## Git commit signatures
 
 Argo CD 3.5+ verifies sources through `AppProject.spec.sourceIntegrity`. The old `signatureKeys` is deprecated and
@@ -236,6 +239,9 @@ sourceIntegrity:
 - Best available today:
   - Exact chart versions, reviewed through Renovate PRs, signed git commits (above), so Argo CD only renders reviewed
     chart pins.
+  - Istio's charts (`addons/istio-ambient`) are also pinned by tarball sha256 (`Chart.yaml` annotation
+    `platform.koorikla.io/dependency-digests`, checked by `hack/deps.sh` locally and in CI, not by the Argo CD repo
+    server).
   - Images, whatever chart deploys them into cell namespaces, are verified at admission.
   - When upstreams sign their charts: verify them in the Renovate PR workflow and mirror them into an internal OCI
     registry ([#43](https://github.com/koorikla/platform/issues/43)).

@@ -19,6 +19,8 @@ metadata:
   namespace: fleet
   labels:
     {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # reads <name>-kubeconfig, which CAPI creates for the Cluster (wave 0)
 spec:
   # 5m: a re-created cluster (same name) has a new API endpoint and cluster CA (argocd-cluster-secret.yaml).
   refreshInterval: 5m

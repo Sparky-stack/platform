@@ -1,0 +1,17 @@
+# Applied to the matching cluster.
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: dev1-x
+  namespace: fleet
+  generation: 1
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels: { platform.koorikla.io/name: dev1 }
+  resources:
+    - { kind: Secret, name: dev1-x }
+status:
+  conditions:
+    - { type: ResourcesApplied, status: "True", reason: Applied, message: "", observedGeneration: 1, lastTransitionTime: "2026-11-18T08:05:28Z" }
+    - { type: Paused, status: "False", reason: NotPaused, message: "", observedGeneration: 1, lastTransitionTime: "2026-11-18T08:03:47Z" }

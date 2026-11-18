@@ -65,7 +65,7 @@ tests:
       - isKind: { of: InfrastructureProvider }
       - equal: { path: spec.version, value: v2.13.1 }
       - equal: { path: spec.configSecret, value: { name: capa-variables, namespace: capa-system } }
-      - notExists: { path: spec.manager }
+      - notExists: { path: spec.manager.featureGates }
 
   - it: installs CAPH without feature gates or configSecret
     template: templates/providers.yaml
@@ -190,3 +190,40 @@ tests:
       capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: someone@example.com }
     asserts:
       - failedTemplate: { errorPattern: "capi.gcp.serviceAccount must be" }
+
+  # #192: capi-controller-manager lost its 15s lease under bootstrap load and exited; its webhook was gone meanwhile
+  - it: gives the managers with lease flags (core, CAPD, CAPA, CAPG) 60s/40s/10s leader election
+    template: templates/providers.yaml
+    set:
+      capi.providers: { docker: true, aws: true, gcp: true }
+      capi.gcp:
+        workloadIdentityProvider: projects/1/locations/global/workloadIdentityPools/p/providers/q
+        serviceAccount: capg@p.iam.gserviceaccount.com
+    asserts:
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: kind, value: CoreProvider }
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: docker }
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: aws }
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: gcp }
+      - equal: { path: spec.manager.featureGates.ClusterTopology, value: true }
+        documentSelector: { path: kind, value: CoreProvider }
+
+  - it: "negative: no leaderElection for managers without the lease flags (k3s bootstrap + control plane, CAPH)"
+    template: templates/providers.yaml
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - notExists: { path: spec.manager }
+        documentSelector: { path: kind, value: BootstrapProvider }
+      - notExists: { path: spec.manager }
+        documentSelector: { path: kind, value: ControlPlaneProvider }
+      - notExists: { path: spec.manager }
+        documentSelector: { path: metadata.name, value: hetzner }
+
+  - it: "negative: refuses a Lease name/namespace (the operator would pass --leader-election-id, unknown to CAPI)"
+    template: templates/providers.yaml
+    set: { leaderElection.resourceName: capi }
+    asserts:
+      - failedTemplate: { errorPattern: "must stay empty" }

@@ -1,15 +1,15 @@
 dependencies:
 - name: base
-  repository: https://blob.istio.io/istio-release/charts
+  repository: oci://ghcr.io/istio/release/charts
   version: 1.32.0
 - name: istiod
-  repository: https://blob.istio.io/istio-release/charts
+  repository: oci://ghcr.io/istio/release/charts
   version: 1.32.0
 - name: cni
-  repository: https://blob.istio.io/istio-release/charts
+  repository: oci://ghcr.io/istio/release/charts
   version: 1.32.0
 - name: ztunnel
-  repository: https://blob.istio.io/istio-release/charts
+  repository: oci://ghcr.io/istio/release/charts
   version: 1.32.0
-digest: sha256:59260fd29a5889ef5f8682376d936b3b9b3fe8f2ddc9165bf64a5f989fd44591
-generated: "2026-11-14T11:50:20.64780952+02:00"
+digest: sha256:ec58eba64e03f52d6489ce2f79850a4249b8e27091fb136cec58da7d06ad6745
+generated: "2026-11-18T09:11:24.861094776+02:00"

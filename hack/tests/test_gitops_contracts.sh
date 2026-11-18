@@ -619,10 +619,17 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
   trig=$(yq '.openchoreo.workflowPlane.autoBuild // "unset"' "$inst_file")
   assert_match "$trig" '^(poll|webhook)$' "$inst selects an auto-build trigger (openchoreo.workflowPlane.autoBuild: $trig)"
   run_ns="workflows-$(yq '.openchoreo.orgNamespace // "default"' "$inst_file")"
+  # with the platform GitHub App (secrets.githubGateApp.enabled, set by bootstrap.sh when seeded); without it neither
+  # the trigger nor the webhook renders (#192: their token generators would fail and degrade the apps)
   helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default --values "$inst_file" \
-    -s templates/auto-build.yaml > "$TMP/ab-$inst.yaml" 2>/dev/null || : > "$TMP/ab-$inst.yaml"
+    --set secrets.githubGateApp.enabled=true -s templates/auto-build.yaml > "$TMP/ab-$inst.yaml" 2>/dev/null || : > "$TMP/ab-$inst.yaml"
   helm template argo-events "$ROOT/addons/argo-events" --namespace argo-events --values "$inst_file" \
-    --set workflowPlane=true --set-string 'falco.clusters={mgmt}' > "$TMP/ae-$inst.yaml"
+    --set workflowPlane=true --set secrets.githubGateApp.enabled=true --set-string 'falco.clusters={mgmt}' > "$TMP/ae-$inst.yaml"
+  assert_eq "$(helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default --values "$inst_file" \
+    -s templates/auto-build.yaml 2>&1 | grep -c '^kind:' || true)" 0 "$inst: no auto-build without the platform GitHub App"
+  assert_eq "$(helm template argo-events "$ROOT/addons/argo-events" --namespace argo-events --values "$inst_file" \
+    --set workflowPlane=true --set-string 'falco.clusters={mgmt}' | yq 'select(.metadata.name == "auto-build-webhook") | .kind')" "" \
+    "$inst: no auto-build webhook without the platform GitHub App"
   assert_eq "$(N="$ab_tpl" yq 'select(.kind == "WorkflowTemplate" and .metadata.name == strenv(N)) | .metadata.namespace' \
     "$TMP/ab-$inst.yaml")" "$run_ns" "$inst: WorkflowTemplate $ab_tpl renders in $run_ns"
   cron=$(yq 'select(.kind == "CronWorkflow") | .spec.workflowSpec.workflowTemplateRef.name + "@" + .metadata.namespace' "$TMP/ab-$inst.yaml")

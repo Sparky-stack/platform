@@ -60,6 +60,7 @@ jobs:
           install: true
           cache: true
 
+      # Bump the v<N> key prefix to force one cold chart fetch everywhere (v2: Istio charts moved to OCI).
       - name: Cache Helm chart dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -67,9 +68,9 @@ jobs:
             ~/.cache/helm
             charts/*/charts
             addons/*/charts
-          key: helm-charts-${{ hashFiles('charts/*/Chart.lock', 'addons/*/Chart.lock') }}
+          key: helm-charts-v2-${{ hashFiles('charts/*/Chart.lock', 'addons/*/Chart.lock') }}
           restore-keys: |
-            helm-charts-
+            helm-charts-v2-
 
       - name: Environment
         run: |
@@ -105,13 +106,14 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Bump the v<N> key prefix to force one cold chart fetch everywhere (v2: Istio charts moved to OCI).
       - name: Cache Helm chart dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             charts/*/charts
             addons/*/charts
-          key: helm-charts-${{ hashFiles('charts/*/Chart.lock', 'addons/*/Chart.lock') }}
+          key: helm-charts-v2-${{ hashFiles('charts/*/Chart.lock', 'addons/*/Chart.lock') }}
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca # v0.3.1900000450
         env:
           GITHUB_TOKEN: ${{ github.token }}

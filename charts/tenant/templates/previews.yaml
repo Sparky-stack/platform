@@ -20,7 +20,10 @@ the Component name, which the selector pins to the app name. Branch names and ti
 {{- $m := regexFind "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$" (trimSuffix ".git" (trimSuffix "/" $app.repoURL)) }}
 {{- if $m }}{{ $gh = append $gh (merge (dict "slug" (trimPrefix "https://github.com/" $m)) $app) }}{{ end }}
 {{- end }}
-{{- if and $pv.enabled $gh }}
+{{- /* The pull request generator authenticates with the platform GitHub App's token (addon secret-stores renders it
+only with secrets.githubGateApp.enabled): without the App no ApplicationSet, which would only report errors (#192). */ -}}
+{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
+{{- if and $pv.enabled $gh $gate }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
 {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" $label) }}{{ fail (printf "previews.expiredLabel %q: letters, digits, space, . _ - only" $label) }}{{ end }}

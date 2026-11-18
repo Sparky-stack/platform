@@ -59,3 +59,16 @@ tests:
       - notContains: { path: spec.usages, content: server auth }
       - isNull: { path: spec.isCA }
       - equal: { path: spec.issuerRef, value: { kind: Issuer, name: dev1-agent-ca } }
+
+  # #192: a Certificate waits (Progressing) for its Issuer, so each link of the chain syncs one wave after the previous
+  - it: chains the PKI over sync waves (Issuer 0 -> CA cert 1 -> CA issuer 2 -> client cert 3)
+    template: templates/openchoreo-agent-pki.yaml
+    asserts:
+      - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
+        documentIndex: 0
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+        documentIndex: 1
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "2" }
+        documentIndex: 2
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+        documentIndex: 3

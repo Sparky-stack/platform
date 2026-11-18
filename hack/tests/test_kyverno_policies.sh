@@ -20,6 +20,10 @@
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
 #   tests/kyverno/platform-key offline: with a platform key only <registry.host>/<appsProject>/ is trusted
+#   tests/kyverno/workflow-digests
+#                              offline (#36, templates/workflow-image-digests.yaml): in workflows-* every container,
+#                              initContainer and ephemeral container image is image@sha256:<64 hex>; tag-only, implicit
+#                              latest and malformed digests are denied, other namespaces are not matched
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
 #   tests/kyverno/signatures-transition
@@ -72,13 +76,15 @@ fi
 addon="$ROOT/addons/kyverno-policies"
 [[ -d "$addon/charts" ]] || helm dependency build "$addon" >/dev/null
 cp -R "$addon/tests/kyverno" "$TMP/kyverno"
-suites=(registries platform-key)
+suites=(registries platform-key workflow-digests)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
   (
     hv=()
     [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
-    helm template kyverno-policies "$addon" --namespace kyverno -s templates/image-verification.yaml \
+    tpl=templates/image-verification.yaml
+    [[ "$s" == workflow-digests ]] && tpl=templates/workflow-image-digests.yaml
+    helm template kyverno-policies "$addon" --namespace kyverno -s "$tpl" \
       ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
     rc=0
     "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || rc=$?
@@ -118,7 +124,7 @@ wp_chart="$ROOT/addons/openchoreo-workflow-plane"
   # auto-build webhook (#164): the Sensor's Workflows in the run namespace run only WorkflowTemplate auto-build;
   # other creators there (OpenChoreo's agent: builds, gates) are not matched.
   helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true \
-    --set openchoreo.workflowPlane.autoBuild=webhook -s templates/auto-build-webhook.yaml \
+    --set openchoreo.workflowPlane.autoBuild=webhook --set secrets.githubGateApp.enabled=true -s templates/auto-build-webhook.yaml \
     | yq 'select(.kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding")' > "$TMP/ab-vap.yaml"
   for c in sensor:allowed sensor:denied agent:denied; do
     who=${c%%:*}; res=${c#*:}

@@ -70,6 +70,42 @@ argo-cd:
         end
         return hs
       resource.customizations.health.policies.kyverno.io_NamespacedDeletingPolicy: *deletingPolicyHealth
+      # CAPI (1.13) sets ResourcesApplied on a ClusterResourceSet only once a Cluster matches its selector. Argo CD's
+      # built-in check (v3.6) reads a missing condition as Progressing forever, so a CRS for the mesh PEERS of the only
+      # member (lean local profile) kept its cluster app Progressing (#192). Reconciled (a condition observed this
+      # generation) without ResourcesApplied = nothing matches = Healthy; otherwise as upstream.
+      resource.customizations.health.addons.cluster.x-k8s.io_ClusterResourceSet: |
+        hs = {}
+        local reconciled = false
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "ResourcesApplied" then
+              if c.status == "True" then
+                hs.status = "Healthy"
+                hs.message = "cluster resource set is applied"
+              elseif c.status == "False" then
+                hs.status = "Degraded"
+                hs.message = (c.message ~= nil and c.message ~= "") and c.message or (c.reason or "not applied")
+              else
+                hs.status = "Progressing"
+                hs.message = c.message or "applying"
+              end
+              return hs
+            end
+            if c.observedGeneration ~= nil and obj.metadata.generation ~= nil
+                and c.observedGeneration >= obj.metadata.generation then
+              reconciled = true
+            end
+          end
+        end
+        if reconciled then
+          hs.status = "Healthy"
+          hs.message = "No cluster matches the selector: nothing to apply"
+        else
+          hs.status = "Progressing"
+          hs.message = "Initializing cluster resource set"
+        end
+        return hs
   controller:
     image:
       tag: &argocdTag v3.6.1@sha256:296e3d74f449b2ce45265613fcb68c18ed7366488360c8ea32f5f2a93d2e5c54   # index: amd64, arm64, ppc64le, s390x

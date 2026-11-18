@@ -1,0 +1,59 @@
+{{- /*
+Digest-only images in workflow-plane run namespaces (#36, docs/supply-chain.md "Digest references"). OpenChoreo runs
+every WorkflowRun (builds, promotion gates, Helm chart publishing, the auto-build trigger) in workflows-<org namespace>;
+the image of a run step can come from a developer (Component spec.workflow.parameters.checks.image) or from a
+template. A tag is mutable: whoever controls the tag controls what runs next to the build's signing key and registry
+push credentials. So every container, initContainer and ephemeral (kubectl debug) container image of a Pod there must
+be <ref>@sha256:<64 hex>. Argo's executor (init/wait) and every platform image are digest-pinned
+(hack/tests/test_image_pins.sh): no exception is needed, and none is configured.
+Enforced (Deny, fail closed): a denied Pod fails the workflow step with the admission message; when Kyverno is down,
+only new run pods in workflows-* wait - platform namespaces are excluded (addons/kyverno webhook namespaceSelector and
+matchConditions here).
+*/ -}}
+{{- $w := .Values.workflowImageDigests }}
+{{- if $w.enabled }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*-)?$" (toString $w.namespacePrefix)) }}{{ fail (printf "workflowImageDigests.namespacePrefix %q must be a namespace name prefix (e.g. workflows-)" (toString $w.namespacePrefix)) }}{{ end }}
+{{- if not (has (toString $w.failurePolicy) (list "Fail" "Ignore")) }}{{ fail (printf "workflowImageDigests.failurePolicy %q is not Fail or Ignore" (toString $w.failurePolicy)) }}{{ end }}
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: platform-workflow-image-digests
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Digest-pinned images in workflow run namespaces
+    policies.kyverno.io/description: >-
+      Every container, initContainer and ephemeral container image of a Pod in {{ $w.namespacePrefix }}* namespaces
+      (OpenChoreo workflow runs: builds, gates, auto-build) is referenced by digest (image@sha256:...), including
+      Component checks.image overrides. Tag-only references are denied.
+spec:
+  validationActions: [Deny]
+  failurePolicy: {{ $w.failurePolicy }}
+  evaluation:
+    background:
+      enabled: true                  # PolicyReports for run pods admitted before the policy existed
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods, pods/ephemeralcontainers]
+  matchConditions:
+    # Label selectors cannot match a name prefix, and OpenChoreo creates workflows-<org ns> without a platform label.
+    - name: workflow-run-namespaces
+      expression: 'request.namespace.startsWith({{ $w.namespacePrefix | toJson }})'
+    - name: never-platform-namespaces
+      expression: '!(request.namespace in {{ .Values.platformNamespaces | toJson }})'
+  variables:
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image)
+        + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
+        + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : [])
+    - name: unpinned
+      expression: "variables.images.filter(i, !i.matches('^[^@]+@sha256:[0-9a-f]{64}$'))"
+  validations:
+    - expression: size(variables.unpinned) == 0
+      messageExpression: >-
+        'images in {{ $w.namespacePrefix }}* namespaces must be referenced by digest (image@sha256:<digest>, see
+        crane digest <image>); tag-only: ' + variables.unpinned.join(', ')
+{{- end }}

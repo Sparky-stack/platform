@@ -1,0 +1,3 @@
+# Rendered as on mgmt (values/role-mgmt.yaml turns the policy on where the workflow plane runs).
+workflowImageDigests:
+  enabled: true
