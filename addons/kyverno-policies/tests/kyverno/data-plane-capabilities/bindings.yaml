@@ -1,0 +1,8 @@
+# ResourceReleaseBindings checked against the contexts (hack/tests/test_kyverno_policies.sh).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata: {name: orders-db-development, namespace: default}
+spec:
+  owner: {projectName: demo, resourceName: orders-db}
+  environment: development
+  resourceRelease: orders-db-1a2b3c4d

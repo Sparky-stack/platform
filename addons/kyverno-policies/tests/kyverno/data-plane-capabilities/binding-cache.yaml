@@ -1,0 +1,7 @@
+# A Resource whose type needs nothing on the data plane.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata: {name: cache-development, namespace: default}
+spec:
+  owner: {projectName: demo, resourceName: cache}
+  environment: development
