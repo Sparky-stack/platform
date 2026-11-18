@@ -59,7 +59,7 @@
     },
     {
       "customType": "regex",
-      "description": "koorikla/platform app-container.yaml commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag ci-v1); bump together with the app repos' `uses: koorikla/platform/.github/workflows/app-*.yaml@<sha> # ci-v1`",
+      "description": "koorikla/platform app-container.yaml commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag ci-v1); bump together with the app repos' `uses: koorikla/platform/.github/workflows/app-*.yaml@<sha> # ci-v1.0.0`",
       "managerFilePatterns": [
         "/^addons/kyverno-policies/values\\.yaml$/",
         "/^installations/[^/]+/addons/kyverno-policies/[^/]+\\.ya?ml$/"

@@ -19,7 +19,7 @@ installation, then shows what changes for AWS / Hetzner.
 |---|---|---|
 | [koorikla/platform](https://github.com/koorikla/platform) | **yes** | bootstrap, charts, addons, installations: the GitOps root |
 | [koorikla/hello-world](https://github.com/koorikla/hello-world) | optional | example tenant app (`installations/local/tenants/demo.yaml`). Fork it to see your own CI build, push and roll out an image; skip it to deploy the upstream image as-is |
-| [`ci/`](https://github.com/koorikla/platform/tree/main/ci) | optional | reusable workflows hello-world calls (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1`). Fork it only if you want to own the build logic; otherwise pin the upstream tag or, better, a commit SHA |
+| [`ci/`](https://github.com/koorikla/platform/tree/main/ci) | optional | reusable workflows hello-world calls (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`). Fork it only if you want to own the build logic; otherwise pin the upstream tag or, better, a commit SHA |
 
 ```bash
 gh repo fork koorikla/platform --clone && cd platform     # or fork in the UI and git clone
@@ -74,7 +74,7 @@ What it deliberately leaves alone, and what you edit by hand if it applies:
 | Chart defaults in `addons/*/values.yaml` (e.g. `addons/secret-stores` `installation.githubOrg`) | keep: only used when a chart renders standalone; every generated Application gets `installation.yaml`, which `set-repo` rewrote. The unit tests assert the defaults |
 | Links in prose and diagrams | `DOCS=1`, or leave them: they describe upstream. Plain-text mentions (`gh repo fork koorikla/platform`, diagram box titles) stay either way |
 | Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/koorikla/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
-| Your hello-world fork: `uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1` | keep (public, but pin a SHA), or point it at your platform fork and change the `uses:` owner |
+| Your hello-world fork: `uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0` | keep (public, but pin a SHA), or point it at your platform fork and change the `uses:` owner |
 | `.devcontainer/devcontainer.json` name, `mise.toml` comment, schema cache dir `koorikla-platform` | cosmetic |
 
 ## 3. Credentials

@@ -21,7 +21,7 @@ docker run --rm -p 8080:8080 ${{ values.name }}:dev     # http://localhost:8080/
 
 ## CI and delivery
 
-`.github/workflows/ci.yaml` calls the reusable workflow `app-container.yaml` (koorikla/platform), pinned by commit SHA (`# ci-v1`,
+`.github/workflows/ci.yaml` calls the reusable workflow `app-container.yaml` (koorikla/platform), pinned by commit SHA (`# ci-v1.0.0`,
 Renovate keeps it current): multi-arch build and Trivy scan on pull requests; on `main` also push to
 `ghcr.io/<owner>/${{ values.name }}`, SPDX SBOM, SLSA provenance and a keyless cosign signature. The `bump` job then
 pins the new image digest in `deploy/openchoreo/workload.yaml` and OpenChoreo deploys it to `development`.

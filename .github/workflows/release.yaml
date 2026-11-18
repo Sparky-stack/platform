@@ -1,0 +1,47 @@
+# Releases (docs/releases.md): release-please keeps one open "chore: release main" PR with the next versions and
+# changelogs, computed from the conventional-commit titles of squash-merged PRs. Merging it tags and publishes:
+#   platform  vX.Y.Z     everything except ci/            (CHANGELOG.md)
+#   ci        ci-vX.Y.Z  ci/ (scripts, toolbox, fixtures)  (ci/CHANGELOG.md) - the ref app repos pin for app-* workflows
+# Runs as the koorikla-promotion-gate GitHub App (short-lived installation token) so the release PR triggers CI;
+# GITHUB_TOKEN-created PRs would not.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: GitHub App token
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Summary
+        env:
+          RELEASES: ${{ steps.release.outputs.releases_created }}
+          PATHS: ${{ steps.release.outputs.paths_released }}
+        run: echo "releases created=$RELEASES paths=$PATHS" >> "$GITHUB_STEP_SUMMARY"
