@@ -32,6 +32,15 @@ byoDelivery:
   enabled: false
   store: delivery             # ClusterSecretStore of addon secret-stores (delivery.*)
 
+# Agent RBAC for the kinds the platform's data-service OpenChoreo types render (templates/cluster-agent-data-services.yaml,
+# #70): ClusterTrait keda-scaler -> KEDA ScaledObject, ClusterResourceType postgresql -> PostgreSQL XR (addon crossplane).
+clusterAgentDataServices:
+  enabled: true
+  serviceAccount: cluster-agent-dataplane   # == the upstream agent Deployment's ServiceAccount (checked by the test)
+  rules:
+    - { apiGroup: keda.sh, resources: [scaledobjects] }
+    - { apiGroup: platform.koorikla.io, resources: [postgresqls] }
+
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy
   security:
