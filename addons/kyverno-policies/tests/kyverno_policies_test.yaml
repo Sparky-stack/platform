@@ -60,7 +60,7 @@ tests:
       # never 15008 from everywhere: that would let any mesh pod (another cell) past OpenChoreo's isolation
       - notMatchRegex: { path: "spec.generate[0].template.value", pattern: 'ipBlock' }
 
-  - it: "cell mesh (#53): STRICT PeerAuthentication in ambient cells unless opted out (platform.koorikla.io/mtls=permissive)"
+  - it: "cell mesh (#53): STRICT PeerAuthentication in ambient cells, PERMISSIVE when opted out (platform.koorikla.io/mtls=permissive)"
     template: templates/cell-mesh.yaml
     documentSelector: { path: metadata.name, value: openchoreo-cell-mtls }
     asserts:
@@ -68,12 +68,17 @@ tests:
       - equal: { path: spec.evaluation.synchronize.enabled, value: true }
       - contains:
           path: spec.matchConstraints.objectSelector.matchExpressions
-          content: { key: platform.koorikla.io/mtls, operator: NotIn, values: [permissive] }
-      - contains:
-          path: spec.matchConstraints.objectSelector.matchExpressions
           content: { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+      # the opt-out is the generated mode, never the selector: Kyverno keeps a synchronized object whose trigger stops
+      # matching, so an opted-out cell would stay STRICT (seen live on dev1)
+      - notContains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: platform.koorikla.io/mtls, operator: NotIn, values: [permissive] }
       - matchRegex: { path: "spec.generate[0].template.value", pattern: 'kind: PeerAuthentication\n' }
-      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'mode: STRICT' }
+      # quoted: an unquoted (( a ? b : c )) is a YAML mapping and the policy fails to compile
+      - matchRegex:
+          path: "spec.generate[0].template.value"
+          pattern: "mode: \"\\(\\( object.metadata.\\?labels\\[\\?'platform.koorikla.io/mtls'\\].orValue\\(''\\) == 'permissive' \\? 'PERMISSIVE' : 'STRICT' \\)\\)\""
 
   - it: "cell mesh (#53): Kyverno's background controller may manage NetworkPolicies and PeerAuthentications"
     template: templates/cell-mesh.yaml

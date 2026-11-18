@@ -11,12 +11,14 @@ so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
                                             gateway (and pod-to-pod traffic within a cell) is dropped by the CNI.
                                             Peers, not ports: inside the tunnel the endpoint port is no longer checked
                                             by the CNI, the peer set stays the same (staging never reaches production).
-  GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` (mtls STRICT) in every enrolled cell, unless the
-                                            namespace carries <mtls.optOutLabel>=permissive (set per environment through
-                                            ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels). ztunnel then
-                                            rejects plaintext from clients outside the mesh; kubelet probes are exempt.
-Both: kept in sync (tampering is reverted, an opted-out or unenrolled namespace loses the object), existing cells
-included (generateExisting). Cells opted out of ambient (istio.io/dataplane-mode=none) get neither.
+  GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` in every enrolled cell: mtls STRICT, so ztunnel
+                                            rejects plaintext from clients outside the mesh (kubelet probes are exempt);
+                                            PERMISSIVE while the namespace carries <mtls.optOutLabel>=permissive (set per
+                                            environment through ProjectReleaseBinding namespaceLabels). The opt-out is a
+                                            mode, not a selector: Kyverno never deletes a synchronized object when its
+                                            trigger stops matching, but it does re-render it on every trigger update.
+Both: kept in sync (an edited or deleted object is restored), existing cells included (generateExisting). Cells
+created with istio.io/dataplane-mode=none get neither.
 */ -}}
 {{- $ae := .Values.ambientEnrollment }}
 {{- if $ae.enabled }}
@@ -91,7 +93,7 @@ metadata:
     policies.kyverno.io/title: Strict mTLS in ambient OpenChoreo cells
     policies.kyverno.io/description: >-
       PeerAuthentication default (STRICT) in every ambient-enrolled cell namespace, so ztunnel accepts only mesh mTLS.
-      A cell opts out with the namespace label {{ $ae.mtls.optOutLabel }}=permissive.
+      PERMISSIVE in a cell with the namespace label {{ $ae.mtls.optOutLabel }}=permissive.
 spec:
   evaluation:
     synchronize:
@@ -114,7 +116,6 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
         - { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
-        - { key: {{ $ae.mtls.optOutLabel }}, operator: NotIn, values: [permissive] }
   matchConditions:
     - name: never-platform-namespaces
       expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
@@ -130,7 +131,7 @@ spec:
             labels: { app.kubernetes.io/managed-by: kyverno }
           spec:
             mtls:
-              mode: STRICT
+              mode: "(( object.metadata.?labels[?'{{ $ae.mtls.optOutLabel }}'].orValue('') == 'permissive' ? 'PERMISSIVE' : 'STRICT' ))"
 {{- end }}
 ---
 # Kyverno's background controller creates, updates and deletes the generated objects.

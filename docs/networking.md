@@ -185,7 +185,8 @@ enrollment (synchronized: an edited or deleted object is restored, generated for
   endpoint ports, and ambient tunnels every mesh connection to 15008, so without it the CNI drops ingress (and
   pod-to-pod traffic inside a cell). The peer set is unchanged, so a staging pod still can't reach production; inside
   the tunnel the CNI no longer checks the endpoint port.
-- `openchoreo-cell-mtls`: the STRICT `PeerAuthentication`, off with `ambientEnrollment.mtls.strict: false`.
+- `openchoreo-cell-mtls`: the `PeerAuthentication` (STRICT, or PERMISSIVE for an opted-out cell), off with
+  `ambientEnrollment.mtls.strict: false`.
 
 Unaffected: kubelet probes (ambient SNATs them to `169.254.7.127`, which ztunnel exempts), cAdvisor and
 kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API server only), the promotion gate
@@ -194,8 +195,10 @@ kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API 
 **Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an
 operator not listed above) is refused. Either enroll the client, or keep one environment `PERMISSIVE` with the
 namespace label `platform.koorikla.io/mtls=permissive` through
-`ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels` (the policy then skips it and removes its generated
-`PeerAuthentication`). `istio.io/dataplane-mode=none` takes a cell out of the mesh entirely (neither object).
+`ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels`: the generated `PeerAuthentication` switches to
+`PERMISSIVE` (a mode, not a selector: Kyverno never deletes a synchronized object whose trigger stops matching, but
+re-renders it on every namespace update). A cell created with `istio.io/dataplane-mode=none` is out of the mesh and
+gets neither object.
 
 A Kubernetes-native MutatingAdmissionPolicy was considered and rejected. It can't label namespaces that already
 exist, and in Kubernetes 1.35 it is beta and off by default (needs a feature gate on k3s). Kyverno was wanted anyway.

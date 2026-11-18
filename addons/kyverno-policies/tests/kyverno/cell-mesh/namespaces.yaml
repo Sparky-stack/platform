@@ -2,7 +2,7 @@
 # PeerAuthentication default STRICT (openchoreo-cell-mtls). hack/tests/test_kyverno_policies.sh counts per policy.
 #   dp-...-development  enrolled cell                              hbone + mtls
 #   dp-...-production   cell before the enrollment label lands     hbone + mtls
-#   dp-...-legacy       cell opted out of STRICT (permissive)      hbone only
+#   dp-...-legacy       cell opted out of STRICT (permissive)      hbone + mtls PERMISSIVE
 #   dp-...-nomesh       cell opted out of ambient (none)           neither
 #   not-a-cell          ambient namespace not created by OpenChoreo neither
 #   telemetry           platform namespace carrying cell labels    neither

@@ -25,8 +25,8 @@
 #                              initContainer and ephemeral container image is image@sha256:<64 hex>; tag-only, implicit
 #                              latest and malformed digests are denied, other namespaces are not matched
 #   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy and a
-#                              STRICT PeerAuthentication; opted-out cells (permissive / dataplane-mode none), non-cells
-#                              and platform namespaces do not
+#                              STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
+#                              non-cells and platform namespaces get neither
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
 #   tests/kyverno/signatures-transition
@@ -277,7 +277,7 @@ for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolat
 done
 
 # cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
-for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:2:'development production'; do
+for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy'; do
   p=${c%%:*}; rest=${c#*:}; n=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/cm-$p.out")
   assert_match "$out" "pass: $n, fail: 0, warn: 0, error: 0" "cell mesh: $p generates into $n of 6 namespaces"
@@ -285,6 +285,8 @@ for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell
   assert_eq "${got% }" "$want" "cell mesh: $p matches exactly the cells: $want"
 done
 assert_match "$(cat "$TMP/cm-openchoreo-cell-hbone.out")" 'port: 15008' "cell mesh: HBONE NetworkPolicy opens tcp 15008"
-assert_match "$(cat "$TMP/cm-openchoreo-cell-mtls.out")" 'mode: STRICT' "cell mesh: PeerAuthentication is STRICT"
+# PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
+modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
+assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"
 
 finish
