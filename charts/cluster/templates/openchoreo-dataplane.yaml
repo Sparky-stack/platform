@@ -1,6 +1,8 @@
 {{- /*
 OpenChoreo registration of this cluster in the control plane (mgmt):
-  ClusterDataPlane <name>  planeID <name>; trusts only fleet/<name>-agent-ca; app ingress = Gateway gateway-default of
+  ClusterDataPlane <name>  planeID <name>; annotations addons.platform.koorikla.io/<addon> from the fleet file `addons`
+                           (data-service platform types check them, docs/data-services.md); trusts only
+                           fleet/<name>-agent-ca; app ingress = Gateway gateway-default of
                            the data plane (addon openchoreo-data-plane) at gatewayHost:gatewayPort; secrets via the
                            workload cluster's ClusterSecretStore `default`.
                            With installation.yaml openchoreo.observability.enabled: observabilityPlaneRef ->
@@ -24,6 +26,12 @@ metadata:
     openchoreo.dev/display-name: {{ $name | quote }}
     openchoreo.dev/description: {{ printf "%s cluster %s (%s)" (.Values.provider | default "docker") $name (.Values.region | default "local") | quote }}
     {{- include "openchoreo.crAnnotations" . | nindent 4 }}
+    {{- /* The fleet file's addon opt-ins, same keys and values as the CAPI Cluster / Argo CD cluster secret labels.
+    OpenChoreo 1.3.3 exposes ClusterDataPlane annotations (not labels) to trait CEL as dataplane.annotations: platform
+    types that need an operator check them (keda-scaler; postgresql bindings via addon kyverno-policies). */}}
+    {{- range $addon, $on := (.Values.addons | default dict) }}
+    addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
+    {{- end }}
 spec:
   planeID: {{ $name }}
   clusterAgent:
