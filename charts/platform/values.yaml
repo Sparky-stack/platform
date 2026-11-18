@@ -168,5 +168,4 @@ examples:
     selector:               # every mesh member
       matchLabels:
         platform.koorikla.io/role: workload
-      matchExpressions:
-        - { key: mesh.platform.koorikla.io/group, operator: Exists }
+        addons.platform.koorikla.io/istio-eastwest: "true"

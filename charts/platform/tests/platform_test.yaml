@@ -195,7 +195,7 @@ tests:
       - equal: { path: spec.template.spec.destination.namespace, value: eastwest-demo }
       - equal:
           path: spec.generators[0].clusters.selector
-          value: { matchLabels: { platform.koorikla.io/role: workload }, matchExpressions: [{ key: mesh.platform.koorikla.io/group, operator: Exists }] }
+          value: { matchLabels: { platform.koorikla.io/role: workload, addons.platform.koorikla.io/istio-eastwest: "true" } }
       - equal:
           path: spec.template.spec.source.helm.valueFiles
           value:

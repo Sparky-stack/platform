@@ -68,7 +68,7 @@ selects or reads those labels; no template names a cluster.
 |---|---|
 | `mesh.platform.koorikla.io/group: <group>` | catalog `clusterLabelParameters` → addon mesh `global.meshID`; CRS selector of the peers' remote secrets |
 | `mesh.platform.koorikla.io/network: <name>` | addon mesh `global.network` (ztunnel `NETWORK`); east-west Gateway label |
-| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE`; the example selects clusters with this label |
+| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE`; charts/cluster still sets `addons.platform.koorikla.io/istio-eastwest` (only the `eastwest` example selects on it) |
 
 `global.multiCluster.clusterName` = cluster name on **every** cluster (catalog `clusterNameParameters`), so istiod and
 ztunnel always agree on the cluster ID. Clusters outside the mesh keep network and meshID empty: ztunnel and istiod
@@ -485,7 +485,7 @@ on remaining peers and `fleet/<gone>-mesh-reader` on `mgmt` (reader certs expire
 The `ApplicationSet example-eastwest` (charts/platform `templates/appset-examples.yaml`) is rendered only when
 `installation.yaml` sets `examples.eastwest.enabled` (locally: multicluster profile only; it needs two members, which
 `hack/tests/test_local_profiles.sh` checks). It targets clusters labelled
-`platform.koorikla.io/role=workload` with a `mesh.platform.koorikla.io/group` label, and values layer as
+`addons.platform.koorikla.io/istio-eastwest=true` (still set by charts/cluster from `mesh.group`), and values layer as
 `examples/eastwest/values.yaml` < `installations/<inst>/examples/eastwest/{values,cluster-<name>}.yaml`.
 
 - Namespace `eastwest-demo`: `istio.io/dataplane-mode=ambient`, Pod Security `restricted` enforced.

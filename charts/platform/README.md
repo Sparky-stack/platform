@@ -164,8 +164,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | dns.provider | string | `"none"` |  |
 | examples.eastwest.enabled | bool | `false` |  |
 | examples.eastwest.namespace | string | `"eastwest-demo"` |  |
-| examples.eastwest.selector.matchExpressions[0].key | string | `"mesh.platform.koorikla.io/group"` |  |
-| examples.eastwest.selector.matchExpressions[0].operator | string | `"Exists"` |  |
+| examples.eastwest.selector.matchLabels."addons.platform.koorikla.io/istio-eastwest" | string | `"true"` |  |
 | examples.eastwest.selector.matchLabels."platform.koorikla.io/role" | string | `"workload"` |  |
 | examplesProject.namespaceResources[0].group | string | `""` |  |
 | examplesProject.namespaceResources[0].kind | string | `"Service"` |  |
