@@ -159,8 +159,10 @@ userlands; helpers live in [`hack/lib/portable.sh`](../hack/lib/portable.sh).
 `hack/tests/`. Suites take renders through `render_platform`, `render_cluster`, `render_standalone_addon` and
 `render_layered_addon` (`hack/tests/lib.sh`): the `hack/test.sh` render of this run when present, else a fresh
 `helm template` (a suite run on its own never reads an old render). `hack/deps.sh` rebuilds only charts whose `charts/`
-differs from their `Chart.lock` (missing or extra tarballs) and retries downloads; CI caches the chart tarballs keyed
-on every `Chart.lock`.
+differs from their `Chart.lock` (missing or extra tarballs, or a tarball that differs from a digest pinned in the
+`Chart.yaml` annotation `platform.koorikla.io/dependency-digests`) and retries downloads. It refreshes only the https
+repositories those charts use (`helm repo update <names>`), so a stale or retired repository in your own helm config
+cannot fail it. CI caches the chart tarballs keyed on every `Chart.lock`.
 
 ## Host differences (Docker Desktop and friends)
 
