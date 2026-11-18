@@ -112,6 +112,11 @@ tests:
       - equal: { path: spec.target.deletionPolicy, value: Retain }
       - equal: { path: 'spec.data[0].remoteRef', value: { key: openbao-unseal, property: key } }
 
+  - it: the seal key syncs in a wave before the StatefulSet that mounts it (no hang if ESO's webhook is not ready)
+    template: templates/unseal.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+
   - it: collects every member's public inputs by label through mgmt-fleet, flattened to <cluster>.{group,server,ca}
     template: templates/mesh-clients.yaml
     asserts:
