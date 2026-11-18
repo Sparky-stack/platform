@@ -77,23 +77,21 @@ assert_match "$(py hack/lib/chartlock.py --tarballs "$TMP/p" || true)" \
   'pinned digest for old-1\.0\.0\.tgz matches no Chart\.lock' "a pin without a locked dependency is detected"
 
 # deps.sh behaviour with a logging fake helm on a scratch tree:
-# - `helm repo update` names only the repositories of the charts being built: a stale registration in the user's helm
-#   config (Istio's retired GCS bucket answered 403 during upstream's scream tests) is never refreshed.
+# - repositories are registered in a throwaway repository config, never the user's: a stale registration there (Istio's
+#   retired GCS bucket answered 403 during upstream's scream tests) is neither refreshed nor loaded.
 # - a cached tarball that differs from its pin is rebuilt; a download that still differs fails.
 rm -rf "$TMP/t2"; mkdir -p "$TMP/t2/hack/lib" "$TMP/t2/addons" "$TMP/t2/charts" "$TMP/fake"
 cp hack/deps.sh "$TMP/t2/hack/"; cp hack/lib/portable.sh hack/lib/chartlock.py "$TMP/t2/hack/lib/"
 cp -R addons/external-dns "$TMP/t2/addons/"; rm -rf "$TMP/t2/addons/external-dns/charts"
 pin_chart "$TMP/t2/addons/istio-ambient"; cp "$TMP/t2/addons/istio-ambient/charts/"* "$TMP/fake/"
 printf 'tampered\n' > "$TMP/t2/addons/istio-ambient/charts/base-1.32.0.tgz"
-export FAKE_EDNS_URL FAKE_SRC="$TMP/fake" FAKE_LOG="$TMP/helm.log"
-FAKE_EDNS_URL=$(yq '.dependencies[0].repository' addons/external-dns/Chart.yaml)
+export FAKE_SRC="$TMP/fake" FAKE_LOG="$TMP/helm.log"
+edns_url=$(yq '.dependencies[0].repository' addons/external-dns/Chart.yaml)
+printf 'repositories:\n- name: stale-istio\n  url: https://istio-release.storage.googleapis.com/charts\n' > "$TMP/user-repos.yaml"
 cat > "$TMP/bin/helm" <<'FAKE'
 #!/usr/bin/env bash
-echo "$*" >> "$FAKE_LOG"
+echo "$* [repos=$HELM_REPOSITORY_CONFIG]" >> "$FAKE_LOG"
 case "$1 $2" in
-  "repo list")
-    printf '[{"name":"stale-istio","url":"https://istio-release.storage.googleapis.com/charts"},'
-    printf '{"name":"edns","url":"%s"}]\n' "$FAKE_EDNS_URL" ;;
   "dependency build")
     d=$4; mkdir -p "$d/charts"
     if [[ $d == *istio-ambient ]]; then cp "$FAKE_SRC/"* "$d/charts/"
@@ -102,11 +100,13 @@ case "$1 $2" in
 esac
 FAKE
 chmod +x "$TMP/bin/helm"; : > "$FAKE_LOG"
-out=$(PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh" 2>&1) && rc=0 || rc=$?
+out=$(HELM_REPOSITORY_CONFIG="$TMP/user-repos.yaml" PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh" 2>&1) \
+  && rc=0 || rc=$?
 log=$(cat "$FAKE_LOG")
-assert_eq "$rc" "0" "deps.sh builds with a stale repository registered ($out)"
-assert_match "$log" $'(^|\n)repo update edns(\n|$)' "helm repo update names only the needed repository"
-assert_eq "$(grep -c -e 'stale-istio' -e '^repo update$' "$FAKE_LOG" || true)" "0" "the stale repository is never refreshed"
+assert_eq "$rc" "0" "deps.sh builds with a stale repository in the user's helm config ($out)"
+assert_match "$log" "(^|"$'\n'")repo add r[0-9a-f]{10} $edns_url --force-update " "deps.sh registers the needed repository"
+assert_eq "$(grep -c -e 'user-repos.yaml' -e '^repo update' "$FAKE_LOG" || true)" "0" \
+  "helm never sees the user's repository config, and no repo update refreshes everything"
 assert_match "$log" 'dependency build --skip-refresh addons/istio-ambient' "a tampered cached tarball is rebuilt"
 assert_eq "$(py hack/lib/chartlock.py --tarballs "$TMP/t2/addons/istio-ambient"; echo $?)" "0" \
   "rebuilt tarballs match their pins"
