@@ -1,9 +1,8 @@
 # Developer environment
 
 One toolchain, pinned once, on **macOS, Linux and Windows, amd64 and arm64**: [mise](https://mise.jdx.dev) installs
-every CLI at the version in [`mise.toml`](../mise.toml), [Task](https://taskfile.dev) runs every entrypoint from
-[`Taskfile.yml`](../Taskfile.yml), and the scripts behind them are portable bash. `make <target>` still works: the
-`Makefile` is a one-line-per-target shim for `task <target>`.
+every CLI at the version in [`mise.toml`](../mise.toml), [`Taskfile.yml`](../Taskfile.yml) is the single entrypoint
+(via [Task](https://taskfile.dev), installed by mise), and the scripts behind it are portable bash.
 
 | Host | Status | Proof |
 |---|---|---|
@@ -20,7 +19,7 @@ every CLI at the version in [`mise.toml`](../mise.toml), [Task](https://taskfile
 ```bash
 brew install mise git && echo 'eval "$(mise activate zsh)"' >> ~/.zshrc && exec zsh
 cd platform && mise trust && mise install      # all tools + helm-unittest plugin
-task up                                        # or: make up
+task up
 ```
 
 **Linux** (Docker Engine; your user in the `docker` group)
@@ -46,15 +45,14 @@ Ubuntu 24.04 + its own Docker engine (docker-in-docker feature v4: it picks ipta
 legacy iptables, which GitHub's amd64 runners need) and runs `mise install` on create. Codespaces needs the 8-core /
 32 GB machine for the full local platform (estimated from the k3d + two CAPD clusters footprint).
 
-Without mise activated in your shell, prefix commands with `mise exec --` (`mise exec -- task test`) or use
-`make test` (the shim falls back to `mise exec -- task` when `task` is not on `PATH`). `task doctor` reports missing
+Without mise activated in your shell, prefix commands with `mise exec --` (`mise exec -- task test`). `task doctor` reports missing
 tools and version drift against `mise.toml`. `mise activate` sets `PATH` for the directory the shell started in and
 only updates it at a prompt: a non-interactive `bash -ic 'cd <clone> && ./hack/test.sh'` started elsewhere (scripts,
 agents) runs your global tool versions, so use `mise exec --` there. `hack/test.sh` prints any `DRIFT` first.
 
 ## Entrypoints
 
-`task --list` is the source of truth. `make <name>` maps to `task <name>` (`make images-audit` -> `task images:audit`).
+[`Taskfile.yml`](../Taskfile.yml) is the single entrypoint (via `mise`); `task --list` is the source of truth.
 
 | Task | What |
 |---|---|
@@ -75,8 +73,8 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
   directory. Every tool uses the **aqua** backend (upstream release assets; the aqua registry entry declares the
   supported platforms) except Python (mise core, python-build-standalone). `mise.lock` pins the exact URL + checksum
   for `linux-{x64,arm64}`, `macos-{x64,arm64}`, `windows-{x64,arm64}`. Renovate bumps `mise.toml` natively.
-- **Task** is a single Go binary with its own POSIX shell interpreter, so the Taskfile runs unchanged on Windows,
-  where Make is not installed by default. The Makefile maps each target to `task <target>`.
+- **Task** is a single Go binary with its own POSIX shell interpreter, so `Taskfile.yml` runs unchanged as the single
+  entrypoint on Linux, macOS and Windows (where Make is not installed by default).
 - **Rejected**: Nix / devbox / flox (no native Windows; WSL only), asdf (plugins are shell scripts, no Windows),
   Homebrew bundles (macOS/Linux only), per-tool curl installers in scripts (amd64-Linux-only, no checksums, versions
   duplicated between CI and docs).

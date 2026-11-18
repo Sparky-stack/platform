@@ -1,7 +1,7 @@
 # Datadog fan-out for every workload cluster of this installation (addon telemetry). Enable: rename this file to
 # values.yaml (or copy it to env-<environment>.yaml / cluster-<name>.yaml for a subset). docs/observability.md "Datadog".
 # Secret: key `datadog`, property `api-key` in the backend behind ClusterSecretStore `default` on the workload clusters
-# (locally: `platform-secrets` on mgmt, seeded by `make secrets` when DATADOG_API_KEY is set). Never commit the key.
+# (locally: `platform-secrets` on mgmt, seeded by `task secrets` when DATADOG_API_KEY is set). Never commit the key.
 # The OpenChoreo observability plane keeps receiving everything; Datadog gets a copy.
 datadog:
   enabled: true                     # renders ExternalSecret telemetry-datadog -> env DD_API_KEY in the collector

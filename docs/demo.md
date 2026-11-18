@@ -10,7 +10,7 @@ output, talking points, and a fallback. A step whose feature is not on `main` ye
 Run `task demo:check` 15 minutes before and again just before you start. It is read-only and prints one row per check:
 
 ```bash
-task demo:check            # make demo-check; or: bash hack/demo-check.sh
+task demo:check            # or: bash hack/demo-check.sh
 ```
 
 ```text

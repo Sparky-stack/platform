@@ -10,7 +10,6 @@ on:
       - mise.toml
       - mise.lock
       - Taskfile.yml
-      - Makefile
       - .gitattributes
       - prek.toml
       - .devcontainer/**
@@ -92,10 +91,6 @@ jobs:
 
       - name: task test
         run: task test
-
-      - name: Makefile shim
-        if: runner.os != 'Windows'
-        run: make -n lint test hooks-run up INST=local
 
   devcontainer:
     name: devcontainer (${{ matrix.os }})
