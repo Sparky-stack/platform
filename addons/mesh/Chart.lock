@@ -1,18 +1,18 @@
 dependencies:
-  - name: base
-    repository: oci://ghcr.io/istio/release/charts
-    version: 1.32.0
-  - name: istiod
-    repository: oci://ghcr.io/istio/release/charts
-    version: 1.32.0
-  - name: cni
-    repository: oci://ghcr.io/istio/release/charts
-    version: 1.32.0
-  - name: ztunnel
-    repository: oci://ghcr.io/istio/release/charts
-    version: 1.32.0
-  - name: cert-manager-istio-csr
-    repository: https://charts.jetstack.io
-    version: v0.19.1
+- name: base
+  repository: oci://ghcr.io/istio/release/charts
+  version: 1.32.0
+- name: istiod
+  repository: oci://ghcr.io/istio/release/charts
+  version: 1.32.0
+- name: cni
+  repository: oci://ghcr.io/istio/release/charts
+  version: 1.32.0
+- name: ztunnel
+  repository: oci://ghcr.io/istio/release/charts
+  version: 1.32.0
+- name: cert-manager-istio-csr
+  repository: https://charts.jetstack.io
+  version: v0.19.1
 digest: sha256:2d7aea63b4c90a3e20fcc1ee5f0e559e42e4e67dc9f6392f86f30eba2d66d6db
-generated: "2026-11-19T00:50:00Z"
+generated: "2026-11-19T01:29:34.981619648+02:00"
