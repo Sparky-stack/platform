@@ -19,7 +19,7 @@ import re
 import sys
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
-PATH_ROOTS = ("addons/", "charts/", "hack/", "docs/", "installations/", "bootstrap/", ".github/", ".devcontainer/")
+PATH_ROOTS = ("addons/", "charts/", "hack/", "docs/", "wiki/", "installations/", "bootstrap/", ".github/", ".devcontainer/")
 PLACEHOLDER = re.compile(r"[<>*{}$…]|\.\.\.|\|")
 LINK = re.compile(r"!?\[(?:[^\]\[]|\[[^\]]*\])*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HTML_LINK = re.compile(r"<(?:img|a)\b[^>]*?\b(?:src|href)=\"([^\"]+)\"", re.I)

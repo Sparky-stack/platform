@@ -1,0 +1,35 @@
+# Wiki Index — koorikla/platform
+
+> Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
+> Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
+> Last updated: 2026-11-18 | Total pages: 22
+
+## Decisions
+- [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
+- [Fold koorikla/ci into Platform Repo and Pin Tooling with mise](decisions/fold-ci-into-platform-and-mise-toolchain.md) — Consolidate `koorikla/ci` workflows/scripts/toolbox into `koorikla/platform` (#213) and pin all CLI tools in `mise.toml`.
+- [Helm, Crossplane, and OpenChoreo Building Blocks — No Kustomize or Flux](decisions/building-blocks-helm-crossplane-openchoreo.md) — Use Helm wrapper charts, Crossplane v2 Compositions, and OpenChoreo CRs pushed by Argo CD on `mgmt`; never Flux or Kustomize.
+- [Local Platform Lab Scope, Single-Cluster Profile, BYO, and Cloud Examples](decisions/local-lab-scope-byo-and-cloud-examples.md) — Prove everything on Docker (`k3d` + single `dev1` CAPD cluster by default), support `provider: byo`, and ship cloud ClusterClasses as untested examples.
+- [Merge clusterclasses into charts/cluster with Provider Folders](decisions/merge-clusterclasses-into-charts-cluster.md) — Fold `addons/clusterclasses` into `charts/cluster/templates/` under per-provider folders (`providers/<provider>/`) with a fleet-wide `classes` mode (#116).
+- [OpenBao as Local Mesh CA with Pluggable Cloud CA](decisions/openbao-mesh-ca-and-pluggable-cloud-ca.md) — Keep mesh CA private keys inside OpenBao on `mgmt` (`istio-csr` on members) behind a standard cert-manager `Issuer` contract pluggable in cloud.
+- [OSS crossplane-contrib Upjet Providers Only](decisions/crossplane-oss-upjet-providers-only.md) — Standardize on open-source `crossplane-contrib` Upjet family providers plus `CloudNativePG` locally, avoiding commercial Upbound packages.
+- [PR Preview Environments Design](decisions/pr-preview-environments.md) — Render per-PR OpenChoreo `Environment` + bindings via `charts/preview` with a 48h Kyverno TTL and `occ remote` inner loop (#168).
+- [Re-Bootstrap Over Long Live Repair and Nightly Rehearsal](decisions/rebootstrap-over-repair-and-nightly-rehearsal.md) — Prefer `task down` + `task up` over imperative live repair; enforce zero-touch convergence (~31 min to 45 Healthy apps) via bootstrap rehearsals.
+- [Talos on Hetzner Waits for Upstream CACPPT Release](decisions/talos-on-hetzner-waits-for-upstream.md) — Switch Hetzner example from k3s to Talos once upstream Sidero CACPPT releases `TalosControlPlaneTemplate` (#189).
+
+## Gotchas
+- [Argo CD Custom Health for Kyverno DeletingPolicy and Unmatched CRS](gotchas/argocd-custom-health-deletingpolicy-and-crs.md) — Kyverno `DeletingPolicy` never sets `Ready` and unmatched peers-only `ClusterResourceSet`s stay `Progressing` without custom Lua checks (#187, #198).
+- [Argo CD Sync-Wave Ordering for CAPI Outputs and Unlimited Retry](gotchas/argocd-sync-wave-ordering-and-unlimited-retry.md) — Separate CAPI producers and consumers across sync waves and set `retry.limit: -1` (never `controller.sync.timeout.seconds`) (#192, #195, #199).
+- [Docker Network Pool Exhaustion from crossplane render](gotchas/docker-network-pool-exhaustion-crossplane-render.md) — Share one Docker bridge network and function containers across `crossplane render` tests so Docker subnet pools don't exhaust (#181).
+- [Gemini Transcript Ceiling and Token Discipline for Subagents](gotchas/gemini-transcript-ceiling-for-agents.md) — Read small file slices, skip Flux/Kustomize skill refs, keep writes `< 80` lines, and commit each step to avoid context cutoffs.
+- [Istio Ambient Port 15008 in Cell Policies and Telemetry DNS on *.localhost](gotchas/istio-ambient-port-15008-and-telemetry-dns.md) — Open TCP `15008` (HBONE) in cell NetworkPolicies and keep `telemetry` out of ambient mesh so `ztunnel` DNS capture doesn't break `*.localhost` (#53, #206, #208).
+- [mise Global vs Repo Tool Versions and Python Env Var Leakage](gotchas/mise-global-vs-repo-tool-versions.md) — Always run `mise trust` and prefix commands with `env -u PYTHONHOME -u PYTHONPATH -u PYTHON PATH=/usr/bin:$PATH mise exec --` inside the worktree (#171).
+- [OpenBao Policies Only at Init, Policy Reconciler, and Wave -1 Seal Key](gotchas/openbao-policies-init-and-reconciler.md) — Reconcile `tenant-*` policies via a post-init job and sync `openbao-unseal` in wave `-1` before the StatefulSet (#96, #179, #190, #191).
+- [OpenChoreo ReleaseBinding Ordering and Fresh Local Harbor Digests](gotchas/openchoreo-releasebinding-and-fresh-registry.md) — Create `ComponentRelease` before `ReleaseBinding`, rebuild when fresh local Harbor lacks the Git-pinned digest, and gate on workload readiness (#103, #200, #201).
+- [OpenSearch ActiveProcessorCount OOMKill in k3d](gotchas/opensearch-jvm-processors-in-k3d.md) — Pin `-XX:ActiveProcessorCount=1` so OpenSearch in k3d doesn't size thread pools for host CPU cores and OOMKill every 45 minutes (#49, #205).
+
+## Concepts
+- [GitOps Catalog and Cluster Onboarding Flow](concepts/gitops-and-cluster-onboarding-flow.md) — How one `installations/<inst>/clusters/<name>.yaml` file drives CAPI/BYO, label-selected addon ApplicationSets, ESO delivery, and OpenChoreo data-plane registration.
+- [OpenChoreo SDLC, Supply Chain, and Promotion Flow](concepts/openchoreo-sdlc-and-promotion-flow.md) — End-to-end path from git push to in-cluster BuildKit/Harbor/Cosign build, cell deployment, and SLO-gated promotion to production.
+
+## Queries
+- [Why Is an Argo CD Application Stuck Progressing on First Boot?](queries/argocd-app-stuck-progressing-triage.md) — Step-by-step triage checklist for first-boot `Progressing` applications (`--core` health, sync waves, custom Lua checks, OpenBao wave `-1`, and fresh Harbor digests).
