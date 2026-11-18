@@ -70,8 +70,68 @@ openchoreo-control-plane:
         publicUrl: "http://api.openchoreo.localhost:8080"
       security:
         authorization:
-          bootstrap:   # authz bootstrap Job (kubectl apply of the default roles)
+          bootstrap:   # authz bootstrap Job (kubectl apply of the default roles and mappings)
             image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
+            # platform: upstream's 10 default role bindings verbatim except mcp-tryout-client-binding (client_id
+            # service_mcp_client, Thunder script 57), which binds to ClusterAuthzRole mcp-service
+            # (templates/mcp-service-role.yaml: read-only + workflowrun:create) instead of admin (docs/ai-agents.md).
+            # Keeping the binding name updates an existing cluster's mcp-tryout-client-binding in place on sync.
+            mappings:
+              - name: admin-binding
+                kind: ClusterAuthzRoleBinding
+                roleMappings: [{ roleRef: { name: admin, kind: ClusterAuthzRole } }]
+                entitlement: { claim: groups, value: admins }
+                effect: allow
+              - name: developer-binding
+                kind: ClusterAuthzRoleBinding
+                roleMappings: [{ roleRef: { name: developer, kind: ClusterAuthzRole } }]
+                entitlement: { claim: groups, value: developers }
+                effect: allow
+              - name: platform-engineer-binding
+                kind: ClusterAuthzRoleBinding
+                roleMappings: [{ roleRef: { name: platform-engineer, kind: ClusterAuthzRole } }]
+                entitlement: { claim: groups, value: platform-engineers }
+                effect: allow
+              - name: sre-binding
+                kind: ClusterAuthzRoleBinding
+                roleMappings: [{ roleRef: { name: sre, kind: ClusterAuthzRole } }]
+                entitlement: { claim: groups, value: sres }
+                effect: allow
+              - name: mcp-tryout-client-binding
+                kind: ClusterAuthzRoleBinding
+                roleMappings: [{ roleRef: { name: mcp-service, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: service_mcp_client }
+                effect: allow
+              - name: backstage-catalog-reader-binding
+                kind: ClusterAuthzRoleBinding
+                system: true
+                roleMappings: [{ roleRef: { name: backstage-catalog-reader, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: openchoreo-backstage-client }
+                effect: allow
+              - name: finops-agent-binding
+                kind: ClusterAuthzRoleBinding
+                system: true
+                roleMappings: [{ roleRef: { name: finops-agent, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: openchoreo-finops-agent }
+                effect: allow
+              - name: rca-agent-binding
+                kind: ClusterAuthzRoleBinding
+                system: true
+                roleMappings: [{ roleRef: { name: rca-agent, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: openchoreo-rca-agent }
+                effect: allow
+              - name: workload-publisher-binding
+                kind: ClusterAuthzRoleBinding
+                system: true
+                roleMappings: [{ roleRef: { name: workload-publisher, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: openchoreo-workload-publisher-client }
+                effect: allow
+              - name: observer-resource-reader-binding
+                kind: ClusterAuthzRoleBinding
+                system: true
+                roleMappings: [{ roleRef: { name: observer-resource-reader, kind: ClusterAuthzRole } }]
+                entitlement: { claim: client_id, value: openchoreo-observer-resource-reader-client }
+                effect: allow
     # platform: no remoteConnect (`occ remote` tunnels): needs the data plane's SNI router published per cluster
 
   backstage:

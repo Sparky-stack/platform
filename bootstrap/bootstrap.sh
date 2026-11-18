@@ -302,7 +302,7 @@ seed_generated_secret() {
 
 seed_openchoreo_secret() {
   seed_generated_secret openchoreo thunder-admin-password admin-user-password developer-user-password \
-    backstage-client-secret backstage-backend-secret
+    backstage-client-secret backstage-backend-secret service-mcp-client-secret
   # Observability plane (addon openchoreo-observability-plane) and data-plane telemetry; observer-client-secret is
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
@@ -327,7 +327,7 @@ seed_openbao_secret() {
 }
 
 # Platform cosign key pair for in-cluster builds (key cosign-platform: cosign.key [encrypted], cosign.pub,
-# cosign.password). Generated once with cosign from the koorikla/ci toolbox image (no host install); the private key
+# cosign.password). Generated once with cosign from the ci-toolbox image (ci/toolbox) (no host install); the private key
 # only ever exists in this Secret (and the build pods that mount it). Admission policies trust cosign.pub.
 COSIGN_IMAGE="ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79"
 COSIGN_TMP=""

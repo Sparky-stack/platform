@@ -142,7 +142,7 @@ registry:
     credentialsKey: platform-ghcr
 
 # ClusterWorkflows (OpenChoreo, on the control plane) -> Argo ClusterWorkflowTemplate koorikla-build on the workflow plane
-# (addon openchoreo-workflow-plane). One component workflow per stack, same koorikla/ci scripts as the GitHub Actions
+# (addon openchoreo-workflow-plane). One component workflow per stack, same ci/scripts as the GitHub Actions
 # wrappers; the stack's ClusterComponentTypes list them in allowedWorkflows (templates/upstream-defaults.yaml).
 buildWorkflows:
   # -- Language stack build workflows (`buildWorkflows.{stacks,platforms,secrets}`: `go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow (`helmChartWorkflow`).

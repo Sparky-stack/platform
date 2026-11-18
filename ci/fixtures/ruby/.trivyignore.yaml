@@ -1,0 +1,10 @@
+# Accepted risks for the ruby self-test image (see README "Accepting risk").
+# Every entry needs a statement and an expiry so it is revisited.
+vulnerabilities:
+  - id: CVE-2026-33210
+    paths:
+      - "usr/local/lib/ruby/gems/4.0.0/specifications/default/json-2.18.0.gemspec"
+    statement: >-
+      Default json gem bundled with ruby:4.0.9-slim; the fixture never parses
+      untrusted JSON. Drop when the ruby base image ships json >= 2.19.2.
+    expired_at: 2027-01-31

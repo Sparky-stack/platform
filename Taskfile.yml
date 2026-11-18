@@ -97,11 +97,11 @@ tasks:
       - '"{{.BASH}}" hack/kubeconfig.sh {{shellQuote .CLUSTER}}'
 
   set-repo:
-    desc: "Point a fork at itself: repoURL, githubOrg, tenant app repos (REPO=https://github.com/<you>/platform.git [ORG=] [APPS_ORG=] [DOCS=1 [CI_ORG=]])"
+    desc: "Point a fork at itself: repoURL, githubOrg, tenant app repos (REPO=https://github.com/<you>/platform.git [ORG=] [APPS_ORG=] [DOCS=1])"
     requires:
       vars: [REPO]
     cmds:
-      - 'ORG={{shellQuote (.ORG | default "")}} APPS_ORG={{shellQuote (.APPS_ORG | default "")}} DOCS={{shellQuote (.DOCS | default "0")}} CI_ORG={{shellQuote (.CI_ORG | default "")}} "{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
+      - 'ORG={{shellQuote (.ORG | default "")}} APPS_ORG={{shellQuote (.APPS_ORG | default "")}} DOCS={{shellQuote (.DOCS | default "0")}} "{{.BASH}}" hack/set-repo.sh {{shellQuote .REPO}}'
 
   # ---- offline validation -----------------------------------------------------------------------------------------
   lint:

@@ -308,7 +308,7 @@ Every image must publish both. The only accepted exceptions are listed, each wit
 the audit reports them as `EXCEPTION`. Images that are tag-only or not fully qualified:
 [#45](https://github.com/koorikla/platform/issues/45).
 
-Apps built by koorikla/ci must publish multi-arch images too, or arm64 hosts will fail to run them on CAPD clusters.
+Apps built by the ci/ workflows must publish multi-arch images too, or arm64 hosts will fail to run them on CAPD clusters.
 
 ## Updating a tool
 

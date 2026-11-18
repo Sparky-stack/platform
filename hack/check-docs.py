@@ -19,7 +19,7 @@ import re
 import sys
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
-PATH_ROOTS = ("addons/", "charts/", "hack/", "docs/", "installations/", "bootstrap/", ".github/", ".devcontainer/")
+PATH_ROOTS = ("addons/", "charts/", "hack/", "docs/", "wiki/", "installations/", "bootstrap/", ".github/", ".devcontainer/")
 PLACEHOLDER = re.compile(r"[<>*{}$…]|\.\.\.|\|")
 LINK = re.compile(r"!?\[(?:[^\]\[]|\[[^\]]*\])*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HTML_LINK = re.compile(r"<(?:img|a)\b[^>]*?\b(?:src|href)=\"([^\"]+)\"", re.I)
@@ -145,7 +145,7 @@ def main():
                     vdescs = [m.group(1).strip() for m in re.finditer(r"^\s*#\s*--\s+(.+)$", vfh.read(), re.M)]
                 raw = "\n".join(lines)
                 if any(d not in raw for d in vdescs):
-                    problems.append("%s: stale README.md (out of sync with values.yaml; run helm-docs)" % rel)
+                    problems.append("%s: stale README.md (out of sync with values.yaml; run helm-docs)" % rel_posix)
         fence = False
         for no, line in enumerate(lines, 1):
             where = "%s:%d" % (rel, no)

@@ -102,7 +102,7 @@ spec:
         checks:
           type: object
           default: {}
-          description: koorikla/ci scripts/{{ $st.stack }}/check.sh in the toolchain image
+          description: ci/scripts/{{ $st.stack }}/check.sh in the toolchain image
           properties:
             enabled:
               type: boolean
@@ -118,7 +118,7 @@ spec:
               type: object
               default: {{ $st.checkEnv | toJson }}
               additionalProperties: { type: string }
-              description: Script flags (see the header of scripts/{{ $st.stack }}/check.sh in koorikla/ci)
+              description: Script flags (see the header of scripts/{{ $st.stack }}/check.sh in ci/scripts)
             {{- if $st.postgres }}
             postgres:
               type: boolean

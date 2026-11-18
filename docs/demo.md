@@ -249,7 +249,7 @@ docker.io image is denied by `openchoreo-trusted-registries-enforce`. An image p
 pipeline is denied the same way (`image (harbor.openchoreo.localhost:9443/apps/) is not signed by platform-key`).
 
 Talking points:
-- One pipeline for every stack, CI-provider-agnostic: the workflow plane runs the same koorikla/ci scripts as the
+- One pipeline for every stack, CI-provider-agnostic: the workflow plane runs the same ci/scripts as the
   GitHub path; Git stays the source of truth (the build commits the digest ref, Argo CD deploys it).
 - Push-to-deploy without inbound traffic: locally a poll (GitHub App token, read-only, one build per commit), in cloud
   installations a signed GitHub webhook into the same trigger.

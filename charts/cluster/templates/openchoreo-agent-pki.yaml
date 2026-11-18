@@ -1,11 +1,4 @@
-{{- /*
-Per-cluster agent PKI on mgmt (cert-manager, namespace fleet). The CA and its private key never leave mgmt:
-  Issuer      <name>-agent-selfsigned  roots exactly one CA
-  Certificate <name>-agent-ca          isCA; Secret <name>-agent-ca (ClusterDataPlane <name> trusts its ca.crt)
-  Issuer      <name>-agent-ca          signs exactly one client cert
-  Certificate <name>-agent-tls         CN=<name>, client auth; Secret <name>-agent-tls -> workload cluster via the CRS
-Deleting the cluster file deletes the CA, which revokes the cluster: no other plane trusts it.
-*/ -}}
+{{- /* Per-cluster OpenChoreo agent PKI on mgmt (cert-manager self-signed root, CA cert, CA issuer, client cert). */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
 {{- $name := include "openchoreo.name" . }}
 {{- $ns := include "openchoreo.fleetNamespace" . }}

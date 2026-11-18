@@ -1,0 +1,83 @@
+---
+apiVersion: ci.koorikla.dev/v1alpha1
+kind: WebApp
+metadata:
+  name: hello
+  namespace: default
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: hello
+    - apiVersion: v1
+      kind: ConfigMap
+      name: hello-config
+status:
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: config, deployment'
+    reason: Creating
+    status: "False"
+    type: Ready
+  configMapName: hello-config
+---
+apiVersion: v1
+data:
+  GREETING: tere
+kind: ConfigMap
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: config
+  labels:
+    crossplane.io/composite: hello
+  name: hello-config
+  namespace: default
+  ownerReferences:
+  - apiVersion: ci.koorikla.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: WebApp
+    name: hello
+    uid: 03e2fcc5-c4a4-5f33-a308-57235bff341b
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: deployment
+  labels:
+    crossplane.io/composite: hello
+  name: hello
+  namespace: default
+  ownerReferences:
+  - apiVersion: ci.koorikla.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: WebApp
+    name: hello
+    uid: 03e2fcc5-c4a4-5f33-a308-57235bff341b
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: hello-config
+        image: ghcr.io/koorikla/hello-world:main
+        name: app

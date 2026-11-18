@@ -1,23 +1,11 @@
 {{- /*
-Falco escalation identity of this cluster (docs/observability.md "Falco response"), delivered like the agent identity:
-an ESO-templated ClusterResourceSet payload, built on mgmt, applied by CAPI to exactly this Cluster.
-  ExternalSecret <name>-falco-escalation (store platform, key falco-webhook: url, token) templates the payload:
-    Namespace falco + Secret falco/falcosidekick-escalation
-      WEBHOOK_ADDRESS        <url>/<name>                     (addon argo-events: one endpoint per cluster)
-      WEBHOOK_CUSTOMHEADERS  Authorization:Bearer <token>   token = sha256("<name>:<store token>"), hex
-  ClusterResourceSet <name>-falco-escalation applies it (strategy Reconcile: a rotated store token is re-applied).
-The store's token never leaves mgmt; the cluster holds only its own token, which argo-events accepts only on its own
-endpoint, so it cannot post events for another cluster. Same expression as addon argo-events (ae.falcoToken) and addon
-falco on mgmt: hack/tests/test_falco_tokens.sh. Off when the cluster opts out of addon falco or falcoEscalation is off.
-provider byo: ExternalSecret <name>-falco-escalation renders the Secret itself (no payload) and PushSecret
-<name>-push-falco-escalation copies it to falco/falcosidekick-escalation (byo-access.yaml).
+Per-cluster Falco escalation identity (docs/observability.md "Falco response"): derives sha256("<name>:<token>") on
+mgmt so the shared store token never leaves mgmt. Delivered via ClusterResourceSet (or PushSecret on byo).
 */ -}}
 {{- if and .Values.falcoEscalation.enabled (ne (toString (dig "falco" "" (.Values.addons | default dict))) "false") }}
-{{- $name := required "name is required" .Values.name }}
+{{- $name := .Values.name }}
 {{- $ns := .Values.falcoEscalation.namespace }}
-{{- if eq (toString .Values.provider) "byo" }}
-{{- /* byo: the same Secret, templated as a plain Secret in fleet and pushed (same expressions as the payload below;
-hack/tests/test_falco_tokens.sh and test_byo_delivery.sh evaluate both). */}}
+{{- $byo := eq (toString .Values.provider) "byo" }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -35,36 +23,12 @@ spec:
     creationPolicy: Owner
     template:
       engineVersion: v2
+      {{- if $byo }}
       type: Opaque
       data:   # gitleaks:allow: ESO template; the derived per-cluster token only
         WEBHOOK_ADDRESS: '{{ printf "{{ printf \"%%s/%%s\" (.url | trimSuffix \"/\") %s }}" (quote $name) }}'
         WEBHOOK_CUSTOMHEADERS: '{{ printf "{{ printf \"Authorization:Bearer %%s\" (printf \"%%s:%%s\" %s .token | sha256sum) }}" (quote $name) }}'
-  data:
-    - secretKey: url
-      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: url }
-    - secretKey: token
-      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: token }
----
-{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-falco-escalation" $name) "source" (printf "%s-falco-escalation" $name)
-      "namespace" $ns "remoteName" "falcosidekick-escalation") }}
-{{- else }}
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ $name }}-falco-escalation
-  namespace: fleet
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: platform
-  target:
-    name: {{ $name }}-falco-escalation
-    creationPolicy: Owner
-    template:
-      engineVersion: v2
+      {{- else }}
       type: addons.cluster.x-k8s.io/resource-set
       data:   # gitleaks:allow: ESO template of the CRS payload Secret; the derived per-cluster token only
         falco-escalation.yaml: |
@@ -82,12 +46,17 @@ spec:
           data:
             WEBHOOK_ADDRESS: {{ printf "{{ printf \"%%s/%%s\" (.url | trimSuffix \"/\") %s | b64enc }}" (quote $name) }}
             WEBHOOK_CUSTOMHEADERS: {{ printf "{{ printf \"Authorization:Bearer %%s\" (printf \"%%s:%%s\" %s .token | sha256sum) | b64enc }}" (quote $name) }}
+      {{- end }}
   data:
     - secretKey: url
       remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: url }
     - secretKey: token
       remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: token }
 ---
+{{- if $byo }}
+{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-falco-escalation" $name) "source" (printf "%s-falco-escalation" $name)
+      "namespace" $ns "remoteName" "falcosidekick-escalation") }}
+{{- else }}
 apiVersion: addons.cluster.x-k8s.io/v1beta2
 kind: ClusterResourceSet
 metadata:
@@ -95,7 +64,7 @@ metadata:
   namespace: fleet
   annotations:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-    argocd.argoproj.io/sync-wave: "1"   # after its payload (wave 0) and the Cluster: docs/providers.md "Sync waves of a cluster app"
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   strategy: Reconcile
   clusterSelector:

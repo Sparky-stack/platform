@@ -1,0 +1,10 @@
+# actionlint 1.7.12 predates two GitHub features used here (both GA on github.com):
+#  - `$/` self-repository reusable-workflow references (2026-07-30 changelog)
+#  - `job.workflow_repository` / `job.workflow_sha` context (2026-09 changelog)
+self-hosted-runner:
+  labels: []
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'reusable workflow call "\$/\.github/workflows/.+" at "uses" is not following the format'
+      - 'property "workflow_(sha|repository|ref|file_path)" is not defined in object type'

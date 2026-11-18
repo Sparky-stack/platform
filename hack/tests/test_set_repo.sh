@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # hack/set-repo.sh on a scratch copy: rewrites repoURL / githubOrg / tenant repos, is idempotent, keeps label keys,
-# honours APPS_ORG, DOCS=1 and CI_ORG.
+# honours APPS_ORG and DOCS=1.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -47,12 +47,10 @@ assert_eq "$(yq '.apps[0].repoURL' "$W/installations/local/tenants/demo.yaml")" 
 APPS_ORG=https://github.com/example bash "$W/hack/set-repo.sh" https://github.com/example/platform.git >/dev/null
 assert_eq "$(yq '.apps[0].repoURL' "$W/installations/local/tenants/demo.yaml")" "https://github.com/example/hello-world.git" "APPS_ORG switch on re-run"
 
-# DOCS=1 rewrites links, never label keys; docs/forking.md (upstream fork/mirror steps) is left alone; koorikla/ci
-# stays upstream unless CI_ORG is given.
+# DOCS=1 rewrites links, never label keys; docs/forking.md (upstream fork/mirror steps) is left alone.
 W="$TMP/docs"; copy "$W"
 DOCS=1 bash "$W/hack/set-repo.sh" https://github.com/Example/platform.git >/dev/null
 assert_eq "$(has '\[Example/hello-world\]\(https://github\.com/Example/hello-world\)' "$W/README.md")" yes "README hello-world link + text follow APPS_ORG"
-assert_eq "$(has '\[koorikla/ci\]\(https://github\.com/koorikla/ci\)' "$W/README.md")" yes "koorikla/ci links kept without CI_ORG"
 assert_eq "$(has 'https://github\.com/Example/platform/issues/' "$W/docs/runbooks/incidents.md")" yes "runbook issue links follow REPO"
 assert_eq "$(grep -c 'ghcr\.io/koorikla/' "$W/docs/openchoreo.md" || true)" "0" "GHCR refs rewritten (lowercase owner)"
 assert_eq "$(has 'ghcr\.io/example/hello-world' "$W/docs/openchoreo.md")" yes "GHCR owner lowercased"
@@ -62,15 +60,14 @@ assert_eq "$same" yes "docs/forking.md untouched"
 assert_eq "$(has '^git clone --bare https://github\.com/koorikla/platform\.git' "$W/docs/forking.md")" yes "forking.md mirror step still clones upstream"
 assert_eq "$(has 'gh repo fork koorikla/platform' "$W/README.md")" yes "README fork command still names upstream"
 
-# APPS_ORG=koorikla keeps the hello-world doc links (they must match the tenant file); CI_ORG moves the ci links.
+# APPS_ORG=koorikla keeps the hello-world doc links (they must match the tenant file).
 W="$TMP/docs-keep"; copy "$W"
-APPS_ORG=https://github.com/koorikla CI_ORG=https://github.com/example DOCS=1 \
+APPS_ORG=https://github.com/koorikla DOCS=1 \
   bash "$W/hack/set-repo.sh" https://github.com/example/platform.git >/dev/null
 assert_eq "$(has '\[koorikla/hello-world\]\(https://github\.com/koorikla/hello-world\)' "$W/README.md")" yes "APPS_ORG=koorikla keeps README hello-world link"
 assert_eq "$(has 'repoURL: https://github\.com/koorikla/hello-world\.git' "$W/docs/openchoreo.md")" yes "APPS_ORG=koorikla keeps docs hello-world repo"
 assert_eq "$(has 'ghcr\.io/koorikla/hello-world' "$W/docs/openchoreo.md")" yes "APPS_ORG=koorikla keeps GHCR image"
 assert_eq "$(yq '.apps[0].repoURL' "$W/installations/local/tenants/demo.yaml")" "https://github.com/koorikla/hello-world.git" "tenant file matches the docs"
-assert_eq "$(has '\[example/ci\]\(https://github\.com/example/ci\)' "$W/README.md")" yes "CI_ORG moves the ci links"
 
 # A renamed fork: full repo URLs (+ link text) move to REPO, a longer repo name is left alone; round trip is clean.
 W="$TMP/docs-rename"; copy "$W"

@@ -1,0 +1,250 @@
+name: crossplane-configuration
+
+# Crossplane configuration package (XRDs + Compositions + function pipeline):
+# pinned Crossplane CLI, `crossplane resource validate` of package objects
+# (against Crossplane core + function/provider schemas from crossplane.yaml)
+# and of example XRs (against the XRDs), `crossplane composition render` of
+# every example XR with validation of the composed resources and a diff
+# against tests/render/expected/<file> when present, then `crossplane xpkg
+# build`, push to an OCI registry, cosign keyless sign + SLSA provenance.
+#
+# Required caller permissions:
+#   contents: read, packages: write, id-token: write, attestations: write
+
+on:
+  workflow_call:
+    inputs:
+      package_root:
+        description: 'Directory containing crossplane.yaml'
+        required: false
+        type: string
+        default: '.'
+      examples_dir:
+        description: 'Example XRs (relative to package_root); bundled into the package'
+        required: false
+        type: string
+        default: 'examples'
+      render_dir:
+        description: 'Render test assets relative to package_root (functions.yaml, expected/, observed/, extra-resources/)'
+        required: false
+        type: string
+        default: 'tests/render'
+      ignore:
+        description: 'Extra comma-separated xpkg build --ignore patterns'
+        required: false
+        type: string
+        default: ''
+      crossplane_version:
+        description: 'Crossplane CLI version'
+        required: false
+        type: string
+        default: 'v2.5.0'
+      package_name:
+        description: 'Package (OCI repository) name (default: metadata.name in crossplane.yaml)'
+        required: false
+        type: string
+        default: ''
+      registry:
+        description: 'Registry prefix (default ghcr.io/<owner>)'
+        required: false
+        type: string
+        default: ''
+      push:
+        description: 'Push and sign on non-PR events'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      registry_username:
+        description: 'Registry username (non-GHCR registries)'
+        required: false
+      registry_password:
+        description: 'Registry password/token (non-GHCR registries)'
+        required: false
+    outputs:
+      package:
+        description: 'Package reference tagged with the short SHA'
+        value: ${{ jobs.package.outputs.package }}
+      digest:
+        description: 'Pushed package digest (empty on PRs)'
+        value: ${{ jobs.package.outputs.digest }}
+      package_digest_ref:
+        description: 'Immutable <repo>@sha256:... reference (empty on PRs)'
+        value: ${{ jobs.package.outputs.package_digest_ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate + render tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: xp-config-validate-${{ github.repository }}-${{ inputs.package_root }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch platform ci/scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Install Crossplane CLI
+        env:
+          CROSSPLANE_VERSION: ${{ inputs.crossplane_version }}
+        run: bash "$CI_SCRIPTS/crossplane/install-cli.sh"
+
+      - name: Cache Crossplane schema cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/xp-cache
+          key: xp-schemas-${{ hashFiles(format('{0}/crossplane.yaml', inputs.package_root), format('{0}/{1}/functions.yaml', inputs.package_root, inputs.render_dir)) }}
+
+      - name: Validate and render
+        env:
+          PACKAGE_ROOT: ${{ inputs.package_root }}
+          EXAMPLES_DIR: ${{ inputs.examples_dir }}
+          RENDER_DIR: ${{ inputs.render_dir }}
+          CACHE_DIR: ${{ runner.temp }}/xp-cache
+        run: bash "$CI_SCRIPTS/crossplane/validate-render.sh"
+
+      - name: Upload rendered output
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: crossplane-render-${{ github.run_attempt }}
+          path: ${{ env.CI_OUT_DIR }}/render
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    name: xpkg build, push, sign
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: xp-config-package-${{ github.repository }}-${{ inputs.package_root }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      package: ${{ steps.vars.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+      package_digest_ref: ${{ steps.push.outputs.image_digest_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch platform ci/scripts (same commit as this workflow)
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+        run: |
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "CI_SCRIPTS=$d/ci/scripts" >> "$GITHUB_ENV"
+          echo "CI_OUT_DIR=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+
+      - name: Install Crossplane CLI
+        env:
+          CROSSPLANE_VERSION: ${{ inputs.crossplane_version }}
+        run: bash "$CI_SCRIPTS/crossplane/install-cli.sh"
+
+      - name: Package name
+        id: pkgname
+        env:
+          PACKAGE_ROOT: ${{ inputs.package_root }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: bash "$CI_SCRIPTS/crossplane/package-name.sh"
+
+      - name: Compute package coordinates
+        id: vars
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ steps.pkgname.outputs.name }}
+          INPUT_PUSH: ${{ inputs.push }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: bash "$CI_SCRIPTS/common/image-meta.sh"
+
+      - name: Package tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.repo }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+            type=ref,event=branch
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
+
+      - name: xpkg build
+        id: build
+        env:
+          PACKAGE_ROOT: ${{ inputs.package_root }}
+          EXAMPLES_DIR: ${{ inputs.examples_dir }}
+          IGNORE: ${{ inputs.ignore }}
+        run: bash "$CI_SCRIPTS/crossplane/xpkg-build.sh"
+
+      - name: Log in to registry
+        if: steps.vars.outputs.should_push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.vars.outputs.registry_host }}
+          username: ${{ secrets.registry_username || github.actor }}
+          password: ${{ secrets.registry_password || github.token }}
+
+      - name: xpkg push
+        id: push
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          PACKAGE_FILES: ${{ steps.build.outputs.xpkg }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: bash "$CI_SCRIPTS/crossplane/xpkg-push.sh"
+
+      - name: Attest SLSA build provenance
+        if: steps.vars.outputs.should_push == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Install cosign
+        if: steps.vars.outputs.should_push == 'true'
+        uses: sigstore/cosign-installer@v4.1.3
+
+      - name: Cosign keyless sign
+        if: steps.vars.outputs.should_push == 'true'
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.push.outputs.image_digest_ref }}
+          RECURSIVE: 'false'
+        run: bash "$CI_SCRIPTS/common/sign-image.sh"

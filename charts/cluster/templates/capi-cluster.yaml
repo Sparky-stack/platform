@@ -1,172 +1,73 @@
 {{- /*
-CAPI topology Cluster for this fleet file, in namespace fleet, class k3s-<provider> (gcp-gke: gke-managed, a managed GKE
-control plane whose worker pools are MachinePools; capi.gke.* below). provider byo: no CAPI object at all - an existing
-cluster registered from its kubeconfig (templates/byo-*.yaml, docs/providers.md "Bring your own cluster (byo)").
-Helpers are prefixed capi.* and live here (charts/cluster templates are split by concern and owner):
-  capi.validate  - fails rendering on an unusable fleet file
-  capi.gke       - "true" for provider gcp-gke (managed control plane: no k3s, no node files, no control plane size)
-  capi.byo       - "true" for provider byo (existing cluster: no CAPI objects, no node files, no CNI addon)
-  capi.labels    - platform.koorikla.io/* + addons.platform.koorikla.io/* (docs/conventions.md); the Argo CD cluster
-                   secret must carry exactly these labels -> include "capi.labels" there too. The cilium addon label
-                   is derived from `cni` (the CNI is a birth fact, the addon follows it); istio-eastwest and the
-                   mesh.platform.koorikla.io/* labels from `mesh.group` (docs/multicluster.md).
+CAPI topology Cluster in namespace fleet (class k3s-<provider>, or gke-managed for gcp-gke; skipped for byo).
+Shared helpers: capi.validate, capi.gke, capi.byo, capi.labels, capi.registry.harbor.
 */ -}}
 {{- define "capi.validate" -}}
 {{- $v := .Values -}}
-{{- if not $v.name -}}
-{{- fail "cluster: `name` is required (installations/<inst>/clusters/<name>.yaml)" -}}
-{{- end -}}
-{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" $v.name) -}}
-{{- fail (printf "cluster: name %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name) -}}
-{{- end -}}
-{{- if not (has $v.provider (list "docker" "aws" "hetzner" "gcp-gke" "byo")) -}}
-{{- fail (printf "cluster %s: provider %q must be one of docker, aws, hetzner, gcp-gke, byo" $v.name $v.provider) -}}
-{{- end -}}
 {{- $gke := eq (include "capi.gke" .) "true" -}}
 {{- $byo := eq (include "capi.byo" .) "true" -}}
-{{- if $byo -}}
-{{- /* An existing cluster: its owner runs its control plane, nodes, version and CNI. Sizing keys would be silently
-ignored, so they fail instead (docs/providers.md "Bring your own cluster (byo)"). */ -}}
-{{- $cpb := $v.controlPlane | default dict -}}
-{{- $set := dict "kubernetesVersion" (not (empty $v.kubernetesVersion)) "controlPlane" (or (not (kindIs "invalid" $cpb.replicas)) (not (empty $cpb.machineType)))
-      "workers" (not (empty $v.workers)) "providerSpec" (not (empty $v.providerSpec)) -}}
-{{- range $k := keys $set | sortAlpha -}}
-{{- if index $set $k -}}
-{{- fail (printf "cluster %s: %s does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name $k) -}}
-{{- end -}}
-{{- end -}}
-{{- else if $gke -}}
-{{- /* GKE takes vX.Y.Z (CAPG strips any -gke.N suffix and the v; GKE resolves the patch alias in the channel). */ -}}
-{{- if not $v.kubernetesVersion -}}
-{{- fail (printf "cluster %s: `kubernetesVersion` is required (GKE version, e.g. v1.35.1)" $v.name) -}}
-{{- end -}}
-{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" $v.kubernetesVersion) -}}
-{{- fail (printf "cluster %s: kubernetesVersion %q is not a GKE version (vX.Y.Z) for provider gcp-gke" $v.name $v.kubernetesVersion) -}}
-{{- end -}}
-{{- else -}}
-{{- if not $v.kubernetesVersion -}}
-{{- fail (printf "cluster %s: `kubernetesVersion` is required (k3s release, e.g. v1.35.10+k3s1)" $v.name) -}}
-{{- end -}}
-{{- if not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+\\+k3s[0-9]+$" $v.kubernetesVersion) -}}
-{{- fail (printf "cluster %s: kubernetesVersion %q is not a k3s release (vX.Y.Z+k3sN)" $v.name $v.kubernetesVersion) -}}
-{{- end -}}
-{{- end -}}
-{{- /* installation.yaml capi.providers key of the fleet file's provider (gcp-gke runs on CAPG: key gcp) */ -}}
-{{- $pkey := index (dict "gcp-gke" "gcp") $v.provider | default $v.provider -}}
-{{- $providers := (($v.capi | default dict).providers | default dict) -}}
-{{- if $byo -}}
-{{- /* not a CAPI provider: nothing to enable in installation.yaml capi.providers */ -}}
-{{- else if and $gke (not (index $providers $pkey)) -}}
-{{- fail (printf "cluster %s: provider gcp-gke needs capi.providers.gcp: true in installation.yaml (CAPG)" $v.name) -}}
-{{- end -}}
-{{- if and (hasKey $providers $pkey) (not (index $providers $pkey)) -}}
-{{- fail (printf "cluster %s: provider %s is not enabled in installation.yaml capi.providers" $v.name $v.provider) -}}
-{{- end -}}
-{{- if and (not (has $v.provider (list "docker" "byo"))) (not $v.region) -}}
-{{- fail (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider) -}}
-{{- end -}}
-{{- $env := $v.environment -}}
-{{- if not (and (kindIs "string" $env) (has $env (list "development" "staging" "production"))) -}}
-{{- fail (printf "cluster %s: environment %q must be one of development, staging, production" $v.name (kindIs "invalid" $env | ternary "" (toString $env))) -}}
-{{- end -}}
-{{- if $gke -}}
-{{- /* CAPG v1.13.1's GCPManagedControlPlane has no datapathProvider/networkPolicy: GKE Dataplane V2 (Cilium) cannot be
-requested, and a self-installed Cilium on GKE is not the birth-time CNI this platform requires (docs/providers.md). */ -}}
-{{- if ne $v.cni "gke" -}}
-{{- fail (printf "cluster %s: cni %q is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE's VPC-native networking)" $v.name $v.cni) -}}
-{{- end -}}
-{{- else if $byo -}}
-{{- /* Whatever the cluster runs (cilium, flannel, calico, a cloud VPC CNI): a fact for label platform.koorikla.io/cni
-(addon values/cni-<cni>.yaml), never installed by the platform. */ -}}
-{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" (toString $v.cni)) -}}
-{{- fail (printf "cluster %s: cni %q must be a DNS label naming the cluster's CNI (cilium, flannel, calico, ...)" $v.name (toString $v.cni)) -}}
-{{- end -}}
-{{- if eq (toString (index ($v.addons | default dict) "cilium")) "true" -}}
-{{- fail (printf "cluster %s: addons.cilium cannot be true on provider byo - the platform installs a CNI only at a cluster's birth (docs/networking.md); drop addons.cilium" $v.name) -}}
-{{- end -}}
-{{- else if not (has $v.cni (list "cilium" "flannel")) -}}
-{{- fail (printf "cluster %s: cni %q must be cilium or flannel" $v.name $v.cni) -}}
-{{- end -}}
-{{- if and (not $byo) (hasKey ($v.addons | default dict) "cilium") (ne $v.addons.cilium (eq $v.cni "cilium")) -}}
-{{- fail (printf "cluster %s: addons.cilium=%v contradicts cni=%s (the cilium addon follows `cni`; drop addons.cilium)" $v.name $v.addons.cilium $v.cni) -}}
-{{- end -}}
-{{- range $addon, $on := $v.addons -}}
-{{- if not (kindIs "bool" $on) -}}
-{{- fail (printf "cluster %s: addons.%s must be true or false" $v.name $addon) -}}
-{{- end -}}
-{{- end -}}
-{{- $mesh := ($v.mesh | default dict) -}}
-{{- if and $byo $mesh.group -}}
-{{- /* The member's mesh reader cert is signed by the k3s client CA that CAPI keeps on mgmt (templates/mesh-remote-secret.yaml);
-a byo cluster's CA key stays with its owner (#174). */ -}}
-{{- fail (printf "cluster %s: mesh.group is not available on provider byo yet (#174): drop mesh.group" $v.name) -}}
-{{- end -}}
-{{- if $mesh.group -}}
-{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" $mesh.group) -}}
-{{- fail (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mesh.group) -}}
-{{- end -}}
-{{- if eq (index ($v.addons | default dict) "istio-ambient" | toString) "false" -}}
-{{- fail (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name) -}}
-{{- end -}}
-{{- if not (index ((($v.mgmt | default dict).addons) | default dict) "openbao") -}}
-{{- fail (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name) -}}
-{{- end -}}
-{{- if not (has $mesh.group ($mesh.groups | default list)) -}}
-{{- fail (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mesh.group) -}}
-{{- end -}}
-{{- if not (($mesh.ca | default dict).host) -}}
-{{- fail (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name) -}}
-{{- end -}}
-{{- end -}}
-{{- range $a := list "istio-eastwest" "istio-csr" -}}
-{{- if and (hasKey ($v.addons | default dict) $a) (ne (index $v.addons $a) (not (empty $mesh.group))) -}}
-{{- fail (printf "cluster %s: addons.%s=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.%s)" $v.name $a (index $v.addons $a) ($mesh.group | default "") $a) -}}
-{{- end -}}
-{{- end -}}
-{{- /* Control plane size = embedded etcd voters (cluster-api-k3s v0.5.0 supports no other datastore). Odd only: an
-even count adds a voter without adding failure tolerance, and 2 voters is the state a rollout must never shrink from.
-Production on a cloud provider needs >= 3: every single-server rollout ends with a 2 -> 1 etcd member removal, which
-etcd documents as unsafe and which lost quorum on dev1 (docs/providers.md "Control plane size and rollouts"). Local
-CAPD clusters are disposable and may run 1 server whatever their environment label says. */ -}}
+{{- $k3s := not (or $gke $byo) -}}
+{{- $dns := "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" -}}
 {{- $cp := $v.controlPlane | default dict -}}
-{{- if $gke -}}
-{{- /* Google runs the GKE control plane (regional: replicated across the region's zones); there is nothing to size. */ -}}
-{{- if or (not (kindIs "invalid" $cp.replicas)) $cp.machineType -}}
-{{- fail (printf "cluster %s: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" $v.name) -}}
-{{- end -}}
-{{- if not $v.workers -}}
-{{- fail (printf "cluster %s: gcp-gke needs at least one entry in workers (a GKE node pool)" $v.name) -}}
-{{- end -}}
-{{- if not (($v.providerSpec | default dict).project) -}}
-{{- fail (printf "cluster %s: providerSpec.project (GCP project id) is required for gcp-gke" $v.name) -}}
-{{- end -}}
-{{- end -}}
+{{- $cpSet := or (not (kindIs "invalid" $cp.replicas)) (not (empty $cp.machineType)) -}}
 {{- $replicas := kindIs "invalid" $cp.replicas | ternary 1 $cp.replicas -}}
-{{- if not (or $gke $byo) -}}
-{{- if not (regexMatch "^[0-9]+$" (toString $replicas)) -}}
-{{- fail (printf "cluster %s: controlPlane.replicas %v must be a whole number (1, 3, 5)" $v.name $replicas) -}}
+{{- $addons := $v.addons | default dict -}}
+{{- $mesh := $v.mesh | default dict -}}
+{{- $mg := $mesh.group | default "" -}}
+{{- $providers := ($v.capi | default dict).providers | default dict -}}
+{{- $pkey := eq (toString $v.provider) "gcp-gke" | ternary "gcp" (toString $v.provider) -}}
+{{- $env := kindIs "invalid" $v.environment | ternary "" (toString $v.environment) -}}
+{{- $checks := list
+  (list (not $v.name) "cluster: `name` is required (installations/<inst>/clusters/<name>.yaml)")
+  (list (not (regexMatch $dns (toString $v.name))) (printf "cluster: name %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name))
+  (list (not (has $v.provider (list "docker" "aws" "hetzner" "gcp-gke" "byo"))) (printf "cluster %s: provider %q must be one of docker, aws, hetzner, gcp-gke, byo" $v.name $v.provider))
+  (list (and $byo $cpSet) (printf "cluster %s: controlPlane does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
+  (list (and $byo (not (empty $v.kubernetesVersion))) (printf "cluster %s: kubernetesVersion does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
+  (list (and $byo (not (empty $v.providerSpec))) (printf "cluster %s: providerSpec does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
+  (list (and $byo (not (empty $v.workers))) (printf "cluster %s: workers does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
+  (list (and $gke (not $v.kubernetesVersion)) (printf "cluster %s: `kubernetesVersion` is required (GKE version, e.g. v1.35.1)" $v.name))
+  (list (and $gke (not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" (toString $v.kubernetesVersion)))) (printf "cluster %s: kubernetesVersion %q is not a GKE version (vX.Y.Z) for provider gcp-gke" $v.name $v.kubernetesVersion))
+  (list (and $k3s (not $v.kubernetesVersion)) (printf "cluster %s: `kubernetesVersion` is required (k3s release, e.g. v1.35.10+k3s1)" $v.name))
+  (list (and $k3s (not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+\\+k3s[0-9]+$" (toString $v.kubernetesVersion)))) (printf "cluster %s: kubernetesVersion %q is not a k3s release (vX.Y.Z+k3sN)" $v.name $v.kubernetesVersion))
+  (list (and $gke (not (index $providers "gcp"))) (printf "cluster %s: provider gcp-gke needs capi.providers.gcp: true in installation.yaml (CAPG)" $v.name))
+  (list (and (not $byo) (hasKey $providers $pkey) (not (index $providers $pkey))) (printf "cluster %s: provider %s is not enabled in installation.yaml capi.providers" $v.name $v.provider))
+  (list (and (not (has $v.provider (list "docker" "byo"))) (not $v.region)) (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider))
+  (list (not (and (kindIs "string" $v.environment) (has $env (list "development" "staging" "production")))) (printf "cluster %s: environment %q must be one of development, staging, production" $v.name $env))
+  (list (and $gke (ne (toString $v.cni) "gke")) (printf "cluster %s: cni %q is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE's VPC-native networking)" $v.name $v.cni))
+  (list (and $byo (not (regexMatch $dns (toString $v.cni)))) (printf "cluster %s: cni %q must be a DNS label naming the cluster's CNI (cilium, flannel, calico, ...)" $v.name (toString $v.cni)))
+  (list (and $byo (eq (toString (index $addons "cilium")) "true")) (printf "cluster %s: addons.cilium cannot be true on provider byo - the platform installs a CNI only at a cluster's birth (docs/networking.md); drop addons.cilium" $v.name))
+  (list (and $k3s (not (has $v.cni (list "cilium" "flannel")))) (printf "cluster %s: cni %q must be cilium or flannel" $v.name $v.cni))
+  (list (and (not $byo) (hasKey $addons "cilium") (ne (index $addons "cilium") (eq (toString $v.cni) "cilium"))) (printf "cluster %s: addons.cilium=%v contradicts cni=%s (the cilium addon follows `cni`; drop addons.cilium)" $v.name (index $addons "cilium") $v.cni))
+-}}
+{{- range $addon, $on := $addons -}}
+{{- $checks = append $checks (list (not (kindIs "bool" $on)) (printf "cluster %s: addons.%s must be true or false" $v.name $addon)) -}}
 {{- end -}}
-{{- if or (lt (int $replicas) 1) (eq (mod (int $replicas) 2) 0) -}}
-{{- fail (printf "cluster %s: controlPlane.replicas %v must be odd (1, 3, 5): k3s servers are embedded etcd voters" $v.name $replicas) -}}
-{{- end -}}
-{{- if and (ne $v.provider "docker") (eq (toString $v.environment) "production") (lt (int $replicas) 3) -}}
-{{- fail (printf "cluster %s: production on %s needs controlPlane.replicas >= 3 - a single-server rollout ends with an unsafe 2 -> 1 etcd member removal (docs/providers.md)" $v.name $v.provider) -}}
-{{- end -}}
-{{- end -}}
+{{- $checks = concat $checks (list
+  (list (and $byo (not (empty $mg))) (printf "cluster %s: mesh.group is not available on provider byo yet (#174): drop mesh.group" $v.name))
+  (list (and (not (empty $mg)) (not (regexMatch $dns (toString $mg)))) (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mg))
+  (list (and (not (empty $mg)) (eq (toString (index $addons "istio-ambient")) "false")) (printf "cluster %s: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" $v.name))
+  (list (and (not (empty $mg)) (not (index (($v.mgmt | default dict).addons | default dict) "openbao"))) (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name))
+  (list (and (not (empty $mg)) (not (has $mg ($mesh.groups | default list)))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
+  (list (and (not (empty $mg)) (not (($mesh.ca | default dict).host))) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))
+  (list (and (hasKey $addons "istio-eastwest") (ne (index $addons "istio-eastwest") (not (empty $mg)))) (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $addons "istio-eastwest") $mg))
+  (list (and (hasKey $addons "istio-csr") (ne (index $addons "istio-csr") (not (empty $mg)))) (printf "cluster %s: addons.istio-csr=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-csr)" $v.name (index $addons "istio-csr") $mg))
+  (list (and $gke $cpSet) (printf "cluster %s: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" $v.name))
+  (list (and $gke (not $v.workers)) (printf "cluster %s: gcp-gke needs at least one entry in workers (a GKE node pool)" $v.name))
+  (list (and $gke (not (($v.providerSpec | default dict).project))) (printf "cluster %s: providerSpec.project (GCP project id) is required for gcp-gke" $v.name))
+  (list (and $k3s (not (regexMatch "^[0-9]+$" (toString $replicas)))) (printf "cluster %s: controlPlane.replicas %v must be a whole number (1, 3, 5)" $v.name $replicas))
+  (list (and $k3s (or (lt (int $replicas) 1) (eq (mod (int $replicas) 2) 0))) (printf "cluster %s: controlPlane.replicas %v must be odd (1, 3, 5): k3s servers are embedded etcd voters" $v.name $replicas))
+  (list (and $k3s (ne (toString $v.provider) "docker") (eq $env "production") (lt (int $replicas) 3)) (printf "cluster %s: production on %s needs controlPlane.replicas >= 3 - a single-server rollout ends with an unsafe 2 -> 1 etcd member removal (docs/providers.md)" $v.name $v.provider))
+) -}}
 {{- range $i, $w := $v.workers -}}
-{{- if not $w.name -}}
-{{- fail (printf "cluster %s: workers[%d].name is required" $v.name $i) -}}
+{{- $checks = append $checks (list (not $w.name) (printf "cluster %s: workers[%d].name is required" $v.name $i)) -}}
 {{- end -}}
+{{- range $c := $checks -}}
+{{- if index $c 0 -}}{{- fail (index $c 1) -}}{{- end -}}
 {{- end -}}
 {{- end }}
 
-{{- define "capi.gke" -}}
-{{- eq (toString .Values.provider) "gcp-gke" | toString -}}
-{{- end }}
-
-{{- define "capi.byo" -}}
-{{- eq (toString .Values.provider) "byo" | toString -}}
-{{- end }}
+{{- define "capi.gke" -}}{{ eq (toString .Values.provider) "gcp-gke" | toString }}{{- end }}
+{{- define "capi.byo" -}}{{ eq (toString .Values.provider) "byo" | toString }}{{- end }}
 
 {{- define "capi.labels" -}}
 platform.koorikla.io/name: {{ .Values.name | quote }}
@@ -181,14 +82,12 @@ platform.koorikla.io/cni: {{ .Values.cni | quote }}
 mesh.platform.koorikla.io/group: {{ . | quote }}
 mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
 {{- end }}
-{{- /* byo: the cluster brings its CNI, the cilium addon never runs there (whatever cni says). */}}
 {{- $cilium := and (eq .Values.cni "cilium") (ne (include "capi.byo" .) "true") }}
 {{- range $addon, $on := merge (dict "cilium" $cilium "istio-eastwest" (not (empty $meshGroup)) "istio-csr" (not (empty $meshGroup))) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}
 
-{{- /* "true" when nodes pull from the installation's Harbor (installation.yaml registry.type harbor + host). */ -}}
 {{- define "capi.registry.harbor" -}}
 {{- $r := .Values.registry | default dict -}}
 {{- and (eq (toString $r.type) "harbor") (ne (toString ($r.host | default "")) "") | toString -}}
@@ -198,34 +97,81 @@ addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
 {{- end }}
 
+{{- define "capi.variables" -}}
+{{- $gke := eq (include "capi.gke" .) "true" -}}
+{{- $harbor := and (not $gke) (eq (include "capi.registry.harbor" .) "true") -}}
+{{- $vars := dict -}}
+{{- if not $gke -}}
+{{- $vars = dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni -}}
+{{- if $harbor -}}
+{{- $_ := set $vars "registryCA" true -}}
+{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias -}}
+{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") -}}
+{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if ne .Values.provider "docker" -}}
+{{- $_ := set $vars "region" .Values.region -}}
+{{- with (.Values.controlPlane | default dict).machineType -}}
+{{- $_ := set $vars "controlPlaneMachineType" . -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := mergeOverwrite $vars (.Values.providerSpec | default dict) -}}
+{{- range $k := keys $vars | sortAlpha }}
+- name: {{ $k }}
+  value: {{ index $vars $k | toJson }}
+{{- end }}
+{{- end }}
+
+{{- define "capi.topology.gke" -}}
+workers:
+  machinePools:
+    {{- range .Values.workers }}
+    - class: default-worker
+      name: {{ .name }}
+      replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
+      {{- if or .machineType .failureDomain }}
+      variables:
+        overrides:
+          {{- with .machineType }}
+          - name: workerMachineType
+            value: {{ . | quote }}
+          {{- end }}
+          {{- with .failureDomain }}
+          - name: workerNodeLocations
+            value: [{{ . | quote }}]
+          {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "capi.topology.k3s" -}}
+controlPlane:
+  replicas: {{ (.Values.controlPlane | default dict).replicas | default 1 }}
+{{- if .Values.workers }}
+workers:
+  machineDeployments:
+    {{- range .Values.workers }}
+    - class: default-worker
+      name: {{ .name }}
+      replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
+      {{- with .failureDomain }}
+      failureDomain: {{ . | quote }}
+      {{- end }}
+      {{- if and .machineType (ne $.Values.provider "docker") }}
+      variables:
+        overrides:
+          - name: workerMachineType
+            value: {{ .machineType | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
 {{- include "capi.validate" . }}
 {{- if ne (include "capi.byo" .) "true" }}
 {{- $gke := eq (include "capi.gke" .) "true" }}
-{{- /* ClusterClass variables: generated facts first, providerSpec (fleet file) last so it can override them.
-gke-managed has no node files (registryAuth/registryCA) and no cni variable: GKE owns nodes and their network. */ -}}
-{{- $harbor := and (not $gke) (eq (include "capi.registry.harbor" .) "true") }}
-{{- $vars := dict }}
-{{- if not $gke }}
-{{- $vars = dict "registryAuth" (or (.Values.secrets.nodeRegistryAuth.enabled | default false) $harbor) "cni" .Values.cni }}
-{{- end }}
-{{- if $harbor }}
-{{- $_ := set $vars "registryCA" true }}
-{{- /* Harbor's token realm is its externalURL: nodes must resolve the registry name itself (no mirror hop). Local
-CAPD nodes get an /etc/hosts alias to the container that publishes it (k3d serverlb); real installations use DNS. */ -}}
-{{- if and (eq .Values.provider "docker") .Values.registry.nodeHostAlias }}
-{{- $_ := set $vars "registryHostAlias" (regexReplaceAll ":[0-9]+$" .Values.registry.host "") }}
-{{- $_ := set $vars "registryHostAliasTarget" .Values.registry.nodeHostAlias }}
-{{- end }}
-{{- end }}
-{{- if ne .Values.provider "docker" }}
-{{- $_ := set $vars "region" .Values.region }}
-{{- with (.Values.controlPlane | default dict).machineType }}
-{{- $_ := set $vars "controlPlaneMachineType" . }}
-{{- end }}
-{{- end }}
-{{- range $k, $val := .Values.providerSpec }}
-{{- $_ := set $vars $k $val }}
-{{- end }}
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
@@ -237,7 +183,7 @@ metadata:
     {{- include "capi.annotations" . | nindent 4 }}
 spec:
   {{- if not $gke }}
-  clusterNetwork:             # k3s defaults (the k3s provider does not pass these on; kept for CAPI/tools)
+  clusterNetwork:
     pods:
       cidrBlocks: [10.42.0.0/16]
     services:
@@ -249,52 +195,7 @@ spec:
       name: {{ ternary "gke-managed" (printf "k3s-%s" .Values.provider) $gke }}
       namespace: fleet
     version: {{ .Values.kubernetesVersion }}
-    {{- if $gke }}
-    {{- /* GKE node pools: one MachinePool per fleet file worker; failureDomain -> the pool's zone (nodeLocations). */}}
-    workers:
-      machinePools:
-        {{- range .Values.workers }}
-        - class: default-worker
-          name: {{ .name }}
-          replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
-          {{- if or .machineType .failureDomain }}
-          variables:
-            overrides:
-              {{- with .machineType }}
-              - name: workerMachineType
-                value: {{ . | quote }}
-              {{- end }}
-              {{- with .failureDomain }}
-              - name: workerNodeLocations
-                value: [{{ . | quote }}]
-              {{- end }}
-          {{- end }}
-        {{- end }}
-    {{- else }}
-    controlPlane:
-      replicas: {{ (.Values.controlPlane | default dict).replicas | default 1 }}
-    {{- end }}
-    {{- with (not $gke | ternary .Values.workers (list)) }}
-    workers:
-      machineDeployments:
-        {{- range . }}
-        - class: default-worker
-          name: {{ .name }}
-          replicas: {{ hasKey . "replicas" | ternary .replicas 1 }}
-          {{- with .failureDomain }}
-          failureDomain: {{ . | quote }}
-          {{- end }}
-          {{- if and .machineType (ne $.Values.provider "docker") }}
-          variables:
-            overrides:
-              - name: workerMachineType
-                value: {{ .machineType | quote }}
-          {{- end }}
-        {{- end }}
-    {{- end }}
+    {{- include (ternary "capi.topology.gke" "capi.topology.k3s" $gke) . | nindent 4 }}
     variables:
-      {{- range $k := keys $vars | sortAlpha }}
-      - name: {{ $k }}
-        value: {{ index $vars $k | toJson }}
-      {{- end }}
+      {{- include "capi.variables" . | nindent 6 }}
 {{- end }}
