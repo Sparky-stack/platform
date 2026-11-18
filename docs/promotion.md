@@ -86,6 +86,9 @@ Application excludes that file.
       (`hack/tests/test_gitops_contracts.sh`) reject tenant projects named `<other project>-…` (their gated
       Applications would look like the other project's) and any Application name `<project>-<app>[-<env>]` that two
       tenant files of an installation share (`a`/`b-c` and `a-b`/`c` both give `a-b-c`).
+  - Production `ResourceReleaseBinding`s (a database bound to production, [data-services.md](data-services.md#postgresql-from-openchoreo))
+    follow the same rule. They have no component, so the writer must be a gated Application of the binding's project
+    (`<spec.owner.projectName>-<app>-<spec.environment>`): commit them to the app's `release-bindings/production.yaml`.
   - The OpenChoreo controller may change metadata only (`object.spec == oldObject.spec`, for finalizers).
   - The garbage collector may delete: deleting the Component cascades to its production binding. So the restricted
     groups may not delete gated Components either (next bullet); offboarding is removing the app from the tenant file
