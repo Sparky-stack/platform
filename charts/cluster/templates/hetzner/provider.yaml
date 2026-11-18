@@ -1,0 +1,15 @@
+{{- /* CAPH InfrastructureProvider (scope fleet, capi.providers.hetzner). No provider-level credentials: every
+HetznerCluster names its token secret (clusterclass.yaml). */ -}}
+{{- if and (eq .Values.scope "fleet") .Values.capi.providers.hetzner }}
+{{ include "providers.namespace" "caph-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: hetzner
+  namespace: caph-system
+  annotations:
+    {{- include "providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ .Values.hetzner.version }}
+{{- end }}

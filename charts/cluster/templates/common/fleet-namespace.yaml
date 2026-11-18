@@ -1,0 +1,11 @@
+{{- /* Namespace fleet (scope fleet): ClusterClasses, Clusters and their secrets live here. */ -}}
+{{- if eq .Values.scope "fleet" }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fleet
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/part-of: platform
+{{- end }}

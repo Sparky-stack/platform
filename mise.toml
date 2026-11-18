@@ -11,7 +11,7 @@ min_version = "2026.1.0"
 kubectl = "1.35.10"        # aqua:kubernetes/kubernetes/kubectl; = k3s v1.35 of mgmt and workload clusters (skew +-1)
 helm = "4.3.2"             # aqua:helm/helm
 k3d = "5.8.3"              # aqua:k3d-io/k3d; local mgmt cluster (bootstrap/k3d-mgmt.yaml, k3d.io/v1alpha5)
-clusterctl = "1.13.8"      # aqua:kubernetes-sigs/cluster-api; = CAPI core in addons/capi-providers
+clusterctl = "1.13.8"      # aqua:kubernetes-sigs/cluster-api; = CAPI core in charts/cluster
 argocd = "3.6.1"           # aqua:argoproj/argo-cd; = Argo CD server (addons/argo-cd)
 # YAML / validation
 yq = "4.54.3"              # aqua:mikefarah/yq

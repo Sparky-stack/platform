@@ -1,32 +1,32 @@
 suite: provider byo - an existing cluster registered without CAPI; PushSecrets replace the ClusterResourceSets
 templates:
-  - templates/capi-cluster.yaml
-  - templates/openchoreo-helpers.yaml
-  - templates/mesh-helpers.yaml
-  - templates/capi-registries.yaml
-  - templates/argocd-cluster-secret.yaml
-  - templates/byo-access.yaml
-  - templates/openchoreo-agent-crs.yaml
-  - templates/openchoreo-agent-pki.yaml
-  - templates/openchoreo-dataplane.yaml
-  - templates/secrets-seed-crs.yaml
-  - templates/falco-escalation-crs.yaml
-  - templates/image-verification-crs.yaml
+  - templates/common/capi-cluster.yaml
+  - templates/common/_openchoreo.tpl
+  - templates/common/_mesh.tpl
+  - templates/common/capi-registries.yaml
+  - templates/common/argocd-cluster-secret.yaml
+  - templates/byo/access.yaml
+  - templates/common/openchoreo-agent-crs.yaml
+  - templates/common/openchoreo-agent-pki.yaml
+  - templates/common/openchoreo-dataplane.yaml
+  - templates/common/secrets-seed-crs.yaml
+  - templates/common/falco-escalation-crs.yaml
+  - templates/common/image-verification-crs.yaml
 values: [values/byo.yaml]
 tests:
   - it: renders no CAPI Cluster
-    template: templates/capi-cluster.yaml
+    template: templates/common/capi-cluster.yaml
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: renders no node registry config even with node registry auth and Harbor (nodes belong to the cluster's owner)
-    template: templates/capi-registries.yaml
+    template: templates/common/capi-registries.yaml
     set: { secrets.nodeRegistryAuth.enabled: true }
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: reads the kubeconfig from platform store key byo-<name> into fleet/<name>-kubeconfig (the Secret CAPI would write)
-    template: templates/byo-access.yaml
+    template: templates/byo/access.yaml
     documentIndex: 0
     asserts:
       - isKind: { of: ExternalSecret }
@@ -37,7 +37,7 @@ tests:
       - equal: { path: spec.data, value: [{ secretKey: value, remoteRef: { key: byo-byo1, property: kubeconfig } }] }
 
   - it: pushes through a ClusterSecretStore on that kubeconfig, usable from fleet only
-    template: templates/byo-access.yaml
+    template: templates/byo/access.yaml
     documentIndex: 1
     asserts:
       - isKind: { of: ClusterSecretStore }
@@ -47,7 +47,7 @@ tests:
       - notExists: { path: spec.provider.kubernetes.auth }
 
   - it: registers with Argo CD from the same Secret, labelled provider byo, cilium off
-    template: templates/argocd-cluster-secret.yaml
+    template: templates/common/argocd-cluster-secret.yaml
     asserts:
       - equal: { path: 'spec.data[0].remoteRef', value: { key: byo1-kubeconfig, property: value } }
       - equal: { path: 'spec.target.template.metadata.labels["platform.koorikla.io/provider"]', value: byo }
@@ -61,14 +61,14 @@ tests:
       - matchRegex: { path: spec.target.template.data.config, pattern: 'client-key-data' }
 
   - it: keeps the cilium addon off on byo even when the cluster runs Cilium (the platform installs a CNI only at birth)
-    template: templates/argocd-cluster-secret.yaml
+    template: templates/common/argocd-cluster-secret.yaml
     set: { cni: cilium }
     asserts:
       - equal: { path: 'spec.target.template.metadata.labels["platform.koorikla.io/cni"]', value: cilium }
       - equal: { path: 'spec.target.template.metadata.labels["addons.platform.koorikla.io/cilium"]', value: "false" }
 
   - it: pushes the agent client cert into openchoreo-data-plane/cluster-agent-tls, not via a ClusterResourceSet
-    template: templates/openchoreo-agent-crs.yaml
+    template: templates/common/openchoreo-agent-crs.yaml
     asserts:
       - hasDocuments: { count: 3 }
       - isKind: { of: PushSecret }
@@ -88,7 +88,7 @@ tests:
         documentIndex: 0
 
   - it: pushes the gateway CA public cert (read from store mgmt-openchoreo) into platform-delivery
-    template: templates/openchoreo-agent-crs.yaml
+    template: templates/common/openchoreo-agent-crs.yaml
     asserts:
       - isKind: { of: ExternalSecret }
         documentIndex: 1
@@ -104,21 +104,21 @@ tests:
         documentIndex: 2
 
   - it: keeps the agent CA and its key on mgmt (only the client cert Secret is pushed)
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     asserts:
       - hasDocuments: { count: 4 }
       - equal: { path: spec.commonName, value: byo1 }
         documentIndex: 3
 
   - it: registers the ClusterDataPlane with planeID == name like any cluster
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentSelector: { path: kind, value: ClusterDataPlane }
     asserts:
       - equal: { path: spec.planeID, value: byo1 }
       - equal: { path: spec.clusterAgent.clientCA.secretKeyRef.name, value: byo1-agent-ca }
 
   - it: seeds workload keys by PushSecret into openchoreo-secrets
-    template: templates/secrets-seed-crs.yaml
+    template: templates/common/secrets-seed-crs.yaml
     asserts:
       - hasDocuments: { count: 2 }
       - isKind: { of: ExternalSecret }
@@ -131,7 +131,7 @@ tests:
         documentIndex: 1
 
   - it: pushes the derived falco token Secret into falco/falcosidekick-escalation
-    template: templates/falco-escalation-crs.yaml
+    template: templates/common/falco-escalation-crs.yaml
     asserts:
       - hasDocuments: { count: 2 }
       - equal: { path: spec.target.template.type, value: Opaque }
@@ -146,7 +146,7 @@ tests:
         documentIndex: 1
 
   - it: pushes image verification material (public keys to platform-delivery, pull secret to kyverno), never the private key
-    template: templates/image-verification-crs.yaml
+    template: templates/common/image-verification-crs.yaml
     asserts:
       - hasDocuments: { count: 4 }
       - equal: { path: 'spec.data[0].remoteRef', value: { key: cosign-platform, property: cosign.pub } }
@@ -166,8 +166,8 @@ tests:
     templates:
       - templates/openchoreo-agent-crs.yaml
       - templates/secrets-seed-crs.yaml
-      - templates/falco-escalation-crs.yaml
-      - templates/image-verification-crs.yaml
+      - templates/common/falco-escalation-crs.yaml
+      - templates/common/image-verification-crs.yaml
     documentSelector: { path: kind, value: ClusterResourceSet, matchMany: true, skipEmptyTemplates: true }
     asserts:
       - hasDocuments: { count: 0 }
@@ -175,7 +175,7 @@ tests:
   - it: CAPI clusters keep their ClusterResourceSets and get no PushSecret or byo store
     values: [values/capi-docker.yaml]
     templates:
-      - templates/byo-access.yaml
+      - templates/byo/access.yaml
       - templates/openchoreo-agent-crs.yaml
     documentSelector: { path: kind, value: PushSecret, matchMany: true, skipEmptyTemplates: true }
     asserts:

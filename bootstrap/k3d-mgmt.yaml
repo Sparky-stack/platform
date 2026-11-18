@@ -28,7 +28,7 @@ options:
       # Longer leader election for the embedded controllers, to ride out slow etcd fsyncs. k3s exits on a missed renewal
       # ("leaderelection lost"), and the clean bootstrap's I/O burst (CAPD nodes, Harbor, image pulls) stalls etcd
       # fdatasync for 5-8 s on a busy host: 5 mgmt restarts in the first 15 min, each restarting every mgmt pod.
-      # Upstream 15s/10s/2s. Same values as the CAPD ClusterClass (addons/clusterclasses k3s.dockerLeaderElectionArgs,
+      # Upstream 15s/10s/2s. Same values as the CAPD ClusterClass (charts/cluster k3s.dockerLeaderElectionArgs,
       # #82; hack/tests/test_gitops_contracts.sh keeps them equal).
       - arg: --kube-controller-manager-arg=leader-elect-lease-duration=60s
         nodeFilters: [server:*]

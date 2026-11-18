@@ -120,31 +120,29 @@ for inst_dir in installations/*; do
   check_kubeconform "charts/platform ($inst)" "$TMP/platform-$inst.yaml"
 done
 
-# 4. Render + kubeconform charts/cluster for every installation x cluster file
+# 4. Render + kubeconform charts/cluster (scope cluster) for every installation x cluster file; scope fleet renders in 5.
 echo "==> Testing charts/cluster"
-if [[ -f charts/cluster/templates/capi-cluster.yaml ]]; then
-  for inst_dir in installations/*; do
-    [[ -f "$inst_dir/installation.yaml" ]] || continue
-    inst=$(basename "$inst_dir")
-    for cf in "$inst_dir"/clusters/*.yaml; do
-      [[ -f "$cf" ]] || continue
-      cname=$(yq '.name' "$cf")
-      helm lint charts/cluster --values "$inst_dir/installation.yaml" --values "$cf" >/dev/null
-      helm template "cluster-$cname" charts/cluster --namespace fleet \
-        --values "$inst_dir/installation.yaml" --values "$cf" > "$TMP/cluster-$inst-$cname.yaml"
-      check_kubeconform "charts/cluster ($inst/$cname)" "$TMP/cluster-$inst-$cname.yaml"
-    done
+for inst_dir in installations/*; do
+  [[ -f "$inst_dir/installation.yaml" ]] || continue
+  inst=$(basename "$inst_dir")
+  for cf in "$inst_dir"/clusters/*.yaml; do
+    [[ -f "$cf" ]] || continue
+    cname=$(yq '.name' "$cf")
+    helm lint charts/cluster --values "$inst_dir/installation.yaml" --values "$cf" >/dev/null
+    helm template "cluster-$cname" charts/cluster --namespace fleet \
+      --values "$inst_dir/installation.yaml" --values "$cf" > "$TMP/cluster-$inst-$cname.yaml"
+    check_kubeconform "charts/cluster ($inst/$cname)" "$TMP/cluster-$inst-$cname.yaml"
   done
-else
-  echo "  SKIP charts/cluster (capi-cluster.yaml not present on this branch)"
-fi
+done
 
 # 5. Render + kubeconform every addon in addons/* (standalone + layered per installation/role/cluster)
 echo "==> Testing addons/*"
-for dir in addons/*; do
+# Catalog entries with their own chart `path` (cluster-fleet: charts/cluster in scope fleet) render here like addons.
+for dir in addons/* $(yq '.addons[] | select(.path) | .path' charts/platform/values.yaml); do
   [[ -f "$dir/Chart.yaml" ]] || continue
   selected "$dir" || continue
-  addon=$(basename "$dir")
+  addon=$(D="$dir" yq '.addons | to_entries | .[] | select(.value.path == strenv(D)) | .key' charts/platform/values.yaml)
+  [[ -n "$addon" ]] || addon=$(basename "$dir")
   ns=$(yq ".addons[\"$addon\"].namespace // \"$addon\"" charts/platform/values.yaml)
 
   cn_params=()
@@ -160,9 +158,11 @@ for dir in addons/*; do
   read_lines lp_args label_param_args "$addon" "$NO_LABELS"
   standalone_sets+=(${lp_args[@]+"${lp_args[@]}"})
 
-  helm template "$(yq ".addons[\"$addon\"].releaseName // \"$addon\"" charts/platform/values.yaml)" "$dir" --namespace "$ns" \
-    ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
-  check_kubeconform "addons/$addon (standalone)" "$TMP/addon-$addon-standalone.yaml"
+  if [[ "$dir" == addons/* ]]; then   # a `path` chart has its own standalone render (charts/cluster: step 4 + unittest)
+    helm template "$(yq ".addons[\"$addon\"].releaseName // \"$addon\"" charts/platform/values.yaml)" "$dir" --namespace "$ns" \
+      ${standalone_sets[@]+"${standalone_sets[@]}"} > "$TMP/addon-$addon-standalone.yaml"
+    check_kubeconform "addons/$addon (standalone)" "$TMP/addon-$addon-standalone.yaml"
+  fi
 
   roles_raw=$(yq ".addons[\"$addon\"].roles[]?" charts/platform/values.yaml || true)
   [[ -n "$roles_raw" ]] || roles_raw=$'mgmt\nworkload'
@@ -291,10 +291,6 @@ failed=0
 for dir in charts/* addons/* examples/*; do
   [[ -d "$dir/tests" ]] || continue
   selected "$dir" || continue
-  if [[ "$dir" == "charts/cluster" && ! -f "$dir/templates/capi-cluster.yaml" ]]; then
-    echo "==> SKIP helm unittest $dir (capi-cluster.yaml not present on this branch)"
-    continue
-  fi
   echo "==> helm unittest $dir"
   if helm unittest "$dir"; then
     passed=$((passed + 1))

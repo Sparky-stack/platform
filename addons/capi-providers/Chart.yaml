@@ -1,5 +1,0 @@
-apiVersion: v2
-name: capi-providers
-description: Cluster API providers as cluster-api-operator CRs - core, k3s bootstrap + control plane, docker | aws | hetzner
-type: application
-version: 0.1.0

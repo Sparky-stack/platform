@@ -48,7 +48,7 @@ spec:
       source:
         repoURL: {{ $inst.repoURL | quote }}
         targetRevision: {{ include "platform.addonsTargetRevision" $ }}
-        path: {{ printf "addons/%s" $addon | quote }}
+        path: {{ $cfg.path | default (printf "addons/%s" $addon) | quote }}
         helm:
           releaseName: {{ $cfg.releaseName | default $addon | quote }}
           ignoreMissingValueFiles: true

@@ -1,0 +1,52 @@
+{{- /* CAPG InfrastructureProvider with the GKE gates (scope fleet, capi.providers.gcp). */ -}}
+{{- if and (eq .Values.scope "fleet") .Values.capi.providers.gcp }}
+{{- $gcp := .Values.gcp }}
+{{- $wif := .Values.capi.gcp | default dict }}
+---
+{{ include "providers.namespace" "capg-system" }}
+---
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
+kind: InfrastructureProvider
+metadata:
+  name: gcp
+  namespace: capg-system
+  annotations:
+    {{- include "providers.annotations" . | nindent 4 }}
+spec:
+  version: {{ $gcp.version }}
+  configSecret:
+    name: {{ $gcp.configSecret }}
+    namespace: capg-system
+  {{- include "providers.manager" (dict "p" $gcp "le" .Values.leaderElection) | nindent 2 }}
+  deployment:
+    containers:
+      - name: manager
+        imageUrl: {{ $gcp.image }}
+  # Workload Identity Federation: the credential config (credentials.yaml) reads a projected token of the manager's
+  # ServiceAccount, audience = the WIF provider (its default allowed audience). Kubernetes rotates the token.
+  patches:
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+        name: capg-controller-manager
+        namespace: capg-system
+      patch: |
+        spec:
+          template:
+            spec:
+              containers:
+                - name: manager
+                  volumeMounts:
+                    - name: gcp-wif-token
+                      mountPath: {{ $gcp.tokenPath }}
+                      readOnly: true
+              volumes:
+                - name: gcp-wif-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          audience: {{ printf "https://iam.googleapis.com/%s" $wif.workloadIdentityProvider | quote }}
+                          expirationSeconds: 3600
+{{- end }}
