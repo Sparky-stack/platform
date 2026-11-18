@@ -8,12 +8,14 @@ cert-manager Vault Issuer for this member, pointing at the mesh CA in OpenBao on
            vault://istio-system/openbao-mesh (+ the server URL) - the role accepts only that subject and audience.
 The policy behind the role allows sign on this cluster's PKI role only: a stolen token signs nothing for another
 cluster or group, and expires in 10 minutes. No CA key is ever on this cluster.
-Sync waves: -2 the ServiceAccount, its token-request RBAC and the admission policies (templates/admission.yaml); -1
-the Issuer, whose Ready check already logs in to OpenBao (so it can only turn Ready once they exist); 0 the rest.
+Sync waves: -2 the ServiceAccount, its token-request RBAC and the admission policies (templates/csr-admission.yaml); -1
+the Issuer, whose Ready check already logs in to OpenBao (so it can only turn Ready once they exist); 0 the rest
+(istio-csr, istio base/istiod/cni); 1 ztunnel. So on a member the whole mesh app waits for OpenBao login first.
 */ -}}
+{{- if .Values.mesh.csr.enabled }}
 {{- $i := .Values.issuer }}
-{{- $c := include "istio-csr-addon.cluster" . }}
-{{- $g := include "istio-csr-addon.group" . }}
+{{- $c := include "mesh.cluster" . }}
+{{- $g := include "mesh.group" . }}
 {{- $ca := .Values.mesh.ca }}
 {{- if $g }}
 apiVersion: v1
@@ -22,7 +24,7 @@ metadata:
   name: {{ $i.serviceAccount }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 automountServiceAccountToken: false     # only cert-manager's TokenRequest uses it
@@ -33,7 +35,7 @@ metadata:
   name: {{ printf "%s-tokenrequest" $i.serviceAccount }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 rules:
@@ -48,7 +50,7 @@ metadata:
   name: {{ printf "%s-tokenrequest" $i.serviceAccount }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
 roleRef:
@@ -66,7 +68,7 @@ metadata:
   name: {{ $i.name }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"    # before istio-csr's Deployment and the istiod Certificate
 spec:
@@ -82,4 +84,5 @@ spec:
         role: {{ $i.role }}
         serviceAccountRef:
           name: {{ $i.serviceAccount }}
+{{- end }}
 {{- end }}

@@ -15,7 +15,7 @@ internal approver approves every CertificateRequest. So who may ask is limited h
 OpenBao enforces the rest server-side (allowed DNS names, spiffe://<trust domain>/ns/<ns>/sa/<sa> URIs, TTL).
 */ -}}
 {{- $a := .Values.admission }}
-{{- if $a.enabled }}
+{{- if and .Values.mesh.csr.enabled $a.enabled }}
 {{- $sa := .Values.issuer.serviceAccount }}
 {{- $aud := printf "vault://%s/%s" .Release.Namespace .Values.issuer.name }}
 {{- $self := printf "object.kind == 'Issuer' && object.metadata.namespace == '%s' && object.metadata.name == '%s'" .Release.Namespace .Values.issuer.name }}
@@ -26,7 +26,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: platform-mesh-ca-requests
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
@@ -51,7 +51,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: platform-mesh-ca-certificates
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
@@ -76,7 +76,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: platform-mesh-ca-issuers
   labels:
-    {{- include "istio-csr-addon.labels" . | nindent 4 }}
+    {{- include "mesh.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"   # in force before the Issuer and anything it guards
 spec:
@@ -102,7 +102,7 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: {{ $p }}
   labels:
-    {{- include "istio-csr-addon.labels" $ | nindent 4 }}
+    {{- include "mesh.labels" $ | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 spec:

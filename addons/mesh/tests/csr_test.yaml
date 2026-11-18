@@ -1,17 +1,17 @@
-suite: istio-csr - member side of the mesh CA (Vault Issuer -> OpenBao, JWT auth, no CA key on the cluster)
-release: { name: istio-csr, namespace: istio-system }
+suite: mesh (istio-csr) - member side of the mesh CA (Vault Issuer -> OpenBao, JWT auth, no CA key on the cluster)
+release: { name: mesh, namespace: istio-system }
 templates:
-  - templates/issuer.yaml
-  - templates/admission.yaml
+  - templates/csr-issuer.yaml
+  - templates/csr-admission.yaml
   - charts/cert-manager-istio-csr/templates/deployment.yaml
   - charts/cert-manager-istio-csr/templates/certificate.yaml
 set:
   cluster: { name: dev1 }
-  mesh: { group: local, ca: { host: openbao.example.test, port: 8200 } }
+  mesh: { csr: { enabled: true }, group: local, ca: { host: openbao.example.test, port: 8200 } }
   cert-manager-istio-csr: { app: { server: { clusterID: dev1 } } }
 tests:
   - it: Vault Issuer points at this cluster's role in its group's intermediate, verified with OpenBao's CA
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     documentSelector: { path: kind, value: Issuer }
     asserts:
       - equal: { path: metadata.name, value: openbao-mesh }
@@ -20,7 +20,7 @@ tests:
       - equal: { path: spec.vault.caBundleSecretRef, value: { name: openbao-ca, key: ca.crt } }
 
   - it: "auth: this cluster's JWT mount, projected ServiceAccount token (no static token, no token Secret)"
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     documentSelector: { path: kind, value: Issuer }
     asserts:
       - equal:
@@ -30,7 +30,7 @@ tests:
       - notExists: { path: spec.vault.auth.kubernetes.secretRef }
 
   - it: only cert-manager's controller may mint that ServiceAccount's token
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     asserts:
       - equal: { path: automountServiceAccountToken, value: false }
         documentSelector: { path: kind, value: ServiceAccount }
@@ -40,7 +40,7 @@ tests:
         documentSelector: { path: kind, value: RoleBinding }
 
   - it: "sync order: the Issuer (-1) comes after the ServiceAccount and token RBAC its Ready check logs in with (-2)"
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
         documentSelector: { path: kind, value: Issuer }
@@ -52,12 +52,12 @@ tests:
         documentSelector: { path: kind, value: RoleBinding }
 
   - it: "sync order: the admission policies are in force (-2) before the Issuer they guard"
-    template: templates/admission.yaml
+    template: templates/csr-admission.yaml
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
 
   - it: "a group is a cryptographic boundary: another group signs at its own intermediate"
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     documentSelector: { path: kind, value: Issuer }
     set:
       mesh: { group: prod }
@@ -65,21 +65,21 @@ tests:
       - equal: { path: spec.vault.path, value: pki-mesh-prod-int/sign/dev1 }
 
   - it: standalone render without a group leaves the Issuer out
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     set:
       mesh: { group: "" }
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: "negative: rejects a group that is not a DNS label"
-    template: templates/issuer.yaml
+    template: templates/csr-issuer.yaml
     set:
       mesh: { group: Bad_Group }
     asserts:
-      - failedTemplate: { errorMessage: "istio-csr: mesh.group \"Bad_Group\" must be a DNS label (set by the catalog from mesh.platform.koorikla.io/group)" }
+      - failedTemplate: { errorMessage: "mesh: mesh.group \"Bad_Group\" must be a DNS label (set by the catalog from mesh.platform.koorikla.io/group)" }
 
   - it: only istio-csr and cert-manager may request certificates from the mesh CA; only istiod's Certificate may reference it
-    template: templates/admission.yaml
+    template: templates/csr-admission.yaml
     asserts:
       - hasDocuments: { count: 6 }
       - matchRegex: { path: 'spec.validations[0].expression', pattern: 'system:serviceaccount:istio-system:cert-manager-istio-csr' }
@@ -92,7 +92,7 @@ tests:
         documentIndex: 5
 
   - it: "no second Vault Issuer may obtain a token the mesh CA accepts (ServiceAccount istio-csr-openbao / mesh audience)"
-    template: templates/admission.yaml
+    template: templates/csr-admission.yaml
     asserts:
       - isKind: { of: ValidatingAdmissionPolicy }
         documentIndex: 2

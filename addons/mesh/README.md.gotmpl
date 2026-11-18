@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `cni`, `ztunnel`), plus `cert-manager-istio-csr` (`v0.19.1`, Vault `Issuer` to OpenBao on `mgmt` and admission policies) and the multi-network east-west `Gateway` (`istio-eastwestgateway`) + `platform:istio-reader` discovery RBAC on multicluster mesh members (`values/mesh-member.yaml`).
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel, `values/provider-gcp-gke.yaml` on GKE, `values/provider-aws.yaml` on AWS, and `values/mesh-member.yaml` on mesh members).
+- **Catalog label:** `addons.platform.koorikla.io/mesh` (`default: true`, opt-out with `"false"`); `mesh.csr.enabled` and `mesh.eastwest.enabled` turn on via `values/mesh-member.yaml` when `mesh.platform.koorikla.io/group` is set.
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Mesh CA rotation, member decommissioning and Istio upgrades: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--mesh), [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md#2-remove-decommission-a-workload-cluster) and [upgrades](../../docs/runbooks/upgrades.md#5-istio-ambient-mesh).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking](../../docs/networking.md)
+- [Multicluster mesh](../../docs/multicluster.md)
+{{- end -}}
