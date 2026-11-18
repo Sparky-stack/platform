@@ -302,7 +302,7 @@ seed_generated_secret() {
 
 seed_openchoreo_secret() {
   seed_generated_secret openchoreo thunder-admin-password admin-user-password developer-user-password \
-    backstage-client-secret backstage-backend-secret
+    backstage-client-secret backstage-backend-secret service-mcp-client-secret
   # Observability plane (addon openchoreo-observability-plane) and data-plane telemetry; observer-client-secret is
   # shared with Thunder's observer OAuth client.
   seed_generated_secret openchoreo-observability opensearch-username=admin opensearch-password=@strong \
