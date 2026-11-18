@@ -1,19 +1,4 @@
-{{- /*
-provider byo: register an existing cluster - no CAPI object, same names and labels as a CAPI cluster
-(docs/providers.md "Bring your own cluster (byo)", docs/portability.md).
-  ExternalSecret <name>-kubeconfig     platform store key byo-<name>, property kubeconfig (seeded by `task secrets` on
-                                       the local backend; a vault entry elsewhere) -> Secret fleet/<name>-kubeconfig,
-                                       key `value`: the same Secret CAPI writes for its clusters, so the Argo CD cluster
-                                       secret (argocd-cluster-secret.yaml) and everything else reading it stay unchanged.
-  ClusterSecretStore byo-<name>        ESO kubernetes provider on that kubeconfig (authRef: server, CA and client cert or
-                                       bearer token from the kubeconfig itself); conditions: namespace fleet only.
-                                       Used by PushSecrets only (byo.pushSecret below) - the replacement for CAPI's
-                                       ClusterResourceSet: mgmt pushes the same per-cluster payloads (agent client cert,
-                                       public CAs, derived tokens, seeded keys) into the cluster. CA private keys never
-                                       leave mgmt (invariant 4): only Secrets the CRS path delivers are pushed.
-The kubeconfig grants what Argo CD already has on the cluster (it is the Argo CD cluster secret's credential); no new
-trust. Exec-plugin kubeconfigs are not supported (neither Argo CD's cluster config here nor ESO can run the plugin).
-*/ -}}
+{{- /* provider byo: ExternalSecret fleet/<name>-kubeconfig (wave -1), ClusterSecretStore byo-<name>, and byo.pushSecret helper. */ -}}
 {{- if eq (include "capi.byo" .) "true" }}
 {{- include "capi.validate" . }}
 {{- $name := .Values.name }}
@@ -27,7 +12,6 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"   # before the stores and PushSecrets that read it
 spec:
-  # 1m like the Argo CD cluster secret: a rotated credential or a moved endpoint reaches mgmt within a minute.
   refreshInterval: 1m
   secretStoreRef:
     kind: ClusterSecretStore
@@ -64,26 +48,8 @@ spec:
         namespace: fleet
         key: value
 {{- end }}
-
-{{- /* Platform store key holding the byo cluster's kubeconfig (property kubeconfig). docs/conventions.md "Secret keys". */ -}}
-{{- define "byo.secretKey" -}}byo-{{ required "name is required" .Values.name }}{{- end }}
-
-{{- /* ClusterSecretStore on mgmt that writes into the byo cluster. */ -}}
-{{- define "byo.store" -}}byo-{{ required "name is required" .Values.name }}{{- end }}
-
-{{- /*
-byo.pushSecret: one PushSecret in fleet that copies a whole mgmt Secret into the byo cluster - the byo counterpart of one
-Secret in a ClusterResourceSet payload. Dict arguments:
-  root        the chart context
-  name        PushSecret name (<cluster>-push-<what>)
-  source      Secret in fleet to push (all keys and its type; nothing else)
-  namespace   remote namespace (must exist: created by the addon that owns it; the PushSecret retries until then)
-  remoteName  remote Secret name
-  labels      labels of the remote Secret (dict; the source's labels and annotations are not copied)
-deletionPolicy Delete: a payload switched off while the cluster stays registered is removed from it. Deregistering does
-not reliably clean up (Argo CD deletes the kubeconfig Secret with the PushSecrets): docs/providers.md "Bring your own
-cluster (byo)".
-*/ -}}
+{{- define "byo.secretKey" -}}byo-{{ .Values.name }}{{- end }}
+{{- define "byo.store" -}}byo-{{ .Values.name }}{{- end }}
 {{- define "byo.pushSecret" -}}
 apiVersion: external-secrets.io/v1alpha1
 kind: PushSecret
@@ -93,8 +59,6 @@ metadata:
   labels:
     platform.koorikla.io/name: {{ .root.Values.name | quote }}
   annotations:
-    # After everything else of the cluster app: a PushSecret stays Degraded until its namespace exists on the cluster
-    # (created by the cluster's addon apps), and must not hold back the ClusterDataPlane / Environments (waves 9, 10).
     argocd.argoproj.io/sync-wave: "20"
 spec:
   refreshInterval: 10m

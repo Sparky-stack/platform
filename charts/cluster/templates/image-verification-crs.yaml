@@ -1,31 +1,11 @@
-{{- /*
-Kyverno image verification for Harbor-built images (docs/supply-chain.md "Wiring the key", #15): everything Kyverno on
-this workload cluster needs to verify <registry.host>/<registry.appsProject>/ images signed by the workflow plane,
-delivered like the agent identity: an ESO-templated ClusterResourceSet payload, built on mgmt, applied by CAPI to
-exactly this Cluster (strategy Reconcile: a rotated key, CA or robot secret is re-applied).
-  ExternalSecret <name>-image-verification (fleet) reads
-    cosign.pub of store key imageVerification.cosignKey   (property select: the private key and its password are
-                                                           never read, so they cannot reach the payload)
-    nodes-secret of store key nodeRegistry.secretKey      (pull-only robot, the one the nodes' registries.yaml uses)
-    ca.crt of harbor-ca-bundle via store mgmt-harbor      (public CA cert, name-scoped store)
-  and templates, in namespace imageVerification.namespace:
-    ConfigMap <configMap>   cosign.pub, ca.crt            public; addon kyverno-policies reads cosign.pub at admission
-                                                          (resource.Get), addon kyverno trusts ca.crt (SSL_CERT_DIR)
-    Secret <pullSecret>     .dockerconfigjson             credentials.secrets of the Harbor image policies
-Why not the local seed path (secrets.workloadSeed): it copies whole store keys, i.e. the encrypted private key + its
-password. Why a ConfigMap and not the policy: the key is per installation (locally a fresh pair per mgmt bootstrap),
-and Kyverno 1.20 takes a key inline, from KMS or from a CEL expression - not from a Secret reference.
-*/ -}}
+{{- /* Kyverno Harbor image verification material (cosign.pub, ca.crt, pull robot) via ClusterResourceSet or byo PushSecret. */ -}}
 {{- $iv := .Values.imageVerification }}
 {{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
 {{- if and $iv.enabled $harbor (ne (toString (dig "kyverno" "" (.Values.addons | default dict))) "false") }}
-{{- $name := required "name is required" .Values.name }}
+{{- $name := .Values.name }}
 {{- $nr := .Values.nodeRegistry }}
 {{- $host := .Values.registry.host }}
 {{- if eq (include "capi.byo" .) "true" }}
-{{- /* byo: the ConfigMap's two public keys as Secret <name>-image-verification, pushed to platform-delivery (addon kyverno,
-values/provider-byo.yaml, turns it into ConfigMap <configMap>: PushSecret writes only Secrets), and the pull secret as
-<name>-registry-pull pushed to <namespace>/<pullSecret>. Same store reads as the payload below. */}}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:

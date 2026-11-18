@@ -1,15 +1,4 @@
-{{- /*
-This member's entry for the mesh CA on mgmt (addon openbao): Secret fleet/<name>-mesh-openbao, labelled
-mesh.platform.koorikla.io/openbao-client=true, with PUBLIC data only:
-  cluster, group   from the fleet file
-  server           the member's API server URL (CAPI kubeconfig)  -> OpenBao fetches <server>/openid/v1/jwks
-  ca               the member's cluster CA certificate (CAPI kubeconfig) -> pins that TLS connection
-addon openbao's ExternalSecret mesh-clients collects every such Secret (find by label) and its reconcile creates, for
-exactly this cluster, JWT auth at auth/mesh-<name> (this cluster's own ServiceAccount signing keys), PKI role
-pki-mesh-<group>-int/roles/<name> and identity entity mesh-<name> (static policy mesh-member: sign on that role only).
-Removing mesh.group (or the fleet file) deletes this Secret, and the next reconcile removes the member's auth mount and
-entity: it cannot obtain a new certificate from then on. The kubeconfig's client credentials are read by ESO only and never templated.
-*/ -}}
+{{- /* Publishes public cluster coordinates into Secret fleet/<name>-mesh-openbao for addon openbao JWT/PKI setup. */ -}}
 {{- if include "mesh.group" . }}
 {{- $name := .Values.name }}
 apiVersion: external-secrets.io/v1
@@ -22,7 +11,6 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"   # reads <name>-kubeconfig, which CAPI creates for the Cluster (wave 0)
 spec:
-  # 5m: a re-created cluster (same name) has a new API endpoint and cluster CA (argocd-cluster-secret.yaml).
   refreshInterval: 5m
   secretStoreRef:
     kind: ClusterSecretStore
