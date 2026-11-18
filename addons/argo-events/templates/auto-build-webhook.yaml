@@ -13,7 +13,10 @@ replayed or redelivered push can at most cause one extra reconcile, never a buil
 head, and never a second build of the same commit.
 */ -}}
 {{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
-{{- if and (eq $trigger "webhook") (eq (include "ae.workflowPlane" .) "true") }}
+{{- /* The webhook is configured on the platform GitHub App and its Workflows need the App's tokens (addon
+openchoreo-platform renders WorkflowTemplate auto-build only with it): off without secrets.githubGateApp.enabled. */ -}}
+{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
+{{- if and (eq $trigger "webhook") (eq (include "ae.workflowPlane" .) "true") $gate }}
 {{- $w := .Values.autoBuildWebhook }}
 {{- $org := .Values.openchoreo.orgNamespace }}
 {{- $ns := printf "workflows-%s" $org }}

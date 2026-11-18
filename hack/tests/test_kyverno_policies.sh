@@ -118,7 +118,7 @@ wp_chart="$ROOT/addons/openchoreo-workflow-plane"
   # auto-build webhook (#164): the Sensor's Workflows in the run namespace run only WorkflowTemplate auto-build;
   # other creators there (OpenChoreo's agent: builds, gates) are not matched.
   helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true \
-    --set openchoreo.workflowPlane.autoBuild=webhook -s templates/auto-build-webhook.yaml \
+    --set openchoreo.workflowPlane.autoBuild=webhook --set secrets.githubGateApp.enabled=true -s templates/auto-build-webhook.yaml \
     | yq 'select(.kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding")' > "$TMP/ab-vap.yaml"
   for c in sensor:allowed sensor:denied agent:denied; do
     who=${c%%:*}; res=${c#*:}

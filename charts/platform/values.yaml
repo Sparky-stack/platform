@@ -57,6 +57,14 @@ registry:
 dns:
   provider: none              # none | route53 | cloudflare (docs/dns.md)
   domainFilters: []
+secrets:
+  # The platform GitHub App (store key promotion-gate-github, docs/forking.md (c2)) is available. Auto-build and PR
+  # previews render only when true: their ESO GithubAccessToken generators fail without the key and would leave
+  # secret-stores, openchoreo-platform and every tenant Degraded (#192). Backend kubernetes: bootstrap.sh sets it on
+  # the root app (helm parameter) from whether `task secrets` seeded the key; false in installation.yaml forces it
+  # off. Other backends: set it in installation.yaml once the key is in the store.
+  githubGateApp:
+    enabled: false
 
 addons:
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)

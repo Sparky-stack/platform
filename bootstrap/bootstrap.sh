@@ -459,13 +459,18 @@ cmd_secrets() {
 
   # promotion-gate-github: the platform's GitHub App (Contents, Pull requests, Commit statuses: write; app repos
   # only). The promotion gate and every in-cluster build mint installation tokens scoped to one repository per run
-  # (builds: ESO GithubAccessToken generator, docs/build-plane.md). Optional: without it the gate fails closed and
-  # builds fail at checkout.
+  # (builds: ESO GithubAccessToken generator, docs/build-plane.md). Optional: without it the gate fails closed, builds
+  # fail at checkout, and auto-build + PR previews are not rendered (secrets.githubGateApp.enabled, gate_app_enabled).
   if [[ -n "${GITHUB_GATE_APP_ID:-}${GITHUB_GATE_APP_INSTALLATION_ID:-}${GITHUB_GATE_APP_PRIVATE_KEY_FILE:-}" ]]; then
     require_app_env GITHUB_GATE_APP_ID GITHUB_GATE_APP_INSTALLATION_ID GITHUB_GATE_APP_PRIVATE_KEY_FILE
     apply_secret platform-secrets promotion-gate-github githubAppID=GITHUB_GATE_APP_ID \
       githubAppInstallationID=GITHUB_GATE_APP_INSTALLATION_ID githubAppPrivateKey=@"$GITHUB_GATE_APP_PRIVATE_KEY_FILE"
     log "  promotion-gate-github: GitHub App $GITHUB_GATE_APP_ID, installation $GITHUB_GATE_APP_INSTALLATION_ID"
+  elif [[ "$(gate_app_enabled)" == true ]]; then
+    log "  promotion-gate-github: kept from an earlier run"
+  else
+    warn "  promotion-gate-github: no GITHUB_GATE_APP_*: auto-build and PR previews stay off, the promotion gate fails"
+    warn "  closed, builds cannot clone (docs/forking.md (c2))"
   fi
 
   seed_openchoreo_secret
@@ -474,6 +479,37 @@ cmd_secrets() {
   seed_openbao_secret
   log "  openchoreo, openchoreo-observability, harbor, cosign-platform, openbao-unseal: generated once, kept on re-runs"
   seed_byo_kubeconfigs
+  # A running stack picks up a newly seeded (or removed) gate App without a full `up`.
+  if kubectl --context "$CTX" -n argocd get application root -o name >/dev/null 2>&1; then
+    apply_root_app
+  fi
+}
+
+# gate_app_enabled -> true|false|"" : root app value secrets.githubGateApp.enabled. Features that need the platform
+# GitHub App (auto-build, PR previews: their ESO GithubAccessToken generators fail without the key and degrade the
+# apps) render only when it is true (#192). kubernetes backend: true iff promotion-gate-github is seeded and
+# installation.yaml does not set it to false. Other backends: "" (bootstrap cannot see the store; installation.yaml
+# decides, default false in charts/platform).
+gate_app_enabled() {
+  [[ "$BACKEND" == kubernetes ]] || return 0
+  if [[ "$(yq '.secrets.githubGateApp.enabled' "$INST_FILE")" == false ]]; then
+    echo false
+  elif kubectl --context "$CTX" -n platform-secrets get secret promotion-gate-github -o name >/dev/null 2>&1; then
+    echo true
+  else
+    echo false
+  fi
+}
+
+# root_app_manifest: bootstrap/root-app.yaml for this installation (repo, revision, value file, gate_app_enabled).
+root_app_manifest() {
+  REPO_URL="$REPO_URL" REVISION="$REVISION" INST_NAME="$INST" GATE="$(gate_app_enabled)" \
+    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"] | del(.spec.source.helm.parameters) | with(select(strenv(GATE) != ""); .spec.source.helm.parameters = [{"name": "secrets.githubGateApp.enabled", "value": strenv(GATE)}])' \
+    bootstrap/root-app.yaml
+}
+
+apply_root_app() {
+  root_app_manifest | kubectl --context "$CTX" apply -f - >/dev/null
 }
 
 # Bootstrap repo credentials so Argo CD can read a private fork before ESO exists (same sources as platform-github;
@@ -562,10 +598,8 @@ cmd_argocd() {
 
   seed_argocd_repo_secret
 
-  log "Applying root Application for installation '$INST'"
-  REPO_URL="$REPO_URL" REVISION="$REVISION" INST_NAME="$INST" \
-    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"]' \
-    bootstrap/root-app.yaml | kubectl --context "$CTX" apply -f - >/dev/null
+  log "Applying root Application for installation '$INST' (secrets.githubGateApp.enabled=$(gate_app_enabled))"
+  apply_root_app
 }
 
 cmd_up() {

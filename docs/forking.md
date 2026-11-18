@@ -150,6 +150,15 @@ task secrets
 unset PLATFORM_GITHUB_TOKEN GHCR_TOKEN
 ```
 
+**Without the (c2) App the stack still converges Healthy.** The features that cannot work without it are not
+rendered: auto-build (addon openchoreo-platform, and argo-events' webhook) and PR previews (the preview token in
+secret-stores, every tenant's preview ApplicationSet). Their ESO `GithubAccessToken` generators would otherwise fail
+and leave those apps Degraded (#192). The promotion gate stays (it fails closed at the PR step) and builds fail at
+checkout. The switch is the installation value `secrets.githubGateApp.enabled` (default `false`, charts/platform):
+- backend `kubernetes`: `task up` / `task secrets` set it on the root app from whether `promotion-gate-github` is
+  seeded (seed it later and re-run `task secrets`: the features appear); `false` in installation.yaml keeps them off;
+- other backends: set `true` in installation.yaml once the key is in your store.
+
 `PLATFORM_GITHUB_TOKEN` is deliberately not `GITHUB_TOKEN`: dev shells, devcontainers and Codespaces often export a
 broad token under that name. `GITHUB_TOKEN` [+ `GITHUB_USER`] is still read, with a warning; classic (`ghp_`) and
 OAuth (`gho_`) tokens warn too.
