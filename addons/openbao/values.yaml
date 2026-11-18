@@ -37,7 +37,7 @@ mesh:
 
 # --- platform glue (templates/) -------------------------------------------------------------------------------------
 # Static auto-unseal key (OpenBao `seal "static"`, AES-256-GCM): store key `openbao-unseal`, property `key` = 64 hex
-# characters (32 bytes). Seeded by `make secrets` locally. Production: replace the static seal with a cloud KMS seal
+# characters (32 bytes). Seeded by `task secrets` locally. Production: replace the static seal with a cloud KMS seal
 # (`seal "awskms"` via IRSA / Pod Identity, or `seal "transit"` against another OpenBao) - docs/multicluster.md.
 unseal:
   # -- Pulls `openbao-unseal` (`unseal.{store,remoteKey,secretName}`) from `ClusterSecretStore/platform` for static auto-unseal.

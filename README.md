@@ -75,7 +75,7 @@ templates/              Backstage golden-path scaffolder templates + app repo sk
 examples/               opt-in smoke workloads (such as cross-cluster Istio east-west)
 docs/                   concept guides, day-2 operations handbook (docs/operations.md), runbooks/, and diagrams/
 hack/                   portable tooling, linters, and offline contract tests (hack/tests/)
-mise.toml, Taskfile.yml pinned cross-platform CLI versions and Task entrypoints (Makefile shim)
+mise.toml, Taskfile.yml pinned cross-platform CLI versions and Task entrypoints
 ```
 
 ## Documentation

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # hack/check-docs.py (task lint): Markdown links, anchors, "doc.md "Section"" references, repo paths in code spans and
-# task/make commands must resolve. Negative cases on a fixture first, then the real repo.
+# task commands must resolve (make commands are rejected). Negative cases on a fixture first, then the real repo.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
@@ -19,7 +19,6 @@ cat > "$fx/addons/a/README.md" <<'EOF'
 ## Links
 EOF
 printf 'tasks:\n  up:\n    cmds: []\n  images:audit:\n    cmds: []\n' > "$fx/Taskfile.yml"
-printf 'up: ; @true\n' > "$fx/Makefile"
 touch "$fx/hack/real.sh"
 cat > "$fx/docs/target.md" <<'EOF'
 # Target
@@ -29,7 +28,7 @@ EOF
 cat > "$fx/README.md" <<'EOF'
 # Readme
 [ok](docs/target.md#some-section) [ok2](docs/target.md#node-pulls-mirrors-with-fallback) [web](https://example.com)
-[self](#readme) `hack/real.sh` `addons/<addon>/values.yaml` `task up` `task images:audit` `make up`
+[self](#readme) `hack/real.sh` `addons/<addon>/values.yaml` `task up` `task images:audit`
 docs/target.md "Some Section" and `target.md` "Node pulls"
 ```bash
 task up
@@ -43,7 +42,7 @@ assert_match "$out" "docs check OK" "clean fixture reports OK"
 cat >> "$fx/README.md" <<'EOF'
 [missing](docs/nope.md) [anchor](docs/target.md#nope) <img src="docs/img.png">
 `hack/gone.sh` docs/target.md "No Such Section" docs/absent.md
-`task nope` `make nope`
+`task nope` `make up`
 ```
 task missing-in-block
 ```
@@ -62,7 +61,7 @@ assert_match "$out" "path hack/gone.sh does not exist" "missing repo path in a c
 assert_match "$out" 'has no section "No Such Section"' "missing section reference"
 assert_match "$out" "docs/absent.md does not exist" "missing bare docs/ reference"
 assert_match "$out" 'task nope. is not a Taskfile task' "unknown task"
-assert_match "$out" 'make nope. is not a Makefile target' "unknown make target"
+assert_match "$out" 'make up. is not supported \(use .task.\)' "make target rejected with task hint"
 assert_match "$out" 'task missing-in-block. is not a Taskfile task' "unknown task in a code block"
 assert_eq "$(grep -c 'charts/dep' <<<"$out" || true)" 0 "vendored chart docs are skipped"
 assert_eq "$(grep -c 'templates/t/skeleton' <<<"$out" || true)" 0 "project-template skeleton docs are skipped"
