@@ -2,8 +2,10 @@
 # Images: one image for controller, webhook and cert controller, pinned by multi-arch index digest (tag@digest; the
 # chart renders <repository>:<tag>; docs/conventions.md invariant 9). A chart bump updates tag and digest together.
 external-secrets:
+  # -- Installs ESO CRDs (`external-secrets.genericTargets.enabled` in `values/role-mgmt.yaml` and `values/provider-byo.yaml` enables non-Secret targets on `mgmt` and [byo](../../docs/providers.md#bring-your-own-cluster-byo) clusters).
   installCRDs: true
   image:
+    # -- `v2.15.0` pinned by multi-arch index digest (shared across `image`, `webhook.image`, `certController.image`).
     tag: v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31   # index: amd64, arm64, ppc64le, s390x
   resources:
     requests:

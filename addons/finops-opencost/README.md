@@ -11,9 +11,11 @@ Wrapper chart for OpenChoreo's `finops-opencost` module (`0.2.1`) on `mgmt`. Run
 
 ## Key values
 
-- `finops-opencost.opencost.opencost.exporter.defaultClusterId`: default cluster attribution ID (`mgmt`).
-- `finops-opencost.opencost.opencost.exporter.securityContext`: hardened to meet Pod Security `restricted` (`runAsNonRoot: true`, drop `ALL`).
-- `finops-opencost.adapter.image.tag`: `0.2.1` pinned by multi-arch index digest.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| finops-opencost.adapter.image.tag | string | `"0.2.1@sha256:c9f4175c1ef74e981022a61ee4e9eb084baea286c989fb097bda195d21f3d155"` | `0.2.1` pinned by multi-arch index digest. |
+| finops-opencost.opencost.opencost.exporter.defaultClusterId | string | `"mgmt"` | Default cluster attribution ID (`mgmt`). |
+| finops-opencost.opencost.opencost.exporter.securityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Hardened to meet Pod Security `restricted` (`runAsNonRoot: true`, drop `ALL`). |
 
 ## Day-2 notes
 

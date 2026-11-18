@@ -1,0 +1,17 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Istio Ambient (`1.32.0`: `base`, `istiod`, `cni`, `ztunnel`). Provides sidecarless mTLS (HBONE) and L4 authorization across workload clusters, with optional multi-network multicluster mesh support.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel, `values/provider-gcp-gke.yaml` on GKE and `values/mesh-member.yaml` on mesh members).
+- **Catalog label:** `addons.platform.koorikla.io/istio-ambient` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Rolling `istiod` and `ztunnel` safely: [upgrades](../../docs/runbooks/upgrades.md#5-istio-ambient-istio-ambient-istio-csr-istio-eastwest).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking](../../docs/networking.md)
+- [Multicluster mesh](../../docs/multicluster.md)
+{{- end -}}

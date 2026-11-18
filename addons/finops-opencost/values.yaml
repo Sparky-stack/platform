@@ -10,7 +10,9 @@ finops-opencost:
     opencost:
       # exporter image: the opencost chart already pins ghcr.io/opencost/opencost:1.121.1@sha256 (amd64, arm64)
       exporter:
+        # -- Default cluster attribution ID (`mgmt`).
         defaultClusterId: mgmt   # VERIFY: per-cluster attribution of remote-written workload metrics
+        # -- Hardened to meet Pod Security `restricted` (`runAsNonRoot: true`, drop `ALL`).
         securityContext:         # platform: Pod Security restricted (chart default {}); image runs as uid 1001
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -18,4 +20,5 @@ finops-opencost:
           seccompProfile: { type: RuntimeDefault }
   adapter:
     image:
+      # -- `0.2.1` pinned by multi-arch index digest.
       tag: 0.2.1@sha256:c9f4175c1ef74e981022a61ee4e9eb084baea286c989fb097bda195d21f3d155   # index: amd64, arm64

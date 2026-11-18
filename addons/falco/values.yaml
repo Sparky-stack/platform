@@ -29,6 +29,7 @@ secretStore: default             # slack (mgmt: `platform`, set per role)
 # ClusterResourceSet <cluster>-falco-escalation; the store key falco-webhook never reaches the cluster); mgmt
 # (values/role-mgmt.yaml) renders it from store `platform`, key remoteKey (url, token).
 escalation:
+  # -- Pulls webhook secrets (`escalation.{enabled,remoteKey}` for `falco-webhook`, `slack.{enabled,remoteKey}` for `falco-slack`) via ESO.
   enabled: true
   store: ""
   remoteKey: falco-webhook
@@ -49,6 +50,7 @@ falco:
       tag: 0.14.3@sha256:2230fb4802aafe09455b58d38f8f1faedd8f09f042e9a18fffd397e63488c023   # index: amd64, arm64
   driver:
     enabled: true
+    # -- `modern_ebpf` (`loader.enabled: false`).
     kind: modern_ebpf
     loader:
       enabled: false             # modern eBPF is built into Falco (CO-RE): no driver download/build init container
@@ -171,6 +173,7 @@ falco:
     config:
       # Every event names its cluster (output_fields.cluster): set per cluster by the addon ApplicationSet (catalog
       # clusterNameFormats "cluster:%s"); falco-response cross-checks it against the endpoint the event arrived on.
+      # -- Tags events with `cluster:<name>` (`clusterNameFormats`), forwards to `telemetry-collector` and `falco-talon`, and escalates `critical` events via `falcosidekick-escalation`.
       customfields: ""
       webhook:
         minimumpriority: critical      # escalation (address + token: Secret falcosidekick-escalation, extraEnv below)
@@ -204,6 +207,7 @@ falco:
 
 # --- Falco Talon: scoped responses (rules match only the platform rules, which fire only in dp-* namespaces) ---------
 falco-talon:
+  # -- Enables Falco Talon (`config.rulesOverride` labels suspicious pods on app container shells and terminates pods matching crypto-miner rules).
   enabled: true
   replicaCount: 1                # upstream 2 (+ leader election); one is enough per cluster here
   image:

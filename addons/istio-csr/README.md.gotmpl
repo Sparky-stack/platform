@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `cert-manager-istio-csr` (`v0.19.1`) on multicluster mesh members. Replaces `istiod`'s internal CA so workload and `istiod` certificates are signed by the shared mesh CA in OpenBao on `mgmt` via a cert-manager Vault `Issuer` and audience-bound ServiceAccount JWT auth.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`).
+- **Catalog label:** `addons.platform.koorikla.io/istio-csr` (`default: false`, set to `"true"` by `charts/cluster` when `mesh.group` is set).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Mesh CA rotation and Istio upgrades: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--istio-csr) and [upgrades](../../docs/runbooks/upgrades.md#5-istio-ambient-istio-ambient-istio-csr-istio-eastwest).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Multicluster mesh](../../docs/multicluster.md)
+{{- end -}}

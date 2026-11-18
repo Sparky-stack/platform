@@ -15,6 +15,7 @@
 # Images: full references pinned by multi-arch index digest (docs/conventions.md invariant 9). The Istio charts use an
 # `image` containing "/" verbatim (hub, tag and variant are then ignored): bump the version and digest together.
 global:
+  # -- Istio namespace (`global.{multiCluster.clusterName,meshID,network}` are populated from cluster labels; `global.platform` is `k3s` in `values/cni-flannel.yaml` and `gke` in `values/provider-gcp-gke.yaml`).
   istioNamespace: istio-system
   proxy:
     # waypoint proxies istiod injects (optional in ambient; rendered into the injector config, not a pod spec)
@@ -23,6 +24,7 @@ global:
 base: {}
 
 istiod:
+  # -- `ambient` profile (with `cni.profile` and `ztunnel.profile`, distroless `1.32.0` images pinned by multi-arch index digest; `istiod.env.ENABLE_CA_SERVER` is `"false"` in `values/mesh-member.yaml`).
   profile: ambient
   image: docker.io/istio/pilot:1.32.0-distroless@sha256:219ab7efcf1fd1f883086ad4a4a649c0e70bee3200423d6eef9f435103a79423   # index: amd64, arm64
   # PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER is deliberately NOT set: "false" crashes istiod 1.32.0 as soon as it

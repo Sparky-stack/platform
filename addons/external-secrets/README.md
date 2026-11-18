@@ -11,9 +11,18 @@ Wrapper chart for External Secrets Operator (`2.15.0`). Reconciles `ExternalSecr
 
 ## Key values
 
-- `external-secrets.installCRDs`: `true`.
-- `external-secrets.{image,webhook.image,certController.image}.tag`: `v2.15.0` pinned by multi-arch index digest.
-- `external-secrets.genericTargets.enabled` (`values/role-mgmt.yaml`, `values/provider-byo.yaml`): `true` on `mgmt` and on byo clusters only, so ESO can render non-Secret targets such as gateway CA `ConfigMap`s (byo: rebuilt from the Secrets mgmt pushes, [byo](../../docs/providers.md#bring-your-own-cluster-byo)).
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| external-secrets.certController.image.tag | string | `"v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"` |  |
+| external-secrets.certController.resources.requests.cpu | string | `"25m"` |  |
+| external-secrets.certController.resources.requests.memory | string | `"64Mi"` |  |
+| external-secrets.image.tag | string | `"v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"` | `v2.15.0` pinned by multi-arch index digest (shared across `image`, `webhook.image`, `certController.image`). |
+| external-secrets.installCRDs | bool | `true` | Installs ESO CRDs (`external-secrets.genericTargets.enabled` in `values/role-mgmt.yaml` and `values/provider-byo.yaml` enables non-Secret targets on `mgmt` and [byo](../../docs/providers.md#bring-your-own-cluster-byo) clusters). |
+| external-secrets.resources.requests.cpu | string | `"25m"` |  |
+| external-secrets.resources.requests.memory | string | `"64Mi"` |  |
+| external-secrets.webhook.image.tag | string | `"v2.15.0@sha256:6888f243e5f8f7592c6d7fae2a5547c9e33531441b47b53807b9093b25a00e31"` |  |
+| external-secrets.webhook.resources.requests.cpu | string | `"10m"` |  |
+| external-secrets.webhook.resources.requests.memory | string | `"32Mi"` |  |
 
 ## Day-2 notes
 

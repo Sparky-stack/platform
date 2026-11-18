@@ -11,9 +11,30 @@ Wrapper chart for `external-dns` (`1.23.0` / `v0.23.0`). Publishes DNS records f
 
 ## Key values
 
-- `dns.{provider,domainFilters}`: `none`, `route53` (workload identity only), or `cloudflare` (scoped API token), plus allowed DNS zones.
-- `external-dns.{policy,registry,txtOwnerId}`: `upsert-only` with `txt` ownership set to `<installation>-<cluster>`.
-- `secrets.{store,cloudflare.remoteKey}`: reads `external-dns-cloudflare` from `platform` on `mgmt` and isolated store `dns` on workload clusters.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| cluster.name | string | `"sample"` |  |
+| cluster.role | string | `"mgmt"` |  |
+| dns.domainFilters | list | `[]` |  |
+| dns.provider | string | `"none"` | `none`, `route53` (workload identity only), or `cloudflare` (scoped API token), plus allowed `dns.domainFilters` zones. |
+| external-dns.domainFilters | list | `[]` |  |
+| external-dns.enabled | bool | `false` |  |
+| external-dns.image.tag | string | `"v0.23.0@sha256:1854499e2b08cee47c40a08e356bff20dcb192dbcfde8378fc3f900f12cad5a3"` |  |
+| external-dns.interval | string | `"1m"` |  |
+| external-dns.policy | string | `"upsert-only"` | `upsert-only` with `registry: txt` and `txtOwnerId` set to `<installation>-<cluster>`. |
+| external-dns.provider.name | string | `"aws"` |  |
+| external-dns.registry | string | `"txt"` |  |
+| external-dns.resources.limits.cpu | string | `"100m"` |  |
+| external-dns.resources.limits.memory | string | `"128Mi"` |  |
+| external-dns.resources.requests.cpu | string | `"10m"` |  |
+| external-dns.resources.requests.memory | string | `"48Mi"` |  |
+| external-dns.sources[0] | string | `"gateway-httproute"` |  |
+| external-dns.sources[1] | string | `"gateway-grpcroute"` |  |
+| external-dns.sources[2] | string | `"gateway-tlsroute"` |  |
+| external-dns.txtOwnerId | string | `"sample"` |  |
+| secrets.cloudflare.enabled | bool | `false` |  |
+| secrets.cloudflare.remoteKey | string | `"external-dns-cloudflare"` |  |
+| secrets.store | string | `"platform"` | Reads `external-dns-cloudflare` (`secrets.cloudflare.remoteKey`) from `platform` on `mgmt` and isolated store `dns` on workload clusters. |
 
 ## Day-2 notes
 
