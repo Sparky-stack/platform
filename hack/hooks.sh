@@ -87,7 +87,7 @@ cmd_helm_docs() {
     for root in charts addons; do
       helm-docs --chart-search-root "$root" --template-files ../hack/helm-docs/README.md.gotmpl --template-files README.md.gotmpl >/dev/null 2>&1
     done
-    git diff --exit-code -- '*/README.md'
+    git diff --exit-code -- 'charts/*/README.md' 'addons/*/README.md'
     return
   fi
   read_lines dirs chart_dirs "$@"
@@ -96,7 +96,7 @@ cmd_helm_docs() {
     root=${d%%/*}
     helm-docs --chart-search-root "$root" --chart-to-generate "$d" --template-files ../hack/helm-docs/README.md.gotmpl --template-files README.md.gotmpl >/dev/null 2>&1
   done
-  git diff --exit-code -- '*/README.md'
+  git diff --exit-code -- 'charts/*/README.md' 'addons/*/README.md'
 }
 
 cmd_charts() {
