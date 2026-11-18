@@ -226,6 +226,26 @@ tests:
       - equal: { path: spec.parameters.openAPIV3Schema.properties.checks.properties.postgres.default, value: false }
         documentSelector: { path: metadata.name, value: elixir }
 
+  - it: checks.image overrides must be digest references (run pods in workflows-* admit only digests, #36)
+    template: templates/build-workflows.yaml
+    documentSelector: { path: metadata.name, value: go }
+    asserts:
+      - equal:
+          path: spec.parameters.openAPIV3Schema.properties.checks.properties.image.pattern
+          value: "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+      - matchRegex:
+          path: spec.parameters.openAPIV3Schema.properties.checks.properties.image.default
+          pattern: "@sha256:[0-9a-f]{64}$"
+
+  - it: rejects a stack default checkImage without a digest
+    template: templates/build-workflows.yaml
+    set:
+      buildWorkflows.stacks:
+        - { name: go, displayName: Go, description: d, stack: go, checkImage: "docker.io/library/golang:1.27.4-trixie", checkSetup: "", checkEnv: {} }
+    asserts:
+      - failedTemplate:
+          errorPattern: 'buildWorkflows.stacks\[go\].checkImage "docker.io/library/golang:1.27.4-trixie" must be pinned by digest'
+
   - it: component types allow exactly the build workflows
     template: templates/upstream-defaults.yaml
     documentSelector: { path: metadata.name, value: service }

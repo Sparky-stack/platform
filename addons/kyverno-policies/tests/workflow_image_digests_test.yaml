@@ -1,0 +1,53 @@
+suite: kyverno-policies - digest-only images in workflow run namespaces (#36)
+release:
+  name: kyverno-policies
+  namespace: kyverno
+templates: [templates/workflow-image-digests.yaml]
+tests:
+  - it: is off on workload clusters (no workflow plane there)
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: denies (fail closed) Pods in workflows-* on mgmt unless every image is pinned by digest
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: ValidatingPolicy }
+      - equal: { path: metadata.name, value: platform-workflow-image-digests }
+      - equal: { path: spec.validationActions, value: [Deny] }
+      - equal: { path: spec.failurePolicy, value: Fail }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
+      - equal:
+          path: "spec.matchConstraints.resourceRules[0]"
+          value: { apiGroups: [""], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [pods, pods/ephemeralcontainers] }
+      - equal: { path: "spec.matchConditions[0].expression", value: 'request.namespace.startsWith("workflows-")' }
+      - matchRegex: { path: "spec.matchConditions[1].expression", pattern: '^!\(request.namespace in \[.*"openchoreo-workflow-plane".*\]\)$' }
+      # every container kind, no exception list
+      - matchRegex: { path: "spec.variables[0].expression", pattern: 'object.spec.containers.*initContainers.*ephemeralContainers' }
+      - equal: { path: "spec.variables[1].expression", value: "variables.images.filter(i, !i.matches('^[^@]+@sha256:[0-9a-f]{64}$'))" }
+      - equal: { path: "spec.validations[0].expression", value: size(variables.unpinned) == 0 }
+      - notExists: { path: spec.matchConstraints.excludeResourceRules }
+
+  - it: follows namespacePrefix
+    set:
+      workflowImageDigests: { enabled: true, namespacePrefix: runs- }
+    asserts:
+      - equal: { path: "spec.matchConditions[0].expression", value: 'request.namespace.startsWith("runs-")' }
+
+  - it: rejects a namespacePrefix that would match every namespace or break out of the CEL string
+    set:
+      workflowImageDigests: { enabled: true, namespacePrefix: 'w")||true||("' }
+    asserts:
+      - failedTemplate: { errorPattern: 'workflowImageDigests.namespacePrefix .* must be a namespace name prefix' }
+
+  - it: rejects an empty namespacePrefix
+    set:
+      workflowImageDigests: { enabled: true, namespacePrefix: "" }
+    asserts:
+      - failedTemplate: { errorPattern: 'workflowImageDigests.namespacePrefix .* must be a namespace name prefix' }
+
+  - it: rejects an unknown failurePolicy
+    set:
+      workflowImageDigests: { enabled: true, failurePolicy: Audit }
+    asserts:
+      - failedTemplate: { errorPattern: 'workflowImageDigests.failurePolicy "Audit" is not Fail or Ignore' }

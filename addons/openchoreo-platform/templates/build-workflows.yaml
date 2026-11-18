@@ -15,6 +15,7 @@ Component. CEL (${...}) is evaluated by OpenChoreo per run; ESO templates ({{ }}
 {{- $relPath := include "build.relPathPattern" . }}
 {{- $refPattern := "^[A-Za-z0-9_][A-Za-z0-9._/-]*$" }}
 {{- range $st := $b.stacks }}
+{{- if and $st.checkImage (not (regexMatch "^[^@\\s]+@sha256:[0-9a-f]{64}$" $st.checkImage)) }}{{ fail (printf "buildWorkflows.stacks[%s].checkImage %q must be pinned by digest (image@sha256:<digest>): run pods in workflows-* admit only digest references" $st.name $st.checkImage) }}{{ end }}
 ---
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow
@@ -109,7 +110,10 @@ spec:
             image:
               type: string
               default: {{ $st.checkImage | quote }}
-              description: Toolchain image (pin the version your project needs)
+              # Run pods in workflows-* admit only digest references (addon kyverno-policies
+              # platform-workflow-image-digests, #36): reject a tag here, before the run starts.
+              pattern: "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+              description: Toolchain image by digest, e.g. docker.io/library/golang:1.27-trixie@sha256:<digest> (pin the version your project needs)
             env:
               type: object
               default: {{ $st.checkEnv | toJson }}

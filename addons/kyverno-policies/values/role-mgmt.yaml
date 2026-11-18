@@ -6,6 +6,10 @@ ambientEnrollment:
 imageVerification:
   enabled: false
 
+# The OpenChoreo workflow plane (catalog openchoreo-workflow-plane: roles [mgmt]) runs here: digest-only run images.
+workflowImageDigests:
+  enabled: true
+
 # PR previews: the Environments live here (expiry, cap, TTL); preview cell namespaces only on data planes.
 previewGuards:
   environments: true

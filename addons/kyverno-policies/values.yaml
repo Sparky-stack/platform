@@ -6,6 +6,9 @@
 #   templates/ambient-enrollment.yaml
 #                                MutatingPolicy: OpenChoreo cell namespaces get istio.io/dataplane-mode=ambient
 #                                (workload clusters; values/role-mgmt.yaml turns it off on mgmt).
+#   templates/workflow-image-digests.yaml
+#                                ValidatingPolicy (Deny): Pods in workflows-* (OpenChoreo workflow runs) only with
+#                                image@sha256 references (mgmt only, values/role-mgmt.yaml).
 
 # Never touched by any policy here. Same list as addons/kyverno (webhook namespaceSelector) - keep in sync
 # (hack/tests/test_gitops_contracts.sh checks it).
@@ -170,6 +173,15 @@ imageVerification:
   # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
   # would simply not be matched by the signature policy.
   extraTrustedPrefixes: []
+
+# --- Digest-only images in workflow run namespaces (#36, docs/supply-chain.md "Digest references") ---------------------
+# templates/workflow-image-digests.yaml: ValidatingPolicy platform-workflow-image-digests (Deny) - every Pod image in
+# <namespacePrefix>* (OpenChoreo's workflows-<org ns>: builds, gates, auto-build) is image@sha256:<digest>, including
+# Component checks.image overrides. No exceptions: every image the platform runs there is digest-pinned.
+workflowImageDigests:
+  enabled: false                     # values/role-mgmt.yaml: the workflow plane runs on mgmt (catalog roles [mgmt])
+  namespacePrefix: workflows-
+  failurePolicy: Fail                # Kyverno down: new run pods wait (only workflows-*), never admitted unchecked
 
 # --- PR preview environments (installation.yaml `previews`, docs/preview-environments.md) ------------------------------
 # templates/previews.yaml. `previews` comes from installation.yaml (enabled, ttl, maxPerTenant); these are defaults.
