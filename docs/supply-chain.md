@@ -236,6 +236,9 @@ sourceIntegrity:
 - Best available today:
   - Exact chart versions, reviewed through Renovate PRs, signed git commits (above), so Argo CD only renders reviewed
     chart pins.
+  - Istio's charts (`addons/istio-ambient`) are also pinned by tarball sha256 (`Chart.yaml` annotation
+    `platform.koorikla.io/dependency-digests`, checked by `hack/deps.sh` locally and in CI, not by the Argo CD repo
+    server).
   - Images, whatever chart deploys them into cell namespaces, are verified at admission.
   - When upstreams sign their charts: verify them in the Renovate PR workflow and mirror them into an internal OCI
     registry ([#43](https://github.com/koorikla/platform/issues/43)).

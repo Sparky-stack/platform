@@ -7,7 +7,14 @@ charts that already have a charts/ dir, so a stale lock only shows on a clean tr
 This check runs on every chart, cached or not.
 
 Usage: chartlock.py <chart dir>...   -> one line per stale or missing lock, exit 1 if any.
+       chartlock.py --tarballs <chart dir>...   -> vendored dependency tarballs vs pinned digests (below), exit 1 if any
+       differs or is unpinned.
 Stdlib only: the YAML is read through yq (mise) as JSON.
+
+Digest pins: helm cannot pin a dependency by digest (`version: x@sha256:...` is an invalid constraint), so a chart may
+list the sha256 of each locked tarball in the Chart.yaml annotation DIGESTS_ANNOTATION, one `<name>-<version>.tgz
+sha256:<hex>` per line. That sha256 is the chart's OCI layer digest and the `digest` of a classic index.yaml entry. Once
+a chart has the annotation, every Chart.lock dependency needs a pin and every pin a locked dependency.
 """
 import os
 import hashlib
@@ -49,7 +56,50 @@ def digest(chart_dir):
     return "sha256:" + hashlib.sha256(go_json([req, locked]).encode()).hexdigest(), lock.get("digest")
 
 
+DIGESTS_ANNOTATION = "platform.koorikla.io/dependency-digests"
+
+
+def pins(meta):
+    raw = (meta.get("annotations") or {}).get(DIGESTS_ANNOTATION)
+    if raw is None:
+        return None
+    out = {}
+    for line in raw.splitlines():
+        if line.strip():
+            name, _, sha = line.strip().partition(" ")
+            out[name] = sha.strip()
+    return out
+
+
+def check_tarballs(d):
+    """Problems (strings) of chart dir d's vendored tarballs against its pins; [] when unpinned or all match."""
+    with open(f"{d}/Chart.yaml", encoding="utf-8") as f:
+        if DIGESTS_ANNOTATION not in f.read():  # skip the yq call for the (many) charts without pins
+            return []
+    want = pins(load(f"{d}/Chart.yaml"))
+    if want is None:
+        return []
+    locked = [f"{x['name']}-{x['version']}.tgz" for x in load(f"{d}/Chart.lock").get("dependencies") or []]
+    bad = [f"{d}: {t} has no pinned digest in Chart.yaml annotation {DIGESTS_ANNOTATION}" for t in locked
+           if t not in want]
+    bad += [f"{d}: pinned digest for {t} matches no Chart.lock dependency" for t in want if t not in locked]
+    for t in locked:
+        path = f"{d}/charts/{t}"
+        if t not in want or not os.path.isfile(path):
+            continue
+        with open(path, "rb") as f:
+            have = "sha256:" + hashlib.sha256(f.read()).hexdigest()
+        if have != want[t]:
+            bad.append(f"{d}: charts/{t} is {have}, pinned {want[t]}")
+    return bad
+
+
 def main(dirs):
+    if dirs[:1] == ["--tarballs"]:
+        bad = [line for d in dirs[1:] for line in check_tarballs(d)]
+        for line in bad:
+            print(line)
+        return 1 if bad else 0
     bad = 0
     for d in dirs:
         if not os.path.isfile(f"{d}/Chart.lock"):

@@ -111,8 +111,12 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   scoped per cgroup namespace and CAPD node containers use private cgroupns.
 
 ## Istio ambient (`addons/istio-ambient`)
-- Charts `base`, `istiod`, `cni`, `ztunnel` 1.32.0 from `https://blob.istio.io/istio-release/charts` (the old GCS
-  repository stops at 1.30.x). istiod, cni and ztunnel use `profile: ambient`; images are `docker.io/istio/*`.
+- Charts `base`, `istiod`, `cni`, `ztunnel` 1.32.0 from upstream's OCI registry `oci://ghcr.io/istio/release/charts`
+  (same tarballs as `https://blob.istio.io/istio-release/charts`; the GCS bucket and `gcr.io/istio-release` stop at
+  1.30.x and go away on 2026-12-16, see Istio's
+  [GCP retirement post](https://istio.io/latest/blog/2026/retirement-of-gcp/)). Helm cannot pin dependency digests, so
+  `Chart.yaml` lists each tarball's sha256 (annotation `platform.koorikla.io/dependency-digests`, = the OCI layer
+  digest) and `hack/deps.sh` refuses other bytes; a version bump updates them in the same PR. istiod, cni and ztunnel use `profile: ambient`; images are `docker.io/istio/*`.
 - **CNI directories follow `cni`**:
   - Cilium clusters: istio-cni uses the standard `/etc/cni/net.d` + `/opt/cni/bin` and chains into Cilium's conflist.
   - flannel clusters: `values/cni-flannel.yaml` sets `global.platform: k3s`
