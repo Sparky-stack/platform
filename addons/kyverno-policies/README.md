@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, digest-only images in workflow run namespaces on `mgmt`.
+Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, digest-only images in workflow run namespaces on `mgmt`.
 
 ## Where it runs
 
@@ -15,6 +15,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 
 - `kyverno-policies.{podSecurityStandard,validationFailureAction,vpolExclude}`: `baseline` in `Audit` mode (`failurePolicy: Ignore`), excluding `platformNamespaces`.
 - `ambientEnrollment.enabled`: `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient.
+- `ambientEnrollment.mtls.{strict,optOutLabel}`: every enrolled cell gets NetworkPolicy `platform-mesh-hbone` (HBONE `15008/tcp` from OpenChoreo's peers) and a `STRICT` `PeerAuthentication`, `PERMISSIVE` where the namespace carries `platform.koorikla.io/mtls=permissive` ([strict mTLS in cell namespaces](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
 - `imageVerification.{enabled,environments,github,platformKey,requireDigest}`: `Audit` in `development`/`staging` and `Deny` in `production`, verifying `koorikla/ci` keyless workflow attestations or `cosign-platform` signatures (key inline in `platformKey.publicKey` or, with Harbor, from ConfigMap `platform-image-verification` that `charts/cluster` delivers; `platformKey.cluster`).
 - `workflowImageDigests.{enabled,namespacePrefix,failurePolicy}`: on `mgmt` only (where the workflow plane runs), denies Pods in `workflows-*` whose images are not `image@sha256:<digest>` (ValidatingPolicy `platform-workflow-image-digests`, [build plane](../../docs/build-plane.md#security-posture-of-build-pods)).
 
