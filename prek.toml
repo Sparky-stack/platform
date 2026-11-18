@@ -27,7 +27,7 @@ priority = "fix-whitespace"
 
 [[repos.hooks]]
 id = "end-of-file-fixer"
-exclude = '^(charts|addons)/[^/]+/README\.md$'
+exclude = '^(charts|addons)/[^/]+/README\.md$|^ci/fixtures/'
 priority = "fix-eof"
 
 # CRLF guard: .gitattributes already checks text out as LF everywhere; this catches CRLF written by editors.
