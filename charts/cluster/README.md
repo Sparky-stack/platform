@@ -11,11 +11,52 @@ Onboards one workload cluster from `installations/<inst>/clusters/<name>.yaml`: 
 
 ## Key values
 
-- `name`, `provider`, `region`, `environment`, `kubernetesVersion`: cluster identity, `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`), and k3s (or GKE `vX.Y.Z`) version.
-- `cni`: `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`); `gke` only on `gcp-gke`.
-- `controlPlane.{replicas,machineType}`, `workers[]`, `providerSpec`: server count (odd; `>= 3` for cloud production; none on `gcp-gke`), node pools (GKE: MachinePools), and provider variables.
-- `openchoreo.dataPlane.{enabled,gatewayHost,gatewayPort,environments}`: registers the `ClusterDataPlane` and binds environments.
-- `addons`, `addonsRevision`, `mesh.group`: per-cluster addon overrides, Git revision pin, and opt-in Istio ambient mesh membership.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| addons | object | `{}` | Per-cluster addon overrides (`addons.platform.koorikla.io/<addon>`). |
+| addonsRevision | string | `"HEAD"` | Git revision pin (`platform.koorikla.io/addons-revision`). |
+| cni | string | `"cilium"` | `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`); `gke` only on `gcp-gke`. |
+| controlPlane.machineType | string | `""` | Server instance type (`controlPlane.replicas` is odd, `>= 3` for cloud production; none on `gcp-gke`). |
+| environment | string | `"development"` |  |
+| falcoEscalation.enabled | bool | `true` |  |
+| falcoEscalation.namespace | string | `"falco"` |  |
+| falcoEscalation.remoteKey | string | `"falco-webhook"` |  |
+| imageVerification.configMap | string | `"platform-image-verification"` |  |
+| imageVerification.cosignKey | string | `"cosign-platform"` |  |
+| imageVerification.enabled | bool | `true` |  |
+| imageVerification.namespace | string | `"kyverno"` |  |
+| imageVerification.pullSecret | string | `"platform-registry"` |  |
+| installation.name | string | `"local"` |  |
+| kubernetesVersion | string | `""` | k3s version (or GKE `vX.Y.Z` version on `gcp-gke`). |
+| mesh.ca | object | `{}` |  |
+| mesh.group | string | `""` | Opt-in Istio ambient multicluster mesh membership. |
+| mesh.groups | list | `[]` |  |
+| name | string | `""` | Cluster identity (`ClusterDataPlane` name and `planeID`). |
+| nodeRegistry.caFile | string | `"/etc/rancher/k3s/registry-ca.crt"` |  |
+| nodeRegistry.caSecret | string | `"harbor-ca-bundle"` |  |
+| nodeRegistry.caStore | string | `"mgmt-harbor"` |  |
+| nodeRegistry.robot | string | `"robot$nodes"` |  |
+| nodeRegistry.secretKey | string | `"harbor"` |  |
+| nodeRegistry.secretProperty | string | `"nodes-secret"` |  |
+| openchoreo.dataPlane.enabled | bool | `false` | Registers the `ClusterDataPlane` and binds `openchoreo.dataPlane.{gatewayHost,gatewayPort,environments}`. |
+| openchoreo.dataPlane.environments | list | `[]` |  |
+| openchoreo.dataPlane.gatewayHost | string | `""` |  |
+| openchoreo.dataPlane.gatewayPort | int | `19080` |  |
+| provider | string | `"docker"` | Cluster provider (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`) selecting `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`). |
+| providerSpec | object | `{}` | Extra `ClusterClass` provider variables passed as-is. |
+| region | string | `"local"` |  |
+| registry.host | string | `""` |  |
+| registry.mirror.enabled | bool | `false` |  |
+| registry.nodeHostAlias | string | `""` |  |
+| registry.proxyCache | list | `[]` |  |
+| registry.type | string | `"external"` |  |
+| secrets.backend | string | `"kubernetes"` |  |
+| secrets.nodeRegistryAuth.enabled | bool | `true` |  |
+| secrets.nodeRegistryAuth.key | string | `"platform-ghcr"` |  |
+| secrets.nodeRegistryAuth.registry | string | `"ghcr.io"` |  |
+| secrets.workloadKubernetes.namespace | string | `"openchoreo-secrets"` |  |
+| secrets.workloadSeed.keys[0] | string | `"openchoreo-observability"` |  |
+| workers | list | `[]` | Node pools (`[{name, replicas, machineType, failureDomain}]`; GKE: MachinePools). |
 
 ## Day-2 notes
 

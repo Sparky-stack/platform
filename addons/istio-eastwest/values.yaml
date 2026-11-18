@@ -15,10 +15,12 @@ installation: { name: local }
 # From the cluster's labels (catalog clusterLabelParameters). network falls back to cluster.name, which is what
 # charts/cluster puts on the label and on istio-system (topology.istio.io/network) - all three must agree.
 mesh:
+  # -- Mesh group and `network` labels injected from the cluster secret (`clusterLabelParameters`).
   group: ""
   network: ""
 
 gateway:
+  # -- East-west Gateway sizing (`gateway.{name,replicas,serviceAnnotations,loadBalancerSourceRanges}`) and required peer egress CIDR allowlist outside Docker.
   name: istio-eastwestgateway
   replicas: 1
   # istio-proxy of the generated Deployment (waypoint template). Locally ~30-60Mi idle. VERIFY under load.
@@ -36,6 +38,7 @@ gateway:
 # ClusterRole platform-istio-reader (discovery reads only - no Secrets, no ConfigMaps but istio-system/istio, no writes;
 # templates/reader-rbac.yaml), never to upstream's istio-reader-clusterrole-istio-system (reads all Secrets).
 reader:
+  # -- Scoped discovery RBAC (`reader.{enabled,user,remoteCredentialsSecrets}`) for `platform:istio-reader`.
   enabled: true
   user: platform:istio-reader
   # istiod 1.32.0 serves a peer only after ALL its informers on that peer synced, including the remote credentials

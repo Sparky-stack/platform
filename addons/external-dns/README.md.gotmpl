@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `external-dns` (`1.23.0` / `v0.23.0`). Publishes DNS records for Gateway API `HTTPRoute`, `GRPCRoute`, and `TLSRoute` resources to Route 53 or Cloudflare according to `installation.yaml` `dns.provider`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all infra providers (`namespace: external-dns`; layers `values/dns-<dns.provider>.yaml` and `values/role-<role>.yaml`).
+- **Catalog label:** `addons.platform.koorikla.io/external-dns` (`default: false`, opt-in with `"true"` per cluster).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Rotating Cloudflare DNS tokens: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#6-eso-backed-platform-and-workload-secrets).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [DNS: external-dns](../../docs/dns.md)
+{{- end -}}

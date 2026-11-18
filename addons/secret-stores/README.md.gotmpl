@@ -1,0 +1,19 @@
+{{- define "chart.purpose" -}}
+Renders External Secrets Operator `ClusterSecretStore`s, scoped reader RBAC, and Argo CD's `platform-repo-creds` `ExternalSecret`. Separates platform secrets (`platform`, `workflows`, `mgmt-fleet`, `mgmt-openchoreo` on `mgmt`; `mgmt-harbor` lives in addon harbor) from workload tenant (`default`) and Cloudflare DNS (`dns`) stores.
+
+Every store and its identity (ServiceAccount, plus a reader Role on the kubernetes backend) comes from one helper, `secret-stores.store` (`templates/_helpers.tpl`); `templates/stores.yaml` only lists what differs per store.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: external-secrets`; layers `values/role-<role>.yaml`).
+- **Catalog label:** `addons.platform.koorikla.io/secret-stores` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Rotating GitHub App keys, PATs, and ESO-backed secrets: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#4-github-app-keys-and-registry-pats).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Architecture: Secrets](../../docs/architecture.md#secrets-one-store-name-pluggable-backends)
+- [Conventions: Secret keys](../../docs/conventions.md#secret-keys)
+{{- end -}}

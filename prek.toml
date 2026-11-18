@@ -27,6 +27,7 @@ priority = "fix-whitespace"
 
 [[repos.hooks]]
 id = "end-of-file-fixer"
+exclude = '^(charts|addons)/[^/]+/README\.md$|^ci/fixtures/'
 priority = "fix-eof"
 
 # CRLF guard: .gitattributes already checks text out as LF everywhere; this catches CRLF written by editors.
@@ -123,6 +124,15 @@ entry = "bash hack/hooks.sh chart-lock"
 files = '^(charts|addons)/[^/]+/Chart\.(yaml|lock)$'
 require_serial = true
 verbose = true
+priority = "check"
+
+[[repos.hooks]]
+id = "helm-docs"
+name = "chart README.md in sync with helm-docs"
+language = "system"
+entry = "bash hack/hooks.sh helm-docs"
+files = '^(charts|addons)/[^/]+/(Chart\.yaml|values\.yaml|README\.md(\.gotmpl)?)$|^hack/helm-docs/'
+require_serial = true
 priority = "check"
 
 # helm lint + template + kubeconform (+ helm unittest) of the changed charts only (CHARTS=... hack/test.sh). CI skips

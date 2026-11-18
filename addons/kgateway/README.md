@@ -11,8 +11,11 @@ Wrapper chart for `kgateway-crds` and `kgateway` (`v2.3.1`). Implements Gateway 
 
 ## Key values
 
-- `kgateway.controller.image.tag`: `v2.3.1` pinned by multi-arch index digest.
-- `kgateway.controller.resources`: sets CPU/memory requests (`50m` / `128Mi`) and a `512Mi` memory limit.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| kgateway-crds | object | `{}` |  |
+| kgateway.controller.image.tag | string | `"v2.3.1@sha256:fe72209a3dfa735d1155cc8b7ba4605d0600a0b32ec515816052c678f2d5afbf"` | `v2.3.1` pinned by multi-arch index digest. |
+| kgateway.controller.resources | object | `{"limits":{"memory":"512Mi"},"requests":{"cpu":"50m","memory":"128Mi"}}` | Sets CPU/memory requests (`50m` / `128Mi`) and a `512Mi` memory limit. |
 
 ## Day-2 notes
 

@@ -4,6 +4,7 @@
 #   hack/hooks.sh gitleaks <file>...     secrets in the staged (index) content of the files
 #   hack/hooks.sh py-compile <file>...   Python syntax (python -m py_compile without writing .pyc files)
 #   hack/hooks.sh chart-lock <file>...   Chart.lock in sync with Chart.yaml for the charts the files belong to
+#   hack/hooks.sh helm-docs <file>...    chart README.md in sync with helm-docs for the charts the files belong to
 #   hack/hooks.sh charts <file>...       helm lint + template + kubeconform (+ helm unittest) for those charts only,
 #                                        via `CHARTS=... hack/test.sh` (same rendering as `task test`)
 #   hack/hooks.sh commit-msg <msg-file>  warn (never fail) when the subject is not a conventional commit
@@ -79,6 +80,25 @@ cmd_chart_lock() {
   py hack/lib/chartlock.py "${locked[@]}"
 }
 
+cmd_helm_docs() {
+  local dirs=() d root
+  command -v helm-docs >/dev/null 2>&1 || { echo "helm-docs not on PATH: run 'mise install'" >&2; return 1; }
+  if [[ " $* " == *" hack/helm-docs/"* ]]; then
+    for root in charts addons; do
+      helm-docs --chart-search-root "$root" --template-files ../hack/helm-docs/README.md.gotmpl --template-files README.md.gotmpl >/dev/null 2>&1
+    done
+    git diff --exit-code -- 'charts/*/README.md' 'addons/*/README.md'
+    return
+  fi
+  read_lines dirs chart_dirs "$@"
+  (( ${#dirs[@]} > 0 )) || return 0
+  for d in ${dirs[@]+"${dirs[@]}"}; do
+    root=${d%%/*}
+    helm-docs --chart-search-root "$root" --chart-to-generate "$d" --template-files ../hack/helm-docs/README.md.gotmpl --template-files README.md.gotmpl >/dev/null 2>&1
+  done
+  git diff --exit-code -- 'charts/*/README.md' 'addons/*/README.md'
+}
+
 cmd_charts() {
   local dirs=()
   read_lines dirs chart_dirs "$@"
@@ -109,8 +129,9 @@ case "$cmd" in
   gitleaks) cmd_gitleaks "$@" ;;
   py-compile) cmd_py_compile "$@" ;;
   chart-lock) cmd_chart_lock "$@" ;;
+  helm-docs) cmd_helm_docs "$@" ;;
   charts) cmd_charts "$@" ;;
   commit-msg) cmd_commit_msg "$@" ;;
   chart-dirs) chart_dirs "$@" ;;
-  *) echo "usage: $0 gitleaks|py-compile|chart-lock|charts|commit-msg|chart-dirs <file>..." >&2; exit 2 ;;
+  *) echo "usage: $0 gitleaks|py-compile|chart-lock|helm-docs|charts|commit-msg|chart-dirs <file>..." >&2; exit 2 ;;
 esac

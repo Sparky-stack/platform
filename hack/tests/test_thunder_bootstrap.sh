@@ -86,7 +86,7 @@ fi
 
 # Negative (mutation): the PR #5 placeholders - a comment-only and an empty file - are caught.
 files "$TMP/th-default.yaml" "$TMP/neg"
-assert_eq "$(cd "$TMP/neg" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" "./48-csp.yaml ./49-cors.yaml ./50-user-schema-and-users.yaml ./51-backstage-app.yaml ./54-cli-app.yaml ./59-openchoreo-observer-app.yaml ./70-openchoreo-promotion-gate-app.yaml ./ai-agent-clients/README " "agents off: the Job sees the platform scripts and the README, no agent file"
+assert_eq "$(cd "$TMP/neg" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" "./48-csp.yaml ./49-cors.yaml ./50-user-schema-and-users.yaml ./51-backstage-app.yaml ./54-cli-app.yaml ./57-service-mcp-app.yaml ./59-openchoreo-observer-app.yaml ./70-openchoreo-promotion-gate-app.yaml ./ai-agent-clients/README " "agents off: the Job sees the platform scripts and the README, no agent file"
 mkdir -p "$TMP/neg/ai-agent-clients"
 printf '# rca agent client off\n' > "$TMP/neg/ai-agent-clients/53-rca-agent-client.yaml"
 : > "$TMP/neg/ai-agent-clients/60-finops-agent-client.yaml"

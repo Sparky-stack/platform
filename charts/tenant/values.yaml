@@ -3,8 +3,10 @@
 #   installations/<inst>/tenants/<project>.yaml    -> project, description, apps (schema below)
 
 # --- the tenant file -------------------------------------------------------------------------------------------------
+# -- OpenChoreo `Project` name (DNS-1123 label) and `AppProject/tenant-<project>` (alongside `description`).
 project: ""                 # required; OpenChoreo Project name, DNS-1123 label (AppProject tenant-<project>)
 description: ""
+# -- Tenant applications (`[{name, repoURL, path, revision, promotionGates}]`; `name` must equal the app repo's `Component` name).
 apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
                             # name == the app repo's one Component name (gated bindings are admitted only from
                             # Application <project>-<component>-<env>, addon openchoreo-platform promotion-git-only.yaml)
@@ -19,6 +21,7 @@ openchoreo:
   orgNamespace: default
 # PR preview environments (templates/previews.yaml, docs/preview-environments.md); installation.yaml overrides.
 previews:
+  # -- Enables `ApplicationSet/previews-<project>` (`previews.*`, `previewOptIn`, `previewToken`: opted-in Components x open pull requests -> one `charts/preview` Application per PR; [preview environments](../../docs/preview-environments.md)).
   enabled: false
   dataPlane: dev1
   requeueAfterSeconds: 1800
@@ -26,6 +29,7 @@ previews:
 
 secrets:
   tenantStores:
+    # -- Enables per-tenant OpenBao secrets (`tenantSecrets.{namespace,label}`: descriptor `Secret/<project>-openbao-tenant` and `ServiceAccount/<project>-writer` in `openbao-tenants`; [Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
     enabled: false          # per-tenant OpenBao secrets (templates/secrets.yaml); needs addon openbao on mgmt
 
 # --- chart settings (platform-wide; override in installation.yaml only if needed) ---------------------------------
@@ -49,6 +53,7 @@ previewProject: previews
 # project's namespace on that environment's data plane.
 deploymentPipeline:
   name: default
+  # -- Environments (`development`, `staging`, `production`) provisioned via `ProjectReleaseBinding`.
   environments: [development, staging, production]
 projectType:
   kind: ClusterProjectType
@@ -56,6 +61,7 @@ projectType:
 # The only kinds an app repo may sync (namespaced, group openchoreo.dev, org namespace only). Project /
 # ProjectReleaseBinding stay platform-owned (this chart); platform kinds (Environment, DeploymentPipeline,
 # *ComponentType, *Trait, planes, authz) are never allowed.
+# -- Allowlisted OpenChoreo developer CRDs.
 developerKinds:
   - Component
   - Workload
@@ -70,6 +76,7 @@ promotion:
   # app's main Application), so the freeze windows below can stop exactly the production sync. Promotion there is a
   # reviewed pull request (CODEOWNERS + required status `openchoreo/promotion-gate`); an app opts out with
   # `promotionGates: false` in the tenant file.
+  # -- Environments with separate gated `Application`s, ABAC component-delete deny (`restrictedGroups`), and `freezeWindows`.
   gatedEnvironments: [production]
   # Groups (JWT claim `groups`) that may not delete a gated app's Component through console / openchoreo-api / occ /
   # MCP (the cascade would delete its gated bindings). Same list addon openchoreo-platform denies gated binding writes.

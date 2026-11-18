@@ -21,12 +21,14 @@ installation: { name: local }
 
 # mesh.group: catalog clusterLabelParameters (label mesh.platform.koorikla.io/group); mesh.ca: installation.yaml.
 mesh:
+  # -- Mesh group (`clusterLabelParameters`) and `mgmt` OpenBao endpoint (`mesh.ca.{host,port}`).
   group: ""
   ca:
     host: openbao.openchoreo.localhost
     port: 8200
 
 issuer:
+  # -- Vault `Issuer` (`issuer.{name,serviceAccount,role,caSecret}`) authenticating with `istio-csr-openbao` and `openbao-ca`.
   name: openbao-mesh                 # == memberAuth.audience suffix in addon openbao (vault://istio-system/openbao-mesh)
   serviceAccount: istio-csr-openbao  # == addon openbao memberAuth.serviceAccount
   role: istio-csr                    # == addon openbao memberAuth.role
@@ -35,10 +37,12 @@ issuer:
   certManagerServiceAccount: { name: cert-manager, namespace: cert-manager }
 
 rootCA:
+  # -- Pins `mesh-root-ca` (`root-cert.pem`) delivered from `mgmt` via CAPI `ClusterResourceSet`.
   secret: mesh-root-ca               # CRS payload from mgmt: this group's root certificate (public)
   key: root-cert.pem
 
 admission:
+  # -- ValidatingAdmissionPolicy (`admission.{enabled,requesters,certificates}`) restricting `openbao-mesh` `CertificateRequest`s.
   enabled: true
   # Who may create CertificateRequests for Issuer openbao-mesh: istio-csr (workload + its serving cert) and
   # cert-manager's controller (the istiod Certificate rendered by the chart).

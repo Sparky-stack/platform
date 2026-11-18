@@ -13,6 +13,7 @@ opentelemetry-ebpf-instrumentation:
   fullnameOverride: obi
   image:
     registry: ghcr.io               # fully qualified (chart default)
+    # -- `v1.0.0` pinned by multi-arch index digest.
     tag: v1.0.0@sha256:a68d70e934260f72540f157ccf4fb4adfa38f11de060d7d905696dad6a3fca02   # multi-arch index digest: amd64, arm64
   preset: application
   resources:
@@ -24,6 +25,7 @@ opentelemetry-ebpf-instrumentation:
         obi:
           version: "2.0"
           capture:
+            # -- Includes processes in `dp-*` namespaces while excluding collectors and apps already exporting OTLP on `:4317`.
             rules:                  # replaces the preset's rules (policy stays: default exclude, first match wins)
               - action: exclude
                 name: exclude-obi-and-collectors
@@ -47,6 +49,7 @@ opentelemetry-ebpf-instrumentation:
                     namespace_glob: ['dp-*']        # OpenChoreo data-plane namespaces dp-<org>-<project>-<env>-<hash>
       # traces: chart default (OTLP gRPC -> ${HOST_IP}:4317, the telemetry collector's hostPort)
       meter_provider:
+        # -- Pushes OTLP HTTP to `http://${HOST_IP}:4318`.
         readers:                    # platform: OTLP only (no Prometheus pull endpoint on :9090)
           - periodic:
               interval: 60000

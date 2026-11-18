@@ -85,6 +85,7 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
 |---|---|---|---|
 | kubectl | 1.35.10 | aqua:kubernetes/kubernetes/kubectl | matches k3s v1.35 on mgmt + workload clusters |
 | helm | 4.3.2 | aqua:helm/helm | charts, lint, template; plugin `helm-unittest` 1.2.1 (postinstall hook) |
+| helm-docs | 1.14.2 | aqua:norwoodj/helm-docs | generated chart `README.md` values tables (`task lint`, git hooks) |
 | k3d | 5.8.3 | aqua:k3d-io/k3d | local mgmt cluster (5.9.0 exists; 5.8.3 is the version the live boot proved) |
 | clusterctl | 1.13.8 | aqua:kubernetes-sigs/cluster-api | = CAPI core of `addons/capi-providers` |
 | argocd | 3.6.1 | aqua:argoproj/argo-cd | = Argo CD server |
@@ -120,6 +121,7 @@ once, `task doctor` warns until you do) installs `pre-commit` and
 | py-compile | `*.py` | Python syntax |
 | mise-tools-table | `mise.toml` | every `[tools]` entry parses for `task doctor` |
 | chart-lock | `Chart.yaml` / `Chart.lock` | lock digest in sync (`hack/lib/chartlock.py`; skipped with a note until it is on `main`) |
+| helm-docs | `charts/` `addons/` `Chart.yaml` / `values.yaml` / `README.md*`, `hack/helm-docs/` | `README.md` in sync with `helm-docs` (`hack/helm-docs/README.md.gotmpl` + per-chart `README.md.gotmpl`) |
 | charts | `charts/` `addons/` `installations/` | `CHARTS=<changed charts> hack/test.sh`: helm lint + template per installation/cluster + kubeconform (cached schemas) + helm unittest of the changed charts only; installation/cluster files select `charts/platform` + `charts/cluster`. Everything else is `task test` / CI |
 | conventional-commit | commit message | warns, never blocks: squash merges make the PR title the commit on `main` |
 

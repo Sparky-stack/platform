@@ -24,6 +24,7 @@ cluster:
   name: default
 openchoreo:
   controlPlane:
+    # -- `mgmt` ingestion endpoints (with `openchoreo.observability.{httpPort,tlsPort}`) for remote-write, OTLP, and OpenSearch.
     host: openchoreo.localhost
   observability:
     enabled: true
@@ -32,12 +33,14 @@ openchoreo:
 
 # --- platform glue (templates/) -------------------------------------------------------------------------------------
 secrets:
+  # -- Pulls `openchoreo-observability` credentials (`secrets.{store,remoteKey}`) from workload `ClusterSecretStore/default`.
   store: default                       # workload clusters: ClusterSecretStore/default (AGENTS.md invariant 5)
   remoteKey: openchoreo-observability  # opensearch-username, opensearch-password (same key as on mgmt)
 
 # Datadog fan-out (off). Enabling renders Secret telemetry-datadog (DD_API_KEY) from `secrets.store`, key `datadog`,
 # property `api-key`; the collector loads it via envFrom (optional). The exporter/pipelines are a values overlay.
 datadog:
+  # -- Optional dual-shipping to Datadog (`datadog.{enabled,remoteKey,property}`; `false` by default).
   enabled: false
   remoteKey: datadog
   property: api-key
@@ -54,6 +57,7 @@ datadog:
 
 # --- OpenTelemetry Collector: the fan-out point ----------------------------------------------------------------------
 opentelemetry-collector:
+  # -- `daemonset` with `service.internalTrafficPolicy: Local` on OTLP port `4317`.
   mode: daemonset
   fullnameOverride: telemetry-collector
   image:

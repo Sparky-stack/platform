@@ -96,6 +96,7 @@ eventBus:
 # Argo Workflows (the OpenChoreo workflow plane, addon openchoreo-workflow-plane) runs falco-response and the
 # promotion gate: auto = render WorkflowTemplate falco-response and both Sensors only once its CRDs exist on the
 # cluster (Argo CD re-renders when they appear), true / false force it. The EventSource and EventBus always render.
+# -- `auto` (renders `Sensor`s and `WorkflowTemplate`s when Argo Workflows CRDs and `openchoreo.workflowPlane.enabled` are active).
 workflowPlane: auto
 
 # Pods of the EventSource / Sensors (one pod each).
@@ -105,6 +106,7 @@ podResources:
 
 # Falco escalation receiver (contract: docs/observability.md "Falco response").
 falco:
+  # -- Authenticates per-cluster `falcosidekick` webhooks (`falco.{enabled,clusters,tokenSecret,route,response}`; `fleetParameters` injects `falco.clusters` from Argo CD cluster secrets) and runs `falco-response`.
   enabled: true
   port: 12000
   endpoint: /falco
@@ -150,6 +152,7 @@ falco:
 # OpenChoreo ClusterWorkflow promotion-gate for that component (addon openchoreo-platform). One WorkflowRun per rollout
 # (name derived from the rollout id), so re-delivered events are no-ops.
 promotionGate:
+  # -- Triggers `ClusterWorkflow/promotion-gate` (`promotionGate.{enabled,sourceEnvironments,workflow}`) when `staging` bindings roll out.
   enabled: true
   sourceEnvironments: [staging]
   workflow: promotion-gate
@@ -162,6 +165,7 @@ promotionGate:
 # workflows-<org ns> for the pushed repository (addon openchoreo-platform), which reads the branch head from GitHub and
 # creates the per-commit WorkflowRun exactly like a poll. The payload only selects the repository.
 autoBuildWebhook:
+  # -- With installation `openchoreo.workflowPlane.autoBuild: webhook`: GitHub App push webhook (`autoBuildWebhook.{secret,route,rateLimit}`) starting `WorkflowTemplate/auto-build` of addon `openchoreo-platform`.
   workflowTemplate: auto-build       # == addon openchoreo-platform autoBuild.workflowTemplate
   port: 12001
   endpoint: /github

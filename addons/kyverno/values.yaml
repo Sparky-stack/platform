@@ -12,6 +12,7 @@
 # provider byo (values/provider-byo.yaml): ConfigMap platform-image-verification rebuilt from the Secret mgmt pushes into
 # platform-delivery, instead of the ClusterResourceSet (templates/byo-image-verification.yaml).
 byoDelivery:
+  # -- On byo clusters (`values/provider-byo.yaml`), `templates/byo-image-verification.yaml` rebuilds ConfigMap `platform-image-verification` from the Secret mgmt pushes ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
   enabled: false
   store: delivery                           # ClusterSecretStore of addon secret-stores (delivery.*)
   configMap: platform-image-verification    # == charts/cluster imageVerification.configMap
@@ -34,6 +35,7 @@ kyverno:
     # Webhook namespaceSelector. For Namespace objects it matches the Namespace's own labels, so platform namespaces
     # can't be mutated either; OpenChoreo cell namespaces (dp-*) are not listed and stay in scope.
     webhooks:
+      # -- Excludes `platformNamespaces` (`kube-system`, `argocd`, `capi-*`, `openchoreo-*`, etc.) from admission webhook interception.
       namespaceSelector:
         matchExpressions:
           - key: kubernetes.io/metadata.name
@@ -78,6 +80,7 @@ kyverno:
     initContainer:
       image: { tag: "v1.20.0@sha256:339067e083430e0c97007541bef9cfdbac89bee13f7228772c77ae8aead14b8b" }   # kyvernopre
     container:
+      # -- `v1.20.0` pinned by multi-arch index digest (alongside `backgroundController`, `cleanupController`, `reportsController`; `values/role-workload.yaml` mounts `platform-image-verification` and `SSL_CERT_DIR` to trust the Harbor CA, [supply-chain](../../docs/supply-chain.md#wiring-the-key)).
       image: { tag: "v1.20.0@sha256:9de49c5416ea536f00a205527197ac048abdf32c5a75d633cd9afff8928f359d" }
       resources:
         requests: { cpu: 50m, memory: 128Mi }
@@ -113,6 +116,7 @@ kyverno:
   reportsController:
     replicas: 1
     image: { tag: "v1.20.0@sha256:f54e3cc106fadb1a615d0ec11c42f741f51d3580a5f70dfbe7bd7ec58864ef03" }
+    # -- Raises memory to `96Mi` request / `256Mi` limit on `mgmt` (`values/role-mgmt.yaml`) for initial object-list peaks.
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }

@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs the outbound `cluster-agent` (which dials `mgmt`'s `cluster-gateway` over mTLS WebSocket) and the data-plane ingress `Gateway` serving tenant components.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: openchoreo-data-plane`).
+- **Catalog label:** `addons.platform.koorikla.io/openchoreo-data-plane` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Disconnected agents and client cert rotation: [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected) and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#3-openchoreo-agent-certificates).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [OpenChoreo](../../docs/openchoreo.md)
+{{- end -}}

@@ -46,6 +46,7 @@ platformNamespaces: &platformNamespaces
   - agentgateway-system
 
 kyverno-policies:
+  # -- `baseline` in `Audit` mode (`validationFailureAction: Audit`, `failurePolicy: Ignore`), excluding `platformNamespaces` (`vpolExclude`).
   podSecurityStandard: baseline
   validationFailureAction: Audit
   failurePolicy: Ignore             # audit-only policies must never block a request
@@ -62,6 +63,7 @@ kyverno-policies:
 # A namespace that already has istio.io/dataplane-mode (e.g. "none", set per environment through
 # ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels) is left alone - that is the opt-out.
 ambientEnrollment:
+  # -- `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient.
   enabled: true
   cellNamespaceSelector:
     matchLabels:
@@ -75,6 +77,7 @@ ambientEnrollment:
   # (hack/tests/test_gitops_contracts.sh checks the gateway and the platform clients). A cell keeps PERMISSIVE with
   # the namespace label <optOutLabel>=permissive (ProjectReleaseBinding namespaceLabels).
   mtls:
+    # -- Every enrolled cell gets NetworkPolicy `platform-mesh-hbone` and a `STRICT` `PeerAuthentication`, or `PERMISSIVE` where `<optOutLabel>=permissive` ([strict mTLS in cell namespaces](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
     strict: true
     optOutLabel: platform.koorikla.io/mtls
 
@@ -93,6 +96,7 @@ ambientEnrollment:
 # Deployment): where requireDigest is on (production) the Workload must already carry image@sha256 (app-container.yaml output
 # image_digest_ref); elsewhere tag references are only reported.
 imageVerification:
+  # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures.
   enabled: true
   # environment -> Audit (PolicyReport only) | Deny (blocked at admission).
   environments:
@@ -189,6 +193,7 @@ imageVerification:
 # <namespacePrefix>* (OpenChoreo's workflows-<org ns>: builds, gates, auto-build) is image@sha256:<digest>, including
 # Component checks.image overrides. No exceptions: every image the platform runs there is digest-pinned.
 workflowImageDigests:
+  # -- On `mgmt` only, denies Pods in `workflows-*` whose images are not `image@sha256:<digest>` (`ValidatingPolicy/platform-workflow-image-digests`, [build plane](../../docs/build-plane.md#security-posture-of-build-pods)).
   enabled: false                     # values/role-mgmt.yaml: the workflow plane runs on mgmt (catalog roles [mgmt])
   namespacePrefix: workflows-
   failurePolicy: Fail                # Kyverno down: new run pods wait (only workflows-*), never admitted unchecked
@@ -196,6 +201,7 @@ workflowImageDigests:
 # --- PR preview environments (installation.yaml `previews`, docs/preview-environments.md) ------------------------------
 # templates/previews.yaml. `previews` comes from installation.yaml (enabled, ttl, maxPerTenant); these are defaults.
 previews:
+  # -- PR previews (`previews` and `previewGuards`): expiry stamp, per-tenant cap and TTL `DeletingPolicy` on `mgmt` Environments; quota, limits and egress isolation in preview cell namespaces ([preview environments](../../docs/preview-environments.md)).
   enabled: false
   ttl: 48h
   maxPerTenant: 2
@@ -204,6 +210,7 @@ previews:
 # ResourceReleaseBinding only to an environment whose data plane runs the addons its type names in
 # platform.koorikla.io/requires-addons.
 dataPlaneCapabilities:
+  # -- On `mgmt` only, denies a `ResourceReleaseBinding` whose (Cluster)ResourceType names an addon in `platform.koorikla.io/requires-addons` that the environment's data plane does not announce (`ValidatingPolicy/platform-data-plane-capabilities`, [data services](../../docs/data-services.md#only-on-data-planes-that-run-the-operator)).
   enabled: false                     # values/role-mgmt.yaml: the OpenChoreo control plane runs on mgmt
 
 previewGuards:

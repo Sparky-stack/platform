@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `gateway-crds-helm` (`1.8.2`), installing Gateway API `v1.5.1` `standard`-channel CRDs (`GatewayClass`, `Gateway`, `HTTPRoute`, `GRPCRoute`, `ReferenceGrant`) required by `kgateway`, `cert-manager`, and OpenChoreo.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: kube-system`).
+- **Catalog label:** `addons.platform.koorikla.io/gateway-api-crds` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Coordinating Gateway API CRD bumps with `kgateway` and OpenChoreo: [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking: Gateway API versions](../../docs/networking.md#gateway-api-versions)
+{{- end -}}

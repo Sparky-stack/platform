@@ -11,9 +11,16 @@ Renders k3s `coredns-custom` `ConfigMap` rules so pods inside local Docker (`k3d
 
 ## Key values
 
-- `openchoreo.controlPlane.host`: control-plane base domain (`openchoreo.localhost`).
-- `rewrite.target`: `gateway-default.openchoreo-control-plane.svc.cluster.local` on `mgmt`; `k3d-platform-mgmt-serverlb` on CAPD workload clusters.
-- `observabilityRewrite.target` and `registryRewrite.target`: optional `mgmt` CNAME rewrites for observability and Harbor (`registry.type: harbor`).
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| enabled | bool | `true` |  |
+| observabilityRewrite.target | string | `""` | Optional `mgmt` CNAME rewrite for observability (alongside `registryRewrite.target` for Harbor when `registry.type: harbor`). |
+| openchoreo.controlPlane.host | string | `"openchoreo.localhost"` | Control-plane base domain (`openchoreo.localhost`). |
+| openchoreo.observability.enabled | bool | `false` |  |
+| registry.host | string | `""` |  |
+| registry.type | string | `"external"` |  |
+| registryRewrite.target | string | `""` |  |
+| rewrite.target | string | `"k3d-platform-mgmt-serverlb"` | `gateway-default.openchoreo-control-plane.svc.cluster.local` on `mgmt`; `k3d-platform-mgmt-serverlb` on CAPD workload clusters. |
 
 ## Day-2 notes
 

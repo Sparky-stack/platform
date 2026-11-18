@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `hcloud-cloud-controller-manager` (`1.39.3`). Initializes Hetzner Cloud nodes, attaches topology metadata, and reconciles Hetzner LoadBalancers using the `kube-system/hcloud` secret populated by CAPH.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, `providers: [hetzner]` (`namespace: kube-system`).
+- **Catalog label:** `addons.platform.koorikla.io/hcloud-ccm` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Hetzner token rotation and cluster scaling: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#6-eso-backed-platform-and-workload-secrets), [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md), and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Cluster API providers](../../docs/providers.md)
+{{- end -}}

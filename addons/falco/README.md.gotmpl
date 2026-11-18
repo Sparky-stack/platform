@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Falco (`9.2.2` / `0.45.2`, modern eBPF), `falcosidekick` (`2.35.1`), and `falco-talon` (`0.5.0` / `0.3.0`). Detects runtime threats across `mgmt` and workload clusters, ships alerts to the telemetry collector on workload clusters, escalates `critical` alerts to `argo-events`, and runs Talon pod-level response actions in `dp-*` app namespaces.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: falco`; layers `values/role-mgmt.yaml` on `mgmt`).
+- **Catalog label:** `addons.platform.koorikla.io/falco` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Responding to critical Falco alerts and rotating webhook tokens: [incidents](../../docs/runbooks/incidents.md#falco-critical-alert) and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#6-eso-backed-platform-and-workload-secrets).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Observability: Falco](../../docs/observability.md#falco)
+{{- end -}}

@@ -29,12 +29,14 @@ openchoreo:
 # provider byo (values/provider-byo.yaml): ConfigMap cluster-gateway-ca from the Secret mgmt pushes into
 # platform-delivery, instead of the ClusterResourceSet (templates/byo-gateway-ca.yaml).
 byoDelivery:
+  # -- On byo clusters (`values/provider-byo.yaml`), agent TLS and CA arrive by `PushSecret`; `templates/byo-gateway-ca.yaml` rebuilds the `cluster-gateway-ca` ConfigMap ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
   enabled: false
   store: delivery             # ClusterSecretStore of addon secret-stores (delivery.*)
 
 # Agent RBAC for the kinds the platform's data-service OpenChoreo types render (templates/cluster-agent-data-services.yaml,
 # #70): ClusterTrait keda-scaler -> KEDA ScaledObject, ClusterResourceType postgresql -> PostgreSQL XR (addon crossplane).
 clusterAgentDataServices:
+  # -- Extra agent RBAC (`clusterAgentDataServices.{enabled,serviceAccount,rules}`) for the kinds the platform's data-service types render (KEDA `ScaledObject`, PostgreSQL XR; [data services](../../docs/data-services.md#consuming-them-from-openchoreo)).
   enabled: true
   serviceAccount: cluster-agent-dataplane   # == the upstream agent Deployment's ServiceAccount (checked by the test)
   rules:
@@ -50,6 +52,7 @@ openchoreo-data-plane:
     # App ingress: listener http :19080 (upstream k3d port range). kgateway's default Service type LoadBalancer ->
     # k3s klipper binds hostPort 19080 on every node (CAPD: node container IPs on docker network `kind`, reachable
     # from the Linux host). == cluster file openchoreo.dataPlane.gatewayPort (ClusterDataPlane gateway.ingress).
+    # -- Workload data-plane Gateway ports (`19080` / `19443`).
     httpPort: 19080         # reachable from the host at <CAPD node IP>:19080 (klipper on CAPD k3s)
     httpsPort: 19443
     tls:
@@ -67,6 +70,7 @@ openchoreo-data-plane:
   clusterAgent:
     image:   # fully qualified (chart default) and pinned by multi-arch index digest (docs/conventions.md invariant 9)
       tag: v1.3.3@sha256:de4907fcf4ffa6822dcbcaff876b02861bae0804c3aa86db6df64f918ef8451c   # index: amd64, arm64
+    # -- Set from `openchoreo.controlPlane.clusterGatewayURL` (`installationParameters`) alongside per-cluster `planeID` (`clusterNameParameters`).
     serverUrl: wss://cluster-gateway.openchoreo.localhost:8443/ws
     planeID: default        # overridden per cluster by the addon ApplicationSet (see header)
     resources:              # platform: upstream requests 50m/128Mi; one websocket + applies from the control plane
@@ -77,6 +81,7 @@ openchoreo-data-plane:
       configmap.reloader.stakater.com/reload: cluster-gateway-ca
     tls:
       enabled: true
+      # -- Mounts `cluster-agent-tls` and `serverCAConfigMap: cluster-gateway-ca` delivered by CAPI `ClusterResourceSet` (with Reloader annotations).
       clientSecretName: cluster-agent-tls     # mounted at /certs; delivered by the ClusterResourceSet
       serverCAConfigMap: cluster-gateway-ca   # mounted at /ca-certs; delivered by the ClusterResourceSet
       # With TLS on, the chart always renders a self-signed Issuer + Certificate (CN = planeID). It must not write into

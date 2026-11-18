@@ -11,8 +11,11 @@ Wrapper chart for `gateway-crds-helm` (`1.8.2`), installing Gateway API `v1.5.1`
 
 ## Key values
 
-- `gateway-crds-helm.crds.gatewayAPI.{enabled,channel}`: `true` on the `standard` channel.
-- `gateway-crds-helm.crds.envoyGateway.enabled`: `false` (Envoy Gateway CRDs are omitted; `kgateway` provides the Gateway controller).
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| gateway-crds-helm.crds.envoyGateway.enabled | bool | `false` | `false` (Envoy Gateway CRDs are omitted; `kgateway` provides the Gateway controller). |
+| gateway-crds-helm.crds.gatewayAPI.channel | string | `"standard"` |  |
+| gateway-crds-helm.crds.gatewayAPI.enabled | bool | `true` | `true` on the `standard` `channel`. |
 
 ## Day-2 notes
 

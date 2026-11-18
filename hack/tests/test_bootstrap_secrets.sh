@@ -164,7 +164,7 @@ assert_eq "$(meta platform-github namespace)" platform-secrets "app: namespace"
 assert_eq "$(q platform-secrets .kind)" Namespace "app: namespace applied server-side"
 assert_eq "$(has "$OUT" 'repoCreds.auth is token')" yes "app: warns repoCreds.auth mismatch"
 assert_eq "$(has "$OUT" 'group/others')" no "app: 0600 key file, no mode warning"
-assert_eq "$(keys openchoreo)" "admin-user-password,backstage-backend-secret,backstage-client-secret,developer-user-password,thunder-admin-password" "app: generated openchoreo keys"
+assert_eq "$(keys openchoreo)" "admin-user-password,backstage-backend-secret,backstage-client-secret,developer-user-password,service-mcp-client-secret,thunder-admin-password" "app: generated openchoreo keys"
 assert_eq "$(val openchoreo-observability opensearch-username)" admin "app: fixed generated value"
 assert_match "$(val openchoreo-observability opensearch-password)" '^Px9!' "app: @strong generated value"
 gen=$(val openchoreo thunder-admin-password)

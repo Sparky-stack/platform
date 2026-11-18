@@ -29,6 +29,7 @@ cluster: { name: mgmt, provider: docker }
 installation: { name: local }
 # installation.yaml `mesh`: groups (one root + intermediate per group) and ca (the address members dial).
 mesh:
+  # -- Mesh groups (`mesh.{groups,ca.host,ca.port}`) reconciled into PKI mounts and the passthrough endpoint.
   groups: []
   ca:
     host: openbao.openchoreo.localhost
@@ -39,6 +40,7 @@ mesh:
 # characters (32 bytes). Seeded by `make secrets` locally. Production: replace the static seal with a cloud KMS seal
 # (`seal "awskms"` via IRSA / Pod Identity, or `seal "transit"` against another OpenBao) - docs/multicluster.md.
 unseal:
+  # -- Pulls `openbao-unseal` (`unseal.{store,remoteKey,secretName}`) from `ClusterSecretStore/platform` for static auto-unseal.
   store: platform
   remoteKey: openbao-unseal
   property: key
@@ -57,6 +59,7 @@ tls:
 # filled by ESO from the CA Secret (SecretStore openbao-ca-source, GET of openbao-ca only) and from OpenBao itself
 # (SecretStore openbao-pki-public: Kubernetes auth role mesh-ca-read, policy = read +/cert/ca only; self-initialisation).
 caPublic:
+  # -- Publishes root/CA bundles (`caPublic.{store,secretName,namespaces}`) through `ClusterSecretStore/mgmt-openbao` to `fleet`.
   store: mgmt-openbao
   secretName: openbao-ca-bundle
   namespaces: [fleet]              # charts/cluster mesh-trust.yaml (CRS payload for the member's istio-system)
@@ -76,6 +79,7 @@ gateway:
 # down"): workload certificates 24h (ztunnel renews at half-life, so running pods survive >= 12h without OpenBao),
 # istiod / istio-csr serving certs requested by addon istio-csr within workloadMaxTTL.
 pki:
+  # -- X.509 constraints (`pki.{trustDomain,allowedDomains,workloadTTL,rootTTL,intermediateTTL}`: `cluster.local`, `24h` leaf TTL).
   trustDomain: cluster.local
   allowedDomains:                  # == addon istio-csr: istiod cert (CN + SAN) and istio-csr's own serving cert
     - istiod.istio-system.svc
@@ -145,6 +149,7 @@ tenantSecrets:
 # self-init (values.yaml openbao.server.ha.raft.config, initialize "policy-reconciler"); the role values below must
 # equal those pins (contract test test_openbao_policy_reconcile.sh) or OpenBao answers 403.
 policyReconciler:
+  # -- ServiceAccount, `loginRole`, and pinned `roleTTL` of the policy reconciler (must equal the self-init pins).
   serviceAccount: openbao-policy-reconciler     # == self-init role platform-policy-reconciler
   loginRole: platform-policy-reconciler
   roleTTL: 15m                                  # tenant-config / tenant-writer token_ttl == token_max_ttl (pinned)
@@ -152,6 +157,7 @@ policyReconciler:
 # installation.yaml secrets.tenantStores (default off).
 secrets:
   tenantStores:
+    # -- Enables per-tenant KV v2 mounts `kv-tenant-<tenant>`, JWT auth `tenants-<cluster>` per mesh member, and CronJobs `tenant-reconcile` (`tenantSecrets.*`) and `policy-reconcile` ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao), [policy reconciler](../../docs/multicluster.md#policies-from-git-the-policy-reconciler)).
     enabled: false
 
 # ValidatingAdmissionPolicies (admissionregistration.k8s.io/v1) on mgmt for the remote-secret reader certs:

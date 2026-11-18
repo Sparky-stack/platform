@@ -5,6 +5,7 @@ installation:
   githubOrg: https://github.com/koorikla
 
 secrets:
+  # -- `kubernetes` (`platform-secrets` / `openchoreo-secrets`), `aws`, or `vault`.
   backend: kubernetes          # kubernetes | aws | vault
   kubernetes:
     namespace: platform-secrets
@@ -15,6 +16,7 @@ secrets:
     prefix: ""
     role: ""
   tenantStores:
+    # -- Per-tenant OpenBao `SecretStore/openbao-tenant` (`tenantStores.*`) in every OpenChoreo cell namespace ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
     enabled: false             # installation.yaml: per-tenant OpenBao SecretStores (tenantStores below)
   vault:
     server: https://vault.example.com
@@ -61,6 +63,7 @@ dns:
 # tenant store `default` (the ClusterDataPlane secretStoreRef every tenant SecretReference / ExternalSecret can use).
 # Only these namespaces may reference it (AGENTS.md invariant 5 exception; hack/tests/test_secret_store_scope.sh).
 dnsStore:
+  # -- Isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only, with `secrets.dnsStore`).
   namespaces:
     - external-dns
 
@@ -70,6 +73,7 @@ dnsStore:
 # Name-scoped GET of exactly `keys` (AGENTS.md invariant 5 exception: public certificates/keys only), only from
 # `namespaces`. Off elsewhere: CAPI clusters get the ConfigMaps from ClusterResourceSets.
 delivery:
+  # -- `ClusterSecretStore/delivery` on byo clusters (`values/provider-byo.yaml`), name-scoped to the public material mgmt pushes into `platform-delivery` ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
   enabled: false
   namespace: platform-delivery
   keys:
@@ -82,6 +86,7 @@ delivery:
 # Namespaces on mgmt allowed to read ClusterSecretStore `platform` (spec.conditions). Every current consumer is listed;
 # a new one must be added here (hack/tests/test_secret_store_scope.sh fails otherwise).
 platformStore:
+  # -- Explicit `mgmt` namespaces permitted to reference `ClusterSecretStore/platform`.
   namespaces:
     - argocd                           # platform-repo-creds (this chart)
     - fleet                            # <cluster>-registries, <cluster>-seed-* (charts/cluster); hetzner (addon clusterclasses)
@@ -101,6 +106,7 @@ platformStore:
 # `workflows-*` and, on the kubernetes backend, by Role resourceNames to only the keys those workflows read (never the
 # full `platform` store: AGENTS.md invariant 5; hack/tests/test_secret_store_scope.sh).
 workflowStore:
+  # -- Least-privilege `workflows` store (`workflowStore.{namespaceRegexes,keys}` and `secrets.workflowStore`) for `workflows-*` build and promotion runs.
   namespaceRegexes:
     - "^workflows-.+$"
   keys:
@@ -118,6 +124,7 @@ previews:
 # previewToken.secretName must match). Installation token of the platform GitHub App (store key below, the promotion
 # gate's App), restricted to `permissions`; Argo CD gets only the token.
 previewToken:
+  # -- Pull-request-read installation token (`previewToken.*` with `previews.enabled`) of the platform GitHub App for the preview ApplicationSets (`argocd/preview-github-token`).
   secretName: preview-github-token
   namespace: argocd
   githubKey: promotion-gate-github
@@ -141,6 +148,7 @@ tenantStores:
 repoCreds:
   name: platform-repo-creds
   namespace: argocd
+  # -- `token` (PAT) or `githubApp` credentials (`repoCreds.{auth,remoteKey}`) for Argo CD.
   remoteKey: platform-github
   # token: properties username + token (fine-grained PAT, read-only Contents). githubApp: properties githubAppID,
   # githubAppInstallationID, githubAppPrivateKey (preferred: Argo CD mints short-lived installation tokens).

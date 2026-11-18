@@ -1,0 +1,19 @@
+{{- define "chart.purpose" -}}
+Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`, `fleet`, `previews`, `examples`), the `mgmt` cluster secret, and `ApplicationSet`s for workload clusters (`fleet`), the addon catalog (`addons/*`), tenants (`tenants`), and opt-in examples.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Target:** `mgmt` cluster (`namespace: argocd`), reconciled by the bootstrap `Application/root` (`bootstrap/root-app.yaml`).
+- **Selection:** Not a catalog addon; owns the `addons` catalog in `charts/platform/values.yaml` that selects clusters via `platform.koorikla.io/role`, `platform.koorikla.io/provider`, and `addons.platform.koorikla.io/<addon>`.
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Addon rollout waves, Renovate bumps, and stuck root/addon syncs: [upgrades](../../docs/runbooks/upgrades.md) and [incidents](../../docs/runbooks/incidents.md#argo-app-stuck-or-outofsync).
+- Emergency `selfHeal` freeze on `Application/root`: [break-glass](../../docs/runbooks/break-glass.md).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Architecture: Addons catalog + labels](../../docs/architecture.md#addons-catalog--labels-gitops-bridge-style)
+- [Conventions and contracts](../../docs/conventions.md)
+- [Day-2 operations](../../docs/operations.md)
+{{- end -}}

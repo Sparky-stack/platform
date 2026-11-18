@@ -11,6 +11,7 @@ cluster:
   name: sample
   role: mgmt
 dns:
+  # -- `none`, `route53` (workload identity only), or `cloudflare` (scoped API token), plus allowed `dns.domainFilters` zones.
   provider: none              # none | route53 | cloudflare (installation.yaml)
   domainFilters: []           # zones ExternalDNS may touch (installation.yaml)
 
@@ -19,6 +20,7 @@ dns:
 # (values/role-workload.yaml; scoped to this namespace, never the tenant store `default`). Route 53 has no secret:
 # IRSA / EKS Pod Identity only, static AWS keys are refused (templates/validate.yaml).
 secrets:
+  # -- Reads `external-dns-cloudflare` (`secrets.cloudflare.remoteKey`) from `platform` on `mgmt` and isolated store `dns` on workload clusters.
   store: platform
   cloudflare:
     enabled: false            # values/dns-cloudflare.yaml
@@ -39,6 +41,7 @@ external-dns:
     - gateway-grpcroute
     - gateway-tlsroute
 
+  # -- `upsert-only` with `registry: txt` and `txtOwnerId` set to `<installation>-<cluster>`.
   policy: upsert-only         # creates/updates, never deletes. `sync` (also deletes records of removed routes) only per
                               # installation, in installations/<inst>/addons/external-dns/values.yaml, on a dedicated zone
   registry: txt

@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for `agentgateway-crds` and `agentgateway` (`v1.1.0`) on `mgmt`. Provides an in-cluster LLM proxy (`Gateway` + `AgentgatewayBackend`) so OpenChoreo's opt-in RCA and FinOps agents call OpenAI, Anthropic, or Gemini without holding provider API keys.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: agentgateway-system`).
+- **Catalog label:** `addons.platform.koorikla.io/agentgateway` (`default: false`, opt-in via `installation.yaml` `mgmt.addons.agentgateway: "true"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Rotating LLM API keys in ESO: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#6-eso-backed-platform-and-workload-secrets).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [OpenChoreo AI agents](../../docs/ai-agents.md)
+{{- end -}}

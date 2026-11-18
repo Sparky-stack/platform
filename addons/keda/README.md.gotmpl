@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for KEDA (`2.21.0`) on workload clusters. Provides event-driven autoscaling (`ScaledObject` and `ScaledJob`) across all namespaces from Prometheus, Kafka, and external event sources.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: keda`, `serverSideDiff: true`).
+- **Catalog label:** `addons.platform.koorikla.io/keda` (`default: false`, opt-in with `"true"` per cluster via `addons.keda: true`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Workload capacity planning and addon upgrades: [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Data services](../../docs/data-services.md)
+{{- end -}}

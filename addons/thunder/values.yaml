@@ -35,6 +35,7 @@
 # Footprint: one pod 100m/50Mi requests (upstream), setup Job the same while it runs, 3 small PVCs on local-path.
 
 bootstrapSecret:
+  # -- Pulls OIDC client and admin secrets (`bootstrapSecret.{store,remoteKey,observabilityRemoteKey,promotionGate}`) from `ClusterSecretStore/platform` into `thunder-bootstrap`.
   store: platform           # ClusterSecretStore
   remoteKey: openchoreo     # flat key, see header
   name: thunder-bootstrap   # Secret consumed by thunderid.setup (admin.passwordRef, secretEnv)
@@ -58,6 +59,7 @@ thunderid:
   fullnameOverride: thunder
 
   deployment:
+    # -- `1` (single-writer SQLite persistence) with `1.0.1` pinned by multi-arch index digest.
     replicaCount: 1           # SQLite: single writer
     image:
       tag: 1.0.1@sha256:d3c0613ff447a551fd440768a15bdfb6668948e80809cbb50f82d6752f22ab3e   # multi-arch index digest: amd64, arm64
@@ -67,6 +69,7 @@ thunderid:
   ingress:
     enabled: false            # no ingress-nginx: the HTTPRoute below on the OpenChoreo control-plane Gateway
   httproute:
+    # -- Exposes `thunder.<openchoreo.controlPlane.host>` via `openchoreo-control-plane/gateway-default`.
     enabled: true
     parentRefs:
       - name: gateway-default

@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Cilium (`1.20.4`). Provides eBPF CNI networking, `kube-proxy` replacement, WireGuard node-to-node encryption, and Hubble flow telemetry on workload clusters created with `cni: cilium`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: kube-system`).
+- **Catalog label:** `addons.platform.koorikla.io/cilium` (`default: false`, set to `"true"` by `charts/cluster` when the fleet file sets `cni: cilium`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Inspecting dropped packets with Hubble and upgrading Cilium: [observability first look](../../docs/runbooks/observability-first-look.md#2-querying-prometheus-logs-and-hubble-directly) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Networking](../../docs/networking.md)
+{{- end -}}

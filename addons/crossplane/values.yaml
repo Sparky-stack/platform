@@ -39,6 +39,7 @@ crossplane:
   rbacManager:
     replicas: 1
   provider:
+    # -- `[]` (`templates/activation-policy.yaml` activates only the APIs used by the active `Composition`).
     defaultActivations: []          # no "*" MRAP: templates/activation-policy.yaml activates exactly what is composed
   metrics:
     enabled: true                   # :8080/metrics on core + RBAC manager; PodMonitor below
@@ -101,6 +102,7 @@ postgresql:
   # Backend = Composition installed on this cluster. Empty: looked up from the cluster's provider fact (fleet file
   # `provider` -> label platform.koorikla.io/provider -> cluster.provider). A provider missing from the map fails the
   # render (no silent default). Override per cluster only to force a backend (e.g. cnpg on a cloud cluster).
+  # -- Active `Composition` (`postgresql.backendByProvider` maps `cluster.provider` to `cnpg`, `aws-rds`, `gcp-cloudsql`, or `azure-flexible`).
   backend: ""
   backendByProvider:
     docker: cnpg
@@ -114,6 +116,7 @@ postgresql:
 
   # cnpg: CloudNativePG Clusters in the XR's namespace. Needs addon cloudnative-pg on the same cluster.
   cnpg:
+    # -- Backend-specific image catalog (`postgresql-standard`) and `postgresql.{cnpg,aws,gcp,azure}` subnet/VPC and workload-identity settings.
     imageCatalog: postgresql-standard   # ClusterImageCatalog of addon cloudnative-pg (one pinned image per major)
     podMonitor: true                    # per-cluster PodMonitor (instance metrics :9187); needs addon telemetry
     backup:
@@ -169,4 +172,5 @@ policy:
   # PostgreSQL XRs in OpenChoreo cells of these environments must set highAvailability: true and backup.enabled: true.
   production:
     environments: [production]
+    # -- `Deny` on cloud (`Audit` in `values/provider-docker.yaml`) for non-HA or unbacked `production` instances.
     action: Deny                        # values/provider-docker.yaml: Audit (no object store, one node locally)

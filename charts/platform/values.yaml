@@ -2,16 +2,19 @@
 
 # Defaults so standalone `helm template charts/platform` works; overridden by installation.yaml.
 installation:
+  # -- GitOps repository and org scope (`installation.{name,repoURL,revision,githubOrg}`) layered from `installations/<inst>/installation.yaml`.
   name: local
   repoURL: https://github.com/koorikla/platform.git
   revision: HEAD
   githubOrg: https://github.com/koorikla
 
 mgmt:
+  # -- Management cluster identity (`mgmt.{name,provider,region,environment}`).
   name: mgmt
   provider: docker
   region: local
   environment: mgmt
+  # -- `mgmt` addon opt-in/opt-out overrides.
   addons: {}
 
 # Git commit signature verification for Argo CD sources (AppProject sourceIntegrity, Argo CD >= 3.5; the older
@@ -20,6 +23,7 @@ mgmt:
 # with its web-flow key, so `head` mode with that key = only GitHub-made commits deploy. Public keys go into
 # addons/argo-cd `argo-cd.configs.gpg.keys`. docs/supply-chain.md.
 sourceIntegrity:
+  # -- Enables Git commit signature verification for `platform`, `fleet`, and `tenant` `AppProject`s.
   enabled: false
   mode: head                         # none | head (HEAD commit/tag signed) | strict (every commit since the last signed tag)
   keys: [B5690EEEBB952194]           # GitHub web-flow commit signing key (since 2024-01; VERIFY); add maintainers' keys
@@ -43,6 +47,7 @@ sourceIntegrity:
 # Chart path: addons/<name>. Values layering: docs/architecture.md "Addons".
 # Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
+  # -- Installation-wide OpenChoreo toggles (`openchoreo.*`) passed into catalog parameters.
   orgNamespace: default
   controlPlane:
     host: openchoreo.localhost
@@ -67,6 +72,7 @@ secrets:
     enabled: false
 
 addons:
+  # -- Addon catalog entry (`namespace`, `roles`, `providers`, `default`, parameter mappings, `installationValueFiles`).
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
   cert-manager:             { namespace: cert-manager,             roles: [mgmt, workload], default: true }
   external-secrets:         { namespace: external-secrets,         roles: [mgmt, workload], default: true }

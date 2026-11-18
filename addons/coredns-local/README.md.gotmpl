@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Renders k3s `coredns-custom` `ConfigMap` rules so pods inside local Docker (`k3d` and CAPD) clusters resolve `*.openchoreo.localhost` (and local observability/Harbor hosts on `mgmt`) to in-cluster Gateway Services or `k3d-platform-mgmt-serverlb`.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt, workload]`, `providers: [docker, byo]` (`namespace: kube-system`; layers `values/role-<role>.yaml`). On byo clusters `enabled: false` (`values/provider-byo.yaml`) unless the installation turns it on: `installations/local/addons/coredns-local/values.yaml` does, its byo k3d clusters share network `kind`.
+- **Catalog label:** `addons.platform.koorikla.io/coredns-local` (`default: true`, opt-out with `"false"`).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Debugging local agent or gateway DNS resolution: [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [OpenChoreo: Local networking](../../docs/openchoreo.md#local-networking)
+{{- end -}}
