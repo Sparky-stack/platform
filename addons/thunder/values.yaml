@@ -11,6 +11,7 @@
 #   developer-user-password   OpenChoreo user developer@openchoreo.dev (group developers -> OpenChoreo role developer)
 #   backstage-client-secret   OAuth client openchoreo-backstage-client (also read by addon openchoreo-control-plane)
 #   backstage-backend-secret  (read by addon openchoreo-control-plane only)
+#   service-mcp-client-secret OAuth client service_mcp_client (headless MCP clients, client_credentials; docs/ai-agents.md)
 # plus, from other keys of the same store: `openchoreo-observability` observer-client-secret (OAuth client
 # openchoreo-observer-resource-reader-client) and `promotion-gate` client-secret (OAuth client openchoreo-promotion-gate,
 # read by the promotion gate's per-run ExternalSecret too; docs/promotion.md).
@@ -130,6 +131,7 @@ thunderid:
       - { name: OPENCHOREO_ADMIN_PASSWORD, secretName: thunder-bootstrap, secretKey: admin-user-password }
       - { name: OPENCHOREO_DEVELOPER_PASSWORD, secretName: thunder-bootstrap, secretKey: developer-user-password }
       - { name: BACKSTAGE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: backstage-client-secret }
+      - { name: SERVICE_MCP_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: service-mcp-client-secret }
       - { name: OBSERVER_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: observer-client-secret }
       - { name: PROMOTION_GATE_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: promotion-gate-client-secret }
       # AI agent clients (docs/ai-agents.md): the keys exist only for agents in bootstrapSecret.aiAgentClients (optional),
@@ -156,11 +158,11 @@ thunderid:
 
   # Declarative documents imported by the setup Job on top of ThunderID's shipped defaults; upserted by fixed id
   # (01900000-0000-7000-8001-* block, clear of ThunderID's own). Upstream 48, 49, 51, 54 verbatim except the client
-  # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/55-58/61/62 - service clients
-  # with well-known secrets for components not installed here (sample portal, MCP, workload publisher, e2e); 59 below
-  # with its secret from the store; 53/60 (AI agents) from setup.extraVolumes above. Add a client back together with
-  # the feature that uses it. Platform clients (70+) use ids from 01900000-0000-7000-8001-000000000100 on, clear of
-  # upstream's.
+  # secret; 50 reduced to two users with generated passwords. platform: dropped upstream 52/55/56/58/61/62 - service
+  # clients with well-known secrets for components not installed here (sample portal, browser MCP, workload publisher,
+  # e2e); 57/59 below with their secrets from the store; 53/60 (AI agents) from setup.extraVolumes above. Add a client
+  # back together with the feature that uses it. Platform clients (70+) use ids from
+  # 01900000-0000-7000-8001-000000000100 on, clear of upstream's.
   bootstrap:
     scripts:
       # A path override replaces ThunderID's shipped entry: every directive except img-src mirrors the 1.0.1 defaults.
@@ -347,6 +349,31 @@ thunderid:
                   - given_name
                   - family_name
                   - picture
+
+      # Upstream 57 (headless MCP clients -> openchoreo-api / observer, client_credentials); secret from the store.
+      # Bound in openchoreo-control-plane to ClusterAuthzRole mcp-service (read-only + workflowrun:create) instead of
+      # upstream's admin (docs/ai-agents.md).
+      57-service-mcp-app.yaml: |
+        resource_type: application
+        id: 01900000-0000-7000-8001-000000000066
+        ouId: 01900000-0000-7000-8000-000000000001
+        name: Service MCP App
+        type: mcp
+        description: Service MCP app to be used by backend services which can securely store the secret
+        inboundAuthConfig:
+          - type: oauth2
+            config:
+              clientId: service_mcp_client
+              clientSecret: "{{ .SERVICE_MCP_CLIENT_SECRET }}"
+              grantTypes:
+                - client_credentials
+              tokenEndpointAuthMethod: client_secret_basic
+              pkceRequired: false
+              publicClient: false
+              token:
+                accessToken:
+                  clientConfig:
+                    validityPeriod: 3600
 
       # Upstream 59 (observability plane's observer -> control plane API, client_credentials); secret from the store.
       59-openchoreo-observer-app.yaml: |

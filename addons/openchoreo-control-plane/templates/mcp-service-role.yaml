@@ -1,0 +1,69 @@
+# Dedicated least-privilege role for headless MCP clients authenticating with OAuth2 client_credentials as
+# client_id `service_mcp_client` (Thunder script 57, docs/ai-agents.md "OpenChoreo MCP servers").
+# Upstream's authz bootstrap binds `service_mcp_client` (ClusterAuthzRoleBinding `mcp-tryout-client-binding`) to
+# `ClusterAuthzRole/admin` (`*`). Here Git is the source of truth for platform and tenant resources, so headless
+# MCP agents get read-only access across the control plane and observability plane plus `workflowrun:create`
+# (ephemeral build and promotion-gate runs do not live in Git). Because OpenChoreo's MCP server filters `tools/list`
+# and `tools/call` by the caller's capabilities, mutating CRUD tools are hidden automatically and secret values
+# (`secret:view`, `resource:read-secrets`) and pod exec (`component:exec`) remain off limits.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterAuthzRole
+metadata:
+  name: mcp-service
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  description: Headless MCP service client (service_mcp_client) - read-only platform and observability inspection plus workflow run triggers
+  actions:
+    - clusterdataplane:view
+    - clusterworkflowplane:view
+    - clusterobservabilityplane:view
+    - clustercomponenttype:view
+    - clusterresourcetype:view
+    - clusterprojecttype:view
+    - clustertrait:view
+    - clusterworkflow:view
+    - clusterauthzrole:view
+    - clusterauthzrolebinding:view
+    - namespace:view
+    - environment:view
+    - deploymentpipeline:view
+    - dataplane:view
+    - workflowplane:view
+    - observabilityplane:view
+    - componenttype:view
+    - resourcetype:view
+    - projecttype:view
+    - trait:view
+    - workflow:view
+    - secretreference:view
+    - project:view
+    - projectrelease:view
+    - projectreleasebinding:view
+    - component:view
+    - componentrelease:view
+    - releasebinding:view
+    - workload:view
+    - resource:view
+    - resourcerelease:view
+    - resourcereleasebinding:view
+    - workflowrun:view
+    - workflowrun:create
+    - authzrole:view
+    - authzrolebinding:view
+    - observabilityalertsnotificationchannel:view
+    - logs:view
+    - platformlogs:view
+    - auditlogs:view
+    - events:view
+    - wirelogs:view
+    - metrics:view
+    - traces:view
+    - alerts:view
+    - incidents:view
+    - rcareport:view
+    - finopsreport:view
+    - finops:view
+    - deliveryinsights:view
