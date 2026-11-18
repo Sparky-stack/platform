@@ -24,7 +24,7 @@ tests:
   - it: webhook without resync renders the WorkflowTemplate (Sensor target) but no CronWorkflow
     set: { openchoreo.workflowPlane.autoBuild: webhook, autoBuild.resyncSchedule: "" }
     asserts:
-      - hasDocuments: { count: 11 }
+      - hasDocuments: { count: 13 }
 
   - it: the WorkflowTemplate is the one shared build trigger for both modes
     set: { openchoreo.workflowPlane.autoBuild: webhook }
@@ -136,3 +136,44 @@ tests:
     set: { secrets: null }
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: registry-aware "already built" reads Harbor with the pull-only robot, never the builder (#200)
+    documentSelector: { path: metadata.name, value: auto-build-registry }
+    asserts:
+      - equal: { path: metadata.namespace, value: workflows-default }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: workflows } }
+      - equal: { path: spec.data, value: [{ secretKey: password, remoteRef: { key: harbor, property: nodes-secret } }] }
+      - equal: { path: spec.target.template.data.username, value: robot$nodes }
+      - equal: { path: spec.target.template.data.password, value: "{{ .password }}" }
+
+  - it: the registry CA comes from the name-scoped CA store, like the build runs'
+    documentSelector: { path: metadata.name, value: auto-build-registry-ca }
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-harbor } }
+      - equal: { path: spec.data, value: [{ secretKey: ca.crt, remoteRef: { key: harbor-ca-bundle, property: ca.crt } }] }
+
+  - it: the pass gets the registry host, robot and CA only as files and env (#200)
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - contains:
+          path: 'spec.templates[0].script.env'
+          content: { name: REGISTRY_HOST, value: harbor.openchoreo.localhost:9443 }
+      - contains:
+          path: 'spec.templates[0].script.env'
+          content: { name: REGISTRY_AUTH_DIR, value: /var/run/secrets/auto-build-registry }
+      - contains:
+          path: 'spec.templates[0].script.env'
+          content: { name: REGISTRY_CA_FILE, value: /var/run/secrets/auto-build-registry-ca/ca.crt }
+      - contains:
+          path: spec.volumes
+          content: { name: registry, secret: { secretName: auto-build-registry, defaultMode: 288 } }
+      - contains:
+          path: 'spec.templates[0].script.volumeMounts'
+          content: { name: registry-ca, mountPath: /var/run/secrets/auto-build-registry-ca, readOnly: true }
+      - matchRegex: { path: 'spec.templates[0].script.source', pattern: "def image_exists" }
+
+  - it: an external registry renders no registry check (no robot to read with)
+    set: { registry.type: external }
+    asserts:
+      - hasDocuments: { count: 12 }
+      - notExists: { path: 'spec.templates[0].script.env[?(@.name == "REGISTRY_HOST")]' }

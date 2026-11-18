@@ -251,6 +251,14 @@ autoBuild:
     key: promotion-gate-github
     permissions: { contents: read }
     tokenRefreshInterval: 30m
+  # Registry-aware "already built" (registry.type harbor, #200): the pass HEADs the digest the Workload pins; missing
+  # (a clean bootstrap: git pins the previous stack's Harbor) -> rebuild of the Workload's spec.source.commit. Pull-only
+  # robot (== addons/harbor config.robots[name=nodes], already read by nodes and Kyverno); CA from
+  # buildWorkflows.secrets.harbor.caStore/caSecret. The store key must be in addon secret-stores workflowStore.keys.
+  registry:
+    robot: robot$nodes
+    key: harbor
+    property: nodes-secret
   image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
   resources:
     requests: { cpu: 10m, memory: 32Mi }

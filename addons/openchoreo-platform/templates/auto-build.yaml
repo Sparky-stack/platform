@@ -17,8 +17,13 @@ PR previews (installation.yaml previews.enabled, docs/preview-environments.md) a
                                          before Argo CD generated the preview Application)
   ServiceAccount + RBAC                  list Components, get (Cluster)Workflows, get/list/create WorkflowRuns in the
                                          org namespace; one ConfigMap (cache) and Argo's task results here
+registry.type harbor adds the registry-aware "already built" check (a pinned digest missing in Harbor, e.g. after a
+clean bootstrap, rebuilds the Workload's commit; #200):
+  ExternalSecret auto-build-registry     pull-only robot (autoBuild.registry: username + password; store `workflows`)
+  ExternalSecret auto-build-registry-ca  the registry CA public cert (store buildWorkflows.secrets.harbor.caStore)
 The Sensor of addon argo-events (trigger webhook) creates Workflows from the same WorkflowTemplate.
-Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, public 443.
+Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, the registry
+(Harbor Gateway proxy), public 443.
 */ -}}
 {{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
 {{- if not (has $trigger (list "poll" "webhook" "none")) }}
@@ -40,6 +45,8 @@ charts/platform values.yaml), else the token ExternalSecrets fail and degrade th
 {{- $sync := dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true" }}
 {{- $pv := .Values.previews | default dict }}
 {{- $pa := $a.previews }}
+{{- $harbor := eq (toString .Values.registry.type) "harbor" }}
+{{- $hs := .Values.buildWorkflows.secrets.harbor }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -203,6 +210,48 @@ spec:
           apiVersion: generators.external-secrets.io/v1alpha1
           kind: GithubAccessToken
           name: {{ $name }}
+{{- if $harbor }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-registry
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $a.secretStore }}
+  target:
+    name: {{ $name }}-registry
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      data:
+        username: {{ required "autoBuild.registry.robot is required (a pull-only Harbor robot)" $a.registry.robot | quote }}
+        password: "{{ `{{ .password }}` }}"
+  data:
+    - secretKey: password
+      remoteRef: { key: {{ $a.registry.key }}, property: {{ $a.registry.property }} }
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-registry-ca
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $hs.caStore }}
+  target:
+    name: {{ $name }}-registry-ca
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  data:
+    - secretKey: ca.crt
+      remoteRef: { key: {{ $hs.caSecret }}, property: ca.crt }
+{{- end }}
 {{- if $pv.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -302,6 +351,16 @@ spec:
         secretName: {{ $name }}-previews-token
         defaultMode: 288
     {{- end }}
+    {{- if $harbor }}
+    - name: registry
+      secret:
+        secretName: {{ $name }}-registry
+        defaultMode: 288
+    - name: registry-ca
+      secret:
+        secretName: {{ $name }}-registry-ca
+        defaultMode: 292              # 0444: public cert
+    {{- end }}
   templates:
     - name: reconcile
       script:
@@ -317,6 +376,10 @@ spec:
           {{- if $pv.enabled }}
           - { name: previews-token, mountPath: /var/run/secrets/auto-build-previews, readOnly: true }
           {{- end }}
+          {{- if $harbor }}
+          - { name: registry, mountPath: /var/run/secrets/auto-build-registry, readOnly: true }
+          - { name: registry-ca, mountPath: /var/run/secrets/auto-build-registry-ca, readOnly: true }
+          {{- end }}
         env:
           - { name: ORG_NAMESPACE, value: {{ $org | quote }} }
           - { name: STATE_NAMESPACE, value: {{ $ns | quote }} }
@@ -326,6 +389,12 @@ spec:
           - { name: MAX_RUNS, value: {{ $a.maxRunsPerPass | toString | quote }} }
           - { name: STALE_SECONDS, value: {{ $a.staleRunSeconds | toString | quote }} }
           - { name: MIN_RATE_REMAINING, value: {{ $a.minRateRemaining | toString | quote }} }
+          {{- if $harbor }}
+          # registry-aware "already built": a Workload pinning a digest this registry does not have is rebuilt (#200)
+          - { name: REGISTRY_HOST, value: {{ include "build.registryHost" . | quote }} }
+          - { name: REGISTRY_AUTH_DIR, value: /var/run/secrets/auto-build-registry }
+          - { name: REGISTRY_CA_FILE, value: /var/run/secrets/auto-build-registry-ca/ca.crt }
+          {{- end }}
           {{- if $pv.enabled }}
           # PR previews (docs/preview-environments.md); the opt-in == charts/tenant previewOptIn
           - { name: PREVIEWS, value: "true" }

@@ -48,13 +48,20 @@ def component(name="hello-world", auto=True, url="https://github.com/koorikla/he
     return {"metadata": {"name": name}, "spec": spec}
 
 
-def workload(commit):
-    return "spec:\n  source:\n    repository: https://github.com/koorikla/hello-world\n    commit: \"%s\"\n" % commit
+def workload(commit, image=""):
+    text = "spec:\n  source:\n    repository: https://github.com/koorikla/hello-world\n    commit: \"%s\"\n" % commit
+    return text + ("  container:\n    image: %s\n    env:\n      - key: GREETING\n" % image if image else "")
+
+
+REGISTRY = "harbor.openchoreo.localhost:9443"
+DIGEST = "sha256:" + "d" * 64
+IMAGE_B = "%s/apps/demo/hello-world:bbbbbbb@%s" % (REGISTRY, DIGEST)
 
 
 class FakeApi:
-    def __init__(self, components, heads, files=None, compare=None, runs=None):
+    def __init__(self, components, heads, files=None, compare=None, runs=None, registry=None):
         self._components = components
+        self.registry = registry or {}    # digest -> True | False | None (unknown); absent = present
         self.heads = heads                # (slug, branch) -> sha
         self.files = files or {}          # (slug, path, sha) -> text
         self.compare = compare or {}      # (slug, base, head) -> [files] | None
@@ -86,6 +93,14 @@ class FakeApi:
 
     def run_exists(self, name):
         return name in self.runs
+
+    def image_exists(self, host, repository, digest):
+        self.calls.append(("registry", host, repository, digest))
+        return self.registry.get(digest, True)
+
+    def commit_sha(self, slug, ref):
+        self.calls.append(("commit", slug, ref))
+        return {"bbbbbbb": SHA_B}[ref]
 
     def component_runs(self, comp, labels):
         return [r for r in self.runs.values() if r["metadata"]["labels"].get("openchoreo.dev/component") == comp
@@ -149,6 +164,31 @@ class PureHelpers(unittest.TestCase):
         self.assertEqual(ab.workload_commit("spec:\n  source:\n    commit: abc1234 # built\n"), "abc1234")
         self.assertIsNone(ab.workload_commit("spec:\n  source:\n    commit: \"\"\n"))
         self.assertIsNone(ab.workload_commit(""))
+
+    def test_workload_image(self):
+        self.assertEqual(ab.workload_image(workload(SHA_A, IMAGE_B)), IMAGE_B)
+        self.assertEqual(ab.workload_image('spec:\n  container:\n    image: "x/y@%s" # pinned\n' % DIGEST), "x/y@" + DIGEST)
+        self.assertIsNone(ab.workload_image(workload(SHA_A)))
+
+    def test_image_parts(self):
+        self.assertEqual(ab.image_parts(IMAGE_B), (REGISTRY, "apps/demo/hello-world", DIGEST))
+        self.assertEqual(ab.image_parts("Harbor.X/a/b@" + DIGEST), ("harbor.x", "a/b", DIGEST))
+        for ref in ["%s/apps/demo/hello-world:bbbbbbb" % REGISTRY, "hello-world@" + DIGEST, "h/a/../b@" + DIGEST,
+                    "h/a/b@sha256:abc", "h/A/b@" + DIGEST, "", None]:
+            self.assertIsNone(ab.image_parts(ref), ref)
+
+    def test_rebuild_name_is_deterministic_and_short(self):
+        self.assertEqual(ab.rebuild_name("hello-world", SHA_B, DIGEST), "hello-world-bbbbbbbbbbbb-dddddddd")
+        long = ab.rebuild_name("x" * 39 + "-yyyy", SHA_B, DIGEST)
+        self.assertLessEqual(len(long), 63)
+        self.assertNotIn("--", long)
+        self.assertNotEqual(ab.rebuild_name("hello-world", SHA_B, "sha256:" + "e" * 64), ab.run_name("hello-world", SHA_B))
+
+    def test_bearer_challenge(self):
+        self.assertEqual(ab.bearer_challenge('Bearer realm="https://h/service/token",service="harbor-registry"'),
+                         {"realm": "https://h/service/token", "service": "harbor-registry"})
+        self.assertIsNone(ab.bearer_challenge('Basic realm="harbor"'))
+        self.assertIsNone(ab.bearer_challenge(None))
 
     def test_only_under(self):
         self.assertTrue(ab.only_under(["deploy/openchoreo/workload.yaml"], "deploy/openchoreo"))
@@ -299,6 +339,79 @@ class Reconcile(unittest.TestCase):
         rec = reconcile(api)
         self.assertEqual([r["metadata"]["name"] for r in api.created], ["b-aaaaaaaaaaaa"])
         self.assertEqual(len(rec.errors), 1)
+
+    # --- registry-aware "already built" (#200) ----------------------------------------------------------------------
+    def fresh_stack(self, registry, image=IMAGE_B, built=SHA_B, runs=None):
+        # main = hand-off commit C of the build of B, pinning an image of the previous stack's Harbor
+        return FakeApi([component()], {(SLUG, "main"): SHA_C}, files={(SLUG, WL, SHA_C): workload(built, image)},
+                       compare={(SLUG, built, SHA_C): ["deploy/openchoreo/workload.yaml"]}, registry=registry,
+                       runs=runs)
+
+    def test_missing_digest_rebuilds_the_workloads_commit_not_the_head(self):
+        api = self.fresh_stack({DIGEST: False})
+        rec = reconcile(api, registry_host=REGISTRY)
+        self.assertEqual([r["metadata"]["name"] for r in api.created], ["hello-world-bbbbbbbbbbbb-dddddddd"])
+        run = api.created[0]
+        self.assertEqual(run["spec"]["workflow"]["parameters"]["repository"]["revision"]["commit"], SHA_B)
+        self.assertEqual(run["metadata"]["annotations"], {ab.COMMIT_ANNOTATION: SHA_B})
+        self.assertEqual(run["metadata"]["labels"]["platform.koorikla.io/trigger"], "auto-build")
+        self.assertEqual(rec.state["components"]["hello-world"]["result"], "rebuilt")
+        self.assertIn(("registry", REGISTRY, "apps/demo/hello-world", DIGEST), api.calls)
+
+    def test_missing_digest_rebuild_is_idempotent(self):
+        api = self.fresh_stack({DIGEST: False})
+        state = {}
+        reconcile(api, state, registry_host=REGISTRY)
+        rec = reconcile(api, state, registry_host=REGISTRY)            # next tick, same head
+        self.assertEqual(rec.created, [])
+        rec = reconcile(api, {}, registry_host=REGISTRY)               # state lost, run (finished) still there
+        self.assertEqual(rec.created, [])
+        self.assertEqual(len(api.created), 1)
+
+    def test_present_digest_is_up_to_date_and_remembered(self):
+        api = self.fresh_stack({DIGEST: True})
+        rec = reconcile(api, registry_host=REGISTRY)
+        self.assertEqual(api.created, [])
+        self.assertEqual(rec.state["components"]["hello-world"]["result"], "up-to-date")
+        self.assertEqual(rec.state["components"]["hello-world"]["image"], IMAGE_B)
+
+    def test_digest_that_disappears_later_is_rebuilt(self):
+        api = self.fresh_stack({DIGEST: True})
+        state = {}
+        reconcile(api, state, registry_host=REGISTRY)
+        api.registry[DIGEST] = False                                   # Harbor GC / restore without the artifact
+        api.calls.clear()
+        reconcile(api, state, registry_host=REGISTRY)
+        self.assertEqual([r["metadata"]["name"] for r in api.created], ["hello-world-bbbbbbbbbbbb-dddddddd"])
+
+    def test_unknown_registry_answer_never_rebuilds(self):
+        api = self.fresh_stack({DIGEST: None})
+        reconcile(api, registry_host=REGISTRY)
+        self.assertEqual(api.created, [])
+
+    def test_image_of_another_registry_is_not_checked(self):
+        api = self.fresh_stack({DIGEST: False}, image="ghcr.io/koorikla/hello-world:bbbbbbb@" + DIGEST)
+        reconcile(api, registry_host=REGISTRY)
+        self.assertEqual(api.created, [])
+        self.assertEqual([c for c in api.calls if c[0] == "registry"], [])
+
+    def test_registry_check_off_without_registry_host(self):
+        api = self.fresh_stack({DIGEST: False})
+        reconcile(api)
+        self.assertEqual(api.created, [])
+
+    def test_short_built_commit_is_resolved(self):
+        api = self.fresh_stack({DIGEST: False}, built="bbbbbbb")
+        reconcile(api, registry_host=REGISTRY)
+        self.assertEqual(api.created[0]["spec"]["workflow"]["parameters"]["repository"]["revision"]["commit"], SHA_B)
+
+    def test_running_build_blocks_the_rebuild(self):
+        running = {"metadata": {"name": "hello-world-aaaaaaaaaaaa", "creationTimestamp": "2026-11-17T12:00:00Z",
+                                "labels": {"platform.koorikla.io/trigger": "auto-build",
+                                           "openchoreo.dev/component": "hello-world"}}, "status": {}}
+        api = self.fresh_stack({DIGEST: False}, runs={"hello-world-aaaaaaaaaaaa": running})
+        reconcile(api, registry_host=REGISTRY, now=dt.datetime(2026, 11, 17, 12, 5, tzinfo=dt.timezone.utc))
+        self.assertEqual(api.created, [])
 
     def test_rate_limit_stops_the_pass(self):
         class Limited(FakeApi):

@@ -53,6 +53,33 @@ How it works and what it never does:
   are not routable from the host: docs/dev-environment.md "Host differences (Docker Desktop and friends)").
 - Tests: `hack/tests/test_demo_check.sh` (stubbed kubectl, curl, cosign, helm; part of `task test`).
 
+### After a clean bootstrap
+
+`task down && task up` deletes Harbor and every ComponentRelease, while the app repo still pins what the previous stack
+built: the Workload's image digest and, in `release-bindings/{staging,production}.yaml`, the release names the previous
+stack's OpenChoreo cut. What happens per environment ([#200](https://github.com/koorikla/platform/issues/200)):
+
+| Environment | After the bootstrap | Manual steps |
+|---|---|---|
+| development | Auto-build finds the pinned digest missing in Harbor and rebuilds the Workload's commit (WorkflowRun `hello-world-<sha[:12]>-<digest[:8]>`, docs/build-plane.md "Auto-build" step 5); the hand-off commits the new digest, `autoDeploy` rolls it out. Serves about 10 minutes after the workflow plane is up, usually before `task up` reports every app Healthy. | none |
+| staging, production | The pinned release does not exist in this stack (binding `ComponentReleaseNotFound`). `task demo:check` shows them PENDING `not promoted in this stack yet`. | one promotion, the demo's step 5 |
+
+Staging and production come back only through a promotion, on purpose: a release reaches them after its rollout,
+smoke test and 5xx rate were checked in the environment before (docs/promotion.md "The gates"), and that evidence
+belongs to the stack it was gathered in. Re-pinning production automatically would bypass the gate and the release
+manager's merge. Promote development's release to staging (in a koorikla/hello-world checkout):
+
+```bash
+REL=$(kubectl --context k3d-platform-mgmt -n default get releasebinding hello-world-development -o jsonpath='{.spec.releaseName}')
+git switch -c "promote-staging-$REL"
+yq -i ".spec.releaseName = \"$REL\"" deploy/openchoreo/release-bindings/staging.yaml
+git commit -am "promote(hello-world): $REL to staging" && gh pr create --fill && gh pr merge --squash
+```
+
+Once staging has rolled out, the promotion gate opens PR `promote/hello-world-production`; merge it outside the freeze
+window and production serves. Do this before the demo when step 5 should start from three serving environments; it
+also gives the "promotion-gate WorkflowRuns present" row its run (runs expire 1 h after completion).
+
 Also prepare:
 - Browser tabs: Argo CD (`task ui`, http://localhost:8081), the OpenChoreo console http://openchoreo.localhost:8080
   (user `admin@openchoreo.dev`, password: docs/forking.md "4. Boot"), Harbor https://harbor.openchoreo.localhost:9443, the

@@ -448,7 +448,7 @@ c_build_in_cluster() {
 
 # ---- step 5: deploy & promote ---------------------------------------------------------------------------------------
 c_http() {
-  local env=$1 dp gw host port ip code path
+  local env=$1 dp gw host port ip code path rel
   dp=$(env_dataplane "$env")
   [[ -n "$dp" ]] || { echo "environment $env has no dataPlaneRef"; return 1; }
   gw=$(km get clusterdataplanes.openchoreo.dev "$dp" \
@@ -459,8 +459,24 @@ c_http() {
   [[ -n "$ip" ]] || { echo "no node IP for cluster $dp"; return 1; }
   path="/$COMP-$ENDPOINT/"
   code=$(node_http_code "$env-$NS.$host" "$port" "$ip" "$path")
+  [[ "$code" == 200 ]] && { echo "$code http://$env-$NS.$host:$port$path (node $ip)"; return 0; }
+  rel=$(unpromoted_release "$env")
+  if [[ -n "$rel" ]]; then
+    # A clean bootstrap keeps the release names git pins for staging/production, but the ComponentReleases were cut
+    # by the previous stack: nothing to serve until the next promotion (docs/demo.md "After a clean bootstrap").
+    echo "$code: not promoted in this stack yet - $env pins $rel, not a ComponentRelease of this stack (promote: docs/demo.md \"After a clean bootstrap\")"
+    return 2
+  fi
   echo "$code http://$env-$NS.$host:$port$path (node $ip)"
-  [[ "$code" == 200 ]]
+  return 1
+}
+
+# unpromoted_release <env>: the release the component's binding for <env> pins when this stack has no such
+# ComponentRelease (Ready reason ComponentReleaseNotFound), else empty.
+unpromoted_release() {
+  local out
+  out=$(km get releasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.environment}{" "}{.spec.releaseName}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}' 2>/dev/null) || return 0
+  printf '%s\n' "$out" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e && $4 == "ComponentReleaseNotFound" { print $3; exit }'
 }
 
 c_gate_runs() {

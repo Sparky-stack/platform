@@ -65,6 +65,7 @@ case "\$a" in
   *" get workloads.openchoreo.dev "*) k=workloads ;;
   *" get namespaces "*) k=cellns ;;
   *" get workflowruns.openchoreo.dev "*) k=workflowruns ;;
+  *" get releasebindings.openchoreo.dev "*) k=bindings ;;
   *" get clusterworkflows.openchoreo.dev "*) k=clusterworkflow ;;
   *" get imagevalidatingpolicies"*) k=policies ;;
   *" get daemonsets,deployments "*) k=falco ;;
@@ -336,6 +337,27 @@ run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
 assert_match "$OUT" $'\n14 PASS, 15 FAIL, 0 PENDING$' "strict: summary"
+
+# ---- fresh stack (#200) ---------------------------------------------------------------------------------------------
+# A clean bootstrap: development serves (auto-build rebuilt the Workload's commit); staging/production pin release names
+# of the previous stack -> PENDING with the reason, not FAIL. Any other non-200 still FAILs.
+cp -R "$TMP/fix/green" "$TMP/fix/fresh"; FIX="$TMP/fix/fresh"
+printf '404' > "$FIX/http.staging-default.dev1.apps.localhost"
+printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+printf 'hello-world development hello-world-6df447bf6 Ready\nhello-world staging hello-world-77ff9dc697 ComponentReleaseNotFound\nother production other-1 ComponentReleaseNotFound\nhello-world production hello-world-77ff9dc697 ComponentReleaseNotFound\n' \
+  > "$FIX/k3d-platform-mgmt.bindings"
+run fresh
+assert_eq "$RC" 0 "fresh: unpromoted staging/production do not fail the pre-flight"
+assert_eq "$(result_of 'hello-world 200 in staging')" PENDING "fresh: staging not promoted in this stack -> PENDING"
+assert_eq "$(detail_of 'hello-world 200 in staging')" '404: not promoted in this stack yet - staging pins hello-world-77ff9dc697, not a ComponentRelease of this stack (promote: docs/demo.md "After a clean bootstrap")' "fresh: says why and what to do"
+assert_eq "$(result_of 'hello-world 200 in production')" PENDING "fresh: production likewise"
+assert_eq "$(result_of 'hello-world 200 in development')" PASS "fresh: development serves"
+printf 'hello-world staging hello-world-77ff9dc697 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
+run fresh-ready
+assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: a binding with its release that does not serve still FAILs"
+rm "$FIX/k3d-platform-mgmt.bindings"
+run fresh-none
+assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: no binding -> FAIL"
 
 # ---- API server down ------------------------------------------------------------------------------------------------
 FIX="$TMP/fix/down"; mkdir -p "$FIX"
