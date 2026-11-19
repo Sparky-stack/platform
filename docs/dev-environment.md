@@ -191,8 +191,11 @@ userlands; helpers live in [`hack/lib/portable.sh`](../hack/lib/portable.sh).
 `hack/test.sh` renders every chart once (step 5) and exports that directory as `RENDERED_DIR` to the suites in
 `hack/tests/`. Suites take renders through `render_platform`, `render_cluster`, `render_standalone_addon` and
 `render_layered_addon` (`hack/tests/lib.sh`): the `hack/test.sh` render of this run when present, else a fresh
-`helm template` (a suite run on its own never reads an old render). `hack/deps.sh` rebuilds only charts whose `charts/`
-differs from their `Chart.lock` (missing or extra tarballs, or a tarball that differs from a digest pinned in the
+`helm template` (a suite run on its own never reads an old render). The same file holds the rest a new suite needs:
+`assert_eq`/`assert_match`/`assert_nonempty` + `finish` (the `N passed` line), `kc_valid` (kubeconform with the CRD
+schemas, as `hack/test.sh` runs it), and a fake-tool harness: `fake_bin_yq` + `run_isolated` run a script against fakes
+in `$BIN` with a scrubbed environment, `bootstrap_harness` lets a suite call single `bootstrap.sh` functions.
+`hack/deps.sh` rebuilds only charts whose `charts/` differs from their `Chart.lock` (missing or extra tarballs, or a tarball that differs from a digest pinned in the
 `Chart.yaml` annotation `platform.koorikla.io/dependency-digests`) and retries downloads. It registers the https repositories
 those charts use in a throwaway repository config (`HELM_REPOSITORY_CONFIG`), so a stale or retired repository in your
 own helm config cannot fail it. CI caches the chart tarballs keyed on every `Chart.lock`.
