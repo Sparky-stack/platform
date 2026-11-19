@@ -15,7 +15,7 @@
 #   RENDER_DIR       render test assets, relative to PACKAGE_ROOT, default
 #                    tests/render (functions.yaml, observed/<name>,
 #                    expected/<name>, extra-resources/<name>)
-#   FUNCTIONS_FILE   default $RENDER_DIR/functions.yaml
+#   FUNCTIONS_FILE   default $RENDER_DIR/functions.yaml (absent in a Crossplane Project: embedded functions)
 #   UPDATE_EXPECTED  true = (re)write expected outputs instead of diffing
 #   CACHE_DIR        schema cache dir (crossplane --cache-dir)
 #   CI_OUT_DIR       output dir, default ./.ci-out
@@ -103,7 +103,7 @@ log "validate examples against XRDs"
 crossplane resource validate ${cache_args} "${extensions}" "${examples}"
 
 # 3. Render tests.
-[[ -f "${functions}" ]] || die "functions file ${functions} not found (needed by composition render)"
+[[ -f "${functions}" || -f crossplane-project.yaml ]] || die "functions file ${functions} not found (needed by composition render)"
 
 find_composition() {
   # $1 = XR file; prints the composition file to use.
@@ -148,7 +148,10 @@ while IFS= read -r xr <&3; do
     continue
   fi
   count=$((count + 1))
-  set -- "$xr" "$comp" "${functions}"
+  set -- "$xr" "$comp"
+  # No functions file in a Crossplane Project: render builds the embedded functions (functions/) and resolves the
+  # project's dependencies itself (first run pulls them, hence the longer timeout).
+  if [[ -f "${functions}" ]]; then set -- "$@" "${functions}"; else set -- "$@" --timeout "${RENDER_TIMEOUT:-15m}"; fi
   xrd="$(find_xrd "$xr" || true)"
   [[ -z "${xrd}" ]] || set -- "$@" --xrd "${xrd}"
   [[ ! -f "${render_dir}/observed/${name}" ]] || set -- "$@" --observed-resources "${render_dir}/observed/${name}"

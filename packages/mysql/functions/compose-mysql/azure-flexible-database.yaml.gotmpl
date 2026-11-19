@@ -1,0 +1,14 @@
+{{- if eq $backend "azure-flexible" }}
+---
+apiVersion: dbformysql.azure.m.upbound.io/v1beta1
+kind: FlexibleDatabase
+metadata:
+  name: {{ $name }}-db
+  annotations:
+    {{ setResourceNameAnnotation "database" }}
+    crossplane.io/external-name: {{ $db }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider: { resourceGroupName: {{ $facts.resourceGroupName }}, serverNameRef: { name: {{ $name }} }, charset: utf8mb4, collation: utf8mb4_0900_ai_ci }
+{{- end }}

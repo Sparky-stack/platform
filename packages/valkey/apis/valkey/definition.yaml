@@ -1,0 +1,70 @@
+# The developer-facing Valkey API (Redis-compatible cache / key-value store): one namespaced XR (Crossplane v2). The
+# cluster decides the backend through the EnvironmentConfig platform-valkey, read by the one Composition "valkey".
+# Contract, identical on every backend: status.endpoint / status.port / status.tls (plain values) and the Secret
+# status.secretName (= <name>-valkey) with keys username, password. Status: layout (packages/valkey/README.md).
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: valkeys.platform.koorikla.io
+spec:
+  scope: Namespaced
+  group: platform.koorikla.io
+  names:
+    kind: Valkey
+    plural: valkeys
+    singular: valkey
+    categories: [platform]
+  defaultCompositionRef:
+    name: valkey
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - { name: Backend, type: string, jsonPath: .status.backend }
+        - { name: Endpoint, type: string, jsonPath: .status.endpoint }
+        - { name: Secret, type: string, jsonPath: .status.secretName }
+        - { name: Ready, type: string, jsonPath: '.status.conditions[?(@.type=="Ready")].status' }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  description: "S | M | L: memory per node (about 512Mi / 2Gi / 8Gi; ElastiCache / Memorystore / Azure tier)."
+                  type: string
+                  enum: [S, M, L]
+                  default: S
+                highAvailability:
+                  description: A replica in another zone with automatic failover.
+                  type: boolean
+                  default: false
+                maxmemoryPolicy:
+                  description: What Valkey evicts when memory is full (noeviction for queues / sessions, allkeys-lru for caches).
+                  type: string
+                  enum: [noeviction, allkeys-lru, volatile-lru, allkeys-lfu]
+                  default: noeviction
+                deletionPolicy:
+                  description: Retain keeps the cloud cache when the XR is deleted; Delete removes it.
+                  type: string
+                  enum: [Retain, Delete]
+                  default: Retain
+            status:
+              type: object
+              properties:
+                backend:
+                  description: valkey-operator | aws-elasticache | gcp-memorystore | azure-cache
+                  type: string
+                endpoint:
+                  type: string
+                port:
+                  type: integer
+                tls:
+                  description: Whether clients must use TLS (rediss://).
+                  type: boolean
+                secretName:
+                  description: Credentials Secret in this namespace (username, password).
+                  type: string

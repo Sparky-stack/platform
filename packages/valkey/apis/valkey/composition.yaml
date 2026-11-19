@@ -1,0 +1,322 @@
+# The one Composition of the Valkey API (pipeline mode), same shape as packages/postgresql:
+#   1. function-environment-configs loads the cluster's facts, EnvironmentConfig platform-valkey (required).
+#   2. function-go-templating dispatches on $facts.backend to one {{ define }} per backend (valkey-operator |
+#      aws-elasticache | gcp-memorystore | azure-cache); an unknown backend fails the render. "connection-secret" is the
+#      shared partial: an ESO Password generator + the <name>-valkey Secret (username, password).
+#   3. function-auto-ready derives the XR's readiness.
+# Status: layout. valkey-operator is render-tested offline; the cloud blocks are skeletons (VERIFY: never applied).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: valkey
+spec:
+  compositeTypeRef:
+    apiVersion: platform.koorikla.io/v1alpha1
+    kind: Valkey
+  mode: Pipeline
+  pipeline:
+    - step: environment
+      functionRef:
+        name: function-environment-configs
+      input:
+        apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          environmentConfigs:
+            - type: Reference
+              ref:
+                name: platform-valkey
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- define "connection-secret" }}
+            {{- $o := "{{" }}
+            {{- $c := "}}" }}
+            ---
+            apiVersion: generators.external-secrets.io/v1alpha1
+            kind: Password
+            metadata:
+              name: {{ .name }}-valkey-password
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: password-generator
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec: { length: 32, digits: 8, symbols: 0, noUpper: false, allowRepeat: true }
+            ---
+            apiVersion: external-secrets.io/v1
+            kind: ExternalSecret
+            metadata:
+              name: {{ .name }}-valkey
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: connection-secret
+            spec:
+              refreshPolicy: CreatedOnce
+              target:
+                name: {{ .name }}-valkey
+                creationPolicy: Owner
+                template:
+                  engineVersion: v2
+                  type: Opaque
+                  data:
+                    username: {{ .username }}
+                    password: '{{ $o }} .password {{ $c }}'
+              dataFrom:
+                - sourceRef:
+                    generatorRef:
+                      apiVersion: generators.external-secrets.io/v1alpha1
+                      kind: Password
+                      name: {{ .name }}-valkey-password
+            {{- end }}
+            {{- define "valkey-operator" }}
+            {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+            {{- $xr := .observed.composite.resource }}
+            {{- $spec := $xr.spec | default dict }}
+            {{- $name := $xr.metadata.name }}
+            {{- $ns := $xr.metadata.namespace }}
+            {{- $size := dig "size" "S" $spec }}
+            {{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+            {{- $id := printf "vk-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+            {{- $mp := list "*" }}
+            {{- if eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+            {{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+            {{- /* valkey-operator: a ValkeyCluster (valkey-io/valkey-operator, the Valkey project's own operator; addon: follow-up)
+            in the XR's namespace. Cluster mode only: clients must be cluster-aware. One shard, plus one replica per shard when
+            highAvailability. Valkey's open default user is disabled; the app user "app" gets its password from <name>-valkey.
+            VERIFY: v1alpha1 field names (shards/replicas/acl.users/permissions), Service name, Ready condition. */}}
+            {{- $mem := get (dict "S" "512Mi" "M" "2Gi" "L" "8Gi") $size }}
+            ---
+            apiVersion: valkey.io/v1alpha1
+            kind: ValkeyCluster
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: cluster
+            spec:
+              shards: 1
+              replicas: {{ ternary 1 0 $ha }}
+              config:
+                maxmemory-policy: {{ dig "maxmemoryPolicy" "noeviction" $spec }}
+              resources:
+                requests: { cpu: 100m, memory: {{ $mem }} }
+                limits: { memory: {{ $mem }} }
+              acl:
+                users:
+                  - name: default
+                    state: Disabled
+                  - name: app
+                    password:
+                      type: Secret
+                      secret: { name: {{ $name }}-valkey, keys: [password] }
+                    permissions: "+@all -@admin -@dangerous ~* &*"
+            {{- template "connection-secret" (dict "name" $name "username" "app") }}
+            ---
+            apiVersion: platform.koorikla.io/v1alpha1
+            kind: Valkey
+            status:
+              backend: valkey-operator
+              endpoint: {{ printf "%s.%s.svc" $name $ns }}
+              port: 6379
+              tls: false
+              secretName: {{ $name }}-valkey
+            {{- end }}
+            {{- define "aws-elasticache" }}
+            {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+            {{- $xr := .observed.composite.resource }}
+            {{- $spec := $xr.spec | default dict }}
+            {{- $name := $xr.metadata.name }}
+            {{- $ns := $xr.metadata.namespace }}
+            {{- $size := dig "size" "S" $spec }}
+            {{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+            {{- $id := printf "vk-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+            {{- $mp := list "*" }}
+            {{- if eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+            {{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+            {{- /* aws-elasticache skeleton: ElastiCache for Valkey replication group in the cluster's subnet / security groups,
+            TLS in transit, AUTH token from <name>-valkey (user "default"); a Multi-AZ replica when highAvailability.
+            VERIFY: never applied; IAM auth (user groups) instead of the token. */}}
+            {{- template "connection-secret" (dict "name" $name "username" "default") }}
+            ---
+            apiVersion: elasticache.aws.m.upbound.io/v1beta1
+            kind: ReplicationGroup
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: replication-group
+                crossplane.io/external-name: {{ $id }}
+            spec:
+              managementPolicies: {{ toJson $mp }}
+              providerConfigRef: {{ toJson $pc }}
+              forProvider:
+                region: {{ $facts.region }}
+                description: {{ printf "%s/%s" $ns $name }}
+                engine: valkey
+                engineVersion: "8.0"
+                nodeType: {{ get (dict "S" "cache.t4g.small" "M" "cache.m7g.large" "L" "cache.r7g.large") $size }}
+                numCacheClusters: {{ ternary 2 1 $ha }}
+                automaticFailoverEnabled: {{ $ha }}
+                multiAzEnabled: {{ $ha }}
+                transitEncryptionEnabled: true
+                atRestEncryptionEnabled: true
+                authTokenSecretRef: { name: {{ $name }}-valkey, key: password }
+                subnetGroupName: {{ $facts.subnetGroupName }}
+                securityGroupIds: {{ toJson $facts.securityGroupIds }}
+            ---
+            apiVersion: platform.koorikla.io/v1alpha1
+            kind: Valkey
+            status:
+              backend: aws-elasticache
+              endpoint: {{ dig "replication-group" "resource" "status" "atProvider" "primaryEndpointAddress" "" $observed }}
+              port: 6379
+              tls: true
+              secretName: {{ $name }}-valkey
+            {{- end }}
+            {{- define "gcp-memorystore" }}
+            {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+            {{- $xr := .observed.composite.resource }}
+            {{- $spec := $xr.spec | default dict }}
+            {{- $name := $xr.metadata.name }}
+            {{- $ns := $xr.metadata.namespace }}
+            {{- $size := dig "size" "S" $spec }}
+            {{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+            {{- $id := printf "vk-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+            {{- $mp := list "*" }}
+            {{- if eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+            {{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+            {{- /* gcp-memorystore skeleton: Memorystore for Valkey, Private Service Connect into the cluster's VPC, IAM
+            authentication (the app's Workload Identity service account needs roles/memorystore.dbConnectionUser), TLS. No password:
+            <name>-valkey keeps the same keys with an empty password. VERIFY: never applied, field names, PSC policy. */}}
+            ---
+            apiVersion: memorystore.gcp.m.upbound.io/v1beta1
+            kind: Instance
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: instance
+                crossplane.io/external-name: {{ $id }}
+            spec:
+              managementPolicies: {{ toJson $mp }}
+              providerConfigRef: {{ toJson $pc }}
+              forProvider:
+                project: {{ $facts.project }}
+                location: {{ $facts.region }}
+                engineVersion: VALKEY_8_0
+                nodeType: {{ get (dict "S" "SHARED_CORE_NANO" "M" "STANDARD_SMALL" "L" "HIGHMEM_MEDIUM") $size }}
+                shardCount: 1
+                replicaCount: {{ ternary 1 0 $ha }}
+                authorizationMode: IAM_AUTH
+                transitEncryptionMode: SERVER_AUTHENTICATION
+                deletionProtectionEnabled: {{ eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+                engineConfigs: { maxmemory-policy: {{ dig "maxmemoryPolicy" "noeviction" $spec }} }
+                pscAutoConnections:
+                  - network: {{ $facts.network }}
+                    projectId: {{ $facts.project }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $name }}-valkey
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: connection-secret
+                gotemplating.fn.crossplane.io/ready: "True"
+            type: Opaque
+            stringData:
+              username: default
+              password: ""                            # identity-based auth: clients use a workload identity token instead
+            ---
+            apiVersion: platform.koorikla.io/v1alpha1
+            kind: Valkey
+            status:
+              backend: gcp-memorystore
+              endpoint: {{ dig "instance" "resource" "status" "atProvider" "discoveryEndpoints" list $observed | first | default dict | dig "address" "" }}
+              port: 6379
+              tls: true
+              secretName: {{ $name }}-valkey
+            {{- end }}
+            {{- define "azure-cache" }}
+            {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+            {{- $xr := .observed.composite.resource }}
+            {{- $spec := $xr.spec | default dict }}
+            {{- $name := $xr.metadata.name }}
+            {{- $ns := $xr.metadata.namespace }}
+            {{- $size := dig "size" "S" $spec }}
+            {{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+            {{- $observed := .observed.resources | default dict }}
+            {{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+            {{- $id := printf "vk-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+            {{- $mp := list "*" }}
+            {{- if eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+            {{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+            {{- /* azure-cache skeleton: Azure Cache for Redis (Azure has no managed Valkey; Redis-protocol compatible), private
+            endpoint only, Microsoft Entra authentication (the app's workload identity is added as an access-policy user), access
+            keys disabled; Premium with a replica in another zone when highAvailability. VERIFY: never applied, Entra user
+            assignment, Azure Managed Redis once upjet ships it. */}}
+            ---
+            apiVersion: cache.azure.m.upbound.io/v1beta1
+            kind: RedisCache
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: cache
+                crossplane.io/external-name: {{ $id }}
+            spec:
+              managementPolicies: {{ toJson $mp }}
+              providerConfigRef: {{ toJson $pc }}
+              forProvider:
+                resourceGroupName: {{ $facts.resourceGroupName }}
+                location: {{ $facts.location }}
+                skuName: {{ ternary "Premium" "Standard" (or $ha (eq $size "L")) }}
+                family: {{ ternary "P" "C" (or $ha (eq $size "L")) }}
+                capacity: {{ get (dict "S" 0 "M" 2 "L" 1) $size }}
+                minimumTlsVersion: "1.2"
+                publicNetworkAccessEnabled: false
+                accessKeysAuthenticationEnabled: false
+                redisConfiguration:
+                  activeDirectoryAuthenticationEnabled: true
+                  maxmemoryPolicy: {{ dig "maxmemoryPolicy" "noeviction" $spec }}
+                {{- if $ha }}
+                zones: ["1", "2"]
+                {{- end }}
+            ---
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: {{ $name }}-valkey
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: connection-secret
+                gotemplating.fn.crossplane.io/ready: "True"
+            type: Opaque
+            stringData:
+              username: ""
+              password: ""                            # identity-based auth: clients use a workload identity token instead
+            ---
+            apiVersion: platform.koorikla.io/v1alpha1
+            kind: Valkey
+            status:
+              backend: azure-cache
+              endpoint: {{ printf "%s.redis.cache.windows.net" $id }}
+              port: 6380
+              tls: true
+              secretName: {{ $name }}-valkey
+            {{- end }}
+            {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+            {{- $backend := dig "backend" "" $facts }}
+            {{- if eq $backend "valkey-operator" }}{{ template "valkey-operator" . }}
+            {{- else if eq $backend "aws-elasticache" }}{{ template "aws-elasticache" . }}
+            {{- else if eq $backend "gcp-memorystore" }}{{ template "gcp-memorystore" . }}
+            {{- else if eq $backend "azure-cache" }}{{ template "azure-cache" . }}
+            {{- else }}{{ fail (printf "valkey: unknown backend %q in EnvironmentConfig platform-valkey (valkey-operator | aws-elasticache | gcp-memorystore | azure-cache)" $backend) }}
+            {{- end }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

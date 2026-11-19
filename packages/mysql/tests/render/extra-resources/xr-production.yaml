@@ -1,4 +1,4 @@
-# Facts of a sample moco cluster, as addons/crossplane will render them when the API is enabled (VERIFY: image pin).
+# Sample facts of a moco cluster (fake ids): the keys the moco block of the Composition reads.
 apiVersion: apiextensions.crossplane.io/v1beta1
 kind: EnvironmentConfig
 metadata:

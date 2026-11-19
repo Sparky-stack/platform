@@ -1,0 +1,27 @@
+{{- /* azure-flexible skeleton: MySQL Flexible Server in the cluster's delegated subnet, zone-redundant HA; the admin login is the app user. VERIFY: never applied. */}}
+{{- if eq $backend "azure-flexible" }}
+---
+apiVersion: dbformysql.azure.m.upbound.io/v1beta1
+kind: FlexibleServer
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "server" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    location: {{ $facts.location }}
+    version: "8.4"
+    skuName: {{ get (dict "S" "B_Standard_B2s" "M" "GP_Standard_D2ds_v4" "L" "GP_Standard_D4ds_v4") $size }}
+    storage: { sizeGb: {{ $storage }} }
+    delegatedSubnetId: {{ $facts.delegatedSubnetId }}
+    privateDnsZoneId: {{ $facts.privateDnsZoneId }}
+    administratorLogin: {{ $db }}
+    administratorPasswordSecretRef: { name: {{ $name }}-mysql, key: password }
+    {{- if $ha }}
+    highAvailability: { mode: ZoneRedundant }
+    {{- end }}
+{{- end }}

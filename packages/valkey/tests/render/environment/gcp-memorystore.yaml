@@ -1,0 +1,12 @@
+# Sample facts of a gcp-memorystore cluster (fake ids): the keys the gcp-memorystore block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-valkey
+data:
+  backend: gcp-memorystore
+  cluster: sample
+  environment: development
+  project: sample-project
+  region: europe-north1
+  network: projects/sample-project/global/networks/sample
