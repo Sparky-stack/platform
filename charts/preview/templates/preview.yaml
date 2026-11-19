@@ -16,7 +16,6 @@ Closing the PR deletes the Application (ApplicationSet), whose resources finaliz
 environment finalizer removes the bindings and the cell namespace. expired: "true" renders nothing (same cleanup).
 */ -}}
 {{- if ne (toString .Values.expired) "true" }}
-{{- include "preview.validate" . }}
 {{- $env := include "preview.environment" . }}
 {{- $ns := .Values.openchoreo.orgNamespace }}
 apiVersion: openchoreo.dev/v1alpha1

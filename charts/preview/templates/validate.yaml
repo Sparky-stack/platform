@@ -1,0 +1,11 @@
+{{- /* Cross-field checks of the preview identity (formats are in values.schema.json, which allows "" for standalone lint
+and expired previews): required unless expired, and the route host label fits one DNS label. */ -}}
+{{- if ne (toString .Values.expired) "true" -}}
+{{- $c := required "component is required" .Values.component -}}
+{{- $_ := required "project is required" .Values.project -}}
+{{- if not (toString .Values.pullRequest) -}}{{- fail "pullRequest \"\" must be a pull request number" -}}{{- end -}}
+{{- if not .Values.commit -}}{{- fail "commit \"\" must be a 40-hex commit SHA" -}}{{- end -}}
+{{- /* The external route host is <environment>-<org namespace>.<gateway host> (upstream ClusterComponentType): one DNS label. */ -}}
+{{- $host := printf "pr-%v-%s-%s" .Values.pullRequest $c .Values.openchoreo.orgNamespace -}}
+{{- if gt (len $host) 63 -}}{{- fail (printf "preview host label %q is longer than 63 characters (shorten the component name)" $host) -}}{{- end -}}
+{{- end -}}
