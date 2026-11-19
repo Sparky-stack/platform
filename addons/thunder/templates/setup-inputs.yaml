@@ -1,0 +1,26 @@
+{{- /*
+ConfigMap thunder-setup-inputs: the change detector for the setup Job's hook inputs (#221). NOT a hook.
+
+Everything the setup Job reads (ExternalSecret thunder-bootstrap, ConfigMaps thunder-bootstrap / thunder-setup-config-map
+/ thunder-ai-agent-clients) has to be a PreSync hook: upstream hardcodes the Job as a pre-install hook (weight -5), and
+Argo CD finishes the whole PreSync phase before the first sync wave, so no wave can order a normal resource before it
+(a normal ExternalSecret leaves the Job's pod without its Secret on first boot, and the sync never completes).
+But Argo CD never diffs hooks: a change to one alone never makes the app OutOfSync, so it was never applied (#221).
+This normal ConfigMap carries one checksum per hook input. A change to any input changes it -> app OutOfSync ->
+automated sync -> Argo CD re-applies every PreSync hook and re-runs the setup Job. Keys are <kind>.<name> of the hook
+object; hack/tests/test_hook_kinds.sh requires a key here for every hook ConfigMap/Secret/ExternalSecret of this chart.
+Upstream's ConfigMaps are rendered from .Values.thunderid only, so they share its checksum.
+*/ -}}
+{{- $upstream := toYaml .Values.thunderid | sha256sum }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thunder-setup-inputs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    platform.koorikla.io/hook-inputs: "true"
+data:
+  externalsecret.{{ .Values.bootstrapSecret.name }}: {{ include (print $.Template.BasePath "/bootstrap-secret.yaml") . | sha256sum | quote }}
+  configmap.thunder-ai-agent-clients: {{ include (print $.Template.BasePath "/ai-agent-clients.yaml") . | sha256sum | quote }}
+  configmap.thunder-bootstrap: {{ $upstream | quote }}
+  configmap.thunder-setup-config-map: {{ $upstream | quote }}

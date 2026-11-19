@@ -18,3 +18,6 @@
 
 ## [2026-11-19] create | Argo CD server-side diff and atomic CRD spec (#184)
 - Added `gotchas/argocd-server-side-diff-atomic-crd-spec.md`.
+
+## [2026-11-19] update | Argo CD never diffs hook resources (#221)
+- Updated `gotchas/argocd-server-side-diff-atomic-crd-spec.md`: hook inputs get a checksum in a normal `hook-inputs` ConfigMap; `hack/tests/test_hook_kinds.sh`.

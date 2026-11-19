@@ -1,0 +1,32 @@
+# Non-Job objects that addons render as Helm/Argo CD hooks (hack/tests/test_hook_kinds.sh, #221).
+# Argo CD never diffs a hook: a change to one alone never makes the app OutOfSync, and self-heal never repairs it.
+# Real config therefore is a normal resource ordered by sync waves (pattern: harbor/openbao/data-plane: config
+# normal, only the Job a hook). An entry here needs a reason; a ConfigMap/Secret/ExternalSecret entry additionally
+# needs a key <kind>.<name> in a normal ConfigMap labelled platform.koorikla.io/hook-inputs=true of the same addon,
+# whose checksum makes a change to the hook visible to Argo CD. Entries whose object no longer renders fail the test.
+- { addon: argo-cd, kind: ServiceAccount, name: argocd-redis-secret-init, reason: "upstream, RBAC of the one-shot redis-secret-init hook Job only" }
+- { addon: argo-cd, kind: Role, name: argocd-redis-secret-init, reason: "upstream, RBAC of the one-shot redis-secret-init hook Job only" }
+- { addon: argo-cd, kind: RoleBinding, name: argocd-redis-secret-init, reason: "upstream, RBAC of the one-shot redis-secret-init hook Job only" }
+- { addon: cert-manager, kind: ServiceAccount, name: cert-manager-startupapicheck, reason: "upstream, RBAC of the startupapicheck hook Job only" }
+- { addon: cert-manager, kind: Role, name: "cert-manager-startupapicheck:create-cert", reason: "upstream, RBAC of the startupapicheck hook Job only" }
+- { addon: cert-manager, kind: RoleBinding, name: "cert-manager-startupapicheck:create-cert", reason: "upstream, RBAC of the startupapicheck hook Job only" }
+- { addon: kyverno, kind: ServiceAccount, name: kyverno-migrate-resources, reason: "upstream, RBAC of the migrate-resources hook Job only" }
+- { addon: kyverno, kind: ClusterRole, name: "kyverno:migrate-resources", reason: "upstream, RBAC of the migrate-resources hook Job only" }
+- { addon: kyverno, kind: ClusterRoleBinding, name: "kyverno:migrate-resources", reason: "upstream, RBAC of the migrate-resources hook Job only" }
+- { addon: kyverno, kind: ServiceAccount, name: kyverno-check-legacy-policies, reason: "upstream, RBAC of the check-legacy-policies hook Job only" }
+- { addon: kyverno, kind: ClusterRole, name: "kyverno:check-legacy-policies", reason: "upstream, RBAC of the check-legacy-policies hook Job only" }
+- { addon: kyverno, kind: ClusterRoleBinding, name: "kyverno:check-legacy-policies", reason: "upstream, RBAC of the check-legacy-policies hook Job only" }
+- { addon: openchoreo-control-plane, kind: ServiceAccount, name: openchoreo-authz-bootstrap, reason: "upstream, RBAC of the authz bootstrap PostSync Job only" }
+- { addon: openchoreo-control-plane, kind: ClusterRole, name: openchoreo-authz-bootstrap, reason: "upstream, RBAC of the authz bootstrap PostSync Job only" }
+- { addon: openchoreo-control-plane, kind: ClusterRoleBinding, name: openchoreo-authz-bootstrap, reason: "upstream, RBAC of the authz bootstrap PostSync Job only" }
+- { addon: openchoreo-control-plane, kind: ConfigMap, name: openchoreo-authz-bootstrap, reason: "upstream hardcodes it as a post-install hook with its Job; checksum in ConfigMap openchoreo-authz-bootstrap-inputs" }
+- { addon: thunder, kind: ServiceAccount, name: thunderid-service-account, reason: "upstream hardcodes it as a pre-install hook; identity only, no config" }
+- { addon: thunder, kind: PersistentVolumeClaim, name: thunder-database-pvc, reason: "upstream hardcoded hook; hook-failed + delete protection (hack/tests/test_pvc_hooks.sh)" }
+- { addon: thunder, kind: PersistentVolumeClaim, name: thunder-certs-pvc, reason: "upstream hardcoded hook; hook-failed + delete protection (hack/tests/test_pvc_hooks.sh)" }
+- { addon: thunder, kind: PersistentVolumeClaim, name: thunder-secrets-pvc, reason: "upstream hardcoded hook; hook-failed + delete protection (hack/tests/test_pvc_hooks.sh)" }
+- { addon: thunder, kind: ValidatingAdmissionPolicy, name: thunder-pvc-delete-protection, reason: "must exist before the hook PVCs (weight -30); hack/tests/test_pvc_hooks.sh" }
+- { addon: thunder, kind: ValidatingAdmissionPolicyBinding, name: thunder-pvc-delete-protection, reason: "must exist before the hook PVCs (weight -30); hack/tests/test_pvc_hooks.sh" }
+- { addon: thunder, kind: ConfigMap, name: thunder-bootstrap, reason: "upstream pre-install hook read by the PreSync setup Job; checksum in ConfigMap thunder-setup-inputs" }
+- { addon: thunder, kind: ConfigMap, name: thunder-setup-config-map, reason: "upstream pre-install hook read by the PreSync setup Job; checksum in ConfigMap thunder-setup-inputs" }
+- { addon: thunder, kind: ConfigMap, name: thunder-ai-agent-clients, reason: "mounted by the PreSync setup Job (upstream hardcodes it as a hook, no wave can precede PreSync); checksum in ConfigMap thunder-setup-inputs" }
+- { addon: thunder, kind: ExternalSecret, name: thunder-bootstrap, reason: "Secret of the PreSync setup Job (upstream hardcodes it as a hook, no wave can precede PreSync); checksum in ConfigMap thunder-setup-inputs" }

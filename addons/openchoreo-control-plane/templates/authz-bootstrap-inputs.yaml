@@ -1,0 +1,20 @@
+{{- /*
+ConfigMap openchoreo-authz-bootstrap-inputs: change detector for upstream's authz bootstrap hook inputs (#221). NOT a hook.
+Upstream renders ConfigMap openchoreo-authz-bootstrap (the default roles and bindings, from
+openchoreoApi.config.security.authorization.bootstrap) and the Job that applies it as post-install,post-upgrade hooks
+(Argo CD PostSync), hardcoded. Argo CD never diffs hooks, so a change to the roles/bindings alone (e.g. #218's
+mcp-tryout-client-binding) never makes the app OutOfSync. This normal ConfigMap carries the checksum of those values:
+a change -> app OutOfSync -> automated sync -> the PostSync hooks re-apply. hack/tests/test_hook_kinds.sh.
+*/ -}}
+{{- $cp := index .Values "openchoreo-control-plane" }}
+{{- if $cp.security.authz.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openchoreo-authz-bootstrap-inputs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    platform.koorikla.io/hook-inputs: "true"
+data:
+  configmap.openchoreo-authz-bootstrap: {{ toYaml $cp.openchoreoApi.config.security.authorization.bootstrap | sha256sum | quote }}
+{{- end }}

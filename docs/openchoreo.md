@@ -70,6 +70,15 @@ ClusterDataPlane (wave 10). On a clean bootstrap the tenant's bindings exist lon
   every sync (`setup.preserveJob`: Argo's default BeforeHookCreation, so a failed run never blocks the next one and
   `kubectl -n thunder logs job/thunder-setup` shows the last run); the control plane's authz bootstrap Job (PostSync)
   re-applies its roles.
+- Argo CD never diffs hooks, but it runs them only when a sync happens: a change to a hook alone (ExternalSecret
+  `thunder-bootstrap` after #218) left the app Synced and the live object old (#221). Real config is therefore a
+  normal resource ordered by sync waves, and only the Job is a hook. Where a Job's input must itself be a hook (Thunder:
+  upstream hardcodes the setup Job as `pre-install` = PreSync, which runs before any sync wave, so its ExternalSecret
+  and ConfigMaps stay PreSync hooks; control plane: upstream's PostSync authz ConfigMap), a normal ConfigMap labelled
+  `platform.koorikla.io/hook-inputs` (`thunder-setup-inputs`, `openchoreo-authz-bootstrap-inputs`) carries one
+  checksum per hook input, so a change makes the app OutOfSync and the sync re-applies the hooks. Self-heal still does
+  not repair hand edits of a hook object. `hack/tests/test_hook_kinds.sh` allows a non-Job hook only via
+  `hack/tests/hook_allowlist.yaml` (with a reason) and requires the checksum key for hook ConfigMaps/Secrets/ExternalSecrets.
 - Thunder's PVCs are hooks Argo CD can delete: the upstream chart hardcodes them as `pre-install` hooks (they must
   exist before the PreSync setup Job mounts them), and an Argo hook always has a delete policy (none =
   BeforeHookCreation, i.e. every sync). They keep `hook-failed`, so a successful sync never touches them, but a failed

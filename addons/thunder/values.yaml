@@ -32,6 +32,8 @@
 #     below (upserts by id: re-runs are safe; every document must be a mapping, hack/tests/test_thunder_bootstrap.sh).
 #     Replaced on every sync (setup.preserveJob). RISK: the setup pod carries the Deployment's selector labels (no
 #     knob), so thunder-service routes to it for ~1 min per sync.
+#   Argo CD never diffs hooks (#221): a change to the ExternalSecret or a hook ConfigMap alone would never trigger a
+#   sync. The normal ConfigMap thunder-setup-inputs (templates/setup-inputs.yaml) carries their checksums, so it does.
 # Footprint: one pod 100m/50Mi requests (upstream), setup Job the same while it runs, 3 small PVCs on local-path.
 
 bootstrapSecret:
