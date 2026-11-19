@@ -115,12 +115,19 @@ Declarative, no cluster names: the **data plane announces** what it runs, the **
 - **First boot (#246):** the annotation is the fleet file's opt-in, true from cluster birth, while the addon itself
   lands minutes later. So the data plane's cluster agent waits for it: addon openchoreo-data-plane renders a Sync hook
   `capability-gate` (sync wave -1, before the agent Deployment) that runs `kubectl wait` until the CRD of every enabled
-  `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`, switched on per cluster from the
-  `addons.platform.koorikla.io/keda` label). Nothing reaches the cluster before its traits' kinds exist. Without it,
+  `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`; `crossplane` ->
+  `postgresqls.platform.koorikla.io`, the XRD of the Configuration package crossplane pulls after it is Healthy, ~20 min
+  after the agent on a fresh local bootstrap, #255), each switched on per cluster from its
+  `addons.platform.koorikla.io/<addon>` label. Nothing reaches the cluster before the kinds of its traits and resource
+  types exist. Without it,
   OpenChoreo 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on controller-runtime's
   exponential backoff (capped at 1000 s, no watch on the data plane), so development served ~17 min after KEDA was
-  Healthy. `hack/tests/test_openchoreo_types.sh` fails when a ClusterTrait renders a kind the gate does not wait for.
-  Stuck agent on a new cluster: `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers`.
+  Healthy. `hack/tests/test_openchoreo_types.sh` fails when a ClusterTrait or ClusterResourceType renders an addon kind
+  the gate does not wait for under that addon. Stuck agent on a new cluster: the init container `wait-for-<addon>-crds`
+  in `kubectl -n openchoreo-data-plane get pod -l app.kubernetes.io/name=capability-gate` names the missing addon; each
+  wait times out after `capabilityGate.timeout` (30m) with the CRD name in
+  `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers`, and Argo CD retries the sync. A failed
+  crossplane package (`kubectl get configuration.pkg`) keeps the agent waiting there, by design.
 
 ### Readiness and replicas
 
