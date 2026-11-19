@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon cloudnative-pg (platform keys only; upstream subchart keys stay open)",
+  "type": "object",
+  "required": [
+    "namespace",
+    "imageCatalog"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the ApplicationSet (--set-string, so every value is a string): this cluster's facts.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name."
+        },
+        "role": {
+          "type": "string",
+          "description": "mgmt or workload."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (selects values/provider-<provider>.yaml)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment of the cluster."
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI of the cluster (selects values/cni-<cni>.yaml)."
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of the cluster."
+        }
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "description": "Labels on the operator namespace (koorikla-lib.operatorNamespace).",
+      "properties": {
+        "podSecurity": {
+          "enum": [
+            "",
+            "privileged",
+            "baseline",
+            "restricted"
+          ],
+          "description": "Pod Security admission level enforced on the operator namespace (\"\" = no labels)."
+        },
+        "ambient": {
+          "type": "boolean",
+          "description": "Enrol the operator namespace in the Istio ambient mesh."
+        }
+      }
+    },
+    "imageCatalog": {
+      "type": "object",
+      "description": "ClusterImageCatalog with one pinned PostgreSQL image per major (templates/image-catalog.yaml).",
+      "required": [
+        "enabled",
+        "name",
+        "images"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the ClusterImageCatalog."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+          "description": "Catalog name that Clusters reference in spec.imageCatalogRef."
+        },
+        "images": {
+          "type": "object",
+          "description": "PostgreSQL major version -> image pinned by digest (repo:tag@sha256:...).",
+          "propertyNames": {
+            "pattern": "^[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[^\\s@]+:[^\\s@]+@sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "cloudnative-pg": {
+      "type": "object",
+      "description": "Upstream cloudnative-pg chart values (not constrained here)."
+    },
+    "plugin-barman-cloud": {
+      "type": "object",
+      "description": "Upstream plugin-barman-cloud chart values (not constrained here)."
+    },
+    "koorikla-lib": {
+      "type": "object",
+      "description": "Library chart koorikla-lib (charts/lib); Helm adds global here."
+    }
+  }
+}
