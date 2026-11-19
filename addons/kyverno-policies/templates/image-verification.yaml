@@ -226,7 +226,8 @@ spec:
         + ("ephemeralContainers" in images ? images.ephemeralContainers : [])
   validations:
     {{- range $s := $cs }}
-    {{- $match := printf "[%s].exists(p, image.startsWith(p))" (include "kp.quoteList" $s.prefixes) }}
+    {{- $quoted := list }}{{ range $s.prefixes }}{{ $quoted = append $quoted (toJson .) }}{{ end }}
+    {{- $match := printf "[%s].exists(p, image.startsWith(p))" (join ", " $quoted) }}
     {{- /* One attestor per call, joined with ||: CEL stops at the first attestor that verifies, and Kyverno caches a
     result only when every attestor of the call verified - a list of several attestors would never be cached and would
     verify all of them on every admission. */ -}}

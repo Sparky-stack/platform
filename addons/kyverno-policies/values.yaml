@@ -1,16 +1,16 @@
 # Kyverno policies on every cluster (catalog: namespace kyverno, roles [mgmt, workload], default true). The engine is
 # addons/kyverno; until its CRDs exist this app's sync fails and Argo CD retries. docs/networking.md "Kyverno".
 #
-#   kyverno-policies (upstream)  Pod Security Standards baseline as CEL ValidatingPolicies, Audit only (PolicyReports,
-#                                nothing is blocked), platform namespaces excluded.
-#   templates/ambient-enrollment.yaml
-#                                MutatingPolicy: OpenChoreo cell namespaces get istio.io/dataplane-mode=ambient
-#                                (workload clusters; values/role-mgmt.yaml turns it off on mgmt).
-#   templates/cell-mesh.yaml     GeneratingPolicies: in every ambient cell namespace a NetworkPolicy admitting HBONE
-#                                (tcp 15008) from OpenChoreo's peers and a STRICT PeerAuthentication (#53).
-#   templates/workflow-image-digests.yaml
-#                                ValidatingPolicy (Deny): Pods in workflows-* (OpenChoreo workflow runs) only with
-#                                image@sha256 references (mgmt only, values/role-mgmt.yaml).
+#   kyverno-policies (upstream)          Pod Security Standards baseline as CEL ValidatingPolicies, Audit only
+#                                        (PolicyReports, nothing is blocked), platform namespaces excluded.
+#   templates/ambient-enrollment.yaml    cell namespaces get istio.io/dataplane-mode=ambient        (workload)
+#   templates/cell-mesh.yaml             HBONE NetworkPolicy + STRICT PeerAuthentication per cell   (workload)
+#   templates/image-verification.yaml    supply-chain gate: signatures, attestations, registries    (workload)
+#   templates/workload-resilience.yaml   replicas, probes, requests; Deny in production             (workload)
+#   templates/previews.yaml              PR previews: expiry/cap/TTL (mgmt), cell guardrails        (workload)
+#   templates/workflow-image-digests.yaml  digest-only images in workflows-* run namespaces         (mgmt)
+#   templates/data-plane-capabilities.yaml  bindings only to data planes running the needed addons  (mgmt)
+# The role column is set by values/role-mgmt.yaml; each section below documents its template.
 
 # Never touched by any policy here. Same list as addons/kyverno (webhook namespaceSelector) - keep in sync
 # (hack/tests/test_gitops_contracts.sh checks it).
@@ -211,6 +211,7 @@ previews:
   enabled: false
   ttl: 48h
   maxPerTenant: 2
+
 # --- Data-plane capabilities of OpenChoreo resource types (#70, docs/data-services.md) ---------------------------------
 # templates/data-plane-capabilities.yaml: ValidatingPolicy platform-data-plane-capabilities (Deny) on mgmt - a
 # ResourceReleaseBinding only to an environment whose data plane runs the addons its type names in

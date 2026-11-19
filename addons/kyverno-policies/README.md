@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, production workload resilience (replicas, probes, requests; Deny in production, Audit elsewhere), digest-only images in workflow run namespaces on `mgmt`.
+Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies. Workload clusters: Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces, per-environment image signature/attestation gates, production workload resilience (replicas, probes, requests; Deny in production, Audit elsewhere) and PR preview cell guardrails. `mgmt`: digest-only images in workflow run namespaces, PR preview expiry/cap/TTL, and ResourceReleaseBindings only to data planes that run the addons their type needs.
 
 ## Where it runs
 
