@@ -70,11 +70,11 @@ capabilityGate:
 priorityClasses:
   app-production:
     value: 100000
-    preemptionPolicy: PreemptLowerPriority
+    preemptionPolicy: Never   # app priority orders the scheduling queue only and never evicts running pods
     description: OpenChoreo components in the production environment (ClusterTrait resilience).
   app-standard:
     value: 1000
-    preemptionPolicy: Never   # non-production never evicts anything to get scheduled
+    preemptionPolicy: Never   # app priority orders the scheduling queue only and never evicts running pods
     description: OpenChoreo components outside production (ClusterTrait resilience).
 
 openchoreo-data-plane:
