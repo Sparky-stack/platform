@@ -326,5 +326,12 @@ RenderedRelease controller can stay on a failed apply (`proxy request failed wit
 not connected yet) for a long backoff ([#51](https://github.com/koorikla/platform/issues/51)). Triage and the
 annotation kick command: [runbooks/incidents.md](runbooks/incidents.md#data-plane-agent-disconnected).
 
+The mechanism (confirmed in v1.3.3 source and live in [#246](https://github.com/koorikla/platform/issues/246)): the
+RenderedRelease controller returns an apply error to controller-runtime and watches only RenderedReleases, so the next
+attempt follows the default rate limiter (5 ms doubling, max 1000 s) and nothing re-queues it when the data plane
+recovers. On a fresh bootstrap the same backoff kept development down ~17 min after addon keda was Healthy: the data
+plane's agent therefore starts only once the CRDs of its opt-in addons exist (`capabilityGate` in addon
+openchoreo-data-plane, [data services](data-services.md#only-on-data-planes-that-run-the-operator)).
+
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*`):
 [#52](https://github.com/koorikla/platform/issues/52).

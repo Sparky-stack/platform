@@ -2,7 +2,7 @@
 
 > Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-18 | Total pages: 22
+> Last updated: 2026-11-19 | Total pages: 22
 
 ## Decisions
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
@@ -25,7 +25,7 @@
 - [Istio Ambient Port 15008 in Cell Policies and Telemetry DNS on *.localhost](gotchas/istio-ambient-port-15008-and-telemetry-dns.md) — Open TCP `15008` (HBONE) in cell NetworkPolicies and keep `telemetry` out of ambient mesh so `ztunnel` DNS capture doesn't break `*.localhost` (#53, #206, #208).
 - [mise Global vs Repo Tool Versions and Python Env Var Leakage](gotchas/mise-global-vs-repo-tool-versions.md) — Always run `mise trust` and prefix commands with `env -u PYTHONHOME -u PYTHONPATH -u PYTHON PATH=/usr/bin:$PATH mise exec --` inside the worktree (#171).
 - [OpenBao Policies Only at Init, Policy Reconciler, and Wave -1 Seal Key](gotchas/openbao-policies-init-and-reconciler.md) — Reconcile `tenant-*` policies via a post-init job and sync `openbao-unseal` in wave `-1` before the StatefulSet (#96, #179, #190, #191).
-- [OpenChoreo ReleaseBinding Ordering and Fresh Local Harbor Digests](gotchas/openchoreo-releasebinding-and-fresh-registry.md) — Create `ComponentRelease` before `ReleaseBinding`, rebuild when fresh local Harbor lacks the Git-pinned digest, and gate on workload readiness (#103, #200, #201).
+- [OpenChoreo ReleaseBinding Ordering and Fresh Local Harbor Digests](gotchas/openchoreo-releasebinding-and-fresh-registry.md) — Create `ComponentRelease` before `ReleaseBinding`, rebuild when fresh local Harbor lacks the Git-pinned digest, gate the data-plane agent on addon CRDs (capped apply backoff), and gate on workload readiness (#103, #200, #201, #246).
 - [OpenSearch ActiveProcessorCount OOMKill in k3d](gotchas/opensearch-jvm-processors-in-k3d.md) — Pin `-XX:ActiveProcessorCount=1` so OpenSearch in k3d doesn't size thread pools for host CPU cores and OOMKill every 45 minutes (#49, #205).
 
 ## Concepts
