@@ -10,7 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_openbao_tenant_reconcile =="
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; IN="$TMP/inputs"
 mkdir -p "$S/mounts" "$S/auth" "$S/writes" "$S/entities" "$S/roles" "$BIN" "$IN/tenants" "$IN/clusters"

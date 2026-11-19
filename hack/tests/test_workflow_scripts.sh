@@ -11,8 +11,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_workflow_scripts =="
-
 # falco-response (docs/observability.md "Falco response"): the event is a Falco alert whose output fields tenants control
 # (command lines), so `{{`/`{{=` in it is possible. Steps get it (and the enrich result) only as env values; in source,
 # args or command Argo would template it into code.

@@ -8,7 +8,6 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_bootstrap_file_sources =="
 cd "$ROOT"
 
 # jsonl <in.yaml> <out.jsonl>: one compact JSON document per line; ClusterClass patch templates also parsed

@@ -18,7 +18,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_project_templates =="
 cd "$ROOT"
 
 # Scaffolder actions registered in openchoreo-ui v1.3.3 (backend features of @openchoreo/backstage-portal-backend:

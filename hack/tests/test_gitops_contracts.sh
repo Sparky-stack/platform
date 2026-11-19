@@ -4,8 +4,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_gitops_contracts =="
-
 helm template platform "$ROOT/charts/platform" --namespace argocd \
   --values "$ROOT/installations/local/installation.yaml" > "$TMP/platform.yaml"
 PV="$ROOT/charts/platform/values.yaml"

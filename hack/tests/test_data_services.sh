@@ -18,7 +18,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_data_services =="
 ADDONS="keda strimzi cloudnative-pg"
 CATALOG=charts/platform/values.yaml
 INST_DIR=installations/local

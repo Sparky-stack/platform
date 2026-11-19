@@ -3,8 +3,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_changed_units =="
-
 units() { printf '%s\n' "$@" | bash "$ROOT/hack/changed-units.sh" | tr '\n' ' ' | sed 's/ $//'; }
 
 assert_eq "$(units charts/tenant/values.yaml charts/tenant/templates/ns.yaml)" "charts/tenant" "chart-only -> that chart"

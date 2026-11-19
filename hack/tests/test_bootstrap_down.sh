@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_down =="
-
 bootstrap_harness
 
 # Fake kubectl: FAKE_FLEET=1 -> ns fleet exists with Clusters dev1 + prod1; FAKE_DELETE_FAIL=1 -> delete times out.

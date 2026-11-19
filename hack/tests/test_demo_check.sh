@@ -6,8 +6,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_demo_check =="
-
 R="$TMP/root"; BIN="$TMP/bin"
 mkdir -p "$R/hack" "$R/addons/kyverno-policies" "$R/installations" "$R/charts/cluster"
 fake_bin_yq "$BIN"

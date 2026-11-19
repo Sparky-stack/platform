@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_status =="
-
 bootstrap_harness
 
 SENTINEL=SentinelAdminPw4711

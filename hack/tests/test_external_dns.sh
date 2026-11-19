@@ -11,7 +11,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_external_dns =="
 NS=$(yq '.addons["external-dns"].namespace' "$ADDONS_CATALOG")
 SAMPLE_SERVER=https://192.0.2.10:6443
 

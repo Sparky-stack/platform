@@ -1,6 +1,8 @@
-# hack/tests/lib.sh — shared assertion helpers for bash contract tests.
+# hack/tests/lib.sh: sourced by every hack/tests/*.sh. Assertions with a pass/fail count (finish prints it and sets the
+# exit code hack/test.sh reads), a fake-tool harness, kubeconform, and renders reused from hack/test.sh.
 # shellcheck shell=bash disable=SC2034
 set -euo pipefail
+echo "== $(basename "$0" .sh) =="
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 TMP=$(mktemp -d)

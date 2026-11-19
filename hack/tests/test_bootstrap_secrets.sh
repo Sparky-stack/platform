@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_secrets =="
-
 bootstrap_harness
 cp "$ROOT/bootstrap/root-app.yaml" "$R/bootstrap/"   # root_app_manifest
 LOCAL_INST="$R/installations/local/installation.yaml"

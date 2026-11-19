@@ -20,7 +20,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_crossplane_render =="
 ADDON=addons/crossplane
 FIX=hack/tests/crossplane
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")

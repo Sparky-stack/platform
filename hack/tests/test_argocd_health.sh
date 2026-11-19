@@ -10,8 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_argocd_health =="
-
 ARGOCD=${ARGOCD:-argocd}
 if ! command -v "$ARGOCD" >/dev/null 2>&1; then
   echo "  SKIP argocd CLI not found (set ARGOCD=/path/to/argocd)"
