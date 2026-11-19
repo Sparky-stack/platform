@@ -1,9 +1,7 @@
 {{- /*
-Build run namespace workflows-<org ns> on mgmt, rendered here (once) whenever this chart puts something in it: the run
-NetworkPolicies, the executor token, the agent's Role. OpenChoreo's WorkflowRun controller creates it on the first run
-and tolerates an existing one. Delete=false: removing the addon must not delete run history.
-The NetworkPolicy/token templates use the fixed OpenChoreo 1.3.3 name workflows-; clusterAgentRBAC.runNamespacePrefix
-only moves it when they are both off (RBAC-only), as before.
+Build run namespace workflows-<org ns> on mgmt, rendered once while anything of this chart lives in it (run
+NetworkPolicies, executor token, agent Role). Delete=false: removing the addon must not delete run history.
+runNamespacePrefix only names it when the RBAC is all that is on (NetworkPolicy/token hardcode OpenChoreo's workflows-).
 */ -}}
 {{- $np := .Values.runNetworkPolicy.enabled }}
 {{- $token := .Values.runExecutorToken.enabled }}
