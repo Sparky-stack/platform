@@ -139,7 +139,6 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | promotion.gitOnly.writers[0] | string | `"system:serviceaccount:argocd:argocd-application-controller"` |  |
 | promotion.restrictedGroups[0] | string | `"developers"` |  |
 | promotionGate.apiURL | string | `""` |  |
-| promotionGate.autoTrigger.sourceEnvironments[0] | string | `"staging"` |  |
 | promotionGate.baseBranch | string | `"main"` |  |
 | promotionGate.bindingPath | string | `"deploy/openchoreo/release-bindings/{environment}.yaml"` |  |
 | promotionGate.clientID | string | `"openchoreo-promotion-gate"` |  |
@@ -170,6 +169,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | registry.host | string | `"harbor.openchoreo.localhost:9443"` |  |
 | registry.type | string | `"harbor"` |  |
 | resilience.enabled | bool | `true` | Embed ClusterTrait `resilience` (topology spread, PodDisruptionBudget, preStop + grace period, PriorityClass) in the Deployment component types. |
+| secrets.githubGateApp.enabled | bool | `false` |  |
 | secrets.tenantStores.enabled | bool | `false` |  |
 | tenantStoreName | string | `"openbao-tenant"` |  |
 | upstreamDefaults.enabled | bool | `true` |  |

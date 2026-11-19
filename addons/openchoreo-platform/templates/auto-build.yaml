@@ -1,39 +1,19 @@
 {{- /*
-Auto-build trigger (values.yaml autoBuild, docs/build-plane.md "Auto-build"). Everything lives in the run namespace
-workflows-<org ns> of the workflow plane on mgmt:
-  ExternalSecret auto-build-github-app   the platform GitHub App (scoped store `workflows`); read only by ESO
-  GithubAccessToken auto-build           ESO generator: installation token restricted to autoBuild.github.permissions
-  ExternalSecret auto-build-github-token Secret with that token (`token`), re-minted every tokenRefreshInterval
-  WorkflowTemplate auto-build            one reconcile pass (files/auto-build/auto_build.py), parameter `repository`
-                                         (empty = every opted-in Component; webhook runs pass the pushed repo)
-  CronWorkflow auto-build-poll           trigger poll: every pollSchedule; trigger webhook: every resyncSchedule
-PR previews (installation.yaml previews.enabled, docs/preview-environments.md) add to the same pass:
-  ExternalSecret auto-build-previews-token  a second installation token (autoBuild.previews.github.permissions:
-                                         commit statuses + pull requests) for status, PR lookup and the expiry label
-  RBAC                                   get Components / Environments / ReleaseBindings, get+create
-                                         ComponentReleases (org ns), list the preview Applications (argocd), get the
-                                         build's Argo Workflow (run ns)
-  CronWorkflow auto-build-previews       trigger webhook only: every previews.schedule (PR pushes reach the webhook
-                                         before Argo CD generated the preview Application)
-  ServiceAccount + RBAC                  list Components, get (Cluster)Workflows, get/list/create WorkflowRuns in the
-                                         org namespace; one ConfigMap (cache) and Argo's task results here
-registry.type harbor adds the registry-aware "already built" check (a pinned digest missing in Harbor, e.g. after a
-clean bootstrap, rebuilds the Workload's commit; #200):
-  ExternalSecret auto-build-registry     pull-only robot (autoBuild.registry: username + password; store `workflows`)
-  ExternalSecret auto-build-registry-ca  the registry CA public cert (store buildWorkflows.secrets.harbor.caStore)
-The Sensor of addon argo-events (trigger webhook) creates Workflows from the same WorkflowTemplate.
-Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, the registry
-(Harbor Gateway proxy), public 443.
+Auto-build trigger (values.yaml autoBuild, docs/build-plane.md "Auto-build") in the run namespace workflows-<org ns> of
+the mgmt workflow plane: WorkflowTemplate auto-build (one reconcile pass of files/auto-build/auto_build.py; the
+argo-events Sensor starts it for webhook pushes) + CronWorkflow auto-build-poll (poll: pollSchedule, webhook: resyncSchedule).
+The pass reads GitHub with a short-lived installation token (ESO GithubAccessToken generator, no PAT). PR previews
+(previews.enabled) add a second token, preview RBAC and, for trigger webhook, CronWorkflow auto-build-previews (PR
+pushes reach the webhook before Argo CD generated the preview Application). registry.type harbor adds a pull-only robot
++ CA for the "already built" check (a pinned digest missing in Harbor, e.g. after a clean bootstrap, rebuilds; #200).
+Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, Harbor, public 443.
 */ -}}
-{{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
+{{- $trigger := toString .Values.openchoreo.workflowPlane.autoBuild }}
 {{- if not (has $trigger (list "poll" "webhook" "none")) }}
 {{- fail (printf "openchoreo.workflowPlane.autoBuild: %q is not poll, webhook or none" $trigger) }}
 {{- end }}
-{{- $wpEnabled := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) }}
-{{- /* Every pass needs an installation token of the platform GitHub App: off without it (secrets.githubGateApp.enabled,
-charts/platform values.yaml), else the token ExternalSecrets fail and degrade this app (#192). */ -}}
-{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
-{{- if and (ne $trigger "none") $wpEnabled .Values.buildWorkflows.enabled $gate }}
+{{- /* Off without the platform GitHub App in the store (secrets.githubGateApp.enabled): every pass needs its token. */ -}}
+{{- if and (ne $trigger "none") .Values.openchoreo.workflowPlane.enabled .Values.buildWorkflows.enabled .Values.secrets.githubGateApp.enabled }}
 {{- $a := .Values.autoBuild }}
 {{- $org := .Values.openchoreo.orgNamespace }}
 {{- $ns := printf "workflows-%s" $org }}
@@ -42,8 +22,7 @@ charts/platform values.yaml), else the token ExternalSecrets fail and degrade th
 {{- if contains "{{" $script }}{{ fail "files/auto-build/auto_build.py must not contain '{{' (Argo templating)" }}{{ end }}
 {{- $schedule := ternary $a.pollSchedule $a.resyncSchedule (eq $trigger "poll") }}
 {{- if and (eq $trigger "poll") (not $schedule) }}{{ fail "autoBuild.pollSchedule is required for trigger poll" }}{{ end }}
-{{- $sync := dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true" }}
-{{- $pv := .Values.previews | default dict }}
+{{- $pv := .Values.previews }}
 {{- $pa := $a.previews }}
 {{- $harbor := eq (toString .Values.registry.type) "harbor" }}
 {{- $hs := .Values.buildWorkflows.secrets.harbor }}
@@ -179,37 +158,8 @@ spec:
     - secretKey: private-key
       remoteRef: { key: {{ $a.github.key }}, property: githubAppPrivateKey }
 ---
-apiVersion: generators.external-secrets.io/v1alpha1
-kind: GithubAccessToken
-metadata:
-  name: {{ $name }}
-  namespace: {{ $ns }}
-  annotations: {{- toYaml $sync | nindent 4 }}
-spec:
-  appIDRef: { name: {{ $name }}-github-app, key: app-id }
-  installIDRef: { name: {{ $name }}-github-app, key: installation-id }
-  permissions: {{- toYaml (required "autoBuild.github.permissions is required (least privilege: contents: read)" $a.github.permissions) | nindent 4 }}
-  auth:
-    privateKey:
-      secretRef: { name: {{ $name }}-github-app, key: private-key }
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ $name }}-github-token
-  namespace: {{ $ns }}
-spec:
-  refreshInterval: {{ $a.github.tokenRefreshInterval }}
-  target:
-    name: {{ $name }}-github-token
-    creationPolicy: Owner
-    deletionPolicy: Delete
-  dataFrom:
-    - sourceRef:
-        generatorRef:
-          apiVersion: generators.external-secrets.io/v1alpha1
-          kind: GithubAccessToken
-          name: {{ $name }}
+{{ include "autoBuild.githubToken" (dict "name" $name "token" (printf "%s-github-token" $name) "root" $
+     "permissions" (required "autoBuild.github.permissions is required (least privilege: contents: read)" $a.github.permissions)) }}
 {{- if $harbor }}
 ---
 apiVersion: external-secrets.io/v1
@@ -278,37 +228,8 @@ subjects:
     name: {{ $name }}
     namespace: {{ $ns }}
 ---
-apiVersion: generators.external-secrets.io/v1alpha1
-kind: GithubAccessToken
-metadata:
-  name: {{ $name }}-previews
-  namespace: {{ $ns }}
-  annotations: {{- toYaml $sync | nindent 4 }}
-spec:
-  appIDRef: { name: {{ $name }}-github-app, key: app-id }
-  installIDRef: { name: {{ $name }}-github-app, key: installation-id }
-  permissions: {{- toYaml (required "autoBuild.previews.github.permissions is required (statuses: write, pull_requests: write)" $pa.github.permissions) | nindent 4 }}
-  auth:
-    privateKey:
-      secretRef: { name: {{ $name }}-github-app, key: private-key }
----
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ $name }}-previews-token
-  namespace: {{ $ns }}
-spec:
-  refreshInterval: {{ $a.github.tokenRefreshInterval }}
-  target:
-    name: {{ $name }}-previews-token
-    creationPolicy: Owner
-    deletionPolicy: Delete
-  dataFrom:
-    - sourceRef:
-        generatorRef:
-          apiVersion: generators.external-secrets.io/v1alpha1
-          kind: GithubAccessToken
-          name: {{ $name }}-previews
+{{ include "autoBuild.githubToken" (dict "name" (printf "%s-previews" $name) "token" (printf "%s-previews-token" $name) "root" $
+     "permissions" (required "autoBuild.previews.github.permissions is required (statuses: write, pull_requests: write)" $pa.github.permissions)) }}
 {{- end }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -316,7 +237,8 @@ kind: WorkflowTemplate
 metadata:
   name: {{ $name }}
   namespace: {{ $ns }}
-  annotations: {{- toYaml $sync | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   entrypoint: reconcile
   serviceAccountName: {{ $name }}
@@ -410,38 +332,21 @@ spec:
           - { name: REPOSITORY, value: {{ `"{{workflow.parameters.repository}}"` }} }
         source: |
           {{- $script | nindent 10 }}
-{{- if $schedule }}
+{{- /* concurrencyPolicy Forbid: a slow pass is never overlapped by the next tick. */ -}}
+{{- $crons := list }}
+{{- if $schedule }}{{ $crons = append $crons (dict "suffix" "poll" "schedule" $schedule "trigger" $trigger) }}{{ end }}
+{{- if and $pv.enabled (eq $trigger "webhook") $pa.schedule }}{{ $crons = append $crons (dict "suffix" "previews" "schedule" $pa.schedule "trigger" "previews") }}{{ end }}
+{{- range $crons }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
-  name: {{ $name }}-poll
+  name: {{ $name }}-{{ .suffix }}
   namespace: {{ $ns }}
-  annotations: {{- toYaml $sync | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
-  schedules: [{{ $schedule | quote }}]
-  timezone: UTC
-  concurrencyPolicy: Forbid           # a slow pass is never overlapped by the next tick
-  startingDeadlineSeconds: 30
-  successfulJobsHistoryLimit: 2
-  failedJobsHistoryLimit: 3
-  workflowMetadata:
-    labels:
-      platform.koorikla.io/trigger: {{ $trigger }}
-  workflowSpec:
-    workflowTemplateRef:
-      name: {{ $name }}
-{{- end }}
-{{- if and $pv.enabled (eq $trigger "webhook") $pa.schedule }}
----
-apiVersion: argoproj.io/v1alpha1
-kind: CronWorkflow
-metadata:
-  name: {{ $name }}-previews
-  namespace: {{ $ns }}
-  annotations: {{- toYaml $sync | nindent 4 }}
-spec:
-  schedules: [{{ $pa.schedule | quote }}]
+  schedules: [{{ .schedule | quote }}]
   timezone: UTC
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 30
@@ -449,9 +354,49 @@ spec:
   failedJobsHistoryLimit: 3
   workflowMetadata:
     labels:
-      platform.koorikla.io/trigger: previews
+      platform.koorikla.io/trigger: {{ .trigger }}
   workflowSpec:
     workflowTemplateRef:
       name: {{ $name }}
 {{- end }}
+{{- end }}
+
+{{- /* An installation token of the platform GitHub App for the reconcile pass: ESO GithubAccessToken generator <name>
+(scoped to `permissions`) + ExternalSecret <token> that re-mints it every autoBuild.github.tokenRefreshInterval. */ -}}
+{{- define "autoBuild.githubToken" -}}
+{{- $a := .root.Values.autoBuild }}
+{{- $ns := printf "workflows-%s" .root.Values.openchoreo.orgNamespace }}
+{{- $app := printf "%s-github-app" $a.workflowTemplate -}}
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: GithubAccessToken
+metadata:
+  name: {{ .name }}
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  appIDRef: { name: {{ $app }}, key: app-id }
+  installIDRef: { name: {{ $app }}, key: installation-id }
+  permissions: {{- toYaml .permissions | nindent 4 }}
+  auth:
+    privateKey:
+      secretRef: { name: {{ $app }}, key: private-key }
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .token }}
+  namespace: {{ $ns }}
+spec:
+  refreshInterval: {{ $a.github.tokenRefreshInterval }}
+  target:
+    name: {{ .token }}
+    creationPolicy: Owner
+    deletionPolicy: Delete
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: GithubAccessToken
+          name: {{ .name }}
 {{- end }}

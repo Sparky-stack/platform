@@ -22,7 +22,7 @@ The gate never writes to a cluster: on success it opens/updates the promotion pu
 {{- $tokenURL := $g.tokenURL | default (printf "http://thunder.%s:%v/oauth2/token" $host $g.controlPlanePort) }}
 {{- $observerURL := $g.observerURL | default (printf "http://observer.%s:%v" $host .Values.openchoreo.observability.httpPort) }}
 {{- $observe := and $g.observe.enabled .Values.openchoreo.observability.enabled }}
-{{- $githubOwner := required "installation.githubOrg is required (GitHub owner the gate may open PRs in)" (dig "githubOrg" "" (.Values.installation | default dict)) }}
+{{- $githubOwner := required "installation.githubOrg is required (GitHub owner the gate may open PRs in)" .Values.installation.githubOrg }}
 {{- $label := "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }}
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow

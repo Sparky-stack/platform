@@ -1,3 +1,5 @@
+{{- /* Helpers shared by the build ClusterWorkflows (build-workflows.yaml, helm-chart-workflow.yaml) and auto-build.yaml. */ -}}
+
 {{- /* Registry host (CA/credential scope) for builds: harbor -> registry.host, external -> first path element. */ -}}
 {{- define "build.registryHost" -}}
 {{- if eq (toString .Values.registry.type) "harbor" -}}
@@ -38,15 +40,6 @@ schema pattern for repository.url (one path segment after a prefix, starting alp
 {{- printf "^(%s)[A-Za-z0-9][A-Za-z0-9._-]*$" (join "|" $q) -}}
 {{- end }}
 
-{{- /*
-CEL (rendered by OpenChoreo per run): the GitHub repository name of the run's repository.url (last path segment, a
-trailing ".git" removed) - what the GithubAccessToken generator scopes the token to. The schema pattern
-(build.repoUrlPattern) guarantees exactly one segment after an allowed prefix.
-*/ -}}
-{{- define "build.repoName" -}}
-${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/') + 1, size(parameters.repository.url) - (parameters.repository.url.endsWith('.git') ? 4 : 0))}
-{{- end }}
-
 {{- /* Repository-relative path (appPath, docker.context, docker.filePath, chart.path): no "..", no absolute path. */ -}}
 {{- define "build.relPathPattern" -}}
 ^(\.|(\./)?\.?[A-Za-z0-9_][A-Za-z0-9._-]*(/\.?[A-Za-z0-9_][A-Za-z0-9._-]*)*/?)$
@@ -65,7 +58,7 @@ ${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/')
 Per-run resources of a ClusterWorkflow: OpenChoreo renders them into workflows-<org ns> for every WorkflowRun
 (CEL ${...}), ESO materializes them ({{ }} escaped for Helm), the Argo pods mount the Secrets by name.
   <run>-git          GithubAccessToken         ESO generator: an installation token of the platform GitHub App for the
-                                               run's one repository (build.repoName), `permissions` only
+                                               run's one repository, `permissions` only
   <run>-git          kubernetes.io/basic-auth  that token (x-access-token): clone + GitOps commit, re-minted every
                                                buildWorkflows.github.tokenRefreshInterval
   <run>-registry     dockerconfigjson          push/pull the registry      (harbor robot builder | external credentials)
@@ -75,13 +68,17 @@ Call: include "build.resources" (dict "root" $ "permissions" <map> ["gitopsAware
 gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to write).
 */ -}}
 {{- define "build.resources" -}}
-{{- $root := .root }}
-{{- $g := $root.Values.buildWorkflows.github }}
+{{- $gitopsAware := .gitopsAware }}
 {{- $perms := required "build.resources: permissions (buildWorkflows.github.permissions / readPermissions) are required" .permissions }}
+{{- with .root }}
+{{- $g := .Values.buildWorkflows.github }}
 {{- $app := required "buildWorkflows.github.appSecret is required" $g.appSecret }}
-{{- with $root }}
 {{- $s := .Values.buildWorkflows.secrets }}
 {{- $host := include "build.registryHost" . }}
+{{- $harbor := eq (toString .Values.registry.type) "harbor" }}
+{{- /* CEL: the repository name of repository.url (last path segment, ".git" removed); build.repoUrlPattern guarantees
+exactly one segment after an allowed prefix. */ -}}
+{{- $repoName := "${parameters.repository.url.substring(parameters.repository.url.lastIndexOf('/') + 1, size(parameters.repository.url) - (parameters.repository.url.endsWith('.git') ? 4 : 0))}" }}
 - id: git-token
   template:
     apiVersion: generators.external-secrets.io/v1alpha1
@@ -95,10 +92,10 @@ gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to
       {{- end }}
       appIDRef: { name: {{ $app }}, key: app-id }
       installIDRef: { name: {{ $app }}, key: installation-id }
-      repositories: [{{ include "build.repoName" . | quote }}]
+      repositories: [{{ $repoName | quote }}]
       permissions:
         {{- range $k, $v := $perms }}
-        {{- if and $.gitopsAware (hasKey $g.readPermissions $k) (ne (toString $v) (toString (get $g.readPermissions $k))) }}
+        {{- if and $gitopsAware (hasKey $g.readPermissions $k) (ne (toString $v) (toString (get $g.readPermissions $k))) }}
         {{ $k }}: {{ printf "${parameters.gitops.enabled ? '%s' : '%s'}" $v (get $g.readPermissions $k) | quote }}
         {{- else }}
         {{ $k }}: {{ $v | quote }}
@@ -148,20 +145,20 @@ gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to
           engineVersion: v2
           type: kubernetes.io/dockerconfigjson
           data:
-            {{- if eq (toString .Values.registry.type) "harbor" }}
+            {{- if $harbor }}
             {{- $u := $s.harbor.robot }}
             .dockerconfigjson: '{"auths":{ {{- $host | toJson -}} :{"username": {{- $u | toJson -}} ,"password":{{`{{ .password | toJson }}`}},"auth":{{`{{ printf "%s:%s" `}}{{ $u | quote }}{{` .password | b64enc | toJson }}`}}}}}'
             {{- else }}
             .dockerconfigjson: '{"auths":{ {{- $host | toJson -}} :{"username":{{`{{ .username | toJson }}`}},"password":{{`{{ .password | toJson }}`}},"auth":{{`{{ printf "%s:%s" .username .password | b64enc | toJson }}`}}}}}'
             {{- end }}
       data:
-        {{- if eq (toString .Values.registry.type) "harbor" }}
+        {{- if $harbor }}
         - { secretKey: password, remoteRef: { key: {{ $s.harbor.key }}, property: {{ $s.harbor.property }} } }
         {{- else }}
         - { secretKey: username, remoteRef: { key: {{ .Values.registry.external.credentialsKey }}, property: username } }
         - { secretKey: password, remoteRef: { key: {{ .Values.registry.external.credentialsKey }}, property: token } }
         {{- end }}
-{{- if eq (toString .Values.registry.type) "harbor" }}
+{{- if $harbor }}
 - id: registry-ca
   template:
     apiVersion: external-secrets.io/v1

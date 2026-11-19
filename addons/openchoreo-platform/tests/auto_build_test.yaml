@@ -133,7 +133,7 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: "negative: nothing when the installation does not say the App is there (charts/platform default false)"
-    set: { secrets: null }
+    set: { secrets.githubGateApp.enabled: false }
     asserts:
       - hasDocuments: { count: 0 }
 
