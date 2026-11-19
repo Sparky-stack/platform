@@ -76,7 +76,7 @@ tests:
     set:
       mesh: { group: Bad_Group }
     asserts:
-      - failedTemplate: { errorMessage: "mesh: mesh.group \"Bad_Group\" must be a DNS label (set by the catalog from mesh.platform.koorikla.io/group)" }
+      - failedTemplate: { errorPattern: "'/mesh/group': '.*Bad_Group' does not match pattern" }
 
   - it: only istio-csr and cert-manager may request certificates from the mesh CA; only istiod's Certificate may reference it
     template: templates/csr-admission.yaml

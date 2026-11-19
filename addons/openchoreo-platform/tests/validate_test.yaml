@@ -1,0 +1,39 @@
+suite: openchoreo-platform - values validation (values.schema.json + templates/validate.yaml)
+templates:
+  - templates/validate.yaml
+  - templates/namespace.yaml
+tests:
+  - it: accepts the chart defaults
+    template: templates/validate.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+  - it: harbor builds need registry.host
+    template: templates/validate.yaml
+    set: { registry.host: "" }
+    asserts:
+      - failedTemplate: { errorMessage: "registry.host is required for registry.type harbor" }
+  - it: external builds need registry.external.repository
+    template: templates/validate.yaml
+    set: { registry.type: external, registry.external.repository: "" }
+    asserts:
+      - failedTemplate: { errorMessage: "registry.external.repository is required for registry.type external" }
+  - it: rejects an unknown registry type
+    template: templates/validate.yaml
+    set: { registry.type: quay }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/registry/type': value must be one of 'harbor', 'external'" }
+  - it: needs at least one environment in the pipeline
+    template: templates/validate.yaml
+    set: { deploymentPipeline.environments: [] }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/deploymentPipeline/environments': minItems" }
+  - it: needs the org namespace as a DNS label
+    template: templates/namespace.yaml
+    set: { openchoreo.orgNamespace: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/openchoreo/orgNamespace'" }
+  - it: rejects a githubOrg that would not yield an https://<host>/<owner>/ prefix
+    template: templates/validate.yaml
+    set: { installation.githubOrg: "https://github.com/" }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/installation/githubOrg': 'https://github.com/' does not match pattern" }

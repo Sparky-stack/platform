@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon thunder (platform keys; thunderid.* is the upstream chart's)",
+  "type": "object",
+  "required": ["bootstrapSecret", "openchoreo", "thunderid"],
+  "properties": {
+    "bootstrapSecret": {
+      "description": "ExternalSecret thunder-bootstrap (PreSync hook): admin password and OAuth client secrets for the setup Job.",
+      "type": "object",
+      "required": ["name", "store", "remoteKey", "promotionGate"],
+      "properties": {
+        "name": {
+          "description": "Secret consumed by thunderid.setup (admin.passwordRef, secretEnv).",
+          "type": "string",
+          "minLength": 1
+        },
+        "store": {
+          "description": "ClusterSecretStore the bootstrap Secret is read from.",
+          "type": "string",
+          "minLength": 1
+        },
+        "remoteKey": {
+          "description": "Store key holding the admin/user passwords and the Backstage/MCP client secrets.",
+          "type": "string",
+          "minLength": 1
+        },
+        "aiAgentClients": {
+          "description": "AI agent OAuth clients to bootstrap (scripts 53 rca, 60 finops); unlisted agents get no client.",
+          "type": ["array", "null"],
+          "items": { "enum": ["rca", "finops"] }
+        },
+        "aiRemoteKey": {
+          "description": "Store key with the AI agents' OAuth client secrets (shared with addon openchoreo-observability-plane).",
+          "type": "string"
+        },
+        "observabilityRemoteKey": {
+          "description": "Store key with observer-client-secret (shared with the observability plane).",
+          "type": "string"
+        },
+        "promotionGate": {
+          "description": "Promotion gate OAuth client (script 70): same store key as the gate's per-run ExternalSecret.",
+          "type": "object",
+          "required": ["remoteKey", "property"],
+          "properties": {
+            "remoteKey": { "description": "Store key of the promotion gate client.", "type": "string", "minLength": 1 },
+            "property": { "description": "Property holding the client secret.", "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "openchoreo": {
+      "description": "installation.yaml openchoreo: Thunder's public host is thunder.<controlPlane.host> (templates/validate.yaml).",
+      "type": "object",
+      "required": ["controlPlane"],
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "required": ["host"],
+          "properties": {
+            "host": {
+              "description": "OpenChoreo control-plane host (OIDC issuer and Backstage redirect URIs derive from it).",
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            }
+          }
+        }
+      }
+    },
+    "thunderid": {
+      "description": "Upstream ThunderID chart values (not constrained here).",
+      "type": "object"
+    }
+  }
+}

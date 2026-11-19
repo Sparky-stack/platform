@@ -28,10 +28,7 @@ supply-chain gate applies imageVerification.defaultAction (Audit = development t
 {{- $g := .Values.previewGuards }}
 {{- if $pv.enabled }}
 {{- $ttl := toString ($pv.ttl | default "48h") }}
-{{- if not (regexMatch "^([0-9]+h)?([0-9]+m)?$" $ttl) }}{{ fail (printf "previews.ttl %q: hours and/or minutes, e.g. 48h" $ttl) }}{{ end }}
-{{- if not (regexMatch "^([0-9]+h)?([0-9]+m)?$" (toString $g.ttlGrace)) }}{{ fail (printf "previewGuards.ttlGrace %q: hours and/or minutes, e.g. 1h" (toString $g.ttlGrace)) }}{{ end }}
 {{- $cap := int ($pv.maxPerTenant | default 0) }}
-{{- if lt $cap 1 }}{{ fail "previews.maxPerTenant must be at least 1" }}{{ end }}
 {{- if $g.environments }}
 apiVersion: policies.kyverno.io/v1
 kind: MutatingPolicy

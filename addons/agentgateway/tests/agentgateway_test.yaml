@@ -38,7 +38,7 @@ tests:
     template: templates/gateway.yaml
     set: { gateway.allowedNamespaces: [] }
     asserts:
-      - failedTemplate: { errorMessage: "gateway.allowedNamespaces must list the namespaces allowed to call the LLM proxy (an empty list would leave it open)" }
+      - failedTemplate: { errorPattern: "at '/gateway/allowedNamespaces': minItems" }
 
   - it: provider key comes from store platform key openchoreo-ai, synced raw as key Authorization (no ESO template)
     template: templates/llm.yaml
@@ -73,7 +73,7 @@ tests:
     template: templates/llm.yaml
     set: { llm.provider: cohere }
     asserts:
-      - failedTemplate: { errorMessage: 'llm.provider must be openai, anthropic or gemini, got "cohere"' }
+      - failedTemplate: { errorPattern: "at '/llm/provider': value must be one of 'openai', 'anthropic', 'gemini'" }
 
   - it: llm.enabled false leaves only the Gateway
     template: templates/llm.yaml

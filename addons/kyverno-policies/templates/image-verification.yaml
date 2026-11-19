@@ -20,11 +20,9 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- if $iv.enabled }}
 {{- $byAction := dict }}
 {{- range $env, $action := $iv.environments }}
-{{- if not (has $action (list "Audit" "Deny")) }}{{ fail (printf "imageVerification.environments.%s: %q is not Audit or Deny" $env $action) }}{{ end }}
 {{- $_ := set $byAction $action (append (get $byAction $action | default list) $env) }}
 {{- end }}
 {{- $default := $iv.defaultAction | default "" }}
-{{- if and $default (not (has $default (list "Audit" "Deny"))) }}{{ fail (printf "imageVerification.defaultAction: %q is not Audit, Deny or empty" $default) }}{{ end }}
 {{- if and $default (not (hasKey $byAction $default)) }}{{ $_ := set $byAction $default list }}{{ end }}
 {{- $platform := .Values.platformNamespaces | toJson }}
 {{- /* sources: [{kind: github|platform, prefixes, attestors: [name], attestations: [name]}] */ -}}
@@ -35,14 +33,8 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 current pin; transitionWorkflowRefs keeps the previous one trusted while app repos move to the new pin (at most two).
 Kyverno 1.20 verifies only ONE identity per attestor ("multiple identities are not supported"), so every trusted commit
 renders its own attestors (name suffix -<sha7> for transition commits) and the validations accept any of them. */ -}}
-{{- if not (regexMatch "^https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml$" ($iv.github.workflow | default "")) }}{{ fail (printf "imageVerification.github.workflow %q must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" ($iv.github.workflow | default "")) }}{{ end }}
 {{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
 {{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
-{{- range $wfRefs }}
-{{- if not (regexMatch "^[0-9a-f]{40}$" .) }}{{ fail (printf "imageVerification.github.workflowRef %q must be a 40-hex commit SHA of %s (tags and branches are mutable)" . $iv.github.workflow) }}{{ end }}
-{{- end }}
-{{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
-{{- if ne (len $wfRefs) (len (uniq $wfRefs)) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
 {{- $triggers := $iv.github.triggers | default list }}
 {{- /* Every attestor of the CURRENT pin comes first: validations try the attestors one at a time (CEL ||, the first that
 verifies wins) and only a successful single-attestor verification is cached, so images at the current pin cost one
@@ -59,7 +51,6 @@ verification per check; only images still at the transition pin pay the failed a
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if not $keyless }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
 {{- $names := list }}{{ range $keyless }}{{ $names = append $names .name }}{{ end }}
 {{- if ne (len $names) (len (uniq $names)) }}{{ fail (printf "imageVerification.github: attestor names collide after truncation to 60 characters: %s" (join ", " $names)) }}{{ end }}
 {{- $sources = append $sources (dict "kind" "github" "prefixes" $iv.github.prefixes "attestors" $names "attestations" ($iv.github.attestations | default list)) }}
@@ -72,15 +63,10 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- $pkc := $iv.platformKey.cluster | default dict }}
 {{- $clusterKey := and $iv.platformKey.enabled (not $iv.platformKey.publicKey) (eq (toString $reg.type) "harbor") (ne (toString ($pkc.configMap | default "")) "") }}
 {{- $platformKey := and $iv.platformKey.enabled (or $iv.platformKey.publicKey $clusterKey) }}
-{{- if $clusterKey }}
-{{- range $f := list "namespace" "configMap" }}{{ if not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" (toString (get $pkc $f))) }}{{ fail (printf "imageVerification.platformKey.cluster.%s %q is not a Kubernetes object name" $f (toString (get $pkc $f))) }}{{ end }}{{ end }}
-{{- end }}
 {{- $platformPrefixes := list }}
 {{- if $platformKey }}
-{{- $host := required "imageVerification.platformKey (publicKey or registry.type harbor) is set: installation registry.host is required (image prefix <host>/<appsProject>/)" $reg.host }}
+{{- $host := $reg.host }}{{- /* required + format: templates/validate.yaml, values.schema.json */ -}}
 {{- $project := $reg.appsProject | default "apps" }}
-{{- if not (regexMatch "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?$" $host) }}{{ fail (printf "registry.host %q must be <dns name>[:<port>]" $host) }}{{ end }}
-{{- if not (regexMatch "^[a-z0-9]([-a-z0-9._]*[a-z0-9])?$" $project) }}{{ fail (printf "registry.appsProject %q is not a registry project name" $project) }}{{ end }}
 {{- $platformPrefixes = list (printf "%s/%s/" $host $project) }}
 {{- $sources = append $sources (dict "kind" "platform" "prefixes" $platformPrefixes "attestors" (list "platform-key") "attestations" ($iv.platformKey.attestations | default list)) }}
 {{- end }}
@@ -88,7 +74,7 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
 {{- $trusted = concat $trusted $platformPrefixes }}
 {{- $usedAttestations := list }}
-{{- range $sources }}{{ range .attestations }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
+{{- range $sources }}{{ range .attestations }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
 {{- range $action := keys $byAction | sortAlpha }}
 {{- $envs := get $byAction $action | sortAlpha }}
 {{- $suffix := ternary "enforce" "audit" (eq $action "Deny") }}

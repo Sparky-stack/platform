@@ -1,0 +1,848 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "openchoreo-platform",
+  "description": "Values of the openchoreo-platform chart (OpenChoreo platform CRs on mgmt). Cross-field rules live in templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "installation": {
+      "type": "object",
+      "description": "Installation facts (installation.yaml installation.*).",
+      "properties": {
+        "githubOrg": {
+          "type": "string",
+          "description": "GitHub owner URL (https://github.com/<org>): default git allowlist and the gate's PR owner.",
+          "minLength": 1,
+          "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*/?$"
+        }
+      },
+      "required": [
+        "githubOrg"
+      ]
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "Installation facts (installation.yaml openchoreo.*).",
+      "properties": {
+        "orgNamespace": {
+          "type": "string",
+          "description": "OpenChoreo organisation namespace on mgmt.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "controlPlane": {
+          "type": "object",
+          "description": "Control plane endpoints.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Base host of the control plane (api.<host>, thunder.<host>).",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*(:[0-9]+)?$"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        "observability": {
+          "type": "object",
+          "description": "Observability plane of the installation.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Observability plane installed."
+            },
+            "httpPort": {
+              "type": "integer",
+              "description": "Host port of the observability gateway.",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        },
+        "workflowPlane": {
+          "type": "object",
+          "description": "Workflow (build) plane of the installation.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Workflow plane installed: builds and auto-build render only then."
+            },
+            "autoBuild": {
+              "enum": [
+                "poll",
+                "webhook",
+                "none"
+              ],
+              "description": "Auto-build trigger: poll (local), webhook (cloud) or none."
+            }
+          }
+        }
+      },
+      "required": [
+        "orgNamespace",
+        "controlPlane"
+      ]
+    },
+    "deploymentPipeline": {
+      "type": "object",
+      "description": "Promotion order of environments.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "DeploymentPipeline name referenced by every tenant Project.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "environments": {
+          "type": "array",
+          "description": "Environments in promotion order (at least one).",
+          "items": {
+            "type": "string",
+            "description": "Environment name.",
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "environments"
+      ]
+    },
+    "upstreamDefaults": {
+      "type": "object",
+      "description": "Upstream default OpenChoreo objects.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the upstream defaults."
+        }
+      }
+    },
+    "dataServices": {
+      "type": "object",
+      "description": "Data-service ClusterResourceTypes/Traits.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render them."
+        }
+      }
+    },
+    "resilience": {
+      "type": "object",
+      "description": "ClusterTrait resilience.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render it."
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Optional secret integrations.",
+      "properties": {
+        "tenantStores": {
+          "type": "object",
+          "description": "Per-tenant OpenBao stores.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render tenant-store types."
+            }
+          }
+        },
+        "githubGateApp": {
+          "type": "object",
+          "description": "Platform GitHub App in the store (gate PRs, auto-build tokens).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "App credentials exist: enables auto-build and gate PRs."
+            }
+          }
+        }
+      }
+    },
+    "tenantStoreName": {
+      "type": "string",
+      "description": "Namespaced SecretStore name of tenant stores (upstream defaults point at it).",
+      "minLength": 1
+    },
+    "promotion": {
+      "type": "object",
+      "description": "Who may promote, and when (promotion-authz, promotion-git-only, the gate).",
+      "properties": {
+        "gatedEnvironments": {
+          "type": "array",
+          "description": "Environments only the gate may promote into.",
+          "items": {
+            "type": "string",
+            "description": "Environment.",
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          }
+        },
+        "restrictedGroups": {
+          "type": "array",
+          "description": "Groups that may not bind gated environments directly.",
+          "items": {
+            "type": "string",
+            "description": "Group.",
+            "minLength": 1
+          }
+        },
+        "gitOnly": {
+          "type": "object",
+          "description": "Only Argo CD (Git) may write ReleaseBindings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render the ValidatingAdmissionPolicy."
+            },
+            "writers": {
+              "type": "array",
+              "description": "Subjects allowed to write bindings.",
+              "items": {
+                "type": "string",
+                "description": "Kubernetes user, group or system:serviceaccount:<ns>:<name>.",
+                "minLength": 1
+              }
+            },
+            "metadataWriters": {
+              "type": "array",
+              "description": "Subjects allowed to write status/metadata only.",
+              "items": {
+                "type": "string",
+                "description": "Kubernetes user, group or system:serviceaccount:<ns>:<name>.",
+                "minLength": 1
+              }
+            },
+            "deleters": {
+              "type": "array",
+              "description": "Subjects allowed to delete bindings (GC).",
+              "items": {
+                "type": "string",
+                "description": "Kubernetes user, group or system:serviceaccount:<ns>:<name>.",
+                "minLength": 1
+              }
+            },
+            "breakGlassGroups": {
+              "type": "array",
+              "description": "Emergency groups that bypass the policy.",
+              "items": {
+                "type": "string",
+                "description": "Kubernetes user, group or system:serviceaccount:<ns>:<name>.",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "freezeWindows": {
+          "type": "array",
+          "description": "Weekly windows the gate refuses promotions in.",
+          "items": {
+            "type": "object",
+            "description": "One freeze window.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Window name.",
+                "minLength": 1
+              },
+              "start": {
+                "type": "string",
+                "description": "Start, '<Day> HH:MM'.",
+                "minLength": 1
+              },
+              "end": {
+                "type": "string",
+                "description": "End, '<Day> HH:MM'.",
+                "minLength": 1
+              },
+              "timeZone": {
+                "type": "string",
+                "description": "IANA time zone.",
+                "minLength": 1
+              },
+              "environments": {
+                "type": "array",
+                "description": "Environments the window applies to.",
+                "items": {
+                  "type": "string",
+                  "description": "Environment.",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": [
+              "name",
+              "start",
+              "end"
+            ]
+          }
+        }
+      }
+    },
+    "promotionGate": {
+      "type": "object",
+      "description": "Promotion-gate ClusterWorkflow (smoke, observe, PR to the app repo).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the gate."
+        },
+        "workflowPlane": {
+          "type": "string",
+          "description": "ClusterWorkflowPlane the gate runs on.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Pod labels that grant egress to the OpenChoreo API, Thunder and the observer (required).",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "image": {
+          "type": "string",
+          "description": "Python image, pinned by digest.",
+          "minLength": 1,
+          "pattern": "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources (requests/limits)."
+        },
+        "ttlAfterCompletion": {
+          "type": "string",
+          "description": "How long finished runs are kept.",
+          "minLength": 1
+        },
+        "apiURL": {
+          "type": "string",
+          "description": "OpenChoreo API URL; empty: http://api.<host>:<controlPlanePort>."
+        },
+        "tokenURL": {
+          "type": "string",
+          "description": "Thunder token URL; empty: derived from the host."
+        },
+        "observerURL": {
+          "type": "string",
+          "description": "Observer URL; empty: derived."
+        },
+        "prometheusURL": {
+          "type": "string",
+          "description": "Prometheus the observe step queries.",
+          "minLength": 1
+        },
+        "controlPlanePort": {
+          "type": "integer",
+          "description": "Port of the in-cluster control plane endpoints.",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "clientID": {
+          "type": "string",
+          "description": "Thunder OAuth client of the gate.",
+          "minLength": 1
+        },
+        "clientSecret": {
+          "type": "object",
+          "description": "Store key/property of the client secret.",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Store key.",
+              "minLength": 1
+            },
+            "property": {
+              "type": "string",
+              "description": "Property.",
+              "minLength": 1
+            }
+          }
+        },
+        "github": {
+          "type": "object",
+          "description": "GitHub App of the gate.",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Store key of the platform GitHub App.",
+              "minLength": 1
+            }
+          }
+        },
+        "statusContext": {
+          "type": "string",
+          "description": "Commit status context.",
+          "minLength": 1
+        },
+        "baseBranch": {
+          "type": "string",
+          "description": "Branch the gate opens PRs against.",
+          "minLength": 1
+        },
+        "bindingPath": {
+          "type": "string",
+          "description": "Path of the ReleaseBinding file in the app repo ({environment} placeholder).",
+          "minLength": 1
+        },
+        "smoke": {
+          "type": "object",
+          "description": "HTTP smoke test.",
+          "properties": {
+            "http": {
+              "type": "boolean",
+              "description": "Run it."
+            },
+            "path": {
+              "type": "string",
+              "description": "Path to request."
+            }
+          }
+        },
+        "observe": {
+          "type": "object",
+          "description": "Error-rate observation window.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Run it."
+            },
+            "windowMinutes": {
+              "type": "number",
+              "description": "Window length.",
+              "minimum": 0
+            },
+            "maxErrorRate": {
+              "type": "number",
+              "description": "Max 5xx ratio (0..1).",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "podLabels",
+        "prometheusURL"
+      ]
+    },
+    "registry": {
+      "type": "object",
+      "description": "Image registry builds push to.",
+      "properties": {
+        "type": {
+          "enum": [
+            "harbor",
+            "external"
+          ],
+          "description": "harbor (in-cluster, needs host) or external (needs external.repository); checked in validate.yaml."
+        },
+        "host": {
+          "type": "string",
+          "description": "Harbor host[:port]."
+        },
+        "appsProject": {
+          "type": "string",
+          "description": "Harbor project for app images."
+        },
+        "external": {
+          "type": "object",
+          "description": "External registry.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Repository prefix, e.g. ghcr.io/<org>."
+            },
+            "credentialsKey": {
+              "type": "string",
+              "description": "Store key of push credentials."
+            }
+          }
+        }
+      }
+    },
+    "buildWorkflows": {
+      "type": "object",
+      "description": "Per-stack build ClusterWorkflows (docs/build-plane.md).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the build workflows."
+        },
+        "workflowPlane": {
+          "type": "string",
+          "description": "ClusterWorkflowPlane builds run on.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "workflowTemplate": {
+          "type": "string",
+          "description": "ClusterWorkflowTemplate a build runs.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "ttlAfterCompletion": {
+          "type": "string",
+          "description": "How long finished runs are kept.",
+          "minLength": 1
+        },
+        "platforms": {
+          "type": "string",
+          "description": "Image platforms, comma-separated.",
+          "minLength": 1
+        },
+        "signing": {
+          "type": "object",
+          "description": "Image signing.",
+          "properties": {
+            "transparencyLog": {
+              "type": "boolean",
+              "description": "Upload signatures to Rekor."
+            }
+          }
+        },
+        "git": {
+          "type": "object",
+          "description": "Git allowlist.",
+          "properties": {
+            "allowedRepositoryPrefixes": {
+              "type": "array",
+              "description": "https://<host>/<owner>/ prefixes builds may use; empty: installation.githubOrg.",
+              "items": {
+                "type": "string",
+                "description": "Prefix ending in /.",
+                "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9][A-Za-z0-9._-]*/)+$"
+              }
+            }
+          }
+        },
+        "github": {
+          "type": "object",
+          "description": "GitHub App tokens of builds.",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Store key of the platform GitHub App.",
+              "minLength": 1
+            },
+            "appSecret": {
+              "type": "string",
+              "description": "ExternalSecret with the App credentials in workflows-<org>.",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "secretStore": {
+              "type": "string",
+              "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
+              "minLength": 1
+            },
+            "apiURL": {
+              "type": "string",
+              "description": "GitHub API URL; empty: public GitHub."
+            },
+            "permissions": {
+              "type": "object",
+              "description": "GitHub App token permissions (least privilege), e.g. {contents: read}. Push builds."
+            },
+            "readPermissions": {
+              "type": "object",
+              "description": "GitHub App token permissions (least privilege), e.g. {contents: read}. Read-only steps."
+            },
+            "tokenRefreshInterval": {
+              "type": "string",
+              "description": "Token refresh interval (tokens expire after 1h).",
+              "minLength": 1
+            },
+            "agent": {
+              "type": "object",
+              "description": "Workflow-plane agent identity.",
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "description": "Namespace.",
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "serviceAccount": {
+                  "type": "string",
+                  "description": "ServiceAccount.",
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                }
+              }
+            }
+          },
+          "required": [
+            "key",
+            "appSecret",
+            "permissions",
+            "readPermissions",
+            "tokenRefreshInterval"
+          ]
+        },
+        "secrets": {
+          "type": "object",
+          "description": "Build secrets (cosign key, Harbor robot, CA)."
+        },
+        "stacks": {
+          "type": "array",
+          "description": "One ClusterWorkflow per stack.",
+          "items": {
+            "type": "object",
+            "description": "One stack.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Workflow name suffix.",
+                "minLength": 1,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              "displayName": {
+                "type": "string",
+                "description": "Backstage display name.",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "description": "Backstage description."
+              },
+              "stack": {
+                "type": "string",
+                "description": "Build script stack.",
+                "minLength": 1
+              },
+              "checkImage": {
+                "type": "string",
+                "description": "Check-step image pinned by digest (run pods admit only digests); empty: no check step.",
+                "pattern": "^$|^[^@\\s]+@sha256:[0-9a-f]{64}$"
+              },
+              "checkSetup": {
+                "type": "string",
+                "description": "Shell run before checks."
+              },
+              "checkEnv": {
+                "type": "object",
+                "description": "Environment of the check step.",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "postgres": {
+                "type": "boolean",
+                "description": "Start a PostgreSQL sidecar for tests."
+              }
+            },
+            "required": [
+              "name",
+              "stack"
+            ]
+          }
+        }
+      }
+    },
+    "autoBuild": {
+      "type": "object",
+      "description": "Auto-build trigger (docs/build-plane.md \"Auto-build\").",
+      "properties": {
+        "workflowTemplate": {
+          "type": "string",
+          "description": "WorkflowTemplate of one reconcile pass.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "pollSchedule": {
+          "type": "string",
+          "description": "Cron of trigger poll.",
+          "minLength": 1
+        },
+        "resyncSchedule": {
+          "type": "string",
+          "description": "Cron of the webhook resync; empty: no resync CronWorkflow."
+        },
+        "maxRunsPerPass": {
+          "type": "integer",
+          "description": "Max builds started per pass.",
+          "minimum": 0
+        },
+        "staleRunSeconds": {
+          "type": "integer",
+          "description": "Age after which a run counts as stale.",
+          "minimum": 0
+        },
+        "minRateRemaining": {
+          "type": "integer",
+          "description": "Stop when GitHub rate limit falls below this.",
+          "minimum": 0
+        },
+        "stateConfigMap": {
+          "type": "string",
+          "description": "ConfigMap with the pass state.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "secretStore": {
+          "type": "string",
+          "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
+          "minLength": 1
+        },
+        "github": {
+          "type": "object",
+          "description": "Read token of the pass.",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Store key.",
+              "minLength": 1
+            },
+            "permissions": {
+              "type": "object",
+              "description": "GitHub App token permissions (least privilege), e.g. {contents: read}."
+            },
+            "tokenRefreshInterval": {
+              "type": "string",
+              "description": "Token refresh interval.",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "permissions"
+          ]
+        },
+        "registry": {
+          "type": "object",
+          "description": "Pull-only Harbor robot for the already-built check.",
+          "properties": {
+            "robot": {
+              "type": "string",
+              "description": "Robot account.",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "description": "Store key.",
+              "minLength": 1
+            },
+            "property": {
+              "type": "string",
+              "description": "Property.",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "robot"
+          ]
+        },
+        "image": {
+          "type": "string",
+          "description": "Python image, pinned by digest.",
+          "minLength": 1,
+          "pattern": "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources (requests/limits)."
+        },
+        "previews": {
+          "type": "object",
+          "description": "PR preview environments.",
+          "properties": {
+            "github": {
+              "type": "object",
+              "description": "Preview token.",
+              "properties": {
+                "permissions": {
+                  "type": "object",
+                  "description": "GitHub App token permissions (least privilege), e.g. {contents: read}."
+                }
+              },
+              "required": [
+                "permissions"
+              ]
+            },
+            "statusContext": {
+              "type": "string",
+              "description": "Commit status context.",
+              "minLength": 1
+            },
+            "optIn": {
+              "type": "object",
+              "description": "Repo opt-in annotation.",
+              "properties": {
+                "annotation": {
+                  "type": "string",
+                  "description": "Annotation.",
+                  "minLength": 1
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Value.",
+                  "minLength": 1
+                }
+              }
+            },
+            "argocdNamespace": {
+              "type": "string",
+              "description": "Argo CD namespace.",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "schedule": {
+              "type": "string",
+              "description": "Cron of the previews pass (trigger webhook).",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "workflowTemplate",
+        "github",
+        "registry"
+      ]
+    },
+    "previews": {
+      "type": "object",
+      "description": "PR preview environments.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render preview RBAC and passes."
+        }
+      }
+    },
+    "helmChartWorkflow": {
+      "type": "object",
+      "description": "Helm chart build ClusterWorkflow.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render it."
+        },
+        "name": {
+          "type": "string",
+          "description": "ClusterWorkflow name.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "workflowTemplate": {
+          "type": "string",
+          "description": "ClusterWorkflowTemplate.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      }
+    }
+  },
+  "required": [
+    "installation",
+    "openchoreo",
+    "deploymentPipeline"
+  ]
+}

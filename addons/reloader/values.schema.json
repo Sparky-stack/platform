@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "reloader addon values",
+  "type": "object",
+  "properties": {
+    "reloader": {
+      "type": "object",
+      "description": "Upstream stakater/reloader chart; only the platform invariants are constrained.",
+      "properties": {
+        "reloader": {
+          "type": "object",
+          "description": "Reloader settings.",
+          "properties": {
+            "watchGlobally": {
+              "const": false,
+              "description": "Must stay false: no ClusterRole that reads every Secret."
+            },
+            "namespaces": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "description": "Watched namespace.",
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              "description": "Namespaces watched with a scoped Role each (non-empty)."
+            },
+            "reloadStrategy": {
+              "const": "annotations",
+              "description": "Annotation patch, not env vars: no containers[].env drift under Argo CD SSA."
+            },
+            "autoReloadAll": {
+              "type": "boolean",
+              "description": "Roll every workload mounting a changed object (needs resourceLabelSelector, templates/validate.yaml)."
+            },
+            "resourceLabelSelector": {
+              "type": "string",
+              "description": "Only ConfigMaps/Secrets with this label trigger reloads."
+            },
+            "readOnlyRootFileSystem": {
+              "const": true,
+              "description": "Pod Security restricted: read-only root filesystem."
+            },
+            "deployment": {
+              "type": "object",
+              "description": "Reloader Deployment.",
+              "properties": {
+                "securityContext": {
+                  "type": "object",
+                  "description": "Pod security context (Pod Security restricted).",
+                  "properties": {
+                    "runAsNonRoot": {
+                      "const": true,
+                      "description": "Pod Security restricted: non-root."
+                    },
+                    "seccompProfile": {
+                      "type": "object",
+                      "description": "Seccomp profile.",
+                      "properties": {
+                        "type": {
+                          "const": "RuntimeDefault",
+                          "description": "Pod Security restricted: RuntimeDefault."
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "runAsNonRoot",
+                    "seccompProfile"
+                  ]
+                },
+                "containerSecurityContext": {
+                  "type": "object",
+                  "description": "Container security context (Pod Security restricted).",
+                  "properties": {
+                    "allowPrivilegeEscalation": {
+                      "const": false,
+                      "description": "Pod Security restricted: no escalation."
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "description": "Linux capabilities.",
+                      "properties": {
+                        "drop": {
+                          "type": "array",
+                          "contains": {
+                            "const": "ALL"
+                          },
+                          "description": "Must drop ALL."
+                        }
+                      },
+                      "required": [
+                        "drop"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowPrivilegeEscalation",
+                    "capabilities"
+                  ]
+                }
+              },
+              "required": [
+                "securityContext",
+                "containerSecurityContext"
+              ]
+            }
+          },
+          "required": [
+            "watchGlobally",
+            "namespaces",
+            "reloadStrategy",
+            "readOnlyRootFileSystem",
+            "deployment"
+          ]
+        }
+      },
+      "required": [
+        "reloader"
+      ]
+    }
+  },
+  "required": [
+    "reloader"
+  ]
+}

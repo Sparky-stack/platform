@@ -101,7 +101,7 @@ tests:
     template: templates/build-workflows.yaml
     set: { buildWorkflows.github.permissions: null }
     asserts:
-      - failedTemplate: { errorPattern: "permissions .* are required" }
+      - failedTemplate: { errorPattern: "at '/buildWorkflows/github': missing property 'permissions'" }
 
   - it: the App's private key reaches only ESO, through the scoped store, in the run namespace
     template: templates/build-github.yaml
@@ -181,19 +181,19 @@ tests:
     template: templates/helm-chart-workflow.yaml
     set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/"] }
     asserts:
-      - failedTemplate: { errorPattern: "must be https://<host>/<owner>/" }
+      - failedTemplate: { errorPattern: "at '/buildWorkflows/git/allowedRepositoryPrefixes/0': 'https://github.com/' does not match pattern" }
 
   - it: rejects a prefix without the closing slash (would also match koorikla-evil)
     template: templates/helm-chart-workflow.yaml
     set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/koorikla"] }
     asserts:
-      - failedTemplate: { errorPattern: "ending in /" }
+      - failedTemplate: { errorPattern: "at '/buildWorkflows/git/allowedRepositoryPrefixes/0': 'https://github.com/koorikla' does not match pattern" }
 
   - it: rejects a non-https prefix
     template: templates/helm-chart-workflow.yaml
     set: { buildWorkflows.git.allowedRepositoryPrefixes: ["http://github.com/koorikla/"] }
     asserts:
-      - failedTemplate: { errorPattern: "must be https://" }
+      - failedTemplate: { errorPattern: "at '/buildWorkflows/git/allowedRepositoryPrefixes/0': 'http://github.com/koorikla/' does not match pattern" }
 
   - it: gitops writes only deploy/openchoreo/<name>.yaml, refs and paths cannot inject options or traverse
     template: templates/build-workflows.yaml
@@ -244,7 +244,7 @@ tests:
         - { name: go, displayName: Go, description: d, stack: go, checkImage: "docker.io/library/golang:1.27.4-trixie", checkSetup: "", checkEnv: {} }
     asserts:
       - failedTemplate:
-          errorPattern: 'buildWorkflows.stacks\[go\].checkImage "docker.io/library/golang:1.27.4-trixie" must be pinned by digest'
+          errorPattern: "at '/buildWorkflows/stacks/0/checkImage': 'docker.io/library/golang:1.27.4-trixie' does not match pattern"
 
   - it: component types allow exactly the build workflows
     template: templates/upstream-defaults.yaml

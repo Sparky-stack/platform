@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "preview chart values",
+  "description": "Identity of one PR preview, from the pull request generator. Empty identity is allowed by the schema (standalone lint, expired previews); templates/validate.yaml requires it unless expired.",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$",
+      "description": "OpenChoreo Project (tenant file `project`), a DNS-1123 label."
+    },
+    "component": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$",
+      "description": "Component name (tenant app name), a DNS-1123 label."
+    },
+    "pullRequest": {
+      "type": [
+        "string",
+        "integer"
+      ],
+      "pattern": "^([1-9][0-9]{0,6})?$",
+      "minimum": 1,
+      "maximum": 9999999,
+      "description": "Pull request number."
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40})?$",
+      "description": "PR head SHA (40 hex): the build the ReleaseBinding pins."
+    },
+    "repository": {
+      "type": "string",
+      "description": "owner/name of the app repo (annotation only)."
+    },
+    "branch": {
+      "type": "string",
+      "description": "PR head branch (annotation only)."
+    },
+    "expired": {
+      "type": [
+        "string",
+        "boolean"
+      ],
+      "enum": [
+        "true",
+        "false",
+        true,
+        false
+      ],
+      "description": "\"true\" when the PR carries the expiry label: renders nothing, Argo CD prunes."
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "From installation.yaml.",
+      "properties": {
+        "orgNamespace": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "description": "OpenChoreo organization namespace."
+        }
+      },
+      "required": [
+        "orgNamespace"
+      ]
+    },
+    "previews": {
+      "type": "object",
+      "description": "From installation.yaml `previews`.",
+      "properties": {
+        "dataPlane": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "description": "ClusterDataPlane every preview lands on."
+        }
+      },
+      "required": [
+        "dataPlane"
+      ]
+    }
+  },
+  "required": [
+    "openchoreo",
+    "previews"
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon openbao (platform keys; openbao.* is the upstream chart's)",
+  "type": "object",
+  "required": [
+    "mesh",
+    "gateway",
+    "openbao"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name (mgmt)."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider; anything but docker requires gateway.loadBalancerSourceRanges (templates/validate.yaml)."
+        }
+      },
+      "description": "Injected by the ApplicationSet (--set-string): this cluster's facts."
+    },
+    "mesh": {
+      "type": "object",
+      "required": [
+        "ca"
+      ],
+      "properties": {
+        "groups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$"
+          },
+          "description": "Mesh groups: DNS labels (max 32 chars), unique; each becomes pki-mesh-<group>[-int] mounts."
+        },
+        "ca": {
+          "type": "object",
+          "required": [
+            "host",
+            "port"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+              "description": "DNS name members dial (SNI + listener cert SAN)."
+            },
+            "port": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              ],
+              "description": "Gateway listener port (== k3d published port locally)."
+            }
+          },
+          "description": "Endpoint members dial: SNI of the TLS passthrough listener and the Gateway listener port."
+        }
+      },
+      "description": "installation.yaml mesh: groups (one PKI root + intermediate each) and the address members dial."
+    },
+    "unseal": {
+      "type": "object",
+      "properties": {
+        "store": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ClusterSecretStore with the unseal key."
+        },
+        "remoteKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Store key."
+        },
+        "property": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Property holding the key."
+        },
+        "secretName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secret mounted at /openbao/unseal."
+        }
+      },
+      "description": "Static auto-unseal key (store key with 64 hex chars), mounted into the server."
+    },
+    "tls": {
+      "type": "object",
+      "properties": {
+        "caIssuer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Namespaced CA Issuer (key never leaves the namespace)."
+        },
+        "caDuration": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "CA lifetime."
+        },
+        "secretName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Listener certificate Secret."
+        },
+        "duration": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Listener certificate lifetime."
+        },
+        "renewBefore": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Renewal margin."
+        }
+      },
+      "description": "Namespaced CA and the listener certificate."
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Gateway name."
+        },
+        "className": {
+          "type": "string",
+          "minLength": 1,
+          "description": "GatewayClass."
+        },
+        "loadBalancerSourceRanges": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+          },
+          "description": "Members' egress CIDRs; required outside docker (templates/validate.yaml)."
+        }
+      },
+      "description": "kgateway TLS passthrough Gateway for mesh members."
+    },
+    "pki": {
+      "type": "object",
+      "properties": {
+        "trustDomain": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SPIFFE trust domain of workload certificates."
+        },
+        "allowedDomains": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Non-SPIFFE names istio-csr may request (istiod, istio-csr)."
+        },
+        "workloadTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Workload certificate TTL."
+        },
+        "workloadMaxTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Workload certificate max TTL."
+        },
+        "rootTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Group root TTL."
+        },
+        "intermediateTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Group intermediate TTL."
+        },
+        "keyType": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Key type of roots/intermediates (OpenBao PKI key_type)."
+        },
+        "rootKeyBits": {
+          "type": "integer",
+          "description": "Root key bits."
+        },
+        "intermediateKeyBits": {
+          "type": "integer",
+          "description": "Intermediate key bits."
+        }
+      },
+      "description": "Mesh PKI mounts and roles."
+    },
+    "memberAuth": {
+      "type": "object",
+      "properties": {
+        "tokenTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Member token TTL."
+        }
+      },
+      "description": "Kubernetes auth role members' istio-csr logs in with."
+    },
+    "reconcile": {
+      "type": "object",
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cron schedule."
+        }
+      },
+      "description": "mesh-reconcile CronJob/Sync hook (members and group CAs)."
+    },
+    "tenantSecrets": {
+      "type": "object",
+      "properties": {
+        "tokenTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Reader token TTL."
+        },
+        "schedule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cron schedule."
+        }
+      },
+      "description": "Tenant KV mounts, reader role and tenant-reconcile CronJob."
+    },
+    "policyReconciler": {
+      "type": "object",
+      "properties": {
+        "roleTTL": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Pinned tenant role token TTL."
+        }
+      },
+      "description": "policy-reconcile CronJob (tenant-* policies from files/policies)."
+    },
+    "admission": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the admission policies."
+        },
+        "readerMaxDuration": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Max reader token duration."
+        }
+      },
+      "description": "Admission policies around mesh reader credentials and CSRs."
+    },
+    "openbao": {
+      "type": "object",
+      "description": "Upstream OpenBao chart values (not constrained here)."
+    }
+  }
+}

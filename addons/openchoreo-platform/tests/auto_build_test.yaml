@@ -68,7 +68,7 @@ tests:
   - it: rejects an unknown trigger
     set: { openchoreo.workflowPlane.autoBuild: always }
     asserts:
-      - failedTemplate: { errorPattern: 'openchoreo.workflowPlane.autoBuild: "always" is not poll, webhook or none' }
+      - failedTemplate: { errorPattern: "at '/openchoreo/workflowPlane/autoBuild': value must be one of 'poll', 'webhook', 'none'" }
 
   - it: GitHub access is an ESO-minted, read-only installation token of the platform App
     documentSelector: { path: kind, value: GithubAccessToken }
@@ -95,7 +95,7 @@ tests:
   - it: refuses an unrestricted token
     set: { autoBuild.github.permissions: null }
     asserts:
-      - failedTemplate: { errorPattern: "autoBuild.github.permissions is required" }
+      - failedTemplate: { errorPattern: "at '/autoBuild/github': missing property 'permissions'" }
 
   - it: org-namespace RBAC is read + create only (no update, patch or delete of tenant objects)
     documentSelector: { path: 'rules[0].resources[0]', value: components }

@@ -88,10 +88,6 @@ spec:
               forceString: true
             {{- end }}
             {{- range $p, $f := $cfg.clusterNameFormats }}
-            {{- $bare := replace "%%" "" $f }}
-            {{- if or (ne (len (splitList "%" $bare)) 2) (not (contains "%s" $bare)) }}
-            {{- fail (printf "addons.%s.clusterNameFormats.%s: %q must contain exactly one %%s" $addon $p $f) }}
-            {{- end }}
             - name: {{ $p | quote }}
               value: {{ printf $f $label.name | squote }}
               forceString: true
@@ -102,7 +98,7 @@ spec:
             {{- end }}
             {{- range $p := $cfg.clusterIdParameters }}
             - name: {{ $p | quote }}
-              value: '{{ required "installation.name is required" $inst.name }}-{{ $label.name }}'
+              value: '{{ $inst.name }}-{{ $label.name }}'
               forceString: true
             {{- end }}
             {{- range $p, $t := $cfg.installationParameters }}
@@ -110,9 +106,6 @@ spec:
               value: {{ tpl $t $ | quote }}
             {{- end }}
             {{- range $p, $part := $cfg.clusterServerParameters }}
-            {{- if not (hasKey $serverExpr $part) }}
-            {{- fail (printf "addons.%s.clusterServerParameters.%s: %q is not one of url, host, port" $addon $p $part) }}
-            {{- end }}
             - name: {{ $p | quote }}
               value: {{ index $serverExpr $part | squote }}
               {{- if ne $part "port" }}
@@ -120,12 +113,6 @@ spec:
               {{- end }}
             {{- end }}
             {{- range $p, $l := $cfg.clusterLabelParameters }}
-            {{- if not (and (kindIs "map" $l) $l.label) }}
-            {{- fail (printf "addons.%s.clusterLabelParameters.%s: want {label: <key>, default: <value>}" $addon $p) }}
-            {{- end }}
-            {{- if and (hasKey $l "default") (not (kindIs "string" $l.default)) }}
-            {{- fail (printf "addons.%s.clusterLabelParameters.%s: default must be a string (quote it: \"%v\")" $addon $p $l.default) }}
-            {{- end }}
             - name: {{ $p | quote }}
               {{- if ne (get $l "default" | default "") "" }}
               value: {{ printf `'{{ $v := index .metadata.labels %q }}{{ if $v }}{{ $v }}{{ else }}%s{{ end }}'` $l.label $l.default }}

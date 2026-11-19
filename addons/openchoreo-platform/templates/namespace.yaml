@@ -6,7 +6,7 @@ openchoreo.dev/control-plane=true. Upstream labels `default` with kubectl; here 
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ required "openchoreo.orgNamespace is required" .Values.openchoreo.orgNamespace }}
+  name: {{ .Values.openchoreo.orgNamespace }}
   labels:
     openchoreo.dev/control-plane: "true"
   annotations:

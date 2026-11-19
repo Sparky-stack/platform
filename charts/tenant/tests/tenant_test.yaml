@@ -1,5 +1,6 @@
 suite: tenant (AppProject + OpenChoreo Project + app Applications)
 templates:
+  - templates/validate.yaml
   - templates/appproject.yaml
   - templates/project.yaml
   - templates/applications.yaml
@@ -16,7 +17,7 @@ set:
       revision: v1.2.3
 tests:
   - it: requires a project name
-    template: templates/project.yaml
+    template: templates/validate.yaml
     set:
       project: ""
     asserts:
@@ -27,10 +28,10 @@ tests:
     set:
       project: Demo_1
     asserts:
-      - failedTemplate: { errorMessage: 'project "Demo_1" must be a DNS-1123 label' }
+      - failedTemplate: { errorPattern: "at '/project': 'Demo_1' does not match pattern" }
 
   - it: rejects duplicate app names (first template rendering the app list fails)
-    template: templates/authz.yaml
+    template: templates/validate.yaml
     set:
       apps:
         - { name: a, repoURL: https://x/a.git }
@@ -39,7 +40,7 @@ tests:
       - failedTemplate: { errorMessage: 'apps: duplicate name "a"' }
 
   - it: rejects app names ending in -<gated environment> (they would pass as the gated Application in the VAP)
-    template: templates/authz.yaml
+    template: templates/validate.yaml
     set:
       apps:
         - { name: hotfix-production, repoURL: https://x/a.git }
@@ -188,7 +189,14 @@ tests:
     set:
       promotion.freezeWindows: [{ start: "Friday 16", end: "Mon 08:00" }]
     asserts:
-      - failedTemplate: { errorMessage: 'promotion.freezeWindows: bad bound "Friday 16" (want e.g. "Fri 16:00")' }
+      - failedTemplate: { errorPattern: "at '/promotion/freezeWindows/0/start': 'Friday 16' does not match pattern" }
+
+  - it: rejects a window whose start equals its end
+    template: templates/validate.yaml
+    set:
+      promotion.freezeWindows: [{ name: never, start: "Fri 16:00", end: "Fri 16:00" }]
+    asserts:
+      - failedTemplate: { errorMessage: 'promotion.freezeWindows "never": start == end' }
 
   - it: follows the installation's org namespace everywhere
     set:

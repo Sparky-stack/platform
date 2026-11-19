@@ -50,7 +50,7 @@ tests:
     set:
       previewToken.permissions: null
     asserts:
-      - failedTemplate: { errorMessage: "previewToken.permissions is required (least privilege: pull_requests: read)" }
+      - failedTemplate: { errorPattern: "/previewToken': missing property 'permissions'" }
 
   - it: "negative: no preview token chain without the platform GitHub App: the generator would fail and degrade the app (#192)"
     set: { secrets.githubGateApp.enabled: false }

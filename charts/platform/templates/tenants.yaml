@@ -2,8 +2,8 @@
 ApplicationSet tenants (mgmt, argocd): installations/<inst>/tenants/<project>.yaml -> Application tenant-<project>
 rendering charts/tenant (installation.yaml + tenant file). Removing the file offboards the tenant (resources finalizer).
 */ -}}
-{{- $inst := required "installation.name is required" .Values.installation.name }}
-{{- $repo := required "installation.repoURL is required" .Values.installation.repoURL }}
+{{- $inst := .Values.installation.name }}
+{{- $repo := .Values.installation.repoURL }}
 {{- $rev := .Values.installation.revision | default "HEAD" }}
 {{- $orgNs := (.Values.openchoreo | default dict).orgNamespace | default "default" }}
 apiVersion: argoproj.io/v1alpha1

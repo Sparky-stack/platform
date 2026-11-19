@@ -1,24 +1,16 @@
-{{- /* Mesh groups of the installation (installation.yaml mesh.groups), validated: DNS labels, no duplicates. */ -}}
+{{- /* Mesh groups of the installation (installation.yaml mesh.groups; DNS labels, unique: values.schema.json). */ -}}
 {{- define "openbao-addon.groups" -}}
-{{- $groups := (.Values.mesh | default dict).groups | default list -}}
-{{- range $g := $groups -}}
-{{- if not (regexMatch "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" (toString $g)) -}}
-{{- fail (printf "openbao: mesh.groups entry %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" (toString $g)) -}}
-{{- end -}}
-{{- end -}}
-{{- if ne (len $groups) (len (uniq $groups)) -}}{{- fail "openbao: mesh.groups has duplicates" -}}{{- end -}}
-{{- toJson $groups -}}
+{{- toJson (.Values.mesh.groups | default list) -}}
 {{- end }}
 
 {{- /* Address members dial (installation.yaml mesh.ca): host = SNI of the TLS passthrough listener + a SAN of the
-listener cert; port = Gateway listener port = k3d published port (bootstrap/k3d-mgmt.yaml, contract test). */ -}}
+listener cert; port = Gateway listener port = k3d published port (bootstrap/k3d-mgmt.yaml, contract test).
+Both required and format-checked by values.schema.json. */ -}}
 {{- define "openbao-addon.host" -}}
-{{- required "mesh.ca.host is required (installation.yaml)" ((.Values.mesh | default dict).ca | default dict).host -}}
+{{- .Values.mesh.ca.host -}}
 {{- end }}
 {{- define "openbao-addon.port" -}}
-{{- $p := required "mesh.ca.port is required (installation.yaml)" ((.Values.mesh | default dict).ca | default dict).port -}}
-{{- if not (regexMatch "^[0-9]+$" (toString $p)) }}{{ fail (printf "openbao: mesh.ca.port %v must be a port number" $p) }}{{ end -}}
-{{- $p -}}
+{{- .Values.mesh.ca.port -}}
 {{- end }}
 
 {{- define "openbao-addon.labels" -}}

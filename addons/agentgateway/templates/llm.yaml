@@ -5,9 +5,6 @@ property <provider>-api-key). The agents never see the provider key.
 */ -}}
 {{- if .Values.llm.enabled }}
 {{- $p := .Values.llm.provider }}
-{{- if not (has $p (list "openai" "anthropic" "gemini")) }}
-{{- fail (printf "llm.provider must be openai, anthropic or gemini, got %q" $p) }}
-{{- end }}
 {{- $auth := printf "%s-llm-auth" $p }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -20,7 +17,7 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: {{ required "secrets.store is required" .Values.secrets.store }}
+    name: {{ .Values.secrets.store }}
   target:
     name: {{ $auth }}
   data:

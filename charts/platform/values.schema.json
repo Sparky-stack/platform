@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "platform (root Application) values",
+  "description": "Platform keys only; installation.yaml carries more keys for the addons, so the top level is open.",
+  "type": "object",
+  "required": [
+    "installation",
+    "addons"
+  ],
+  "properties": {
+    "installation": {
+      "type": "object",
+      "description": "GitOps repository and installation identity.",
+      "required": [
+        "name",
+        "repoURL"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Installation directory under installations/ (a DNS label: part of cluster ids).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "repoURL": {
+          "type": "string",
+          "description": "Git repository Argo CD syncs from.",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "description": "Git revision (default HEAD)."
+        },
+        "githubOrg": {
+          "type": "string",
+          "description": "GitHub org URL (sourceIntegrity repos, app repos)."
+        },
+        "domain": {
+          "type": "string",
+          "description": "Public base domain of the installation."
+        }
+      }
+    },
+    "mgmt": {
+      "type": "object",
+      "description": "Management cluster identity and addon toggles.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (docker, aws, hetzner, gcp-gke, byo).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "region": {
+          "type": "string",
+          "description": "Region."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment label.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI (flannel default; gke on GKE).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "addons": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              }
+            ],
+            "description": "Addon opt-in/opt-out label value (true/false or the quoted label strings)."
+          },
+          "description": "mgmt addon opt-in/opt-out overrides (catalog entry name -> toggle)."
+        }
+      }
+    },
+    "sourceIntegrity": {
+      "type": "object",
+      "description": "Git commit signature verification (AppProjects).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable sourceIntegrity on the platform, fleet and previews AppProjects."
+        },
+        "mode": {
+          "type": "string",
+          "description": "none | head (HEAD signed) | strict (every commit since the last signed tag).",
+          "enum": [
+            "none",
+            "head",
+            "strict"
+          ]
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "GPG key ids allowed to sign."
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Repository globs (tpl over the installation values)."
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "description": "Image registry.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "external | harbor (addon harbor on mgmt).",
+          "enum": [
+            "external",
+            "harbor"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "description": "Registry host (harbor: externalURL)."
+        },
+        "hostCache": {
+          "type": "object",
+          "description": "Local host pull-through caches.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Set by bootstrap (REGISTRY_CACHE)."
+            }
+          }
+        }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "description": "Public DNS for Gateway API routes (docs/dns.md).",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "none | route53 | cloudflare (picks addons/external-dns/values/dns-<provider>.yaml).",
+          "enum": [
+            "none",
+            "route53",
+            "cloudflare"
+          ]
+        },
+        "domainFilters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Zones external-dns manages."
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Secret backend facts.",
+      "properties": {
+        "githubGateApp": {
+          "type": "object",
+          "description": "Platform GitHub App key present in the store.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render auto-build and PR previews (#192)."
+            }
+          }
+        }
+      }
+    },
+    "addons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Catalog entry: one ApplicationSet addon-<name> (templates/appset-addons.yaml).",
+        "additionalProperties": false,
+        "required": [
+          "namespace",
+          "roles"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Destination namespace of the addon's Application.",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "mgmt",
+                "workload"
+              ]
+            },
+            "description": "Cluster roles (label platform.koorikla.io/role) the addon is installed on."
+          },
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "description": "Provider.",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "description": "Only clusters with one of these platform.koorikla.io/provider labels."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "true: opt-out per cluster (label \"false\"); false: opt-in (label \"true\"). Omitted = true."
+          },
+          "releaseName": {
+            "type": "string",
+            "description": "Helm release name (default: the entry name).",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "path": {
+            "type": "string",
+            "description": "Chart path in the repo (default addons/<name>).",
+            "pattern": "^(addons|charts)/[a-z0-9][-a-z0-9]*$"
+          },
+          "serverSideDiff": {
+            "type": "boolean",
+            "description": "Argo CD server-side diff (operators/cert-manager own caBundles or defaults)."
+          },
+          "compareOptions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "description": "Option.",
+              "pattern": "^[A-Za-z]+=(true|false)$"
+            },
+            "description": "argocd.argoproj.io/compare-options, e.g. IncludeMutationWebhook=true (#184)."
+          },
+          "ignoreDifferences": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Argo CD ignoreDifferences entries (adds RespectIgnoreDifferences)."
+          },
+          "clusterNameParameters": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Helm parameters set to the cluster name."
+          },
+          "clusterIdParameters": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Helm parameters set to <installation.name>-<cluster name>."
+          },
+          "fleetParameters": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Helm parameters set to {<every platform cluster name>} (sorted helm list)."
+          },
+          "clusterNameFormats": {
+            "type": "object",
+            "description": "Helm parameter -> format with exactly one %s (the cluster name inside fixed text; %% is a literal %).",
+            "additionalProperties": {
+              "type": "string",
+              "description": "Format.",
+              "pattern": "^([^%]|%%)*%s([^%]|%%)*$"
+            }
+          },
+          "installationParameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Helm parameter -> tpl over the installation values."
+          },
+          "clusterServerParameters": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                "url",
+                "host",
+                "port"
+              ]
+            },
+            "description": "Helm parameter -> part of the cluster secret's API server URL."
+          },
+          "clusterLabelParameters": {
+            "type": "object",
+            "description": "Helm parameter -> a cluster secret label's value (else default).",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Cluster secret label key.",
+                  "minLength": 1
+                },
+                "default": {
+                  "type": "string",
+                  "description": "Value when the label is missing (a string: quote it)."
+                }
+              }
+            }
+          },
+          "installationValueFiles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "tpl rendering to a file under values/ (checked after tpl in appset-addons.yaml)."
+            },
+            "description": "Extra value files picked by installation facts (after cni-*)."
+          }
+        }
+      },
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      },
+      "description": "Addon catalog: entry name -> catalog entry."
+    }
+  }
+}

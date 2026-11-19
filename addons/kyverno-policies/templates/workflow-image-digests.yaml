@@ -12,8 +12,6 @@ matchConditions here).
 */ -}}
 {{- $w := .Values.workflowImageDigests }}
 {{- if $w.enabled }}
-{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*-)?$" (toString $w.namespacePrefix)) }}{{ fail (printf "workflowImageDigests.namespacePrefix %q must be a namespace name prefix (e.g. workflows-)" (toString $w.namespacePrefix)) }}{{ end }}
-{{- if not (has (toString $w.failurePolicy) (list "Fail" "Ignore")) }}{{ fail (printf "workflowImageDigests.failurePolicy %q is not Fail or Ignore" (toString $w.failurePolicy)) }}{{ end }}
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:

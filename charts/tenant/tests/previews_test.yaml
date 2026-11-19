@@ -110,7 +110,7 @@ tests:
     set:
       previews.expiredLabel: 'x" .labels }}{{ "'
     asserts:
-      - failedTemplate: { errorMessage: 'previews.expiredLabel "x\" .labels }}{{ \"": letters, digits, space, . _ - only' }
+      - failedTemplate: { errorPattern: "at '/previews/expiredLabel': .* does not match pattern" }
 
   - it: "negative: no preview ApplicationSet without the platform GitHub App (its token comes from the App; #192)"
     set: { secrets.githubGateApp.enabled: false }

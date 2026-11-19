@@ -1,19 +1,6 @@
-{{- /* Invariants: scoped namespace RBAC only (no cluster-wide Secret reads on workload clusters), annotation reload
-strategy (no containers[].env drift under Argo CD SSA), and Pod Security `restricted`. */ -}}
-{{- $r := ((.Values.reloader | default dict).reloader | default dict) -}}
-{{- if or $r.watchGlobally (empty $r.namespaces) -}}
-{{- fail "reloader.reloader: watchGlobally must be false and namespaces non-empty (no cluster-wide Secret RBAC on workload clusters)" -}}
-{{- end -}}
-{{- if ne ($r.reloadStrategy | default "") "annotations" -}}
-{{- fail (printf "reloader.reloader.reloadStrategy (%q) must be \"annotations\" (avoids containers[].env drift under Argo CD ServerSideApply)" ($r.reloadStrategy | default "")) -}}
-{{- end -}}
+{{- /* Cross-field rule only; the single-key invariants (scoped namespace RBAC, annotation reload strategy, Pod Security
+`restricted`) are in values.schema.json. */ -}}
+{{- $r := .Values.reloader.reloader -}}
 {{- if and $r.autoReloadAll (empty $r.resourceLabelSelector) -}}
 {{- fail "reloader.reloader.autoReloadAll needs a resourceLabelSelector (otherwise every workload in the watched namespaces restarts on any ConfigMap/Secret change)" -}}
-{{- end -}}
-{{- $dep := $r.deployment | default dict -}}
-{{- $psc := $dep.securityContext | default dict -}}
-{{- $csc := $dep.containerSecurityContext | default dict -}}
-{{- $drops := (($csc.capabilities | default dict).drop | default list) -}}
-{{- if or (not $r.readOnlyRootFileSystem) (not $psc.runAsNonRoot) (ne (($psc.seccompProfile | default dict).type | default "") "RuntimeDefault") (not (hasKey $csc "allowPrivilegeEscalation")) $csc.allowPrivilegeEscalation (not (has "ALL" $drops)) -}}
-{{- fail "reloader: Pod Security restricted requires readOnlyRootFileSystem=true, securityContext.runAsNonRoot=true, seccompProfile.type=RuntimeDefault, containerSecurityContext.allowPrivilegeEscalation=false, and capabilities.drop=[ALL]" -}}
 {{- end -}}

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "openchoreo-control-plane",
+  "description": "Values of the openchoreo-control-plane wrapper (mgmt). Upstream subchart keys under openchoreo-control-plane are not constrained here; cross-field invariants (hostnames, gateway port, GitHub App wiring) live in templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "openchoreo": {
+      "type": "object",
+      "description": "Installation facts (installation.yaml openchoreo.*).",
+      "properties": {
+        "orgNamespace": {
+          "type": "string",
+          "description": "OpenChoreo organisation namespace on mgmt.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "controlPlane": {
+          "type": "object",
+          "description": "Public endpoints of the control plane.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Base host: Backstage at <host>, API at api.<host>, Thunder at thunder.<host>.",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*(:[0-9]+)?$"
+            },
+            "clusterGatewayURL": {
+              "type": "string",
+              "description": "wss:// URL workload-cluster agents dial (TLS passthrough on gateway.httpsPort).",
+              "minLength": 1,
+              "pattern": "^wss://"
+            }
+          },
+          "required": [
+            "host",
+            "clusterGatewayURL"
+          ]
+        },
+        "observability": {
+          "type": "object",
+          "description": "Observability plane of the installation.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Observability plane installed (== backstage.features.observability.enabled)."
+            },
+            "httpPort": {
+              "type": "integer",
+              "description": "Host port of the observability gateway.",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        }
+      },
+      "required": [
+        "controlPlane"
+      ]
+    },
+    "backstageSecrets": {
+      "type": "object",
+      "description": "ExternalSecret with Backstage's backend secrets.",
+      "properties": {
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
+          "minLength": 1
+        },
+        "remoteKey": {
+          "type": "string",
+          "description": "Store key holding the Backstage secrets.",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "store"
+      ]
+    },
+    "scaffolder": {
+      "type": "object",
+      "description": "Backstage scaffolder integrations.",
+      "properties": {
+        "githubApp": {
+          "type": "object",
+          "description": "GitHub App credentials for repository creation (docs/project-templates.md).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render the ExternalSecret (needs the subchart's GitHub integration, checked in validate.yaml)."
+            },
+            "store": {
+              "type": "string",
+              "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
+              "minLength": 1
+            },
+            "remoteKey": {
+              "type": "string",
+              "description": "Store key of the platform GitHub App.",
+              "minLength": 1
+            },
+            "secretName": {
+              "type": "string",
+              "description": "Secret Backstage reads GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY from.",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            }
+          },
+          "required": [
+            "enabled"
+          ]
+        }
+      }
+    },
+    "gatewayCA": {
+      "type": "object",
+      "description": "Publish the cluster-gateway CA (public part) to fleet for ClusterResourceSets.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the PushSecret/ExternalSecret pair."
+        },
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Namespace that receives the CA copy.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the CA copy.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "sourceSecret": {
+          "type": "string",
+          "description": "cert-manager CA Secret of the chart.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      }
+    },
+    "openchoreo-control-plane": {
+      "type": "object",
+      "description": "Upstream openchoreo-control-plane subchart values (not constrained here)."
+    }
+  },
+  "required": [
+    "openchoreo"
+  ]
+}

@@ -12,7 +12,7 @@ The ApplicationSets' pull request generators use it through tokenRef. No PAT; Ar
 generator fails and degrades this app (#192). */ -}}
 {{- if and (eq .Values.role "mgmt") $pv.enabled (dig "githubGateApp" "enabled" false (.Values.secrets | default dict)) }}
 {{- $t := .Values.previewToken }}
-{{- $name := required "previewToken.secretName is required" $t.secretName }}
+{{- $name := $t.secretName }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -45,7 +45,7 @@ metadata:
 spec:
   appIDRef: { name: {{ $name }}-app, key: app-id }
   installIDRef: { name: {{ $name }}-app, key: installation-id }
-  permissions: {{- toYaml (required "previewToken.permissions is required (least privilege: pull_requests: read)" $t.permissions) | nindent 4 }}
+  permissions: {{- toYaml $t.permissions | nindent 4 }}
   auth:
     privateKey:
       secretRef: { name: {{ $name }}-app, key: private-key }
