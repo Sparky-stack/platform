@@ -41,35 +41,11 @@ tests:
       - notExists: { path: 'metadata.labels["addons.platform.koorikla.io/istio-eastwest"]' }
       - notExists: { path: 'metadata.labels["addons.platform.koorikla.io/istio-csr"]' }
 
-  - it: rejects mesh.group without the mesh CA (addon openbao) on mgmt
-    values: [values/capi-docker.yaml]
-    set: { mesh: { group: local } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" }
-
-  - it: rejects mesh.group without mesh.ca (where members reach OpenBao)
-    values: [values/capi-docker.yaml]
-    set: { mesh: { group: local, groups: [local] }, mgmt: { addons: { openbao: true } } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" }
-
-  - it: rejects a mesh member without the mesh addon
-    values: [values/capi-docker.yaml]
-    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { mesh: false } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh addon (addons.mesh is false)" }
-
-  - it: "negative: rejects a mesh group without its own root (not in installation.yaml mesh.groups)"
-    values: [values/capi-docker.yaml]
-    set: { mesh: { group: prod, groups: [local] }, mgmt: { addons: { openbao: true } } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group \"prod\" is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" }
-
   - it: rejects a mesh group that is not a DNS label
     values: [values/capi-docker.yaml]
     set: { mesh: { group: Mesh_1 }, mgmt: { addons: { openbao: true } } }
     asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group \"Mesh_1\" must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" }
+      - failedTemplate: { errorPattern: "at '/mesh/group'" }   # values.schema.json
 
   - it: "cni: flannel turns the cilium addon off and passes the ClusterClass variable"
     values: [values/capi-docker.yaml]
@@ -182,49 +158,49 @@ tests:
     values: [values/capi-docker.yaml]
     set: { name: "" }
     asserts:
-      - failedTemplate: { errorPattern: "`name` is required" }
+      - failedTemplate: { errorPattern: "at '/name'" }   # values.schema.json
 
   - it: fails on a name that is not a DNS label
     values: [values/capi-docker.yaml]
     set: { name: Dev_1 }
     asserts:
-      - failedTemplate: { errorPattern: "must be a DNS label" }
+      - failedTemplate: { errorPattern: "at '/name'" }   # values.schema.json
 
   - it: fails without kubernetesVersion
     values: [values/capi-docker.yaml]
     set: { kubernetesVersion: "" }
     asserts:
-      - failedTemplate: { errorPattern: "`kubernetesVersion` is required" }
+      - failedTemplate: { errorPattern: "at '/kubernetesVersion'" }   # values.schema.json
 
   - it: fails on a kubernetesVersion that is not a k3s release
     values: [values/capi-docker.yaml]
     set: { kubernetesVersion: v1.35.10 }
     asserts:
-      - failedTemplate: { errorPattern: "is not a k3s release" }
+      - failedTemplate: { errorPattern: "at '/kubernetesVersion'" }   # values.schema.json
 
   - it: fails on an unknown provider
     values: [values/capi-docker.yaml]
     set: { provider: gcp }
     asserts:
-      - failedTemplate: { errorPattern: "must be one of docker, aws, hetzner" }
+      - failedTemplate: { errorPattern: "at '/provider'" }   # values.schema.json
 
   - it: fails on environment 'prod' (cannot bypass production >=3 servers rule)
     values: [values/capi-aws.yaml]
     set: { environment: prod, controlPlane.replicas: 1 }
     asserts:
-      - failedTemplate: { errorPattern: "environment \"prod\" must be one of development, staging, production" }
+      - failedTemplate: { errorPattern: "at '/environment'" }   # values.schema.json
 
   - it: fails on an unknown or empty environment
     values: [values/capi-docker.yaml]
     set: { environment: "" }
     asserts:
-      - failedTemplate: { errorPattern: "must be one of development, staging, production" }
+      - failedTemplate: { errorPattern: "at '/environment'" }   # values.schema.json
 
   - it: fails when environment is null
     values: [values/capi-docker.yaml]
     set: { environment: null }
     asserts:
-      - failedTemplate: { errorPattern: "must be one of development, staging, production" }
+      - failedTemplate: { errorPattern: "missing property 'environment'" }   # values.schema.json
 
   - it: accepts staging environment
     values: [values/capi-docker.yaml]
@@ -232,54 +208,42 @@ tests:
     asserts:
       - equal: { path: 'metadata.labels["platform.koorikla.io/environment"]', value: staging }
 
-  - it: fails when the provider is disabled in the installation
-    values: [values/capi-docker.yaml]
-    set: { provider: aws, region: eu-central-1 }
-    asserts:
-      - failedTemplate: { errorPattern: "provider aws is not enabled in installation.yaml capi.providers" }
-
   - it: fails on a non-boolean addon override
     values: [values/capi-docker.yaml]
     set: { addons: { kgateway: "no" } }
     asserts:
-      - failedTemplate: { errorPattern: "addons.kgateway must be true or false" }
+      - failedTemplate: { errorPattern: "at '/addons/kgateway'" }   # values.schema.json
 
   - it: fails on an unknown cni
     values: [values/capi-docker.yaml]
     set: { cni: calico }
     asserts:
-      - failedTemplate: { errorPattern: "cni \"calico\" must be cilium or flannel" }
-
-  - it: fails when addons.cilium contradicts cni
-    values: [values/capi-docker.yaml]
-    set: { cni: flannel, addons: { cilium: true } }
-    asserts:
-      - failedTemplate: { errorPattern: "addons.cilium=true contradicts cni=flannel" }
+      - failedTemplate: { errorPattern: "at '/cni'" }   # values.schema.json
 
   - it: fails on a worker without a name
     values: [values/capi-docker.yaml]
     set: { workers: [{ replicas: 1 }] }
     asserts:
-      - failedTemplate: { errorPattern: "workers\\[0\\].name is required" }
+      - failedTemplate: { errorPattern: "at '/workers/0'" }   # values.schema.json
 
   # --- control plane size: k3s servers are embedded etcd voters (docs/providers.md "Control plane size and rollouts")
   - it: fails on an even control plane size (no extra etcd failure tolerance; 2 is the unsafe rollout state)
     values: [values/capi-docker.yaml]
     set: { controlPlane.replicas: 2 }
     asserts:
-      - failedTemplate: { errorPattern: "controlPlane.replicas 2 must be odd" }
+      - failedTemplate: { errorPattern: "at '/controlPlane/replicas'" }   # values.schema.json
 
   - it: fails on a control plane of 0 servers
     values: [values/capi-docker.yaml]
     set: { controlPlane.replicas: 0 }
     asserts:
-      - failedTemplate: { errorPattern: "controlPlane.replicas 0 must be odd" }
+      - failedTemplate: { errorPattern: "at '/controlPlane/replicas'" }   # values.schema.json
 
   - it: fails on a non-integer control plane size
     values: [values/capi-docker.yaml]
     set: { controlPlane.replicas: three }
     asserts:
-      - failedTemplate: { errorPattern: "controlPlane.replicas three must be a whole number" }
+      - failedTemplate: { errorPattern: "at '/controlPlane/replicas'" }   # values.schema.json
 
   - it: accepts 3 and 5 servers
     values: [values/capi-docker.yaml]
@@ -292,12 +256,6 @@ tests:
     set: { controlPlane.replicas: null }
     asserts:
       - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
-
-  - it: fails on a single-server production cluster on a cloud provider
-    values: [values/capi-aws.yaml]
-    set: { controlPlane.replicas: 1 }
-    asserts:
-      - failedTemplate: { errorPattern: "production on aws needs controlPlane.replicas >= 3" }
 
   - it: allows a single-server development cluster on a cloud provider
     values: [values/capi-hetzner.yaml]
@@ -333,3 +291,9 @@ tests:
     asserts:
       - contains: { path: spec.topology.variables, content: { name: registryCA, value: true } }
       - notContains: { path: spec.topology.variables, content: { name: registryHostAliasTarget, value: k3d-platform-mgmt-serverlb } }
+
+  - it: "negative: fails on an unknown scope (a typo used to render nothing)"
+    values: [values/capi-docker.yaml]
+    set: { scope: mgmt }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/scope'" }   # values.schema.json

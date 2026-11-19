@@ -1,9 +1,11 @@
 suite: openchoreo ClusterDataPlane + Environments
 templates:
+  - templates/validate.yaml
   - templates/common/openchoreo-dataplane.yaml
   - templates/common/_openchoreo.tpl
 set:
   name: dev1
+  kubernetesVersion: v1.35.10+k3s1   # a valid cluster file (values.schema.json)
   provider: docker
   region: local
   openchoreo.orgNamespace: default
@@ -20,7 +22,7 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: requires a gateway host
-    template: templates/common/openchoreo-dataplane.yaml
+    template: templates/validate.yaml
     set:
       openchoreo.dataPlane.gatewayHost: ""
     asserts:
