@@ -59,6 +59,8 @@ openchoreo:
 registry:
   type: external
   host: ""
+  hostCache:
+    enabled: false            # local: host pull-through caches (hack/registry-cache.sh); bootstrap REGISTRY_CACHE=0 sets false
 dns:
   provider: none              # none | route53 | cloudflare (docs/dns.md)
   domainFilters: []

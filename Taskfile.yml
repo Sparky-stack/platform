@@ -89,6 +89,21 @@ tasks:
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} down'
 
+  cache:status:
+    desc: List the host pull-through registry caches (kept by task down) and their disk use
+    cmds:
+      - '"{{.BASH}}" hack/registry-cache.sh status'
+
+  cache:clean:
+    desc: Remove the host pull-through registry caches and their volumes (next task up pulls from the internet)
+    cmds:
+      - '"{{.BASH}}" hack/registry-cache.sh clean'
+
+  timings:
+    desc: Print the clean-bootstrap phase timings of the running stack (mgmt converged, dev1 provisioned/converged)
+    cmds:
+      - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} timings'
+
   kubeconfig:
     desc: "Write <CLUSTER>.kubeconfig for a CAPD workload cluster, usable from this host (CLUSTER=dev1)"
     requires:

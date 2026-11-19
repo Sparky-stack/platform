@@ -172,15 +172,17 @@ spec:
           {{- if $cfg.serverSideDiff }}
           - ServerSideDiff=true
           {{- end }}
-        # Retry without limit (every 5m at most) on the latest revision: an addon can wait on another app for longer than
+        # Retry without limit (every 1m at most) on the latest revision: an addon can wait on another app for longer than
         # any fixed budget on a clean bootstrap (e.g. ServiceMonitors of cloudnative-pg/crossplane before telemetry's
         # monitoring.coreos.com CRDs exist: 5 failed attempts live, #192), and an operation that gives up stays failed
-        # until the next commit - a manual step. Same policy as the fleet ApplicationSet.
+        # until the next commit - a manual step. Same policy as the fleet ApplicationSet. The 1m cap (was 5m) bounds the idle
+        # time after the missing CRD/webhook appears: with 5m, keda/cloudnative-pg/crossplane on dev1 and cluster-fleet
+        # on mgmt slept up to 5 min after their dependency was healthy (clean bootstrap timeline).
         retry:
           limit: -1
           refresh: true
           backoff:
             duration: 10s
             factor: 2
-            maxDuration: 5m
+            maxDuration: 1m
 {{- end }}

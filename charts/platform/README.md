@@ -183,6 +183,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | openchoreo.orgNamespace | string | `"default"` | Installation-wide OpenChoreo toggles (`openchoreo.*`) passed into catalog parameters. |
 | openchoreo.workflowPlane.enabled | bool | `false` |  |
 | registry.host | string | `""` |  |
+| registry.hostCache.enabled | bool | `false` |  |
 | registry.type | string | `"external"` |  |
 | secrets.githubGateApp.enabled | bool | `false` |  |
 | sourceIntegrity.enabled | bool | `false` | Enables Git commit signature verification for `platform`, `fleet`, and `tenant` `AppProject`s. |

@@ -59,6 +59,8 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
 | `setup` | `mise install` + helm-unittest plugin + git hooks |
 | `doctor` | every tool from `mise.toml` present at the pinned version |
 | `up` / `secrets` / `argocd` / `status` / `ui` / `down` | bootstrap stages (`INST=local` default; `task up INST=aws-example`) |
+| `timings` | phase timings of the running stack: mgmt apps, each workload cluster provisioned and converged ([Bootstrap time](#bootstrap-time-and-registry-caches)) |
+| `cache:status` / `cache:clean` | list / remove the host pull-through registry caches that `down` keeps ([Bootstrap time](#bootstrap-time-and-registry-caches)) |
 | `kubeconfig CLUSTER=dev1` | host-usable kubeconfig of a CAPD workload cluster (see Docker Desktop below) |
 | `set-repo REPO=https://github.com/<you>/platform.git` | point a fork at itself: `repoURL`, `githubOrg`, tenant app repos (`ORG=`, `APPS_ORG=`, `DOCS=1`; docs/forking.md) |
 | `hooks:install` / `hooks:run` | install the git hooks / run every hook on every tracked file, as CI does ([Git hooks](#git-hooks)) |
@@ -305,6 +307,35 @@ Both the k3d mgmt (`bootstrap/k3d-mgmt.yaml`) and the CAPD control planes (Clust
 the short leases until it is re-created; a CAPD cluster gets them through a control-plane rollout.
 Check: `docker logs k3d-platform-mgmt-server-0 2>&1 | grep -c 'leaderelection lost'` and
 `docker inspect k3d-platform-mgmt-server-0 --format '{{.RestartCount}}'` stay 0.
+
+## Bootstrap time and registry caches
+
+A clean `task up` on main @474e8af took 32.9 min to 43 Synced/Healthy apps (20-core host). Argo CD's timeline showed
+where it went: ~100 images pulled from the internet each rebuild (mgmt pulls of 2-5 min each, dev1 ~90 s per wave),
+apps waiting out a 5 min retry backoff after their missing CRD/webhook had appeared (cluster-fleet on mgmt retried at
+5.3 then 10.3 min; keda/cloudnative-pg/crossplane on dev1 at 25.3 then 30.3 min), and dev1's addons idling ~8 min in
+a comparison error because Argo CD registered dev1 before its API served and only retried on the 300 s resync.
+
+What keeps it short now:
+- **Host pull-through caches** (`hack/registry-cache.sh`): one `registry` container per upstream in
+  `installation.yaml` `registry.hostCache.mirrors` (`platform-cache-<upstream, dots as dashes>`, network `kind`, named
+  volume). They belong to no k3d cluster, so `task down` keeps them and a rebuild pulls from local disk. `task up`
+  starts them and hands k3d a k3s `registries.yaml` mirroring each upstream to them; CAPD nodes get the same mirrors
+  from charts/cluster (`capi-registries.yaml`, docker provider only) instead of Harbor's proxy projects for those
+  upstreams. containerd falls back to the upstream when a cache is down. `REGISTRY_CACHE=0 task up` opts out (mgmt pulls
+  direct, CAPD nodes keep Harbor); `task cache:clean` removes containers and volumes (several GiB: check `task
+  cache:status` when disk runs low; below `REGISTRY_CACHE_MIN_FREE_GIB` (default 10) free on a native Linux Docker, `up` skips creating them).
+- **Retry backoff capped at 1m** (ApplicationSets in charts/platform, tenant apps): unlimited retries stay (#199), the
+  idle time after a dependency heals is at most a minute.
+- **Argo CD resync 120 s** (upstream default; jitter 30 s) and upstream processor counts (status 20, operation 10).
+- `task timings` prints the phases from Argo CD and CAPI timestamps (first successful sync per app), so a regression
+  shows which phase grew:
+
+```text
+  mgmt apps converged           14.1 min  (26 apps, last tenant-demo)
+  dev1 provisioned (API up)     13.2 min
+  dev1 apps converged           32.1 min  (17 apps, last crossplane-dev1)
+```
 
 ## Windows notes
 

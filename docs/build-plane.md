@@ -28,7 +28,7 @@ the OpenChoreo API; here the Workload changes only by commit).
 | mgmt | `openchoreo-platform` | default | `ClusterWorkflow`s `go`, `nextjs`, `elixir`, `ruby`, `dockerfile` (component) and `helm-chart` (generic); every ClusterComponentType's `allowedWorkflows` |
 | mgmt | `harbor` | harbor | Harbor 2.15.4 behind Gateway `harbor` (kgateway, HTTPS 9443), Trivy, desired-state Job; `ClusterSecretStore mgmt-harbor` |
 | mgmt | (OpenChoreo) | workflows-default | one Argo Workflow + pods per WorkflowRun, per-run ExternalSecrets; ServiceAccount `workflow-sa` and Role created by the WorkflowRun controller; namespace + default-deny NetworkPolicy from addon openchoreo-workflow-plane |
-| workload | `charts/cluster` + ClusterClass | node OS | k3s `registries.yaml`: Harbor proxy-cache mirrors, robot auth, registry CA; CAPD `/etc/hosts` alias |
+| workload | `charts/cluster` + ClusterClass | node OS | k3s `registries.yaml`: Harbor proxy-cache mirrors (local: host pull-through caches for the upstreams they cover, [dev-environment.md](dev-environment.md#bootstrap-time-and-registry-caches)), robot auth, registry CA; CAPD `/etc/hosts` alias |
 
 ## Build ClusterWorkflows
 
