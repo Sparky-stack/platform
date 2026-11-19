@@ -85,6 +85,21 @@ bootstrap_harness() {
   fake_bin_yq "$BIN"
 }
 
+# kc_valid <file|dir>... -> yes|no (kubeconform's report on stderr when no): kubeconform -strict as hack/test.sh runs
+# it, CRD schemas from $SCHEMAS_DIR (hack/schemas.sh) looked up first so an offline run never asks upstream for them.
+kc_valid() {
+  local out
+  mkdir -p "$SCHEMAS_DIR/.kubeconform-cache"
+  if out=$(kubeconform -cache "$SCHEMAS_DIR/.kubeconform-cache" -strict -summary -kubernetes-version 1.35.0 \
+      -skip CustomResourceDefinition -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \
+      -schema-location default "$@" 2>&1); then
+    echo yes
+  else
+    echo "$out" >&2
+    echo no
+  fi
+}
+
 # --- renders: reuse hack/test.sh's (RENDERED_DIR) when present ------------------------------------------------------
 
 # render_platform <inst> <out>: reuse RENDERED_DIR/platform-<inst>.yaml if present, else helm template charts/platform.

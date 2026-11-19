@@ -26,13 +26,7 @@ FIX=hack/tests/crossplane
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 [[ -d "$SCHEMAS_DIR/rds.aws.m.upbound.io" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
 [[ -d "$ADDON/charts" ]] || helm dependency build "$ADDON" >/dev/null
-KC_ARGS=(-strict -summary -kubernetes-version 1.35.0 -skip CustomResourceDefinition
-  -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" -schema-location default)
-kc() {   # kc <file> <label>
-  local out
-  if out=$(kubeconform "${KC_ARGS[@]}" "$1" 2>&1); then assert_eq ok ok "$2 passes kubeconform -strict ($out)"
-  else echo "$out" >&2; assert_eq invalid ok "$2 passes kubeconform -strict"; fi
-}
+kc() { assert_eq "$(kc_valid "$1")" yes "$2 passes kubeconform -strict"; }   # kc <file> <label>
 COMP=packages/postgresql/apis/postgresql/composition.yaml
 CFG_RE='^ghcr\.io/koorikla/platform/postgresql:[a-z0-9.-]+@sha256:[0-9a-f]{64}$'
 PKG_RE='^(xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+|ghcr\.io/koorikla/platform/[a-z0-9_-]+:[a-z0-9.-]+)@sha256:[0-9a-f]{64}$'
