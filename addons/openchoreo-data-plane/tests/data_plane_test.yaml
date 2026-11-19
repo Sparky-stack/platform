@@ -148,11 +148,16 @@ tests:
     template: templates/capability-gate.yaml
     asserts:
       - hasDocuments: { count: 0 }
-  - it: ships the PriorityClasses ClusterTrait resilience assigns, production preempting, the rest never
+  - it: ships the PriorityClasses ClusterTrait resilience assigns, both Never preempting so platform pods cannot be evicted
     template: templates/priority-classes.yaml
     asserts:
       - hasDocuments: { count: 2 }
-      - equal: { path: preemptionPolicy, value: PreemptLowerPriority }
+      - equal: { path: value, value: 100000 }
         documentSelector: { path: metadata.name, value: app-production }
+      - equal: { path: preemptionPolicy, value: Never }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: "Force=true,Replace=true" }
+        documentSelector: { path: metadata.name, value: app-production }
+      - equal: { path: value, value: 1000 }
+        documentSelector: { path: metadata.name, value: app-standard }
       - equal: { path: preemptionPolicy, value: Never }
         documentSelector: { path: metadata.name, value: app-standard }

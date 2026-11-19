@@ -1,13 +1,18 @@
-{{- /* PriorityClasses for OpenChoreo components (#251, docs/openchoreo.md "Resilience defaults"). ClusterTrait resilience
-(addon openchoreo-platform) sets app-production on production pods and app-standard everywhere else, so under node
-pressure production pods preempt the others, never the other way round. Both stay far below system-cluster-critical:
-platform controllers always win. A pod naming a missing class is rejected, hence they ship with the data plane. */ -}}
+{{- /* PriorityClasses for OpenChoreo components (#251, #276, docs/openchoreo.md "Resilience defaults"). ClusterTrait
+resilience (addon openchoreo-platform) sets app-production on production pods and app-standard everywhere else. Both set
+preemptionPolicy: Never so app priority only orders the pending scheduling queue (production ahead of non-production)
+and never evicts running pods — protecting platform controllers that run at default priority 0 on workload clusters. A
+pod naming a missing class is rejected, hence they ship with the data plane. */ -}}
 {{- range $name, $pc := .Values.priorityClasses }}
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: {{ $name }}
+  annotations:
+    # value and preemptionPolicy are immutable: a change must delete + recreate the class. Running pods keep their
+    # resolved priority; new pods are rejected only for the moment the class is absent (Argo retries them).
+    argocd.argoproj.io/sync-options: Force=true,Replace=true
 value: {{ $pc.value }}
 preemptionPolicy: {{ $pc.preemptionPolicy }}
 globalDefault: false

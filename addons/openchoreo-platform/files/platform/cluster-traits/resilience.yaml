@@ -6,7 +6,7 @@
 #   everywhere           topologySpreadConstraints over nodes and zones (maxSkew 1, best effort), preStop sleep +
 #                        terminationGracePeriodSeconds (the gateway stops routing before the process gets SIGTERM)
 #   staging, production  PodDisruptionBudget maxUnavailable 1 when replicas >= 2 (a drain never takes all pods)
-#   production           PriorityClass app-production (preempts non-production pods); elsewhere app-standard
+#   production           PriorityClass app-production (queue priority ahead of app-standard; both Never preempt)
 #                        (both shipped to every data plane by addon openchoreo-data-plane)
 #
 # The label resilience.platform.koorikla.io/min-replicas states the replica floor the component asked for: autoscaler
