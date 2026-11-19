@@ -72,6 +72,8 @@ echo "  checked $n addon renders"
 # 3. No stale or reason-less allowlist entries.
 while IFS=$'\t' read -r a k nm reason; do
   assert_nonempty "$reason" "allowlist $a $k/$nm has a reason"
+  [[ -d "addons/$a" ]] && known=yes || known=no
+  assert_eq "$known" "yes" "allowlist $a $k/$nm names an existing addon"
   # Scoped PR CI (task test:changed) renders only the changed addons: judge staleness only for addons rendered here.
   grep -qxF "$a" "$TMP/rendered" || continue
   grep -qxF "$a $k $nm" "$TMP/seen" && seen=yes || seen=no
