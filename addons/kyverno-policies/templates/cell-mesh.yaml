@@ -11,6 +11,8 @@ so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
                                             gateway (and pod-to-pod traffic within a cell) is dropped by the CNI.
                                             Peers, not ports: inside the tunnel the endpoint port is no longer checked
                                             by the CNI, the peer set stays the same (staging never reaches production).
+                                            Plus kubelet probes, which ambient SNATs to 169.254.7.127 (IPv6
+                                            fd16:9254:7127:1337:ffff:ffff:ffff:ffff): without it they are dropped too.
   GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` in every enrolled cell: mtls STRICT, so ztunnel
                                             rejects plaintext from clients outside the mesh (kubelet probes are exempt);
                                             PERMISSIVE while the namespace carries <mtls.optOutLabel>=permissive (set per
@@ -32,7 +34,8 @@ metadata:
     policies.kyverno.io/title: HBONE into ambient OpenChoreo cells
     policies.kyverno.io/description: >-
       NetworkPolicy platform-mesh-hbone in every ambient-enrolled cell namespace: Istio HBONE (tcp 15008) to component
-      pods from the peers OpenChoreo's per-component NetworkPolicy admits (same namespace, platform system components).
+      pods from the peers OpenChoreo's per-component NetworkPolicy admits (same namespace, platform system components),
+      and kubelet probes from ambient's link-local SNAT source 169.254.7.127.
 spec:
   evaluation:
     synchronize:
@@ -82,6 +85,13 @@ spec:
                         - { key: openchoreo.dev/system-component, operator: Exists }
                 ports:
                   - { port: 15008, protocol: TCP }
+              # Kubelet probes: istio-cni SNATs them to this link-local source on enrolled pods (Istio "Ambient, health
+              # probes, and Kubernetes NetworkPolicy"). Cilium sees it as world, not host, so OpenChoreo's policy drops
+              # every probe (startup probe kills, CrashLoopBackOff). Any port: probe ports are per component. Nothing
+              # else can use the source: it is host-local (never routed) and Cilium refuses spoofed pod sources.
+              - from:
+                  - ipBlock: { cidr: 169.254.7.127/32 }
+                  - ipBlock: { cidr: "fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128" }
 {{- if $ae.mtls.strict }}
 ---
 apiVersion: policies.kyverno.io/v1

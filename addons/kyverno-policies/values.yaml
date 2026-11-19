@@ -72,7 +72,7 @@ ambientEnrollment:
       - { key: openchoreo.dev/project, operator: Exists }
       - { key: openchoreo.dev/environment, operator: Exists }
   # Mesh policy of enrolled cells (templates/cell-mesh.yaml, #53). Always: NetworkPolicy platform-mesh-hbone (HBONE
-  # tcp 15008 from the peers OpenChoreo admits). mtls.strict: PeerAuthentication `default` STRICT, so plaintext from
+  # tcp 15008 from the peers OpenChoreo admits, kubelet probes from ambient's SNAT source 169.254.7.127). mtls.strict: PeerAuthentication `default` STRICT, so plaintext from
   # outside the mesh is refused. Needs the data-plane gateway and every in-cluster client of cell pods in the mesh
   # (hack/tests/test_gitops_contracts.sh checks the gateway and the platform clients). A cell keeps PERMISSIVE with
   # the namespace label <optOutLabel>=permissive (ProjectReleaseBinding namespaceLabels).
