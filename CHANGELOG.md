@@ -2,6 +2,30 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.3.0](https://github.com/koorikla/platform/compare/v0.2.0...v0.3.0) (2026-11-19)
+
+
+### Features
+
+* **addons:** values.schema.json for crossplane, mesh, openbao, harbor, thunder (Wave C) ([#308](https://github.com/koorikla/platform/issues/308)) ([604182e](https://github.com/koorikla/platform/commit/604182e3f32af48a88945fbd20aaf0dd5fc16304)), closes [#116](https://github.com/koorikla/platform/issues/116)
+* **addons:** values.schema.json for kyverno-policies, secret-stores, external-dns, argo-events ([#116](https://github.com/koorikla/platform/issues/116)) ([#309](https://github.com/koorikla/platform/issues/309)) ([bc7f467](https://github.com/koorikla/platform/commit/bc7f467168690a5fc729abed492c7007a49fbeb5))
+* **addons:** values.schema.json for observability-plane, workflow-plane, telemetry (Wave C) ([#305](https://github.com/koorikla/platform/issues/305)) ([f17ae7b](https://github.com/koorikla/platform/commit/f17ae7b20afe4339f062f5b4a9555f271b445069))
+* **cluster:** values.schema.json + one templates/validate.yaml for charts/cluster ([#306](https://github.com/koorikla/platform/issues/306)) ([966abda](https://github.com/koorikla/platform/commit/966abda897f4b8f186140244c053150ca57bf81b))
+* **mesh:** single-source the ambient probe SNAT address + Istio bump check ([#287](https://github.com/koorikla/platform/issues/287)) ([#288](https://github.com/koorikla/platform/issues/288)) ([7cf486c](https://github.com/koorikla/platform/commit/7cf486cd56b5fde5631e0157f04efc332d136e9e))
+* **openchoreo:** values.schema.json for openchoreo-platform/control-plane/data-plane (Wave C) ([#307](https://github.com/koorikla/platform/issues/307)) ([0a0fa9b](https://github.com/koorikla/platform/commit/0a0fa9b139cbb5fa5637bcf0cb7d817853065d98)), closes [#116](https://github.com/koorikla/platform/issues/116)
+* **templates:** GitHub org + manifest-created scaffolder App, documented (Refs [#109](https://github.com/koorikla/platform/issues/109)) ([#275](https://github.com/koorikla/platform/issues/275)) ([ab6e383](https://github.com/koorikla/platform/commit/ab6e38348badffd6c4f819d2896f1fb74a7fef06))
+* values.schema.json for platform (catalog shape), tenant, preview and small addons + schema contract test ([#310](https://github.com/koorikla/platform/issues/310)) ([2770721](https://github.com/koorikla/platform/commit/27707215e6f5721168efbde2a393e5c51c94ce52))
+
+
+### Bug Fixes
+
+* **kyverno-policies:** admit kubelet probes from ambient's SNAT source in every cell ([#286](https://github.com/koorikla/platform/issues/286)) ([00b5d16](https://github.com/koorikla/platform/commit/00b5d16b5ea853aff3483b6bab782a86f71804db))
+* **kyverno:** 60s leader leases so etcd stalls do not restart every controller ([#284](https://github.com/koorikla/platform/issues/284)) ([81cfccb](https://github.com/koorikla/platform/commit/81cfccb0a71ece18f32fb5cf0c5b2f567611dfb6))
+* **openbao:** seed the demo tenant secret on every clean bootstrap with the tenant's writer identity ([#285](https://github.com/koorikla/platform/issues/285)) ([9130ccd](https://github.com/koorikla/platform/commit/9130ccd2996806c22b10f87035437c2894114ef4))
+* **test:** hook allowlist entries must name an existing addon ([#299](https://github.com/koorikla/platform/issues/299)) ([#300](https://github.com/koorikla/platform/issues/300)) ([a3a7657](https://github.com/koorikla/platform/commit/a3a76575d74aecfa3689fec1df714d6c215988c6))
+* **test:** hook allowlist staleness only judged for addons rendered in this run (scoped PR CI) ([#298](https://github.com/koorikla/platform/issues/298)) ([4990cae](https://github.com/koorikla/platform/commit/4990caedde4425430648c2d13ffc80809b39eaf4))
+* **test:** Windows Git Bash portability (CRLF, process substitution) ([#304](https://github.com/koorikla/platform/issues/304)) ([821f9f7](https://github.com/koorikla/platform/commit/821f9f712137ef74b168c4d6274005365afd543a))
+
 ## [0.2.0](https://github.com/koorikla/platform/compare/v0.1.0...v0.2.0) (2026-11-19)
 
 
