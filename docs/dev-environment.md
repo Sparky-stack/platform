@@ -195,7 +195,8 @@ userlands; helpers live in [`hack/lib/portable.sh`](../hack/lib/portable.sh).
 `assert_eq`/`assert_match`/`assert_nonempty` + `finish` (the `N passed` line), `kc_valid` (kubeconform with the CRD
 schemas, as `hack/test.sh` runs it), and a fake-tool harness: `fake_bin_yq` + `run_isolated` run a script against fakes
 in `$BIN` with a scrubbed environment, `bootstrap_harness` lets a suite call single `bootstrap.sh` functions.
-`hack/deps.sh` rebuilds only charts whose `charts/` differs from their `Chart.lock` (missing or extra tarballs, or a tarball that differs from a digest pinned in the
+`hack/deps.sh` rebuilds only charts whose `charts/` differs from their `Chart.lock` (missing or extra tarballs, or a
+tarball that differs from a digest pinned in the
 `Chart.yaml` annotation `platform.koorikla.io/dependency-digests`) and retries downloads. It registers the https repositories
 those charts use in a throwaway repository config (`HELM_REPOSITORY_CONFIG`), so a stale or retired repository in your
 own helm config cannot fail it. CI caches the chart tarballs keyed on every `Chart.lock`.
