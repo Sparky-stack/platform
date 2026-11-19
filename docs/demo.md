@@ -351,20 +351,27 @@ kubectl --kubeconfig dev1.kubeconfig get issuers,certificates -n istio-system
 kubectl --kubeconfig dev1.kubeconfig get ns -L istio.io/dataplane-mode | grep dp-
 kubectl --context k3d-platform-mgmt get clustersecretstores
 kubectl --kubeconfig dev1.kubeconfig get clustersecretstores
+# app secret: hello-world GREETING_SECRET from the project's own OpenBao mount (SecretReference in the app repo)
+NS=$(kubectl --kubeconfig dev1.kubeconfig get ns -l openchoreo.dev/project=demo,openchoreo.dev/environment=development -o name | cut -d/ -f2)
+kubectl --kubeconfig dev1.kubeconfig -n "$NS" get secretstore,externalsecret
 ```
 
 Expected: Issuer `openbao-mesh` (Vault issuer) `READY True` and Certificate `istiod` `READY True` on each mesh member;
 app namespaces in ambient mode; ClusterSecretStores `Ready True` on mgmt (`platform`, `mgmt-*`) and `default` on the
-workload clusters.
+workload clusters; in the development cell namespace `SecretStore openbao-tenant` and the hello-world ExternalSecret
+`READY True` (store `openbao-tenant`, refresh 15s).
 
 Talking points:
 - Istio ambient: ztunnel gives every app pod mTLS without sidecars; istio-csr on each member asks OpenBao on mgmt to
   sign, scoped to that cluster's PKI role with 10-minute tokens.
-- No secret is in Git; ESO pulls from the platform store; per-tenant stores are next (#96).
+- No secret is in Git: hello-world's repo holds a `SecretReference` (a pointer), the value was written to
+  `kv-tenant-demo` with the project's writer identity, and each cell namespace can read only its own project's mount
+  (docs/openchoreo.md "Application secrets").
 
 Fallback: if `task demo:check` does not show "OpenBao-issued mesh certificates" as PASS (e.g. right after a restart
 of OpenBao or istiod), show ambient enrollment, the ClusterSecretStores and the design in docs/architecture.md; do not
-debug the CA live. Per-tenant SecretStores on OpenBao are **pending #96**.
+debug the CA live. If row "hello-world reads GREETING_SECRET from OpenBao" fails, the demo value was not written
+(docs/multicluster.md "Writing a secret", key `hello-world`, property `greeting`).
 
 ## 9. App with a database
 
