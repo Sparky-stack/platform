@@ -108,6 +108,7 @@ Wrapper chart for `argo-events` (`2.4.28` / `v1.9.11`) on `mgmt`. Runs the platf
 
 ## Day-2 notes
 
+- A rejected render names the bad value: `values.schema.json` checks types, formats and enums (Helm prints `at '/<path>'`); cross-field rules live in `templates/validate.yaml`.
 - Triaging Falco critical escalations and blocked promotion triggers: [incidents](../../docs/runbooks/incidents.md#falco-critical-alert) and [promotion gate failing closed](../../docs/runbooks/incidents.md#promotion-gate-failing-closed).
 
 ## Links

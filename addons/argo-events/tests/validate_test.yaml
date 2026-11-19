@@ -14,7 +14,7 @@ tests:
   - it: rejects an unknown workflowPlane mode
     set: { workflowPlane: maybe }
     asserts:
-      - failedTemplate: { errorMessage: 'workflowPlane: "maybe" is not auto, true or false' }
+      - failedTemplate: { errorPattern: "/workflowPlane': value must be one of" }
 
   - it: an EventBus version without pinned images fails rendering
     set: { eventBus.natsVersion: "2.9.16" }
@@ -25,7 +25,7 @@ tests:
   - it: rejects a cluster name that is not a DNS label
     set: { falco.clusters: [dev1, "Dev_1"] }
     asserts:
-      - failedTemplate: { errorMessage: 'falco.clusters: "Dev_1" is not a cluster name (DNS-1123 label)' }
+      - failedTemplate: { errorPattern: "/falco/clusters/1': 'Dev_1' does not match pattern" }
 
   - it: an empty cluster list fails the render (the ApplicationSet generates it)
     set: { falco.clusters: [] }
@@ -40,7 +40,7 @@ tests:
   - it: rejects an unknown minimum priority
     set: { falco.minimumPriority: severe }
     asserts:
-      - failedTemplate: { errorMessage: 'falco.minimumPriority "severe" is not a Falco priority' }
+      - failedTemplate: { errorPattern: "/falco/minimumPriority': 'severe' does not match pattern" }
 
   - it: auto-build webhook refuses to run without an HMAC secret (unsigned payloads would be accepted)
     set: { openchoreo.workflowPlane.autoBuild: webhook, secrets.githubGateApp.enabled: true, autoBuildWebhook.secret.key: "" }
@@ -56,3 +56,15 @@ tests:
     set: { autoBuildWebhook.secret.key: "", installation.githubOrg: https://gitlab.com/acme }
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: needs openchoreo.controlPlane.host (routes are <hostPrefix>.<host>)
+    set:
+      openchoreo.controlPlane.host: null
+    asserts:
+      - failedTemplate: { errorPattern: "/openchoreo/controlPlane': missing property 'host'" }
+
+  - it: needs autoBuildWebhook.workflowTemplate
+    set:
+      autoBuildWebhook.workflowTemplate: ""
+    asserts:
+      - failedTemplate: { errorPattern: "/autoBuildWebhook/workflowTemplate': minLength" }
