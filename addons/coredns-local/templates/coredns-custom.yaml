@@ -1,8 +1,8 @@
 {{- /* enabled: false on byo clusters (values/provider-byo.yaml) unless their installation shares the local docker
 network (installations/local/addons/coredns-local/values.yaml). */ -}}
 {{- if .Values.enabled }}
-{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
-{{- $target := required "rewrite.target is required" .Values.rewrite.target }}
+{{- $host := .Values.openchoreo.controlPlane.host }}
+{{- $target := .Values.rewrite.target }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
