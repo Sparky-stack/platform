@@ -128,6 +128,7 @@ charts/preview/                 one PR preview environment (Environment + bindin
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, operations + runbooks/, one doc per area, diagrams
+packages/<name>/                Crossplane Configuration packages (platform APIs: XRD + Composition), own release
 templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each
 hack/                           tests and helper scripts (task test); hack/lib/portable.sh
 mise.toml, Taskfile.yml         pinned toolchain, cross-platform entrypoints
