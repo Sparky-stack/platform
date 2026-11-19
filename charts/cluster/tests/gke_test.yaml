@@ -1,5 +1,6 @@
 suite: provider gcp-gke - GKE via CAPG (ClusterClass gke-managed), rendered from the fleet file
 templates:
+  - templates/validate.yaml
   - templates/common/capi-cluster.yaml
   - templates/common/argocd-cluster-secret.yaml
   - templates/common/capi-registries.yaml
@@ -76,15 +77,15 @@ tests:
       - notMatchRegex: { path: spec.target.template.data.config, pattern: 'client-certificate-data|client-key-data|token' }
       - equal: { path: 'spec.target.template.metadata.labels["platform.koorikla.io/provider"]', value: gcp-gke }
 
-  # --- render-time guards (capi-registries.yaml renders first and runs capi.validate) -------------------------------
+  # --- render-time guards (values.schema.json, templates/validate.yaml) -------------------------------------------
   - it: rejects cni cilium (CAPG v1.13.1 cannot request GKE Dataplane V2)
     set: { cni: cilium }
     template: templates/common/capi-registries.yaml
     asserts:
-      - failedTemplate: { errorMessage: 'cluster prod-euw1: cni "cilium" is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE''s VPC-native networking)' }
+      - failedTemplate: { errorPattern: "at '/cni'" }   # values.schema.json
 
   - it: rejects switching the cilium addon on (it follows cni, and gcp-gke has no Cilium)
-    template: templates/common/capi-registries.yaml
+    template: templates/validate.yaml
     set: { addons.cilium: true }
     asserts:
       - failedTemplate: { errorMessage: "cluster prod-euw1: addons.cilium=true contradicts cni=gke (the cilium addon follows `cni`; drop addons.cilium)" }
@@ -94,17 +95,17 @@ tests:
     set: { cni: gke }
     template: templates/common/capi-registries.yaml
     asserts:
-      - failedTemplate: { errorMessage: 'cluster dev-fsn1: cni "gke" must be cilium or flannel' }
+      - failedTemplate: { errorPattern: "at '/cni'" }   # values.schema.json
 
   - it: rejects controlPlane.replicas (managed control plane)
     set: { controlPlane.replicas: 3 }
-    template: templates/common/capi-registries.yaml
+    template: templates/validate.yaml
     asserts:
       - failedTemplate: { errorMessage: "cluster prod-euw1: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" }
 
   - it: rejects controlPlane.machineType (managed control plane)
     set: { controlPlane.machineType: e2-standard-4 }
-    template: templates/common/capi-registries.yaml
+    template: templates/validate.yaml
     asserts:
       - failedTemplate: { errorMessage: "cluster prod-euw1: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" }
 
@@ -112,22 +113,22 @@ tests:
     set: { kubernetesVersion: v1.35.10+k3s1 }
     template: templates/common/capi-registries.yaml
     asserts:
-      - failedTemplate: { errorMessage: 'cluster prod-euw1: kubernetesVersion "v1.35.10+k3s1" is not a GKE version (vX.Y.Z) for provider gcp-gke' }
+      - failedTemplate: { errorPattern: "at '/kubernetesVersion'" }   # values.schema.json
 
   - it: rejects a cluster without node pools
     set: { workers: [] }
     template: templates/common/capi-registries.yaml
     asserts:
-      - failedTemplate: { errorMessage: "cluster prod-euw1: gcp-gke needs at least one entry in workers (a GKE node pool)" }
+      - failedTemplate: { errorPattern: "at '/workers'" }   # values.schema.json
 
   - it: requires providerSpec.project
     set: { providerSpec.project: "" }
     template: templates/common/capi-registries.yaml
     asserts:
-      - failedTemplate: { errorMessage: "cluster prod-euw1: providerSpec.project (GCP project id) is required for gcp-gke" }
+      - failedTemplate: { errorPattern: "at '/providerSpec/project'" }   # values.schema.json
 
   - it: requires CAPG in the installation (capi.providers.gcp)
     set: { capi.providers.gcp: false }
-    template: templates/common/capi-registries.yaml
+    template: templates/validate.yaml
     asserts:
       - failedTemplate: { errorMessage: "cluster prod-euw1: provider gcp-gke needs capi.providers.gcp: true in installation.yaml (CAPG)" }

@@ -16,11 +16,6 @@ PreSync hook below the setup Job's weight (-5), like upstream's bootstrap Config
 */ -}}
 {{- $on := .Values.bootstrapSecret.aiAgentClients | default list }}
 {{- $scripts := dict "rca" "53-rca-agent-client.yaml" "finops" "60-finops-agent-client.yaml" }}
-{{- range $on }}
-{{- if not (hasKey $scripts .) }}
-{{- fail (printf "bootstrapSecret.aiAgentClients: %q is not one of rca, finops" .) }}
-{{- end }}
-{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -8,6 +8,7 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
+- Values are checked by `values.schema.json` (`registry.type` must be `harbor`, `registry.host` format, `secrets.store` and other platform keys; `helm` prints the failing path). Cross-field rules (upstream literals vs `registry.host`, gateway, token Secret, proxy-cache endpoints) are in `templates/validate.yaml`.
 - Database/blob backups and node registry secret recovery: [backup and restore](../../docs/runbooks/backup-restore.md#5-harbor-harbor) and [break-glass](../../docs/runbooks/break-glass.md#blocked-cluster-sync-on-node-registry-secret).
 {{- end -}}
 

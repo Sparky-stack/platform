@@ -1,69 +1,7 @@
 {{- /*
 CAPI topology Cluster in namespace fleet (class k3s-<provider>, or gke-managed for gcp-gke; skipped for byo).
-Shared helpers: capi.validate, capi.gke, capi.byo, capi.labels, capi.registry.harbor.
+Shared helpers (checks: templates/validate.yaml): capi.gke, capi.byo, capi.labels, capi.registry.harbor.
 */ -}}
-{{- define "capi.validate" -}}
-{{- $v := .Values -}}
-{{- $gke := eq (include "capi.gke" .) "true" -}}
-{{- $byo := eq (include "capi.byo" .) "true" -}}
-{{- $k3s := not (or $gke $byo) -}}
-{{- $dns := "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$" -}}
-{{- $cp := $v.controlPlane | default dict -}}
-{{- $cpSet := or (not (kindIs "invalid" $cp.replicas)) (not (empty $cp.machineType)) -}}
-{{- $replicas := kindIs "invalid" $cp.replicas | ternary 1 $cp.replicas -}}
-{{- $addons := $v.addons | default dict -}}
-{{- $mesh := $v.mesh | default dict -}}
-{{- $mg := $mesh.group | default "" -}}
-{{- $providers := ($v.capi | default dict).providers | default dict -}}
-{{- $pkey := eq (toString $v.provider) "gcp-gke" | ternary "gcp" (toString $v.provider) -}}
-{{- $env := kindIs "invalid" $v.environment | ternary "" (toString $v.environment) -}}
-{{- $checks := list
-  (list (not $v.name) "cluster: `name` is required (installations/<inst>/clusters/<name>.yaml)")
-  (list (not (regexMatch $dns (toString $v.name))) (printf "cluster: name %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name))
-  (list (not (has $v.provider (list "docker" "aws" "hetzner" "gcp-gke" "byo"))) (printf "cluster %s: provider %q must be one of docker, aws, hetzner, gcp-gke, byo" $v.name $v.provider))
-  (list (and $byo $cpSet) (printf "cluster %s: controlPlane does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
-  (list (and $byo (not (empty $v.kubernetesVersion))) (printf "cluster %s: kubernetesVersion does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
-  (list (and $byo (not (empty $v.providerSpec))) (printf "cluster %s: providerSpec does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
-  (list (and $byo (not (empty $v.workers))) (printf "cluster %s: workers does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
-  (list (and $gke (not $v.kubernetesVersion)) (printf "cluster %s: `kubernetesVersion` is required (GKE version, e.g. v1.35.1)" $v.name))
-  (list (and $gke (not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+$" (toString $v.kubernetesVersion)))) (printf "cluster %s: kubernetesVersion %q is not a GKE version (vX.Y.Z) for provider gcp-gke" $v.name $v.kubernetesVersion))
-  (list (and $k3s (not $v.kubernetesVersion)) (printf "cluster %s: `kubernetesVersion` is required (k3s release, e.g. v1.35.10+k3s1)" $v.name))
-  (list (and $k3s (not (regexMatch "^v[0-9]+\\.[0-9]+\\.[0-9]+\\+k3s[0-9]+$" (toString $v.kubernetesVersion)))) (printf "cluster %s: kubernetesVersion %q is not a k3s release (vX.Y.Z+k3sN)" $v.name $v.kubernetesVersion))
-  (list (and $gke (not (index $providers "gcp"))) (printf "cluster %s: provider gcp-gke needs capi.providers.gcp: true in installation.yaml (CAPG)" $v.name))
-  (list (and (not $byo) (hasKey $providers $pkey) (not (index $providers $pkey))) (printf "cluster %s: provider %s is not enabled in installation.yaml capi.providers" $v.name $v.provider))
-  (list (and (not (has $v.provider (list "docker" "byo"))) (not $v.region)) (printf "cluster %s: `region` is required for provider %s" $v.name $v.provider))
-  (list (not (and (kindIs "string" $v.environment) (has $env (list "development" "staging" "production")))) (printf "cluster %s: environment %q must be one of development, staging, production" $v.name $env))
-  (list (and $gke (ne (toString $v.cni) "gke")) (printf "cluster %s: cni %q is not available on gcp-gke - CAPG v1.13.1 cannot enable GKE Dataplane V2 (Cilium); set cni: gke (GKE's VPC-native networking)" $v.name $v.cni))
-  (list (and $byo (not (regexMatch $dns (toString $v.cni)))) (printf "cluster %s: cni %q must be a DNS label naming the cluster's CNI (cilium, flannel, calico, ...)" $v.name (toString $v.cni)))
-  (list (and $byo (eq (toString (index $addons "cilium")) "true")) (printf "cluster %s: addons.cilium cannot be true on provider byo - the platform installs a CNI only at a cluster's birth (docs/networking.md); drop addons.cilium" $v.name))
-  (list (and $k3s (not (has $v.cni (list "cilium" "flannel")))) (printf "cluster %s: cni %q must be cilium or flannel" $v.name $v.cni))
-  (list (and (not $byo) (hasKey $addons "cilium") (ne (index $addons "cilium") (eq (toString $v.cni) "cilium"))) (printf "cluster %s: addons.cilium=%v contradicts cni=%s (the cilium addon follows `cni`; drop addons.cilium)" $v.name (index $addons "cilium") $v.cni))
--}}
-{{- range $addon, $on := $addons -}}
-{{- $checks = append $checks (list (not (kindIs "bool" $on)) (printf "cluster %s: addons.%s must be true or false" $v.name $addon)) -}}
-{{- end -}}
-{{- $checks = concat $checks (list
-  (list (and $byo (not (empty $mg))) (printf "cluster %s: mesh.group is not available on provider byo yet (#174): drop mesh.group" $v.name))
-  (list (and (not (empty $mg)) (not (regexMatch $dns (toString $mg)))) (printf "cluster %s: mesh.group %q must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" $v.name $mg))
-  (list (and (not (empty $mg)) (eq (toString (index $addons "mesh")) "false")) (printf "cluster %s: mesh.group needs the mesh addon (addons.mesh is false)" $v.name))
-  (list (and (not (empty $mg)) (not (index (($v.mgmt | default dict).addons | default dict) "openbao"))) (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name))
-  (list (and (not (empty $mg)) (not (has $mg ($mesh.groups | default list)))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
-  (list (and (not (empty $mg)) (not (($mesh.ca | default dict).host))) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))
-  (list (and $gke $cpSet) (printf "cluster %s: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" $v.name))
-  (list (and $gke (not $v.workers)) (printf "cluster %s: gcp-gke needs at least one entry in workers (a GKE node pool)" $v.name))
-  (list (and $gke (not (($v.providerSpec | default dict).project))) (printf "cluster %s: providerSpec.project (GCP project id) is required for gcp-gke" $v.name))
-  (list (and $k3s (not (regexMatch "^[0-9]+$" (toString $replicas)))) (printf "cluster %s: controlPlane.replicas %v must be a whole number (1, 3, 5)" $v.name $replicas))
-  (list (and $k3s (or (lt (int $replicas) 1) (eq (mod (int $replicas) 2) 0))) (printf "cluster %s: controlPlane.replicas %v must be odd (1, 3, 5): k3s servers are embedded etcd voters" $v.name $replicas))
-  (list (and $k3s (ne (toString $v.provider) "docker") (eq $env "production") (lt (int $replicas) 3)) (printf "cluster %s: production on %s needs controlPlane.replicas >= 3 - a single-server rollout ends with an unsafe 2 -> 1 etcd member removal (docs/providers.md)" $v.name $v.provider))
-) -}}
-{{- range $i, $w := $v.workers -}}
-{{- $checks = append $checks (list (not $w.name) (printf "cluster %s: workers[%d].name is required" $v.name $i)) -}}
-{{- end -}}
-{{- range $c := $checks -}}
-{{- if index $c 0 -}}{{- fail (index $c 1) -}}{{- end -}}
-{{- end -}}
-{{- end }}
-
 {{- define "capi.gke" -}}{{ eq (toString .Values.provider) "gcp-gke" | toString }}{{- end }}
 {{- define "capi.byo" -}}{{ eq (toString .Values.provider) "byo" | toString }}{{- end }}
 

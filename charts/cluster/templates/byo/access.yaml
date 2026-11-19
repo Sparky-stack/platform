@@ -1,7 +1,6 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* provider byo: ExternalSecret fleet/<name>-kubeconfig (wave -1), ClusterSecretStore byo-<name>, and byo.pushSecret helper. */ -}}
 {{- if eq (include "capi.byo" .) "true" }}
-{{- include "capi.validate" . }}
 {{- $name := .Values.name }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret

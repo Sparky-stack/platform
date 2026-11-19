@@ -73,7 +73,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"    # before istio-csr's Deployment and the istiod Certificate
 spec:
   vault:
-    server: {{ printf "https://%s:%v" (required "mesh.ca.host is required (installation.yaml)" $ca.host) (required "mesh.ca.port is required (installation.yaml)" $ca.port) | quote }}
+    server: {{ printf "https://%s:%v" $ca.host $ca.port | quote }}
     path: {{ printf "pki-mesh-%s-int/sign/%s" $g $c | quote }}
     caBundleSecretRef:
       name: {{ $i.caSecret }}

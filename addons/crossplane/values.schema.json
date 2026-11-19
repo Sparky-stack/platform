@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon crossplane (platform keys; crossplane.* is the upstream chart's)",
+  "type": "object",
+  "required": [
+    "cluster",
+    "packages",
+    "postgresql"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name (EnvironmentConfig fact)."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (key of postgresql.backendByProvider)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment (EnvironmentConfig fact; production gets the stricter policy)."
+        },
+        "region": {
+          "type": "string",
+          "description": "Default region of managed databases."
+        }
+      },
+      "description": "Injected by the ApplicationSet (--set-string): this cluster's facts (provider selects the PostgreSQL backend)."
+    },
+    "namespace": {
+      "type": "object",
+      "properties": {
+        "podSecurity": {
+          "enum": [
+            "",
+            "privileged",
+            "baseline",
+            "restricted"
+          ],
+          "description": "Pod Security admission level enforced on crossplane-system (\"\" = no labels)."
+        }
+      },
+      "description": "crossplane-system namespace settings."
+    },
+    "crossplane": {
+      "type": "object",
+      "description": "Upstream Crossplane chart values (not constrained here)."
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "podMonitor": {
+          "type": "boolean",
+          "description": "Render a PodMonitor (needs addon telemetry's CRDs)."
+        }
+      },
+      "description": "Crossplane metrics."
+    },
+    "packages": {
+      "type": "object",
+      "required": [
+        "configuration"
+      ],
+      "properties": {
+        "runtimeConfig": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "DeploymentRuntimeConfig name."
+            }
+          },
+          "description": "DeploymentRuntimeConfig shared by every Function and Provider."
+        },
+        "configuration": {
+          "type": "string",
+          "pattern": "^[a-z0-9][-a-z0-9._/]*(:[0-9]+)?/[-a-z0-9._/]+:[-A-Za-z0-9._]+@sha256:[a-f0-9]{64}$",
+          "description": "The platform's PostgreSQL Configuration package (ghcr.io/koorikla/platform/postgresql:<tag>@sha256:...)."
+        },
+        "signatureVerification": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Verify signatures."
+            },
+            "prefix": {
+              "type": "string",
+              "description": "Image prefix the ImageConfig matches."
+            },
+            "issuer": {
+              "type": "string",
+              "description": "OIDC issuer of the signing identity."
+            },
+            "subjectRegExp": {
+              "type": "string",
+              "description": "Allowed signing workflow identities (regex)."
+            }
+          },
+          "description": "Cosign keyless verification of the platform's own packages (ImageConfig)."
+        },
+        "functions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z0-9][-a-z0-9._/]*(:[0-9]+)?/[-a-z0-9._/]+:[-A-Za-z0-9._]+@sha256:[a-f0-9]{64}$",
+            "description": "Pinned package ref."
+          },
+          "description": "Composition Functions: name -> pinned package."
+        },
+        "providers": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "cnpg",
+              "aws-rds",
+              "gcp-cloudsql",
+              "azure-flexible"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[a-z0-9][-a-z0-9._/]*(:[0-9]+)?/[-a-z0-9._/]+:[-A-Za-z0-9._]+@sha256:[a-f0-9]{64}$",
+              "description": "Pinned package ref."
+            }
+          },
+          "description": "Providers per backend: backend -> (name -> pinned package)."
+        }
+      },
+      "description": "Crossplane packages, each pinned <repo>:<tag>@sha256:<multi-arch index digest>."
+    },
+    "postgresql": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "enum": [
+            "",
+            "cnpg",
+            "aws-rds",
+            "gcp-cloudsql",
+            "azure-flexible"
+          ],
+          "description": "Explicit backend; \"\" = postgresql.backendByProvider[cluster.provider]."
+        },
+        "backendByProvider": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "cnpg",
+              "aws-rds",
+              "gcp-cloudsql",
+              "azure-flexible"
+            ]
+          },
+          "description": "Default backend per cluster.provider."
+        },
+        "cnpg": {
+          "type": "object",
+          "description": "In-cluster CloudNativePG facts."
+        },
+        "aws": {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "Region (\"\" = cluster.region)."
+            },
+            "vpcId": {
+              "type": "string",
+              "description": "VPC of the DB subnet group."
+            },
+            "subnetIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Private subnets in >= 2 AZs."
+            },
+            "nodeSecurityGroupId": {
+              "type": "string",
+              "description": "Security group allowed to reach 5432 (the cluster's nodes)."
+            },
+            "identity": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "enum": [
+                    "IRSA",
+                    "PodIdentity"
+                  ],
+                  "description": "IRSA (roleArn annotation) or PodIdentity (association on crossplane-system/provider-aws)."
+                },
+                "roleArn": {
+                  "type": "string",
+                  "description": "IRSA role of the providers (required with IRSA)."
+                }
+              },
+              "description": "How the AWS providers authenticate."
+            }
+          },
+          "description": "aws-rds facts."
+        },
+        "gcp": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "GCP project."
+            },
+            "region": {
+              "type": "string",
+              "description": "Region (\"\" = cluster.region)."
+            },
+            "privateNetwork": {
+              "type": "string",
+              "description": "projects/<project>/global/networks/<vpc>."
+            },
+            "allocatedIpRange": {
+              "type": "string",
+              "description": "Optional private services access range."
+            },
+            "identity": {
+              "type": "object",
+              "properties": {
+                "serviceAccount": {
+                  "type": "string",
+                  "description": "GSA for KSA crossplane-system/provider-gcp (\"\" = direct WIF principal)."
+                }
+              },
+              "description": "GKE Workload Identity."
+            }
+          },
+          "description": "gcp-cloudsql facts."
+        },
+        "azure": {
+          "type": "object",
+          "properties": {
+            "subscriptionID": {
+              "type": "string",
+              "description": "Azure subscription."
+            },
+            "tenantID": {
+              "type": "string",
+              "description": "Entra tenant."
+            },
+            "clientID": {
+              "type": "string",
+              "description": "User-assigned managed identity federated with provider-azure."
+            },
+            "resourceGroupName": {
+              "type": "string",
+              "description": "Resource group of the servers."
+            },
+            "location": {
+              "type": "string",
+              "description": "Location (\"\" = cluster.region)."
+            },
+            "delegatedSubnetId": {
+              "type": "string",
+              "description": "Subnet delegated to Flexible Server."
+            },
+            "privateDnsZoneId": {
+              "type": "string",
+              "description": "Private DNS zone of the servers."
+            }
+          },
+          "description": "azure-flexible facts."
+        }
+      },
+      "description": "PostgreSQL backend of this cluster and its per-cloud facts (backend-specific required facts: templates/validate.yaml)."
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the policies."
+        },
+        "production": {
+          "type": "object",
+          "properties": {
+            "environments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "cluster.environment values treated as production."
+            },
+            "action": {
+              "type": "string",
+              "description": "Policy action for production violations (provider-docker.yaml: Audit)."
+            }
+          },
+          "description": "Stricter rules for production environments."
+        }
+      },
+      "description": "Admission policies for PostgreSQL claims."
+    }
+  }
+}

@@ -9,6 +9,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 
 {{- define "chart.day2Notes" -}}
 - Failed promotion gates or emergency overrides: [incidents](../../docs/runbooks/incidents.md#promotion-gate-failing-closed) and [break-glass](../../docs/runbooks/break-glass.md#emergency-production-promotion-or-freeze-window-override).
+- Values are checked before rendering: `values.schema.json` (types, DNS labels, digest-pinned images, git prefixes, required keys) and `templates/validate.yaml` (cross-field: the registry type needs its host or repository). A schema error names the failing key path (`at '/registry/type'`).
 {{- end -}}
 
 {{- define "chart.links" -}}

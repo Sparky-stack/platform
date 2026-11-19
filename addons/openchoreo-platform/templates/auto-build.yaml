@@ -9,19 +9,15 @@ pushes reach the webhook before Argo CD generated the preview Application). regi
 Egress: the namespace's default-deny NetworkPolicy (addon openchoreo-workflow-plane): DNS, API server, Harbor, public 443.
 */ -}}
 {{- $trigger := toString .Values.openchoreo.workflowPlane.autoBuild }}
-{{- if not (has $trigger (list "poll" "webhook" "none")) }}
-{{- fail (printf "openchoreo.workflowPlane.autoBuild: %q is not poll, webhook or none" $trigger) }}
-{{- end }}
 {{- /* Off without the platform GitHub App in the store (secrets.githubGateApp.enabled): every pass needs its token. */ -}}
 {{- if and (ne $trigger "none") .Values.openchoreo.workflowPlane.enabled .Values.buildWorkflows.enabled .Values.secrets.githubGateApp.enabled }}
 {{- $a := .Values.autoBuild }}
 {{- $org := .Values.openchoreo.orgNamespace }}
 {{- $ns := printf "workflows-%s" $org }}
-{{- $name := required "autoBuild.workflowTemplate is required" $a.workflowTemplate }}
+{{- $name := $a.workflowTemplate }}
 {{- $script := .Files.Get "files/auto-build/auto_build.py" }}
 {{- if contains "{{" $script }}{{ fail "files/auto-build/auto_build.py must not contain '{{' (Argo templating)" }}{{ end }}
 {{- $schedule := ternary $a.pollSchedule $a.resyncSchedule (eq $trigger "poll") }}
-{{- if and (eq $trigger "poll") (not $schedule) }}{{ fail "autoBuild.pollSchedule is required for trigger poll" }}{{ end }}
 {{- $pv := .Values.previews }}
 {{- $pa := $a.previews }}
 {{- $harbor := eq (toString .Values.registry.type) "harbor" }}
@@ -159,7 +155,7 @@ spec:
       remoteRef: { key: {{ $a.github.key }}, property: githubAppPrivateKey }
 ---
 {{ include "autoBuild.githubToken" (dict "name" $name "token" (printf "%s-github-token" $name) "root" $
-     "permissions" (required "autoBuild.github.permissions is required (least privilege: contents: read)" $a.github.permissions)) }}
+     "permissions" $a.github.permissions) }}
 {{- if $harbor }}
 ---
 apiVersion: external-secrets.io/v1
@@ -178,7 +174,7 @@ spec:
     deletionPolicy: Delete
     template:
       data:
-        username: {{ required "autoBuild.registry.robot is required (a pull-only Harbor robot)" $a.registry.robot | quote }}
+        username: {{ $a.registry.robot | quote }}
         password: "{{ `{{ .password }}` }}"
   data:
     - secretKey: password
@@ -229,7 +225,7 @@ subjects:
     namespace: {{ $ns }}
 ---
 {{ include "autoBuild.githubToken" (dict "name" (printf "%s-previews" $name) "token" (printf "%s-previews-token" $name) "root" $
-     "permissions" (required "autoBuild.previews.github.permissions is required (statuses: write, pull_requests: write)" $pa.github.permissions)) }}
+     "permissions" $pa.github.permissions) }}
 {{- end }}
 ---
 apiVersion: argoproj.io/v1alpha1
