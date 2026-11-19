@@ -50,7 +50,8 @@ The rules every change keeps. Design and reasons: [architecture.md](architecture
    always-required keys; Helm checks it on `template`, `lint` and in Argo CD) and one `templates/validate.yaml` for
    cross-field rules the schema cannot express. Upstream subchart keys stay unconstrained unless they carry a platform
    invariant (e.g. reloader's scoped RBAC). `cluster.*` arrives via `--set-string`, so cluster values are strings.
-   Contract: `hack/tests/test_values_schema.sh` (allowlist `hack/tests/values_schema_allowlist.yaml`, emptied after #116).
+   A thin wrapper's schema is just `cluster` plus `"type": "object"` for each subchart key (e.g. `addons/obi`).
+   Contract: `hack/tests/test_values_schema.sh` (no exemptions; `helm lint` per installation).
 
 ## Labels and annotations
 On the CAPI `Cluster` and the Argo CD cluster secret (provider byo: the cluster secret only):

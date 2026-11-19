@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # Values contract (#116): every deployable chart (charts/*, addons/*; not library charts, not the *-test helm-unittest
 # harness charts) ships a values.schema.json for its own platform keys, and `helm lint` - which validates values
-# against the schema - passes with each installation's values (layered the way Argo CD layers them). Charts without a
-# schema YET are listed in values_schema_allowlist.yaml with a reason; stale entries fail, so the list only shrinks.
+# against the schema - passes with each installation's values (layered the way Argo CD layers them). No exemptions: a
+# thin wrapper needs only `cluster` plus `"type": "object"` for its upstream subchart keys (e.g. addons/obi).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$ROOT/hack/lib/portable.sh"
 cd "$ROOT"
 source hack/lib/addons.sh
 
-ALLOW=hack/tests/values_schema_allowlist.yaml
 MGMT_SERVER=https://kubernetes.default.svc   # = hack/test.sh
 SAMPLE_SERVER=https://192.0.2.10:6443        # = hack/test.sh (TEST-NET-1)
 
@@ -24,44 +23,34 @@ deployable_charts() {
   done
 }
 
-# schema_violations <root> <allowlist> -> one line per violation; empty when the contract holds.
+# schema_violations <root> -> one line per violation; empty when the contract holds.
 schema_violations() {
-  local root=$1 allow=$2 d n reason
+  local root=$1 d
   while IFS= read -r d; do
-    n=$(C="$d" yq '[.[] | select(.chart == strenv(C))] | length' "$allow" | tr -d '\r')
-    reason=$(C="$d" yq -r '.[] | select(.chart == strenv(C)) | .reason // ""' "$allow" | tr -d '\r')
-    if [[ -f "$root/$d/values.schema.json" ]]; then
+    if [[ ! -f "$root/$d/values.schema.json" ]]; then
+      echo "MISSING $d: no values.schema.json"
+    else
       # shellcheck disable=SC2016 # $schema is a JSON key, not a shell variable
       yq -p json -e '.["$schema"] != null and .type == "object"' "$root/$d/values.schema.json" >/dev/null 2>&1 \
         || echo "INVALID $d: values.schema.json needs \$schema and top-level type object"
-      [[ "$n" == 0 ]] || echo "STALE $d: has a schema, remove it from the allowlist"
-    elif [[ "$n" == 0 ]]; then
-      echo "MISSING $d: no values.schema.json and not in the allowlist"
-    elif [[ -z "$reason" ]]; then
-      echo "NOREASON $d: allowlist entry without a reason"
     fi
   done < <(deployable_charts "$root")
-  while IFS= read -r d; do
-    [[ -z "$d" || -f "$root/$d/Chart.yaml" ]] || echo "UNKNOWN $d: allowlist entry is not a chart"
-  done < <(yq -r '.[].chart' "$allow" | tr -d '\r')
 }
 
-v=$(schema_violations "$ROOT" "$ALLOW")
-assert_eq "$v" "" "every deployable chart has a values.schema.json or an allowlist entry with a reason"
+v=$(schema_violations "$ROOT")
+assert_eq "$v" "" "every deployable chart has a valid values.schema.json"
 [[ -z "$v" ]] || printf '    %s\n' "$v" >&2
 
-# Negative fixture: each violation kind is reported; library and *-test charts are exempt.
+# Negative fixture: each violation kind is reported; library and *-test charts are exempt, a valid schema passes.
 F="$TMP/tree"
 mk() { mkdir -p "$F/$1"; printf 'apiVersion: v2\nname: %s\nversion: 0.1.0\n%s' "$(basename "$1")" "${2:-}" > "$F/$1/Chart.yaml"; }
-mk charts/noschema; mk charts/lib 'type: library'; mk charts/lib-test; mk addons/noreason; mk addons/stale; mk addons/bad
+mk charts/noschema; mk charts/lib 'type: library'; mk charts/lib-test; mk addons/good; mk addons/bad
 # shellcheck disable=SC2016
-echo '{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}' > "$F/addons/stale/values.schema.json"
+echo '{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}' > "$F/addons/good/values.schema.json"
 echo '{"type": "object"}' > "$F/addons/bad/values.schema.json"
-printf -- '- { chart: addons/noreason }\n- { chart: addons/stale, reason: x }\n- { chart: addons/ghost, reason: x }\n' > "$TMP/allow.yaml"
-v=$(schema_violations "$F" "$TMP/allow.yaml")
-assert_eq "$(printf '%s\n' "$v" | cut -d: -f1 | sort | tr '\n' ' ')" \
-  "INVALID addons/bad MISSING charts/noschema NOREASON addons/noreason STALE addons/stale UNKNOWN addons/ghost " \
-  "fixture: missing schema, empty reason, stale and unknown entries and an invalid schema are reported"
+v=$(schema_violations "$F")
+assert_eq "$(printf '%s\n' "$v" | cut -d: -f1 | sort | tr '\n' ' ')" "INVALID addons/bad MISSING charts/noschema " \
+  "fixture: a missing and an invalid schema are reported; library, *-test and valid charts are not"
 
 # helm lint per installation: <label> <helm lint args...>
 lint() {
