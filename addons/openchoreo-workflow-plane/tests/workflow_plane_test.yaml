@@ -304,7 +304,7 @@ tests:
     template: templates/validate.yaml
     set: { clusterWorkflowPlane.secretStore: platform }
     asserts:
-      - failedTemplate: { errorPattern: "/clusterWorkflowPlane/secretStore': 'not' failed" }
+      - failedTemplate: { errorMessage: "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }
 
   - it: refuses an empty workflow-plane secret store (schema)
     template: templates/validate.yaml

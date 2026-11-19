@@ -133,11 +133,8 @@
         },
         "secretStore": {
           "type": "string",
-          "description": "Key-scoped ClusterSecretStore for workflow resources; never the full platform store.",
-          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-          "not": {
-            "const": "platform"
-          }
+          "description": "Key-scoped ClusterSecretStore for workflow resources (never \"platform\": enforced in templates/validate.yaml with the reason).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
         }
       },
       "required": [

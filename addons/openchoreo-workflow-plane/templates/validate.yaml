@@ -1,7 +1,8 @@
 {{- /*
 Cross-field render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no
 control-plane CA copied, agent RBAC, run NetworkPolicy labels, BuildKit mirror names. Single-key rules (types, names,
-secretStore never "platform", runNamespacePrefix) are in values.schema.json.
+runNamespacePrefix) are in values.schema.json. secretStore != "platform" stays here: its message says why
+(tenant isolation, asserted by hack/tests/test_secret_store_scope.sh).
 */ -}}
 {{- if not .Values.openchoreo.workflowPlane.enabled }}
 {{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
@@ -18,6 +19,9 @@ secretStore never "platform", runNamespacePrefix) are in values.schema.json.
 {{- end }}
 {{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $wp.clusterAgent.tls.serverCAConfigMap) }}
 {{- fail "agentServerCA.configMapName must equal openchoreo-workflow-plane.clusterAgent.tls.serverCAConfigMap" }}
+{{- end }}
+{{- if eq .Values.clusterWorkflowPlane.secretStore "platform" }}
+{{- fail "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }}
 {{- end }}
 {{- if .Values.clusterAgentRBAC.enabled }}
 {{- if $wp.clusterAgent.rbac.create }}
