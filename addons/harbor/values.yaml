@@ -38,8 +38,6 @@ registry:
     - { upstream: registry.k8s.io, project: k8s }
     - { upstream: cr.openchoreo.dev, project: openchoreo }
     - { upstream: gcr.io, project: gcr }
-  mirror:
-    enabled: true
 
 # --- platform glue -----------------------------------------------------------------------------------------------
 # Secrets (never committed; seeded by `task secrets` locally, created by the operator in aws/vault):
@@ -60,7 +58,6 @@ pki:
   caIssuer: harbor-ca                       # namespaced Issuer + CA Secret in ns harbor; the key never leaves it
   caDuration: 87600h                        # 10y
   tlsSecret: harbor-tls                     # == harbor.expose.tls.secret.secretName
-  extraDNSNames: []                         # the Gateway listener serves only the registry host
   tokenSecret: harbor-token                 # == harbor.core.secretName (JWT signing for Harbor's token service)
 
 # Gateway `harbor` (kgateway): one HTTPS listener on the registry port, TLS terminated with harbor-tls. kgateway
@@ -84,7 +81,6 @@ caPublic:
 
 # Desired state applied by templates/config.yaml (files/harbor-config.py, Harbor API v2.0, stdlib Python).
 config:
-  enabled: true
   image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
   schedule: "17 * * * *"                    # re-apply hourly (drift, rotated robot secrets); also an Argo PostSync hook
   coreURL: http://harbor-core               # in-namespace Service (internal TLS off)

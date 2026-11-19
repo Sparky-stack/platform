@@ -6,6 +6,7 @@ port as a hostPort on mgmt, k3d publishes it; Service port == listener port == p
 plane's gateway). TrafficPolicy: Envoy's default 15s route timeout would cut large layer transfers.
 */ -}}
 {{- $g := .Values.gateway }}
+{{- $port := regexFind ":[0-9]+$" .Values.registry.host | trimPrefix ":" | default "443" }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -16,7 +17,7 @@ spec:
   listeners:
     - name: https
       protocol: HTTPS
-      port: {{ include "harbor-addon.port" . }}
+      port: {{ $port }}
       hostname: {{ include "harbor-addon.hostname" . | quote }}
       tls:
         mode: Terminate

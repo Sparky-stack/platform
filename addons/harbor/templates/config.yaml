@@ -4,9 +4,8 @@ Harbor's API, idempotently: as an Argo CD PostSync hook after every sync and hou
 secrets). Chosen over Terraform/OpenTofu (state backend + provider credentials on mgmt) and over a Harbor operator
 (none maintained for Harbor 2.15): ~200 lines of stdlib Python, no state, re-runnable.
 */ -}}
-{{- if .Values.config.enabled }}
 {{- $c := .Values.config }}
-{{- $proxy := include "harbor-addon.proxyProjects" . | fromJsonArray }}
+{{- $proxy := list }}{{ range .Values.registry.proxyCache }}{{ $proxy = append $proxy .project }}{{ end }}
 {{- /* registries: every proxy-cache upstream + every replication source */ -}}
 {{- $regNames := list }}
 {{- range .Values.registry.proxyCache }}{{ $regNames = append $regNames .upstream }}{{ end }}
@@ -93,4 +92,3 @@ spec:
           labels: { app.kubernetes.io/name: harbor-config }
         spec:
           {{- include "harbor-addon.configPod" . | nindent 10 }}
-{{- end }}

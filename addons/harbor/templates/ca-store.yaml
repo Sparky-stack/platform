@@ -6,34 +6,7 @@ Secret of this namespace (admin password, serving key) is reachable. Consumers: 
 (ns fleet, node bootstrap) and the build ClusterWorkflows (workflows-<org ns>, push/scan/sign trust).
 */ -}}
 {{- $p := .Values.caPublic }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
-rules:
-  - apiGroups: [""]
-    resources: [secrets]
-    resourceNames: [{{ $p.secretName }}]
-    verbs: [get]
-  - apiGroups: [authorization.k8s.io]
-    resources: [selfsubjectrulesreviews]
-    verbs: [create]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-{{ $p.store }} }
-subjects:
-  - { kind: ServiceAccount, name: eso-{{ $p.store }}, namespace: {{ .Release.Namespace }} }
+{{- include "harbor-addon.esoSecretReader" (dict "name" $p.store "secret" $p.secretName "ns" .Release.Namespace) }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore

@@ -23,7 +23,6 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | config.apps.preventVulnerable | bool | `false` |  |
 | config.apps.severity | string | `"critical"` |  |
 | config.coreURL | string | `"http://harbor-core"` |  |
-| config.enabled | bool | `true` |  |
 | config.endpoints."cr.openchoreo.dev".type | string | `"docker-registry"` |  |
 | config.endpoints."cr.openchoreo.dev".url | string | `"https://cr.openchoreo.dev"` |  |
 | config.endpoints."docker.io".type | string | `"docker-hub"` |  |
@@ -167,12 +166,10 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | harbor.trivy.resources.requests.memory | string | `"192Mi"` |  |
 | pki.caDuration | string | `"87600h"` |  |
 | pki.caIssuer | string | `"harbor-ca"` | Issues `harbor-tls` (`pki.{caIssuer,tlsSecret}`), exposes Harbor via `gateway.{name,className}` (`kgateway`), and exports the public CA via `ClusterSecretStore/mgmt-harbor`. |
-| pki.extraDNSNames | list | `[]` |  |
 | pki.tlsSecret | string | `"harbor-tls"` |  |
 | pki.tokenSecret | string | `"harbor-token"` |  |
 | registry.appsProject | string | `"apps"` |  |
 | registry.host | string | `"harbor.openchoreo.localhost:9443"` |  |
-| registry.mirror.enabled | bool | `true` |  |
 | registry.proxyCache[0].project | string | `"dockerhub"` |  |
 | registry.proxyCache[0].upstream | string | `"docker.io"` |  |
 | registry.proxyCache[1].project | string | `"ghcr"` |  |

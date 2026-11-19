@@ -127,3 +127,9 @@ tests:
     set: { registry.type: external }
     asserts:
       - failedTemplate: { errorPattern: "disable addon harbor" }
+
+  - it: fails without secrets.store (every Harbor secret comes from it)
+    template: templates/validate.yaml
+    set: { secrets.store: "" }
+    asserts:
+      - failedTemplate: { errorMessage: secrets.store is required }
