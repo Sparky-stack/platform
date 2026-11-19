@@ -90,3 +90,33 @@ tests:
       openchoreo.observability.enabled: false
     asserts:
       - failedTemplate: {}
+
+  # values.schema.json (was template `required`): the schema rejects the values before any template renders.
+  - it: schema rejects a missing cluster.name
+    template: templates/env.yaml
+    set:
+      cluster.name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "/cluster/name"
+  - it: schema rejects a missing openchoreo.controlPlane.host
+    template: templates/env.yaml
+    set:
+      openchoreo.controlPlane.host: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "missing propert.*host"
+  - it: schema rejects a host that is not a DNS name
+    template: templates/env.yaml
+    set:
+      openchoreo.controlPlane.host: "https://oc.example.com"
+    asserts:
+      - failedTemplate:
+          errorPattern: "/openchoreo/controlPlane/host"
+  - it: schema rejects an empty secrets.store
+    template: templates/secrets.yaml
+    set:
+      secrets.store: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "/secrets/store"

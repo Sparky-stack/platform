@@ -185,6 +185,10 @@ Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collec
 | secrets.remoteKey | string | `"openchoreo-observability"` |  |
 | secrets.store | string | `"default"` | Pulls `openchoreo-observability` credentials (`secrets.{store,remoteKey}`) from workload `ClusterSecretStore/default`. |
 
+Validation: `values.schema.json` checks the platform's own keys (types, required keys, names; Helm prints the failing
+path). Cross-field rules against `installation.yaml` live in `templates/validate.yaml`. Upstream subchart keys are not
+constrained.
+
 ## Day-2 notes
 
 - Checking shipper readiness and the Prometheus agent active-series budget: [observability first look](../../docs/runbooks/observability-first-look.md#1-first-5-minute-triage-order-where-to-look-first).

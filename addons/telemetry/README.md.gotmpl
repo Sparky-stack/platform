@@ -14,3 +14,10 @@ Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collec
 {{- define "chart.links" -}}
 - [Observability and runtime security](../../docs/observability.md)
 {{- end -}}
+
+{{- define "chart.keyValuesNotes" }}
+
+Validation: `values.schema.json` checks the platform's own keys (types, required keys, names; Helm prints the failing
+path). Cross-field rules against `installation.yaml` live in `templates/validate.yaml`. Upstream subchart keys are not
+constrained.
+{{- end -}}
