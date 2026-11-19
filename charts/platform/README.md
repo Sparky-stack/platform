@@ -17,6 +17,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.agentgateway.namespace | string | `"agentgateway-system"` |  |
 | addons.agentgateway.roles[0] | string | `"mgmt"` |  |
 | addons.argo-cd | object | `{"default":true,"namespace":"argocd","releaseName":"argocd","roles":["mgmt"]}` | Addon catalog entry (`namespace`, `roles`, `providers`, `default`, parameter mappings, `installationValueFiles`). |
+| addons.argo-events.compareOptions[0] | string | `"IncludeMutationWebhook=true"` |  |
 | addons.argo-events.default | bool | `true` |  |
 | addons.argo-events.fleetParameters[0] | string | `"falco.clusters"` |  |
 | addons.argo-events.namespace | string | `"argo-events"` |  |
@@ -140,9 +141,11 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-observability-plane.default | bool | `true` |  |
 | addons.openchoreo-observability-plane.namespace | string | `"openchoreo-observability-plane"` |  |
 | addons.openchoreo-observability-plane.roles[0] | string | `"mgmt"` |  |
+| addons.openchoreo-platform.compareOptions[0] | string | `"IncludeMutationWebhook=true"` |  |
 | addons.openchoreo-platform.default | bool | `true` |  |
 | addons.openchoreo-platform.namespace | string | `"default"` |  |
 | addons.openchoreo-platform.roles[0] | string | `"mgmt"` |  |
+| addons.openchoreo-workflow-plane.compareOptions[0] | string | `"IncludeMutationWebhook=true"` |  |
 | addons.openchoreo-workflow-plane.default | bool | `true` |  |
 | addons.openchoreo-workflow-plane.namespace | string | `"openchoreo-workflow-plane"` |  |
 | addons.openchoreo-workflow-plane.roles[0] | string | `"mgmt"` |  |

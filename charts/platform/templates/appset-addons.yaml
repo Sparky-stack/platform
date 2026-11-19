@@ -43,6 +43,14 @@ spec:
   template:
     metadata:
       name: '{{ $addon }}-{{ "{{" }} .name {{ "}}" }}'
+      {{- /* compareOptions: Argo CD per-Application compare options (annotation argocd.argoproj.io/compare-options).
+      IncludeMutationWebhook=true for addons rendering Argo Workflows objects: their CRD `spec` is atomic +
+      preserve-unknown, and server-side diff otherwise reverts every spec change to the live value (Synced, never
+      applied: #184, argoproj/argo-cd#27625). hack/tests/test_argocd_compare_options.sh enforces it. */}}
+      {{- with $cfg.compareOptions }}
+      annotations:
+        argocd.argoproj.io/compare-options: {{ join "," . | quote }}
+      {{- end }}
     spec:
       project: platform
       source:
