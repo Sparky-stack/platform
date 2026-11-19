@@ -164,8 +164,8 @@ tests:
 
   - it: renders no ClusterResourceSet anywhere
     templates:
-      - templates/openchoreo-agent-crs.yaml
-      - templates/secrets-seed-crs.yaml
+      - templates/common/openchoreo-agent-crs.yaml
+      - templates/common/secrets-seed-crs.yaml
       - templates/common/falco-escalation-crs.yaml
       - templates/common/image-verification-crs.yaml
     documentSelector: { path: kind, value: ClusterResourceSet, matchMany: true, skipEmptyTemplates: true }
@@ -176,7 +176,7 @@ tests:
     values: [values/capi-docker.yaml]
     templates:
       - templates/byo/access.yaml
-      - templates/openchoreo-agent-crs.yaml
+      - templates/common/openchoreo-agent-crs.yaml
     documentSelector: { path: kind, value: PushSecret, matchMany: true, skipEmptyTemplates: true }
     asserts:
       - hasDocuments: { count: 0 }

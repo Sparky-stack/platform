@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Common helpers for koorikla/ci scripts. Sourced, never executed directly.
+# Common helpers for ci/scripts. Sourced, never executed directly.
 #
 # Portability contract for every script under scripts/:
 #   - bash >= 3.2 (macOS /bin/bash): no associative arrays, no mapfile/readarray,
@@ -87,11 +87,6 @@ step_summary() {
 # platform_slug linux/arm64/v8 -> linux-arm64-v8
 platform_slug() {
   printf '%s' "$1" | tr '/' '-'
-}
-
-# first_csv "a,b,c" -> a
-first_csv() {
-  printf '%s' "${1%%,*}" | tr -d '[:space:]'
 }
 
 # csv_words "a, b,c" -> "a b c" (for `for x in $(csv_words ...)`)

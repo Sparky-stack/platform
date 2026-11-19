@@ -44,7 +44,7 @@ spec:
       kind: Namespace
     - group: openchoreo.dev
       kind: ClusterDataPlane
-    - group: external-secrets.io     # provider byo: ClusterSecretStore byo-<name> (charts/cluster byo-access.yaml)
+    - group: external-secrets.io     # provider byo: ClusterSecretStore byo-<name> (charts/cluster templates/byo/access.yaml)
       kind: ClusterSecretStore
   namespaceResourceWhitelist:
     - group: ""

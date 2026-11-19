@@ -12,8 +12,9 @@ on:
       - 'ci/toolbox/**'
       - 'ci/scripts/**'
   push:
-    # Moving the v1 tag (re)publishes ghcr.io/koorikla/ci-toolbox:v1 (paths are not
-    # evaluated for tag pushes).
+    # Leftover from koorikla/ci (where `v1` was the toolbox tag): platform `v*` release
+    # tags rebuild the toolbox too (paths are not evaluated for tag pushes). Release-please
+    # tags ci/ as `ci-v*`, which does not match.
     tags: ['v*']
     branches: [main]
     paths:
