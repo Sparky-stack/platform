@@ -63,6 +63,7 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
 | `set-repo REPO=https://github.com/<you>/platform.git` | point a fork at itself: `repoURL`, `githubOrg`, tenant app repos (`ORG=`, `APPS_ORG=`, `DOCS=1`; docs/forking.md) |
 | `hooks:install` / `hooks:run` | install the git hooks / run every hook on every tracked file, as CI does ([Git hooks](#git-hooks)) |
 | `lint` / `test` / `schemas` | offline validation (helm lint/template, kubeconform, helm-unittest, contract tests, shellcheck, actionlint) |
+| `test:changed` | `test` for only what changed since `BASE` (default `origin/main`), as PR CI does ([Scoped PR CI](#scoped-pr-ci)) |
 | `images:audit` | every image of the installation checked for linux/amd64 + linux/arm64 (`-- --live` adds running pods) |
 | `tools:lock` | refresh `mise.lock` for all six platforms after editing `mise.toml` |
 | `clean` | drop downloaded chart dependencies |
@@ -129,9 +130,37 @@ Nothing is downloaded at commit time: builtin hooks are compiled into prek, the 
 own environment, or a tool not pinned in `mise.toml`.
 
 **CI runs the same hooks** on every tracked file (`task hooks:run` in the `ci` and `portability` workflows, all four
-OS/arch jobs and the dev container; only `charts` is skipped there because `task test` renders every chart). In an
+OS/arch jobs and the dev container; only `charts` is skipped there because `task test` renders every chart). A scoped
+pull request runs them on its changed files only ([Scoped PR CI](#scoped-pr-ci)). In an
 emergency `git commit --no-verify` skips the hooks locally, and `SKIP=charts,gitleaks git commit` skips single hooks;
 CI still fails the PR on any finding.
+
+## Scoped PR CI
+
+The `ci` workflow's `validate` job (the merge gate, it reports on every PR) validates only what a pull request touches.
+[`hack/changed-units.sh`](../hack/changed-units.sh) maps the PR's changed files (`HEAD^1..HEAD` of the merge commit)
+to units:
+
+| Changed | Unit | PR CI runs |
+|---|---|---|
+| `charts/<c>/**`, `addons/<a>/**`, `installations/*/addons/<a>/**` | that chart | hooks on changed files, check-docs, helm lint + template x installations + kubeconform + helm-unittest of that chart, related contract tests |
+| `packages/<p>/**` | `packages/<p>` | hooks, check-docs, related contract tests; the package's own workflow (path filter `packages/<p>/**`) renders and builds it |
+| `ci/**`, `.github/workflows/app-*.yaml` / `ci-selftest.yaml` | `ci` | hooks, check-docs, related contract tests; `ci-selftest` builds the fixtures |
+| `templates/**` | `templates` | hooks, check-docs, related contract tests; the `templates` workflow renders them |
+| only `docs/**`, `wiki/**`, `*.md` outside charts | `docs` | hooks on changed files + check-docs |
+| anything else | `full` | `task hooks:run lint test`, as before |
+
+`full` covers the shared inputs: `hack/**`, `bootstrap/**`, `charts/platform/**` (catalog + ApplicationSets feed every
+addon render), `charts/cluster/**`, `installations/*/installation.yaml` and `clusters/*`, `mise.toml`, `Taskfile.yml`,
+`prek.toml`, `renovate.json`, `.github/workflows/ci.yaml` and the other workflows, and every path the script does not
+know (when unsure: full). Push to `main`, `merge_group` and `workflow_dispatch` always run full. A contract test is
+"related" when it names the unit's path, or, for charts and addons, checks every chart (`addons/*`, `charts/*`,
+`$RENDERED_DIR`): `hack/changed-units.sh --tests addons/harbor` lists them. A test that needs every render carries
+`# scoped-ci full-if: <regex>`: the run goes full when a changed chart's files match (`test_secret_store_scope.sh`:
+any chart with an `ExternalSecret` / `SecretStore`), else the test waits for the full run on `main`. Example: an
+`addons/cilium` PR renders 1 of 38 charts (plus `charts/platform` / `charts/cluster`) and runs 11 of 73 suites, about
+1.5 min instead of 4.5 min locally. `task test:changed` (`BASE=<ref>`) gives you the same scope locally, uncommitted
+files included; `task test` still runs everything. Fixtures: `hack/tests/test_changed_units.sh`.
 
 ## Portable bash rules
 

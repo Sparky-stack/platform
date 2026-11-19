@@ -3,11 +3,15 @@ on:
   pull_request:
   push:
     branches: [main]
+  merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # One job, always run: `validate` is the merge gate on every PR. Pull requests validate only the units they touch
+  # (hack/changed-units.sh, docs/dev-environment.md#scoped-pr-ci); push, merge_group and manual runs validate all.
   validate:
     runs-on: ubuntu-latest
     env:
@@ -15,6 +19,18 @@ jobs:
       MISE_YES: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2   # the PR merge commit and its first parent (base branch tip): HEAD^1..HEAD = the PR's change
+      - name: Scope (hack/changed-units.sh)
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          units=full
+          if [[ "$EVENT" == pull_request ]]; then units=$(git diff --name-only HEAD^1 HEAD | bash hack/changed-units.sh); fi
+          units=${units//$'\n'/ }
+          echo "units=$units" >> "$GITHUB_OUTPUT"
+          echo "Validating: \`$units\`" | tee -a "$GITHUB_STEP_SUMMARY"
       # Same pinned toolchain as developers (mise.toml); the helm-unittest plugin comes from its postinstall hook.
       - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
@@ -35,10 +51,25 @@ jobs:
       # Every git hook from prek.toml on every tracked file: the same checks developers get on commit. The changed-
       # charts hook is skipped here only because `task test` below renders every chart.
       - name: Git hooks on all files (task hooks:run)
+        if: steps.scope.outputs.units == 'full'
         run: task hooks:run
         env:
           SKIP: charts
       - name: Lint charts, YAML, shell scripts and GitHub Actions
+        if: steps.scope.outputs.units == 'full'
         run: task lint
       - name: Run full offline validation and tests
+        if: steps.scope.outputs.units == 'full'
         run: task test
+      # Scoped PR: hooks on the changed files only, then check-docs + lint/render/kubeconform/unittest of the changed
+      # charts and their related contract tests (hack/test-changed.sh; docs-only PRs stop after check-docs).
+      - name: Git hooks on changed files
+        if: steps.scope.outputs.units != 'full'
+        run: prek run --from-ref HEAD^1 --to-ref HEAD --show-diff-on-failure
+        env:
+          SKIP: charts
+      - name: Validate changed units (task test:changed)
+        if: steps.scope.outputs.units != 'full'
+        run: task test:changed
+        env:
+          BASE: HEAD^1
