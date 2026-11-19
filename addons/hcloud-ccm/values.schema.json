@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon hcloud-ccm (platform keys only; upstream subchart keys stay open)",
+  "type": "object",
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the ApplicationSet (--set-string, so every value is a string): this cluster's facts.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name."
+        },
+        "role": {
+          "type": "string",
+          "description": "mgmt or workload."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (selects values/provider-<provider>.yaml)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment of the cluster."
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI of the cluster (selects values/cni-<cni>.yaml)."
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of the cluster."
+        }
+      }
+    },
+    "hcloud-cloud-controller-manager": {
+      "type": "object",
+      "description": "Upstream hcloud-cloud-controller-manager chart values (not constrained here)."
+    }
+  }
+}

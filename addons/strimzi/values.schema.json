@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon strimzi (platform keys only; upstream subchart keys stay open)",
+  "type": "object",
+  "required": [
+    "namespace",
+    "monitoring"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the ApplicationSet (--set-string, so every value is a string): this cluster's facts.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name."
+        },
+        "role": {
+          "type": "string",
+          "description": "mgmt or workload."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (selects values/provider-<provider>.yaml)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment of the cluster."
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI of the cluster (selects values/cni-<cni>.yaml)."
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of the cluster."
+        }
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "description": "Labels on the operator namespace (koorikla-lib.operatorNamespace).",
+      "properties": {
+        "podSecurity": {
+          "enum": [
+            "",
+            "privileged",
+            "baseline",
+            "restricted"
+          ],
+          "description": "Pod Security admission level enforced on the operator namespace (\"\" = no labels)."
+        },
+        "ambient": {
+          "type": "boolean",
+          "description": "Enrol the operator namespace in the Istio ambient mesh."
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "description": "Cluster operator metrics.",
+      "properties": {
+        "podMonitor": {
+          "type": "boolean",
+          "description": "Render a PodMonitor (needs addon telemetry's prometheus-operator CRDs)."
+        }
+      }
+    },
+    "strimzi-kafka-operator": {
+      "type": "object",
+      "description": "Upstream strimzi-kafka-operator chart values (not constrained here)."
+    },
+    "koorikla-lib": {
+      "type": "object",
+      "description": "Library chart koorikla-lib (charts/lib); Helm adds global here."
+    }
+  }
+}
