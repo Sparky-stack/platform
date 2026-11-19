@@ -50,6 +50,7 @@ case "\$a" in
   *" get --raw "*kube_pod_labels*) k=prom-app ;;
   *" get applications.argoproj.io "*sync.status*) k=apps ;;
   *" get applications.argoproj.io "*) [[ -f "\$FIX/\$t.apps" ]] && awk '{ print \$1 }' "\$FIX/\$t.apps"; exit 0 ;;
+  *" get clusters.cluster.x-k8s.io "*" -l mesh.platform.koorikla.io/group "*) k=mesh-members ;;
   *" get clusters.cluster.x-k8s.io "*'{.metadata.name}{"\\n"}'*) k=cluster-names ;;
   *" get clusters.cluster.x-k8s.io "*) k=clusters ;;
   *" get clusterdataplanes.openchoreo.dev "*" -o jsonpath={.spec.gateway"*)
@@ -111,7 +112,8 @@ chmod +x "$BIN/"*
 green() {
   local d=$1
   mkdir -p "$d"
-  printf 'root Synced Healthy\nharbor-mgmt Synced Healthy\nfalco-dev1 Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\ncrossplane-dev1 Synced Healthy\n' > "$d/k3d-platform-mgmt.apps"
+  printf 'root Synced Healthy\nharbor-mgmt Synced Healthy\nfalco-dev1 Synced Healthy\nopenbao-mgmt Synced Healthy\nmesh-dev1 Synced Healthy\ncrossplane-dev1 Synced Healthy\n' > "$d/k3d-platform-mgmt.apps"
+  printf 'dev1\n' > "$d/k3d-platform-mgmt.mesh-members"
   printf 'True https://openbao.openchoreo.localhost:8200' > "$d/dev1.mesh-issuer"
   printf 'True openbao-mesh 2026-11-18T09:00:00Z' > "$d/dev1.mesh-cert"
   printf 'True' > "$d/dev1.xrds"
@@ -235,7 +237,8 @@ assert_match "$OUT" $'\n29 PASS, 0 FAIL, 0 PENDING$' "green: summary"
 
 # Mesh members and Crossplane clusters vary: failures name the cluster.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
-printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-dev1 Synced Healthy\nistio-csr-prod1 Synced Healthy\ncrossplane-dev1 Synced Healthy\ncrossplane-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nmesh-dev1 Synced Healthy\nmesh-prod1 Synced Healthy\ncrossplane-dev1 Synced Healthy\ncrossplane-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+printf 'dev1\nprod1\n' > "$FIX/k3d-platform-mgmt.mesh-members"
 printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/dev1.mesh-issuer"
 printf 'True openbao-mesh 2026-11-18T10:00:00Z' > "$FIX/dev1.mesh-cert"
 printf 'True https://openbao.openchoreo.localhost:8200' > "$FIX/prod1.mesh-issuer"
@@ -247,9 +250,10 @@ assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "not issued by OpenB
 assert_match "$CALLS" "prod1.kubeconfig --request-timeout=20s get issuers.cert-manager.io -n istio-system openbao-mesh " "addons: reads the member's OpenBao Issuer"
 assert_eq "$(result_of 'PostgreSQL claim API')" FAIL "addons: XRD not Established on an opted-in cluster fails"
 assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io not Established on: prod1(Established=False); ok: dev1" "addons: names the cluster"
-# All members issued by OpenBao; a cluster without istio-csr is not a mesh member (listed, not failed).
+# All members issued by OpenBao; a cluster without mesh.group is not a mesh member (listed, not failed).
 printf 'True openbao-mesh 2026-11-18T11:00:00Z' > "$FIX/prod1.mesh-cert"
-printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nistio-csr-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
+printf 'prod1\n' > "$FIX/k3d-platform-mgmt.mesh-members"
+printf 'root Synced Healthy\nopenbao-mgmt Synced Healthy\nmesh-prod1 Synced Healthy\n' > "$FIX/k3d-platform-mgmt.apps"
 run addons-ok
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" PASS "addons-ok: member certs from OpenBao"
 assert_eq "$(detail_of 'OpenBao-issued mesh certificates')" "OpenBao-issued: prod1(istiod until 2026-11-18T11:00:00Z); not mesh members: dev1" "addons-ok: detail"

@@ -17,7 +17,7 @@ mgmt_rev=$(yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .m
 assert_eq "$mgmt_rev" "HEAD" "in-cluster addons-revision defaults to HEAD"
 
 # 2. If capi-cluster.yaml is present, verify cluster secret labels match CAPI Cluster labels
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" \
     --values "$ROOT/installations/local/clusters/dev1.yaml" > "$TMP/dev1.yaml"
@@ -29,7 +29,7 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
 fi
 
 # 2b. networking: the cilium addon follows the cluster's cni and reaches the API server via the cluster secret's server
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   dev1_cni=$(yq 'select(.kind == "Cluster" and .metadata.name == "dev1") | .metadata.labels["platform.koorikla.io/cni"]' "$TMP/dev1.yaml")
   dev1_cil=$(yq 'select(.kind == "Cluster" and .metadata.name == "dev1") | .metadata.labels["addons.platform.koorikla.io/cilium"]' "$TMP/dev1.yaml")
   assert_eq "$dev1_cil" "$([[ "$dev1_cni" == cilium ]] && echo true || echo false)" "dev1 cilium addon label follows cni ($dev1_cni)"
@@ -43,19 +43,20 @@ mgmt_cni=$(yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .m
 assert_eq "$mgmt_cni" "flannel" "in-cluster (k3d mgmt) carries platform.koorikla.io/cni=flannel"
 
 # 2b2. multicluster mesh (docs/multicluster.md): names shared between charts/cluster, addon openbao (mesh CA on mgmt),
-# addon istio-csr (members) and istio-eastwest; istio-ambient's multi-network settings driven by the mesh labels.
+# addon mesh (istio-csr + east-west on members via values/mesh-member.yaml; ambient multi-network driven by the mesh labels).
 PV="$ROOT/charts/platform/values.yaml"
 OB="$ROOT/addons/openbao/values.yaml"
-IC="$ROOT/addons/istio-csr/values.yaml"
-if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
+IC="$ROOT/addons/mesh/values.yaml"
+MM="$ROOT/addons/mesh/values/mesh-member.yaml"
+if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" --values "$ROOT/installations/local/clusters/dev1.yaml" \
     --set mesh.group=contract --set 'mesh.groups={contract}' --set mgmt.addons.openbao=true > "$TMP/dev1-mesh.yaml"
   helm template openbao "$ROOT/addons/openbao" --namespace openbao --values "$ROOT/installations/local/installation.yaml" \
     --set 'mesh.groups={contract}' > "$TMP/openbao.yaml"
-  helm template istio-csr "$ROOT/addons/istio-csr" --namespace istio-system \
+  helm template mesh "$ROOT/addons/mesh" --namespace istio-system --values "$MM" \
     --values "$ROOT/installations/local/installation.yaml" --set-string mesh.group=contract --set-string cluster.name=dev1 \
-    > "$TMP/istio-csr.yaml"
+    > "$TMP/mesh-member.yaml"
   # trust payload <- openbao-ca-bundle (public certs) through store mgmt-openbao
   trust_store=$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-mesh-trust") | .spec.secretStoreRef.name' "$TMP/dev1-mesh.yaml")
   assert_eq "$trust_store" "$(yq '.caPublic.store' "$OB")" "mesh trust payload reads the store addon openbao publishes"
@@ -71,8 +72,8 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
   assert_match "$(printf '%s\n' "$stores_ss" | yq -o=json -I=0 'select(.kind == "ClusterSecretStore" and .metadata.name == "mgmt-fleet") | .spec.conditions[].namespaces')" \
     "\"$(yq '.addons.openbao.namespace' "$PV")\"" "store mgmt-fleet admits the openbao namespace (mesh-clients)"
   # member auth: istio-csr's Vault Issuer == what the reconcile configures for this cluster
-  iss() { yq "select(.kind == \"Issuer\" and .metadata.name == \"$(yq '.issuer.name' "$IC")\") | $1" "$TMP/istio-csr.yaml"; }
-  ic_ns=$(yq '.addons["istio-csr"].namespace' "$PV")
+  iss() { yq "select(.kind == \"Issuer\" and .metadata.name == \"$(yq '.issuer.name' "$IC")\") | $1" "$TMP/mesh-member.yaml"; }
+  ic_ns=$(yq '.addons["mesh"].namespace' "$PV")
   assert_eq "$(yq '.memberAuth.audience' "$OB")" "vault://$ic_ns/$(yq '.issuer.name' "$IC")" "OpenBao accepts exactly cert-manager's issuer audience (vault://<ns>/<issuer>)"
   assert_eq "$(yq '.memberAuth.serviceAccount' "$OB")" "$ic_ns:$(yq '.issuer.serviceAccount' "$IC")" "OpenBao binds the istio-csr issuer's ServiceAccount"
   assert_eq "$(iss .spec.vault.auth.kubernetes.role)" "$(yq '.memberAuth.role' "$OB")" "Vault Issuer role == OpenBao member role"
@@ -103,11 +104,11 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
     v=$(yq ".[\"cert-manager-istio-csr\"]$k" "$IC")
     assert_eq "$([[ $(hours "$v") -le $wmax ]] && echo ok || echo "$v")" ok "istio-csr $k ($v) <= OpenBao workloadMaxTTL"
   done
-  assert_eq "$(yq '.ztunnel.caAddress' "$ROOT/addons/istio-ambient/values/mesh-member.yaml")" "cert-manager-istio-csr.$ic_ns.svc:443" "ztunnel's CA is istio-csr's Service"
-  assert_eq "$(yq '.istiod.env.ENABLE_CA_SERVER' "$ROOT/addons/istio-ambient/values/mesh-member.yaml")" "false" "istiod runs no CA on mesh members"
-  # reader identity (remote secrets) shared by charts/cluster, istio-eastwest and the admission guard
+  assert_eq "$(yq '.ztunnel.caAddress' "$MM")" "cert-manager-istio-csr.$ic_ns.svc:443" "ztunnel's CA is istio-csr's Service"
+  assert_eq "$(yq '.istiod.env.ENABLE_CA_SERVER' "$MM")" "false" "istiod runs no CA on mesh members"
+  # reader identity (remote secrets) shared by charts/cluster, addon mesh (east-west reader RBAC) and the admission guard
   reader_cn=$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-reader") | .spec.commonName' "$TMP/dev1-mesh.yaml")
-  assert_eq "$reader_cn" "$(yq '.reader.user' "$ROOT/addons/istio-eastwest/values.yaml")" "remote-secret client cert CN == user istio-eastwest binds"
+  assert_eq "$reader_cn" "$(yq '.reader.user' "$IC")" "remote-secret client cert CN == user addon mesh binds"
   assert_eq "$reader_cn" "$(yq '.admission.readerUser' "$OB")" "remote-secret client cert CN == the only CN the client-ca admission policy admits"
   assert_eq "$(yq 'select(.kind == "Certificate" and .metadata.name == "dev1-mesh-reader") | .spec.duration' "$TMP/dev1-mesh.yaml")" "$(yq '.admission.readerMaxDuration' "$OB")" "reader cert lifetime == the admission limit (7d)"
   # every fleet file's mesh.group has a root (charts/cluster fails the render otherwise; this names the installation)
@@ -120,12 +121,12 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
     done
   done
   # owner decision (docs/multicluster.md "Reader RBAC"): no installation opts peers into reading Secrets
-  assert_eq "$(yq '.reader.remoteCredentialsSecrets' "$ROOT/addons/istio-eastwest/values.yaml")" false "istio-eastwest reader.remoteCredentialsSecrets defaults to false"
+  assert_eq "$(yq '.reader.remoteCredentialsSecrets' "$IC")" false "mesh reader.remoteCredentialsSecrets defaults to false"
   secrets_optin=""
   while IFS= read -r f; do
     if [[ "$(yq '.reader.remoteCredentialsSecrets // false' "$f" 2>/dev/null)" != false ]]; then secrets_optin="$secrets_optin ${f#"$ROOT"/}"; fi
-  done < <(find "$ROOT/installations" -path '*/addons/istio-eastwest/*.yaml' -type f)
-  assert_eq "$secrets_optin" "" "no installation enables istio-eastwest reader.remoteCredentialsSecrets"
+  done < <(find "$ROOT/installations" -path '*/addons/mesh/*.yaml' -type f)
+  assert_eq "$secrets_optin" "" "no installation enables mesh reader.remoteCredentialsSecrets"
   # issuer discovery (OpenBao fetches the member's JWKS anonymously): delivered by the member's CRS from a static
   # ConfigMap (exists before the mesh reconcile), exactly one binding of the read-only discovery role, single owner
   oidc=$(yq 'select(.kind == "ConfigMap" and .metadata.name == "dev1-mesh-oidc") | .data["oidc-discovery.yaml"]' "$TMP/dev1-mesh.yaml")
@@ -135,12 +136,11 @@ if [[ -f "$ROOT/charts/cluster/templates/capi-cluster.yaml" ]]; then
     "issuer discovery is the only thing granted to system:unauthenticated"
   assert_match "$(yq -o=json -I=0 'select(.kind == "ClusterResourceSet" and .metadata.name == "dev1-mesh-trust") | .spec.resources' "$TMP/dev1-mesh.yaml")" \
     '"kind":"ConfigMap","name":"dev1-mesh-oidc"' "the mesh-trust CRS applies the issuer-discovery ConfigMap"
-  for a in istio-csr istio-eastwest istio-ambient; do   # one owner: the CRS, never an addon synced after the reconcile
-    helm template "$a" "$ROOT/addons/$a" --namespace istio-system --set-string mesh.group=contract --set-string cluster.name=dev1 \
-      2>/dev/null > "$TMP/oidc-$a.yaml" || true
-    assert_eq "$(yq 'select(.kind == "ClusterRoleBinding" and .roleRef.name == "system:service-account-issuer-discovery") | .metadata.name' "$TMP/oidc-$a.yaml")" "" \
-      "negative: addon $a does not (also) bind issuer discovery"
-  done
+  # one owner: the CRS, never an addon synced after the reconcile
+  helm template mesh "$ROOT/addons/mesh" --namespace istio-system --values "$MM" --set-string mesh.group=contract --set-string cluster.name=dev1 \
+    2>/dev/null > "$TMP/oidc-mesh.yaml" || true
+  assert_eq "$(yq 'select(.kind == "ClusterRoleBinding" and .roleRef.name == "system:service-account-issuer-discovery") | .metadata.name' "$TMP/oidc-mesh.yaml")" "" \
+    "negative: addon mesh does not (also) bind issuer discovery"
   mesh_net=$(yq 'select(.kind == "Cluster") | .metadata.labels["mesh.platform.koorikla.io/network"]' "$TMP/dev1-mesh.yaml")
   assert_eq "$mesh_net" "dev1" "mesh network label == cluster name"
   assert_match "$(yq 'select(.kind == "ExternalSecret" and .metadata.name == "dev1-mesh-trust") | .spec.target.template.data["mesh-trust.yaml"]' "$TMP/dev1-mesh.yaml")" \
@@ -243,20 +243,17 @@ ob_pss=$(yq 'select(.kind == "StatefulSet" or .kind == "Job" or .kind == "CronJo
   | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
 assert_eq "$ob_pss" "" "OpenBao workloads meet Pod Security baseline"
 
-ia_params=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-ambient") | .spec.template.spec.source.helm.parameters[] | .name + "=" + .value' "$TMP/platform.yaml")
-assert_match "$ia_params" 'global.network=\{\{ index .metadata.labels "mesh.platform.koorikla.io/network" \}\}' "istio-ambient network comes from the mesh network label"
-assert_match "$ia_params" 'global.meshID=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "istio-ambient meshID comes from the mesh group label"
-assert_match "$ia_params" 'istiod.env.AMBIENT_ENABLE_MULTI_NETWORK=.*addons.platform.koorikla.io/istio-eastwest.*else \}\}false' "ambient multi-network only on istio-eastwest clusters"
+ia_params=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-mesh") | .spec.template.spec.source.helm.parameters[] | .name + "=" + .value' "$TMP/platform.yaml")
+assert_match "$ia_params" 'global.network=\{\{ index .metadata.labels "mesh.platform.koorikla.io/network" \}\}' "mesh network comes from the mesh network label"
+assert_match "$ia_params" 'global.meshID=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "mesh meshID comes from the mesh group label"
+assert_eq "$(yq '.istiod.env.AMBIENT_ENABLE_MULTI_NETWORK' "$ROOT/addons/mesh/values.yaml"):$(yq '.istiod.env.AMBIENT_ENABLE_MULTI_NETWORK' "$ROOT/addons/mesh/values/mesh-member.yaml")" "false:true" "ambient multi-network only on mesh members"
 assert_match "$ia_params" 'ztunnel.podAnnotations.mesh\\.platform\\.koorikla\\.io/group=\{\{ index .metadata.labels "mesh.platform.koorikla.io/group" \}\}' "a group change rolls ztunnel (pod annotation from the mesh group label)"
 assert_match "$ia_params" 'global.multiCluster.clusterName=\{\{ index .metadata.labels "platform.koorikla.io/name" \}\}' "istio clusterName == cluster name"
-ia_vf=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-ambient") | .spec.template.spec.source.helm.valueFiles[]' "$TMP/platform.yaml")
+ia_vf=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-mesh") | .spec.template.spec.source.helm.valueFiles[]' "$TMP/platform.yaml")
 assert_match "$ia_vf" 'values/mesh-\{\{ if index .metadata.labels "mesh.platform.koorikla.io/group" \}\}member\{\{ else \}\}none\{\{ end \}\}.yaml' "mesh members get values/mesh-member.yaml"
-csr_params=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-istio-csr") | .spec.template.spec.source.helm.parameters[] | .name + "=" + .value' "$TMP/platform.yaml")
-assert_match "$csr_params" 'cert-manager-istio-csr.app.server.clusterID=\{\{ index .metadata.labels "platform.koorikla.io/name" \}\}' "istio-csr cluster ID == istio clusterName (cluster name)"
-for a in istio-eastwest istio-csr; do
-  sel=$(yq "select(.kind == \"ApplicationSet\" and .metadata.name == \"addon-$a\") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == \"addons.platform.koorikla.io/$a\") | .operator" "$TMP/platform.yaml")
-  assert_eq "$sel" "In" "addon-$a is opt-in by label"
-done
+assert_match "$ia_params" 'cert-manager-istio-csr.app.server.clusterID=\{\{ index .metadata.labels "platform.koorikla.io/name" \}\}' "istio-csr cluster ID == istio clusterName (cluster name)"
+assert_eq "$(yq '(.mesh.csr.enabled|tostring) + ":" + (.mesh.eastwest.enabled|tostring)' "$ROOT/addons/mesh/values.yaml")" "false:false" "istio-csr and east-west are off by default"
+assert_eq "$(yq '(.mesh.csr.enabled|tostring) + ":" + (.mesh.eastwest.enabled|tostring)' "$ROOT/addons/mesh/values/mesh-member.yaml")" "true:true" "mesh members turn istio-csr and east-west on"
 
 # 2b5. Istio ambient, STRICT mTLS in cell namespaces (#53): while addon kyverno-policies generates STRICT
 # PeerAuthentications into the cells (templates/cell-mesh.yaml), ztunnel refuses plaintext there, so every in-cluster
@@ -313,8 +310,10 @@ assert_eq "$fleet_ssd" "ServerSideDiff=true" "fleet appset enables ServerSideDif
 # 5. Catalog alignment checks
 odp_param=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-openchoreo-data-plane") | .spec.template.spec.source.helm.parameters[0].name' "$TMP/platform.yaml")
 assert_eq "$odp_param" "openchoreo-data-plane.clusterAgent.planeID" "openchoreo-data-plane sets planeID parameter"
-cc_ssd=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-clusterclasses") | .spec.template.spec.syncPolicy.syncOptions[] | select(. == "ServerSideDiff=true")' "$TMP/platform.yaml")
-assert_eq "$cc_ssd" "ServerSideDiff=true" "clusterclasses enables ServerSideDiff"
+cc_ssd=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-cluster-fleet") | .spec.template.spec.syncPolicy.syncOptions[] | select(. == "ServerSideDiff=true")' "$TMP/platform.yaml")
+assert_eq "$cc_ssd" "ServerSideDiff=true" "cluster-fleet (ClusterClasses) enables ServerSideDiff"
+cf_src=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-cluster-fleet") | .spec.template.spec.source | .path + " " + (.helm.parameters[] | select(.name == "scope") | .value)' "$TMP/platform.yaml")
+assert_eq "$cf_src" "charts/cluster fleet" "cluster-fleet renders charts/cluster in scope fleet"
 kgw_ns=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-kgateway") | .spec.template.spec.destination.namespace' "$TMP/platform.yaml")
 assert_eq "$kgw_ns" "kgateway-system" "kgateway deploys into kgateway-system"
 coredns_roles=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-coredns-local") | .spec.generators[0].clusters.selector.matchExpressions[] | select(.key == "platform.koorikla.io/role") | .values | join(",")' "$TMP/platform.yaml")
@@ -342,7 +341,7 @@ assert_eq "$wl_store" "default" "workload secret-stores creates ClusterSecretSto
 # ClusterClass patches: CAPI's webhook rejects replace/remove ops on array elements (".../files/0/content"); the
 # offline simulator does not, so guard it here for every installation's classes.
 for inst_file in "$ROOT"/installations/*/installation.yaml; do
-  idx_paths=$(helm template cc "$ROOT/addons/clusterclasses" --values "$inst_file" 2>/dev/null \
+  idx_paths=$(helm template cc "$ROOT/charts/cluster" --values "$inst_file" --set scope=fleet 2>/dev/null \
     | yq 'select(.kind == "ClusterClass") | .spec.patches[].definitions[].jsonPatches[] | select(.op == "replace" or .op == "remove") | .path' \
     | grep -E '/[0-9]+(/|$)' || true)
   assert_eq "$idx_paths" "" "ClusterClass replace/remove patches avoid array indices ($(basename "$(dirname "$inst_file")"))"
@@ -413,12 +412,12 @@ k3d_le_missing() {   # k3d_le_missing <k3d file> -> the --kube-<component>-arg=<
       [[ -n "$v" ]] || continue
       FLAG="--$comp-arg=$v" yq -e '[.options.k3s.extraArgs[] | select(.arg == strenv(FLAG))] | length > 0' "$1" >/dev/null 2>&1 \
         || miss="$miss --$comp-arg=$v"
-    done < <(yq '.k3s.dockerLeaderElectionArgs[]' "$ROOT/addons/clusterclasses/values.yaml")
+    done < <(yq '.k3s.dockerLeaderElectionArgs[]' "$ROOT/charts/cluster/values.yaml")
   done
   printf '%s' "$miss"
 }
-assert_eq "$(yq '.k3s.dockerLeaderElectionArgs | length' "$ROOT/addons/clusterclasses/values.yaml")" 3 \
-  "clusterclasses k3s.dockerLeaderElectionArgs sets lease duration, renew deadline and retry period"
+assert_eq "$(yq '.k3s.dockerLeaderElectionArgs | length' "$ROOT/charts/cluster/values.yaml")" 3 \
+  "charts/cluster k3s.dockerLeaderElectionArgs sets lease duration, renew deadline and retry period"
 assert_eq "$(k3d_le_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-mgmt.yaml passes the CAPD leader election to every embedded controller"
 yq 'del(.options.k3s.extraArgs[] | select(.arg == "--kube-scheduler-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-nole.yaml"
 assert_match "$(k3d_le_missing "$TMP/k3d-nole.yaml")" "kube-scheduler-arg=leader-elect-lease-duration" "contract catches a k3d config without the scheduler leader election"

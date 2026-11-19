@@ -59,8 +59,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret (provider byo: the cluster 
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
 | `platform.koorikla.io/cni` | `cilium` \| `flannel` (`gke` on `gcp-gke`; on `byo` whatever the cluster runs) — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
-| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`; addon `mesh` turns istio-csr and the east-west gateway on from `mesh.group`) |
+| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; addon `mesh` layers `values/mesh-member.yaml` there (istio-csr + east-west gateway; docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
@@ -122,7 +122,7 @@ Workload-cluster keys (store `default`): `openchoreo-observability`, optional `d
 ```
 bootstrap/                      k3d config, bootstrap.sh (task up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
-charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
+charts/cluster/                 CAPI: templates/<provider>/ + common/; scope fleet (providers, ClusterClasses) | cluster
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
 charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)

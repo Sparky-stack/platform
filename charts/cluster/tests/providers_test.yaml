@@ -1,0 +1,252 @@
+suite: scope fleet providers - core, k3s and the infrastructure providers enabled by the installation
+templates:
+  - templates/common/capi-core.yaml
+  - templates/docker/provider.yaml
+  - templates/aws/provider.yaml
+  - templates/aws/credentials.yaml
+  - templates/hetzner/provider.yaml
+  - templates/gcp-gke/provider.yaml
+  - templates/gcp-gke/credentials.yaml
+set:
+  scope: fleet
+tests:
+  - it: installs core, k3s bootstrap + control plane and only CAPD by default
+    asserts:
+      - containsDocument: { kind: CoreProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: cluster-api, namespace: capi-system , any: true }
+        template: templates/common/capi-core.yaml
+      - containsDocument: { kind: BootstrapProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: k3s, namespace: capi-k3s-bootstrap-system , any: true }
+        template: templates/common/capi-core.yaml
+      - containsDocument: { kind: ControlPlaneProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: k3s, namespace: capi-k3s-control-plane-system , any: true }
+        template: templates/common/capi-core.yaml
+      - hasDocuments: { count: 1, filterAware: true }
+        documentSelector: { path: kind, value: InfrastructureProvider, matchMany: true }
+        template: templates/docker/provider.yaml
+      - equal: { path: metadata.name, value: docker }
+        documentSelector: { path: kind, value: InfrastructureProvider }
+        template: templates/docker/provider.yaml
+
+  - it: enables ClusterTopology on core (default false in CAPI 1.13)
+    template: templates/common/capi-core.yaml
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - equal: { path: spec.version, value: v1.13.8 }
+      - equal: { path: spec.manager.featureGates.ClusterTopology, value: true }
+
+  # ClusterResourceSet is GA in core 1.13: the gate no longer exists and an unknown gate crashes the manager
+  - it: does not pass a ClusterResourceSet feature gate (CRS is always on in 1.13)
+    template: templates/common/capi-core.yaml
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - notExists: { path: spec.manager.featureGates.ClusterResourceSet }
+
+  - it: fetches the k3s providers from the GitHub release (not a clusterctl built-in)
+    template: templates/common/capi-core.yaml
+    asserts:
+      - equal:
+          path: spec.fetchConfig.url
+          value: https://github.com/k3s-io/cluster-api-k3s/releases/v0.5.0/bootstrap-components.yaml
+        documentSelector: { path: kind, value: BootstrapProvider }
+      - equal:
+          path: spec.fetchConfig.url
+          value: https://github.com/k3s-io/cluster-api-k3s/releases/v0.5.0/control-plane-components.yaml
+        documentSelector: { path: kind, value: ControlPlaneProvider }
+
+  - it: creates a namespace per provider
+    asserts:
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-system , any: true }
+        template: templates/common/capi-core.yaml
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-k3s-bootstrap-system , any: true }
+        template: templates/common/capi-core.yaml
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capi-k3s-control-plane-system , any: true }
+        template: templates/common/capi-core.yaml
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: capd-system , any: true }
+        template: templates/docker/provider.yaml
+
+  - it: toggles infrastructure providers from capi.providers
+    set: { capi.providers: { docker: false, aws: true, hetzner: true } }
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: templates/docker/provider.yaml
+      - containsDocument: { kind: InfrastructureProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: aws, namespace: capa-system , any: true }
+        template: templates/aws/provider.yaml
+      - containsDocument: { kind: InfrastructureProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: hetzner, namespace: caph-system , any: true }
+        template: templates/hetzner/provider.yaml
+
+  - it: gives CAPA its clusterctl variables from configSecret capa-variables, without CAPI feature gates
+    template: templates/aws/provider.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: metadata.name, value: aws }
+    asserts:
+      - isKind: { of: InfrastructureProvider }
+      - equal: { path: spec.version, value: v2.13.1 }
+      - equal: { path: spec.configSecret, value: { name: capa-variables, namespace: capa-system } }
+      - notExists: { path: spec.manager.featureGates }
+
+  - it: installs CAPH without feature gates or configSecret
+    template: templates/hetzner/provider.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: metadata.name, value: hetzner }
+    asserts:
+      - equal: { path: spec.version, value: v1.1.12 }
+      - notExists: { path: spec.manager }
+      - notExists: { path: spec.configSecret }
+
+  # --- CAPG (GKE) ---------------------------------------------------------------------------------------------------
+  - it: installs CAPG with the GKE + MachinePool gates and the pinned multi-arch manager image
+    template: templates/gcp-gke/provider.yaml
+    set:
+      capi.providers.gcp: true
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: capg@p.iam.gserviceaccount.com }
+    documentSelector: { path: metadata.name, value: gcp }
+    asserts:
+      - isKind: { of: InfrastructureProvider }
+      - equal: { path: metadata.namespace, value: capg-system }
+      - equal: { path: spec.version, value: v1.13.1 }
+      - equal: { path: spec.configSecret, value: { name: capg-variables, namespace: capg-system } }
+      - equal: { path: spec.manager.featureGates, value: { GKE: true, MachinePool: true } }
+      - equal: { path: "spec.deployment.containers[0].name", value: manager }
+      - matchRegex:
+          path: "spec.deployment.containers[0].imageUrl"
+          pattern: '^registry\.k8s\.io/cluster-api-gcp/cluster-api-gcp-controller:v1\.13\.1@sha256:[0-9a-f]{64}$'
+
+  - it: mounts a projected ServiceAccount token for Workload Identity Federation into the CAPG manager
+    template: templates/gcp-gke/provider.yaml
+    set:
+      capi.providers.gcp: true
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: capg@p.iam.gserviceaccount.com }
+    documentSelector: { path: metadata.name, value: gcp }
+    asserts:
+      - equal: { path: "spec.patches[0].target", value: { group: apps, version: v1, kind: Deployment, name: capg-controller-manager, namespace: capg-system } }
+      - matchRegex: { path: "spec.patches[0].patch", pattern: 'audience: "https://iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt"' }
+      - matchRegex: { path: "spec.patches[0].patch", pattern: 'mountPath: /var/run/secrets/tokens/gcp' }
+
+  - it: turns core's MachinePool gate on only while CAPG is enabled
+    template: templates/common/capi-core.yaml
+    set:
+      capi.providers.gcp: true
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: capg@p.iam.gserviceaccount.com }
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - equal: { path: spec.manager.featureGates, value: { ClusterTopology: true, MachinePool: true } }
+
+  - it: leaves core's gates untouched without CAPG
+    template: templates/common/capi-core.yaml
+    documentSelector: { path: kind, value: CoreProvider }
+    asserts:
+      - equal: { path: spec.manager.featureGates, value: { ClusterTopology: true } }
+
+  - it: CAPG alone satisfies the at-least-one-provider check
+    template: templates/common/capi-core.yaml
+    set:
+      capi.providers: { docker: false, gcp: true }
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: capg@p.iam.gserviceaccount.com }
+    asserts:
+      - containsDocument: { kind: CoreProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: cluster-api, namespace: capi-system, any: true }
+
+  - it: fails when no infrastructure provider is enabled
+    template: templates/common/capi-core.yaml
+    set: { capi.providers: { docker: false, aws: false, hetzner: false } }
+    asserts:
+      - failedTemplate: { errorPattern: "enable at least one infrastructure provider" }
+
+  - it: renders no credentials for docker-only installations
+    asserts:
+      - hasDocuments: { count: 0 }
+        template: templates/aws/credentials.yaml
+      - hasDocuments: { count: 0 }
+        template: templates/gcp-gke/credentials.yaml
+
+  # cloud credentials never come from git
+  - it: pulls CAPA credentials from ClusterSecretStore/platform key capi-aws
+    template: templates/aws/credentials.yaml
+    set: { capi.providers.aws: true }
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.namespace, value: capa-system }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: spec.target.name, value: capa-variables }
+      - equal:
+          path: spec.data
+          value:
+            - secretKey: AWS_B64ENCODED_CREDENTIALS
+              remoteRef: { key: capi-aws, property: AWS_B64ENCODED_CREDENTIALS }
+
+  - it: uses empty static credentials when CAPA runs with a pod identity
+    template: templates/aws/credentials.yaml
+    set: { capi.providers.aws: true, aws.credentialsFromStore: false }
+    asserts:
+      - isKind: { of: Secret }
+      - equal: { path: stringData.AWS_B64ENCODED_CREDENTIALS, value: "" }
+
+  # CAPG: Workload Identity Federation only - an external_account config, never a service account key
+  - it: renders CAPG's WIF credential config (external_account, no key material) into capg-variables
+    template: templates/gcp-gke/credentials.yaml
+    set:
+      capi.providers.gcp: true
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: capg@p.iam.gserviceaccount.com }
+    asserts:
+      - isKind: { of: Secret }
+      - equal: { path: metadata.name, value: capg-variables }
+      - equal: { path: metadata.namespace, value: capg-system }
+      - equal:
+          path: stringData.GCP_B64ENCODED_CREDENTIALS
+          # {"audience":"//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt","client_email":"capg@p.iam.gserviceaccount.com","credential_source":{"file":"/var/run/secrets/tokens/gcp/token","format":{"type":"text"}},"service_account_impersonation_url":"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/capg@p.iam.gserviceaccount.com:generateAccessToken","subject_token_type":"urn:ietf:params:oauth:token-type:jwt","token_url":"https://sts.googleapis.com/v1/token","type":"external_account","universe_domain":"googleapis.com"}
+          value: eyJhdWRpZW5jZSI6Ii8vaWFtLmdvb2dsZWFwaXMuY29tL3Byb2plY3RzLzEyMy9sb2NhdGlvbnMvZ2xvYmFsL3dvcmtsb2FkSWRlbnRpdHlQb29scy9wb29sL3Byb3ZpZGVycy9tZ210IiwiY2xpZW50X2VtYWlsIjoiY2FwZ0BwLmlhbS5nc2VydmljZWFjY291bnQuY29tIiwiY3JlZGVudGlhbF9zb3VyY2UiOnsiZmlsZSI6Ii92YXIvcnVuL3NlY3JldHMvdG9rZW5zL2djcC90b2tlbiIsImZvcm1hdCI6eyJ0eXBlIjoidGV4dCJ9fSwic2VydmljZV9hY2NvdW50X2ltcGVyc29uYXRpb25fdXJsIjoiaHR0cHM6Ly9pYW1jcmVkZW50aWFscy5nb29nbGVhcGlzLmNvbS92MS9wcm9qZWN0cy8tL3NlcnZpY2VBY2NvdW50cy9jYXBnQHAuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb206Z2VuZXJhdGVBY2Nlc3NUb2tlbiIsInN1YmplY3RfdG9rZW5fdHlwZSI6InVybjppZXRmOnBhcmFtczpvYXV0aDp0b2tlbi10eXBlOmp3dCIsInRva2VuX3VybCI6Imh0dHBzOi8vc3RzLmdvb2dsZWFwaXMuY29tL3YxL3Rva2VuIiwidHlwZSI6ImV4dGVybmFsX2FjY291bnQiLCJ1bml2ZXJzZV9kb21haW4iOiJnb29nbGVhcGlzLmNvbSJ9
+
+  - it: fails without a WIF provider for CAPG
+    template: templates/gcp-gke/credentials.yaml
+    set: { capi.providers.gcp: true, capi.gcp.serviceAccount: capg@p.iam.gserviceaccount.com }
+    asserts:
+      - failedTemplate: { errorPattern: "capi.gcp.workloadIdentityProvider must be" }
+
+  - it: fails on a service account that is not an IAM service account email
+    template: templates/gcp-gke/credentials.yaml
+    set:
+      capi.providers.gcp: true
+      capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: someone@example.com }
+    asserts:
+      - failedTemplate: { errorPattern: "capi.gcp.serviceAccount must be" }
+
+  # #192: capi-controller-manager lost its 15s lease under bootstrap load and exited; its webhook was gone meanwhile
+  - it: gives the managers with lease flags (core, CAPD, CAPA, CAPG) 60s/40s/10s leader election
+    set:
+      capi.providers: { docker: true, aws: true, gcp: true }
+      capi.gcp:
+        workloadIdentityProvider: projects/1/locations/global/workloadIdentityPools/p/providers/q
+        serviceAccount: capg@p.iam.gserviceaccount.com
+    asserts:
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: kind, value: CoreProvider }
+        template: templates/common/capi-core.yaml
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: docker }
+        template: templates/docker/provider.yaml
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: aws }
+        template: templates/aws/provider.yaml
+      - equal: { path: spec.manager.leaderElection, value: { leaderElect: true, leaseDuration: "60s", renewDeadline: "40s", retryPeriod: "10s", resourceLock: leases, resourceName: "", resourceNamespace: "" } }
+        documentSelector: { path: metadata.name, value: gcp }
+        template: templates/gcp-gke/provider.yaml
+      - equal: { path: spec.manager.featureGates.ClusterTopology, value: true }
+        documentSelector: { path: kind, value: CoreProvider }
+        template: templates/common/capi-core.yaml
+
+  - it: "negative: no leaderElection for managers without the lease flags (k3s bootstrap + control plane, CAPH)"
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - notExists: { path: spec.manager }
+        documentSelector: { path: kind, value: BootstrapProvider }
+        template: templates/common/capi-core.yaml
+      - notExists: { path: spec.manager }
+        documentSelector: { path: kind, value: ControlPlaneProvider }
+        template: templates/common/capi-core.yaml
+      - notExists: { path: spec.manager }
+        documentSelector: { path: metadata.name, value: hetzner }
+        template: templates/hetzner/provider.yaml
+
+  - it: "negative: refuses a Lease name/namespace (the operator would pass --leader-election-id, unknown to CAPI)"
+    # helm reports only the first failing template, which is docker/provider.yaml here
+    template: templates/docker/provider.yaml
+    set: { leaderElection.resourceName: capi }
+    asserts:
+      - failedTemplate: { errorPattern: "must stay empty" }

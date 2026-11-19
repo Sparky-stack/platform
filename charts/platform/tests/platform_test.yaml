@@ -174,7 +174,7 @@ tests:
       - containsDocument:
           kind: ApplicationSet
           apiVersion: argoproj.io/v1alpha1
-          name: addon-clusterclasses
+          name: addon-cluster-fleet
           any: true
 
   - it: "AppProject previews: only charts/preview's three OpenChoreo kinds, the org namespace, the platform repo"
@@ -199,13 +199,15 @@ tests:
   # --- catalog clusterLabelParameters (templates/appset-addons.yaml) ----------------------------------------------
   - it: "clusterLabelParameters: label value else default, always a string"
     template: appset-addons.yaml
-    documentSelector: { path: metadata.name, value: addon-istio-ambient }
+    documentSelector: { path: metadata.name, value: addon-mesh }
+    set:
+      addons: { mesh: { clusterLabelParameters: { example.flag: { label: example.test/flag, default: "false" } } } }
     asserts:
       - contains:
           path: spec.template.spec.source.helm.parameters
           content:
-            name: istiod.env.AMBIENT_ENABLE_MULTI_NETWORK
-            value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/istio-eastwest" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
+            name: example.flag
+            value: '{{ $v := index .metadata.labels "example.test/flag" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
             forceString: true
       - contains:
           path: spec.template.spec.source.helm.parameters

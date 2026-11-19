@@ -1,0 +1,37 @@
+{{- if eq .Values.scope "cluster" }}
+{{- /* Publishes public cluster coordinates into Secret fleet/<name>-mesh-openbao for addon openbao JWT/PKI setup. */ -}}
+{{- if include "mesh.group" . }}
+{{- $name := .Values.name }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-mesh-openbao
+  namespace: fleet
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # reads <name>-kubeconfig, which CAPI creates for the Cluster (wave 0)
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: mgmt-fleet
+  target:
+    name: {{ $name }}-mesh-openbao
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          {{- include "mesh.labels" . | nindent 10 }}
+          mesh.platform.koorikla.io/openbao-client: "true"
+      data:
+        cluster: {{ $name | quote }}
+        group: {{ include "mesh.group" . | quote }}
+        server: {{`'{{ (index (fromYaml .kubeconfig).clusters 0).cluster.server }}'`}}
+        ca: {{`'{{ index (index (fromYaml .kubeconfig).clusters 0).cluster "certificate-authority-data" | b64dec }}'`}}
+  data:
+    - secretKey: kubeconfig
+      remoteRef: { key: {{ $name }}-kubeconfig, property: value }
+{{- end }}
+{{- end }}

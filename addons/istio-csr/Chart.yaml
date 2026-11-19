@@ -1,9 +1,0 @@
-apiVersion: v2
-name: istio-csr
-description: cert-manager istio-csr on mesh members - istiod's CA is turned off; workload and istiod certificates are signed by the mesh CA in OpenBao on mgmt (cert-manager Vault Issuer, per-member JWT auth with a projected, audience-bound ServiceAccount token)
-type: application
-version: 0.1.0
-dependencies:
-  - name: cert-manager-istio-csr
-    version: v0.19.1
-    repository: https://charts.jetstack.io

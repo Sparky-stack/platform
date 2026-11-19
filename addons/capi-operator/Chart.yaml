@@ -1,6 +1,6 @@
 apiVersion: v2
 name: capi-operator
-description: Cluster API operator (wrapper). Providers are declared as CRs by the capi-providers addon.
+description: Cluster API operator (wrapper). Providers are declared as CRs by charts/cluster (scope fleet).
 type: application
 version: 0.1.0
 dependencies:

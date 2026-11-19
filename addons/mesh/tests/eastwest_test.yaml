@@ -1,0 +1,189 @@
+suite: mesh (east-west) - ambient east-west gateway + reader RBAC
+templates:
+  - templates/eastwest-gateway.yaml
+  - templates/eastwest-reader-rbac.yaml
+set:
+  cluster.name: prod1
+  mesh: { eastwest: { enabled: true }, group: local, network: prod1 }
+tests:
+  - it: renders an istio-east-west Gateway with the HBONE double-HBONE listener, labelled with the network
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 1
+    asserts:
+      - isKind: { of: Gateway }
+      - equal: { path: metadata.name, value: istio-eastwestgateway }
+      - equal: { path: metadata.namespace, value: NAMESPACE }
+      - equal: { path: 'metadata.labels["topology.istio.io/network"]', value: prod1 }
+      - equal: { path: spec.gatewayClassName, value: istio-east-west }
+      - equal:
+          path: spec.listeners
+          value:
+            - name: mesh
+              port: 15008
+              protocol: HBONE
+              tls: { mode: Terminate, options: { gateway.istio.io/tls-terminate-mode: ISTIO_MUTUAL } }
+      - equal: { path: spec.infrastructure.parametersRef, value: { group: "", kind: ConfigMap, name: istio-eastwestgateway-params } }
+      - notExists: { path: spec.infrastructure.annotations }
+
+  - it: falls back to the cluster name for the network
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 1
+    set:
+      mesh: { group: local, network: "" }
+    asserts:
+      - equal: { path: 'metadata.labels["topology.istio.io/network"]', value: prod1 }
+
+  - it: sizes the generated Deployment through the parametersRef ConfigMap (1 replica, small requests)
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ConfigMap }
+      - matchRegex: { path: data.deployment, pattern: 'replicas: 1' }
+      - matchRegex: { path: data.deployment, pattern: 'name: istio-proxy' }
+      - matchRegex: { path: data.deployment, pattern: 'memory: 64Mi' }
+      - notExists: { path: data.service }
+
+  - it: restricts the LoadBalancer when source ranges are set
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 0
+    set:
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
+    asserts:
+      - matchRegex: { path: data.service, pattern: '- 203.0.113.0/24' }
+
+  - it: asks hcloud-ccm for an LB in the cluster's region on Hetzner
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 1
+    set:
+      cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
+    asserts:
+      - equal: { path: 'spec.infrastructure.annotations["load-balancer.hetzner.cloud/location"]', value: fsn1 }
+
+  - it: uses an NLB on AWS
+    template: templates/eastwest-gateway.yaml
+    documentIndex: 1
+    values: [../values/provider-aws.yaml]
+    set:
+      cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
+      gateway.loadBalancerSourceRanges: [203.0.113.0/24]
+    asserts:
+      - equal: { path: 'spec.infrastructure.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]', value: nlb }
+
+  - it: "negative: refuses an unrestricted LoadBalancer outside docker (15008/15021 open to 0.0.0.0/0)"
+    template: templates/eastwest-gateway.yaml
+    values: [../values/provider-aws.yaml]
+    set:
+      cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
+    asserts:
+      - failedTemplate: { errorMessage: "mesh (dev-euc1, provider aws): gateway.loadBalancerSourceRanges is required outside docker - the peers' egress CIDRs (installations/<inst>/addons/mesh/values.yaml)" }
+
+  - it: "negative: same on Hetzner"
+    template: templates/eastwest-gateway.yaml
+    set:
+      cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
+    asserts:
+      - failedTemplate: {}
+
+  - it: binds the reader user (client cert from mgmt) to the platform's own read-only ClusterRole, never upstream's
+    template: templates/eastwest-reader-rbac.yaml
+    release:
+      namespace: istio-system
+    documentIndex: 1
+    asserts:
+      - isKind: { of: ClusterRoleBinding }
+      - equal: { path: roleRef, value: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: platform-istio-reader } }
+      - notEqual: { path: roleRef.name, value: istio-reader-clusterrole-istio-system }
+      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }
+
+  - it: grants exactly the discovery reads a peer istiod needs (pinned - any widening must change this test)
+    template: templates/eastwest-reader-rbac.yaml
+    documentIndex: 0
+    asserts:
+      - isKind: { of: ClusterRole }
+      - equal: { path: metadata.name, value: platform-istio-reader }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [""], resources: [services, endpoints, pods, namespaces, nodes], verbs: [get, list, watch] }
+            - { apiGroups: [discovery.k8s.io], resources: [endpointslices], verbs: [get, list, watch] }
+            - { apiGroups: [gateway.networking.k8s.io], resources: [gateways], verbs: [get, list, watch] }
+            - { apiGroups: [networking.istio.io, security.istio.io, telemetry.istio.io, extensions.istio.io], resources: ["*"], verbs: [get, list, watch] }
+            - { apiGroups: [multicluster.x-k8s.io], resources: [serviceimports], verbs: [get, list, watch] }
+            - { apiGroups: [apiextensions.k8s.io], resources: [customresourcedefinitions], verbs: [get, list, watch] }
+
+  - it: "negative: peers can never read Secrets/ConfigMaps cluster-wide, write serviceexports or create token/access reviews"
+    template: templates/eastwest-reader-rbac.yaml
+    documentIndex: 0
+    asserts:
+      - notContains: { path: 'rules[0].resources', content: secrets }
+      - notContains: { path: 'rules[0].resources', content: configmaps }
+      - notContains: { path: 'rules[0].resources', content: "*" }
+      - notContains: { path: 'rules[4].resources', content: serviceexports }
+      - notContains: { path: rules, content: { apiGroups: [authentication.k8s.io], resources: [tokenreviews], verbs: [create] } }
+      - notContains: { path: rules, content: { apiGroups: [authorization.k8s.io], resources: [subjectaccessreviews], verbs: [create] } }
+      - notContains: { path: rules, content: { apiGroups: [""], resources: [secrets], verbs: [get, list, watch] } }
+      - lengthEqual: { path: 'rules[0].verbs', count: 3 }
+      - lengthEqual: { path: 'rules[3].verbs', count: 3 }
+
+  - it: "default: no Secret grant to the reader anywhere (4 objects, none references secrets)"
+    template: templates/eastwest-reader-rbac.yaml
+    asserts:
+      - hasDocuments: { count: 4 }
+      - notMatchRegex: { path: metadata.name, pattern: secrets }
+      - notContains: { path: rules, content: { apiGroups: [""], resources: [secrets], verbs: [list, watch] }, any: true }
+
+  - it: "opt-in reader.remoteCredentialsSecrets (docker): a separate ClusterRole with list/watch on Secrets only"
+    template: templates/eastwest-reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+    asserts:
+      - hasDocuments: { count: 6 }
+      - isKind: { of: ClusterRole }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: platform-istio-reader-secrets }
+        documentIndex: 2
+      - equal: { path: rules, value: [{ apiGroups: [""], resources: [secrets], verbs: [list, watch] }] }
+        documentIndex: 2
+      - equal: { path: roleRef.name, value: platform-istio-reader-secrets }
+        documentIndex: 3
+      - equal: { path: subjects, value: [{ apiGroup: rbac.authorization.k8s.io, kind: User, name: "platform:istio-reader" }] }
+        documentIndex: 3
+      - notContains: { path: 'rules[0].resources', content: secrets }
+        documentIndex: 0
+
+  - it: "negative: reader.remoteCredentialsSecrets fails the render outside docker"
+    template: templates/eastwest-reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+      cluster: { name: prod-euc1, provider: aws }
+    asserts:
+      - failedTemplate: { errorMessage: "mesh (prod-euc1, provider aws): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" }
+
+  - it: "negative: reader.remoteCredentialsSecrets fails the render on hetzner too"
+    template: templates/eastwest-reader-rbac.yaml
+    set:
+      reader: { remoteCredentialsSecrets: true }
+      cluster: { name: dev-fsn1, provider: hetzner }
+    asserts:
+      - failedTemplate: {}
+
+  - it: lets peers read only the istio MeshConfig ConfigMap (trust domain) in istio-system
+    template: templates/eastwest-reader-rbac.yaml
+    release:
+      namespace: istio-system
+    asserts:
+      - isKind: { of: Role }
+        documentIndex: 2
+      - equal: { path: metadata.namespace, value: istio-system }
+        documentIndex: 2
+      - equal:
+          path: rules
+          value: [{ apiGroups: [""], resources: [configmaps], resourceNames: [istio], verbs: [get, list, watch] }]
+        documentIndex: 2
+      - isKind: { of: RoleBinding }
+        documentIndex: 3
+      - equal: { path: roleRef.name, value: platform-istio-reader }
+        documentIndex: 3
+      - equal: { path: 'subjects[0].name', value: "platform:istio-reader" }
+        documentIndex: 3

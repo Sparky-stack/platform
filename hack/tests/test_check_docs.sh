@@ -107,6 +107,8 @@ assert_match "$out" 'runbook docs/runbooks/orphan.md is not linked' "unindexed r
 
 cp -R "$TMP/good" "$TMP/readmes"
 mkdir -p "$TMP/readmes/charts/no-readme" "$TMP/readmes/addons/incomplete" "$TMP/readmes/addons/toolong" "$TMP/readmes/addons/stale"
+printf 'apiVersion: v2\nname: no-readme\nversion: 0.1.0\n' > "$TMP/readmes/charts/no-readme/Chart.yaml"
+mkdir -p "$TMP/readmes/addons/deleted/charts" # leftover of a deleted addon (CI chart cache): not a chart
 cat > "$TMP/readmes/addons/incomplete/README.md" <<'EOF'
 # incomplete
 ## Purpose
@@ -134,6 +136,7 @@ knob: true
 out=$(py "$ROOT/hack/check-docs.py" "$TMP/readmes" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "missing, malformed or stale chart/addon READMEs fail"
 assert_match "$out" "charts/no-readme/README.md: missing README.md" "missing chart README rejected"
+assert_eq "$(grep -c addons/deleted <<<"$out")" 0 "dir without Chart.yaml (cached charts/ of a deleted addon) ignored"
 assert_match "$out" 'README missing section "day-2 notes"' "missing addon README section rejected"
 assert_match "$out" "README is 42 lines \(max 40\)" "overlong addon README rejected (table lines ignored)"
 assert_match "$out" "addons/stale/README.md: stale README.md" "stale chart README rejected"

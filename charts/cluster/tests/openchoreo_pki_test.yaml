@@ -1,28 +1,28 @@
 suite: openchoreo agent PKI (per-cluster CA on mgmt)
 templates:
-  - templates/openchoreo-agent-pki.yaml
-  - templates/openchoreo-helpers.yaml
+  - templates/common/openchoreo-agent-pki.yaml
+  - templates/common/_openchoreo.tpl
 set:
   name: dev1
   openchoreo.dataPlane.enabled: true
   openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
 tests:
   - it: renders nothing when the data plane is disabled
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     set:
       openchoreo.dataPlane.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: fails without a cluster name
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     set:
       name: ""
     asserts:
       - failedTemplate: { errorMessage: "name is required (cluster file)" }
 
   - it: renders selfsigned issuer -> CA cert -> CA issuer -> client cert, all in fleet
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     asserts:
       - hasDocuments: { count: 4 }
       - equal: { path: metadata.namespace, value: fleet }
@@ -48,7 +48,7 @@ tests:
         documentIndex: 2
 
   - it: issues the client cert with CN == cluster name, client auth, signed by the per-cluster CA
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     documentIndex: 3
     asserts:
       - isKind: { of: Certificate }
@@ -62,7 +62,7 @@ tests:
 
   # #192: a Certificate waits (Progressing) for its Issuer, so each link of the chain syncs one wave after the previous
   - it: chains the PKI over sync waves (Issuer 0 -> CA cert 1 -> CA issuer 2 -> client cert 3)
-    template: templates/openchoreo-agent-pki.yaml
+    template: templates/common/openchoreo-agent-pki.yaml
     asserts:
       - notExists: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]' }
         documentIndex: 0

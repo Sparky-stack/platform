@@ -553,15 +553,18 @@ c_falco_cluster_name() {
 }
 
 # ---- step 8: zero trust ---------------------------------------------------------------------------------------------
-# Mesh members (clusters with addon istio-csr): cert-manager Issuer istio-system/openbao-mesh is a Vault issuer
-# pointing at OpenBao on mgmt, and istiod's serving Certificate is Ready and issued by it (addons/istio-csr). Workload
+# Mesh members (CAPI Clusters labelled mesh.platform.koorikla.io/group, from the fleet file's mesh.group; addon mesh
+# turns istio-csr on there): cert-manager Issuer istio-system/openbao-mesh is a Vault issuer pointing at OpenBao on
+# mgmt, and istiod's serving Certificate is Ready and issued by it (addons/mesh templates/csr-issuer.yaml). Workload
 # certificates follow the same issuer through istio-csr; no CA key is on the member.
 c_mesh_certs() {
-  local apps c iss crt ok="" bad="" skip=""
+  local apps members c iss crt ok="" bad="" skip=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
   printf '%s\n' "$apps" | grep -q '^openbao-' || { echo "OpenBao addon not installed on mgmt"; return 1; }
+  members=$(km get clusters.cluster.x-k8s.io -n fleet -l mesh.platform.koorikla.io/group \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
-    printf '%s\n' "$apps" | grep -qx "istio-csr-$c" || { skip="$skip${skip:+, }$c"; continue; }
+    printf '%s\n' "$members" | grep -qx "$c" || { skip="$skip${skip:+, }$c"; continue; }
     iss=$(kw "$c" get issuers.cert-manager.io -n istio-system openbao-mesh \
       -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{" "}{.spec.vault.server}' 2>/dev/null)
     crt=$(kw "$c" get certificates.cert-manager.io -n istio-system istiod \
@@ -579,7 +582,7 @@ c_mesh_certs() {
     ok="$ok${ok:+, }$c(istiod until ${3:-?})"
   done
   [[ -z "$bad" ]] || { echo "not issued by OpenBao: $bad${ok:+; ok: $ok}"; return 1; }
-  [[ -n "$ok" ]] || { echo "no mesh member (addon istio-csr) among: ${CLUSTERS[*]:-none}"; return 1; }
+  [[ -n "$ok" ]] || { echo "no mesh member (fleet file mesh.group) among: ${CLUSTERS[*]:-none}"; return 1; }
   echo "OpenBao-issued: $ok${skip:+; not mesh members: $skip}"
 }
 

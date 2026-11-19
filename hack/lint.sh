@@ -14,12 +14,9 @@ first_cluster=$(find "$first_inst/clusters" -maxdepth 1 -name '*.yaml' | sort | 
 for dir in charts/* addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
   if [[ "$dir" == "charts/cluster" ]]; then
-    if [[ ! -f "$dir/templates/capi-cluster.yaml" ]]; then
-      echo "==> SKIP helm lint $dir (capi-cluster.yaml not present on this branch)"
-      continue
-    fi
-    echo "==> helm lint $dir"
+    echo "==> helm lint $dir (scope cluster, scope fleet)"
     helm lint "$dir" --values "$first_inst/installation.yaml" --values "$first_cluster" >/dev/null
+    helm lint "$dir" --values "$first_inst/installation.yaml" --set scope=fleet >/dev/null
   else
     echo "==> helm lint $dir"
     helm lint "$dir" >/dev/null

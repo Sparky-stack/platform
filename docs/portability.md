@@ -35,8 +35,8 @@ Two backends are pluggable per installation rather than per cluster:
   cluster requests certificates through a cert-manager `Issuer` of type `vault`. Any cert-manager issuer can take that
   place - e.g. [aws-privateca-issuer](https://github.com/cert-manager/aws-privateca-issuer) (AWS Private CA),
   [google-cas-issuer](https://github.com/jetstack/google-cas-issuer) (Google CAS), or an existing Vault - without
-  changing istio-csr, Istio or the apps. Only the OpenBao/Vault path is implemented and tested here; the istio-csr addon
-  renders the `vault` Issuer today, so another backend means adding an issuer option to that one template.
+  changing istio-csr, Istio or the apps. Only the OpenBao/Vault path is implemented and tested here; the mesh addon
+  (`templates/csr-issuer.yaml`) renders the `vault` Issuer today, so another backend means adding an issuer option to that one template.
 
 Details and setup: [providers.md](providers.md) ([byo](providers.md#bring-your-own-cluster-byo)).
 
@@ -52,8 +52,7 @@ those labels - `values/role-<role>.yaml`, `values/provider-<provider>.yaml`, `va
 | `cilium` | only where the cluster was born with `cni: cilium` (never on byo, never on GKE) |
 | `aws-ccm`, `hcloud-ccm` | catalog `providers: [aws]` / `[hetzner]` |
 | `coredns-local` | catalog `providers: [docker, byo]`; off on byo except in `installations/local` (k3d on network `kind`) |
-| `istio-ambient` | `values/provider-gcp-gke.yaml` (GKE profile), `values/cni-flannel.yaml` |
-| `istio-eastwest` | `values/provider-aws.yaml` (NLB) |
+| `mesh` | `values/provider-gcp-gke.yaml` (GKE profile), `values/cni-flannel.yaml`, `values/provider-aws.yaml` (east-west NLB) |
 | `crossplane` | `values/provider-docker.yaml` (production rule audits locally) |
 | `external-secrets`, `secret-stores`, `openchoreo-data-plane`, `kyverno` | `values/provider-byo.yaml`: rebuild the ConfigMaps that CRS payloads deliver on CAPI clusters from the Secrets mgmt pushes |
 
