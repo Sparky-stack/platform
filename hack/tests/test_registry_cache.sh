@@ -13,7 +13,8 @@ cat > "$BIN/docker" <<'EOF'
 echo "$*" >> "$DOCKER_LOG"
 case "$1" in
   inspect) exit 1 ;;                      # no cache container running yet
-  ps) [[ "$*" == *-aq* ]] && echo abc123 ;;
+  info) [[ -n "${FAKE_ROOT:-}" ]] && echo "$FAKE_ROOT" ;;
+  ps) [[ "$*" == *-aq* && -z "${FAKE_NONE:-}" ]] && echo abc123 ;;
 esac
 exit 0
 EOF
@@ -46,6 +47,12 @@ assert_eq "$(grep -c k3d "$DOCKER_LOG" || true)" 0 "up: not attached to any k3d 
 PATH="$P" bash "$ROOT/hack/registry-cache.sh" clean >/dev/null
 assert_match "$(cat "$DOCKER_LOG")" "rm -f abc123" "clean: removes the labelled containers"
 assert_eq "$(grep -c '^volume rm platform-cache-' "$DOCKER_LOG")" "$n" "clean: removes every cache volume"
+
+# low disk: no caches are created (containerd then pulls upstream), unless they already exist
+: > "$DOCKER_LOG"
+PATH="$P" FAKE_ROOT="$TMP" FAKE_NONE=1 REGISTRY_CACHE_MIN_FREE_GIB=999999 bash "$ROOT/hack/registry-cache.sh" up 2>"$TMP/err" >/dev/null
+assert_eq "$(grep -c '^run ' "$DOCKER_LOG" || true)" 0 "up: low disk -> no cache containers"
+assert_match "$(cat "$TMP/err")" "registry caches not created" "up: low disk warns"
 
 # bootstrap down never touches the caches (only `task cache:clean` does)
 assert_eq "$(sed -n '/^cmd_down()/,/^}/p' "$ROOT/bootstrap/bootstrap.sh" | grep -c 'registry-cache\|platform-cache' || true)" 0 \

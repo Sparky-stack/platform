@@ -20,8 +20,22 @@ mirrors() { yq '.registry.hostCache.mirrors[] | .upstream + " " + .remote' "$INS
 # name <upstream>: container + volume name, also the CAPD/k3d mirror host (charts/cluster derives it the same way).
 name() { echo "platform-cache-${1//./-}"; }
 
+# low_disk: true when Docker's data dir is on this host (native Linux) and has less than REGISTRY_CACHE_MIN_FREE_GIB
+# (default 10) free. A full cache is several GiB on top of the node image stores; Docker Desktop VMs are not checked.
+low_disk() {
+  local root free_k
+  root=$(docker info -f '{{.DockerRootDir}}' 2>/dev/null | tr -d '\r')
+  [[ -d "$root" ]] || return 1
+  free_k=$(df -Pk "$root" | awk 'NR == 2 { print $4 }')
+  (( free_k < ${REGISTRY_CACHE_MIN_FREE_GIB:-10} * 1024 * 1024 ))
+}
+
 cmd_up() {
   docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
+  if low_disk && [[ -z "$(docker ps -aq --filter label=platform.koorikla.io/registry-cache=true)" ]]; then
+    echo "WARN: less than ${REGISTRY_CACHE_MIN_FREE_GIB:-10} GiB free for Docker: registry caches not created (pulls go upstream)" >&2
+    return 0
+  fi
   local upstream remote n
   while read -r upstream remote; do
     n=$(name "$upstream")

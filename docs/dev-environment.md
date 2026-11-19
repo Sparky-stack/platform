@@ -323,7 +323,7 @@ What keeps it short now:
   from charts/cluster (`capi-registries.yaml`, docker provider only) instead of Harbor's proxy projects for those
   upstreams. containerd falls back to the upstream when a cache is down. `REGISTRY_CACHE=0 task up` opts out (mgmt pulls
   direct, CAPD nodes keep Harbor); `task cache:clean` removes containers and volumes (several GiB: check `task
-  cache:status` when disk runs low).
+  cache:status` when disk runs low; below `REGISTRY_CACHE_MIN_FREE_GIB` (default 10) free on a native Linux Docker, `up` skips creating them).
 - **Retry backoff capped at 1m** (ApplicationSets in charts/platform, tenant apps): unlimited retries stay (#199), the
   idle time after a dependency heals is at most a minute.
 - **Argo CD resync 120 s** (upstream default; jitter 30 s) and upstream processor counts (status 20, operation 10).
