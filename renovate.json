@@ -114,12 +114,17 @@
         "/^installations/[^/]+/addons/crossplane/[^/]+\\.yaml$/"
       ],
       "matchStrings": [
-        "(?<depName>ghcr\\.io/koorikla/platform/[a-z0-9-]+):(?<currentValue>[a-z0-9.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+        "(?<depName>ghcr\\.io/koorikla/platform/[a-z0-9_-]+):(?<currentValue>[a-z0-9.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
       ],
       "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
+    {
+      "description": "A Crossplane Project's Configuration and its embedded function (<name>_compose-<name>) are published by the same CI run and the Configuration's dependsOn pins the function digest: bump both in one PR",
+      "matchPackageNames": ["/^ghcr\\.io/koorikla/platform/postgresql(_compose-postgresql)?$/"],
+      "groupName": "postgresql package"
+    },
     {
       "description": "Mesh charts (addons/mesh: the four Istio charts from OCI ghcr.io/istio/release/charts + cert-manager-istio-csr): one PR. Helm cannot pin dependency digests, so the tarball sha256s in the Chart.yaml annotation platform.koorikla.io/dependency-digests move in the same PR (hack/deps.sh fails until they match)",
       "matchManagers": [

@@ -35,7 +35,7 @@ kc() {   # kc <file> <label>
 }
 COMP=packages/postgresql/apis/postgresql/composition.yaml
 CFG_RE='^ghcr\.io/koorikla/platform/postgresql:[a-z0-9.-]+@sha256:[0-9a-f]{64}$'
-PKG_RE='^xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
+PKG_RE='^(xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+|ghcr\.io/koorikla/platform/[a-z0-9_-]+:[a-z0-9.-]+)@sha256:[0-9a-f]{64}$'
 
 # --- 1a. selection through the ApplicationSet for local dev1 ------------------------------------------------------------
 render_platform local "$TMP/platform.yaml"
@@ -52,7 +52,8 @@ assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.skipDependencyResol
 assert_eq "$(yq -N 'select(.kind == "EnvironmentConfig" and .metadata.name == "platform-postgresql") | .data.backend' "$TMP/dev1.yaml")" \
   cnpg "dev1 (provider docker): EnvironmentConfig platform-postgresql selects cnpg"
 assert_eq "$(yq -N 'select(.kind == "Function") | .metadata.name' "$TMP/dev1.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
-  "function-auto-ready function-environment-configs function-go-templating " "dev1: the three Functions of the Composition"
+  "function-auto-ready function-environment-configs function-go-templating koorikla-platform-postgresqlcompose-postgresql " \
+  "dev1: the Functions of the Composition, its embedded compose-postgresql included"
 assert_eq "$(yq -N 'select(.kind == "ValidatingPolicy" and .metadata.name == "postgresql-production-ha-backup") | .spec.validationActions[0]' "$TMP/dev1.yaml")" \
   Audit "dev1: values/provider-docker.yaml makes the production rule Audit (layered like the ApplicationSet)"
 

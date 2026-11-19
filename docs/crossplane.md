@@ -94,7 +94,8 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   `app-crossplane-configuration.yaml` at `refs/heads/main` or a `postgresql-v*` tag) for every package under
   `ghcr.io/koorikla/platform/`; it also needs `--enable-signature-verification` in `crossplane.args`. The subject alone does not pin the calling repository (any repo can call a public reusable
   workflow); the push target `ghcr.io/koorikla/platform/*` is writable only by this repo, which closes that gap.
-- Promotion: bump `packages.configuration` (`tag@sha256`) in `addons/crossplane/values.yaml`; per-environment pins in
+- Promotion: bump `packages.configuration` and its embedded Function `packages.functions.koorikla-platform-postgresqlcompose-postgresql`
+  (same tag, both `tag@sha256`; one Renovate group) in `addons/crossplane/values.yaml`; per-environment pins in
   `installations/<inst>/addons/crossplane/env-<env>.yaml` gate dev -> prod (the Argo CD gate is #57). Renovate proposes
   digest bumps (`renovate.json`, ghcr.io/koorikla/platform packages).
 
@@ -137,7 +138,7 @@ before an example (VERIFY: not exercised in CI).
 
 `hack/tests/test_crossplane_render.sh`: the ApplicationSet render for dev1 has no XRD / Composition, one Configuration
 pinned by digest with `skipDependencyResolution`, `EnvironmentConfig platform-postgresql` with backend `cnpg` and the
-three Functions; every backend's addon render passes kubeconform and pins every package; a missing fact fails the
+Functions (the embedded `koorikla-platform-postgresqlcompose-postgresql` included); every backend's addon render passes kubeconform and pins every package; a missing fact fails the
 render. `crossplane render` (needs a Linux Docker engine, skipped otherwise) of `packages/postgresql`'s Composition with
 each backend's EnvironmentConfig checks composed resources (kubeconform), HA / backup / deletion / Aurora mapping, the
 identical Secret shape, no password in composed objects, and that an unknown backend is fatal. Renders share one Docker
