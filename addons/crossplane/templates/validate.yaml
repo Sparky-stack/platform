@@ -1,0 +1,26 @@
+{{- /* Renders nothing: per-backend checks that need the resolved backend (types, enums and package pins:
+values.schema.json). Every managed-database fact the Composition needs must be set here, so a missing fact fails the
+Helm render, not the cluster. */ -}}
+{{- $p := .Values.postgresql }}
+{{- $b := include "crossplane.pgBackend" . }}
+{{- if not $b }}
+{{- fail (printf "postgresql: no backend for provider %q - add it to postgresql.backendByProvider or set postgresql.backend" .Values.cluster.provider) }}
+{{- end }}
+{{- $missing := list }}
+{{- if eq $b "aws-rds" }}
+{{- if lt (len ($p.aws.subnetIds | default list)) 2 }}{{ fail "postgresql.aws.subnetIds: at least two private subnets (two AZs) are required" }}{{ end }}
+{{- $missing = list "vpcId" "nodeSecurityGroupId" }}
+{{- if and (eq $p.aws.identity.source "IRSA") (not $p.aws.identity.roleArn) }}
+{{- fail "postgresql.aws.identity.roleArn is required with IRSA" }}
+{{- end }}
+{{- else if eq $b "gcp-cloudsql" }}
+{{- $missing = list "project" "privateNetwork" }}
+{{- else if eq $b "azure-flexible" }}
+{{- $missing = list "tenantID" "resourceGroupName" "delegatedSubnetId" "privateDnsZoneId" "clientID" "subscriptionID" }}
+{{- end }}
+{{- $cloud := include "crossplane.pgCloud" . }}
+{{- range $missing }}
+{{- if not (get (get $p $cloud) .) }}
+{{- fail (printf "postgresql.%s.%s is required for backend %s" $cloud . $b) }}
+{{- end }}
+{{- end }}

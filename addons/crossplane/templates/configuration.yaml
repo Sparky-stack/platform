@@ -9,7 +9,7 @@ metadata:
   annotations:
     {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
 spec:
-  package: {{ required "packages.configuration is required (ghcr.io/koorikla/platform/postgresql:<tag>@sha256:...)" .Values.packages.configuration }}
+  package: {{ .Values.packages.configuration }}
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic
   revisionHistoryLimit: 2

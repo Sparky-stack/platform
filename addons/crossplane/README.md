@@ -119,6 +119,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 
 ## Day-2 notes
 
+- Values are checked by `values.schema.json` (backend enums, `aws.identity.source`, every package pinned `<repo>:<tag>@sha256:<digest>`; `helm` prints the failing path). Facts each backend needs (aws/gcp/azure ids, a backend for `cluster.provider`) are checked in `templates/validate.yaml`.
 - Backing up composed CloudNativePG databases and upgrading Crossplane: [backup and restore](../../docs/runbooks/backup-restore.md#6-cloudnativepg-cloudnative-pg) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
 
 ## Links
