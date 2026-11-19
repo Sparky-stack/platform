@@ -356,7 +356,7 @@ Production enforcement (addon kyverno-policies `templates/workload-resilience.ya
 a readinessProbe and cpu + memory requests on every container; HorizontalPodAutoscalers (also KEDA's) minReplicas >= 2.
 A denial shows up as an apply failure on the RenderedRelease. The PDB itself is not an admission check (OpenChoreo
 applies it together with the Deployment, in no fixed order): it exists by construction and `task demo:check`
-(`resilience-production`) asserts it.
+(row "hello-world PDB/spread/priority in production") asserts it.
 
 ## Known issue: re-created data plane clusters
 
