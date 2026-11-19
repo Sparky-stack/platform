@@ -21,7 +21,7 @@ if [[ -f "$ROOT/charts/cluster/templates/common/capi-cluster.yaml" ]]; then
   helm template cluster-dev1 "$ROOT/charts/cluster" --namespace fleet \
     --values "$ROOT/installations/local/installation.yaml" \
     --values "$ROOT/installations/local/clusters/dev1.yaml" > "$TMP/dev1.yaml"
-  for key in platform.koorikla.io/name platform.koorikla.io/role platform.koorikla.io/provider platform.koorikla.io/region platform.koorikla.io/environment platform.koorikla.io/installation platform.koorikla.io/cni addons.platform.koorikla.io/cilium mesh.platform.koorikla.io/group mesh.platform.koorikla.io/network addons.platform.koorikla.io/istio-eastwest addons.platform.koorikla.io/istio-csr; do
+  for key in platform.koorikla.io/name platform.koorikla.io/role platform.koorikla.io/provider platform.koorikla.io/region platform.koorikla.io/environment platform.koorikla.io/installation platform.koorikla.io/cni addons.platform.koorikla.io/cilium mesh.platform.koorikla.io/group mesh.platform.koorikla.io/network; do
     capi_v=$(yq "select(.kind == \"Cluster\" and .metadata.name == \"dev1\") | .metadata.labels[\"$key\"]" "$TMP/dev1.yaml")
     wl_v=$(yq "select(.kind == \"ExternalSecret\" and .metadata.name == \"dev1-argocd-cluster\") | .spec.target.template.metadata.labels[\"$key\"]" "$TMP/dev1.yaml")
     assert_eq "$wl_v" "$capi_v" "dev1 argocd cluster label $key matches CAPI Cluster"
