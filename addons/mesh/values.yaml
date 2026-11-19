@@ -34,6 +34,13 @@ global:
     # waypoint proxies istiod injects (optional in ambient; rendered into the injector config, not a pod spec)
     image: docker.io/istio/proxyv2:1.32.0-distroless@sha256:9cd1f1cc261f3fe250ab483543e7256c39d5871eae5f1817c0809eff09e365d4   # index: amd64, arm64
 
+# WHY: istio-cni in ambient mode SNATs kubelet health probes into enrolled pods to these fixed link-local addresses
+# (istio/istio cni/pkg/nodeagent/options.go DefaultHostProbeSNATIP / DefaultHostProbeSNATIPV6). Single-sourced here
+# next to the Istio 1.32.0 version pin so addons/kyverno-policies (NetworkPolicy platform-mesh-hbone) and CI checks
+# stay in lockstep on Istio bumps (hack/tests/test_mesh_probe_cidrs.sh, hack/check-istio-probe-cidr.sh, #287).
+ambient:
+  probeSourceCIDRs: [169.254.7.127/32, "fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128"]
+
 base: {}
 
 istiod:
