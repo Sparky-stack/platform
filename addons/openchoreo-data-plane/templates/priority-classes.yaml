@@ -9,6 +9,10 @@ apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: {{ $name }}
+  annotations:
+    # value and preemptionPolicy are immutable: a change must delete + recreate the class. Running pods keep their
+    # resolved priority; new pods are rejected only for the moment the class is absent (Argo retries them).
+    argocd.argoproj.io/sync-options: Force=true,Replace=true
 value: {{ $pc.value }}
 preemptionPolicy: {{ $pc.preemptionPolicy }}
 globalDefault: false

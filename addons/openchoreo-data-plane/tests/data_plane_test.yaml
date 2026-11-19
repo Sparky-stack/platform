@@ -155,6 +155,7 @@ tests:
       - equal: { path: value, value: 100000 }
         documentSelector: { path: metadata.name, value: app-production }
       - equal: { path: preemptionPolicy, value: Never }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: "Force=true,Replace=true" }
         documentSelector: { path: metadata.name, value: app-production }
       - equal: { path: value, value: 1000 }
         documentSelector: { path: metadata.name, value: app-standard }
