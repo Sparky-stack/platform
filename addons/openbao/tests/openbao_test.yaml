@@ -7,6 +7,7 @@ templates:
   - templates/unseal.yaml
   - templates/mesh-clients.yaml
   - templates/reconcile.yaml
+  - templates/validate.yaml
 set:
   mesh: { groups: [local, prod], ca: { host: openbao.example.test, port: 8200 } }
 tests:
@@ -78,7 +79,7 @@ tests:
         documentIndex: 0
 
   - it: "negative: the Gateway fails the render outside docker without source ranges"
-    template: templates/gateway.yaml
+    template: templates/validate.yaml
     set:
       cluster: { name: mgmt, provider: aws }
     asserts:
@@ -103,7 +104,14 @@ tests:
     set:
       mesh: { ca: { host: "" } }
     asserts:
-      - failedTemplate: { errorMessage: "mesh.ca.host is required (installation.yaml)" }
+      - failedTemplate: { errorPattern: "'/mesh/ca/host': minLength: got 0, want 1" }
+
+  - it: "negative: fails when mesh.ca.port is not a port number"
+    template: templates/pki.yaml
+    set:
+      mesh: { ca: { port: abc } }
+    asserts:
+      - failedTemplate: { errorPattern: "'/mesh/ca/port'" }
 
   - it: the static seal key comes from store platform and is never deleted by ESO
     template: templates/unseal.yaml
@@ -172,11 +180,11 @@ tests:
     set:
       mesh: { groups: [Prod_1] }
     asserts:
-      - failedTemplate: { errorMessage: "openbao: mesh.groups entry \"Prod_1\" must be a DNS label (lower-case alphanumerics and '-', max 32 chars)" }
+      - failedTemplate: { errorPattern: "'/mesh/groups/0': '.*Prod_1' does not match pattern" }
 
   - it: "negative: rejects duplicate mesh groups"
     template: templates/reconcile.yaml
     set:
       mesh: { groups: [local, local] }
     asserts:
-      - failedTemplate: { errorMessage: "openbao: mesh.groups has duplicates" }
+      - failedTemplate: { errorPattern: "'/mesh/groups': items at 0 and 1 are equal" }

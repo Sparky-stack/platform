@@ -2,6 +2,7 @@ suite: mesh (east-west) - ambient east-west gateway + reader RBAC
 templates:
   - templates/eastwest-gateway.yaml
   - templates/eastwest-reader-rbac.yaml
+  - templates/validate.yaml
 set:
   cluster.name: prod1
   mesh: { eastwest: { enabled: true }, group: local, network: prod1 }
@@ -71,7 +72,7 @@ tests:
       - equal: { path: 'spec.infrastructure.annotations["service.beta.kubernetes.io/aws-load-balancer-type"]', value: nlb }
 
   - it: "negative: refuses an unrestricted LoadBalancer outside docker (15008/15021 open to 0.0.0.0/0)"
-    template: templates/eastwest-gateway.yaml
+    template: templates/validate.yaml
     values: [../values/provider-aws.yaml]
     set:
       cluster: { name: dev-euc1, provider: aws, region: eu-central-1 }
@@ -79,7 +80,7 @@ tests:
       - failedTemplate: { errorMessage: "mesh (dev-euc1, provider aws): gateway.loadBalancerSourceRanges is required outside docker - the peers' egress CIDRs (installations/<inst>/addons/mesh/values.yaml)" }
 
   - it: "negative: same on Hetzner"
-    template: templates/eastwest-gateway.yaml
+    template: templates/validate.yaml
     set:
       cluster: { name: dev-fsn1, provider: hetzner, region: fsn1 }
     asserts:
@@ -153,7 +154,7 @@ tests:
         documentIndex: 0
 
   - it: "negative: reader.remoteCredentialsSecrets fails the render outside docker"
-    template: templates/eastwest-reader-rbac.yaml
+    template: templates/validate.yaml
     set:
       reader: { remoteCredentialsSecrets: true }
       cluster: { name: prod-euc1, provider: aws }
@@ -161,7 +162,7 @@ tests:
       - failedTemplate: { errorMessage: "mesh (prod-euc1, provider aws): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" }
 
   - it: "negative: reader.remoteCredentialsSecrets fails the render on hetzner too"
-    template: templates/eastwest-reader-rbac.yaml
+    template: templates/validate.yaml
     set:
       reader: { remoteCredentialsSecrets: true }
       cluster: { name: dev-fsn1, provider: hetzner }

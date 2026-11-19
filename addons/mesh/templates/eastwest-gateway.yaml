@@ -3,16 +3,11 @@ Ambient east-west gateway: peers' ztunnels open double-HBONE (outer mTLS to this
 destination ztunnel) to <service>.<namespace> on this network; the gateway forwards the inner stream to a local
 endpoint. Pods are addressed by service name, so pod CIDRs may overlap between clusters. istiod (multi-network on)
 deploys it from the waypoint template; parametersRef customises that Deployment/Service.
+Outside docker gateway.loadBalancerSourceRanges is required (templates/validate.yaml).
 */ -}}
 {{- if .Values.mesh.eastwest.enabled }}
 {{- $network := .Values.mesh.network | default .Values.cluster.name }}
-{{- if not $network }}{{ fail "mesh: no network (mesh.network / cluster.name)" }}{{ end }}
 {{- $g := .Values.gateway }}
-{{- /* Outside docker (CAPD on one host) the LoadBalancer is reachable from the internet: HBONE is mTLS-gated, but
-15008/15021 must still not be open to 0.0.0.0/0. Restrict to the peers' egress CIDRs (docs/multicluster.md). */}}
-{{- if and (ne .Values.cluster.provider "docker") (empty $g.loadBalancerSourceRanges) }}
-{{- fail (printf "mesh (%s, provider %s): gateway.loadBalancerSourceRanges is required outside docker - the peers' egress CIDRs (installations/<inst>/addons/mesh/values.yaml)" .Values.cluster.name .Values.cluster.provider) }}
-{{- end }}
 {{- $annotations := deepCopy ($g.serviceAnnotations | default dict) }}
 {{- if eq .Values.cluster.provider "hetzner" }}
 {{- $_ := set $annotations "load-balancer.hetzner.cloud/location" .Values.cluster.region }}  {{- /* hcloud-ccm needs a location (or network zone) per LB. VERIFY */}}

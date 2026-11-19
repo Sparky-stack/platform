@@ -12,6 +12,7 @@ templates:
   - templates/environment-config.yaml
   - templates/configuration.yaml
   - templates/policies.yaml
+  - templates/validate.yaml
   - charts/crossplane/templates/deployment.yaml
   - charts/crossplane/templates/rbac-manager-deployment.yaml
 tests:
@@ -224,25 +225,25 @@ tests:
       - equal: { path: data.backend, value: cnpg }
 
   - it: a provider without a backend fails instead of guessing
-    template: templates/rbac.yaml
+    template: templates/validate.yaml
     set: { cluster.provider: openstack }
     asserts:
       - failedTemplate: { errorPattern: 'no backend for provider "openstack"' }
 
   - it: an unknown backend fails
-    template: templates/rbac.yaml
+    template: templates/validate.yaml
     set: { postgresql.backend: mysql }
     asserts:
-      - failedTemplate: { errorPattern: 'unknown backend "mysql"' }
+      - failedTemplate: { errorPattern: "'/postgresql/backend': value must be one of" }
 
   - it: aws without the cluster's network facts fails
-    template: templates/environment-config.yaml
+    template: templates/validate.yaml
     set: { cluster.provider: aws, postgresql.aws.identity.roleArn: "arn:aws:iam::111111111111:role/x" }
     asserts:
       - failedTemplate: { errorPattern: 'subnetIds: at least two private subnets' }
 
   - it: aws IRSA without a role fails
-    template: templates/packages.yaml
+    template: templates/validate.yaml
     values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
     set: { postgresql.aws.identity.roleArn: "" }
     asserts:

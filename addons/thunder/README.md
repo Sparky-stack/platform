@@ -106,6 +106,7 @@ Wrapper chart for ThunderID (`1.0.1`). Runs OpenChoreo's OIDC identity provider 
 
 ## Day-2 notes
 
+- Values are checked by `values.schema.json` (bootstrap Secret keys, AI agent names, host format; `helm` prints the failing path). Host consistency with `openchoreo.controlPlane.host` is checked in `templates/validate.yaml`.
 - Backing up and recovering Thunder's delete-protected PVCs: [backup and restore](../../docs/runbooks/backup-restore.md#4-thunder-pvc-recovery-live-verified) and [break-glass](../../docs/runbooks/break-glass.md#intentional-deletion-of-a-delete-protected-pvc).
 - Upgrading Thunder with OpenChoreo: [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).
 
