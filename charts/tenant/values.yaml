@@ -10,6 +10,8 @@ description: ""
 apps: []                    # [{name, repoURL, path: deploy/openchoreo, revision: main, promotionGates: true}]; name unique
                             # name == the app repo's one Component name (gated bindings are admitted only from
                             # Application <project>-<component>-<env>, addon openchoreo-platform promotion-git-only.yaml)
+# -- DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `CronJob/<project>-demo-secrets` with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
+demoSecrets: []             # [{key: hello-world, property: greeting}]; installations/local/tenants/demo.yaml only
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
@@ -107,3 +109,17 @@ sourceIntegrity:
 tenantSecrets:
   namespace: openbao-tenants
   label: openbao.platform.koorikla.io/tenant
+  # Demo seed (templates/demo-secrets.yaml, demoSecrets above); == addon openbao (test_tenant_demo_secrets.sh checks it).
+  demoSeed:
+    addr: https://openbao-active.openbao.svc:8200    # addon openbao reconcile BAO_ADDR
+    caSecret: openbao-ca                             # addon openbao tenant-secrets.yaml: public CA only (ESO)
+    audience: openbao                                # == addon openbao reconcile.audience (role tenant-writer)
+    loginRole: tenant-writer
+    schedule: "*/5 * * * *"                          # retries until tenant-reconcile bound the writer alias
+    image:                                           # == addon openbao openbao.server.image (bao CLI)
+      registry: quay.io
+      repository: openbao/openbao
+      tag: "2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { cpu: 200m, memory: 64Mi }
