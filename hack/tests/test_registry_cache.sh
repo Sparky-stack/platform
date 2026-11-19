@@ -20,8 +20,12 @@ exit 0
 EOF
 chmod +x "$BIN/docker"
 export DOCKER_LOG="$TMP/docker.log"
-YQ_DIR=$(dirname "$(mise which yq 2>/dev/null || command -v yq)")
-P="$BIN:$YQ_DIR:/usr/bin:/bin"
+# yq through a wrapper, not its directory on PATH: on Windows `mise which` returns a C:\ path that breaks PATH
+# (the pattern of test_bootstrap_down.sh).
+REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
+[[ -n "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
+printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"; chmod +x "$BIN/yq"
+P="$BIN:/usr/bin:/bin"
 
 PATH="$P" bash "$ROOT/hack/registry-cache.sh" k3s-config "$TMP/reg.yaml"
 n=$(yq '.registry.hostCache.mirrors | length' "$ROOT/installations/local/installation.yaml")
