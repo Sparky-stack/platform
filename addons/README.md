@@ -17,9 +17,9 @@ Three addons have no upstream dependency and only render configuration for an up
 (k3s CoreDNS), `openchoreo-platform` (OpenChoreo org, pipeline, component types, workflows) and `secret-stores`
 (External Secrets Operator stores).
 
-**Crossplane** is an addon too: [`crossplane/`](crossplane/README.md) installs Crossplane v2 and ships the platform's
-PostgreSQL API (XRD in `templates/xrd-postgresql.yaml`, one Composition per backend in `compositions/`). Why these are
-chart templates and not a Crossplane Configuration package: [docs/data-services.md](../docs/data-services.md).
+**Crossplane** is an addon too: [`crossplane/`](crossplane/README.md) installs Crossplane v2 and, per cluster, the
+platform API packages (`Configuration`s built from `packages/<name>/`, pinned by digest) plus the `EnvironmentConfig`
+with that cluster's facts: [docs/crossplane.md](../docs/crossplane.md).
 
 Adding an addon: [docs/conventions.md](../docs/conventions.md#layout-and-ownership). Catalog and label selection:
 [docs/architecture.md](../docs/architecture.md#addons-catalog--labels-gitops-bridge-style).

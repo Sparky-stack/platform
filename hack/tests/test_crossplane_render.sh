@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # PostgreSQL as a service (addon crossplane, docs/data-services.md "PostgreSQL as a service"):
-#   1. selection: the addon ApplicationSet's render for local dev1 opted in (`addons: {crossplane: true}`) installs
-#      exactly one Composition, postgresql-cnpg, and the XRD defaults to it - from the provider label, no developer input;
+#   1. selection: the addon ApplicationSet's render for local dev1 opted in (`addons: {crossplane: true}`) installs no
+#      XRD / Composition, one Configuration (packages/postgresql) pinned by digest without dependency resolution and
+#      EnvironmentConfig platform-postgresql with backend cnpg - from the provider label, no developer input;
 #      every backend's addon render (hack/tests/crossplane/values-<backend>.yaml) passes kubeconform -strict with the
 #      Crossplane + provider CRD schemas, pins every package by digest and installs only its provider family members;
 #   2. `crossplane render` (offline: pinned CLI from mise.toml, the addon's pinned Crossplane image and function packages
-#      in Docker) of each Composition with the sample XRs in hack/tests/crossplane: composed resources pass kubeconform
+#      in Docker) of the package's one Composition with each backend's EnvironmentConfig (from the addon render) and
+#      the sample XRs in hack/tests/crossplane (an unknown backend must be a fatal result): composed resources pass kubeconform
 #      -strict, HA / backup / deletion policy / Aurora map as documented, and once the cloud reports its endpoint
 #      (observed-<backend>.yaml) every backend delivers the same connection Secret shape (<name>-app: host, port,
 #      dbname, username, password, uri) with no password in the composed objects.
@@ -31,6 +33,8 @@ kc() {   # kc <file> <label>
   if out=$(kubeconform "${KC_ARGS[@]}" "$1" 2>&1); then assert_eq ok ok "$2 passes kubeconform -strict ($out)"
   else echo "$out" >&2; assert_eq invalid ok "$2 passes kubeconform -strict"; fi
 }
+COMP=packages/postgresql/apis/postgresql/composition.yaml
+CFG_RE='^ghcr\.io/koorikla/platform/postgresql:[a-z0-9.-]+@sha256:[0-9a-f]{64}$'
 PKG_RE='^xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
 
 # --- 1a. selection through the ApplicationSet for local dev1 ------------------------------------------------------------
@@ -39,10 +43,16 @@ assert_eq "$(yq '.addons.crossplane.default' charts/platform/values.yaml)" false
 assert_eq "$(yq -o=json -I=0 '.addons.crossplane.roles' charts/platform/values.yaml)" '["workload"]' "catalog: crossplane targets workload clusters"
 render_layered_addon local crossplane "$TMP/dev1.yaml" "$TMP/platform.yaml" workload dev1 docker development local cilium \
   https://192.0.2.10:6443
-assert_eq "$(yq -N 'select(.kind == "Composition") | .metadata.name' "$TMP/dev1.yaml")" postgresql-cnpg \
-  "dev1 (provider docker): the only Composition is postgresql-cnpg"
-assert_eq "$(yq -N 'select(.kind == "CompositeResourceDefinition") | .spec.defaultCompositionRef.name' "$TMP/dev1.yaml")" \
-  postgresql-cnpg "dev1: the XRD defaults to postgresql-cnpg"
+assert_eq "$(yq -N 'select(.kind == "Composition" or .kind == "CompositeResourceDefinition") | .kind' "$TMP/dev1.yaml")" "" \
+  "dev1: the addon renders no XRD / Composition (they come from the Configuration package)"
+assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.package' "$TMP/dev1.yaml" | grep -cE "$CFG_RE" || true)" 1 \
+  "dev1: one Configuration, ghcr.io/koorikla/platform/postgresql pinned tag@digest"
+assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.skipDependencyResolution' "$TMP/dev1.yaml")" true \
+  "dev1: the Configuration skips dependency resolution (the addon pins Functions / Providers)"
+assert_eq "$(yq -N 'select(.kind == "EnvironmentConfig" and .metadata.name == "platform-postgresql") | .data.backend' "$TMP/dev1.yaml")" \
+  cnpg "dev1 (provider docker): EnvironmentConfig platform-postgresql selects cnpg"
+assert_eq "$(yq -N 'select(.kind == "Function") | .metadata.name' "$TMP/dev1.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
+  "function-auto-ready function-environment-configs function-go-templating " "dev1: the three Functions of the Composition"
 assert_eq "$(yq -N 'select(.kind == "ValidatingPolicy" and .metadata.name == "postgresql-production-ha-backup") | .spec.validationActions[0]' "$TMP/dev1.yaml")" \
   Audit "dev1: values/provider-docker.yaml makes the production rule Audit (layered like the ApplicationSet)"
 
@@ -78,8 +88,8 @@ for b in $BACKENDS; do
     helm template crossplane "$ADDON" --namespace crossplane-system -f "$FIX/values-$b.yaml" > "$TMP/addon-$b.yaml"
   fi
   kc "$TMP/addon-$b.yaml" "addon render ($b)"
-  assert_eq "$(yq -N 'select(.kind == "Composition") | .metadata.name' "$TMP/addon-$b.yaml" | tr '\n' ' ')" \
-    "postgresql-$b " "$b: exactly one Composition, postgresql-$b"
+  assert_eq "$(yq -N 'select(.kind == "EnvironmentConfig") | .data.backend' "$TMP/addon-$b.yaml" | tr '\n' ' ')" \
+    "$b " "$b: exactly one EnvironmentConfig, backend $b"
   bad=""
   while IFS= read -r ref; do
     [[ -z "$ref" || "$ref" =~ $PKG_RE ]] || bad="$bad $ref"
@@ -91,11 +101,18 @@ for b in $BACKENDS; do
   # The composed managed resources (MRAP) are exactly the kinds the Composition renders (checked in part 2).
   yq -N 'select(.kind == "ManagedResourceActivationPolicy") | .spec.activate[]' "$TMP/addon-$b.yaml" | tr -d '\r' | sort \
     > "$TMP/mrap-$b.txt"
-  yq 'select(.kind == "Composition")' "$TMP/addon-$b.yaml" > "$TMP/composition-$b.yaml"
-  yq 'select(.kind == "CompositeResourceDefinition")' "$TMP/addon-$b.yaml" > "$TMP/xrd.yaml"
+  yq 'select(.kind == "EnvironmentConfig")' "$TMP/addon-$b.yaml" > "$TMP/env-$b.yaml"
 done
 helm template crossplane "$ADDON" --namespace crossplane-system -f "$FIX/values-cnpg-backup.yaml" \
-  | yq 'select(.kind == "Composition")' > "$TMP/composition-cnpg-backup.yaml"
+  | yq 'select(.kind == "EnvironmentConfig")' > "$TMP/env-cnpg-backup.yaml"
+if out=$(helm template crossplane "$ADDON" --namespace crossplane-system -f "$FIX/values-aws-rds.yaml" \
+  --set postgresql.aws.vpcId= 2>&1); then
+  assert_eq rendered fails "aws-rds without vpcId fails the render"
+else
+  assert_match "$out" "postgresql.aws.vpcId is required" "aws-rds without vpcId fails the render (required fact)"
+fi
+cp packages/postgresql/apis/postgresql/definition.yaml "$TMP/xrd.yaml"
+yq '.data.backend = "mysql"' "$TMP/env-cnpg.yaml" > "$TMP/env-unknown.yaml"
 
 # --- 2. crossplane render ---------------------------------------------------------------------------------------------
 if ! command -v crossplane >/dev/null 2>&1; then
@@ -165,12 +182,12 @@ for img in "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}; do
   docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
 done
 
-# render_one <case> <composition> <xr> [observed]: crossplane composition render (one retry for a transient
+# render_one <case> <EnvironmentConfig> <xr> [observed]: crossplane composition render (one retry for a transient
 # registry/Docker error; a real render failure fails both attempts, the stderr of both is kept for render())
 render_one() {
-  local c=$1 comp=$2 xr=$3 obs=${4:-} args=()
+  local c=$1 env=$2 xr=$3 obs=${4:-} args=()
   [[ -n "$obs" ]] && args=(--observed-resources "$obs")
-  retry_with_backoff 2 2 crossplane composition render "$xr" "$comp" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
+  retry_with_backoff 2 2 crossplane composition render "$xr" "$COMP" --extra-resources "$env" "$TMP/functions.yaml" --xrd "$TMP/xrd.yaml" \
     --crossplane-image "$XP_IMAGE" ${args[@]+"${args[@]}"} > "$TMP/render-$c.yaml" 2> "$TMP/render-$c.err" \
     && : > "$TMP/render-$c.ok"
 }
@@ -179,16 +196,17 @@ render_bg() {
   while [[ $(jobs -rp | wc -l) -ge $XP_RENDER_JOBS ]]; do sleep 0.2; done
   render_one "$@" &
 }
-render_one cnpg-minimal "$TMP/composition-cnpg.yaml" "$FIX/xr-minimal.yaml" || true   # starts the function containers
-render_bg cnpg-production "$TMP/composition-cnpg.yaml" "$FIX/xr-production.yaml"
-render_bg cnpg-backup "$TMP/composition-cnpg-backup.yaml" "$FIX/xr-production.yaml"
-render_bg aws-minimal "$TMP/composition-aws-rds.yaml" "$FIX/xr-minimal.yaml"
-render_bg aws-production "$TMP/composition-aws-rds.yaml" "$FIX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
-render_bg aws-aurora "$TMP/composition-aws-rds.yaml" "$FIX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
-render_bg gcp-minimal "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-minimal.yaml"
-render_bg gcp-production "$TMP/composition-gcp-cloudsql.yaml" "$FIX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
-render_bg azure-minimal "$TMP/composition-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
-render_bg azure-production "$TMP/composition-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
+render_one cnpg-minimal "$TMP/env-cnpg.yaml" "$FIX/xr-minimal.yaml" || true   # starts the function containers
+render_bg cnpg-production "$TMP/env-cnpg.yaml" "$FIX/xr-production.yaml"
+render_bg cnpg-backup "$TMP/env-cnpg-backup.yaml" "$FIX/xr-production.yaml"
+render_bg aws-minimal "$TMP/env-aws-rds.yaml" "$FIX/xr-minimal.yaml"
+render_bg aws-production "$TMP/env-aws-rds.yaml" "$FIX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg aws-aurora "$TMP/env-aws-rds.yaml" "$FIX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg gcp-minimal "$TMP/env-gcp-cloudsql.yaml" "$FIX/xr-minimal.yaml"
+render_bg gcp-production "$TMP/env-gcp-cloudsql.yaml" "$FIX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
+render_bg azure-minimal "$TMP/env-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
+render_bg azure-production "$TMP/env-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
+render_bg unknown-backend "$TMP/env-unknown.yaml" "$FIX/xr-minimal.yaml"
 wait
 
 # render <case>: the render_bg result of that case -> composed resources $TMP/out-<case>.yaml, XR $TMP/xr-<case>.yaml
@@ -224,6 +242,13 @@ assert_mrap() {   # assert_mrap <case> <backend>: every composed managed resourc
 }
 
 # cnpg
+# An EnvironmentConfig with a backend the Composition does not know: a fatal result naming it, nothing composed.
+if [[ -f "$TMP/render-unknown-backend.ok" ]]; then
+  assert_eq rendered fatal "unknown backend: the Composition returns a fatal result"
+else
+  assert_match "$(cat "$TMP/render-unknown-backend.err")" 'unknown backend \\"mysql\\"|unknown backend "mysql"' \
+    "unknown backend: the Composition returns a fatal result naming it"
+fi
 render cnpg-minimal
 assert_eq "$(kinds "$TMP/out-cnpg-minimal.yaml")" "Cluster=1 PodMonitor=1 " "cnpg minimal: a CNPG Cluster + its PodMonitor"
 assert_eq "$(q 'select(.kind == "Cluster") | .spec.instances' "$TMP/out-cnpg-minimal.yaml")" 1 "cnpg minimal: 1 instance"

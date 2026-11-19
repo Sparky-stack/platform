@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single namespaced `PostgreSQL` XRD (`database.platform.koorikla.io`) fulfilled by provider-selected `Composition`s: CloudNativePG (`docker`, `hetzner`), AWS RDS (`aws`), Cloud SQL, or Azure Flexible Server, guarded by ValidatingAdmissionPolicies.
+Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
 
 ## Where it runs
 
@@ -17,6 +17,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single
 | cluster.name | string | `"sample"` |  |
 | cluster.provider | string | `"docker"` |  |
 | cluster.region | string | `"local"` |  |
+| crossplane.args[0] | string | `"--enable-signature-verification"` |  |
 | crossplane.image.repository | string | `"xpkg.crossplane.io/crossplane/crossplane"` |  |
 | crossplane.image.tag | string | `"v2.4.3@sha256:1c66261d805a73cade46e2ac94b665c73aebd4a00844de5fcae4bcadaa2be638"` |  |
 | crossplane.metrics.enabled | bool | `true` |  |
@@ -51,7 +52,9 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single
 | crossplane.securityContextRBACManager.seccompProfile.type | string | `"RuntimeDefault"` |  |
 | monitoring.podMonitor | bool | `true` |  |
 | namespace.podSecurity | string | `"restricted"` |  |
+| packages.configuration | string | `"ghcr.io/koorikla/platform/postgresql:main@sha256:063eda96fcef246d85fc084f01effa6c6618b6f243346fd011b6b1e411047878"` | The PostgreSQL API package (packages/postgresql), tag@digest (a Configuration has one manifest, no index). The promotion point: per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it. |
 | packages.functions.function-auto-ready | string | `"xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:cce8799e19a8f25fb84e1f8dd8855021fdbe8cd7a12a5c22a0c0c345476ae9fe"` |  |
+| packages.functions.function-environment-configs | string | `"xpkg.crossplane.io/crossplane-contrib/function-environment-configs:v0.9.2@sha256:1e4f74646d274437da6dc94d1323a0be8ccfa2e2497c0e92e6722e870ac4d3f6"` |  |
 | packages.functions.function-go-templating | string | `"xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.13.2@sha256:20198cb6ea5b4b8a48042343410ec9031e5ec43431d874364ecd3eac8e861290"` |  |
 | packages.providers.aws-rds.provider-aws-ec2 | string | `"xpkg.crossplane.io/crossplane-contrib/provider-aws-ec2:v2.9.0@sha256:e5c093671479fa349bc8e08ddea44ecaaa2f50ae5d586191b38127a101de5330"` |  |
 | packages.providers.aws-rds.provider-aws-kms | string | `"xpkg.crossplane.io/crossplane-contrib/provider-aws-kms:v2.9.0@sha256:59864b9cfbdc5970f2063dd396717bc769b9849c818dac17b3304bf4cef94911"` |  |
@@ -71,6 +74,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single
 | packages.runtimeConfig.resources.limits.memory | string | `"512Mi"` |  |
 | packages.runtimeConfig.resources.requests.cpu | string | `"10m"` |  |
 | packages.runtimeConfig.resources.requests.memory | string | `"64Mi"` |  |
+| packages.signatureVerification | object | `{"enabled":true,"issuer":"https://token.actions.githubusercontent.com","prefix":"ghcr.io/koorikla/platform/","subjectRegExp":"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"}` | enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags. |
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptNamespaces[1] | string | `"cnpg-system"` |  |
@@ -118,4 +122,5 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single
 
 ## Links
 
+- [Crossplane platform APIs](../../docs/crossplane.md)
 - [Data services: PostgreSQL as a service](../../docs/data-services.md#postgresql-as-a-service)

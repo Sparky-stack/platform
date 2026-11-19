@@ -105,6 +105,18 @@
         "(?<depName>xpkg\\.crossplane\\.io/[a-z0-9-]+/[a-z0-9-]+):(?<currentValue>v[0-9][^@\\s]*)@(?<currentDigest>sha256:[0-9a-f]{64})"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Platform Crossplane Configuration packages (packages/<name>, ghcr.io/koorikla/platform/<name>:<tag>@<digest>) in addon crossplane and per-installation/env pins: bumping the digest is the promotion (docs/crossplane.md)",
+      "managerFilePatterns": [
+        "/^addons/crossplane/values\\.yaml$/",
+        "/^installations/[^/]+/addons/crossplane/[^/]+\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>ghcr\\.io/koorikla/platform/[a-z0-9-]+):(?<currentValue>[a-z0-9.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [

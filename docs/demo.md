@@ -384,7 +384,7 @@ YAML
 kubectl --kubeconfig dev1.kubeconfig -n pg-demo get postgresql orders-db -w   # READY True after ~1.5 min
 ```
 
-Expected: `BACKEND cnpg`, `SECRET orders-db-app`, `COMPOSITION postgresql-cnpg`. A raw CNPG `Cluster` from a tenant
+Expected: `BACKEND cnpg`, `SECRET orders-db-app`, `COMPOSITION postgresql`. A raw CNPG `Cluster` from a tenant
 is denied by the `postgresql-only-through-the-platform-api` policy (also a native ValidatingAdmissionPolicy).
 
 Talking points: the same XR becomes RDS / Aurora, Cloud SQL or Azure Flexible Server on those providers (rendered and

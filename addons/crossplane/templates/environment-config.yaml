@@ -1,0 +1,12 @@
+{{- /* This cluster's PostgreSQL facts (backend, cluster, environment and the backend's network / backup facts; no
+developer input). The one Composition "postgresql" of the Configuration package (packages/postgresql, templates/
+configuration.yaml) loads it with function-environment-configs and dispatches on data.backend. Required facts fail
+here, at render time (crossplane.pgFacts), not on the cluster. */ -}}
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-postgresql
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+data:
+  {{- include "crossplane.pgFacts" . | fromJson | toYaml | nindent 2 }}

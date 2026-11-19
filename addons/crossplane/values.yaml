@@ -4,21 +4,24 @@
 #
 # What this addon installs on a cluster (everything as Helm templates of this chart, so it renders per cluster):
 #   - Crossplane core + RBAC manager (upstream chart, below), namespace crossplane-system with Pod Security restricted.
-#   - Functions function-go-templating + function-auto-ready, and only the provider family members the selected
-#     PostgreSQL backend uses (none for cnpg), all pinned by multi-arch digest and run under the DeploymentRuntimeConfig
-#     "restricted" (Crossplane's default package runtime lacks seccomp + capability drop, which restricted requires).
-#   - XRD postgresqls.platform.koorikla.io (namespaced, Crossplane v2, no claims) and the ONE Composition of the backend
-#     the cluster's provider fact selects (postgresql.backendByProvider below, from label platform.koorikla.io/provider);
-#     the XRD's defaultCompositionRef points at it. Developers never choose: there is nothing else to choose from.
+#   - Functions function-environment-configs + function-go-templating + function-auto-ready, and only the provider
+#     family members the selected PostgreSQL backend uses (none for cnpg), all pinned by multi-arch digest and run under
+#     the DeploymentRuntimeConfig "restricted" (Crossplane's default package runtime lacks seccomp + capability drop).
+#   - The PostgreSQL API as the Configuration package platform-postgresql (packages/postgresql: XRD
+#     postgresqls.platform.koorikla.io + the ONE Composition "postgresql"), pinned tag@digest, signature-verified, and the
+#     EnvironmentConfig platform-postgresql with this cluster's facts: the backend the provider fact selects
+#     (postgresql.backendByProvider below, from label platform.koorikla.io/provider) plus its region / network / backup
+#     facts. The Composition dispatches on that backend. Developers never choose: there is nothing else to choose from.
 #   - A ManagedResourceActivationPolicy activating only the managed resources that Composition composes (provider CRD
 #     count and memory stay low; provider.defaultActivations is empty so nothing else is activated).
 #   - Kyverno ValidatingPolicies: tenants get PostgreSQL only through the XR (no raw CNPG / RDS / Cloud SQL / Flexible
 #     Server objects in their namespaces) and production cells must ask for highAvailability + backup.
 #
-# Why Helm templates and not a Crossplane Configuration package: the Composition carries per-cluster facts (cluster
-# name, region, network ids, backup bucket) and the XRD's defaultCompositionRef depends on the cluster's provider - a
-# Configuration is one immutable OCI artifact for every cluster and would need its own build/publish/sign pipeline, while
-# a wrapper chart renders per cluster through the existing addon ApplicationSet and is tested offline like every addon.
+# Why a package plus an EnvironmentConfig: the API (XRD + Composition) is the same on every cluster and ships as one
+# versioned, cosign-signed OCI artifact with its own release (postgresql-vX.Y.Z); only the facts differ per cluster,
+# and those render here per cluster through the addon ApplicationSet. The Configuration skips dependency resolution:
+# the resolver would install Functions / Providers by floating tag and without the restricted runtime configs, so
+# templates/packages.yaml declares them pinned (docs/data-services.md "Packaging").
 #
 # CRDs: Crossplane v2 installs its own CRDs (Composition, XRD, Function, Provider, ...) from its init container; the
 # chart has none. The platform objects here carry SkipDryRunOnMissingResource and sync wave 1 (wave 2 for the
@@ -34,6 +37,9 @@ crossplane:
   image:
     repository: xpkg.crossplane.io/crossplane/crossplane
     tag: "v2.4.3@sha256:1c66261d805a73cade46e2ac94b665c73aebd4a00844de5fcae4bcadaa2be638"
+  # Package signature verification (ImageConfig spec.verification) is alpha in 2.4 and off without this flag.
+  # VERIFY live: the Configuration revision reports the signature verified (packages.signatureVerification).
+  args: ["--enable-signature-verification"]
   # Single replicas locally. HA: replicas: 2 and rbacManager.replicas: 2 (leader election is on by default).
   replicas: 1
   rbacManager:
@@ -79,7 +85,18 @@ packages:
     providerResources:              # upjet providers hold the Terraform schema in memory
       requests: { cpu: 50m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }
+  # -- The PostgreSQL API package (packages/postgresql), tag@digest (a Configuration has one manifest, no index). The promotion point:
+  # per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it.
+  configuration: ghcr.io/koorikla/platform/postgresql:main@sha256:063eda96fcef246d85fc084f01effa6c6618b6f243346fd011b6b1e411047878 # VERIFY: switch to vX.Y.Z once release-please tags postgresql-v*
+  # Cosign keyless verification of platform packages (ImageConfig; alpha, needs core flag
+  # --enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags.
+  signatureVerification:
+    enabled: true
+    prefix: ghcr.io/koorikla/platform/
+    issuer: https://token.actions.githubusercontent.com
+    subjectRegExp: '^https://github\.com/koorikla/platform/\.github/workflows/app-crossplane-configuration\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$'
   functions:
+    function-environment-configs: xpkg.crossplane.io/crossplane-contrib/function-environment-configs:v0.9.2@sha256:1e4f74646d274437da6dc94d1323a0be8ccfa2e2497c0e92e6722e870ac4d3f6
     function-go-templating: xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.13.2@sha256:20198cb6ea5b4b8a48042343410ec9031e5ec43431d874364ecd3eac8e861290
     function-auto-ready: xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:cce8799e19a8f25fb84e1f8dd8855021fdbe8cd7a12a5c22a0c0c345476ae9fe
   # Per backend: only the family members its Composition uses.
