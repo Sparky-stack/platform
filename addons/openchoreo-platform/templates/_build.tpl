@@ -3,9 +3,9 @@
 {{- /* Registry host (CA/credential scope) for builds: harbor -> registry.host, external -> first path element. */ -}}
 {{- define "build.registryHost" -}}
 {{- if eq (toString .Values.registry.type) "harbor" -}}
-{{- required "registry.host is required for registry.type harbor" .Values.registry.host -}}
+{{- .Values.registry.host -}}
 {{- else -}}
-{{- index (splitList "/" (required "registry.external.repository is required" .Values.registry.external.repository)) 0 -}}
+{{- index (splitList "/" .Values.registry.external.repository) 0 -}}
 {{- end -}}
 {{- end }}
 
@@ -17,13 +17,8 @@ schema pattern for repository.url (one path segment after a prefix, starting alp
 {{- define "build.gitPrefixList" -}}
 {{- $p := .Values.buildWorkflows.git.allowedRepositoryPrefixes | default list -}}
 {{- if not $p -}}
-{{- $org := required "installation.githubOrg (or buildWorkflows.git.allowedRepositoryPrefixes) is required" .Values.installation.githubOrg -}}
+{{- $org := .Values.installation.githubOrg -}}
 {{- $p = list (printf "%s/" (trimSuffix "/" $org)) -}}
-{{- end -}}
-{{- range $p -}}
-{{- if not (regexMatch "^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9][A-Za-z0-9._-]*/)+$" .) -}}
-{{- fail (printf "buildWorkflows.git.allowedRepositoryPrefixes: %q must be https://<host>/<owner>/ (ending in /)" .) -}}
-{{- end -}}
 {{- end -}}
 {{- toJson $p -}}
 {{- end }}
@@ -69,10 +64,10 @@ gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to
 */ -}}
 {{- define "build.resources" -}}
 {{- $gitopsAware := .gitopsAware }}
-{{- $perms := required "build.resources: permissions (buildWorkflows.github.permissions / readPermissions) are required" .permissions }}
+{{- $perms := .permissions }}
 {{- with .root }}
 {{- $g := .Values.buildWorkflows.github }}
-{{- $app := required "buildWorkflows.github.appSecret is required" $g.appSecret }}
+{{- $app := $g.appSecret }}
 {{- $s := .Values.buildWorkflows.secrets }}
 {{- $host := include "build.registryHost" . }}
 {{- $harbor := eq (toString .Values.registry.type) "harbor" }}
@@ -112,7 +107,7 @@ exactly one segment after an allowed prefix. */ -}}
       name: ${metadata.workflowRunName}-git
       namespace: ${metadata.namespace}
     spec:
-      refreshInterval: {{ required "buildWorkflows.github.tokenRefreshInterval is required (tokens expire after 1h)" $g.tokenRefreshInterval }}
+      refreshInterval: {{ $g.tokenRefreshInterval }}
       target:
         name: ${metadata.workflowRunName}-git
         creationPolicy: Owner
