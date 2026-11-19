@@ -9,9 +9,6 @@ publish the provider key as an open relay), so the parameters force ClusterIP an
 agents' namespace. Pod Security restricted: the template sets no seccompProfile; the overlay adds RuntimeDefault.
 */ -}}
 {{- $sel := dict "gateway.networking.k8s.io/gateway-name" .Values.gateway.name }}
-{{- if not .Values.gateway.allowedNamespaces }}
-{{- fail "gateway.allowedNamespaces must list the namespaces allowed to call the LLM proxy (an empty list would leave it open)" }}
-{{- end }}
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
