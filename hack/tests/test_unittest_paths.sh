@@ -4,8 +4,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_unittest_paths =="
-
 # missing_paths <chart dir>: prints "<suite>: <path>" for every referenced template file that does not exist
 missing_paths() {
   local chart=$1 suite path

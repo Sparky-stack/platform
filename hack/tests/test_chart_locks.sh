@@ -5,7 +5,6 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_chart_locks =="
 cd "$ROOT"
 dirs=()
 for d in charts/* addons/*; do

@@ -9,7 +9,6 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
-echo "== test_cluster_sync_order =="
 pick_python || { echo "  SKIP: python3 not found"; exit 0; }
 cd "$ROOT"
 

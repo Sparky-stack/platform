@@ -5,7 +5,6 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 
-echo "== test_ai_agents =="
 CAT=charts/platform/values.yaml
 OBS=addons/openchoreo-observability-plane
 o() { yq ".[\"openchoreo-observability-plane\"]$1" "$OBS/values.yaml"; }

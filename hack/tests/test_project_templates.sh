@@ -18,7 +18,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_project_templates =="
 cd "$ROOT"
 
 # Scaffolder actions registered in openchoreo-ui v1.3.3 (backend features of @openchoreo/backstage-portal-backend:
@@ -37,9 +36,6 @@ if [[ ! -d "$SCHEMAS_DIR/openchoreo.dev" ]]; then   # standalone run (CI workflo
   ./hack/deps.sh >/dev/null
   SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
 fi
-KC_ARGS=(-strict -summary -kubernetes-version 1.35.0 -schema-location default
-  -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json")
-kc() { local out; if out=$(kubeconform "${KC_ARGS[@]}" "$@" 2>&1); then echo yes; else echo "$out" >&2; echo no; fi; }
 # assert_same <label> <expected> <actual>: like assert_eq for long JSON documents; prints a short diff on mismatch
 assert_same() {
   if [[ "$2" == "$3" ]]; then PASS=$((PASS + 1)); return 0; fi
@@ -144,7 +140,7 @@ for t in "${TEMPLATES[@]}"; do
     deploy/openchoreo/release-bindings/production.yaml; do
     assert_eq "$([[ -s "$R/$p" ]] && echo yes)" yes "$t: has $p"
   done
-  assert_eq "$(kc "$R/deploy/openchoreo")" yes "$t: deploy/openchoreo passes kubeconform -strict (OpenChoreo CRDs)"
+  assert_eq "$(kc_valid "$R/deploy/openchoreo")" yes "$t: deploy/openchoreo passes kubeconform -strict (OpenChoreo CRDs)"
   assert_eq "$(yq -r 'select(.kind == "Component") | .metadata.name + " " + .spec.owner.projectName' "$R/deploy/openchoreo/component.yaml")" "sample-svc demo" "$t: Component sample-svc in project demo"
   assert_eq "$(yq -r '.spec.container.image' "$R/deploy/openchoreo/workload.yaml")" "ghcr.io/koorikla/sample-svc:main" "$t: Workload names the image CI publishes"
   assert_eq "$(yq -r '.kind + " " + .metadata.name + " " + .spec.dependencyOf[0]' "$R/catalog-info.yaml")" "Resource sample-svc-repo component:default/sample-svc" "$t: catalog-info is a Resource pointing at OpenChoreo's Component (no duplicate Component ref)"
@@ -155,7 +151,7 @@ for t in "${TEMPLATES[@]}"; do
   img="ghcr.io/koorikla/sample-svc:abc1234@sha256:$(printf 'a%.0s' $(seq 64))"
   bump_out=$(cd "$R" && NEW_IMAGE="$img" NEW_COMMIT=abc1234def py hack/bump-workload.py 2>&1) || true
   assert_eq "$(yq -r '.spec.container.image + " " + .spec.source.commit' "$R/deploy/openchoreo/workload.yaml")" "$img abc1234def" "$t: bump-workload pins image and commit ($bump_out)"
-  assert_eq "$(kc "$R/deploy/openchoreo/workload.yaml")" yes "$t: bumped Workload passes kubeconform -strict"
+  assert_eq "$(kc_valid "$R/deploy/openchoreo/workload.yaml")" yes "$t: bumped Workload passes kubeconform -strict"
   if (cd "$R" && NEW_IMAGE=ghcr.io/koorikla/sample-svc:main NEW_COMMIT=abc1234 py hack/bump-workload.py >/dev/null 2>&1); then r=accepted; else r=refused; fi
   assert_eq "$r" refused "$t: bump-workload refuses an image without digest"
   cp "$TMP/wl.yaml" "$R/deploy/openchoreo/workload.yaml"
@@ -203,7 +199,7 @@ for t in "${TEMPLATES[@]}"; do
   assert_eq "$(yq -r '.kind + " " + .spec.tenant + " " + .spec.framework + " " + .spec.visibility' "$rec" 2>/dev/null)" "GitHubRepository demo $stack public" "$t: governance record for #100"
   tf="$R/platform/installations/local/tenants/demo.yaml"
   if helm template tenant-demo charts/tenant --namespace default -f installations/local/installation.yaml -f "$tf" > "$TMP/$t-tenant.yaml" 2>"$TMP/$t-tenant.err"; then
-    ok=$(kc "$TMP/$t-tenant.yaml")
+    ok=$(kc_valid "$TMP/$t-tenant.yaml")
   else
     ok=no; cat "$TMP/$t-tenant.err" >&2
   fi

@@ -10,7 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_github_app =="
 cd "$ROOT"
 G=hack/github-app.py
 

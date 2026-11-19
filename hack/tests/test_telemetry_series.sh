@@ -11,7 +11,6 @@ cd "$ROOT"
 source hack/lib/portable.sh
 pick_python
 
-echo "== test_telemetry_series =="
 out="$TMP/telemetry.yaml"
 helm template telemetry addons/telemetry --namespace telemetry --set-string cluster.name=sample > "$out"
 

@@ -49,8 +49,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_kyverno_policies =="
-
 # Keyless identity (#41): the trusted app-container.yaml workflow is a commit SHA, and Renovate's custom manager
 # (renovate.json) really matches that line - otherwise the pin would silently never be bumped.
 wf_ref=$(yq -r '.imageVerification.github.workflowRef' "$ROOT/addons/kyverno-policies/values.yaml" | tr -d '\r')

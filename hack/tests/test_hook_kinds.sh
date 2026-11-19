@@ -10,7 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_hook_kinds =="
 cd "$ROOT"
 ALLOW=hack/tests/hook_allowlist.yaml
 

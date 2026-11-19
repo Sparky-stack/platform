@@ -3,8 +3,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_appprojects =="
-
 helm template platform "$ROOT/charts/platform" --namespace argocd \
   --values "$ROOT/installations/local/installation.yaml" > "$TMP/platform.yaml"
 

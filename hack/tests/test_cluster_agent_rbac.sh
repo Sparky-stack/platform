@@ -17,7 +17,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_cluster_agent_rbac =="
 cd "$ROOT"
 wp=addons/openchoreo-workflow-plane
 agent_ns=openchoreo-workflow-plane

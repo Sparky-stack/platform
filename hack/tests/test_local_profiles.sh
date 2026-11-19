@@ -18,8 +18,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_local_profiles =="
-
 # placement <fleet file>... -> "<environment> <cluster>" per environment of every enabled data plane
 placement() {
   local cf

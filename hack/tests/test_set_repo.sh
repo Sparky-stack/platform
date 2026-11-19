@@ -4,8 +4,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_set_repo =="
-
 copy() {
   local dst=$1
   mkdir -p "$dst/hack" "$dst/charts/platform" "$dst/docs/runbooks" "$dst/docs/diagrams/src"

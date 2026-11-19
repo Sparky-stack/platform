@@ -18,7 +18,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_data_services =="
 ADDONS="keda strimzi cloudnative-pg"
 CATALOG=charts/platform/values.yaml
 INST_DIR=installations/local
@@ -28,8 +27,6 @@ SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorik
 for a in $ADDONS; do
   [[ -d "addons/$a/charts" ]] || helm dependency build "addons/$a" >/dev/null
 done
-KC_ARGS=(-strict -summary -kubernetes-version 1.35.0 -skip CustomResourceDefinition -schema-location default
-  -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json")
 
 # selected <platform render> <addon> <labels json> -> yes|no: the addon ApplicationSet's cluster generator selector
 # (matchExpressions In / NotIn / Exists / DoesNotExist) evaluated against one cluster secret's labels.
@@ -93,8 +90,7 @@ for a in $ADDONS; do
     assert_eq "render failed: $(head -c 300 "$out.err")" renders "dev1: addon $a renders with installation values"
     continue
   fi
-  if kc=$(kubeconform "${KC_ARGS[@]}" "$out" 2>&1); then kc_ok=yes; else kc_ok=no; echo "$kc" >&2; fi
-  assert_eq "$kc_ok" yes "dev1: addon $a passes kubeconform -strict with CRD schemas"
+  assert_eq "$(kc_valid "$out")" yes "dev1: addon $a passes kubeconform -strict with CRD schemas"
   case "$a" in
     keda) crds="scaledobjects.keda.sh scaledjobs.keda.sh triggerauthentications.keda.sh" ;;
     strimzi) crds="kafkas.kafka.strimzi.io kafkanodepools.kafka.strimzi.io kafkatopics.kafka.strimzi.io kafkausers.kafka.strimzi.io" ;;
@@ -177,8 +173,7 @@ kinds=$(yq -N '.kind' "$TMP"/examples/example-*.yaml | sort -u | tr '\n' ' ')
 for k in Cluster Kafka KafkaNodePool KafkaTopic ScaledObject ObjectStore PostgreSQL; do
   assert_match "$kinds" "(^| )$k( |$)" "docs/data-services.md shows a $k example"
 done
-if kc=$(kubeconform "${KC_ARGS[@]}" "$TMP"/examples/example-*.yaml 2>&1); then kc_ok=yes; else kc_ok=no; echo "$kc" >&2; fi
-assert_eq "$kc_ok" yes "docs/data-services.md examples pass kubeconform -strict with CRD schemas"
+assert_eq "$(kc_valid "$TMP"/examples/example-*.yaml)" yes "docs/data-services.md examples pass kubeconform -strict with CRD schemas"
 assert_eq "$(grep -c -i 'zookeeper:' docs/data-services.md || true)" 0 "Kafka example is KRaft (no ZooKeeper section)"
 
 finish

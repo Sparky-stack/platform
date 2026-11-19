@@ -10,7 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_openbao_policy_reconcile =="
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; PD="$TMP/policies"
 mkdir -p "$S/policies" "$S/roles" "$BIN" "$PD"

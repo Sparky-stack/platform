@@ -179,7 +179,7 @@ ztunnel carries its upstream connections as HBONE). Only the proxy pod is labell
 stays out. kgateway's own ambient settings (`KGW_ENABLE_ISTIO_INTEGRATION`, waypoint routing) are for DestinationRules
 and waypoints and aren't needed for L4 mTLS. The mesh clients carry no `PeerAuthentication`: they keep accepting
 plaintext from outside the mesh (the cloud LB / klipper into the gateway, the Prometheus agent's scrape of the
-gateway, kube-apiserver into operator webhooks). `hack/tests/test_gitops_contracts.sh` fails if one of them leaves
+gateway, kube-apiserver into operator webhooks). `hack/tests/test_mesh_contracts.sh` fails if one of them leaves
 the mesh while STRICT is on.
 
 `addons/kyverno-policies/templates/cell-mesh.yaml`, two `GeneratingPolicy`s on the same cell selector as the

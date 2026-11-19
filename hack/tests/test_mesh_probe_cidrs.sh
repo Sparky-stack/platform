@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_mesh_probe_cidrs =="
-
 mesh_cidrs=$(yq '.ambient.probeSourceCIDRs[]' "$ROOT/addons/mesh/values.yaml")
 policy_cidrs=$(yq '.mesh.probeSourceCIDRs[]' "$ROOT/addons/kyverno-policies/values.yaml")
 
