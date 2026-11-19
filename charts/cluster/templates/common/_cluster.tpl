@@ -49,8 +49,6 @@ Shared helpers: capi.validate, capi.gke, capi.byo, capi.labels, capi.registry.ha
   (list (and (not (empty $mg)) (not (index (($v.mgmt | default dict).addons | default dict) "openbao"))) (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name))
   (list (and (not (empty $mg)) (not (has $mg ($mesh.groups | default list)))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
   (list (and (not (empty $mg)) (not (($mesh.ca | default dict).host))) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))
-  (list (and (hasKey $addons "istio-eastwest") (ne (index $addons "istio-eastwest") (not (empty $mg)))) (printf "cluster %s: addons.istio-eastwest=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-eastwest)" $v.name (index $addons "istio-eastwest") $mg))
-  (list (and (hasKey $addons "istio-csr") (ne (index $addons "istio-csr") (not (empty $mg)))) (printf "cluster %s: addons.istio-csr=%v contradicts mesh.group=%q (the addon follows mesh.group; drop addons.istio-csr)" $v.name (index $addons "istio-csr") $mg))
   (list (and $gke $cpSet) (printf "cluster %s: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" $v.name))
   (list (and $gke (not $v.workers)) (printf "cluster %s: gcp-gke needs at least one entry in workers (a GKE node pool)" $v.name))
   (list (and $gke (not (($v.providerSpec | default dict).project))) (printf "cluster %s: providerSpec.project (GCP project id) is required for gcp-gke" $v.name))
@@ -83,7 +81,7 @@ mesh.platform.koorikla.io/group: {{ . | quote }}
 mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
 {{- end }}
 {{- $cilium := and (eq .Values.cni "cilium") (ne (include "capi.byo" .) "true") }}
-{{- range $addon, $on := merge (dict "cilium" $cilium "istio-eastwest" (not (empty $meshGroup)) "istio-csr" (not (empty $meshGroup))) (.Values.addons | default dict) }}
+{{- range $addon, $on := merge (dict "cilium" $cilium) (.Values.addons | default dict) }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}

@@ -240,34 +240,6 @@ for dir in addons/*; do
   fi
 done
 
-echo "==> Rendering enabled examples (examples/*), layered per matching cluster like appset-examples.yaml" >&2
-# shellcheck disable=SC2016  # $i is a yq variable
-yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' "$CATALOG" "$INST_FILE" > "$TMP/examples.json"
-for dir in examples/*; do
-  [[ -f "$dir/Chart.yaml" ]] || continue
-  ex=$(basename "$dir")
-  [[ "$(yq -p=json -oy ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
-  helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
-  for cf in "$INST_DIR"/clusters/*.yaml; do
-    [[ -f "$cf" ]] || continue
-    c_name=$(yq '.name' "$cf")
-    labels="$TMP/labels-$c_name.yaml"
-    [[ -s "$labels" ]] || continue
-    match=1   # selector matchLabels (matchExpressions are not evaluated here: render anyway)
-    while IFS=$'\t' read -r k v; do
-      [[ -n "$k" ]] || continue
-      [[ "$(yq -r ".[\"$k\"] // \"\"" "$labels")" == "$v" ]] || match=0
-    done < <(yq -p=json -oy -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
-    (( match )) || continue
-    vargs=(--values "$dir/values.yaml")
-    for vf in "$INST_DIR/examples/$ex/values.yaml" "$INST_DIR/examples/$ex/cluster-$c_name.yaml"; do
-      if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
-    done
-    helm template "$ex" "$dir" "${vargs[@]}" --set-string "cluster.name=$c_name" 2>/dev/null | extract_images \
-      | while IFS= read -r img; do add "$img" "example $ex ($c_name)"; done
-  done
-done
-
 echo "==> Cluster images (k3d mgmt node, CAPD node)" >&2
 k3s_versions=""
 if [[ "$INST" == local ]]; then

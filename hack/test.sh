@@ -233,54 +233,6 @@ for dir in addons/* $(yq '.addons[] | select(.path) | .path' charts/platform/val
   done
 done
 
-# 5b. Examples (examples/*): standalone + per installation on the clusters the example's selector matches, layered like
-# charts/platform templates/appset-examples.yaml
-echo "==> Testing examples/*"
-# selector_matches <selector-json> <labels-file>: matchLabels + matchExpressions (In, NotIn, Exists, DoesNotExist)
-selector_matches() {
-  yq -o=json '.' "$2" | py -c '
-import json, sys
-sel = json.loads(sys.argv[1]); lab = json.load(sys.stdin) or {}
-ok = all(lab.get(k) == v for k, v in (sel.get("matchLabels") or {}).items())
-for e in sel.get("matchExpressions") or []:
-    k, op, vals = e["key"], e["operator"], e.get("values") or []
-    ok = ok and {"In": k in lab and lab[k] in vals, "NotIn": lab.get(k) not in vals,
-                 "Exists": k in lab, "DoesNotExist": k not in lab}[op]
-sys.exit(0 if ok else 1)' "$1"
-}
-for dir in examples/*; do
-  [[ -f "$dir/Chart.yaml" ]] || continue
-  ex=$(basename "$dir")
-  helm lint "$dir" >/dev/null
-  helm template "$ex" "$dir" > "$TMP/example-$ex-standalone.yaml"
-  check_kubeconform "examples/$ex (standalone)" "$TMP/example-$ex-standalone.yaml"
-  for inst_dir in installations/*; do
-    [[ -f "$inst_dir/installation.yaml" ]] || continue
-    inst=$(basename "$inst_dir")
-    # effective examples config = charts/platform defaults < installation.yaml
-    # shellcheck disable=SC2016  # $i is a yq variable
-    yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' charts/platform/values.yaml "$inst_dir/installation.yaml" > "$TMP/examples-$inst.json"
-    enabled=$(yq -p=json ".[\"$ex\"].enabled" "$TMP/examples-$inst.json")
-    [[ "$enabled" == "true" ]] || { echo "  SKIP examples/$ex ($inst): not enabled"; continue; }
-    sel=$(yq -p=json -o=json -I=0 ".[\"$ex\"].selector" "$TMP/examples-$inst.json")
-    ns=$(yq -p=json ".[\"$ex\"].namespace // \"$ex\"" "$TMP/examples-$inst.json")
-    for cf in "$inst_dir"/clusters/*.yaml; do
-      [[ -f "$cf" ]] || continue
-      c_name=$(yq '.name' "$cf")
-      if ! selector_matches "$sel" "$TMP/labels-$inst-$c_name.yaml"; then
-        echo "  SKIP examples/$ex ($inst/$c_name): selector does not match"
-        continue
-      fi
-      vargs=(--values "$dir/values.yaml")
-      for vf in "$inst_dir/examples/$ex/values.yaml" "$inst_dir/examples/$ex/cluster-$c_name.yaml"; do
-        [[ -f "$vf" ]] && vargs+=(--values "$vf")
-      done
-      helm template "$ex" "$dir" --namespace "$ns" "${vargs[@]}" --set-string "cluster.name=$c_name" > "$TMP/example-$ex-$inst-$c_name.yaml"
-      check_kubeconform "examples/$ex ($inst/$c_name)" "$TMP/example-$ex-$inst-$c_name.yaml"
-    done
-  done
-done
-
 # 6. Static manifests
 echo "==> Validating bootstrap/root-app.yaml"
 check_kubeconform "bootstrap/root-app.yaml" bootstrap/root-app.yaml
@@ -288,7 +240,7 @@ check_kubeconform "bootstrap/root-app.yaml" bootstrap/root-app.yaml
 # 7. helm unittest where tests/ exists (after helm dependency build above)
 passed=0
 failed=0
-for dir in charts/* addons/* examples/*; do
+for dir in charts/* addons/*; do
   [[ -d "$dir/tests" ]] || continue
   selected "$dir" || continue
   echo "==> helm unittest $dir"

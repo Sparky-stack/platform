@@ -208,8 +208,7 @@ git mv installations/local/clusters/prod1.yaml.disabled installations/local/clus
 yq -i '.openchoreo.dataPlane.environments -= ["production"]' installations/local/clusters/dev1.yaml
 ```
 
-Optionally also `examples.eastwest.enabled: true` in `installation.yaml` (the cross-cluster example needs two mesh
-members). Back to lean is the reverse. Commit, PR, merge: the `fleet` ApplicationSet creates or deletes prod1 (the CAPI
+Back to lean is the reverse. Commit, PR, merge: the `fleet` ApplicationSet creates or deletes prod1 (the CAPI
 Cluster is deleted gracefully; CAPD removes its containers).
 
 Before the first `task up` those two lines are the whole switch. **On a running stack** `production` already exists as

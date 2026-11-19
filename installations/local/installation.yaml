@@ -125,10 +125,3 @@ mesh:
   ca:
     host: openbao.openchoreo.localhost
     port: 8200
-
-# Examples (examples/<name>, applied by Argo CD to matching clusters; docs/multicluster.md "Example").
-examples:
-  eastwest:
-    # Multicluster profile only (needs two mesh members): echo on prod1, callers on dev1
-    # (installations/local/examples/eastwest/). Off in the lean profile, where dev1 is the only member.
-    enabled: false

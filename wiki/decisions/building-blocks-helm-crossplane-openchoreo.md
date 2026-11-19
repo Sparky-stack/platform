@@ -18,6 +18,7 @@ Official upstream OpenChoreo GitOps skills (`openchoreo-developer-gitops`, `open
   2. **Crossplane v2 XRDs and Compositions** for infrastructure/data APIs (`addons/crossplane`).
   3. **OpenChoreo declarative objects** (`ComponentType`, `Trait`, `ResourceType`, `Workflow`, `Environment`, `ReleaseBinding`).
 - Reconcile everything through **Argo CD on `mgmt` only** (push mode, label-selected ApplicationSets). Never add Flux CD or Kustomize (`kustomization.yaml`) to this repository.
+- Applications (demos and smoke workloads included) ship as OpenChoreo Components, never as custom Helm charts with their own ApplicationSet: the `examples/eastwest` chart and AppProject `examples` were removed for that reason (#116; replacement #232).
 - Keep templates readable at 4am by a sleepy SRE: obvious names, one place per concern, and comments explaining *why* rather than *what*.
 
 ## Alternatives rejected
