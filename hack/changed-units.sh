@@ -31,8 +31,8 @@ unit_of() {
 # `$ROOT/` for docs), or (charts/addons only) when it checks every chart or rendered manifest (`addons/*`, `charts/*`, $RENDERED_DIR).
 related_tests() {
   local t u left
-  for t in hack/tests/test_*.sh; do
-    [[ "$t" != */test_changed_units.sh ]] || continue   # its fixtures name every kind of unit; hack/ changes run it
+  for t in hack/tests/test_*.sh hack/check-istio-probe-cidr.sh; do
+    [[ -f "$t" && "$t" != */test_changed_units.sh ]] || continue   # its fixtures name every kind of unit; hack/ changes run it
     for u in "$@"; do
       left='[^A-Za-z0-9_./-]'
       if [[ "$u" == docs/* || "$u" == *.md ]]; then left='[^A-Za-z0-9_.-]'; fi

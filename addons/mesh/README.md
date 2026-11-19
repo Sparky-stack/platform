@@ -17,6 +17,8 @@ Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `
 | admission.enabled | bool | `true` | ValidatingAdmissionPolicy (`admission.{enabled,requesters,certificates}`) restricting `openbao-mesh` `CertificateRequest`s. |
 | admission.requesters[0] | string | `"system:serviceaccount:istio-system:cert-manager-istio-csr"` |  |
 | admission.requesters[1] | string | `"system:serviceaccount:cert-manager:cert-manager"` |  |
+| ambient.probeSourceCIDRs[0] | string | `"169.254.7.127/32"` |  |
+| ambient.probeSourceCIDRs[1] | string | `"fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128"` |  |
 | base | object | `{}` |  |
 | cert-manager-istio-csr.app.certmanager.issuer.group | string | `"cert-manager.io"` |  |
 | cert-manager-istio-csr.app.certmanager.issuer.kind | string | `"Issuer"` |  |

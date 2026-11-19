@@ -90,8 +90,9 @@ spec:
               # every probe (startup probe kills, CrashLoopBackOff). Any port: probe ports are per component. Nothing
               # else can use the source: it is host-local (never routed) and Cilium refuses spoofed pod sources.
               - from:
-                  - ipBlock: { cidr: 169.254.7.127/32 }
-                  - ipBlock: { cidr: "fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128" }
+                {{- range .Values.mesh.probeSourceCIDRs }}
+                  - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
+                {{- end }}
 {{- if $ae.mtls.strict }}
 ---
 apiVersion: policies.kyverno.io/v1
