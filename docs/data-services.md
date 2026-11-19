@@ -112,6 +112,15 @@ Declarative, no cluster names: the **data plane announces** what it runs, the **
   `allowedTraits` is per component type, cluster-wide. A list of environment names per type would restate what the fleet
   file already says about the cluster, and drift when an environment moves. The capability belongs to the data plane.
 - Backstop: on a data plane without the CRD the apply fails anyway (`no matches for kind`).
+- **First boot (#246):** the annotation is the fleet file's opt-in, true from cluster birth, while the addon itself
+  lands minutes later. So the data plane's cluster agent waits for it: addon openchoreo-data-plane renders a Sync hook
+  `capability-gate` (sync wave -1, before the agent Deployment) that runs `kubectl wait` until the CRD of every enabled
+  `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`, switched on per cluster from the
+  `addons.platform.koorikla.io/keda` label). Nothing reaches the cluster before its traits' kinds exist. Without it,
+  OpenChoreo 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on controller-runtime's
+  exponential backoff (capped at 1000 s, no watch on the data plane), so development served ~17 min after KEDA was
+  Healthy. `hack/tests/test_openchoreo_types.sh` fails when a ClusterTrait renders a kind the gate does not wait for.
+  Stuck agent on a new cluster: `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers`.
 
 ### Readiness and replicas
 

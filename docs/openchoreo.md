@@ -169,11 +169,37 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 | `platform`, key `openchoreo` | properties `thunder-admin-password`, `admin-user-password`, `developer-user-password`, `backstage-client-secret`, `backstage-backend-secret`, `service-mcp-client-secret` (alphanumeric; seeded by `task secrets` locally, created by the operator in aws/vault) |
 | `mgmt-fleet` (ns fleet, read-only) | `<name>-agent-tls` -> CRS payload `<name>-openchoreo-agent` (ExternalSecret in ns fleet) |
 | `mgmt-openchoreo` (ns openchoreo-control-plane, read-only) | `cluster-gateway-ca` (`ca.crt` only) -> CRS payload `openchoreo-gateway-ca` (ExternalSecret in ns **fleet**) |
-| `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; app secrets (OpenChoreo `SecretReference`s) |
+| `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; platform secrets on the data plane. Refuses tenant (cell) namespaces when `secrets.tenantStores.enabled` |
+| `SecretStore openbao-tenant` (each cell namespace) | app secrets: OpenChoreo `SecretReference`s, read from the project's own OpenBao mount `kv-tenant-<project>` ([below](#application-secrets-developer-view)) |
 
 Thunder users: `admin@openchoreo.dev` (group `admins` -> OpenChoreo role admin) and `developer@openchoreo.dev`
 (group `developers` -> role developer), passwords from the `openchoreo` key. Thunder console: user `admin`,
 `thunder-admin-password`.
+
+### Application secrets (developer view)
+A value lives in OpenBao, git holds only a pointer to it (`SecretReference`), and the Workload names the pointer.
+Worked example: hello-world `GREETING_SECRET` (`deploy/openchoreo/greeting-secret.yaml` + `workload.yaml`).
+
+1. **Write the value** to your project's mount `kv-tenant-<project>` with the project's writer identity
+   (`openbao-tenants/<project>-writer`, never root): command in
+   [multicluster.md](multicluster.md#tenant-secrets-openbao) "Writing a secret". One mount per project, shared by its
+   environments: use different keys (`hello-world` vs `hello-world-prod`) when values differ per environment.
+2. **Point at it** from the app repo: `SecretReference` with `data[].secretKey` (the key in the Kubernetes Secret)
+   and `remoteRef.key` / `.property` (path and field *inside your own mount*; never a mount name or a store; there is
+   no store field). Synced by the app's Argo CD Application like the Workload.
+3. **Consume it** in `workload.yaml`: `env[].valueFrom.secretKeyRef: {name: <SecretReference>, key: <secretKey>}`
+   (or `files[].valueFrom.secretKeyRef` for a file). OpenChoreo checks the key exists in the SecretReference.
+4. **What the platform renders**: in each cell namespace an `ExternalSecret` (`refreshInterval: 15s`, set by the
+   component type, which ignores `SecretReference.spec.refreshInterval`) on that namespace's `SecretStore
+   openbao-tenant`, and the Deployment takes the Secret via `envFrom`. `task demo:check` row `app-secret` asserts it.
+5. **Rotate**: write a new version (step 1). The Kubernetes Secret follows within ~15 s, but env vars and files
+   (mounted with `subPath`) are read at container start: roll the pods
+   ([runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)).
+
+Isolation: the store is fixed by the platform, a tenant `ExternalSecret`/`SecretStore` is rejected on the data plane
+(VAP, addon secret-stores) and cannot be synced from an app repo (tenant AppProject), and OpenBao answers a cell
+namespace only from `kv-tenant-<its project>`. A `remoteRef.key` naming another project's path still resolves inside
+your own mount (ESO prefixes the store's mount), and OpenBao would deny it anyway. Tests: `hack/tests/test_tenant_app_secrets.sh`, `task test:openbao`.
 
 ## Adding a data plane
 
@@ -316,8 +342,9 @@ ComponentRelease and ReleaseBinding manifests and open a PR). A ComponentRelease
 so it is meant to be generated (workflow plane or `occ`), not hand-written. `ComponentRelease` is in the tenant
 whitelist for that reason.
 
-Secrets: declare an OpenChoreo `SecretReference` (remote key in the data plane's `default` store) and reference it
-from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
+Secrets: declare an OpenChoreo `SecretReference` (key inside the project's OpenBao mount) and reference it from
+`workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values. Step by step:
+[Application secrets](#application-secrets-developer-view).
 
 ## Known issue: re-created data plane clusters
 
@@ -325,6 +352,13 @@ When a workload cluster is re-created under the same name (new CAPD/cloud cluste
 RenderedRelease controller can stay on a failed apply (`proxy request failed with status 502`, from while the agent was
 not connected yet) for a long backoff ([#51](https://github.com/koorikla/platform/issues/51)). Triage and the
 annotation kick command: [runbooks/incidents.md](runbooks/incidents.md#data-plane-agent-disconnected).
+
+The mechanism (confirmed in v1.3.3 source and live in [#246](https://github.com/koorikla/platform/issues/246)): the
+RenderedRelease controller returns an apply error to controller-runtime and watches only RenderedReleases, so the next
+attempt follows the default rate limiter (5 ms doubling, max 1000 s) and nothing re-queues it when the data plane
+recovers. On a fresh bootstrap the same backoff kept development down ~17 min after addon keda was Healthy: the data
+plane's agent therefore starts only once the CRDs of its opt-in addons exist (`capabilityGate` in addon
+openchoreo-data-plane, [data services](data-services.md#only-on-data-planes-that-run-the-operator)).
 
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*`):
 [#52](https://github.com/koorikla/platform/issues/52).

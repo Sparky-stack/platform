@@ -12,3 +12,6 @@
 
 ## [2026-11-19] update | charts/cluster absorbs capi-providers + clusterclasses (#116)
 - Updated `decisions/merge-clusterclasses-into-charts-cluster.md`: `templates/<provider>/` (not `providers/<provider>/`), `scope: fleet|cluster`, catalog entry `cluster-fleet`.
+
+## [2026-11-19] create | OpenChoreo SecretReference rotation and scope (#250)
+- Added `gotchas/openchoreo-secretreference-rotation-and-scope.md`.

@@ -29,6 +29,7 @@ CTX="${KUBE_CTX:-k3d-platform-mgmt}"
 NS="${DEMO_NAMESPACE:-default}"
 COMP="${DEMO_COMPONENT:-hello-world}"
 ENDPOINT="${DEMO_ENDPOINT:-http}"
+SECRET_ENV="${DEMO_SECRET_ENV:-GREETING_SECRET}"   # env var the demo Workload takes from a SecretReference
 UNSIGNED_IMAGE="${DEMO_UNSIGNED_IMAGE:-ghcr.io/koorikla/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7}"
 # = docs/dev-environment.md (client inside the CAPD network); multi-arch, pinned by digest.
 CURL_IMAGE="curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777"
@@ -594,6 +595,30 @@ c_secret_stores() {
   printf '%s\n' "$out" | summarize_stores
 }
 
+# c_app_secret: the demo component reads $SECRET_ENV from OpenBao through an OpenChoreo SecretReference (#250,
+# docs/openchoreo.md "Secrets"). In the first environment's cell namespace its Deployment takes the env from a Secret
+# that an ExternalSecret on the namespace's own SecretStore openbao-tenant keeps synced. The value is never printed:
+# only its length is looked at.
+c_app_secret() {
+  local env dp ns name es len
+  env=$(env_names | head -n1)
+  dp=$(env_dataplane "$env")
+  ns=$(cell_namespace "$dp" "$env")
+  [[ -n "$ns" ]] || { echo "no cell namespace for environment '${env:-none}' on '${dp:-none}'"; return 1; }
+  for name in $(kw "$dp" -n "$ns" get deployments -l "openchoreo.dev/component=$COMP" \
+      -o jsonpath='{range .items[*].spec.template.spec.containers[*].envFrom[*]}{.secretRef.name}{"\n"}{end}'); do
+    len=$(kw "$dp" -n "$ns" get secret "$name" -o jsonpath="{.data.$SECRET_ENV}" 2>/dev/null | wc -c)
+    (( len > 0 )) || continue
+    es=$(kw "$dp" -n "$ns" get externalsecrets.external-secrets.io "$name" -o jsonpath='{.spec.secretStoreRef.kind}/{.spec.secretStoreRef.name} {.spec.refreshInterval} {.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+    [[ "$es" =~ ^SecretStore/openbao-tenant\ [0-9]+[smh]\ True$ ]] \
+      || { echo "$ns/$name: ExternalSecret is '${es:-missing}' (want SecretStore/openbao-tenant <refresh> True)"; return 1; }
+    echo "$env: $SECRET_ENV from ExternalSecret $name (${es% True}) Ready"
+    return 0
+  done
+  echo "$env ($ns): no Secret of $COMP's Deployment carries $SECRET_ENV (SecretReference not deployed or not synced)"
+  return 1
+}
+
 # ---- step 9: app with a database ------------------------------------------------------------------------------------
 # Crossplane runs on each workload cluster that opts in (fleet file `addons: { crossplane: true, cloudnative-pg: true }`,
 # docs/data-services.md): the PostgreSQL XRD must be Established there. No opted-in cluster fails (step 9 has nothing
@@ -662,6 +687,7 @@ check 8 mesh-certs "OpenBao-issued mesh certificates" c_mesh_certs
 for c in mgmt ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
   check 8 "secret-stores-$c" "ClusterSecretStores Ready ($c)" c_secret_stores "$c"
 done
+check 8 app-secret "$COMP reads $SECRET_ENV from OpenBao" c_app_secret
 
 check 9 postgres "PostgreSQL claim API" c_postgres
 
