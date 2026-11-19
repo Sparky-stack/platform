@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Which parts of the repo a change touches, so PR CI validates only those (docs/dev-environment.md#scoped-pr-ci).
 #   changed-units.sh [PATH...]          changed file paths (args, else one per line on stdin) -> units, one per line:
-#                                       charts/<c>, addons/<a>, packages/<p>, ci, templates; `docs` when only docs
-#                                       changed; `full` when a shared input changed or a path is unknown.
+#                                       charts/<c>, addons/<a>, packages/<p>, docs/<doc>, ci, templates; `docs` when only
+#                                       untested docs changed; `full` when a shared input changed or a path is unknown.
 #   changed-units.sh --tests UNIT...    the hack/tests/test_*.sh contract tests related to those units.
 # When unsure, answer `full`: a wasted CI minute is cheaper than a broken main.
 set -euo pipefail
@@ -20,7 +20,8 @@ unit_of() {
     packages/*/*) r=${1#packages/}; echo "packages/${r%%/*}" ;;
     ci/* | .github/workflows/app-*.yaml | .github/workflows/ci-selftest.yaml | .github/workflows/ci-toolbox.yaml) echo ci ;;
     templates/* | .github/workflows/templates.yaml) echo templates ;;
-    docs/* | wiki/* | *.md) echo docs ;;
+    docs/*) r=${1#docs/}; r="docs/${r%%/*}"; if [[ -n "$(related_tests "$r")" ]]; then echo "$r"; else echo docs; fi ;;
+    wiki/* | *.md) echo docs ;;
     *) echo full ;;   # mise.toml, Taskfile.yml, prek.toml, renovate.json, other workflows, new top-level dirs, ...
   esac
 }
