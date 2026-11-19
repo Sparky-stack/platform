@@ -1,0 +1,35 @@
+{{- define "chart.purpose" -}}
+Library chart `koorikla-lib`: one definition for each block that several charts render identically, so a fix lands in
+every consumer at once. It renders nothing by itself; a consumer lists it as a dependency
+(`repository: file://../../charts/lib` from `addons/`, `file://../lib` from `charts/`) and calls `include`.
+
+| Helper (`templates/`) | Renders | Used by |
+|---|---|---|
+| `koorikla-lib.agentServerCA` (`_agent-server-ca.tpl`) | ExternalSecret -> ConfigMap `cluster-gateway-ca` (gateway CA public cert) for a plane's cluster-agent | `addons/openchoreo-observability-plane`, `addons/openchoreo-workflow-plane` |
+| `koorikla-lib.operatorNamespace` (`_operator-namespace.tpl`) | Pod Security + Istio ambient labels on an operator's namespace | `addons/cloudnative-pg`, `addons/keda`, `addons/strimzi` |
+| `koorikla-lib.esoSecretReader` (`_eso-kubernetes-store.tpl`) | ServiceAccount + Role + RoleBinding `eso-<name>`: GET of one Secret | `addons/harbor`, `addons/openbao` |
+| `koorikla-lib.esoKubernetesProvider` (`_eso-kubernetes-store.tpl`) | `spec.provider.kubernetes` of an in-cluster (Cluster)SecretStore | `addons/harbor`, `addons/openbao`, `addons/secret-stores` |
+| `koorikla-lib.sourceIntegrity` (`_source-integrity.tpl`) | AppProject `spec.sourceIntegrity` (Git commit signature policy) | `charts/platform`, `charts/tenant` |
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Target:** nowhere on its own: its templates render inside each consumer's release.
+- **Selection:** a consumer's `Chart.yaml` dependency; Argo CD's repo-server and `hack/deps.sh` build it from the
+  consumer's `Chart.lock` like any other dependency.
+{{- end -}}
+
+{{- define "chart.keyValuesNotes" }}
+
+None of its own: each helper reads the consumer's values or a `dict` of arguments (documented in its file).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- After editing a helper, `hack/deps.sh` re-packages it into every consumer's `charts/`; prove the change with the
+  consumers' renders and unit tests, and the helpers' own tests in [`charts/lib-test`](../lib-test/README.md).
+- Bump `version` only for a breaking change of a helper's interface (then update every consumer's `Chart.yaml` and lock).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Helm library charts](https://helm.sh/docs/topics/library_charts/)
+- [Conventions: layout](../../docs/conventions.md#layout-and-ownership)
+{{- end -}}

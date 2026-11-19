@@ -54,7 +54,7 @@ server_param_args() {
   local addon="$1" server="$2" p part v
   while IFS=$'\t' read -r p part; do
     [[ -n "$p" ]] || continue
-    v=$(py -c 'import sys,urllib.parse as u;s=sys.argv[1];x=u.urlsplit(s);print({"url":s,"host":x.hostname,"port":x.port or 443}[sys.argv[2]])' "$server" "$part")
+    v=$(addon_server_part "$server" "$part")
     if [[ "$part" == "port" ]]; then printf '%s\n' --set "${p}=${v}"; else printf '%s\n' --set-string "${p}=${v}"; fi
   done < <(yq -r ".addons[\"$addon\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" charts/platform/values.yaml)
 }

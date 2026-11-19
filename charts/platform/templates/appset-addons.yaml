@@ -3,7 +3,8 @@ One ApplicationSet addon-<name> per catalog entry (values.yaml `addons`), on mgm
 <name>-<cluster> per Argo CD cluster secret whose labels match the entry. Layering: docs/architecture.md "Addons".
 */ -}}
 {{- $inst := .Values.installation -}}
-{{- $instValues := omit .Values "addons" -}}
+{{- /* koorikla-lib: the values scope Helm adds for the library dependency (charts/lib), not an installation value. */ -}}
+{{- $instValues := omit .Values "addons" "koorikla-lib" -}}
 {{- /* goTemplate expressions the ApplicationSet controller evaluates per cluster secret; hack/lib/addons.sh mirrors them. */ -}}
 {{- $label := dict -}}
 {{- range list "name" "role" "provider" "region" "environment" "cni" -}}

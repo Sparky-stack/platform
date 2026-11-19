@@ -5,19 +5,7 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_down =="
-
-REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
-[[ -x "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
-
-R="$TMP/root"; BIN="$TMP/bin"
-mkdir -p "$R/bootstrap" "$R/hack" "$BIN"
-cp -R "$ROOT/hack/lib" "$R/hack/"
-cp -R "$ROOT/installations" "$R/"
-sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
-# shellcheck disable=SC2016  # literal code for the generated script
-printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
-printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
+bootstrap_harness
 
 # Fake kubectl: FAKE_FLEET=1 -> ns fleet exists with Clusters dev1 + prod1; FAKE_DELETE_FAIL=1 -> delete times out.
 cat > "$BIN/kubectl" <<'EOF'
@@ -55,14 +43,7 @@ chmod +x "$BIN/"*
 
 run() {
   local name=$1 call=$2; shift 2
-  HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
-  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" \
-      KUBE_CTX=fake INST="${RUN_INST:-local}" HARNESS_CALL="$call" "$@" "$BASH" "$R/bootstrap/bs.sh" > "$HLOG/out" 2>&1; then
-    RC=0
-  else
-    RC=$?
-  fi
-  OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
+  run_isolated "$name" "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL="$call" "$@"
   assert_eq "$(grep -c -- '--context fake' "$HLOG/calls" || true)" "$(grep -c '^kubectl' "$HLOG/calls" || true)" "$name: only the fake context"
 }
 # line <pattern> -> first line number in calls matching the ERE (0 if none)
@@ -103,7 +84,7 @@ assert_eq "$(count '^docker rm -f id-prod1-0 id-prod1-1$')" 1 "nofleet: prod1 le
 assert_eq "$(count '^k3d cluster delete platform-mgmt')" 1 "nofleet: k3d mgmt deleted"
 
 # --- only the local installation ---------------------------------------------------------------------------------
-RUN_INST=aws-example run cloud cmd_down FAKE_FLEET=1
+run cloud cmd_down INST=aws-example FAKE_FLEET=1
 assert_eq "$RC" 1 "cloud: refused"
 assert_eq "$(count '.')" 0 "cloud: no command run"
 

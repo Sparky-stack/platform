@@ -16,7 +16,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_falco_tokens =="
 URL="http://events.example.test:8080/falco/"   # trailing slash on purpose: senders trim it
 TOKEN="sample-store-token"
 

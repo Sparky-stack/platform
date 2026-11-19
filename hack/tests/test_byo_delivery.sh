@@ -24,8 +24,6 @@ source hack/lib/portable.sh
 source hack/lib/addons.sh
 unset RENDERED_DIR   # twins are rendered under the names of real clusters: never reuse the suite's renders
 
-echo "== test_byo_delivery =="
-
 docs_json() { yq ea -o=json -I=0 '[.]' "$1"; }
 
 CAPI_TWIN=(--set provider=docker --set kubernetesVersion=v1.35.10+k3s1 --set capi.providers.docker=true --set cni=flannel)

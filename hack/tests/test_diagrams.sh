@@ -7,7 +7,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_diagrams =="
 B="$ROOT/docs/diagrams/src/build.py"
 
 # 1. committed SVGs are up to date and clean

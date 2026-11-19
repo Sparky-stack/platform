@@ -9,7 +9,6 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_openbao_reconcile =="
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; IN="$TMP/inputs"
 mkdir -p "$S/mounts" "$S/certs" "$S/auth" "$S/policies" "$S/roles" "$S/writes" "$S/entities" "$BIN" "$IN"

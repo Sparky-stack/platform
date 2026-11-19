@@ -1,0 +1,8 @@
+# koorikla-lib.esoKubernetesProvider renders the provider block of a store; wrap it in one to test it.
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: fixture
+spec:
+  provider:
+    {{- include "koorikla-lib.esoKubernetesProvider" .Values.esoKubernetesProvider | nindent 4 }}

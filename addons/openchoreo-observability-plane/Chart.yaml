@@ -16,3 +16,6 @@ dependencies:
   - name: observability-metrics-prometheus
     version: 0.8.0
     repository: oci://ghcr.io/openchoreo/helm-charts
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../../charts/lib

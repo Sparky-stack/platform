@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_registry_cache =="
-
 BIN="$TMP/bin"; mkdir -p "$BIN"
 cat > "$BIN/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -20,11 +18,7 @@ exit 0
 EOF
 chmod +x "$BIN/docker"
 export DOCKER_LOG="$TMP/docker.log"
-# yq through a wrapper, not its directory on PATH: on Windows `mise which` returns a C:\ path that breaks PATH
-# (the pattern of test_bootstrap_down.sh).
-REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
-[[ -n "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
-printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"; chmod +x "$BIN/yq"
+fake_bin_yq "$BIN"
 P="$BIN:/usr/bin:/bin"
 
 PATH="$P" bash "$ROOT/hack/registry-cache.sh" k3s-config "$TMP/reg.yaml"

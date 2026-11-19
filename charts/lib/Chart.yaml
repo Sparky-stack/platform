@@ -1,0 +1,5 @@
+apiVersion: v2
+name: koorikla-lib
+description: Named templates shared by koorikla charts and addons (one definition per concept that several charts render identically)
+type: library
+version: 0.1.0

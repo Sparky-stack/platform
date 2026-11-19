@@ -13,7 +13,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_tenant_demo_secrets =="
 cd "$ROOT"
 
 R="$TMP/tenant.yaml"

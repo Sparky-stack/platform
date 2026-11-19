@@ -2,5 +2,8 @@ dependencies:
 - name: harbor
   repository: https://helm.goharbor.io
   version: 1.19.4
-digest: sha256:3aa81d0e6c37b63bc4333dd934cb8e40ec35717ddc3f2e7fcd7568b9eccd43e1
-generated: "2026-11-14T13:36:24.150860722+02:00"
+- name: koorikla-lib
+  repository: file://../../charts/lib
+  version: 0.1.0
+digest: sha256:222206699807a31a2af070638e4750755712794bd6d53e66df82c017d7725bb2
+generated: "2026-11-19T13:30:23.801230251+02:00"

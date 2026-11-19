@@ -19,8 +19,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_tenant_app_secrets =="
-
 # store_violations <render>: "<type> <resource id> <store kind>/<name> refresh=<interval>" for every ExternalSecret
 # template of a ClusterComponentType that is not on SecretStore openbao-tenant or has no refreshInterval.
 store_violations() {

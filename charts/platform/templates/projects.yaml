@@ -9,7 +9,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"   # before the ApplicationSets using it; pruned after them (reverse waves)
 spec:
   description: Platform addons and management cluster components
-{{- include "platform.sourceIntegrity" . }}
+{{- include "koorikla-lib.sourceIntegrity" . }}
   sourceRepos:
     - '*'
   destinations:
@@ -31,7 +31,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: Workload cluster provisioning (CAPI, Argo registration, OpenChoreo identities)
-{{- include "platform.sourceIntegrity" . }}
+{{- include "koorikla-lib.sourceIntegrity" . }}
   sourceRepos:
     - {{ .Values.installation.repoURL | quote }}
   destinations:
@@ -79,7 +79,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   description: PR preview environments (OpenChoreo Environment + bindings per open pull request)
-{{- include "platform.sourceIntegrity" . }}
+{{- include "koorikla-lib.sourceIntegrity" . }}
   sourceRepos:
     - {{ .Values.installation.repoURL | quote }}
   destinations:

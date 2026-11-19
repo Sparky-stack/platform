@@ -4,7 +4,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_image_audit =="
 # shellcheck source=../image-audit.sh
 source "$ROOT/hack/image-audit.sh"
 

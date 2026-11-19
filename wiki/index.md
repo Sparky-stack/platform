@@ -2,7 +2,7 @@
 
 > Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-19 | Total pages: 24
+> Last updated: 2026-11-19 | Total pages: 25
 
 ## Decisions
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
@@ -24,6 +24,7 @@
 - [Argo CD Sync-Wave Ordering for CAPI Outputs and Unlimited Retry](gotchas/argocd-sync-wave-ordering-and-unlimited-retry.md) — Separate CAPI producers and consumers across sync waves and set `retry.limit: -1` (never `controller.sync.timeout.seconds`) (#192, #195, #199).
 - [Docker Network Pool Exhaustion from crossplane render](gotchas/docker-network-pool-exhaustion-crossplane-render.md) — Share one Docker bridge network and function containers across `crossplane render` tests so Docker subnet pools don't exhaust (#181).
 - [Gemini Transcript Ceiling and Token Discipline for Subagents](gotchas/gemini-transcript-ceiling-for-agents.md) — Read small file slices, skip Flux/Kustomize skill refs, keep writes `< 80` lines, and commit each step to avoid context cutoffs.
+- [Helm Library Chart koorikla-lib (file:// Dependency)](gotchas/helm-library-chart-koorikla-lib.md) — Shared blocks live in `charts/lib`; omit its values scope from `.Values` dumps, re-package `file://` deps in `hack/deps.sh`, test through `charts/lib-test` (#116).
 - [Istio Ambient Port 15008 in Cell Policies and Telemetry DNS on *.localhost](gotchas/istio-ambient-port-15008-and-telemetry-dns.md) — Open TCP `15008` (HBONE) in cell NetworkPolicies and allow kubelet probes from ambient's SNAT source `169.254.7.127/32`, and keep `telemetry` out of ambient mesh so `ztunnel` DNS capture doesn't break `*.localhost` (#53, #206, #208, #251).
 - [mise Global vs Repo Tool Versions and Python Env Var Leakage](gotchas/mise-global-vs-repo-tool-versions.md) — Always run `mise trust` and prefix commands with `env -u PYTHONHOME -u PYTHONPATH -u PYTHON PATH=/usr/bin:$PATH mise exec --` inside the worktree (#171).
 - [OpenBao Policies Only at Init, Policy Reconciler, and Wave -1 Seal Key](gotchas/openbao-policies-init-and-reconciler.md) — Reconcile `tenant-*` policies via a post-init job and sync `openbao-unseal` in wave `-1` before the StatefulSet (#96, #179, #190, #191).

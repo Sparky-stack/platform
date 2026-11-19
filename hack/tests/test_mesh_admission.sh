@@ -10,7 +10,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_mesh_admission =="
 if ! command -v kyverno >/dev/null 2>&1; then
   echo "  SKIP: kyverno CLI not installed (mise install)"
   exit 0

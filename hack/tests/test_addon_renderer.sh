@@ -10,7 +10,6 @@ source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
 
-echo "== test_addon_renderer =="
 R="$TMP/platform-hetzner.yaml"
 render_platform hetzner-example "$R"
 

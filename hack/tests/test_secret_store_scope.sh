@@ -9,7 +9,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_secret_store_scope =="
 # Needs every consumer render: a scoped PR run (hack/test-changed.sh) goes full when a changed chart has secrets.
 # scoped-ci full-if: ExternalSecret|SecretStore|secretStoreRef
 if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then

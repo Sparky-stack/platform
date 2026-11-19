@@ -1,0 +1,8 @@
+# koorikla-lib.sourceIntegrity renders a fragment of an AppProject spec; wrap it in one to test it.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: fixture
+spec:
+  description: fixture
+{{- include "koorikla-lib.sourceIntegrity" . }}

@@ -14,7 +14,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_pvc_hooks =="
 cd "$ROOT"
 
 # violations <render> -> one line per broken rule, empty when the render keeps the contract

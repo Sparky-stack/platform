@@ -1,0 +1,22 @@
+suite: koorikla-lib.agentServerCA
+templates: [templates/agent-server-ca.yaml]
+release: { namespace: openchoreo-workflow-plane }
+tests:
+  - it: renders the ExternalSecret that turns the gateway CA's ca.crt into a ConfigMap
+    asserts:
+      - isKind: { of: ExternalSecret }
+      - equal: { path: metadata.namespace, value: openchoreo-workflow-plane }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: mgmt-openchoreo } }
+      - equal: { path: spec.target.manifest.kind, value: ConfigMap }
+      - equal: { path: "spec.data[0].remoteRef", value: { key: cluster-gateway-ca, property: ca.crt } }
+  - it: takes store, source and ConfigMap name from values
+    set: { agentServerCA: { store: s2, sourceSecret: src2, configMapName: cm2 } }
+    asserts:
+      - equal: { path: metadata.name, value: cm2 }
+      - equal: { path: spec.target.name, value: cm2 }
+      - equal: { path: spec.secretStoreRef.name, value: s2 }
+      - equal: { path: "spec.data[0].remoteRef.key", value: src2 }
+  - it: renders nothing when disabled
+    set: { agentServerCA.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }

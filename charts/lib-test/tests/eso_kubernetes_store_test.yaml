@@ -1,0 +1,52 @@
+suite: koorikla-lib ESO kubernetes-provider stores
+templates: [templates/eso-secret-reader.yaml, templates/eso-kubernetes-provider.yaml]
+tests:
+  - it: esoSecretReader grants GET on the one Secret, plus the store's SelfSubjectRulesReview
+    template: templates/eso-secret-reader.yaml
+    documentSelector: { path: kind, value: Role }
+    asserts:
+      - equal: { path: metadata.name, value: eso-mgmt-x }
+      - equal:
+          path: rules
+          value:
+            - { apiGroups: [""], resources: [secrets], resourceNames: [x-ca-bundle], verbs: [get] }
+            - { apiGroups: [authorization.k8s.io], resources: [selfsubjectrulesreviews], verbs: [create] }
+  - it: esoSecretReader binds the Role to its ServiceAccount
+    template: templates/eso-secret-reader.yaml
+    documentSelector: { path: kind, value: RoleBinding }
+    asserts:
+      - equal: { path: roleRef.name, value: eso-mgmt-x }
+      - equal: { path: subjects, value: [{ kind: ServiceAccount, name: eso-mgmt-x, namespace: x }] }
+  - it: esoSecretReader without optional args renders no labels and leaves the token automount default
+    template: templates/eso-secret-reader.yaml
+    documentSelector: { path: kind, value: ServiceAccount }
+    asserts:
+      - notExists: { path: metadata.labels }
+      - notExists: { path: automountServiceAccountToken }
+  - it: esoSecretReader passes labels to every object and sets automountServiceAccountToken
+    template: templates/eso-secret-reader.yaml
+    set:
+      esoSecretReader: { labels: "app.kubernetes.io/name: x", automountServiceAccountToken: false }
+    asserts:
+      - hasDocuments: { count: 3 }
+      - equal: { path: metadata.labels, value: { app.kubernetes.io/name: x } }
+      - equal: { path: automountServiceAccountToken, value: false }
+        documentSelector: { path: kind, value: ServiceAccount }
+  - it: esoKubernetesProvider for a namespaced SecretStore looks CA and ServiceAccount up in the store's namespace
+    template: templates/eso-kubernetes-provider.yaml
+    asserts:
+      - equal:
+          path: spec.provider.kubernetes
+          value:
+            remoteNamespace: x
+            server:
+              url: https://kubernetes.default.svc
+              caProvider: { type: ConfigMap, name: kube-root-ca.crt, key: ca.crt }
+            auth: { serviceAccount: { name: eso-mgmt-x } }
+  - it: esoKubernetesProvider for a ClusterSecretStore names the namespace of CA and ServiceAccount
+    template: templates/eso-kubernetes-provider.yaml
+    set: { esoKubernetesProvider: { remoteNamespace: src, clusterStore: true, namespace: home } }
+    asserts:
+      - equal: { path: spec.provider.kubernetes.remoteNamespace, value: src }
+      - equal: { path: spec.provider.kubernetes.server.caProvider.namespace, value: home }
+      - equal: { path: spec.provider.kubernetes.auth.serviceAccount, value: { name: eso-mgmt-x, namespace: home } }

@@ -3,3 +3,7 @@ name: platform
 description: Root chart - AppProjects, ApplicationSets (fleet, addon catalog, tenants), mgmt cluster secret
 type: application
 version: 0.1.0
+dependencies:
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../lib

@@ -3,3 +3,7 @@ name: tenant
 description: One OpenChoreo tenant (project) - AppProject tenant-<project>, OpenChoreo Project, one Argo Application per app repo
 type: application
 version: 0.1.0
+dependencies:
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../lib

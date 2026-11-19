@@ -12,8 +12,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_image_pins =="
-
 # <image or glob>|<source substring (hack/image-audit.sh source column)>|<why; when to remove>
 PIN_EXCEPTIONS=(
   # falcosidekick chart (falco 9.2.2) `helm test` pod (hook test-success): image hardcoded, no value to override it.

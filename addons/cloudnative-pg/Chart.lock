@@ -5,5 +5,8 @@ dependencies:
 - name: plugin-barman-cloud
   repository: oci://ghcr.io/cloudnative-pg/charts
   version: 0.9.0
-digest: sha256:38d3a90fcd957a19e1f8d2abf79d079ff4194c994572c7f86f8eae68f4b9af33
-generated: "2026-11-16T05:48:30.027450821+02:00"
+- name: koorikla-lib
+  repository: file://../../charts/lib
+  version: 0.1.0
+digest: sha256:dd641269b8454dd1b4f728766e434ee8b5a4222cbe3e3efae5891cab54794f33
+generated: "2026-11-19T13:29:37.223764301+02:00"

@@ -1,18 +1,3 @@
-{{- /* The operator namespace enforces Pod Security restricted (KEDA's three pods meet it upstream). Argo CD creates
-the namespace (CreateNamespace=true); this object only adds the labels.
-namespace.ambient: Istio ambient mesh client (#53), see values.yaml. */ -}}
-{{- if or .Values.namespace.podSecurity .Values.namespace.ambient }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Release.Namespace }}
-  labels:
-    {{- with .Values.namespace.podSecurity }}
-    pod-security.kubernetes.io/enforce: {{ . | quote }}
-    pod-security.kubernetes.io/audit: {{ . | quote }}
-    pod-security.kubernetes.io/warn: {{ . | quote }}
-    {{- end }}
-    {{- if .Values.namespace.ambient }}
-    istio.io/dataplane-mode: ambient
-    {{- end }}
-{{- end }}
+{{- /* Labels on the operator namespace (namespace.podSecurity, namespace.ambient; see values.yaml). Restricted fits:
+KEDA's three pods meet it upstream. Template: charts/lib/templates/_operator-namespace.tpl. */ -}}
+{{- include "koorikla-lib.operatorNamespace" . }}
