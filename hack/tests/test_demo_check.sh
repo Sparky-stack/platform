@@ -8,16 +8,13 @@ source "$(dirname "$0")/lib.sh"
 
 echo "== test_demo_check =="
 
-REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
-[[ -x "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
-
 R="$TMP/root"; BIN="$TMP/bin"
-mkdir -p "$R/hack" "$R/addons/kyverno-policies" "$R/installations" "$R/charts/cluster" "$BIN"
+mkdir -p "$R/hack" "$R/addons/kyverno-policies" "$R/installations" "$R/charts/cluster"
+fake_bin_yq "$BIN"
 cp "$ROOT/hack/demo-check.sh" "$ROOT/hack/kubeconfig.sh" "$R/hack/"
 cp -R "$ROOT/hack/lib" "$R/hack/"
 cp "$ROOT/addons/kyverno-policies/values.yaml" "$R/addons/kyverno-policies/"
 cp -R "$ROOT/installations/local" "$ROOT/installations/aws-example" "$R/installations/"
-printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
 
 SENTINEL=SentinelKubeToken4711
 KUBECONFIG_B64=$(printf 'apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://192.0.2.7:6443\nusers:\n- name: u\n  user:\n    token: %s\n' "$SENTINEL" | base64 | tr -d '\n')
@@ -173,14 +170,7 @@ green() {
 run() {
   local name=$1
   shift
-  HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
-  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" FIX="$FIX" \
-      KUBECONFIG_MODE=direct DEMO_HTTP_MODE=direct "$@" "$BASH" "$R/hack/demo-check.sh" > "$HLOG/out" 2>&1; then
-    RC=0
-  else
-    RC=$?
-  fi
-  OUT=$(cat "$HLOG/out")
+  run_isolated "$name" "$R/hack/demo-check.sh" FIX="$FIX" KUBECONFIG_MODE=direct DEMO_HTTP_MODE=direct "$@"
   CALLS=$(cat "$HLOG/calls")
 }
 
