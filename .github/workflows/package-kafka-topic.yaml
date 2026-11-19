@@ -3,7 +3,8 @@ name: package-kafka-topic
 # The kafka-topic API Configuration package (packages/kafka-topic): PRs validate + render only; pushes to main and
 # release tags (kafka-topic-vX.Y.Z, release-please component "kafka-topic") build, push to
 # ghcr.io/koorikla/platform/kafka-topic, cosign keyless sign and attest SLSA provenance.
-# Status: layout - no cluster installs it yet (packages/kafka-topic/README.md); enabling it adds the pin to addons/crossplane.
+# Status: layout - no cluster installs it yet (packages/kafka-topic/README.md); enabling it adds the pin to
+# addons/crossplane.
 
 on:
   workflow_dispatch:

@@ -3,7 +3,8 @@ name: package-mysql
 # The mysql API Configuration package (packages/mysql): PRs validate + render only; pushes to main and
 # release tags (mysql-vX.Y.Z, release-please component "mysql") build, push to
 # ghcr.io/koorikla/platform/mysql, cosign keyless sign and attest SLSA provenance.
-# Status: layout - no cluster installs it yet (packages/mysql/README.md); enabling it adds the pin to addons/crossplane.
+# Status: layout - no cluster installs it yet (packages/mysql/README.md); enabling it adds the pin to
+# addons/crossplane.
 
 on:
   workflow_dispatch:

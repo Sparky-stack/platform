@@ -90,6 +90,23 @@ PACKAGE_ROOT=packages/<name> bash ../../ci/scripts/crossplane/validate-render.sh
 `project run` resolves dependencies and has no EnvironmentConfig: apply `tests/render/environment/<backend>.yaml`
 before an example (VERIFY: not exercised in CI).
 
+## APIs and their status
+
+| API | Package | Local backend (operator) | Cloud backends | Status |
+|---|---|---|---|---|
+| PostgreSQL | [`packages/postgresql`](../packages/postgresql/README.md) | CloudNativePG | RDS / Aurora, Cloud SQL, Azure Flexible | tested locally |
+| MySQL | [`packages/mysql`](../packages/mysql/README.md) | MOCO (Vitess evaluated: too heavy per app) | RDS, Cloud SQL, Azure Flexible | layout |
+| Valkey | [`packages/valkey`](../packages/valkey/README.md) | valkey-io/valkey-operator | ElastiCache, Memorystore, Azure Cache for Redis | layout |
+| Bucket | [`packages/bucket`](../packages/bucket/README.md) | RustFS operator | S3, GCS, Azure Blob | layout |
+| KafkaTopic | [`packages/kafka-topic`](../packages/kafka-topic/README.md) | Strimzi | Event Hubs (MSK, Managed Kafka: no upjet kind yet) | layout |
+
+*layout*: package, render tests and an OpenChoreo `ClusterResourceType` (kept in `packages/<api>/openchoreo/`, not
+deployed) exist; no cluster installs it. New packages compose through a Crossplane Project **embedded function**
+(`functions/compose-<api>/`, one go-template per composed object, `crossplane function generate`); their render tests
+run in project mode (no functions file). **Object storage and COSI:** the Kubernetes Container Object Storage
+Interface (SIG Storage, `BucketClaim` / `BucketAccess`) is the future standard for bucket provisioning but is still
+alpha with few drivers (none for RustFS); Crossplane gives one API across RustFS and the three clouds today.
+
 ## Adding a new API
 
 1. `crossplane project init` under `packages/<name>/`, write `apis/<api>/definition.yaml` (namespaced XRD,
