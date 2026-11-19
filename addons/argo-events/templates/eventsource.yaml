@@ -1,8 +1,6 @@
 {{- /*
-EventBus + EventSource `platform` (Falco escalation webhook, OpenChoreo ReleaseBinding events) + their plumbing:
-per-cluster bearer tokens derived from the store, Service exposure through the control-plane Gateway, read-only RBAC on
-bindings. Falco: one endpoint per cluster (POST /falco/<cluster>, event falco-<cluster>), each accepting only that
-cluster's token, so the endpoint an event arrives on authenticates the cluster it names (docs/observability.md).
+EventBus `default` and EventSources `platform` (Falco escalation webhook) and `releasebindings` (OpenChoreo rollouts,
+for the promotion gate) on mgmt, namespace argo-events, with their token Secret, HTTPRoute and RBAC.
 */ -}}
 {{- $clusters := list }}
 {{- if .Values.falco.enabled }}{{ $clusters = include "ae.falcoClusters" . | fromJsonArray }}{{ end }}
@@ -57,6 +55,8 @@ spec:
       - name: falco
         port: {{ .Values.falco.port }}
         targetPort: {{ .Values.falco.port }}
+  {{- /* One endpoint per cluster (POST /falco/<cluster>, event falco-<cluster>), each accepting only that cluster's
+  token: the endpoint an event arrives on authenticates the cluster it names (docs/observability.md). */}}
   webhook:
     {{- range $c := $clusters }}
     {{ printf "falco-%s" $c }}:

@@ -1,8 +1,7 @@
 {{- /*
-Sensors: falco-escalation (-> Workflow from WorkflowTemplate falco-response) and promotion-gate (-> OpenChoreo
-WorkflowRun of ClusterWorkflow promotion-gate). Triggers create objects with deterministic names (event uuid / rollout
-id), so a re-delivered event fails with AlreadyExists instead of running twice.
-Both need the workflow plane (Argo Workflows CRDs + controller, see _helpers.tpl): not rendered without it.
+Sensors falco-escalation (-> Workflow falco-response) and promotion-gate (-> OpenChoreo WorkflowRun of ClusterWorkflow
+promotion-gate) on mgmt, only with the workflow plane (_helpers.tpl ae.workflowPlane). Deterministic object names
+(event uuid / rollout id): a re-delivered event fails with AlreadyExists instead of running twice.
 */ -}}
 {{- $wf := eq (include "ae.workflowPlane" .) "true" }}
 {{- if and .Values.falco.enabled $wf }}

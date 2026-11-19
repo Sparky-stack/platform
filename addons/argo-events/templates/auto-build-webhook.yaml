@@ -1,6 +1,7 @@
 {{- /*
-Auto-build webhook (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): rendered only when
-installation.yaml openchoreo.workflowPlane.autoBuild is `webhook` and the workflow plane exists.
+Auto-build webhook on mgmt (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): GitHub App push ->
+Workflow auto-build in workflows-<org ns>. Only with installation.yaml openchoreo.workflowPlane.autoBuild `webhook`,
+the workflow plane and the platform GitHub App. Objects:
   ExternalSecret github-webhook   HMAC secret of the GitHub App webhook (store platform)
   EventSource github              POST <endpoint>: X-Hub-Signature-256 validated (unsigned/forged payloads -> 400);
                                   never calls GitHub (no token: hooks are configured on the App, not managed here)

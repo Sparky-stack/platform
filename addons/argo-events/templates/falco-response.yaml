@@ -1,11 +1,6 @@
 {{- /*
-WorkflowTemplate falco-response (docs/observability.md "Falco response"), run by the OpenChoreo workflow plane's Argo
-Workflows controller on mgmt. files/falco_response.py (ConfigMap) does the work.
-ServiceAccount tokens, the promotion gate's executor-only pattern: no step container gets one by default
-(automountServiceAccountToken: false); Argo's executor (init/wait containers) uses falco-response-executor, which may
-only report step outputs. Only the two steps that talk to the Kubernetes API opt in (enrich, record: ServiceAccount
-falco-response, read OpenChoreo RenderedReleases/Environments and write Events in the org namespace, no data-plane
-access). The steps that call endpoints outside the cluster API (rca, notify: template `call`) run without a token.
+WorkflowTemplate falco-response (docs/observability.md "Falco response") with its script ConfigMap and identities, on
+mgmt; the OpenChoreo workflow plane's Argo Workflows controller runs it. files/falco_response.py does the work.
 */ -}}
 {{- if and .Values.falco.enabled (eq (include "ae.workflowPlane" .) "true") }}
 {{- $r := .Values.falco.response }}
@@ -20,6 +15,11 @@ data:
   falco_response.py: |
     {{- .Files.Get "files/falco_response.py" | nindent 4 }}
 ---
+{{- /* ServiceAccount tokens follow the promotion gate's executor-only pattern: no step container gets one by default
+(automountServiceAccountToken: false); Argo's executor (init/wait containers) uses falco-response-executor, which may
+only report step outputs. Only enrich and record, which talk to the Kubernetes API, opt in (ServiceAccount
+falco-response: read OpenChoreo RenderedReleases/Environments, write Events in the org namespace, no data-plane
+access). The steps that call endpoints outside the cluster API (rca, notify: template `call`) run without a token. */}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
