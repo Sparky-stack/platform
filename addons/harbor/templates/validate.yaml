@@ -1,4 +1,5 @@
-{{- /* Render-time consistency with installation.yaml `registry` (the subchart's literals must match it). */ -}}
+{{- /* Renders nothing: fails the render when values contradict installation.yaml `registry` or each other (all checks here). */ -}}
+{{- /* The subchart's literals (externalURL, route hosts, parentRefs, token secret) must match installation.yaml. */ -}}
 {{- if ne (toString .Values.registry.type) "harbor" }}
 {{- fail (printf "registry.type is %q: disable addon harbor for mgmt (addons.platform.koorikla.io/harbor: \"false\")" .Values.registry.type) }}
 {{- end }}
@@ -23,4 +24,7 @@
 {{- if not (hasKey $.Values.config.endpoints .upstream) }}
 {{- fail (printf "registry.proxyCache upstream %s has no config.endpoints entry" .upstream) }}
 {{- end }}
+{{- end }}
+{{- if not .Values.secrets.store }}
+{{- fail "secrets.store is required" }}
 {{- end }}
