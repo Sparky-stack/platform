@@ -371,7 +371,8 @@ Talking points:
 Fallback: if `task demo:check` does not show "OpenBao-issued mesh certificates" as PASS (e.g. right after a restart
 of OpenBao or istiod), show ambient enrollment, the ClusterSecretStores and the design in docs/architecture.md; do not
 debug the CA live. If row "hello-world reads GREETING_SECRET from OpenBao" fails, the demo value was not written
-(docs/multicluster.md "Writing a secret", key `hello-world`, property `greeting`).
+(docs/multicluster.md "Tenant secrets (OpenBao)", paragraph "Writing a secret"; key `hello-world`, property
+`greeting`).
 
 ## 9. App with a database
 
