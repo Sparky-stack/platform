@@ -4,7 +4,7 @@ kind: Pod
 metadata: { name: build-pinned, namespace: workflows-default }
 spec:
   containers:
-    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: main, image: "ghcr.io/koorikla/platform/ci-toolbox:main@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
     - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   initContainers:
     - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
@@ -44,7 +44,7 @@ kind: Pod
 metadata: { name: init-tag-only, namespace: workflows-default }
 spec:
   containers:
-    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: main, image: "ghcr.io/koorikla/platform/ci-toolbox:main@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
     - { name: wait, image: "quay.io/argoproj/argoexec:v4.0.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   initContainers:
     - { name: init, image: "quay.io/argoproj/argoexec:v4.0.8" }
@@ -54,7 +54,7 @@ kind: Pod
 metadata: { name: debug-tag-only, namespace: workflows-default }
 spec:
   containers:
-    - { name: main, image: "ghcr.io/koorikla/ci-toolbox:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    - { name: main, image: "ghcr.io/koorikla/platform/ci-toolbox:main@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   ephemeralContainers:
     - { name: debugger, image: "docker.io/library/busybox:1.37" }
 ---

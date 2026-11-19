@@ -82,7 +82,7 @@ Evidence (Kyverno CLI v1.20.0 against the real image
   - `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
     in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d` (the previous pin), fails since
     `transitionWorkflowRefs` is empty again.
-  - an initContainer signed by a repository that is not allowed (`ghcr.io/koorikla/ci-toolbox`, signed by
+  - an initContainer signed by a repository that is not allowed (the frozen old `ghcr.io/koorikla/ci-toolbox`, signed by
     the archived koorikla/ci repo's own pipeline) fails in production.
 - Offline (every `task test`, kyverno CLI from `mise.toml`): unsigned / untrusted images in containers, initContainers
   and ephemeral containers are denied in production; the in-cluster registry without a platform key is denied in
