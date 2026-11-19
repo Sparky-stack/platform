@@ -125,13 +125,28 @@ runner, no cross toolchain). Java JVM images (Quarkus, Spring Boot) build the ja
 `$BUILDPLATFORM` and copy it into each platform's distroless Java runtime; the Quarkus native
 image (Mandrel cannot cross-compile) builds on each arch's native runner.
 
+## Where the image phase lives
+
+Each `app-<stack>.yaml` holds only its stack's checks (test, lint, audit, CodeQL) in its own jobs;
+the image phase (multi-arch build, Trivy scan, SBOM, provenance, cosign signature and attestations)
+is one job, `container`, that calls [`app-container.yaml`](../.github/workflows/app-container.yaml).
+Change image behaviour there, never in a stack workflow. Signing must stay in `app-container.yaml`:
+its path is the Kyverno-trusted signer identity (next section).
+
+GitHub cannot share `on.workflow_call` declarations between files, so every stack workflow repeats
+the image inputs, the registry secrets and the image outputs (one compact line each, at the end of
+its `inputs:`) and passes them through. [`tests/app-workflow-interfaces.test.sh`](tests/app-workflow-interfaces.test.sh)
+(run by the selftest lint job) fails when a copy drifts: same names, types and defaults in every
+stack, every image input wired into the `container` job, secrets and outputs exactly
+`app-container.yaml`'s. Adding an image input: add it to `app-container.yaml` and to every stack.
+
 ## Signing and attestation model
 
 GitHub-built artifacts are signed **keyless** (Sigstore Fulcio + Rekor) with the job's OIDC
 token. Because signing happens inside a *reusable* workflow, the certificate identity is the
 reusable workflow, and the calling repository is recorded in certificate extensions. Every
 stack workflow (go, python, node, rust, java, nextjs, elixir, ruby) signs through
-`container.yaml`, so the identity is the same for all of them:
+`app-container.yaml`, so the identity is the same for all of them:
 
 | Certificate field | Value |
 |---|---|
@@ -294,7 +309,8 @@ Actions in the workflows are pinned by commit SHA with the release as a comment.
 [`ci-selftest.yaml`](../.github/workflows/ci-selftest.yaml) runs every workflow against
 [`fixtures/`](fixtures) on PRs, `workflow_dispatch`, and pushes to `main` touching
 `app-*.yaml`, `ci-selftest.yaml`, `ci/fixtures/**`, `ci/scripts/**` or `ci/tests/**`: actionlint + shellcheck, a bash 3.2
-syntax check of every script plus script unit tests ([`tests/scripts/`](tests/scripts)), Go
+syntax check of every script plus script unit tests ([`tests/scripts/`](tests/scripts)), the image-phase interface
+check ([`tests/app-workflow-interfaces.test.sh`](tests/app-workflow-interfaces.test.sh)), Go
 module, uv project (WSGI on waitress), pnpm Fastify/TypeScript API, dependency-free Rust HTTP
 service (cargo-deny with deny.toml), Quarkus REST service (Maven; JVM and native images), Spring
 Boot service (Gradle, Kotlin DSL), Next.js app, mix project (credo + mix_audit, no Phoenix so
