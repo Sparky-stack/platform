@@ -70,7 +70,7 @@ case "\$a" in
   *" get clusterworkflows.openchoreo.dev "*) k=clusterworkflow ;;
   *" get imagevalidatingpolicies"*) k=policies ;;
   *" get daemonsets,deployments "*) k=falco ;;
-  *" get deployments "*) k=resilience-deploy ;;
+  *" get deployments "*"priorityClassName"*) k=resilience-deploy ;;
   *" get poddisruptionbudgets "*) k=resilience-pdb ;;
   *" get deployment -n falco falco-falcosidekick "*) k=sidekick-fields ;;
   *" get sensors.argoproj.io "*) k=sensor ;;
@@ -79,6 +79,9 @@ case "\$a" in
   *" get certificates.cert-manager.io "*) k=mesh-cert ;;
   *" get clustersecretstores.external-secrets.io "*) k=stores ;;
   *" get compositeresourcedefinitions"*) k=xrds ;;
+  *" get deployments "*"openchoreo.dev/component="*) k=app-envfrom ;;
+  *" get secret "*".data.GREETING_SECRET"*) k=app-secret ;;
+  *" get externalsecrets.external-secrets.io "*) k=app-es ;;
   *) echo "stub: unhandled kubectl \$*" >&2; exit 97 ;;
 esac
 f="\$FIX/\$t.\$k"
@@ -155,6 +158,11 @@ green() {
   printf 'platform True\nmgmt-fleet True\n' > "$d/k3d-platform-mgmt.stores"
   printf 'default True\n' > "$d/dev1.stores"
   cp "$d/dev1.stores" "$d/prod1.stores"
+  # app secret (#250): development cell namespace on dev1, envFrom Secret with GREETING_SECRET, ExternalSecret Ready
+  printf 'dp-default-demo-development-1234\n' > "$d/dev1.cellns"
+  printf 'hello-world-env-secrets-1234\n' > "$d/dev1.app-envfrom"
+  printf 'aGVsbG8=' > "$d/dev1.app-secret"
+  printf 'SecretStore/openbao-tenant 15s True' > "$d/dev1.app-es"
   printf '200' > "$d/http.development-default.dev1.apps.localhost"
   printf '200' > "$d/http.staging-default.dev1.apps.localhost"
   printf '200' > "$d/http.production-default.prod1.apps.localhost"
@@ -237,7 +245,8 @@ assert_eq "$(result_of 'ClusterSecretStores Ready (mgmt)')" PASS "green: stores 
 assert_eq "$(result_of 'PostgreSQL claim API')" PASS "green: XRD Established on the opted-in cluster"
 assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io Established on: dev1" "green: XRD detail"
 assert_match "$CALLS" "dev1.kubeconfig --request-timeout=20s get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io " "green: XRD read on the workload cluster, not mgmt"
-assert_match "$OUT" $'\n30 PASS, 0 FAIL, 0 PENDING$' "green: summary"
+assert_eq "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "development: GREETING_SECRET from ExternalSecret hello-world-env-secrets-1234 (SecretStore/openbao-tenant 15s) Ready" "green: app secret"
+assert_match "$OUT" $'\n31 PASS, 0 FAIL, 0 PENDING$' "green: summary"
 
 # Mesh members and Crossplane clusters vary: failures name the cluster.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
@@ -316,6 +325,8 @@ printf 'cluster:prod1x' > "$FIX/prod1.sidekick-fields"
 printf '2026-11-16T19:04:37Z gate-new promotion-gate /True\n' > "$FIX/k3d-platform-mgmt.workflowruns"
 printf '1' > "$FIX/cosign.rc"
 printf 'platform True\nmgmt-fleet False\n' > "$FIX/k3d-platform-mgmt.stores"
+# app secret synced through another store (e.g. the data plane's ClusterSecretStore) is not the tenant path
+printf 'ClusterSecretStore/default 15s True' > "$FIX/dev1.app-es"
 run red
 common_asserts red
 assert_eq "$RC" 1 "red: exit 1 on FAIL"
@@ -341,12 +352,13 @@ assert_eq "$(result_of 'in-cluster build succeeded')" FAIL "red: no build run ->
 assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-falcosidekick 0/1" "red: falco not ready"
 assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
-assert_match "$OUT" $'\n14 PASS, 14 FAIL, 2 PENDING$' "red: summary"
+assert_match "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "ExternalSecret is 'ClusterSecretStore/default 15s True'" "red: app secret on another store fails"
+assert_match "$OUT" $'\n14 PASS, 15 FAIL, 2 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
-assert_match "$OUT" $'\n14 PASS, 16 FAIL, 0 PENDING$' "strict: summary"
+assert_match "$OUT" $'\n14 PASS, 17 FAIL, 0 PENDING$' "strict: summary"
 
 # ---- fresh stack (#200) ---------------------------------------------------------------------------------------------
 # A clean bootstrap: development serves (auto-build rebuilt the Workload's commit); staging/production pin release names
@@ -354,6 +366,7 @@ assert_match "$OUT" $'\n14 PASS, 16 FAIL, 0 PENDING$' "strict: summary"
 cp -R "$TMP/fix/green" "$TMP/fix/fresh"; FIX="$TMP/fix/fresh"
 printf '404' > "$FIX/http.staging-default.dev1.apps.localhost"
 printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+rm "$FIX/prod1.resilience-deploy" "$FIX/prod1.resilience-pdb"   # nothing promoted to production yet
 printf 'hello-world development hello-world-6df447bf6 Ready\nhello-world staging hello-world-77ff9dc697 ComponentReleaseNotFound\nother production other-1 ComponentReleaseNotFound\nhello-world production hello-world-77ff9dc697 ComponentReleaseNotFound\n' \
   > "$FIX/k3d-platform-mgmt.bindings"
 run fresh
@@ -362,6 +375,8 @@ assert_eq "$(result_of 'hello-world 200 in staging')" PENDING "fresh: staging no
 assert_eq "$(detail_of 'hello-world 200 in staging')" '404: not promoted in this stack yet - staging pins hello-world-77ff9dc697, not a ComponentRelease of this stack (promote: docs/demo.md "After a clean bootstrap")' "fresh: says why and what to do"
 assert_eq "$(result_of 'hello-world 200 in production')" PENDING "fresh: production likewise"
 assert_eq "$(result_of 'hello-world 200 in development')" PASS "fresh: development serves"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" PENDING "fresh: resilience waits for the production promotion"
+assert_eq "$(result_of 'hello-world reads GREETING_SECRET from OpenBao')" PASS "fresh: development app secret still checked"
 printf 'hello-world staging hello-world-77ff9dc697 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
 run fresh-ready
 assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: a binding with its release that does not serve still FAILs"

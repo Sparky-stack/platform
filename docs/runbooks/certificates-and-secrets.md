@@ -4,7 +4,7 @@
 
 ## When to use
 
-Use this runbook to inspect certificate expiry, rotate cert-manager CAs or leaf certificates, manage the OpenBao Istio mesh CA, rotate OpenChoreo data-plane agent certificates, update GitHub App keys or PATs, rotate the `cosign-platform` build signing key, or refresh External Secrets Operator (ESO) secrets ([conventions.md](../conventions.md#secret-keys)).
+Use this runbook to inspect certificate expiry, rotate cert-manager CAs or leaf certificates, manage the OpenBao Istio mesh CA, rotate OpenChoreo data-plane agent certificates, rotate tenant application secrets (OpenBao), update GitHub App keys or PATs, rotate the `cosign-platform` build signing key, or refresh External Secrets Operator (ESO) secrets ([conventions.md](../conventions.md#secret-keys)).
 
 ## Symptoms
 
@@ -129,6 +129,30 @@ kubectl --kubeconfig dev1.kubeconfig -n falco rollout restart deploy/falco-falco
 - **`openchoreo-observability`**: on the local backend, `charts/cluster` seeds `openchoreo-secrets` on each workload cluster (`secrets.workloadSeed`); sync `cluster-<name>`, force-sync `ExternalSecret`s in `openchoreo-observability-plane` and `telemetry`, and restart `fluent-bit` / `events-collector` / `observer`.
 - **`harbor`**: force-sync `harbor/harbor-platform` and trigger a Job from `CronJob/harbor-config` (`kubectl --context k3d-platform-mgmt -n harbor create job --from=cronjob/harbor-config harbor-config-manual`) to update `robot$builder` and `robot$nodes`. Do **not** rotate `secret-key` on a populated Harbor DB without Harbor's upstream key-migration step.
 - **`external-dns-cloudflare`**: delivered via `ClusterSecretStore/dns` ([dns.md](../dns.md#credentials)); force-sync the `ExternalSecret` in `external-dns` and restart `deploy/external-dns` `(not yet verified live)`.
+
+### 7. Tenant application secrets (OpenBao)
+
+App secrets (OpenChoreo `SecretReference`s, [openchoreo.md](../openchoreo.md#application-secrets-developer-view)) live
+in `kv-tenant-<project>`. Rotation = write a new version with the project's writer identity
+([multicluster.md](../multicluster.md#tenant-secrets-openbao) "Writing a secret"; value from a file, never echoed),
+then roll the component's pods. ESO refreshes the cell namespace's Secret within 15 s; env vars and `subPath` files are
+only read at container start, and Reloader deliberately cannot watch tenant `dp-*` namespaces.
+
+```bash
+# After the new version is written (example: project demo, component hello-world, environment development, dev1)
+task kubeconfig CLUSTER=dev1
+KD="kubectl --kubeconfig dev1.kubeconfig"
+NS=$($KD get ns -l openchoreo.dev/project=demo,openchoreo.dev/environment=development -o name | cut -d/ -f2)
+# Optional: sync now instead of waiting for the 15 s refresh
+$KD -n "$NS" annotate externalsecret -l openchoreo.dev/component=hello-world force-sync="$(date +%s)" --overwrite
+$KD -n "$NS" get externalsecret -l openchoreo.dev/component=hello-world   # READY True, LAST SYNC just now
+$KD -n "$NS" rollout restart deployment -l openchoreo.dev/component=hello-world
+$KD -n "$NS" rollout status deployment -l openchoreo.dev/component=hello-world
+```
+
+Repeat the restart per environment that reads the key. `SecretSyncedError` on the ExternalSecret: wrong
+`remoteRef.key`/`property` (key missing in the mount) or the `SecretStore openbao-tenant` is not Ready (tenant
+reconcile, [multicluster.md](../multicluster.md#tenant-secrets-openbao)). Rollback: write the previous value again.
 
 ## Verify
 
