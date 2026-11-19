@@ -32,7 +32,7 @@ Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to e
 | reloader.reloader.namespaces | list | `["openchoreo-data-plane"]` | Watched namespaces (`[openchoreo-control-plane]` in `values/role-mgmt.yaml` with `autoReloadAll`, `resourceLabelSelector` and `ignoreSecrets: true`). |
 | reloader.reloader.readOnlyRootFileSystem | bool | `true` |  |
 | reloader.reloader.reloadStrategy | string | `"annotations"` |  |
-| reloader.reloader.watchGlobally | bool | `false` | Scoped Role + RoleBinding per watched namespace (enforced `false` by `templates/validate.yaml`; no `ClusterRole`). |
+| reloader.reloader.watchGlobally | bool | `false` | Scoped Role + RoleBinding per watched namespace (enforced `false` by `values.schema.json`; no `ClusterRole`). |
 
 ## Day-2 notes
 
