@@ -46,3 +46,20 @@ tests:
       - contains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheTTLDuration=24h }
       - contains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheMaxSize=33554432 }   # not 3.3554432e+07 (unquoted value)
       - notContains: { path: 'spec.template.spec.containers[0].args', content: --imageVerifyCacheEnabled=false }
+
+  - it: "every controller renews its leader lease with a 50 s deadline (10s period; upstream 2s = 10 s, lost on etcd stalls)"
+    templates:
+      - charts/kyverno/templates/admission-controller/deployment.yaml
+      - charts/kyverno/templates/background-controller/deployment.yaml
+      - charts/kyverno/templates/cleanup-controller/deployment.yaml
+      - charts/kyverno/templates/reports-controller/deployment.yaml
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leaderElectionRetryPeriod=10s }
+
+  - it: mgmt and workload overlays keep the leader election period (role values merge, never replace extraArgs)
+    templates:
+      - charts/kyverno/templates/admission-controller/deployment.yaml
+      - charts/kyverno/templates/reports-controller/deployment.yaml
+    values: [../values/role-mgmt.yaml, ../values/role-workload.yaml]
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].args', content: --leaderElectionRetryPeriod=10s }

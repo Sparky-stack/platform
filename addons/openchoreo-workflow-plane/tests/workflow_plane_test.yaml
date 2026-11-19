@@ -109,6 +109,13 @@ tests:
       - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "sign")].depends', value: scan-image && sbom }
       - equal: { path: 'spec.templates[0].dag.tasks[?(@.name == "gitops")].depends', value: sign }
 
+  - it: sign retries pod-creation errors (Kyverno webhook without endpoints), bounded, never a failed cosign (both templates)
+    template: templates/cluster-workflow-templates.yaml
+    asserts:
+      - equal:
+          path: 'spec.templates[?(@.name == "sign")].retryStrategy'
+          value: { limit: "4", retryPolicy: OnError, backoff: { duration: 10s, factor: "2", maxDuration: 5m } }
+
   - it: run pods get no ServiceAccount token, only the executor does (both templates)
     template: templates/cluster-workflow-templates.yaml
     asserts:
