@@ -361,7 +361,7 @@ seed_cosign_secret() {
 }
 
 # seed_byo_kubeconfigs: platform store key byo-<name> (property kubeconfig) for every `provider: byo` fleet file of the
-# installation (charts/cluster templates/byo-access.yaml; docs/providers.md "Bring your own cluster (byo)"). Source, first
+# installation (charts/cluster templates/byo/access.yaml; docs/providers.md "Bring your own cluster (byo)"). Source, first
 # match: the file named by BYO_KUBECONFIG_<NAME> (name upper-cased, '-' -> '_'), else the local k3d cluster <name>
 # (`k3d kubeconfig get`, API server rewritten to its server node's IP on docker network kind: what mgmt pods reach, as
 # with CAPD's kubeconfigs). Neither: a warning, and the cluster stays unregistered until seeded. Re-run after rotating.
