@@ -12,7 +12,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_build_guards =="
 cd "$ROOT"
 command -v git >/dev/null || { echo "  SKIP: git not found"; exit 0; }
 

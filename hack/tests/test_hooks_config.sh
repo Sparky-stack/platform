@@ -10,8 +10,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_hooks_config =="
-
 # tools_table from hack/tools.sh (bash 3.2: no `source <(...)`)
 sed -n '/^tools_table()/,/^}/p' "$ROOT/hack/tools.sh" > "$TMP/fn.sh"
 tools=$(cd "$ROOT" && FN="$TMP/fn.sh" bash -c '. "$FN"; tools_table' | awk '{ print $1 }' | tr '\n' ' ')

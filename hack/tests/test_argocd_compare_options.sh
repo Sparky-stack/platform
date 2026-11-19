@@ -12,8 +12,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_argocd_compare_options =="
-
 render_platform local "$TMP/platform.yaml"
 
 # Kinds whose CRD spec is atomic + preserve-unknown on the platform (live check:

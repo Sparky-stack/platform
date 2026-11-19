@@ -10,7 +10,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_thunder_bootstrap =="
 cd "$ROOT"
 
 # files <render> <out dir> -> the files the setup Job sees below /opt/thunderid/bootstrap, rebuilt from its volumeMounts

@@ -6,8 +6,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_check_docs =="
-
 fx="$TMP/repo"
 mkdir -p "$fx/docs" "$fx/hack" "$fx/addons/a/charts/dep"
 cat > "$fx/addons/a/README.md" <<'EOF'

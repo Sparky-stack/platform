@@ -1,6 +1,8 @@
-# hack/tests/lib.sh — shared assertion helpers for bash contract tests.
+# hack/tests/lib.sh: sourced by every hack/tests/*.sh. Assertions with a pass/fail count (finish prints it and sets the
+# exit code hack/test.sh reads), a fake-tool harness, kubeconform, and renders reused from hack/test.sh.
 # shellcheck shell=bash disable=SC2034
 set -euo pipefail
+echo "== $(basename "$0" .sh) =="
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 TMP=$(mktemp -d)
@@ -43,6 +45,64 @@ finish() {
   echo "  $PASS passed, $FAIL failed"
   (( FAIL == 0 ))
 }
+
+# --- fake-tool harness: run a script against fakes in $BIN with a minimal environment --------------------------------
+
+# fake_bin_yq <bin dir>: put the real yq (REAL_YQ) behind a wrapper in <bin dir>. Scenarios run with PATH=<bin>:/usr/bin:/bin,
+# where a mise shim finds no config, and on Windows `mise which` returns a C:\ path that would break PATH.
+fake_bin_yq() {
+  REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
+  [[ -x "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
+  mkdir -p "$1"
+  printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$1/yq"
+  chmod +x "$1/yq"
+}
+
+# run_isolated <name> <script> [VAR=val ...]: bash <script> with only HOME, PATH=$BIN:/usr/bin:/bin, SYSTEMROOT (Winsock
+# on Windows), TMPDIR, HLOG and the given variables. Fakes log their argv to $HLOG/calls. Sets HLOG, RC and OUT
+# (stdout+stderr, colours stripped).
+run_isolated() {
+  local name=$1 script=$2; shift 2
+  HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
+  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" \
+      "$@" "$BASH" "$script" > "$HLOG/out" 2>&1; then
+    RC=0
+  else
+    RC=$?
+  fi
+  OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
+}
+
+# bootstrap_harness: R=$TMP/root holds bootstrap/bs.sh = bootstrap/bootstrap.sh minus its command dispatcher plus a hook
+# that evals $HARNESS_CALL after load_inst, so a test calls single bootstrap functions; BIN=$TMP/bin starts with yq.
+# Run a function with: run_isolated <name> "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL=<call> [VAR=val ...]
+bootstrap_harness() {
+  R="$TMP/root"; BIN="$TMP/bin"
+  mkdir -p "$R/bootstrap" "$R/hack"
+  cp -R "$ROOT/hack/lib" "$R/hack/"
+  cp -R "$ROOT/installations" "$R/"
+  sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
+  # shellcheck disable=SC2016  # literal code for the generated script
+  printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
+  fake_bin_yq "$BIN"
+}
+
+# kc_valid <file|dir>... -> yes|no (kubeconform's report on stderr when no): kubeconform -strict as hack/test.sh runs
+# it, CRD schemas from $SCHEMAS_DIR (hack/schemas.sh) looked up first so an offline run never asks upstream for them.
+kc_valid() {
+  local out
+  mkdir -p "$SCHEMAS_DIR/.kubeconform-cache"
+  if out=$(kubeconform -cache "$SCHEMAS_DIR/.kubeconform-cache" -strict -summary -kubernetes-version 1.35.0 \
+      -skip CustomResourceDefinition -schema-location "$SCHEMAS_DIR/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \
+      -schema-location default "$@" 2>&1); then
+    echo yes
+  else
+    echo "$out" >&2
+    echo no
+  fi
+}
+
+# --- renders: reuse hack/test.sh's (RENDERED_DIR) when present ------------------------------------------------------
 
 # render_platform <inst> <out>: reuse RENDERED_DIR/platform-<inst>.yaml if present, else helm template charts/platform.
 render_platform() {

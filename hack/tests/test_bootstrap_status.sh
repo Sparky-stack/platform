@@ -5,19 +5,7 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_status =="
-
-REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
-[[ -x "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
-
-R="$TMP/root"; BIN="$TMP/bin"
-mkdir -p "$R/bootstrap" "$R/hack" "$BIN"
-cp -R "$ROOT/hack/lib" "$R/hack/"
-cp -R "$ROOT/installations" "$R/"
-sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
-# shellcheck disable=SC2016  # literal code for the generated script
-printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
-printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
+bootstrap_harness
 
 SENTINEL=SentinelAdminPw4711
 SENTINEL_B64=$(printf '%s' "$SENTINEL" | base64)
@@ -35,15 +23,8 @@ EOF
 chmod +x "$BIN/"*
 
 run() {
-  local name=$1 call=$2
-  HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
-  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" \
-      KUBE_CTX=fake INST=local NO_BROWSER=1 HARNESS_CALL="$call" "$BASH" "$R/bootstrap/bs.sh" > "$HLOG/out" 2>&1; then
-    RC=0
-  else
-    RC=$?
-  fi
-  OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
+  local name=$1
+  run_isolated "$name" "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local NO_BROWSER=1 HARNESS_CALL="$2"
   assert_eq "$RC" 0 "$name: rc"
   assert_eq "$(grep -cE "$SENTINEL|$SENTINEL_B64" "$HLOG/out" || true)" 0 "$name: admin password not printed (plain or base64)"
   assert_match "$OUT" "get secret argocd-initial-admin-secret -o jsonpath='\{\.data\.password\}' \| base64 --decode" \

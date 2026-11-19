@@ -26,7 +26,6 @@
 # the reconcile policies (instead of the projected-token logins) - initialised in a test-only extra stanza.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
-echo "== openbao_integration =="
 for b in docker openssl python3 helm yq; do command -v "$b" >/dev/null || { echo "  SKIP: needs $b"; exit 0; }; done
 docker info >/dev/null 2>&1 || { echo "  SKIP: docker not reachable"; exit 0; }
 cd "$ROOT"

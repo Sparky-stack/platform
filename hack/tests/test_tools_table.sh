@@ -5,8 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_tools_table =="
-
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/hack"
 cp -R "$ROOT/hack/lib" "$ROOT/hack/tools.sh" "$tmp/hack/"

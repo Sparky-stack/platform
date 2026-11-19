@@ -18,7 +18,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
 
-echo "== test_openchoreo_types =="
 cd "$ROOT"
 ocp=addons/openchoreo-platform
 dpa=addons/openchoreo-data-plane

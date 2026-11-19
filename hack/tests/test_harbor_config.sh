@@ -5,7 +5,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_harbor_config =="
 cd "$ROOT"
 # shellcheck source=../lib/portable.sh
 source hack/lib/portable.sh

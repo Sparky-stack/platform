@@ -5,25 +5,12 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-echo "== test_bootstrap_secrets =="
-
-# Real yq behind a wrapper: the scenarios run with a minimal PATH, and a mise shim would not find its config there.
-REAL_YQ=$(mise which yq 2>/dev/null || command -v yq)
-[[ -x "$REAL_YQ" ]] || { echo "  yq not found" >&2; exit 1; }
-
-R="$TMP/root"; BIN="$TMP/bin"
-mkdir -p "$R/bootstrap" "$R/hack" "$BIN"
-cp -R "$ROOT/hack/lib" "$R/hack/"
-cp -R "$ROOT/installations" "$R/"
+bootstrap_harness
 cp "$ROOT/bootstrap/root-app.yaml" "$R/bootstrap/"   # root_app_manifest
-# bootstrap.sh minus its dispatcher, plus a hook that runs $HARNESS_CALL after load_inst.
-sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
-# shellcheck disable=SC2016  # literal code for the generated script
-printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
 LOCAL_INST="$R/installations/local/installation.yaml"
 cp "$LOCAL_INST" "$TMP/local-installation.orig"
 
-# It logs its argv too: secret values reach yq only through the environment (strenv), never as arguments.
+# The yq wrapper logs its argv too: secret values reach yq only through the environment (strenv), never as arguments.
 # shellcheck disable=SC2016  # literal code for the generated wrapper
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "yq $*" >> "$HLOG/calls"\nexec "%s" "$@"\n' "$REAL_YQ" > "$BIN/yq"
 
@@ -117,14 +104,7 @@ SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY|FA
 # colours stripped) and HLOG (calls, apply.N.yaml).
 run() {
   local name=$1 call=$2; shift 2
-  HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
-  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" \
-      KUBE_CTX=fake INST=local HARNESS_CALL="$call" "$@" "$BASH" "$R/bootstrap/bs.sh" > "$HLOG/out" 2>&1; then
-    RC=0
-  else
-    RC=$?
-  fi
-  OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
+  run_isolated "$name" "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL="$call" "$@"
   # Invariants for every scenario: no secret value in any argv, only the fake context, every apply server-side.
   assert_eq "$(grep -Ec "$SECRETS" "$HLOG/calls" || true)" 0 "$name: no secret value in argv"
   assert_eq "$(grep -Ec "$SECRETS" "$HLOG/out" || true)" 0 "$name: no secret value in the output"
