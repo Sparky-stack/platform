@@ -1,8 +1,6 @@
 {{- /*
-Tenants: installations/<inst>/tenants/<project>.yaml -> Application tenant-<project> (AppProject `platform`) rendering
-charts/tenant with installation.yaml + the tenant file as value files. charts/tenant emits AppProject
-tenant-<project>, the OpenChoreo Project (+ ProjectReleaseBindings) and one Application per app repo.
-Removing a tenant file deletes all of it (cascade: the app Applications carry the resources finalizer).
+ApplicationSet tenants (mgmt, argocd): installations/<inst>/tenants/<project>.yaml -> Application tenant-<project>
+rendering charts/tenant (installation.yaml + tenant file). Removing the file offboards the tenant (resources finalizer).
 */ -}}
 {{- $inst := required "installation.name is required" .Values.installation.name }}
 {{- $repo := required "installation.repoURL is required" .Values.installation.repoURL }}

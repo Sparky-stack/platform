@@ -1,3 +1,5 @@
+{{- /* Argo CD cluster secret of mgmt itself (in-cluster): its labels select the mgmt addons (appset-addons.yaml);
+mgmt.addons.<name>: "true"/"false" become the per-addon toggle labels. */ -}}
 {{- $mgmt := .Values.mgmt | default dict -}}
 apiVersion: v1
 kind: Secret
