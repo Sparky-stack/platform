@@ -1,0 +1,94 @@
+{{- /* Prelude of compose-postgresql (files render in name order into one template, so these variables reach every
+file): the cluster's facts, the backend check, the developer's spec with the XRD defaults as fallbacks, and the values
+derived from them, per backend. Object files (<backend>-<object>.yaml.gotmpl) only read these. Everything here runs on
+every backend: keep it side-effect free (no `fail` outside the backend check). */}}
+{{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+{{- /* Shared preamble (read by every file below): the XR's spec with the XRD defaults as fallbacks,
+the cloud-side identifier and the deletion behaviour. $facts is the EnvironmentConfig data. */}}
+{{- $xr := .observed.composite.resource }}
+{{- $spec := $xr.spec | default dict }}
+{{- $name := $xr.metadata.name }}
+{{- $ns := $xr.metadata.namespace }}
+{{- $version := dig "version" "17" $spec | toString }}
+{{- $size := dig "size" "S" $spec }}
+{{- $storage := dig "storageGiB" 10 $spec | int }}
+{{- $ha := dig "highAvailability" false $spec }}
+{{- $backup := dig "backup" "enabled" false $spec }}
+{{- $retention := dig "backup" "retentionDays" 7 $spec | int }}
+{{- $db := dig "database" "app" $spec }}
+{{- $retain := eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+{{- $observed := .observed.resources | default dict }}
+{{- /* Cloud identifier: unique per cluster/namespace/name, starts with a letter, <= 52 chars, no double hyphens. */}}
+{{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 40 | trimSuffix "-" }}
+{{- $id := printf "pg-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+{{- /* Retain: Crossplane never deletes the cloud resource (v2 managed resources have no deletionPolicy). */}}
+{{- $mp := list "*" }}
+{{- if $retain }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+{{- /* ESO template delimiters, emitted literally into ExternalSecret templates. */}}
+{{- $o := "{{" }}
+{{- $c := "}}" }}
+{{- $backend := dig "backend" "" $facts }}
+{{- if not (has $backend (list "cnpg" "aws-rds" "gcp-cloudsql" "azure-flexible")) }}
+{{ fail (printf "postgresql: unknown backend %q in EnvironmentConfig platform-postgresql (cnpg | aws-rds | gcp-cloudsql | azure-flexible)" $backend) }}
+{{- end }}
+{{- /* cnpg: a CloudNativePG Cluster in the XR's namespace (addon cloudnative-pg), image from the ClusterImageCatalog by
+major version, 3 instances (primary + 2 streaming replicas, automated failover) when highAvailability. The operator
+generates the password and writes the connection Secret <name>-app itself; it never leaves the namespace. Backups:
+Barman Cloud plugin (ObjectStore + ScheduledBackup) when asked for and the cluster has an object store. */}}
+{{- $sizes := dict
+  "S" (dict "cpu" "100m" "memory" "256Mi" "limit" "512Mi")
+  "M" (dict "cpu" "500m" "memory" "1Gi" "limit" "2Gi")
+  "L" (dict "cpu" "2" "memory" "4Gi" "limit" "8Gi") }}
+{{- $res := get $sizes $size }}
+{{- $dest := dig "backup" "destinationPath" "" $facts }}
+{{- $backupOn := and $backup $dest }}
+{{- /* aws-rds: RDS for PostgreSQL instance (Multi-AZ when highAvailability) or Aurora PostgreSQL (spec.engine aurora),
+in the cluster's VPC, reachable only from the cluster's node security group, storage encrypted with a per-database KMS
+key, IAM database authentication on. The master password is generated and rotated by RDS in Secrets Manager
+(manageMasterUserPassword) - it never passes through Crossplane; ESO copies it into the connection Secret. */}}
+{{- $aurora := eq (dig "engine" "postgres" $spec) "aurora" }}
+{{- $classes := dict "S" "db.t4g.medium" "M" "db.m7g.large" "L" "db.r7g.xlarge" }}
+{{- if $aurora }}{{ $classes = dict "S" "db.t4g.medium" "M" "db.r7g.large" "L" "db.r7g.xlarge" }}{{ end }}
+{{- $class := get $classes $size }}
+{{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+{{- $tags := dict "platform.koorikla.io/cluster" $facts.cluster "platform.koorikla.io/namespace" $ns "platform.koorikla.io/postgresql" $name }}
+{{- $retentionPeriod := 0 }}
+{{- if $backup }}{{ $retentionPeriod = $retention }}{{ else if $aurora }}{{ $retentionPeriod = 1 }}{{ end }}
+{{- $endpointKey := "instance" }}
+{{- if $aurora }}{{ $endpointKey = "cluster" }}{{ end }}
+{{- /* Connection Secret, once RDS reports the endpoint and the Secrets Manager ARN of the managed master secret. */}}
+{{- $at := dig $endpointKey "resource" "status" "atProvider" dict $observed }}
+{{- $secretArn := "" }}
+{{- with (dig "masterUserSecret" list $at) }}{{ $secretArn = dig "secretArn" "" (first .) }}{{ end }}
+{{- /* gcp-cloudsql: Cloud SQL for PostgreSQL, private IP only in the cluster's VPC, TLS required, IAM database
+authentication on, REGIONAL (synchronous standby in another zone) when highAvailability. The owner role's password is
+generated in-cluster by an ESO Password generator into the connection Secret; Crossplane's pipeline never sees it (the
+provider reads it from the Secret to set it on the user). */}}
+{{- $tiers := dict "S" "db-custom-1-3840" "M" "db-custom-2-7680" "L" "db-custom-4-15360" }}
+{{- $labels := dict "platform-koorikla-io-cluster" $facts.cluster "platform-koorikla-io-namespace" $ns "platform-koorikla-io-postgresql" ($name | replace "." "-") }}
+{{- /* azure-flexible: Azure Database for PostgreSQL Flexible Server with VNet integration (delegated subnet, private DNS
+zone, no public access), Entra authentication enabled next to password authentication, zone-redundant HA when
+highAvailability. The administrator password is generated in-cluster by an ESO Password generator into the connection
+Secret before the server exists (the server needs it at creation; the FQDN is deterministic); Crossplane's pipeline never
+sees it. Storage: the smallest Flexible Server size >= storageGiB. */}}
+{{- $skus := dict "S" "GP_Standard_D2ds_v5" "M" "GP_Standard_D4ds_v5" "L" "GP_Standard_D8ds_v5" }}
+{{- $storageMb := 0 }}
+{{- range $mb := list 32768 65536 131072 262144 524288 1048576 2097152 4194304 8388608 16777216 }}
+{{- if and (eq $storageMb 0) (ge $mb (mul $storage 1024)) }}{{ $storageMb = $mb }}{{ end }}
+{{- end }}
+{{- if eq $storageMb 0 }}{{ $storageMb = 16777216 }}{{ end }}
+{{- $fqdn := printf "%s.postgres.database.azure.com" $id }}
+{{- /* Endpoint per backend (status.endpoint, connection Secrets) and whether the <name>-app Secret exists yet. */}}
+{{- $host := "" }}
+{{- if eq $backend "cnpg" }}{{ $host = printf "%s-rw.%s.svc" $name $ns }}
+{{- else if eq $backend "aws-rds" }}{{ $host = ternary (dig "endpoint" "" $at) (dig "address" "" $at) $aurora }}
+{{- else if eq $backend "gcp-cloudsql" }}{{ $host = dig "instance" "resource" "status" "atProvider" "privateIpAddress" "" $observed }}
+{{- else if eq $backend "azure-flexible" }}{{ $host = dig "server" "resource" "status" "atProvider" "fqdn" $fqdn $observed }}
+{{- end }}
+{{- $secretReady := true }}
+{{- if eq $backend "aws-rds" }}{{ $secretReady = and $host $secretArn }}
+{{- else if eq $backend "gcp-cloudsql" }}{{ $secretReady = $host }}
+{{- end }}
+{{- /* status.backup: cnpg says "unavailable" when asked for on a cluster without an object store. */}}
+{{- $backupStatus := ternary "enabled" "disabled" (eq (toString $backup) "true") }}
+{{- if eq $backend "cnpg" }}{{ $backupStatus = "disabled" }}{{ if $backupOn }}{{ $backupStatus = "enabled" }}{{ else if $backup }}{{ $backupStatus = "unavailable" }}{{ end }}{{ end }}

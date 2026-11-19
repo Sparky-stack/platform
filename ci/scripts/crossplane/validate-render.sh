@@ -15,7 +15,7 @@
 #   RENDER_DIR       render test assets, relative to PACKAGE_ROOT, default
 #                    tests/render (functions.yaml, observed/<name>,
 #                    expected/<name>, extra-resources/<name>)
-#   FUNCTIONS_FILE   default $RENDER_DIR/functions.yaml
+#   FUNCTIONS_FILE   default $RENDER_DIR/functions.yaml (absent in a Crossplane Project: embedded functions)
 #   UPDATE_EXPECTED  true = (re)write expected outputs instead of diffing
 #   CACHE_DIR        schema cache dir (crossplane --cache-dir)
 #   CI_OUT_DIR       output dir, default ./.ci-out
@@ -103,12 +103,13 @@ log "validate examples against XRDs"
 crossplane resource validate ${cache_args} "${extensions}" "${examples}"
 
 # 3. Render tests.
-[[ -f "${functions}" ]] || die "functions file ${functions} not found (needed by composition render)"
+[[ -f "${functions}" || -f crossplane-project.yaml ]] || die "functions file ${functions} not found (needed by composition render)"
 
-# A Crossplane Project's embedded functions (functions/<fn>/) are not in the functions file: build the project, load
+# A Crossplane Project WITH a functions file (Functions pinned like the cluster installs them): its embedded functions
+# (functions/<fn>/) are not in it: build the project, load
 # the images it built for this machine's arch (<repo>_<fn>:<arch>) and add one Function per embedded function, named
 # like Crossplane names the dependency <repo>_<fn> (registry host dropped, / -> -, _ dropped).
-if [[ -f crossplane-project.yaml ]] && compgen -G 'functions/*/' >/dev/null; then
+if [[ -f crossplane-project.yaml && -f "${functions}" ]] && compgen -G 'functions/*/' >/dev/null; then
   require_cmd docker
   repo="$(yq -r '.spec.repository' crossplane-project.yaml)"
   log "crossplane project build (embedded functions for the render tests)"
@@ -169,7 +170,10 @@ while IFS= read -r xr <&3; do
     continue
   fi
   count=$((count + 1))
-  set -- "$xr" "$comp" "${functions}"
+  set -- "$xr" "$comp"
+  # No functions file in a Crossplane Project: render builds the embedded functions (functions/) and resolves the
+  # project's dependencies itself (first run pulls them, hence the longer timeout).
+  if [[ -f "${functions}" ]]; then set -- "$@" "${functions}"; else set -- "$@" --timeout "${RENDER_TIMEOUT:-15m}"; fi
   xrd="$(find_xrd "$xr" || true)"
   [[ -z "${xrd}" ]] || set -- "$@" --xrd "${xrd}"
   [[ ! -f "${render_dir}/observed/${name}" ]] || set -- "$@" --observed-resources "${render_dir}/observed/${name}"

@@ -1,0 +1,14 @@
+{{- /* The XR's status, every backend: the developer contract's plain values (the endpoint once the database reports it; secretName once the <name>-app Secret can exist). */}}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+status:
+  backend: {{ $backend }}
+  backup: {{ $backupStatus }}
+  {{- if $host }}
+  endpoint: {{ $host }}
+  port: 5432
+  {{- end }}
+  {{- if $secretReady }}
+  secretName: {{ $name }}-app
+  {{- end }}
