@@ -38,16 +38,16 @@ tests:
     set:
       workflowImageDigests: { enabled: true, namespacePrefix: 'w")||true||("' }
     asserts:
-      - failedTemplate: { errorPattern: 'workflowImageDigests.namespacePrefix .* must be a namespace name prefix' }
+      - failedTemplate: { errorPattern: "/workflowImageDigests/namespacePrefix': .* does not match pattern" }
 
   - it: rejects an empty namespacePrefix
     set:
       workflowImageDigests: { enabled: true, namespacePrefix: "" }
     asserts:
-      - failedTemplate: { errorPattern: 'workflowImageDigests.namespacePrefix .* must be a namespace name prefix' }
+      - failedTemplate: { errorPattern: "/workflowImageDigests/namespacePrefix': .* does not match pattern" }
 
   - it: rejects an unknown failurePolicy
     set:
       workflowImageDigests: { enabled: true, failurePolicy: Audit }
     asserts:
-      - failedTemplate: { errorPattern: 'workflowImageDigests.failurePolicy "Audit" is not Fail or Ignore' }
+      - failedTemplate: { errorPattern: "/workflowImageDigests/failurePolicy': value must be one of 'Fail', 'Ignore'" }

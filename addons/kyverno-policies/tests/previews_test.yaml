@@ -103,10 +103,10 @@ tests:
     set:
       previews.ttl: 2d
     asserts:
-      - failedTemplate: { errorMessage: 'previews.ttl "2d": hours and/or minutes, e.g. 48h' }
+      - failedTemplate: { errorPattern: "/previews/ttl': '2d' does not match pattern" }
 
   - it: refuses a cap below 1
     set:
       previews.maxPerTenant: 0
     asserts:
-      - failedTemplate: { errorMessage: "previews.maxPerTenant must be at least 1" }
+      - failedTemplate: { errorPattern: "/previews/maxPerTenant': minimum: got 0, want 1" }

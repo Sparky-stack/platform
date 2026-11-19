@@ -301,7 +301,7 @@ tests:
       imageVerification.github.transitionWorkflowRefs: [v1]
     asserts:
       - failedTemplate:
-          errorPattern: 'workflowRef "v1" must be a 40-hex commit SHA'
+          errorPattern: "/imageVerification/github/transitionWorkflowRefs/0': 'v1' does not match pattern"
 
   - it: at most two trusted workflow commits (current + previous)
     template: templates/image-verification.yaml
@@ -312,10 +312,10 @@ tests:
         - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     asserts:
       - failedTemplate:
-          errorPattern: 'trust 3 workflow commits, at most 2'
+          errorPattern: "/imageVerification/github/transitionWorkflowRefs': maxItems: got 2, want 1"
 
   - it: a transition entry repeating workflowRef is refused
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
       imageVerification.github.transitionWorkflowRefs: [0123456789abcdef0123456789abcdef01234567]
@@ -329,7 +329,7 @@ tests:
       imageVerification.github.workflowRef: refs/tags/v1
     asserts:
       - failedTemplate:
-          errorPattern: 'workflowRef "refs/tags/v1" must be a 40-hex commit SHA'
+          errorPattern: "/imageVerification/github/workflowRef': 'refs/tags/v1' does not match pattern"
 
   - it: a short tag or abbreviated SHA is refused
     template: templates/image-verification.yaml
@@ -337,7 +337,7 @@ tests:
       imageVerification.github.workflowRef: de39b1d
     asserts:
       - failedTemplate:
-          errorPattern: 'workflowRef "de39b1d" must be a 40-hex commit SHA'
+          errorPattern: "/imageVerification/github/workflowRef': 'de39b1d' does not match pattern"
 
   - it: a ref smuggled into the workflow URL is refused
     template: templates/image-verification.yaml
@@ -345,7 +345,7 @@ tests:
       imageVerification.github.workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml@refs/heads/main
     asserts:
       - failedTemplate:
-          errorPattern: 'imageVerification.github.workflow .* without a ref'
+          errorPattern: "/imageVerification/github/workflow': '.*@refs/heads/main' does not match pattern"
 
   - it: without the GitHub source no workflow pin is required
     template: templates/image-verification.yaml
@@ -409,7 +409,7 @@ tests:
       - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/","harbor.openchoreo.localhost:9443/apps/"]' }
 
   - it: a public key without installation registry.host fails rendering
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.platformKey.publicKey: "-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----\n"
     asserts:
@@ -441,7 +441,7 @@ tests:
     set:
       imageVerification.environments: { production: Enforce }
     asserts:
-      - failedTemplate: { errorMessage: 'imageVerification.environments.production: "Enforce" is not Audit or Deny' }
+      - failedTemplate: { errorPattern: "/imageVerification/environments/production': value must be one of 'Audit', 'Deny'" }
 
   - it: renders no image verification on mgmt
     template: templates/image-verification.yaml
@@ -552,4 +552,11 @@ tests:
       imageVerification.platformKey.cluster.configMap: 'x").data["a'
     asserts:
       - failedTemplate:
-          errorPattern: 'imageVerification.platformKey.cluster.configMap .* is not a Kubernetes object name'
+          errorPattern: "/imageVerification/platformKey/cluster/configMap': .* does not match pattern"
+
+  - it: the GitHub source needs a workflow pin (empty workflowRef passes the schema, validate.yaml refuses it)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.workflowRef: ""
+    asserts:
+      - failedTemplate: { errorPattern: 'imageVerification.github.workflowRef must be a 40-hex commit SHA' }
