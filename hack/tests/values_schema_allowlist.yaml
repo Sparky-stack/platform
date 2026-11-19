@@ -1,7 +1,6 @@
 # Charts allowed to have no values.schema.json YET (hack/tests/test_values_schema.sh). Wave C of #116 adds a schema to
 # every chart in parallel; the coordinator empties this list when the wave lands. Every entry needs a reason. An entry
 # whose chart now has a schema, or that is not a chart, fails the test, so the list only shrinks.
-- { chart: addons/argo-cd, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
 - { chart: addons/aws-ccm, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
 - { chart: addons/capi-operator, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
 - { chart: addons/cert-manager, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
