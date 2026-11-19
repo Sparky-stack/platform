@@ -346,6 +346,45 @@ Secrets: declare an OpenChoreo `SecretReference` (key inside the project's OpenB
 `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values. Step by step:
 [Application secrets](#application-secrets-developer-view).
 
+## Resilience defaults
+
+Developers set nothing: every Deployment component type (`deployment/service`, `deployment/web-application`,
+`deployment/worker`) embeds the platform ClusterTrait `resilience` (addon openchoreo-platform,
+`files/platform/cluster-traits/resilience.yaml`, #251). It reads the environment name and the component's `replicas`.
+
+| Default | development / previews | staging | production |
+|---|---|---|---|
+| topologySpreadConstraints, nodes + zones, maxSkew 1, `matchLabelKeys: [pod-template-hash]` | ScheduleAnyway | ScheduleAnyway | ScheduleAnyway (zones: knob) |
+| PodDisruptionBudget `maxUnavailable: 1`, `unhealthyPodEvictionPolicy: AlwaysAllow` | - | when replicas >= 2 | when replicas >= 2 |
+| `preStop: sleep 5s`, `terminationGracePeriodSeconds: 30` | yes | yes | yes |
+| PriorityClass (addon openchoreo-data-plane) | `app-standard` (1000, never preempts) | `app-standard` | `app-production` (100000) |
+| Kyverno `openchoreo-workload-resilience-*` | Audit | Audit | **Deny** |
+
+What developers still choose:
+
+| Need | Where |
+|---|---|
+| readiness / liveness / startup probes | ClusterTrait `health-probes` on the Component (required in production) |
+| replicas, cpu/memory requests | ReleaseBinding `componentTypeEnvironmentConfigs` (production: replicas >= 2, requests set) |
+| autoscaling | ClusterTrait `keda-scaler` or `horizontal-pod-autoscaler`; production minReplicas >= 2 |
+| hard zone spread (multi-zone data planes only) | `componentTypeEnvironmentConfigs.resilience.zoneSpread: DoNotSchedule` |
+| dedicated node pool | `componentTypeEnvironmentConfigs.resilience.nodePool: <pool>` (nodes labelled `platform.koorikla.io/node-pool`) |
+| slower shutdown | `resilience.terminationGracePeriodSeconds`, `resilience.preStopSleepSeconds` |
+
+Why spread and not podAntiAffinity: required anti-affinity caps a component at one pod per node and blocks rollouts
+on small clusters; preferred anti-affinity is all-or-nothing scoring. A skew of 1 spreads any replica count evenly and
+`matchLabelKeys` keeps the old ReplicaSet out of the new one's maths. Zones stay ScheduleAnyway by default because
+nodes without `topology.kubernetes.io/zone` (k3d, single-zone clouds) are not eligible at all under DoNotSchedule.
+The preStop sleep keeps a terminating pod serving while the endpoints and the gateway drop it (native sleep action,
+no shell in the image needed).
+
+Production enforcement (addon kyverno-policies `templates/workload-resilience.yaml`): Deployments need >= 2 replicas
+(autoscaled ones state their floor in label `resilience.platform.koorikla.io/min-replicas`, set by the trait),
+a readinessProbe and cpu + memory requests on every container; HorizontalPodAutoscalers (also KEDA's) minReplicas >= 2.
+A denial shows up as an apply failure on the RenderedRelease. The PDB itself is not an admission check (OpenChoreo
+applies it together with the Deployment, in no fixed order): it exists by construction and `task demo:check`
+(row "hello-world PDB/spread/priority in production") asserts it.
+
 ## Known issue: re-created data plane clusters
 
 When a workload cluster is re-created under the same name (new CAPD/cloud cluster, new agent connection), OpenChoreo's

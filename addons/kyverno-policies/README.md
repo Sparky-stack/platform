@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, digest-only images in workflow run namespaces on `mgmt`.
+Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies: automatic Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces and per-environment image signature/attestation gates on workload clusters, production workload resilience (replicas, probes, requests; Deny in production, Audit elsewhere), digest-only images in workflow run namespaces on `mgmt`.
 
 ## Where it runs
 
@@ -147,6 +147,9 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | workflowImageDigests.enabled | bool | `false` | On `mgmt` only, denies Pods in `workflows-*` whose images are not `image@sha256:<digest>` (`ValidatingPolicy/platform-workflow-image-digests`, [build plane](../../docs/build-plane.md#security-posture-of-build-pods)). |
 | workflowImageDigests.failurePolicy | string | `"Fail"` |  |
 | workflowImageDigests.namespacePrefix | string | `"workflows-"` |  |
+| workloadResilience.cellNamespaceSelector.matchLabels."openchoreo.dev/managed-by" | string | `"renderedrelease-controller"` |  |
+| workloadResilience.enabled | bool | `true` | Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off. |
+| workloadResilience.enforcedEnvironments | list | `["production"]` | Environments (cell namespace label `openchoreo.dev/environment`) where the checks deny; Audit everywhere else. |
 
 ## Day-2 notes
 
