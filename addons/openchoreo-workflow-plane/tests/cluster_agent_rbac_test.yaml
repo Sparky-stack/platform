@@ -87,4 +87,9 @@ tests:
     template: templates/validate.yaml
     set: { clusterAgentRBAC.runNamespacePrefix: "" }
     asserts:
-      - failedTemplate: { errorPattern: "clusterAgentRBAC.runNamespacePrefix .* must be a namespace name prefix ending in -" }
+      - failedTemplate: { errorPattern: "/clusterAgentRBAC/runNamespacePrefix.*does not match pattern" }
+  - it: refuses a prefix without the trailing dash (schema)
+    template: templates/validate.yaml
+    set: { clusterAgentRBAC.runNamespacePrefix: workflows }
+    asserts:
+      - failedTemplate: { errorPattern: "/clusterAgentRBAC/runNamespacePrefix.*does not match pattern" }
