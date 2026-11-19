@@ -84,6 +84,12 @@ kubectl --context k3d-platform-mgmt -n thunder logs job/thunder-setup --tail=50
 
 `addons/mesh/values.yaml` orders control plane before dataplane: `istiod` updates in sync wave `0`, and `DaemonSet/ztunnel` rolls in sync wave `1` ([networking.md](../networking.md#istio-ambient-addonsmesh)). Ambient workloads keep running across `istiod` upgrades and re-establish HBONE sockets as `ztunnel` pods roll.
 
+The kubelet probe SNAT source (`ambient.probeSourceCIDRs` in `addons/mesh/values.yaml`, mirrored in
+`addons/kyverno-policies/values.yaml` `mesh.probeSourceCIDRs`) must match the pinned Istio release: CI runs
+`hack/check-istio-probe-cidr.sh` when `addons/mesh/Chart.yaml` changes. If it fails, update both values files
+(`hack/tests/test_mesh_probe_cidrs.sh` keeps them in lockstep), or every ambient pod's probes are dropped
+([networking.md](../networking.md#istio-ambient-addonsmesh)).
+
 ```bash
 task kubeconfig CLUSTER=dev1
 kubectl --kubeconfig dev1.kubeconfig -n istio-system rollout status deploy/istiod --timeout=180s
