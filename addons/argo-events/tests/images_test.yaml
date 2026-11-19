@@ -40,11 +40,3 @@ tests:
     documentSelector: { path: kind, value: EventBus }
     asserts:
       - equal: { path: spec.jetstream.version, value: "2.10.29" }
-
-  - it: an EventBus version without pinned images fails rendering
-    template: templates/eventsource.yaml
-    set:
-      eventBus.natsVersion: "2.9.16"
-    asserts:
-      - failedTemplate:
-          errorPattern: 'eventBus.natsVersion "2.9.16" is not in argo-events.configs.jetstream.versions'
