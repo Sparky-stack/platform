@@ -244,3 +244,26 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: "observability-logs-opensearch.openSearch.resources.limits.cpu is required (the JVM's -XX:ActiveProcessorCount pins to it)"
+
+  # values.schema.json (was template `required`): the schema rejects the values before any template renders.
+  - it: schema rejects a missing openchoreo.controlPlane.host
+    template: templates/validate.yaml
+    set:
+      openchoreo.controlPlane.host: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "/openchoreo/controlPlane': missing property 'host'"
+  - it: schema rejects a missing openchoreo.orgNamespace
+    template: templates/prometheus-network-policy.yaml
+    set:
+      openchoreo.orgNamespace: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "/openchoreo': missing property 'orgNamespace'"
+  - it: schema rejects an empty secrets.store
+    template: templates/secrets.yaml
+    set:
+      secrets.store: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "/secrets/store"

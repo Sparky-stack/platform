@@ -1,13 +1,14 @@
 {{- /*
-All render-time validation of this chart (renders nothing): the subcharts' literal hostnames/ports must match
+Cross-field render-time validation of this chart (renders nothing): the subcharts' literal hostnames/ports must match
 installation.yaml (openchoreo.controlPlane.host, openchoreo.observability.*), the plane CR's planeID the agent's, plus
-the OpenSearch JVM, AI agent, logs setup Job and Prometheus ingress invariants.
+the OpenSearch JVM, AI agent, logs setup Job and Prometheus ingress invariants. Types and required platform keys are
+in values.schema.json.
 */ -}}
 {{- $o := .Values.openchoreo.observability }}
 {{- if not $o.enabled }}
 {{- fail "openchoreo.observability.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-observability-plane: \"false\")" }}
 {{- end }}
-{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $host := .Values.openchoreo.controlPlane.host }}
 {{- $obs := index .Values "openchoreo-observability-plane" }}
 {{- $observer := printf "observer.%s" $host }}
 {{- if not (has $observer $obs.observer.http.hostnames) }}

@@ -189,6 +189,10 @@ Wrapper chart for `openchoreo-observability-plane` (`1.3.3`) plus OpenSearch log
 | secrets.remoteKey | string | `"openchoreo-observability"` |  |
 | secrets.store | string | `"platform"` | Pulls OpenSearch/observer (`openchoreo-observability`) and optional AI agent (`openchoreo-ai`) credentials (`secrets.{store,remoteKey,aiRemoteKey}`) from `ClusterSecretStore/platform`. |
 
+Validation: `values.schema.json` checks the platform's own keys (types, required keys, names; Helm prints the failing
+path). Cross-field rules against `installation.yaml` live in `templates/validate.yaml`. Upstream subchart keys are not
+constrained.
+
 ## Day-2 notes
 
 - Querying Prometheus/OpenSearch and checking observability readiness: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).

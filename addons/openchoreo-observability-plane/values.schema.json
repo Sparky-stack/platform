@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "openchoreo-observability-plane",
+  "description": "Platform-owned keys of the openchoreo-observability-plane wrapper. Upstream subchart keys are not constrained; cross-field checks live in templates/validate.yaml.",
+  "type": "object",
+  "required": [
+    "cluster",
+    "openchoreo",
+    "clusterObservabilityPlane",
+    "secrets"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the addon ApplicationSet with --set-string, so every value is a string.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name.",
+          "minLength": 1
+        }
+      }
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "installation.yaml openchoreo block (valuesObject); subchart hostnames/ports are checked against it in validate.yaml.",
+      "properties": {
+        "orgNamespace": {
+          "type": "string",
+          "description": "OpenChoreo organization namespace; the promotion gate runs in workflows-<orgNamespace>.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "controlPlane": {
+          "type": "object",
+          "description": "Control plane settings.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Base domain; observer.<host>, rca-agent.<host> and *.observability.<host> derive from it.",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        "observability": {
+          "type": "object",
+          "description": "Observability plane settings.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Observability plane installed; false contradicts this addon (validate.yaml)."
+            },
+            "httpPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Gateway HTTP listener (== k3d published port)."
+            },
+            "tlsPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Gateway TLS passthrough listener for OpenSearch (== k3d published port)."
+            }
+          },
+          "required": [
+            "enabled",
+            "httpPort",
+            "tlsPort"
+          ]
+        },
+        "workflowPlane": {
+          "type": "object",
+          "description": "Workflow plane toggle (gates the Prometheus ingress rule).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Workflow plane installed."
+            }
+          },
+          "required": [
+            "enabled"
+          ]
+        }
+      },
+      "required": [
+        "orgNamespace",
+        "controlPlane",
+        "observability",
+        "workflowPlane"
+      ]
+    },
+    "prometheusIngress": {
+      "type": "object",
+      "description": "Additive NetworkPolicy letting platform workflows (promotion gate) query Prometheus.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the NetworkPolicy (also needs openchoreo.workflowPlane.enabled)."
+        },
+        "podLabels": {
+          "type": "object",
+          "description": "Prometheus pod labels.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "fromPodLabels": {
+          "type": "object",
+          "description": "Labels of platform workflow pods; must not be empty (validate.yaml).",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "ports": {
+          "type": "array",
+          "description": "Prometheus pod ports (after the Service DNAT).",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "Port."
+          }
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "clusterObservabilityPlane": {
+      "type": "object",
+      "description": "ClusterObservabilityPlane CR rendered by this chart.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "ClusterObservabilityPlane name.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "planeID": {
+          "type": "string",
+          "description": "Plane ID; must equal openchoreo-observability-plane.clusterAgent.planeID (validate.yaml).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "name",
+        "planeID"
+      ]
+    },
+    "agentServerCA": {
+      "type": "object",
+      "description": "Copies the control-plane gateway CA (public cert only) into a ConfigMap for the agent.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the ExternalSecret."
+        },
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore holding the CA.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "sourceSecret": {
+          "type": "string",
+          "description": "Secret name in the store.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "configMapName": {
+          "type": "string",
+          "description": "Target ConfigMap; must equal clusterAgent.tls.serverCAConfigMap (validate.yaml).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "secrets": {
+      "type": "object",
+      "description": "ExternalSecrets for OpenSearch credentials and AI agent keys.",
+      "properties": {
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore the credentials come from (mgmt: platform).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "remoteKey": {
+          "type": "string",
+          "description": "Store key with the OpenSearch credentials.",
+          "minLength": 1
+        },
+        "aiRemoteKey": {
+          "type": "string",
+          "description": "Store key with the AI agent LLM API keys.",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "store",
+        "remoteKey"
+      ]
+    },
+    "openchoreo-observability-plane": {
+      "type": "object",
+      "description": "Upstream openchoreo-observability-plane subchart values (not constrained here)."
+    },
+    "observability-logs-opensearch": {
+      "type": "object",
+      "description": "Upstream observability-logs-opensearch subchart values (not constrained here)."
+    },
+    "observability-tracing-opensearch": {
+      "type": "object",
+      "description": "Upstream observability-tracing-opensearch subchart values (not constrained here)."
+    },
+    "observability-metrics-prometheus": {
+      "type": "object",
+      "description": "Upstream observability-metrics-prometheus subchart values (not constrained here)."
+    },
+    "koorikla-lib": {
+      "type": "object",
+      "description": "Library chart dependency (Helm adds global: {})."
+    }
+  }
+}
