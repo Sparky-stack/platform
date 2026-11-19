@@ -43,6 +43,18 @@ clusterAgentDataServices:
     - { apiGroup: keda.sh, resources: [scaledobjects] }
     - { apiGroup: platform.koorikla.io, resources: [postgresqls] }
 
+# PriorityClasses ClusterTrait resilience assigns (templates/priority-classes.yaml, #251). Names are referenced by the
+# trait (addon openchoreo-platform files/platform/cluster-traits/resilience.yaml): rename both together.
+priorityClasses:
+  app-production:
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: OpenChoreo components in the production environment (ClusterTrait resilience).
+  app-standard:
+    value: 1000
+    preemptionPolicy: Never   # non-production never evicts anything to get scheduled
+    description: OpenChoreo components outside production (ClusterTrait resilience).
+
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy
   security:

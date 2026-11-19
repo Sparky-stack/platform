@@ -43,6 +43,12 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 | openchoreo-data-plane.gateway.tls.enabled | bool | `false` |  |
 | openchoreo-data-plane.security.enabled | bool | `false` |  |
 | openchoreo.controlPlane.clusterGatewayURL | string | `"wss://cluster-gateway.openchoreo.localhost:8443/ws"` |  |
+| priorityClasses.app-production.description | string | `"OpenChoreo components in the production environment (ClusterTrait resilience)."` |  |
+| priorityClasses.app-production.preemptionPolicy | string | `"PreemptLowerPriority"` |  |
+| priorityClasses.app-production.value | int | `100000` |  |
+| priorityClasses.app-standard.description | string | `"OpenChoreo components outside production (ClusterTrait resilience)."` |  |
+| priorityClasses.app-standard.preemptionPolicy | string | `"Never"` |  |
+| priorityClasses.app-standard.value | int | `1000` |  |
 
 ## Day-2 notes
 

@@ -169,6 +169,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | registry.external.repository | string | `"ghcr.io/koorikla"` |  |
 | registry.host | string | `"harbor.openchoreo.localhost:9443"` |  |
 | registry.type | string | `"harbor"` |  |
+| resilience.enabled | bool | `true` | Embed ClusterTrait `resilience` (topology spread, PodDisruptionBudget, preStop + grace period, PriorityClass) in the Deployment component types. |
 | secrets.tenantStores.enabled | bool | `false` |  |
 | tenantStoreName | string | `"openbao-tenant"` |  |
 | upstreamDefaults.enabled | bool | `true` |  |
