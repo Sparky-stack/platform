@@ -5,7 +5,7 @@ What lives here and who runs it:
 | Path | What | Run by |
 |---|---|---|
 | [`scripts/<stack>/`](scripts), [`scripts/common/`](scripts/common) | build, test, scan, sign, attest scripts (env in, files out) | OpenChoreo ClusterWorkflows ([`addons/openchoreo-workflow-plane`](../addons/openchoreo-workflow-plane)) and the reusable workflows [`.github/workflows/app-*.yaml`](../.github/workflows/) |
-| [`toolbox/`](toolbox) | `ghcr.io/koorikla/ci-toolbox` image: the scripts plus trivy, syft, cosign, ... | built by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml) |
+| [`toolbox/`](toolbox) | `ghcr.io/koorikla/platform/ci-toolbox` image: the scripts plus trivy, syft, cosign, ... | built by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml) |
 | [`fixtures/`](fixtures), [`tests/`](tests) | one tiny project per stack, script unit tests | [`ci-selftest.yaml`](../.github/workflows/ci-selftest.yaml) |
 | [`templates/`](templates) | caller workflows, Dependabot configs, Dockerfiles | copied into app repos |
 
@@ -18,7 +18,7 @@ Helm charts, Crossplane configuration packages and Crossplane providers.
 
 - **Primary path: in-cluster.** OpenChoreo workflow-plane ClusterWorkflows run
   `scripts/<stack>/*.sh` and `scripts/common/*.sh` inside
-  `ghcr.io/koorikla/ci-toolbox` (see [Running in-cluster](#running-in-cluster-openchoreo-workflow-plane)).
+  `ghcr.io/koorikla/platform/ci-toolbox` (see [Running in-cluster](#running-in-cluster-openchoreo-workflow-plane)).
 - **Optional path: GitHub Actions.** Thin reusable workflows that only wire inputs to the
   same scripts (plus GitHub-only extras: CodeQL, SARIF upload, GitHub attestations,
   keyless signing). Nothing stack-specific is inlined in YAML.
@@ -29,7 +29,8 @@ vulnerability attestation.
 
 ## Toolbox image
 
-`ghcr.io/koorikla/ci-toolbox`, tagged `main`, `<short sha>` and `<full sha>`. Multi-arch, itself
+`ghcr.io/koorikla/platform/ci-toolbox` (owned by this repo; `ghcr.io/koorikla/ci-toolbox` belongs to the archived
+koorikla/ci and is frozen, #254), tagged `main`, `<short sha>`, `<full sha>` and `ci-vX.Y.Z`. Multi-arch, itself
 scanned, SBOM'd, attested and cosign-signed by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml)
 through `app-container.yaml`. Pin it by digest (`addons/openchoreo-workflow-plane/values.yaml`
 `images.TOOLBOX_IMAGE`); the `:v1` in that pin is a leftover tag from the archived koorikla/ci repo,
@@ -303,21 +304,21 @@ function-go-templating + example XR + expected render), and a tiny native provid
 
 | Package | Kind |
 |---|---|
-| `ghcr.io/koorikla/ci-selftest-go` | image |
-| `ghcr.io/koorikla/ci-selftest-python` | image |
-| `ghcr.io/koorikla/ci-selftest-node` | image |
-| `ghcr.io/koorikla/ci-selftest-rust` | image |
-| `ghcr.io/koorikla/ci-selftest-java-quarkus` | image (JVM) |
-| `ghcr.io/koorikla/ci-selftest-java-quarkus-native` | image (native) |
-| `ghcr.io/koorikla/ci-selftest-java-spring` | image |
-| `ghcr.io/koorikla/ci-selftest-nextjs` | image |
-| `ghcr.io/koorikla/ci-selftest-elixir` | image |
-| `ghcr.io/koorikla/ci-selftest-ruby` | image |
-| `ghcr.io/koorikla/ci-selftest-helm` | Helm chart (OCI) |
-| `ghcr.io/koorikla/ci-selftest-crossplane-configuration` | xpkg |
-| `ghcr.io/koorikla/ci-selftest-crossplane-provider` | xpkg (multi-arch) |
-| `ghcr.io/koorikla/ci-selftest-crossplane-provider-controller` | image |
-| `ghcr.io/koorikla/ci-toolbox` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-go` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-python` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-node` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-rust` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-java-quarkus` | image (JVM) |
+| `ghcr.io/koorikla/platform/ci-selftest-java-quarkus-native` | image (native) |
+| `ghcr.io/koorikla/platform/ci-selftest-java-spring` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-nextjs` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-elixir` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-ruby` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-helm` | Helm chart (OCI) |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-configuration` | xpkg |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-provider` | xpkg (multi-arch) |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-provider-controller` | image |
+| `ghcr.io/koorikla/platform/ci-toolbox` | image |
 
 Local checks before pushing (from `ci/`): `shellcheck -x scripts/*/*.sh tests/scripts/*.sh &&
 bash tests/scripts/workload-bump.test.sh`; actionlint runs in the prek hooks (`prek.toml`).

@@ -1,8 +1,10 @@
 name: toolbox
 
-# Builds ghcr.io/koorikla/ci-toolbox (multi-arch, scanned, SBOM, attested,
-# cosign-signed) with the same container.yaml app repos use, then smoke-tests
-# the pushed image natively on amd64 and arm64.
+# Builds ghcr.io/koorikla/platform/ci-toolbox (multi-arch, scanned, SBOM, attested,
+# cosign-signed) with the same app-container.yaml app repos use, then smoke-tests
+# the pushed image natively on amd64 and arm64. The package lives under this repo's
+# namespace (like ghcr.io/koorikla/platform/postgresql) so the workflow's GITHUB_TOKEN
+# owns it: ghcr.io/koorikla/ci-toolbox belongs to the archived koorikla/ci (#254).
 
 on:
   workflow_dispatch:
@@ -12,10 +14,9 @@ on:
       - 'ci/toolbox/**'
       - 'ci/scripts/**'
   push:
-    # Leftover from koorikla/ci (where `v1` was the toolbox tag): platform `v*` release
-    # tags rebuild the toolbox too (paths are not evaluated for tag pushes). Release-please
-    # tags ci/ as `ci-v*`, which does not match.
-    tags: ['v*']
+    # ci/ releases (release-please tags `ci-vX.Y.Z`) publish a tagged toolbox; platform
+    # `v*` releases do not (paths are not evaluated for tag pushes).
+    tags: ['ci-v*']
     branches: [main]
     paths:
       - '.github/workflows/ci-toolbox.yaml'
@@ -39,6 +40,7 @@ jobs:
       attestations: write
       security-events: write
     with:
+      registry: ghcr.io/koorikla/platform
       image_name: ci-toolbox
       context: ci
       dockerfile: ci/toolbox/Dockerfile
