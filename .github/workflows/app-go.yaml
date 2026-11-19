@@ -1,7 +1,7 @@
 name: go
 
 # Go service: go vet, golangci-lint, go test -race + coverage, govulncheck,
-# CodeQL (go), then container.yaml (multi-arch build, scan, SBOM, sign).
+# CodeQL (go), then app-container.yaml (multi-arch build, scan, SBOM, sign).
 #
 # Required caller permissions:
 #   contents: read, actions: read, packages: write, id-token: write,
@@ -12,130 +12,58 @@ on:
     inputs:
       working_directory:
         description: 'Go module directory'
-        required: false
         type: string
         default: '.'
       go_version_file:
         description: 'go.mod / .go-version used by setup-go (default <working_directory>/go.mod)'
-        required: false
         type: string
         default: ''
       run_lint:
         description: 'Run golangci-lint'
-        required: false
         type: boolean
         default: true
       golangci_lint_version:
         description: 'golangci-lint version'
-        required: false
         type: string
         default: 'latest'
       run_vulncheck:
         description: 'Run govulncheck'
-        required: false
         type: boolean
         default: true
       run_codeql:
         description: 'Run CodeQL (go)'
-        required: false
         type: boolean
         default: true
       extra_test_cmd:
         description: 'Extra shell command run in working_directory after tests'
-        required: false
         type: string
         default: ''
-      build_container:
-        description: 'Build/scan/sign the container image after checks'
-        required: false
-        type: boolean
-        default: true
-      image_name:
-        description: 'Image name (default: repository name)'
-        required: false
-        type: string
-        default: ''
-      registry:
-        description: 'Registry prefix (default ghcr.io/<owner>)'
-        required: false
-        type: string
-        default: ''
-      context:
-        description: 'Docker build context (default working_directory)'
-        required: false
-        type: string
-        default: ''
-      dockerfile:
-        description: 'Dockerfile (default <working_directory>/Dockerfile)'
-        required: false
-        type: string
-        default: ''
-      platforms:
-        description: 'Comma-separated image platforms'
-        required: false
-        type: string
-        default: 'linux/amd64,linux/arm64'
-      multiarch_strategy:
-        description: 'native (per-arch runners) or qemu'
-        required: false
-        type: string
-        default: 'native'
-      build_args:
-        description: 'Newline-separated extra build-args'
-        required: false
-        type: string
-        default: ''
-      push:
-        description: 'Push, attest and sign on non-PR events'
-        required: false
-        type: boolean
-        default: true
-      trivy_severity:
-        description: 'Severities that fail the image scan'
-        required: false
-        type: string
-        default: 'CRITICAL'
-      trivy_ignore_unfixed:
-        description: 'Ignore unfixed vulnerabilities'
-        required: false
-        type: boolean
-        default: true
-      trivy_ignore_file:
-        description: 'Repo-relative .trivyignore(.yaml) with accepted risks'
-        required: false
-        type: string
-        default: ''
-      trivy_fail:
-        description: 'Fail on findings at trivy_severity'
-        required: false
-        type: boolean
-        default: true
+      # Image phase: passed through unchanged to app-container.yaml (build, Trivy scan, SBOM,
+      # provenance, keyless cosign signature). Same names and defaults in every app-<stack>.yaml;
+      # ci/tests/app-workflow-interfaces.test.sh fails when they drift from app-container.yaml.
+      build_container: {type: boolean, default: true, description: 'Build/scan/sign the container image after checks'}
+      image_name: {type: string, default: '', description: 'Image name (default: repository name)'}
+      registry: {type: string, default: '', description: 'Registry prefix (default ghcr.io/<owner>)'}
+      context: {type: string, default: '', description: 'Docker build context (default working_directory)'}
+      dockerfile: {type: string, default: '', description: 'Dockerfile (default <working_directory>/Dockerfile)'}
+      platforms: {type: string, default: 'linux/amd64,linux/arm64', description: 'Comma-separated image platforms'}
+      multiarch_strategy: {type: string, default: 'native', description: 'native (per-arch runners) or qemu'}
+      build_args: {type: string, default: '', description: 'Newline-separated extra build-args'}
+      push: {type: boolean, default: true, description: 'Push, attest and sign on non-PR events'}
+      trivy_severity: {type: string, default: 'CRITICAL', description: 'Severities that fail the image scan'}
+      trivy_ignore_unfixed: {type: boolean, default: true, description: 'Ignore unfixed vulnerabilities'}
+      trivy_ignore_file: {type: string, default: '', description: 'Repo-relative .trivyignore(.yaml) with accepted risks'}
+      trivy_fail: {type: boolean, default: true, description: 'Fail on findings at trivy_severity'}
     secrets:
-      registry_username:
-        description: 'Registry username (non-GHCR registries)'
-        required: false
-      registry_password:
-        description: 'Registry password/token (non-GHCR registries)'
-        required: false
+      registry_username: {description: 'Registry username (non-GHCR registries)'}
+      registry_password: {description: 'Registry password/token (non-GHCR registries)'}
     outputs:
-      image:
-        description: 'Image reference tagged with the short SHA'
-        value: ${{ jobs.container.outputs.image }}
-      image_ref:
-        description: 'Alias of image'
-        value: ${{ jobs.container.outputs.image_ref }}
-      image_repo:
-        description: 'Image repository without tag'
-        value: ${{ jobs.container.outputs.image_repo }}
-      digest:
-        description: 'Manifest-list digest'
-        value: ${{ jobs.container.outputs.digest }}
-      image_digest_ref:
-        description: 'Immutable <repo>@sha256:... reference'
-        value: ${{ jobs.container.outputs.image_digest_ref }}
-      short_sha:
-        description: '7-character commit SHA'
-        value: ${{ jobs.container.outputs.short_sha }}
+      image: {description: 'Image reference tagged with the short SHA', value: '${{ jobs.container.outputs.image }}'}
+      image_ref: {description: 'Alias of image', value: '${{ jobs.container.outputs.image_ref }}'}
+      image_repo: {description: 'Image repository without tag', value: '${{ jobs.container.outputs.image_repo }}'}
+      digest: {description: 'Manifest-list digest', value: '${{ jobs.container.outputs.digest }}'}
+      image_digest_ref: {description: 'Immutable <repo>@sha256:... reference', value: '${{ jobs.container.outputs.image_digest_ref }}'}
+      short_sha: {description: '7-character commit SHA', value: '${{ jobs.container.outputs.short_sha }}'}
 
 permissions:
   contents: read
