@@ -1,12 +1,10 @@
 {{- /*
-Policy reconciler (#96; docs/multicluster.md "Policies from git: the policy reconciler"): tenant ACL policies and the
-tenant identities' Kubernetes auth roles from git, at any time, without re-initialising OpenBao.
-  ServiceAccount policyReconciler.serviceAccount   self-init role platform-policy-reconciler (policy: sys/policies/acl/
-                                                   tenant-* + the roles tenant-config / tenant-writer, every
-                                                   parameter pinned; nothing else)
-  ConfigMap policy-reconcile                       files/policy-reconcile.sh + every files/policies/*.hcl (tenant-*
-                                                   only: the render fails otherwise, and OpenBao would answer 403)
-  CronJob policy-reconcile                         final wave, like tenant-reconcile: a failing run never fails a sync
+CronJob policy-reconcile on mgmt (with secrets.tenantStores.enabled; #96, docs/multicluster.md "Policies from git: the
+policy reconciler"): writes every files/policies/tenant-*.hcl and the auth roles tenant-config / tenant-writer at any
+time, without re-initialising OpenBao.
+Its identity (ServiceAccount policyReconciler.serviceAccount, self-init role platform-policy-reconciler) may write only
+sys/policies/acl/tenant-* and those two roles with every parameter pinned, so the render fails on any other policy file
+(OpenBao would answer 403). Final wave, like tenant-reconcile: a failing run never fails a sync.
 */ -}}
 {{- if (((.Values.secrets).tenantStores).enabled) }}
 {{- $p := .Values.policyReconciler }}

@@ -1,16 +1,14 @@
 {{- /*
-Inputs of the mesh reconcile: every mesh member's PUBLIC auth data, one fleet Secret per member rendered by
-charts/cluster (mesh-openbao.yaml: cluster, group, server = API server URL, ca = cluster CA certificate, all from the
-CAPI kubeconfig and the fleet file), labelled meshClients.label=true. ESO finds them by label through
-ClusterSecretStore mgmt-fleet and flattens them into Secret mesh-clients: <cluster>.group, <cluster>.server,
-<cluster>.ca - the files the reconcile Job mounts (it has no Kubernetes API access of its own).
+ExternalSecret mesh-clients on mgmt: every mesh member's PUBLIC auth data (fleet Secrets <cluster>-mesh-openbao from
+charts/cluster mesh-openbao.yaml, found by label meshClients.label via ClusterSecretStore mgmt-fleet), flattened into
+the files the mesh-reconcile Job mounts: <cluster>.group, <cluster>.server (API server URL), <cluster>.ca (cluster CA
+cert).
 Retain: a store error keeps the last list; the reconcile never prunes on an empty list either.
-Validation (the template, then the reconcile): a Secret counts only if its name is exactly <cluster>-mesh-openbao (what
-charts/cluster renders). Otherwise it becomes rejected.<secret name> = reason, which the reconcile logs and counts as an
-invalid input (no auth mount, no entity). Secret names are unique in fleet, so this also rules out two Secrets claiming
-the same cluster (before, the later one silently overrode the other's inputs). It does not authenticate the writer: any Secret in fleet named <x>-mesh-openbao
-with the label enrols member <x> with its own JWKS, so write access to Secrets in fleet is mesh-CA admin access
-(fleet also holds every cluster's kubeconfig; docs/multicluster.md "Who may do what in OpenBao").
+A Secret not named exactly <cluster>-mesh-openbao becomes rejected.<secret name> = reason (the reconcile logs it and
+counts it as invalid: no auth mount, no entity), so one Secret cannot claim another cluster's inputs. This does NOT
+authenticate the writer: any labelled Secret <x>-mesh-openbao in fleet enrols member <x> with its own JWKS, so write
+access to Secrets in fleet is mesh-CA admin access (fleet also holds every kubeconfig; docs/multicluster.md "Who may do
+what in OpenBao").
 */ -}}
 {{- $m := .Values.meshClients }}
 apiVersion: external-secrets.io/v1

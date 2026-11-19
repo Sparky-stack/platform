@@ -1,8 +1,9 @@
 {{- /*
-Static auto-unseal key (OpenBao seal "static": AES-256-GCM, 64 hex characters) from ClusterSecretStore `platform`
-(key openbao-unseal, seeded by `task secrets` locally). Mounted read-only into the OpenBao pods only. Losing it means
-losing the data (no recovery keys exist with self-initialisation); back it up with the secret backend. Production:
-cloud KMS seal instead (docs/multicluster.md "Mesh CA (OpenBao)").
+ExternalSecret openbao-unseal on mgmt: the static auto-unseal key (seal "static", AES-256-GCM, 64 hex characters) from
+ClusterSecretStore `platform` (key openbao-unseal, seeded by `task secrets` locally), mounted only into the OpenBao
+pods.
+Losing it loses the data: self-initialisation creates no recovery keys. Back it up with the secret backend. Production:
+a cloud KMS seal instead (docs/multicluster.md "Mesh CA (OpenBao)").
 */ -}}
 {{- $u := .Values.unseal }}
 apiVersion: external-secrets.io/v1
