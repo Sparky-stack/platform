@@ -8,9 +8,11 @@
 #     preRenderValidation on dataplane.annotations; ClusterResourceTypes are checked on mgmt by the Kyverno policy
 #     platform-data-plane-capabilities (rendered for the mgmt role); no type renders a raw CNPG object
 #   - the ClusterDataPlane of local/dev1 announces the addons the types need (fleet file -> annotations)
-#   - the agent's capability gate (#246) waits for the CRD of every kind a ClusterTrait's required addon brings
+#   - the agent's capability gate (#246, #255) waits, per required addon, for the CRD of every kind a ClusterTrait or
+#     ClusterResourceType brings from that addon, enabled from the same cluster label in charts/platform
 # Negatives: without the data-services RBAC the ScaledObject and XR are reported; a trait that drops its check and a type
-# requiring a default-on addon are reported.
+# requiring a default-on addon are reported; an ungated kind, a CRD gated under the wrong addon and a gate charts/platform
+# never enables are reported.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
@@ -43,7 +45,8 @@ for ok in 'agent may apply keda.sh/scaledobjects for ClusterTrait keda-scaler' \
   'agent may apply apps/deployments for ClusterComponentType service' \
   'ClusterTrait keda-scaler requires opt-in workload addon keda' 'ClusterTrait keda-scaler checks addons.platform.koorikla.io/keda' \
   'ClusterResourceType postgresql requires opt-in workload addon crossplane' \
-  'agent waits for crd/scaledobjects.keda.sh of ClusterTrait keda-scaler'; do
+  'agent waits for crd/scaledobjects.keda.sh of ClusterTrait keda-scaler \(addon keda\)' \
+  'agent waits for crd/postgresqls.platform.koorikla.io of ClusterResourceType postgresql \(addon crossplane\)'; do
   assert_match "$out" "OK $ok" "$ok"
 done
 
@@ -76,6 +79,20 @@ out=$(check "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$TMP/dp-ungated.jsonl")
 assert_match "$out" 'VIOLATION: no capability-gate Sync hook before the agent Deployment' "no gate rendered: reported"
 assert_match "$out" 'VIOLATION: ClusterTrait keda-scaler renders ScaledObject \(keda.sh/v1alpha1\) but the capability gate does not wait for crd/scaledobjects.keda.sh' \
   "a trait kind the gate does not wait for is reported"
+assert_match "$out" 'VIOLATION: ClusterResourceType postgresql renders PostgreSQL \(platform.koorikla.io/v1alpha1\) but the capability gate does not wait for crd/postgresqls.platform.koorikla.io' \
+  "a resource type kind the gate does not wait for is reported"
+# The XRD's CRD gated under an addon the resource type does not require (wrong label) is no gate for it.
+helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" --set capabilityGate.addons.keda.enabled=true \
+  --set 'capabilityGate.addons.keda.crds={scaledobjects.keda.sh,postgresqls.platform.koorikla.io}' | yq -o=json -I=0 '.' > "$TMP/dp-wrong.jsonl"
+out=$(check "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$TMP/dp-wrong.jsonl")
+assert_match "$out" 'VIOLATION: ClusterResourceType postgresql renders PostgreSQL .* does not wait for crd/postgresqls.platform.koorikla.io under a required addon \(crossplane\)' \
+  "a CRD gated under the wrong addon is reported"
+# A gate charts/platform never turns on (no cluster label parameter) waits for nothing on a real cluster.
+yq -o=json '.addons | del(.["openchoreo-data-plane"].clusterLabelParameters["capabilityGate.addons.crossplane.enabled"])' \
+  charts/platform/values.yaml > "$TMP/catalog-nolabel.json"
+out=$(py hack/tests/openchoreo_types.py "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$agent_ns/$agent_sa" "$TMP/catalog-nolabel.json" "$TMP/dp-gated.jsonl")
+assert_match "$out" 'VIOLATION: ClusterResourceType postgresql needs the crossplane gate but charts/platform does not enable capabilityGate.addons.crossplane.enabled' \
+  "a gate without its cluster label parameter is reported"
 cat > "$TMP/bad.jsonl" <<'EOF'
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterTrait","metadata":{"name":"unchecked","annotations":{"platform.koorikla.io/requires-addons":"keda"}},"spec":{"preRenderValidations":[{"rule":"${true}","message":"x"}]}}
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterResourceType","metadata":{"name":"rawpg","annotations":{"platform.koorikla.io/requires-addons":"cert-manager, nosuch"}},"spec":{"resources":[{"id":"c","template":{"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster"}}]}}

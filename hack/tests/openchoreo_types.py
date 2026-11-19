@@ -16,6 +16,7 @@ Invariants:
   - no type renders a raw CloudNativePG object (tenants get PostgreSQL only through the platform XR)
 """
 import json
+import re
 import sys
 
 plat_path, dp_path, agent, catalog_path = sys.argv[1:5]
@@ -113,35 +114,53 @@ for obj in types:
             else:
                 out.append(f"OK {name} checks {key}")
 
-# --- capability gate (#246): the agent starts only after the CRDs of every kind a trait's required addon brings -------
-# argv[5]: the data-plane render with every capabilityGate addon enabled. Without the gate OpenChoreo applies the kind
-# before the addon exists and 1.3.3 retries only on its capped exponential backoff (~17 min on a fresh bootstrap).
+# --- capability gate (#246, #255): the agent starts only after the CRDs of every kind a trait or resource type's -----
+# required addon brings. argv[5]: the data-plane render with every capabilityGate addon enabled. Without the gate
+# OpenChoreo applies the kind before the addon exists and 1.3.3 retries only on its capped exponential backoff (~17 min
+# for KEDA, ~30 min for the PostgreSQL XRD on a fresh bootstrap). Per addon: init container wait-for-<addon>-crds waits
+# for the CRD, the main container waits for Established, and charts/platform turns the wait on from the cluster label
+# addons.platform.koorikla.io/<addon> (the same fact the trait/resource type checks).
 if len(sys.argv) > 5:
     gated = load(sys.argv[5])
     jobs = [d for d in gated if d.get("kind") == "Job" and d["metadata"]["name"] == "capability-gate"]
-    gate, wave = set(), None
+    created, established, wave = {}, set(), None
     for j in jobs:
         ann = j["metadata"].get("annotations") or {}
         wave = int(ann.get("argocd.argoproj.io/sync-wave", "0")) if ann.get("argocd.argoproj.io/hook") == "Sync" else None
         pod = j["spec"]["template"]["spec"]
-        for c in (pod.get("initContainers") or []) + (pod.get("containers") or []):
-            gate.update(a[len("crd/"):] for a in c.get("command") or [] if a.startswith("crd/"))
+        for c in pod.get("initContainers") or []:
+            m = re.fullmatch(r"wait-for-(.+)-crds", c.get("name", ""))
+            if m:
+                created.setdefault(m.group(1), set()).update(
+                    a[len("crd/"):] for a in c.get("command") or [] if a.startswith("crd/"))
+        for c in pod.get("containers") or []:
+            if "--for=condition=Established" in (c.get("command") or []):
+                established.update(a[len("crd/"):] for a in c["command"] if a.startswith("crd/"))
     if wave is None or wave >= 0:
         out.append("VIOLATION: no capability-gate Sync hook before the agent Deployment (sync wave < 0)")
+    labels = (catalog.get("openchoreo-data-plane") or {}).get("clusterLabelParameters") or {}
     for obj in types:
-        if obj["kind"] != "ClusterTrait":
-            continue
-        name = f'ClusterTrait {obj["metadata"]["name"]}'
-        if not (obj["metadata"].get("annotations") or {}).get("platform.koorikla.io/requires-addons"):
+        name = f'{obj["kind"]} {obj["metadata"]["name"]}'
+        raw = (obj["metadata"].get("annotations") or {}).get("platform.koorikla.io/requires-addons") or ""
+        req = [a.strip() for a in raw.split(",") if a.strip()]
+        if not req or obj["kind"] == "ClusterComponentType":
             continue
         for plane, api, kind in templates(obj):
             group = api.split("/")[0] if "/" in api else ""
-            if plane != "dataplane" or "." not in group or group.endswith(".k8s.io"):
+            if plane != "dataplane" or "." not in group or group.endswith(".k8s.io") or group == "openchoreo.dev":
                 continue  # built-in kinds exist on every cluster
             crd = f"{plural(kind)}.{group}"
-            if crd in gate:
-                out.append(f"OK agent waits for crd/{crd} of {name}")
-            else:
-                out.append(f"VIOLATION: {name} renders {kind} ({api}) but the capability gate does not wait for crd/{crd}")
+            by = [a for a in req if crd in created.get(a, set())]
+            if not by or crd not in established:
+                out.append(f"VIOLATION: {name} renders {kind} ({api}) but the capability gate does not wait for "
+                           f"crd/{crd} under a required addon ({', '.join(req)})")
+                continue
+            for a in by:
+                lp = labels.get(f"capabilityGate.addons.{a}.enabled") or {}
+                if lp.get("label") != f"addons.platform.koorikla.io/{a}":
+                    out.append(f"VIOLATION: {name} needs the {a} gate but charts/platform does not enable "
+                               f"capabilityGate.addons.{a}.enabled from label addons.platform.koorikla.io/{a}")
+                else:
+                    out.append(f"OK agent waits for crd/{crd} of {name} (addon {a})")
 
 print("\n".join(out))

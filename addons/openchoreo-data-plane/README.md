@@ -15,9 +15,12 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 |-----|------|---------|-------------|
 | byoDelivery.enabled | bool | `false` | On byo clusters (`values/provider-byo.yaml`), agent TLS and CA arrive by `PushSecret`; `templates/byo-gateway-ca.yaml` rebuilds the `cluster-gateway-ca` ConfigMap ([byo](../../docs/providers.md#bring-your-own-cluster-byo)). |
 | byoDelivery.store | string | `"delivery"` |  |
+| capabilityGate.addons.crossplane.crds[0] | string | `"postgresqls.platform.koorikla.io"` |  |
+| capabilityGate.addons.crossplane.enabled | string | `"false"` |  |
 | capabilityGate.addons.keda.crds[0] | string | `"scaledobjects.keda.sh"` |  |
 | capabilityGate.addons.keda.enabled | string | `"false"` |  |
-| capabilityGate.image | string | `"registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39"` | Agent start gate (`capabilityGate.{image,addons.<addon>.{enabled,crds}}`): an Argo CD sync hook in wave -1 waits until every CRD of each enabled addon is Established ([data services](../../docs/data-services.md#keda-and-openchoreo-workloads)). |
+| capabilityGate.image | string | `"registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39"` | Agent start gate (`capabilityGate.{image,timeout,addons.<addon>.{enabled,crds}}`): an Argo CD sync hook in wave -1 waits until every CRD of each enabled addon is Established ([data services](../../docs/data-services.md#keda-and-openchoreo-workloads)). |
+| capabilityGate.timeout | string | `"30m"` |  |
 | cluster.name | string | `"default"` |  |
 | clusterAgentDataServices.enabled | bool | `true` | Extra agent RBAC (`clusterAgentDataServices.{enabled,serviceAccount,rules}`) for the kinds the platform's data-service types render (KEDA `ScaledObject`, PostgreSQL XR; [data services](../../docs/data-services.md#consuming-them-from-openchoreo)). |
 | clusterAgentDataServices.rules[0].apiGroup | string | `"keda.sh"` |  |
@@ -49,7 +52,7 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 
 ## Day-2 notes
 
-- Agent not connecting on a new cluster that opts into `keda`: the `capability-gate` Sync hook (wave -1) holds it until KEDA's CRD is Established (#246); `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers` ([data services](../../docs/data-services.md#only-on-data-planes-that-run-the-operator)).
+- Agent not connecting on a new cluster that opts into `keda` or `crossplane`: the `capability-gate` Sync hook (wave -1) holds it until the CRDs platform traits and resource types render are Established (#246, #255: `scaledobjects.keda.sh`; `postgresqls.platform.koorikla.io`, which needs crossplane's Configuration package installed). `kubectl -n openchoreo-data-plane get pod -l app.kubernetes.io/name=capability-gate` names the waiting addon (init container `wait-for-<addon>-crds`); `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers` ([data services](../../docs/data-services.md#only-on-data-planes-that-run-the-operator)).
 - Disconnected agents and client cert rotation: [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected) and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#3-openchoreo-agent-certificates).
 
 ## Links

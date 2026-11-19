@@ -23,7 +23,7 @@ confidence: high
 ## Fix
 - Order `ComponentRelease` before `ReleaseBinding` (or touch/annotate the `ReleaseBinding` after creating the release).
 - Make the auto-build trigger **registry-aware** (PR #201): query Harbor for the pinned digest and trigger an idempotent `<component>-<sha12>` build whenever the digest is missing.
-- Gate the data plane's cluster agent on its capabilities: addon openchoreo-data-plane `capabilityGate` Sync hook (wave -1) waits for the CRDs of every opted-in addon a ClusterTrait renders (#246). No binding touches, no polling of OpenChoreo objects.
+- Gate the data plane's cluster agent on its capabilities: addon openchoreo-data-plane `capabilityGate` Sync hook (wave -1) waits for the CRDs of every opted-in addon a ClusterTrait or ClusterResourceType renders (#246; #255 added the PostgreSQL XRD, which arrives with crossplane's Configuration package minutes after crossplane is Healthy). No binding touches, no polling of OpenChoreo objects.
 - Promotion gates check data-plane workload readiness and live HTTP traffic directly rather than trusting `ReleaseBinding` status (#103, #104).
 
 ## Where enforced
