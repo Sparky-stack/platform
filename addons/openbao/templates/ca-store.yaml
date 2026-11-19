@@ -2,10 +2,16 @@
 ClusterSecretStore mgmt-openbao: read-only, name-scoped access to Secret openbao/openbao-ca-bundle (templates/pki.yaml),
 which holds PUBLIC certificates only (OpenBao's CA, the mesh group roots). ESO's kubernetes provider reads a remoteRef
 with one GET and validates the store with a SelfSubjectRulesReview that accepts a name-scoped get rule: no list/watch,
-no other Secret of this namespace (CA key, listener key, static seal key) is reachable. Consumer: charts/cluster
-mesh-trust.yaml (ns fleet, CRS payload for each member's istio-system).
+no other Secret of this namespace (CA key, listener key, static seal key) is reachable. Consumers: charts/cluster
+mesh-trust.yaml (ns fleet, CRS payload for each member's istio-system); with secrets.tenantStores.enabled also
+ExternalSecret openbao-tenants/openbao-ca (tenant-secrets.yaml: OpenBao's CA for charts/tenant's demo seed).
 */ -}}
 {{- $p := .Values.caPublic }}
+{{- $nss := $p.namespaces }}
+{{- if (((.Values.secrets).tenantStores).enabled) }}
+{{- /* + openbao-tenants: tenant-secrets.yaml ExternalSecret openbao-ca (CA for the charts/tenant demo seed CronJobs) */}}
+{{- $nss = append $nss .Values.tenantSecrets.inputsNamespace }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -50,7 +56,7 @@ metadata:
     {{- include "openbao-addon.labels" . | nindent 4 }}
 spec:
   conditions:
-    - namespaces: {{ toJson $p.namespaces }}
+    - namespaces: {{ toJson $nss }}
   provider:
     kubernetes:
       remoteNamespace: {{ .Release.Namespace }}

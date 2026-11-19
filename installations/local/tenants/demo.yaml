@@ -7,3 +7,9 @@ apps:
     repoURL: https://github.com/koorikla/hello-world.git
     path: deploy/openchoreo      # default
     revision: main               # default
+# DEMO ONLY: values hello-world's SecretReference (deploy/openchoreo/greeting-secret.yaml) points to, seeded into
+# kv-tenant-demo on every clean bootstrap by CronJob openbao-tenants/demo-demo-secrets as demo-writer (generated
+# "demo-only-<hex>", never in git, never overwritten). Real tenants write their own values (docs/multicluster.md).
+demoSecrets:
+  - key: hello-world
+    property: greeting

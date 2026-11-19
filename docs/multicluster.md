@@ -359,6 +359,19 @@ K="kubectl --context k3d-platform-mgmt"
       BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=tenant-writer jwt="$jwt") bao kv put kv-tenant-demo/db password=-'
 ```
 
+**Demo values** (local installation only, zero-touch after `task down && task up`): a tenant file may list
+`demoSecrets: [{key, property}]` (here `installations/local/tenants/demo.yaml`: `hello-world`/`greeting`, the remoteRef
+of hello-world's `SecretReference`). charts/tenant then renders CronJob `openbao-tenants/<project>-demo-secrets`
+(`files/seed-demo-secrets.sh`, every 5 minutes, final sync wave) that logs in exactly like the command above, as
+`<project>-writer` with role `tenant-writer` (never root, only its own mount), and writes each missing property as a
+generated `demo-only-<24 hex>` value (in the pod, never in git or a log; new key with `cas=0`, a key without the
+property with a patch). An existing property is never overwritten, so a hand-written value or a rotation wins. It
+fails and retries until OpenBao and `tenant-reconcile` (mount + writer alias) exist, without holding any sync. OpenBao's
+CA reaches it as `openbao-tenants/openbao-ca` (ExternalSecret of addon openbao through `ClusterSecretStore
+mgmt-openbao`, public certificate only). Never list real secrets there. Test: `hack/tests/test_tenant_demo_secrets.sh`
+(every remoteRef of the vendored hello-world SecretReference is seeded; pins shared with addon openbao; idempotency
+against a fake CLI).
+
 The app consumes it with an OpenChoreo `SecretReference` (`remoteRef: {key: db, property: password}`) named in its
 Workload; developer steps, the hello-world `GREETING_SECRET` example and rotation:
 [openchoreo.md](openchoreo.md#application-secrets-developer-view). The component types render one `ExternalSecret`
