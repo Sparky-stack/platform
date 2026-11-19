@@ -1,16 +1,13 @@
 {{- /*
-TLS for OpenBao and publication of PUBLIC certificates only.
+TLS for OpenBao on mgmt and publication of PUBLIC certificates only:
   Issuer openbao-selfsigned -> Certificate openbao-ca (CA, key stays in this namespace) -> Issuer openbao-ca
-  Certificate openbao-tls       listener cert: in-cluster names + the member-facing host (SNI of the passthrough
-                                Gateway). OpenBao reloads it on renewal (listener tls_auto_reload).
-  ExternalSecret openbao-ca-bundle -> Secret openbao-ca-bundle with
-    ca.crt             OpenBao's CA certificate (SecretStore openbao-ca-source: GET of Secret openbao-ca only)
-    mesh-root-<g>.pem  each mesh group's root certificate, read from OpenBao (SecretStore openbao-pki-public: Kubernetes
-                       auth role mesh-ca-read, whose static policy - written by self-initialisation - allows read of
-                       +/cert/ca (public certificates) and nothing else)
-ClusterSecretStore mgmt-openbao (templates/ca-store.yaml) may GET only openbao-ca-bundle: consumers never reach a key.
-Sync order (Argo CD waves): 0 OpenBao + everything else, 1 the mesh-reconcile Job (Sync hook: group roots), 2 the
-openbao-pki-public store, openbao-ca-bundle and the CronJob (templates/reconcile.yaml).
+  -> Certificate openbao-tls (listener: in-cluster names + mesh.ca.host; OpenBao reloads it on renewal, listener tls_auto_reload)
+  ExternalSecret openbao-ca-bundle: ca.crt (OpenBao's CA) + mesh-root-<g>.pem (each mesh group's root certificate)
+Why two narrow stores: openbao-ca-source may GET only Secret openbao-ca; openbao-pki-public logs in as Kubernetes auth
+role mesh-ca-read, whose static self-init policy reads +/cert/ca (public certificates) and nothing else.
+ClusterSecretStore mgmt-openbao (ca-store.yaml) may GET only the bundle: consumers never reach a key.
+Sync waves: 0 OpenBao + everything else, 1 the mesh-reconcile Job (Sync hook: creates the group roots), 2 the
+openbao-pki-public store, openbao-ca-bundle and the CronJobs.
 */ -}}
 {{- $ns := .Release.Namespace }}
 {{- $t := .Values.tls }}

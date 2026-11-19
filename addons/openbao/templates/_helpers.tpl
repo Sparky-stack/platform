@@ -26,11 +26,12 @@ app.kubernetes.io/part-of: openbao
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{- /* Pod spec of the reconcile Jobs/CronJobs (templates/reconcile.yaml, templates/tenant-secrets.yaml); context: dict
-r env sa img meshClients tlsSecret, optional script (default mesh-reconcile: ConfigMap + files/<script>.sh) and inputs
-(list of {name, secret, path}, may be empty; default: meshClients at /inputs). */ -}}
+{{- /* Pod spec shared by the three reconcilers (mesh-, tenant-, policy-reconcile): POSIX sh + bao CLI from the OpenBao
+image, no Kubernetes API access, a 10-minute projected token as the only credential. Context: dict root sa env script
+inputs; script = ConfigMap name and files/<script>.sh, inputs = list of {name, secret, path} (may be empty). */ -}}
 {{- define "openbao-addon.reconcilePod" }}
-{{- $inputs := ternary .inputs (list (dict "name" "inputs" "secret" .meshClients "path" "/inputs")) (hasKey . "inputs") }}
+{{- $v := .root.Values }}
+{{- $img := $v.openbao.server.image }}
 serviceAccountName: {{ .sa }}
 automountServiceAccountToken: false
 restartPolicy: Never
@@ -41,19 +42,19 @@ securityContext:
   seccompProfile: { type: RuntimeDefault }
 containers:
   - name: reconcile
-    image: {{ printf "%s/%s:%s" .img.registry .img.repository .img.tag | quote }}
-    command: [/bin/sh, {{ printf "/scripts/%s.sh" (.script | default "mesh-reconcile") }}]
+    image: {{ printf "%s/%s:%s" $img.registry $img.repository $img.tag | quote }}
+    command: [/bin/sh, {{ printf "/scripts/%s.sh" .script }}]
     env:
       {{- toYaml .env | nindent 6 }}
     resources:
-      {{- toYaml .r.resources | nindent 6 }}
+      {{- toYaml $v.reconcile.resources | nindent 6 }}
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities: { drop: [ALL] }
     volumeMounts:
       - { name: scripts, mountPath: /scripts, readOnly: true }
-      {{- range $i := $inputs }}
+      {{- range $i := .inputs }}
       - { name: {{ $i.name }}, mountPath: {{ $i.path }}, readOnly: true }
       {{- end }}
       - { name: token, mountPath: /var/run/secrets/openbao, readOnly: true }
@@ -61,18 +62,18 @@ containers:
       - { name: tmp, mountPath: /tmp }
 volumes:
   - name: scripts
-    configMap: { name: {{ .script | default "mesh-reconcile" }} }
-  {{- range $i := $inputs }}
+    configMap: { name: {{ .script }} }
+  {{- range $i := .inputs }}
   - name: {{ $i.name }}
     secret: { secretName: {{ $i.secret }}, optional: true }    # no members / tenants yet: nothing to enrol
   {{- end }}
   - name: token
     projected:
       sources:
-        - serviceAccountToken: { audience: {{ .r.audience | quote }}, expirationSeconds: 600, path: token }
+        - serviceAccountToken: { audience: {{ $v.reconcile.audience | quote }}, expirationSeconds: 600, path: token }
   - name: tls-ca
     secret:
-      secretName: {{ .tlsSecret }}
+      secretName: {{ $v.tls.secretName }}
       items: [{ key: ca.crt, path: ca.crt }]    # the CA certificate only; never the listener key
   - name: tmp
     emptyDir: { sizeLimit: 16Mi }
