@@ -15,3 +15,6 @@
 
 ## [2026-11-19] create | OpenChoreo SecretReference rotation and scope (#250)
 - Added `gotchas/openchoreo-secretreference-rotation-and-scope.md`.
+
+## [2026-11-19] create | Argo CD server-side diff and atomic CRD spec (#184)
+- Added `gotchas/argocd-server-side-diff-atomic-crd-spec.md`.
