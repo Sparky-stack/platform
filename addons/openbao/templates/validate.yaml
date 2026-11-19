@@ -1,0 +1,6 @@
+{{- /* Renders nothing: cross-field checks of the platform values (types, formats and required keys: values.schema.json).
+Outside docker the passthrough listener is reachable from outside the host: it exposes the whole API (unauthenticated
+sys/health, sys/seal-status and the logins), so it must be restricted to the mesh members' egress CIDRs. */ -}}
+{{- if and (ne .Values.cluster.provider "docker") (empty .Values.gateway.loadBalancerSourceRanges) }}
+{{- fail (printf "openbao (%s, provider %s): gateway.loadBalancerSourceRanges is required outside docker - the mesh members' egress CIDRs (installations/<inst>/addons/openbao/values.yaml)" .Values.cluster.name .Values.cluster.provider) }}
+{{- end }}
