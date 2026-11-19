@@ -147,7 +147,8 @@ to units:
 | `packages/<p>/**` | `packages/<p>` | hooks, check-docs, related contract tests; the package's own workflow (path filter `packages/<p>/**`) renders and builds it |
 | `ci/**`, `.github/workflows/app-*.yaml` / `ci-selftest.yaml` | `ci` | hooks, check-docs, related contract tests; `ci-selftest` builds the fixtures |
 | `templates/**` | `templates` | hooks, check-docs, related contract tests; the `templates` workflow renders them |
-| only `docs/**`, `wiki/**`, `*.md` outside charts | `docs` | hooks on changed files + check-docs |
+| `docs/<d>` (or `docs/<dir>/**`) read by a contract test | `docs/<d>` | hooks on changed files, check-docs, related contract tests (e.g. `docs/data-services.md` -> `test_data_services`, `docs/diagrams/**` -> `test_diagrams`) |
+| only other `docs/**`, `wiki/**`, `*.md` outside charts | `docs` | hooks on changed files + check-docs |
 | anything else | `full` | `task hooks:run lint test`, as before |
 
 `full` covers the shared inputs: `hack/**`, `bootstrap/**`, `charts/platform/**` (catalog + ApplicationSets feed every
