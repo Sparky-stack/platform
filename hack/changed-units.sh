@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Which parts of the repo a change touches, so PR CI validates only those (docs/dev-environment.md#scoped-pr-ci).
 #   changed-units.sh [PATH...]          changed file paths (args, else one per line on stdin) -> units, one per line:
-#                                       charts/<c>, addons/<a>, packages/<p>, docs/<doc>, ci, templates; `docs` when only
-#                                       untested docs changed; `full` when a shared input changed or a path is unknown.
+#                                       charts/<c>, addons/<a>, packages/<p>, docs/<doc>, <doc>.md, ci, templates;
+#                                       `docs` when only untested docs changed; `full` when a shared input changed or a path is unknown.
 #   changed-units.sh --tests UNIT...    the hack/tests/test_*.sh contract tests related to those units.
 # When unsure, answer `full`: a wasted CI minute is cheaper than a broken main.
 set -euo pipefail
@@ -21,19 +21,22 @@ unit_of() {
     ci/* | .github/workflows/app-*.yaml | .github/workflows/ci-selftest.yaml | .github/workflows/ci-toolbox.yaml) echo ci ;;
     templates/* | .github/workflows/templates.yaml) echo templates ;;
     docs/*) r=${1#docs/}; r="docs/${r%%/*}"; if [[ -n "$(related_tests "$r")" ]]; then echo "$r"; else echo docs; fi ;;
-    wiki/* | *.md) echo docs ;;
+    wiki/* | */*.md) echo docs ;;
+    *.md) if [[ -n "$(related_tests "$1")" ]]; then echo "$1"; else echo docs; fi ;;
     *) echo full ;;   # mise.toml, Taskfile.yml, prek.toml, renovate.json, other workflows, new top-level dirs, ...
   esac
 }
 
-# A contract test relates to a unit when it names the unit's path, or (charts/addons only) when it checks every
-# chart or every rendered manifest (`addons/*`, `charts/*`, $RENDERED_DIR).
+# A contract test relates to a unit when it names the unit's path (including after a `/` prefix such as `$W/` or
+# `$ROOT/` for docs), or (charts/addons only) when it checks every chart or rendered manifest (`addons/*`, `charts/*`, $RENDERED_DIR).
 related_tests() {
-  local t u
+  local t u left
   for t in hack/tests/test_*.sh; do
     [[ "$t" != */test_changed_units.sh ]] || continue   # its fixtures name every kind of unit; hack/ changes run it
     for u in "$@"; do
-      if grep -Eq "(^|[^A-Za-z0-9_./-])$u([^A-Za-z0-9_-]|\$)" "$t" ||
+      left='[^A-Za-z0-9_./-]'
+      if [[ "$u" == docs/* || "$u" == *.md ]]; then left='[^A-Za-z0-9_.-]'; fi
+      if grep -Eq "(^|$left)${u//./[.]}([^A-Za-z0-9_-]|\$)" "$t" ||
         { [[ "$u" == charts/* || "$u" == addons/* ]] && grep -Eq '(addons|charts)/\*|RENDERED_DIR' "$t"; }; then
         echo "$t"
         break

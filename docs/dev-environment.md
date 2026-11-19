@@ -149,7 +149,7 @@ to units:
 | `packages/<p>/**` | `packages/<p>` | hooks, check-docs, related contract tests; the package's own workflow (path filter `packages/<p>/**`) renders and builds it |
 | `ci/**`, `.github/workflows/app-*.yaml` / `ci-selftest.yaml` | `ci` | hooks, check-docs, related contract tests; `ci-selftest` builds the fixtures |
 | `templates/**` | `templates` | hooks, check-docs, related contract tests; the `templates` workflow renders them |
-| `docs/<d>` (or `docs/<dir>/**`) read by a contract test | `docs/<d>` | hooks on changed files, check-docs, related contract tests (e.g. `docs/data-services.md` -> `test_data_services`, `docs/diagrams/**` -> `test_diagrams`) |
+| `docs/<d>`, `docs/<dir>/**`, or root `<d>.md` read by a contract test | `docs/<d>` / `<d>.md` | hooks on changed files, check-docs, related contract tests (e.g. `docs/data-services.md` -> `test_data_services`, `docs/openchoreo.md` / `README.md` -> `test_set_repo`, `docs/diagrams/**` -> `test_diagrams`) |
 | only other `docs/**`, `wiki/**`, `*.md` outside charts | `docs` | hooks on changed files + check-docs |
 | anything else | `full` | `task hooks:run lint test`, as before |
 
@@ -157,8 +157,9 @@ to units:
 addon render), `charts/cluster/**`, `installations/*/installation.yaml` and `clusters/*`, `mise.toml`, `Taskfile.yml`,
 `prek.toml`, `renovate.json`, `.github/workflows/ci.yaml` and the other workflows, and every path the script does not
 know (when unsure: full). Push to `main`, `merge_group` and `workflow_dispatch` always run full. A contract test is
-"related" when it names the unit's path, or, for charts and addons, checks every chart (`addons/*`, `charts/*`,
-`$RENDERED_DIR`): `hack/changed-units.sh --tests addons/harbor` lists them. A test that needs every render carries
+"related" when it names the unit's path (including after a `/` prefix like `$W/` or `$ROOT/` for docs), or, for charts
+and addons, checks every chart (`addons/*`, `charts/*`, `$RENDERED_DIR`): `hack/changed-units.sh --tests addons/harbor`
+lists them. A test that needs every render carries
 `# scoped-ci full-if: <regex>`: the run goes full when a changed chart's files match (`test_secret_store_scope.sh`:
 any chart with an `ExternalSecret` / `SecretStore`), else the test waits for the full run on `main`. Example: an
 `addons/cilium` PR renders 1 of 38 charts (plus `charts/platform` / `charts/cluster`) and runs 11 of 73 suites, about
