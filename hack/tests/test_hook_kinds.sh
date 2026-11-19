@@ -49,13 +49,13 @@ addon_of() {
   echo "$best"
 }
 
-: > "$TMP/seen"
+: > "$TMP/seen"; : > "$TMP/rendered"
 n=0
 if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
   for r in "$RENDERED_DIR"/addon-*.yaml; do
     [[ -f "$r" ]] || continue
     a=$(addon_of "$r"); [[ -n "$a" ]] || continue
-    n=$((n + 1))
+    n=$((n + 1)); echo "$a" >> "$TMP/rendered"
     assert_eq "$(violations "$a" "$r")" "" "$(basename "$r" .yaml): no unlisted hook, every hook config has a change detector"
   done
 else
@@ -64,7 +64,7 @@ else
     a=$(basename "$d")
     ns=$(yq ".addons[\"$a\"].namespace // \"$a\"" charts/platform/values.yaml)
     helm template "$a" "$d" --namespace "$ns" > "$TMP/addon-$a-standalone.yaml" 2>/dev/null || { echo "  (skip $a: no standalone render)"; continue; }
-    n=$((n + 1))
+    n=$((n + 1)); echo "$a" >> "$TMP/rendered"
     assert_eq "$(violations "$a" "$TMP/addon-$a-standalone.yaml")" "" "addons/$a (standalone): no unlisted hook, every hook config has a change detector"
   done
 fi
@@ -73,6 +73,8 @@ echo "  checked $n addon renders"
 # 3. No stale or reason-less allowlist entries.
 while IFS=$'\t' read -r a k nm reason; do
   assert_nonempty "$reason" "allowlist $a $k/$nm has a reason"
+  # Scoped PR CI (task test:changed) renders only the changed addons: judge staleness only for addons rendered here.
+  grep -qxF "$a" "$TMP/rendered" || continue
   grep -qxF "$a $k $nm" "$TMP/seen" && seen=yes || seen=no
   assert_eq "$seen" "yes" "allowlist $a $k/$nm still renders as a hook"
 done < <(yq -N '.[] | [.addon, .kind, .name, (.reason // "")] | join("	")' "$ALLOW" | tr -d '\r')
