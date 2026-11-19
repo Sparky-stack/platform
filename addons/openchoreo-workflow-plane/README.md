@@ -111,6 +111,10 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 | runNetworkPolicy.registry.podLabels."gateway.networking.k8s.io/gateway-name" | string | `"harbor"` |  |
 | runNetworkPolicy.registry.port | int | `9443` |  |
 
+Validation: `values.schema.json` checks the platform's own keys (types, required keys, names; Helm prints the failing
+path). Cross-field rules against `installation.yaml` live in `templates/validate.yaml`. Upstream subchart keys are not
+constrained.
+
 ## Day-2 notes
 
 - Workflow controller crash loops and upgrades: [incidents](../../docs/runbooks/incidents.md#workflows-controller-crash-loop) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).

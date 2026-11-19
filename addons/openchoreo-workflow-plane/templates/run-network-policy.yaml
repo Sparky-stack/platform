@@ -78,7 +78,7 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $pw.observability.namespace }} } }
           podSelector: { matchLabels: {{ toJson $pw.observability.podLabels }} }
       ports:
-        - { protocol: TCP, port: {{ required "openchoreo.observability.httpPort is required" $obs.httpPort }} }
+        - { protocol: TCP, port: {{ $obs.httpPort }} }
     - to:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ $pw.observability.namespace }} } }
           podSelector: { matchLabels: {{ toJson $pw.observability.prometheus.podLabels }} }

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "telemetry",
+  "description": "Platform-owned keys of the telemetry addon. Upstream subchart keys are not constrained; cross-field checks live in templates/validate.yaml.",
+  "type": "object",
+  "required": ["cluster", "openchoreo", "secrets"],
+  "$defs": {
+    "dnsName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "toggle": {
+      "type": "object",
+      "required": ["enabled", "keep"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Render the scrape object." },
+        "keep": { "type": "string", "minLength": 1, "description": "Regex of the metric families kept before remote write (agent memory)." }
+      }
+    }
+  },
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the addon ApplicationSet with --set-string, so every value is a string.",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Cluster name; becomes CLUSTER_NAME (k8s.cluster.name) on every signal." }
+      }
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "installation.yaml openchoreo block (valuesObject).",
+      "required": ["controlPlane", "observability"],
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "required": ["host"],
+          "properties": {
+            "host": { "$ref": "#/$defs/dnsName", "minLength": 1, "description": "Base domain; the observability plane is opensearch/prometheus.observability.<host>." }
+          }
+        },
+        "observability": {
+          "type": "object",
+          "required": ["enabled", "httpPort", "tlsPort"],
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Observability plane installed; false contradicts this addon (validate.yaml)." },
+            "httpPort": { "$ref": "#/$defs/port", "description": "Gateway HTTP port of prometheus.observability.<host> (remote write)." },
+            "tlsPort": { "$ref": "#/$defs/port", "description": "Gateway TLS port of opensearch.observability.<host> (logs, traces, events)." }
+          }
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "required": ["store", "remoteKey"],
+      "properties": {
+        "store": { "type": "string", "minLength": 1, "description": "ClusterSecretStore the OpenSearch credentials come from (workload clusters: default)." },
+        "remoteKey": { "type": "string", "minLength": 1, "description": "Store key holding opensearch-username / opensearch-password." }
+      }
+    },
+    "datadog": {
+      "type": "object",
+      "description": "Optional dual-shipping to Datadog.",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Create the telemetry-datadog ExternalSecret (DD_API_KEY)." },
+        "remoteKey": { "type": "string", "minLength": 1, "description": "Store key holding the Datadog API key." },
+        "property": { "type": "string", "minLength": 1, "description": "Property of remoteKey with the API key." }
+      }
+    },
+    "gatewayMetrics": { "$ref": "#/$defs/toggle", "description": "PodMonitor for the Envoy gateway upstream request metrics." },
+    "hubbleMetrics": { "$ref": "#/$defs/toggle", "description": "ServiceMonitor for Cilium Hubble HTTP metrics (OpenChoreo observer metric: http)." },
+    "opentelemetry-collector": { "type": "object", "description": "Upstream opentelemetry-collector subchart (not constrained)." },
+    "observability-logs-opensearch": { "type": "object", "description": "Upstream OpenChoreo Fluent Bit subchart (not constrained; endpoint checked in validate.yaml)." },
+    "observability-metrics-prometheus": { "type": "object", "description": "Upstream OpenChoreo Prometheus agent subchart (not constrained; URL checked in validate.yaml)." },
+    "observability-events-otel-collector": { "type": "object", "description": "Upstream OpenChoreo k8s-events collector subchart (not constrained)." }
+  }
+}

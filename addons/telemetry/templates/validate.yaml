@@ -1,6 +1,6 @@
 {{- /* Fluent Bit's literal OpenSearch endpoint and the metrics module's remote-write URL must match installation.yaml
 (the collector's endpoints are derived in templates/env.yaml and cannot drift). */ -}}
-{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $host := .Values.openchoreo.controlPlane.host }}
 {{- $o := .Values.openchoreo.observability }}
 {{- if not $o.enabled }}
 {{- fail "openchoreo.observability.enabled is false: disable addon telemetry (catalog / addons.platform.koorikla.io/telemetry: \"false\")" }}

@@ -1,6 +1,8 @@
 {{- /*
-All render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no control-plane CA
-copied, key-scoped secret store, agent RBAC, run NetworkPolicy labels, BuildKit mirror names.
+Cross-field render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no
+control-plane CA copied, agent RBAC, run NetworkPolicy labels, BuildKit mirror names. Single-key rules (types, names,
+runNamespacePrefix) are in values.schema.json. secretStore != "platform" stays here: its message says why
+(tenant isolation, asserted by hack/tests/test_secret_store_scope.sh).
 */ -}}
 {{- if not .Values.openchoreo.workflowPlane.enabled }}
 {{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
@@ -18,16 +20,12 @@ copied, key-scoped secret store, agent RBAC, run NetworkPolicy labels, BuildKit 
 {{- if and .Values.agentServerCA.enabled (ne .Values.agentServerCA.configMapName $wp.clusterAgent.tls.serverCAConfigMap) }}
 {{- fail "agentServerCA.configMapName must equal openchoreo-workflow-plane.clusterAgent.tls.serverCAConfigMap" }}
 {{- end }}
-{{- if or (not .Values.clusterWorkflowPlane.secretStore) (eq .Values.clusterWorkflowPlane.secretStore "platform") }}
+{{- if eq .Values.clusterWorkflowPlane.secretStore "platform" }}
 {{- fail "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }}
 {{- end }}
 {{- if .Values.clusterAgentRBAC.enabled }}
 {{- if $wp.clusterAgent.rbac.create }}
 {{- fail "clusterAgentRBAC.enabled: set openchoreo-workflow-plane.clusterAgent.rbac.create=false (the upstream ClusterRole is cluster-admin in all but name, #33)" }}
-{{- end }}
-{{- $prefix := toString .Values.clusterAgentRBAC.runNamespacePrefix }}
-{{- if not (regexMatch "^[a-z0-9][-a-z0-9]*-$" $prefix) }}
-{{- fail (printf "clusterAgentRBAC.runNamespacePrefix %q must be a namespace name prefix ending in - (OpenChoreo: workflows-)" $prefix) }}
 {{- end }}
 {{- end }}
 {{- $np := .Values.runNetworkPolicy }}

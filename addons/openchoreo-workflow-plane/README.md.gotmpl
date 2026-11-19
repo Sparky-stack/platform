@@ -14,3 +14,10 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 {{- define "chart.links" -}}
 - [Build plane](../../docs/build-plane.md)
 {{- end -}}
+
+{{- define "chart.keyValuesNotes" }}
+
+Validation: `values.schema.json` checks the platform's own keys (types, required keys, names; Helm prints the failing
+path). Cross-field rules against `installation.yaml` live in `templates/validate.yaml`. Upstream subchart keys are not
+constrained.
+{{- end -}}

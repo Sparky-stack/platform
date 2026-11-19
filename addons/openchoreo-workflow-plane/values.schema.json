@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "openchoreo-workflow-plane",
+  "description": "Platform-owned keys of the openchoreo-workflow-plane wrapper. Upstream subchart keys are not constrained; cross-field checks live in templates/validate.yaml.",
+  "type": "object",
+  "required": [
+    "openchoreo",
+    "clusterWorkflowPlane"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the addon ApplicationSet with --set-string, so every value is a string.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name.",
+          "minLength": 1
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "description": "installation.yaml registry (valuesObject); mirror/proxy-cache cross-checks live in validate.yaml.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "harbor: in-cluster Harbor with proxy caches; external: any other registry.",
+          "enum": [
+            "harbor",
+            "external"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "description": "Registry <hostname>[:port] (pattern checked in validate.yaml for BuildKit mirrors)."
+        },
+        "proxyCache": {
+          "type": "array",
+          "description": "Upstream registry -> Harbor proxy-cache project (BuildKit mirrors).",
+          "items": {
+            "type": "object",
+            "description": "One proxy cache.",
+            "properties": {
+              "upstream": {
+                "type": "string",
+                "description": "Upstream <hostname>[:port]."
+              },
+              "project": {
+                "type": "string",
+                "description": "Harbor project name."
+              }
+            },
+            "required": [
+              "upstream",
+              "project"
+            ]
+          }
+        }
+      }
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "installation.yaml openchoreo block (valuesObject).",
+      "properties": {
+        "orgNamespace": {
+          "type": "string",
+          "description": "Default OpenChoreo organization namespace.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "observability": {
+          "type": "object",
+          "description": "Observability plane settings (run pods may reach its Gateway).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Observability plane installed: platform workflows get egress to its Gateway."
+            },
+            "httpPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Gateway HTTP port of the observability plane."
+            }
+          },
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "httpPort"
+            ]
+          }
+        },
+        "workflowPlane": {
+          "type": "object",
+          "description": "Workflow plane toggle; false contradicts this addon (validate.yaml).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Workflow plane installed."
+            }
+          },
+          "required": [
+            "enabled"
+          ]
+        }
+      },
+      "required": [
+        "workflowPlane"
+      ]
+    },
+    "clusterWorkflowPlane": {
+      "type": "object",
+      "description": "ClusterWorkflowPlane CR rendered by this chart.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "ClusterWorkflowPlane name.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "planeID": {
+          "type": "string",
+          "description": "Plane ID; must equal openchoreo-workflow-plane.clusterAgent.planeID (validate.yaml).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "secretStore": {
+          "type": "string",
+          "description": "Key-scoped ClusterSecretStore for workflow resources (never \"platform\": enforced in templates/validate.yaml with the reason).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "name",
+        "planeID",
+        "secretStore"
+      ]
+    },
+    "agentServerCA": {
+      "type": "object",
+      "description": "Copies the control-plane gateway CA (public cert only) into a ConfigMap for the agent.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the ExternalSecret."
+        },
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore holding the CA.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "sourceSecret": {
+          "type": "string",
+          "description": "Secret name in the store.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "configMapName": {
+          "type": "string",
+          "description": "Target ConfigMap; must equal clusterAgent.tls.serverCAConfigMap (validate.yaml).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "runNetworkPolicy": {
+      "type": "object",
+      "description": "Strict egress NetworkPolicy for workflow run pods.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the run NetworkPolicies."
+        },
+        "registry": {
+          "type": "object",
+          "description": "Egress to the Harbor Gateway proxy (registry.type harbor only).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Allow the Harbor Gateway."
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Harbor Gateway namespace.",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "podLabels": {
+              "type": "object",
+              "description": "Harbor Gateway proxy pod labels.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Gateway listener port."
+            }
+          }
+        },
+        "apiServer": {
+          "type": "array",
+          "description": "Kubernetes API endpoints run pods may reach.",
+          "items": {
+            "type": "object",
+            "description": "CIDR + port.",
+            "properties": {
+              "cidr": {
+                "type": "string",
+                "description": "CIDR."
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "Port."
+              }
+            },
+            "required": [
+              "cidr",
+              "port"
+            ]
+          }
+        },
+        "internet": {
+          "type": "object",
+          "description": "Internet egress for builds.",
+          "properties": {
+            "ports": {
+              "type": "array",
+              "description": "Allowed internet ports.",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "Port."
+              }
+            },
+            "exceptCIDRs": {
+              "type": "array",
+              "description": "Private ranges excluded from internet egress.",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "platformWorkflows": {
+          "type": "object",
+          "description": "Extra egress for platform workflow pods (promotion gate).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render the platform-workflow NetworkPolicy."
+            },
+            "podLabels": {
+              "type": "object",
+              "description": "Labels selecting platform workflow pods; must not be empty (validate.yaml).",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "controlPlane": {
+              "type": "object",
+              "description": "Control-plane Gateway target.",
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "description": "Namespace.",
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "podLabels": {
+                  "type": "object",
+                  "description": "Pod labels.",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "Port."
+                }
+              }
+            },
+            "observability": {
+              "type": "object",
+              "description": "Observability Gateway + Prometheus target.",
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "description": "Namespace.",
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "podLabels": {
+                  "type": "object",
+                  "description": "Pod labels.",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "prometheus": {
+                  "type": "object",
+                  "description": "Prometheus pods.",
+                  "properties": {
+                    "podLabels": {
+                      "type": "object",
+                      "description": "Pod labels.",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "ports": {
+                      "type": "array",
+                      "description": "Pod ports.",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535,
+                        "description": "Port."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "runExecutorToken": {
+      "type": "object",
+      "description": "Token Secret for the run executor ServiceAccount.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render it."
+        },
+        "serviceAccount": {
+          "type": "string",
+          "description": "Executor ServiceAccount name (OpenChoreo: workflow-sa).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "clusterAgentRBAC": {
+      "type": "object",
+      "description": "Least-privilege replacement for the upstream agent ClusterRole (#33).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the platform RBAC (requires clusterAgent.rbac.create=false, validate.yaml)."
+        },
+        "serviceAccount": {
+          "type": "string",
+          "description": "Upstream agent ServiceAccount name.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "runNamespacePrefix": {
+          "type": "string",
+          "description": "Run namespace prefix ending in - (OpenChoreo: workflows-)."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runNamespacePrefix": {
+            "pattern": "^[a-z0-9][-a-z0-9]*-$"
+          }
+        },
+        "required": [
+          "runNamespacePrefix"
+        ]
+      }
+    },
+    "buildkitMirrors": {
+      "type": "object",
+      "description": "buildkitd.toml mirrors through the Harbor proxy caches.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the buildkitd ConfigMap (registry.type harbor with proxyCache)."
+        },
+        "configMapName": {
+          "type": "string",
+          "description": "ConfigMap mounted by the build step.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "caFile": {
+          "type": "string",
+          "description": "Registry CA path inside the build pod."
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "images": {
+      "type": "object",
+      "description": "Images substituted for @@NAME@@ placeholders in files/; pinned tag@sha256 digests.",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Image reference repo:tag@sha256:<digest>.",
+        "pattern": "^[^@\\s]+:[^@\\s]+@sha256:[a-f0-9]{64}$"
+      }
+    },
+    "openchoreo-workflow-plane": {
+      "type": "object",
+      "description": "Upstream openchoreo-workflow-plane subchart values (not constrained here)."
+    },
+    "koorikla-lib": {
+      "type": "object",
+      "description": "Library chart dependency (Helm adds global: {})."
+    }
+  }
+}

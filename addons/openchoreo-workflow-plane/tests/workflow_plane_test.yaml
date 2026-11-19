@@ -304,9 +304,21 @@ tests:
     template: templates/validate.yaml
     set: { clusterWorkflowPlane.secretStore: platform }
     asserts:
-      - failedTemplate: { errorPattern: "never the full platform store" }
+      - failedTemplate: { errorMessage: "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }
+
+  - it: refuses an empty workflow-plane secret store (schema)
+    template: templates/validate.yaml
+    set: { clusterWorkflowPlane.secretStore: "" }
+    asserts:
+      - failedTemplate: { errorPattern: "/clusterWorkflowPlane/secretStore" }
 
   - it: the Argo executor (init/wait) has room for the argoexec copy in init (page cache, measured ~107Mi)
     template: charts/openchoreo-workflow-plane/charts/argo-workflows/templates/controller/workflow-controller-config-map.yaml
     asserts:
       - matchRegex: { path: data.config, pattern: 'executor:\n(.*\n)*?\s+resources:\n\s+limits:\n\s+cpu: 200m\n\s+memory: 256Mi' }
+
+  - it: refuses an enabled observability plane without its Gateway port (schema)
+    template: templates/validate.yaml
+    set: { openchoreo.observability.httpPort: null }
+    asserts:
+      - failedTemplate: { errorPattern: "/openchoreo/observability': missing property 'httpPort'" }
