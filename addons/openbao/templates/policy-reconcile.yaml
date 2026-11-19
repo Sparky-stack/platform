@@ -81,5 +81,5 @@ spec:
           annotations:
             checksum/config: {{ printf "%s%s%s" (.Files.Get "files/policy-reconcile.sh") (toJson $env) (toJson $files) | sha256sum | trunc 16 }}
         spec:
-          {{- include "openbao-addon.reconcilePod" (dict "r" $r "env" $env "sa" $p.serviceAccount "img" .Values.openbao.server.image "tlsSecret" .Values.tls.secretName "script" "policy-reconcile" "inputs" list) | nindent 10 }}
+          {{- include "openbao-addon.reconcilePod" (dict "root" $ "sa" $p.serviceAccount "env" $env "script" "policy-reconcile" "inputs" list) | nindent 10 }}
 {{- end }}

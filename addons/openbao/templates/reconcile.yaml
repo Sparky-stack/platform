@@ -16,7 +16,6 @@ Both are CA-administration identities nonetheless: protect namespace openbao (wh
 The pods have no Kubernetes API access (automountServiceAccountToken: false); their inputs are the mesh-clients Secret.
 */ -}}
 {{- $r := .Values.reconcile }}
-{{- if $r.enabled }}
 {{- $groups := include "openbao-addon.groups" . | fromJsonArray }}
 {{- $p := .Values.pki }}
 {{- $m := .Values.memberAuth }}
@@ -76,7 +75,7 @@ metadata:
 data:
   mesh-reconcile.sh: |
     {{- .Files.Get "files/mesh-reconcile.sh" | nindent 4 }}
-{{- $ctx := dict "r" $r "img" .Values.openbao.server.image "meshClients" .Values.meshClients.secretName "tlsSecret" .Values.tls.secretName }}
+{{- $inputs := list (dict "name" "inputs" "secret" .Values.meshClients.secretName "path" "/inputs") }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -100,7 +99,7 @@ spec:
       annotations:
         checksum/config: {{ printf "%s%s" (.Files.Get "files/mesh-reconcile.sh") (toJson $jobEnv) | sha256sum | trunc 16 }}
     spec:
-      {{- include "openbao-addon.reconcilePod" (merge (dict "env" $jobEnv "sa" $r.bootstrapServiceAccount) $ctx) | nindent 6 }}
+      {{- include "openbao-addon.reconcilePod" (dict "root" $ "sa" $r.bootstrapServiceAccount "env" $jobEnv "script" "mesh-reconcile" "inputs" $inputs) | nindent 6 }}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -127,5 +126,4 @@ spec:
         metadata:
           labels: { app.kubernetes.io/name: mesh-reconcile }
         spec:
-          {{- include "openbao-addon.reconcilePod" (merge (dict "env" $cronEnv "sa" $r.serviceAccount) $ctx) | nindent 10 }}
-{{- end }}
+          {{- include "openbao-addon.reconcilePod" (dict "root" $ "sa" $r.serviceAccount "env" $cronEnv "script" "mesh-reconcile" "inputs" $inputs) | nindent 10 }}
