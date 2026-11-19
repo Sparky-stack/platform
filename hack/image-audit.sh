@@ -240,34 +240,6 @@ for dir in addons/*; do
   fi
 done
 
-echo "==> Rendering enabled examples (examples/*), layered per matching cluster like appset-examples.yaml" >&2
-# shellcheck disable=SC2016  # $i is a yq variable
-yq eval-all -o=json '. as $i ireduce ({}; . * $i) | .examples // {}' "$CATALOG" "$INST_FILE" > "$TMP/examples.json"
-for dir in examples/*; do
-  [[ -f "$dir/Chart.yaml" ]] || continue
-  ex=$(basename "$dir")
-  [[ "$(yq -p=json -oy ".[\"$ex\"].enabled // false" "$TMP/examples.json")" == "true" ]] || continue
-  helm template "$ex" "$dir" 2>/dev/null | extract_images | while IFS= read -r img; do add "$img" "example $ex"; done
-  for cf in "$INST_DIR"/clusters/*.yaml; do
-    [[ -f "$cf" ]] || continue
-    c_name=$(yq '.name' "$cf")
-    labels="$TMP/labels-$c_name.yaml"
-    [[ -s "$labels" ]] || continue
-    match=1   # selector matchLabels (matchExpressions are not evaluated here: render anyway)
-    while IFS=$'\t' read -r k v; do
-      [[ -n "$k" ]] || continue
-      [[ "$(yq -r ".[\"$k\"] // \"\"" "$labels")" == "$v" ]] || match=0
-    done < <(yq -p=json -oy -r ".[\"$ex\"].selector.matchLabels // {} | to_entries[] | [.key, .value] | @tsv" "$TMP/examples.json" | tr -d '\r')
-    (( match )) || continue
-    vargs=(--values "$dir/values.yaml")
-    for vf in "$INST_DIR/examples/$ex/values.yaml" "$INST_DIR/examples/$ex/cluster-$c_name.yaml"; do
-      if [[ -f "$vf" ]]; then vargs+=(--values "$vf"); fi
-    done
-    helm template "$ex" "$dir" "${vargs[@]}" --set-string "cluster.name=$c_name" 2>/dev/null | extract_images \
-      | while IFS= read -r img; do add "$img" "example $ex ($c_name)"; done
-  done
-done
-
 echo "==> Cluster images (k3d mgmt node, CAPD node)" >&2
 k3s_versions=""
 if [[ "$INST" == local ]]; then
@@ -276,11 +248,11 @@ if [[ "$INST" == local ]]; then
   k3s_versions=$(printf '%s' "${k3d_img%@*}" | sed -E 's/.*:(v[0-9.]+)-(k3s[0-9]+)$/\1+\2/')
 fi
 if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
-  add "$(yq '.docker.kindImage' addons/clusterclasses/values.yaml)" "CAPD node (addons/clusterclasses kindImage)"
+  add "$(yq '.docker.kindImage' charts/cluster/values.yaml)" "CAPD node (charts/cluster docker.kindImage)"
 fi
 if [[ "$(yq '.capi.providers.gcp' "$INST_FILE")" == "true" ]]; then
   # The operator swaps CAPG's release image for this pin (InfrastructureProvider deployment.containers[].imageUrl).
-  add "$(yq '.infrastructure.gcp.image' addons/capi-providers/values.yaml)" "CAPG controller (addons/capi-providers infrastructure.gcp.image)"
+  add "$(yq '.gcp.image' charts/cluster/values.yaml)" "CAPG controller (charts/cluster gcp.image)"
 fi
 
 if (( ! RENDERED )); then
@@ -300,7 +272,7 @@ if (( ! RENDERED )); then
     if [[ -n "$v" ]]; then k3s_versions=$(printf "%s\n%s" "$k3s_versions" "$v"); fi
   done
 
-  pv() { yq "$1 // \"$2\"" addons/capi-providers/values.yaml 2>/dev/null || echo "$2"; }
+  pv() { yq "$1 // \"$2\"" charts/cluster/values.yaml 2>/dev/null || echo "$2"; }
   CAPI_VER=$(pv '.core.version' v1.13.8)
   K3S_PROV_VER=$(pv '.k3s.version' v0.5.0)
   fetch() { curl -fsSL --retry 2 "$1" 2>/dev/null || echo "WARN: could not fetch $1" >&2; }

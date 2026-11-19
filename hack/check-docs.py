@@ -105,7 +105,8 @@ def main():
         if os.path.isdir(gdir):
             for entry in sorted(os.listdir(gdir)):
                 edir = os.path.join(gdir, entry)
-                if not entry.startswith(".") and os.path.isdir(edir):
+                # Chart.yaml marks a chart; CI's chart cache can restore a leftover <deleted-addon>/charts dir.
+                if not entry.startswith(".") and os.path.isfile(os.path.join(edir, "Chart.yaml")):
                     readme = os.path.join(edir, "README.md")
                     if not os.path.isfile(readme):
                         problems.append("%s: missing README.md" % os.path.relpath(readme, ROOT).replace("\\", "/"))

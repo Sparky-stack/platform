@@ -1,7 +1,7 @@
 suite: openchoreo ClusterDataPlane + Environments
 templates:
-  - templates/openchoreo-dataplane.yaml
-  - templates/openchoreo-helpers.yaml
+  - templates/common/openchoreo-dataplane.yaml
+  - templates/common/_openchoreo.tpl
 set:
   name: dev1
   provider: docker
@@ -13,21 +13,21 @@ set:
   openchoreo.dataPlane.environments: [development, staging]
 tests:
   - it: renders nothing when the data plane is disabled
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     set:
       openchoreo.dataPlane.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: requires a gateway host
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     set:
       openchoreo.dataPlane.gatewayHost: ""
     asserts:
       - failedTemplate: { errorMessage: "openchoreo.dataPlane.gatewayHost is required when the data plane is enabled" }
 
   - it: ClusterDataPlane name == planeID == cluster name, trusts only the per-cluster CA
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     asserts:
       - isKind: { of: ClusterDataPlane }
@@ -43,7 +43,7 @@ tests:
           value: SkipDryRunOnMissingResource=true
 
   - it: points app ingress at the data plane Gateway
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     asserts:
       - equal:
@@ -54,7 +54,7 @@ tests:
             http: { host: dev1.apps.localhost, port: 19080, listenerName: http }
 
   - it: one Environment per environment, in the org namespace, bound to this ClusterDataPlane
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     asserts:
       - hasDocuments: { count: 3 }
       - isKind: { of: Environment }
@@ -71,7 +71,7 @@ tests:
         documentIndex: 1
 
   - it: Environments sync one wave before their ClusterDataPlane (ReleaseBindings re-queue on its creation)
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     asserts:
       - equal:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
@@ -91,7 +91,7 @@ tests:
         documentIndex: 2
 
   - it: marks production environments
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     set:
       name: prod1
       openchoreo.dataPlane.environments: [production]
@@ -102,7 +102,7 @@ tests:
       - equal: { path: spec.dataPlaneRef.name, value: prod1 }
 
   - it: follows a non-default org namespace
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     set:
       openchoreo.orgNamespace: acme
     documentIndex: 1
@@ -110,13 +110,13 @@ tests:
       - equal: { path: metadata.namespace, value: acme }
 
   - it: no observabilityPlaneRef unless the installation enables observability
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     asserts:
       - notExists: { path: spec.observabilityPlaneRef }
 
   - it: references ClusterObservabilityPlane default when observability is enabled
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     set:
       openchoreo.observability.enabled: true
@@ -126,7 +126,7 @@ tests:
           value: { kind: ClusterObservabilityPlane, name: default }
 
   - it: observability disabled explicitly
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     set:
       openchoreo.observability.enabled: false
@@ -134,7 +134,7 @@ tests:
       - notExists: { path: spec.observabilityPlaneRef }
 
   - it: ClusterDataPlane carries the fleet file's addon opt-ins as annotations (dataplane.annotations in OpenChoreo CEL)
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     set:
       addons: { keda: true, crossplane: true, strimzi: false }
@@ -144,7 +144,7 @@ tests:
       - equal: { path: 'metadata.annotations["addons.platform.koorikla.io/strimzi"]', value: "false" }
 
   - it: no addon annotation for an addon the fleet file does not mention (opt-in types refuse that data plane)
-    template: templates/openchoreo-dataplane.yaml
+    template: templates/common/openchoreo-dataplane.yaml
     documentIndex: 0
     asserts:
       - notExists: { path: 'metadata.annotations["addons.platform.koorikla.io/keda"]' }

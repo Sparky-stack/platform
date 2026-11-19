@@ -1,6 +1,6 @@
 suite: capi-cluster - CAPI topology Cluster rendered from the fleet file
 templates:
-  - templates/capi-cluster.yaml
+  - templates/common/capi-cluster.yaml
 tests:
   - it: renders a v1beta2 topology Cluster in namespace fleet with class k3s-<provider>
     values: [values/capi-docker.yaml]
@@ -28,20 +28,18 @@ tests:
             platform.koorikla.io/installation: local
             platform.koorikla.io/cni: cilium
             addons.platform.koorikla.io/cilium: "true"
-            addons.platform.koorikla.io/istio-csr: "false"
-            addons.platform.koorikla.io/istio-eastwest: "false"
       - equal:
           path: 'metadata.annotations["platform.koorikla.io/addons-revision"]'
           value: HEAD
 
-  - it: "mesh.group adds the mesh labels and turns istio-eastwest + istio-csr on (docs/multicluster.md)"
+  - it: "mesh.group adds the mesh labels and no per-addon istio labels (addon mesh follows the group label, docs/multicluster.md)"
     values: [values/capi-docker.yaml]
     set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } } }
     asserts:
       - equal: { path: 'metadata.labels["mesh.platform.koorikla.io/group"]', value: local }
       - equal: { path: 'metadata.labels["mesh.platform.koorikla.io/network"]', value: dev1 }
-      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/istio-eastwest"]', value: "true" }
-      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/istio-csr"]', value: "true" }
+      - notExists: { path: 'metadata.labels["addons.platform.koorikla.io/istio-eastwest"]' }
+      - notExists: { path: 'metadata.labels["addons.platform.koorikla.io/istio-csr"]' }
 
   - it: rejects mesh.group without the mesh CA (addon openbao) on mgmt
     values: [values/capi-docker.yaml]
@@ -55,23 +53,11 @@ tests:
     asserts:
       - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" }
 
-  - it: rejects an addons.istio-csr override that contradicts mesh.group
+  - it: rejects a mesh member without the mesh addon
     values: [values/capi-docker.yaml]
-    set: { addons: { istio-csr: true } }
+    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { mesh: false } }
     asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: addons.istio-csr=true contradicts mesh.group=\"\" (the addon follows mesh.group; drop addons.istio-csr)" }
-
-  - it: rejects an addons.istio-eastwest override that contradicts mesh.group
-    values: [values/capi-docker.yaml]
-    set: { addons: { istio-eastwest: true } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: addons.istio-eastwest=true contradicts mesh.group=\"\" (the addon follows mesh.group; drop addons.istio-eastwest)" }
-
-  - it: rejects a mesh member without istio-ambient
-    values: [values/capi-docker.yaml]
-    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { istio-ambient: false } }
-    asserts:
-      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the istio-ambient addon (addons.istio-ambient is false)" }
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh addon (addons.mesh is false)" }
 
   - it: "negative: rejects a mesh group without its own root (not in installation.yaml mesh.groups)"
     values: [values/capi-docker.yaml]
@@ -326,7 +312,7 @@ tests:
       - equal: { path: spec.topology.controlPlane.replicas, value: 1 }
 
   - it: harbor registry adds registryCA and, on docker, the node host alias to the k3d serverlb
-    template: templates/capi-cluster.yaml
+    template: templates/common/capi-cluster.yaml
     values: [values/capi-docker.yaml, values/registry-harbor.yaml]
     asserts:
       - contains: { path: spec.topology.variables, content: { name: registryAuth, value: true } }
@@ -335,14 +321,14 @@ tests:
       - contains: { path: spec.topology.variables, content: { name: registryHostAliasTarget, value: k3d-platform-mgmt-serverlb } }
 
   - it: harbor turns registryAuth on even without GHCR auth (the registries Secret exists)
-    template: templates/capi-cluster.yaml
+    template: templates/common/capi-cluster.yaml
     values: [values/capi-docker.yaml, values/registry-harbor.yaml]
     set: { secrets.nodeRegistryAuth.enabled: false }
     asserts:
       - contains: { path: spec.topology.variables, content: { name: registryAuth, value: true } }
 
   - it: no host alias outside the docker provider
-    template: templates/capi-cluster.yaml
+    template: templates/common/capi-cluster.yaml
     values: [values/capi-hetzner.yaml, values/registry-harbor.yaml]
     asserts:
       - contains: { path: spec.topology.variables, content: { name: registryCA, value: true } }

@@ -14,9 +14,9 @@ schema-checked only ([#26](https://github.com/koorikla/platform/issues/26),
 | Piece | Path | Installs |
 |---|---|---|
 | Operator | `addons/capi-operator` | cluster-api-operator chart 0.30.0 (needs cert-manager, its own addon) |
-| Providers | `addons/capi-providers` | operator CRs: core, k3s bootstrap + control plane, `docker` \| `aws` \| `hetzner` \| `gcp` per `installation.yaml` `capi.providers` |
-| Classes | `addons/clusterclasses` | namespace `fleet`, ClusterClasses `k3s-docker` (if CAPD), `k3s-aws`, `k3s-hetzner`, `gke-managed` (if enabled) + their templates |
-| Clusters | `charts/cluster` (`templates/capi-*.yaml`) | one topology `Cluster` per fleet file + its node registry config secret |
+| Providers | `charts/cluster` scope fleet (`templates/common/capi-core.yaml`, `templates/<provider>/provider.yaml`, `credentials.yaml`) | operator CRs: core, k3s bootstrap + control plane, `docker` \| `aws` \| `hetzner` \| `gcp` per `installation.yaml` `capi.providers` |
+| Classes | `charts/cluster` scope fleet (`templates/<provider>/clusterclass.yaml`) | namespace `fleet`, ClusterClasses `k3s-docker` (if CAPD), `k3s-aws`, `k3s-hetzner`, `gke-managed` (if enabled) + their templates |
+| Clusters | `charts/cluster` scope cluster (`templates/common/`, `templates/byo/`) | one topology `Cluster` per fleet file + its node registry config secret, Argo CD registration, OpenChoreo, mesh, CRS |
 | Cloud CCMs | `addons/aws-ccm`, `addons/hcloud-ccm` | AWS / Hetzner cloud-controller-manager on workload clusters of that provider |
 
 ### Versions
@@ -54,7 +54,7 @@ of upstream's 15s/10s/2s: during a clean local bootstrap the mgmt API server sta
 capi-controller-manager lost its lease, exited, and took the CAPI webhook with it while Argo CD applied the Cluster
 (#192). Same headroom as mgmt's own k3s controllers (#94). The operator turns `spec.manager.leaderElection` into
 `--leader-elect-*` flags; cluster-api-k3s v0.5.0 and CAPH v1.1.12 lack them, so they keep their defaults
-(`leaseFlags` in `addons/capi-providers/values.yaml`). Check: `kubectl -n capi-system get lease
+(`leaseFlags` in `charts/cluster/values.yaml`). Check: `kubectl -n capi-system get lease
 controller-leader-election-capi -o jsonpath='{.spec.leaseDurationSeconds}'` prints `60`.
 
 ## Adding a cluster
@@ -117,7 +117,7 @@ Removing the file deletes the cluster (Argo CD prune -> CAPI deletes machines an
 
 ### Template changes roll clusters
 Machine templates are immutable, and CAPI changes a ClusterClass template by "new template + new reference". The
-clusterclasses chart suffixes every template name with a hash of its spec, so a spec change in git renders a new name,
+charts/cluster chart suffixes every template name with a hash of its spec, so a spec change in git renders a new name,
 the ClusterClass follows, the topology controller rolls every cluster of that class (control plane first), and Argo CD
 prunes the old template. Expect a rolling replacement of nodes after any edit to a template spec; a change to a
 ClusterClass variable value in a fleet file rolls only that cluster.
@@ -176,7 +176,7 @@ reset etcd membership to it (`--cluster-reset`, [#56](https://github.com/koorikl
 [runbooks/break-glass.md](runbooks/break-glass.md#single-server-etcd-quorum-loss).
 
 ### Node registry config
-`charts/cluster/templates/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) into a k3s
+`charts/cluster/templates/common/capi-registries.yaml` renders `ExternalSecret/<name>-registries` (ns `fleet`) into a k3s
 `registries.yaml`: GHCR auth from `platform` store key `platform-ghcr` (`username`, `token`) and, with Harbor, the
 Harbor mirrors, robot auth and `registry-ca.crt` ([build-plane.md](build-plane.md#node-pulls-mirrors-with-fallback)).
 Each class adds `files[].contentFrom.secret` on control plane and workers.
@@ -275,9 +275,9 @@ Prerequisites (once per account):
    `control-plane.cluster-api-provider-aws.sigs.k8s.io` / `nodes.cluster-api-provider-aws.sigs.k8s.io`; the control
    plane policy covers the AWS cloud-controller-manager).
 2. Secret key `capi-aws` in the installation's `platform` store with property `AWS_B64ENCODED_CREDENTIALS`
-   (`clusterawsadm bootstrap credentials encode-as-profile`). The capi-providers addon turns it into
+   (`clusterawsadm bootstrap credentials encode-as-profile`). charts/cluster (scope fleet) turns it into
    `capa-system/capa-variables`, the InfrastructureProvider's `configSecret`. On an EKS mgmt with IRSA/Pod Identity set
-   `infrastructure.aws.credentialsFromStore: false` (empty credentials, CAPA uses its pod identity).
+   `aws.credentialsFromStore: false` (empty credentials, CAPA uses its pod identity).
 3. `installation.yaml`: `capi.providers.aws: true`; catalog entry `aws-ccm` (below).
 
 Class `k3s-aws`: plain Ubuntu AMI (variable `ami`, no CAPA image lookup - those are kubeadm images), k3s installed at
@@ -305,7 +305,7 @@ profile needs the EBS policy).
 
 Prerequisites:
 1. Hetzner Cloud project + API token (read/write) as key `capi-hetzner`, property `hcloud`, in the `platform` store
-   (Vault/OpenBao in `hetzner-example`). `addons/clusterclasses` renders `fleet/hetzner` from it; every HetznerCluster
+   (Vault/OpenBao in `hetzner-example`). `charts/cluster` (scope fleet) renders `fleet/hetzner` from it; every HetznerCluster
    references it (`hetznerSecretRef: {name: hetzner, key: {hcloudToken: hcloud}}`).
 2. Optional SSH key uploaded to the project (variable `sshKey`).
 3. `installation.yaml`: `capi.providers.hetzner: true`; catalog entry `hcloud-ccm` (below).
@@ -333,7 +333,7 @@ CSI is not included (hcloud-csi would be another workload addon with `providers:
 > Kept as a reference for real infrastructure; the developer-facing platform does not depend on it
 > ([portability.md](portability.md)).
 
-Managed control plane: `provider: gcp-gke` -> ClusterClass `gke-managed` (`addons/clusterclasses`, CAPG v1.13.1).
+Managed control plane: `provider: gcp-gke` -> ClusterClass `gke-managed` (`charts/cluster` (scope fleet), CAPG v1.13.1).
 GCPManagedControlPlane is the GKE cluster (regional, version = `topology.version`, release channel, VPC-native,
 GKE Workload Identity pool `<project>.svc.id.goog`), GCPManagedCluster its VPC, and every fleet file worker a GKE node
 pool (MachinePool with GCPManagedMachinePool + an empty GKEConfig; autoscaler off, size = `replicas` per zone,
@@ -345,7 +345,7 @@ Fleet file differences (render-time guards in `charts/cluster`, `tests/gke_test.
 - `controlPlane` must be absent (`replicas` / `machineType` fail the render); `workers` needs >= 1 entry.
 - `cni: gke` is the only value. CAPG v1.13.1's API has no `datapathProvider` / network-policy field, so Dataplane V2
   (GKE's Cilium) cannot be requested and the cilium addon stays off (`addons.platform.koorikla.io/cilium: "false"`).
-  `istio-ambient` layers `values/provider-gcp-gke.yaml` (Istio's `gke` platform profile).
+  `mesh` layers `values/provider-gcp-gke.yaml` (Istio's `gke` platform profile).
 - `providerSpec.project` is required; `network`, `releaseChannel` optional.
 - No node registry config: CAPG v1.13.1 exposes no node containerd config, so `<name>-registries` is not rendered and
   nodes pull directly (private images: `imagePullSecrets` or Artifact Registry with the node service account).
@@ -358,7 +358,7 @@ Credentials, Workload Identity Federation only (no JSON key anywhere):
    JWKS when it is not publicly reachable), with `roles/iam.workloadIdentityUser` for
    `principal://iam.googleapis.com/projects/<n>/locations/global/workloadIdentityPools/<pool>/subject/system:serviceaccount:capg-system:capg-manager`.
 3. `installation.yaml`: `capi.providers.gcp: true`, `capi.gcp.workloadIdentityProvider`, `capi.gcp.serviceAccount`.
-   `addons/capi-providers` renders `capg-system/capg-variables` (`GCP_B64ENCODED_CREDENTIALS` = an `external_account`
+   `charts/cluster` renders `capg-system/capg-variables` (`GCP_B64ENCODED_CREDENTIALS` = an `external_account`
    credential config: identifiers + token path, no key material) and patches a projected ServiceAccount token
    (audience = the provider) into `capg-controller-manager`.
 
@@ -402,7 +402,7 @@ seeds it from `BYO_KUBECONFIG_<NAME>` (a file) or, for a k3d cluster of that nam
 `k3d kubeconfig get` with the API server rewritten to the node's IP on `kind` (as CAPD's kubeconfigs). It grants what
 the Argo CD cluster secret needs anyway; nothing more is added.
 
-What `charts/cluster` renders for byo (`templates/byo-access.yaml`):
+What `charts/cluster` renders for byo (`templates/byo/access.yaml`):
 
 | Object (mgmt) | Purpose |
 |---|---|
@@ -453,8 +453,8 @@ hcloud-ccm: { namespace: kube-system, roles: [workload], default: true, provider
   installed by the operator/ESO in the same sync wave cascade; Argo CD retries until they exist.
 - The cluster-api-operator CRDs are ~228 KB each, close to the 256 KB client-side-apply annotation limit: sync
   `capi-operator` with `ServerSideApply=true`. CAPI webhooks default many Cluster/ClusterClass fields: use server-side
-  diff (or ignoreDifferences) for the `cluster-*` and `clusterclasses` Applications.
+  diff (or ignoreDifferences) for the `cluster-*` and `cluster-fleet-mgmt` Applications.
 
 Open checks: AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
 [#87](https://github.com/koorikla/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
-addons/clusterclasses addons/*-ccm addons/istio-ambient charts/cluster installations/*-example`).
+charts/cluster addons/*-ccm addons/mesh installations/*-example`).

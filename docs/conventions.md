@@ -59,8 +59,8 @@ On the CAPI `Cluster` and the Argo CD cluster secret (provider byo: the cluster 
 | `platform.koorikla.io/environment` | `mgmt`, `development`, `production`, … |
 | `platform.koorikla.io/installation` | installation name (`local`) |
 | `platform.koorikla.io/cni` | `cilium` \| `flannel` (`gke` on `gcp-gke`; on `byo` whatever the cluster runs) — fleet file `cni` (mgmt: `flannel`); selects `values/cni-<cni>.yaml` |
-| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`, `istio-eastwest` and `istio-csr` from `mesh.group`) |
-| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; also sets `addons.platform.koorikla.io/istio-eastwest` and `.../istio-csr` (docs/multicluster.md) |
+| `addons.platform.koorikla.io/<addon>` | `"true"` \| `"false"` — overrides the catalog default for this cluster (`cilium` is derived from `cni`; addon `mesh` turns istio-csr and the east-west gateway on from `mesh.group`) |
+| `mesh.platform.koorikla.io/group`, `.../network` | fleet file `mesh.group` (opt-in multicluster); network = cluster name; addon `mesh` layers `values/mesh-member.yaml` there (istio-csr + east-west gateway; docs/multicluster.md) |
 | annotation `platform.koorikla.io/addons-revision` | git revision the cluster's addon Applications follow (default `HEAD`) |
 
 The label keys are an API between CAPI clusters, cluster secrets and ApplicationSets, not an org name: forks keep them.
@@ -91,7 +91,7 @@ only delete policy). Thunder: [openchoreo.md](openchoreo.md#argo-cd-requirements
 | Mesh CA / remote secrets (opt-in) | ns `openbao`: OpenBao mounts `pki-mesh-<group>-root`, `pki-mesh-<group>-int`, role `<name>`, auth `mesh-<name>`, identity entity `mesh-<name>` (static policy `mesh-member`); ns `fleet`: `<name>-mesh-openbao`, `<name>-mesh-reader`, Issuer `<name>-client-ca`; CRS payloads `<name>-mesh-trust` (+ ConfigMap `<name>-mesh-oidc`), `<name>-mesh-remote-secret` |
 | On mesh members, ns `istio-system` | Secrets `openbao-ca`, `mesh-root-ca` (public), Issuer `openbao-mesh`, `istio-remote-secret-<peer>`, Gateway `istio-eastwestgateway` |
 | OpenChoreo org namespace on mgmt | `default` (label `openchoreo.dev/control-plane: "true"`) |
-| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `examples` (opt-in examples; always present), `tenant-<project>`; charts/platform projects sit in sync wave `-1`, before the ApplicationSets using them (Argo CD prunes in reverse) |
+| Argo CD AppProjects | `platform` (mgmt + addons), `fleet` (cluster charts), `tenant-<project>`; charts/platform projects sit in sync wave `-1`, before the ApplicationSets using them (Argo CD prunes in reverse) |
 
 ## Secret keys
 Keys in the `platform` store (flat, backend-agnostic). The doc in the last column owns the details.
@@ -122,11 +122,10 @@ Workload-cluster keys (store `default`): `openchoreo-observability`, optional `d
 ```
 bootstrap/                      k3d config, bootstrap.sh (task up/down), seed secrets
 charts/platform/                root chart: AppProjects, ApplicationSets (fleet, addons catalog, tenants), mgmt cluster secret
-charts/cluster/                 one workload cluster: templates/capi-*.yaml, argocd-*.yaml, openchoreo-*.yaml
+charts/cluster/                 CAPI: templates/<provider>/ + common/; scope fleet (providers, ClusterClasses) | cluster
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
 charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
-examples/<name>/                opt-in example charts (installation.yaml examples.<name>.enabled; label selector)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, operations + runbooks/, one doc per area, diagrams
 templates/                      golden-path project templates (Backstage scaffolder): template.yaml + skeleton/ each

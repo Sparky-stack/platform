@@ -1,0 +1,254 @@
+{{- /*
+UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only); kept as a reference for real infrastructure.
+The developer-facing platform does not depend on it (docs/portability.md).
+GKE on CAPG (managed control plane). Rendered when capi.providers.gcp. UNTESTED (no GCP account): rendered and
+schema-checked against CAPG v1.13.1's CRDs only (docs/providers.md "GKE (CAPG) - untested example").
+Unlike the k3s classes there are no machines to bootstrap: GCPManagedControlPlane is the GKE cluster (Google runs the
+control plane, its version = topology.version), GCPManagedCluster the VPC around it, and every worker pool is a GKE node
+pool (MachinePool: GCPManagedMachinePool + an empty GKEConfig, GKE bootstraps its own nodes). CAPG v1.13.1 is a
+v1beta1-contract provider: the templates stay v1beta1, the ClusterClass is core's v1beta2.
+Not available through CAPG v1.13.1's API (so not offered here): Dataplane V2 / network policy (no datapathProvider
+field: no Cilium on gcp-gke, label cni=gke) and node containerd config (no registry mirror / registries.yaml; nodes
+pull directly, docs/providers.md).
+*/ -}}
+
+{{- define "gke-managed.cluster" -}}
+template:
+  spec:
+    project: placeholder        # replaced by variable project
+    region: placeholder         # replaced by variable region
+    network:
+      name: placeholder         # replaced by variable network (default: the cluster name, a VPC CAPG creates)
+{{- end }}
+
+{{- define "gke-managed.controlPlane" -}}
+template:
+  spec:
+    project: placeholder        # replaced by variable project
+    location: placeholder       # replaced by variable region (regional cluster: control plane replicated across zones)
+    releaseChannel: regular     # replaced by variable releaseChannel
+    clusterNetwork:
+      useIPAliases: true        # VPC-native (alias IP) pod networking, GKE's current default
+    clusterSecurity:
+      workloadIdentityConfig:
+        workloadPool: placeholder.svc.id.goog   # replaced: <project>.svc.id.goog (GKE Workload Identity for workloads)
+{{- end }}
+
+{{- define "gke-managed.worker" -}}
+template:
+  spec:
+    machineType: {{ .Values.gcp.workerMachineType }}   # replaced by variable workerMachineType
+    # Node count = MachinePool replicas (fleet file workers[].replicas), not the GKE autoscaler (its default is on).
+    scaling:
+      enableAutoscaling: false
+    management:
+      autoRepair: true
+      autoUpgrade: true
+    nodeSecurity:
+      enableSecureBoot: true
+      enableIntegrityMonitoring: true
+{{- end }}
+
+{{- define "gke-managed.bootstrap" -}}
+template:
+  spec: {}
+{{- end }}
+
+{{- if and (eq .Values.scope "fleet") (.Values.capi.providers.gcp) }}
+{{- $ns := "fleet" }}   {{- /* ClusterClasses live next to the Clusters (docs/conventions.md) */}}
+{{- $v := .Values.gcp }}
+{{- $clusterName := include "clusterclass.templateName" (list "gke-managed" (include "gke-managed.cluster" .)) }}
+{{- $cpName := include "clusterclass.templateName" (list "gke-managed-control-plane" (include "gke-managed.controlPlane" .)) }}
+{{- $workerName := include "clusterclass.templateName" (list "gke-managed-worker" (include "gke-managed.worker" .)) }}
+{{- $bootstrapName := include "clusterclass.templateName" (list "gke-managed-worker" (include "gke-managed.bootstrap" .)) }}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: ClusterClass
+metadata:
+  name: gke-managed
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  infrastructure:
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: GCPManagedClusterTemplate
+      name: {{ $clusterName }}
+  controlPlane:
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: GCPManagedControlPlaneTemplate
+      name: {{ $cpName }}
+  workers:
+    machinePools:
+      - class: default-worker
+        bootstrap:
+          templateRef:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+            kind: GKEConfigTemplate
+            name: {{ $bootstrapName }}
+        infrastructure:
+          templateRef:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: GCPManagedMachinePoolTemplate
+            name: {{ $workerName }}
+  variables:
+    - name: project
+      required: true
+      schema:
+        openAPIV3Schema:
+          type: string
+          pattern: ^[a-z][-a-z0-9]{4,28}[a-z0-9]$
+          description: GCP project id the cluster lives in (fleet file providerSpec.project).
+    - name: region
+      required: true
+      schema:
+        openAPIV3Schema:
+          type: string
+          minLength: 1
+          description: GCP region (fleet file `region`); the GKE cluster is regional.
+    - name: network
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: ""
+          description: VPC network name ("" = the cluster name; CAPG creates it).
+    - name: releaseChannel
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          enum: [rapid, regular, stable, extended]
+          default: {{ $v.releaseChannel }}
+          description: GKE release channel (auto-upgrades within it; topology.version pins the control plane minor).
+    - name: workerMachineType
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: string
+          default: {{ $v.workerMachineType }}
+          description: Compute Engine machine type of the node pool.
+    - name: workerNodeLocations
+      required: false
+      schema:
+        openAPIV3Schema:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Zones of the node pool ([] = GKE's default zones of the region); fleet file workers[].failureDomain.
+  patches:
+    - name: cluster
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: GCPManagedClusterTemplate
+            matchResources:
+              infrastructureCluster: true
+          jsonPatches:
+            - op: replace
+              path: /spec/template/spec/project
+              valueFrom:
+                variable: project
+            - op: replace
+              path: /spec/template/spec/region
+              valueFrom:
+                variable: region
+            - op: replace
+              path: /spec/template/spec/network/name
+              valueFrom:
+                # quoted: the rendered text is parsed as YAML (and so is the raw template, hack/tests/bootstrap_file_sources)
+                template: {{`'"{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}"'`}}
+    - name: controlPlane
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: GCPManagedControlPlaneTemplate
+            matchResources:
+              controlPlane: true
+          jsonPatches:
+            - op: replace
+              path: /spec/template/spec/project
+              valueFrom:
+                variable: project
+            - op: replace
+              path: /spec/template/spec/location
+              valueFrom:
+                variable: region
+            - op: replace
+              path: /spec/template/spec/releaseChannel
+              valueFrom:
+                variable: releaseChannel
+            - op: replace
+              path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool
+              valueFrom:
+                template: {{`'"{{ .project }}.svc.id.goog"'`}}
+    - name: workers
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: GCPManagedMachinePoolTemplate
+            matchResources:
+              machinePoolClass:
+                names: [default-worker]
+          jsonPatches:
+            - op: replace
+              path: /spec/template/spec/machineType
+              valueFrom:
+                variable: workerMachineType
+    - name: workerNodeLocations
+      enabledIf: {{`'{{ if .workerNodeLocations }}true{{ end }}'`}}
+      definitions:
+        - selector:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: GCPManagedMachinePoolTemplate
+            matchResources:
+              machinePoolClass:
+                names: [default-worker]
+          jsonPatches:
+            - op: add
+              path: /spec/template/spec/nodeLocations
+              valueFrom:
+                variable: workerNodeLocations
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: GCPManagedClusterTemplate
+metadata:
+  name: {{ $clusterName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "gke-managed.cluster" . | nindent 2 }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: GCPManagedControlPlaneTemplate
+metadata:
+  name: {{ $cpName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "gke-managed.controlPlane" . | nindent 2 }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: GCPManagedMachinePoolTemplate
+metadata:
+  name: {{ $workerName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "gke-managed.worker" . | nindent 2 }}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: GKEConfigTemplate
+metadata:
+  name: {{ $bootstrapName }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "clusterclass.annotations" . | nindent 4 }}
+spec:
+  {{- include "gke-managed.bootstrap" . | nindent 2 }}
+{{- end }}

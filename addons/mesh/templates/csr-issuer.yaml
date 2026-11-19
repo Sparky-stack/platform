@@ -1,0 +1,88 @@
+{{- /*
+cert-manager Vault Issuer for this member, pointing at the mesh CA in OpenBao on mgmt:
+  server   https://<mesh.ca.host>:<mesh.ca.port> (kgateway TLS passthrough on mgmt; locally the k3d serverlb via
+           coredns-local), verified with OpenBao's CA from Secret openbao-ca (CRS payload from mgmt)
+  path     pki-mesh-<group>-int/sign/<cluster>   the PKI role addon openbao's reconcile creates for exactly this cluster
+  auth     auth/mesh-<cluster> (OpenBao JWT auth configured with this cluster's ServiceAccount JWKS), role istio-csr;
+           cert-manager mints a 10-minute token for ServiceAccount istio-csr-openbao with audience
+           vault://istio-system/openbao-mesh (+ the server URL) - the role accepts only that subject and audience.
+The policy behind the role allows sign on this cluster's PKI role only: a stolen token signs nothing for another
+cluster or group, and expires in 10 minutes. No CA key is ever on this cluster.
+Sync waves: -2 the ServiceAccount, its token-request RBAC and the admission policies (templates/csr-admission.yaml); -1
+the Issuer, whose Ready check already logs in to OpenBao (so it can only turn Ready once they exist); 0 the rest
+(istio-csr, istio base/istiod/cni); 1 ztunnel. So on a member the whole mesh app waits for OpenBao login first.
+*/ -}}
+{{- if .Values.mesh.csr.enabled }}
+{{- $i := .Values.issuer }}
+{{- $c := include "mesh.cluster" . }}
+{{- $g := include "mesh.group" . }}
+{{- $ca := .Values.mesh.ca }}
+{{- if $g }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $i.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
+automountServiceAccountToken: false     # only cert-manager's TokenRequest uses it
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-tokenrequest" $i.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts/token]
+    resourceNames: [{{ $i.serviceAccount }}]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-tokenrequest" $i.serviceAccount }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"    # before Issuer openbao-mesh (-1): its readiness check logs in with this token
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-tokenrequest" $i.serviceAccount }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $i.certManagerServiceAccount.name }}
+    namespace: {{ $i.certManagerServiceAccount.namespace }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $i.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mesh.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"    # before istio-csr's Deployment and the istiod Certificate
+spec:
+  vault:
+    server: {{ printf "https://%s:%v" (required "mesh.ca.host is required (installation.yaml)" $ca.host) (required "mesh.ca.port is required (installation.yaml)" $ca.port) | quote }}
+    path: {{ printf "pki-mesh-%s-int/sign/%s" $g $c | quote }}
+    caBundleSecretRef:
+      name: {{ $i.caSecret }}
+      key: ca.crt
+    auth:
+      kubernetes:
+        mountPath: {{ printf "/v1/auth/mesh-%s" $c | quote }}
+        role: {{ $i.role }}
+        serviceAccountRef:
+          name: {{ $i.serviceAccount }}
+{{- end }}
+{{- end }}

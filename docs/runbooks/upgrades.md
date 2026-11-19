@@ -21,7 +21,7 @@ Renovate bumps `kubernetesVersion` (`vX.Y.Z+k3sN`) in `installations/<inst>/clus
 
 - **3-server control planes (`controlPlane.replicas: 3`)**: roll `3 -> 4 -> 3` etcd voters, keeping quorum throughout; mandatory on cloud `production` clusters ([providers.md](../providers.md#control-plane-size-and-rollouts)).
 - **1-server control planes (`controlPlane.replicas: 1`, local default)**: end every rollout with a `2 -> 1` etcd member removal that can lose quorum. Take an etcd snapshot first ([backup-restore.md](backup-restore.md)) or switch to `controlPlane.replicas: 3` before testing non-disruptive rollouts ([scaling-and-capacity.md](scaling-and-capacity.md)).
-- **Scope of template vs variable edits**: changing a template in `addons/clusterclasses` (for example `docker.kindImage` in `addons/clusterclasses/values.yaml`) changes its spec hash and rolls **every** cluster of that class ([providers.md](../providers.md#template-changes-roll-clusters)). Changing a fleet file (`kubernetesVersion`, `controlPlane`, `workers`, `providerSpec`) rolls **only that cluster**.
+- **Scope of template vs variable edits**: changing a ClusterClass template in `charts/cluster` (`templates/<provider>/clusterclass.yaml`; for example `docker.kindImage` in `charts/cluster/values.yaml`) changes its spec hash and rolls **every** cluster of that class ([providers.md](../providers.md#template-changes-roll-clusters)). Changing a fleet file (`kubernetesVersion`, `controlPlane`, `workers`, `providerSpec`) rolls **only that cluster**.
 - **Local `k3d` management cluster**: `bootstrap/k3d-mgmt.yaml` pins `image:` (`docker.io/rancher/k3s:...`) by multi-arch digest. `k3d` applies node image and server flags at cluster creation only; upgrading mgmt locally means backing up stateful data ([backup-restore.md](backup-restore.md)) and recreating via `task down` and `task up` `(not yet verified live)`.
 
 ```bash
@@ -36,13 +36,13 @@ task images:audit
 
 ### 2. CAPI operator and providers
 
-`addons/capi-operator/Chart.yaml` pins `cluster-api-operator`; `addons/capi-providers/values.yaml` pins `core.version` (`v1.13.x`), `k3s.version` (`v0.5.x`), and `infrastructure.{docker,aws,hetzner}.version`.
+`addons/capi-operator/Chart.yaml` pins `cluster-api-operator`; `charts/cluster/values.yaml` pins `core.version` (`v1.13.x`), `k3s.version` (`v0.5.x`), and `{docker,aws,hetzner,gcp}.version` (scope fleet section).
 
-1. Check compatibility (`clusterctl` in `mise.toml` matches `core.version`). Keep `ClusterTopology: true` on `core` and `infrastructure.docker` only: `ClusterResourceSet` is GA in CAPI 1.13 (re-adding a removed gate crashes the manager at startup), and `ClusterTopology` is not a CAPA flag.
-2. Update `addons/capi-providers/values.yaml` (and `mise.toml` `clusterctl` + `task tools:lock` when `core.version` changes), run `task lint` and `task test`, and merge `(not yet verified live)`.
+1. Check compatibility (`clusterctl` in `mise.toml` matches `core.version`). Keep `ClusterTopology: true` on `core` and `docker` only: `ClusterResourceSet` is GA in CAPI 1.13 (re-adding a removed gate crashes the manager at startup), and `ClusterTopology` is not a CAPA flag.
+2. Update `charts/cluster/values.yaml` (and `mise.toml` `clusterctl` + `task tools:lock` when `core.version` changes), run `task lint` and `task test`, and merge `(not yet verified live)`.
 
 ```bash
-# Watch provider controllers on mgmt after Argo CD syncs capi-operator-mgmt and capi-providers-mgmt
+# Watch provider controllers on mgmt after Argo CD syncs capi-operator-mgmt and cluster-fleet-mgmt
 kubectl --context k3d-platform-mgmt get coreprovider,bootstrapprovider,controlplaneprovider,infrastructureprovider -A
 kubectl --context k3d-platform-mgmt -n capi-system rollout status deploy/capi-controller-manager --timeout=180s
 kubectl --context k3d-platform-mgmt -n capi-k3s-control-plane-system rollout status deploy/capi-k3s-control-plane-controller-manager --timeout=180s
@@ -80,9 +80,9 @@ kubectl --context k3d-platform-mgmt -n argocd get applications -l app.kubernetes
 kubectl --context k3d-platform-mgmt -n thunder logs job/thunder-setup --tail=50
 ```
 
-### 5. Istio ambient (`istio-ambient`, `istio-csr`, `istio-eastwest`)
+### 5. Istio ambient (`mesh`)
 
-`addons/istio-ambient/values.yaml` orders control plane before dataplane: `istiod` updates in sync wave `0`, and `DaemonSet/ztunnel` rolls in sync wave `1` ([networking.md](../networking.md#istio-ambient-addonsistio-ambient)). Ambient workloads keep running across `istiod` upgrades and re-establish HBONE sockets as `ztunnel` pods roll.
+`addons/mesh/values.yaml` orders control plane before dataplane: `istiod` updates in sync wave `0`, and `DaemonSet/ztunnel` rolls in sync wave `1` ([networking.md](../networking.md#istio-ambient-addonsmesh)). Ambient workloads keep running across `istiod` upgrades and re-establish HBONE sockets as `ztunnel` pods roll.
 
 ```bash
 task kubeconfig CLUSTER=dev1
@@ -127,7 +127,7 @@ kubectl --kubeconfig dev1.kubeconfig -n openchoreo-data-plane get pods
 - [Cluster API providers and rollouts](../providers.md#control-plane-size-and-rollouts)
 - [Build plane and digest pinning](../build-plane.md#images-and-architectures)
 - [OpenChoreo Argo CD requirements](../openchoreo.md#argo-cd-requirements)
-- [Istio ambient networking](../networking.md#istio-ambient-addonsistio-ambient)
+- [Istio ambient networking](../networking.md#istio-ambient-addonsmesh)
 - [Supply-chain admission policies](../supply-chain.md#image-signatures-and-attestations-at-admission)
 - [Backup and restore](backup-restore.md)
 - [Scaling and capacity](scaling-and-capacity.md)

@@ -1,5 +1,5 @@
 apiVersion: v2
 name: cluster
-description: One workload cluster - CAPI Cluster, Argo CD registration, OpenChoreo data plane identity
+description: Everything Cluster API - scope fleet (providers, credentials, ClusterClasses per provider folder) and scope cluster (one workload cluster - CAPI Cluster, Argo CD registration, OpenChoreo, mesh)
 type: application
 version: 0.1.0

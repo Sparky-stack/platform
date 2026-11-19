@@ -1,0 +1,364 @@
+suite: clusterclasses - namespace fleet, k3s-docker always, cloud classes per installation
+templates:
+  - templates/common/fleet-namespace.yaml
+  - templates/docker/clusterclass.yaml
+  - templates/aws/clusterclass.yaml
+  - templates/hetzner/clusterclass.yaml
+  - templates/gcp-gke/clusterclass.yaml
+  - templates/common/_k3s-clusterclass.tpl
+set:
+  scope: fleet
+tests:
+  - it: creates namespace fleet
+    template: templates/common/fleet-namespace.yaml
+    asserts:
+      - containsDocument: { kind: Namespace, apiVersion: v1, name: fleet, any: true }
+
+  - it: renders only k3s-docker by default
+    asserts:
+      - hasDocuments: { count: 1, filterAware: true }
+        documentSelector: { path: kind, value: ClusterClass, matchMany: true }
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-docker, namespace: fleet, any: true }
+        template: templates/docker/clusterclass.yaml
+
+  - it: renders k3s-aws and k3s-hetzner when the installation enables them
+    set: { capi.providers: { docker: true, aws: true, hetzner: true } }
+    asserts:
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-aws, namespace: fleet, any: true }
+        template: templates/aws/clusterclass.yaml
+      - containsDocument: { kind: ClusterClass, apiVersion: cluster.x-k8s.io/v1beta2, name: k3s-hetzner, namespace: fleet, any: true }
+        template: templates/hetzner/clusterclass.yaml
+
+  - it: renders gke-managed only when the installation enables CAPG
+    template: templates/gcp-gke/clusterclass.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: skips k3s-docker when the installation disables CAPD
+    template: templates/docker/clusterclass.yaml
+    set: { capi.providers: { docker: false, aws: true } }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  # --- k3s-docker --------------------------------------------------------------------------------------------------
+  - it: k3s-docker uses CAPD v1beta2 and cluster-api-k3s v1beta2 templates with hash-suffixed names
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: spec.infrastructure.templateRef.kind, value: DockerClusterTemplate }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta2 }
+      - equal: { path: spec.controlPlane.templateRef.kind, value: KThreesControlPlaneTemplate }
+      - equal: { path: spec.controlPlane.templateRef.apiVersion, value: controlplane.cluster.x-k8s.io/v1beta2 }
+      - matchRegex: { path: spec.controlPlane.templateRef.name, pattern: "^k3s-docker-control-plane-[0-9a-f]{8}$" }
+      - equal: { path: "spec.workers.machineDeployments[0].class", value: default-worker }
+      - equal: { path: "spec.workers.machineDeployments[0].bootstrap.templateRef.kind", value: KThreesConfigTemplate }
+
+  - it: k3s-docker defaults the node image and patches it into both machine templates
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - contains:
+          path: spec.variables
+          content:
+            name: kindImage
+            required: false
+            schema:
+              openAPIV3Schema:
+                type: string
+                default: docker.io/kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+                description: Node container image (OS only; k3s is installed at boot with version = topology.version).
+      - equal:
+          path: "spec.patches[0].definitions[0].selector.matchResources"
+          value: { controlPlane: true, machineDeploymentClass: { names: [default-worker] } }
+
+  - it: k3s-docker control plane waits for get.k3s.io and disables traefik
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal: { path: spec.template.spec.kthreesConfigSpec.serverConfig.disableComponents, value: [traefik] }
+      - matchRegex:
+          path: "spec.template.spec.kthreesConfigSpec.preK3sCommands[0]"
+          pattern: "until curl .*https://get.k3s.io"
+
+  - it: k3s-docker control plane rides out slow etcd fsyncs (longer leader election, #82)
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeControllerManagerArgs
+          value: [leader-elect-lease-duration=60s, leader-elect-renew-deadline=40s, leader-elect-retry-period=10s]
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeSchedulerArgs
+          value: [leader-elect-lease-duration=60s, leader-elect-renew-deadline=40s, leader-elect-retry-period=10s]
+
+  - it: cloud classes keep the upstream leader election (fast controller failover)
+    template: templates/aws/clusterclass.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - notExists: { path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeControllerManagerArgs }
+      - notExists: { path: spec.template.spec.kthreesConfigSpec.serverConfig.kubeSchedulerArgs }
+
+  - it: k3s-docker workers run k3s-agent as Type=exec (CAPD bootstrap deadlock)
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: KThreesConfigTemplate }
+    asserts:
+      - matchRegex: { path: "spec.template.spec.preK3sCommands[0]", pattern: "until curl .*https://get.k3s.io" }
+      - matchRegex: { path: "spec.template.spec.preK3sCommands[1]", pattern: "k3s-agent.service.d.*Type=exec" }
+
+  - it: registry auth writes /etc/rancher/k3s/registries.yaml from Secret <cluster>-registries
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].name", value: registryAuth }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].enabledIf", value: "{{ .registryAuth }}" }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
+      - matchRegex:
+          path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].valueFrom.template"
+          pattern: 'name: "\{\{ \.builtin\.cluster\.name \}\}-registries"'
+      - matchRegex:
+          path: "spec.patches[?(@.name == \"registryAuth\")].definitions[1].jsonPatches[0].valueFrom.template"
+          pattern: "path: /etc/rancher/k3s/registries.yaml"
+
+  - it: changes template names when a template spec changes (immutable templates are rotated)
+    template: templates/docker/clusterclass.yaml
+    set: { k3s.disableComponents: [traefik, metrics-server] }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - notEqual: { path: spec.controlPlane.templateRef.name, value: k3s-docker-control-plane-b3b4afc7 }
+
+  # --- k3s-aws -----------------------------------------------------------------------------------------------------
+  - it: k3s-aws requires region and ami
+    template: templates/aws/clusterclass.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: spec.infrastructure.templateRef.kind, value: AWSClusterTemplate }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta2 }
+      - equal: { path: "spec.variables[0].name", value: region }
+      - equal: { path: "spec.variables[0].required", value: true }
+      - equal: { path: "spec.variables[1].name", value: ami }
+      - equal: { path: "spec.variables[1].required", value: true }
+
+  - it: k3s-aws nodes use the EC2 private DNS name and no embedded CCM / servicelb / traefik
+    template: templates/aws/clusterclass.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+    asserts:
+      - equal:
+          path: spec.template.spec.kthreesConfigSpec.serverConfig
+          value: { disableComponents: [traefik, servicelb], cloudProviderName: external, disableCloudController: true }
+      - equal: { path: spec.template.spec.kthreesConfigSpec.agentConfig.nodeName, value: "{{ ds.meta_data.local_hostname }}" }
+
+  - it: k3s-aws machines skip the secrets-manager helper (plain distro AMI) and default to no SSH key
+    template: templates/aws/clusterclass.yaml
+    set: { capi.providers.aws: true }
+    documentSelector: { path: kind, value: AWSMachineTemplate, matchMany: true }
+    asserts:
+      - equal: { path: spec.template.spec.cloudInit.insecureSkipSecretsManager, value: true }
+      - equal: { path: spec.template.spec.sshKeyName, value: "" }
+
+  # --- k3s-hetzner -------------------------------------------------------------------------------------------------
+  - it: k3s-hetzner reads the CAPH token from Secret hetzner (ExternalSecret from capi-hetzner)
+    template: templates/hetzner/clusterclass.yaml
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - equal:
+          path: spec.template.spec.hetznerSecretRef
+          value: { name: hetzner, key: { hcloudToken: hcloud } }
+        documentSelector: { path: kind, value: HetznerClusterTemplate }
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+        documentSelector: { path: kind, value: ExternalSecret }
+      - equal: { path: spec.data, value: [{ secretKey: hcloud, remoteRef: { key: capi-hetzner, property: hcloud } }] }
+        documentSelector: { path: kind, value: ExternalSecret }
+
+  - it: k3s-hetzner appends the registry file after the CNI config drop-in
+    template: templates/hetzner/clusterclass.yaml
+    set: { capi.providers.hetzner: true }
+    asserts:
+      - equal:
+          path: "spec.template.spec.kthreesConfigSpec.files[0].path"
+          value: /etc/rancher/k3s/config.yaml.d/10-cni.yaml
+        documentSelector: { path: kind, value: KThreesControlPlaneTemplate }
+      - equal: { path: "spec.patches[?(@.name == \"registryAuth\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files/- }
+        documentSelector: { path: kind, value: ClusterClass }
+
+  - it: k3s-hetzner limits region to Hetzner locations
+    template: templates/hetzner/clusterclass.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.variables[0].name", value: region }
+      - equal: { path: "spec.variables[0].schema.openAPIV3Schema.enum", value: [fsn1, hel1, nbg1, ash, hil, sin] }
+
+  # --- cni (cilium | flannel) ----------------------------------------------------------------------------------------
+  - it: every class has variable cni (cilium | flannel, default cilium)
+    templates: [templates/docker/clusterclass.yaml, templates/aws/clusterclass.yaml, templates/hetzner/clusterclass.yaml]
+    set: { capi.providers.aws: true, capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass, matchMany: true }
+    asserts:
+      - contains:
+          path: spec.variables
+          content:
+            name: cni
+            required: false
+            schema:
+              openAPIV3Schema:
+                type: string
+                enum: [cilium, flannel]
+                default: cilium
+                description: >-
+                  Pod network, fixed at birth (fleet file `cni`; switching = rebuild). cilium: k3s without flannel,
+                  kube-proxy and its network-policy controller; Cilium arrives as an Argo CD addon. flannel: k3s' bundled one.
+
+  - it: control planes boot k3s for Cilium by default (no flannel, kube-proxy, network-policy controller)
+    templates: [templates/docker/clusterclass.yaml, templates/aws/clusterclass.yaml, templates/hetzner/clusterclass.yaml]
+    set: { capi.providers.aws: true, capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: KThreesControlPlaneTemplate, matchMany: true }
+    asserts:
+      - equal: { path: "spec.template.spec.kthreesConfigSpec.files[0].path", value: /etc/rancher/k3s/config.yaml.d/10-cni.yaml }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^flannel-backend: none$" }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^disable-kube-proxy: true$" }
+      - matchRegex: { path: "spec.template.spec.kthreesConfigSpec.files[0].content", pattern: "(?m)^disable-network-policy: true$" }
+
+  - it: "cni: flannel replaces the drop-in with k3s' flannel (vxlan on docker)"
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].name", value: cni-flannel }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].enabledIf", value: '{{ if eq .cni "flannel" }}true{{ end }}' }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].path", value: /spec/template/spec/kthreesConfigSpec/files }
+      - matchRegex: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: vxlan$" }
+
+  - it: "cni: flannel on hetzner keeps flannel's wireguard-native backend"
+    template: templates/hetzner/clusterclass.yaml
+    set: { capi.providers.hetzner: true }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel\")].name", value: cni-flannel }
+      - matchRegex: { path: "spec.patches[?(@.name == \"cni-flannel\")].definitions[0].jsonPatches[0].value[0].content", pattern: "(?m)^flannel-backend: wireguard-native$" }
+
+  - it: k3s-aws opens Cilium's node-to-node ports by default and only flannel VXLAN for cni=flannel
+    template: templates/aws/clusterclass.yaml
+    set: { capi.providers.aws: true }
+    asserts:
+      - equal:
+          path: spec.template.spec.network.cni.cniIngressRules
+          value:
+            - { description: cilium vxlan, protocol: udp, fromPort: 8472, toPort: 8472 }
+            - { description: cilium wireguard, protocol: udp, fromPort: 51871, toPort: 51871 }
+            - { description: cilium health, protocol: tcp, fromPort: 4240, toPort: 4240 }
+            - { description: cilium health icmp, protocol: icmp, fromPort: -1, toPort: -1 }
+            - { description: hubble peer (relay to agents), protocol: tcp, fromPort: 4244, toPort: 4244 }
+        documentSelector: { path: kind, value: AWSClusterTemplate }
+      - equal: { path: "spec.patches[?(@.name == \"cni-flannel-security-groups\")].name", value: cni-flannel-security-groups }
+        documentSelector: { path: kind, value: ClusterClass }
+      - equal:
+          path: "spec.patches[?(@.name == \"cni-flannel-security-groups\")].definitions[0].jsonPatches[0].value"
+          value: [{ description: flannel vxlan, protocol: udp, fromPort: 8472, toPort: 8472 }]
+        documentSelector: { path: kind, value: ClusterClass }
+
+  # --- registry (docs/build-plane.md) -------------------------------------------------------------------------------
+  - it: k3s-docker orders patches so cni-flannel (replaces the files list) runs before every files append
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[1].name", value: cni-flannel }
+      - equal: { path: "spec.patches[2].name", value: registryAuth }
+      - equal: { path: "spec.patches[3].name", value: registryCA }
+      - equal: { path: "spec.patches[4].name", value: registryHostAlias }
+
+  - it: cloud classes also run cni-flannel before the registry files
+    template: templates/hetzner/clusterclass.yaml
+    set: { capi.providers: { docker: false, hetzner: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[3].name", value: cni-flannel }
+      - equal: { path: "spec.patches[4].name", value: registryAuth }
+      - equal: { path: "spec.patches[5].name", value: registryCA }
+
+  - it: registryCA appends the registry CA public cert from Secret <cluster>-registries on both node kinds
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].enabledIf', value: "{{ if and .registryAuth .registryCA }}true{{ end }}" }
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[0].jsonPatches[0].path', value: /spec/template/spec/kthreesConfigSpec/files/- }
+      - equal: { path: 'spec.patches[?(@.name == "registryCA")].definitions[1].jsonPatches[0].path', value: /spec/template/spec/files/- }
+      - matchRegex:
+          path: 'spec.patches[?(@.name == "registryCA")].definitions[1].jsonPatches[0].valueFrom.template'
+          pattern: '(?s)path: /etc/rancher/k3s/registry-ca.crt.*key: registry-ca.crt'
+
+  - it: registryHostAlias resolves the alias target via Docker DNS into /etc/hosts before k3s starts
+    template: templates/docker/clusterclass.yaml
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: 'spec.patches[?(@.name == "registryHostAlias")].enabledIf', value: "{{ if .registryHostAliasTarget }}true{{ end }}" }
+      - equal: { path: 'spec.patches[?(@.name == "registryHostAlias")].definitions[0].jsonPatches[0].path', value: /spec/template/spec/kthreesConfigSpec/preK3sCommands/- }
+      - matchRegex:
+          path: 'spec.patches[?(@.name == "registryHostAlias")].definitions[1].jsonPatches[0].valueFrom.template'
+          pattern: 'getent hosts \{\{ \.registryHostAliasTarget \}\}.*>> /etc/hosts'
+
+  # --- gke-managed (CAPG, managed control plane) -------------------------------------------------------------------
+  - it: gke-managed references CAPG v1beta1 managed templates and a MachinePool worker class (no machine templates)
+    template: templates/gcp-gke/clusterclass.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: metadata.name, value: gke-managed }
+      - equal: { path: metadata.namespace, value: fleet }
+      - equal: { path: spec.infrastructure.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: spec.infrastructure.templateRef.kind, value: GCPManagedClusterTemplate }
+      - equal: { path: spec.controlPlane.templateRef.apiVersion, value: infrastructure.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: spec.controlPlane.templateRef.kind, value: GCPManagedControlPlaneTemplate }
+      - matchRegex: { path: spec.controlPlane.templateRef.name, pattern: "^gke-managed-control-plane-[0-9a-f]{8}$" }
+      - notExists: { path: spec.controlPlane.machineInfrastructure }
+      - notExists: { path: spec.workers.machineDeployments }
+      - equal: { path: "spec.workers.machinePools[0].class", value: default-worker }
+      - equal: { path: "spec.workers.machinePools[0].bootstrap.templateRef.apiVersion", value: bootstrap.cluster.x-k8s.io/v1beta1 }
+      - equal: { path: "spec.workers.machinePools[0].bootstrap.templateRef.kind", value: GKEConfigTemplate }
+      - matchRegex: { path: "spec.workers.machinePools[0].bootstrap.templateRef.name", pattern: "^gke-managed-worker-[0-9a-f]{8}$" }
+      - equal: { path: "spec.workers.machinePools[0].infrastructure.templateRef.kind", value: GCPManagedMachinePoolTemplate }
+
+  - it: gke-managed renders every template it references, in namespace fleet
+    template: templates/gcp-gke/clusterclass.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    asserts:
+      - hasDocuments: { count: 5 }
+      - containsDocument: { kind: GCPManagedClusterTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GCPManagedControlPlaneTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GCPManagedMachinePoolTemplate, apiVersion: infrastructure.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+      - containsDocument: { kind: GKEConfigTemplate, apiVersion: bootstrap.cluster.x-k8s.io/v1beta1, namespace: fleet, any: true }
+
+  - it: gke-managed defines only GKE variables (none of the k3s classes' registryAuth / registryCA / cni)
+    template: templates/gcp-gke/clusterclass.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - lengthEqual: { path: spec.variables, count: 6 }
+      - equal: { path: "spec.variables[0].name", value: project }
+      - equal: { path: "spec.variables[0].required", value: true }
+      - equal: { path: "spec.variables[1].name", value: region }
+      - equal: { path: "spec.variables[1].required", value: true }
+      - equal: { path: "spec.variables[3].schema.openAPIV3Schema.enum", value: [rapid, regular, stable, extended] }
+      - equal: { path: "spec.variables[4].schema.openAPIV3Schema.default", value: e2-standard-4 }
+      - notContains: { path: spec.variables, content: { name: cni }, any: true }
+      - notContains: { path: spec.variables, content: { name: registryAuth }, any: true }
+
+  - it: gke-managed patches project, region, network and GKE Workload Identity pool into the cluster templates
+    template: templates/gcp-gke/clusterclass.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    documentSelector: { path: kind, value: ClusterClass }
+    asserts:
+      - equal: { path: "spec.patches[0].definitions[0].jsonPatches[2]", value: { op: replace, path: /spec/template/spec/network/name, valueFrom: { template: '"{{ if .network }}{{ .network }}{{ else }}{{ .builtin.cluster.name }}{{ end }}"' } } }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[1]", value: { op: replace, path: /spec/template/spec/location, valueFrom: { variable: region } } }
+      - equal: { path: "spec.patches[1].definitions[0].jsonPatches[3]", value: { op: replace, path: /spec/template/spec/clusterSecurity/workloadIdentityConfig/workloadPool, valueFrom: { template: '"{{ .project }}.svc.id.goog"' } } }
+      - equal: { path: "spec.patches[3].enabledIf", value: "{{ if .workerNodeLocations }}true{{ end }}" }
+
+  - it: gke-managed node pools take their size from the MachinePool (GKE autoscaler off), VPC-native control plane
+    template: templates/gcp-gke/clusterclass.yaml
+    set: { capi.providers: { docker: false, gcp: true } }
+    asserts:
+      - equal: { path: spec.template.spec.scaling.enableAutoscaling, value: false }
+        documentSelector: { path: kind, value: GCPManagedMachinePoolTemplate }
+      - equal: { path: spec.template.spec.clusterNetwork.useIPAliases, value: true }
+        documentSelector: { path: kind, value: GCPManagedControlPlaneTemplate }

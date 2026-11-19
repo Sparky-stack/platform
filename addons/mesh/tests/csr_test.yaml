@@ -1,0 +1,132 @@
+suite: mesh (istio-csr) - member side of the mesh CA (Vault Issuer -> OpenBao, JWT auth, no CA key on the cluster)
+release: { name: mesh, namespace: istio-system }
+templates:
+  - templates/csr-issuer.yaml
+  - templates/csr-admission.yaml
+  - charts/cert-manager-istio-csr/templates/deployment.yaml
+  - charts/cert-manager-istio-csr/templates/certificate.yaml
+set:
+  cluster: { name: dev1 }
+  mesh: { csr: { enabled: true }, group: local, ca: { host: openbao.example.test, port: 8200 } }
+  cert-manager-istio-csr: { app: { server: { clusterID: dev1 } } }
+tests:
+  - it: Vault Issuer points at this cluster's role in its group's intermediate, verified with OpenBao's CA
+    template: templates/csr-issuer.yaml
+    documentSelector: { path: kind, value: Issuer }
+    asserts:
+      - equal: { path: metadata.name, value: openbao-mesh }
+      - equal: { path: spec.vault.server, value: "https://openbao.example.test:8200" }
+      - equal: { path: spec.vault.path, value: pki-mesh-local-int/sign/dev1 }
+      - equal: { path: spec.vault.caBundleSecretRef, value: { name: openbao-ca, key: ca.crt } }
+
+  - it: "auth: this cluster's JWT mount, projected ServiceAccount token (no static token, no token Secret)"
+    template: templates/csr-issuer.yaml
+    documentSelector: { path: kind, value: Issuer }
+    asserts:
+      - equal:
+          path: spec.vault.auth
+          value: { kubernetes: { mountPath: /v1/auth/mesh-dev1, role: istio-csr, serviceAccountRef: { name: istio-csr-openbao } } }
+      - notExists: { path: spec.vault.auth.tokenSecretRef }
+      - notExists: { path: spec.vault.auth.kubernetes.secretRef }
+
+  - it: only cert-manager's controller may mint that ServiceAccount's token
+    template: templates/csr-issuer.yaml
+    asserts:
+      - equal: { path: automountServiceAccountToken, value: false }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: rules, value: [{ apiGroups: [""], resources: [serviceaccounts/token], resourceNames: [istio-csr-openbao], verbs: [create] }] }
+        documentSelector: { path: kind, value: Role }
+      - equal: { path: subjects, value: [{ kind: ServiceAccount, name: cert-manager, namespace: cert-manager }] }
+        documentSelector: { path: kind, value: RoleBinding }
+
+  - it: "sync order: the Issuer (-1) comes after the ServiceAccount and token RBAC its Ready check logs in with (-2)"
+    template: templates/csr-issuer.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+        documentSelector: { path: kind, value: Issuer }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: ServiceAccount }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: Role }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+        documentSelector: { path: kind, value: RoleBinding }
+
+  - it: "sync order: the admission policies are in force (-2) before the Issuer they guard"
+    template: templates/csr-admission.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-2" }
+
+  - it: "a group is a cryptographic boundary: another group signs at its own intermediate"
+    template: templates/csr-issuer.yaml
+    documentSelector: { path: kind, value: Issuer }
+    set:
+      mesh: { group: prod }
+    asserts:
+      - equal: { path: spec.vault.path, value: pki-mesh-prod-int/sign/dev1 }
+
+  - it: standalone render without a group leaves the Issuer out
+    template: templates/csr-issuer.yaml
+    set:
+      mesh: { group: "" }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: "negative: rejects a group that is not a DNS label"
+    template: templates/csr-issuer.yaml
+    set:
+      mesh: { group: Bad_Group }
+    asserts:
+      - failedTemplate: { errorMessage: "mesh: mesh.group \"Bad_Group\" must be a DNS label (set by the catalog from mesh.platform.koorikla.io/group)" }
+
+  - it: only istio-csr and cert-manager may request certificates from the mesh CA; only istiod's Certificate may reference it
+    template: templates/csr-admission.yaml
+    asserts:
+      - hasDocuments: { count: 6 }
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: 'system:serviceaccount:istio-system:cert-manager-istio-csr' }
+        documentIndex: 0
+      - matchRegex: { path: 'spec.validations[0].expression', pattern: "object.metadata.name in \\[\"istiod\"\\]" }
+        documentIndex: 1
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 3
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 5
+
+  - it: "no second Vault Issuer may obtain a token the mesh CA accepts (ServiceAccount istio-csr-openbao / mesh audience)"
+    template: templates/csr-admission.yaml
+    asserts:
+      - isKind: { of: ValidatingAdmissionPolicy }
+        documentIndex: 2
+      - equal: { path: metadata.name, value: platform-mesh-ca-issuers }
+        documentIndex: 2
+      - equal: { path: 'spec.matchConstraints.resourceRules[0].resources', value: [issuers, clusterissuers] }
+        documentIndex: 2
+      - equal:
+          path: 'spec.validations[0].expression'
+          value: "object.spec.vault.auth.kubernetes.serviceAccountRef.name != 'istio-csr-openbao' || (object.kind == 'Issuer' && object.metadata.namespace == 'istio-system' && object.metadata.name == 'openbao-mesh')"
+        documentIndex: 2
+      - matchRegex: { path: 'spec.validations[1].expression', pattern: "a == 'vault://istio-system/openbao-mesh'" }
+        documentIndex: 2
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentIndex: 2
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 5
+
+  - it: istio-csr pins the group root, serves ztunnel (ambient node auth) with this cluster's ID, short workload certs
+    template: charts/cert-manager-istio-csr/templates/deployment.yaml
+    asserts:
+      - contains: { path: 'spec.template.spec.containers[0].args', content: "--root-ca-file=/var/run/secrets/istio-csr/root/root-cert.pem" }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: "--cluster-id=dev1" }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: "--ca-trusted-node-accounts=istio-system/ztunnel" }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: "--max-client-certificate-duration=24h" }
+      - contains: { path: 'spec.template.spec.containers[0].args', content: "--issuer-name=openbao-mesh" }
+      - contains: { path: 'spec.template.spec.volumes', content: { name: root-ca, secret: { secretName: mesh-root-ca, items: [{ key: root-cert.pem, path: root-cert.pem }] } } }
+      - equal: { path: 'spec.template.spec.containers[0].image', value: "quay.io/jetstack/cert-manager-istio-csr:v0.19.1@sha256:eb1b8beee32f7dd830c301b7d2e061f46f9250b0421457e78b1017de8ffb9d86" }
+
+  - it: "istiod's serving cert comes from the mesh CA (48h, renewed after 24h; istiod survives a day without OpenBao)"
+    template: charts/cert-manager-istio-csr/templates/certificate.yaml
+    asserts:
+      - equal: { path: spec.secretName, value: istiod-tls }
+      - equal: { path: spec.duration, value: 48h }
+      - equal: { path: spec.renewBefore, value: 24h }
+      - equal: { path: spec.issuerRef, value: { name: openbao-mesh, kind: Issuer, group: cert-manager.io } }
+      - equal: { path: spec.uris, value: [spiffe://cluster.local/ns/istio-system/sa/istiod-service-account] }

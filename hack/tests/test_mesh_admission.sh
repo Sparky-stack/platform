@@ -2,7 +2,7 @@
 # Mesh admission guards, evaluated offline with the kyverno CLI (CEL, same expression language as the API server):
 #   mgmt    addon openbao templates/mesh-admission.yaml: what charts/cluster renders for the remote-secret reader certs
 #           is admitted; everything that would turn a <name>-client-ca issuer into a general signing API is denied
-#   members addon istio-csr templates/admission.yaml: only istio-csr / cert-manager may ask the mesh CA (OpenBao) for
+#   members addon mesh templates/csr-admission.yaml: only istio-csr / cert-manager may ask the mesh CA (OpenBao) for
 #           certificates, only istiod's Certificate may reference it, never a CA, and no second Vault Issuer may obtain
 #           a token the mesh CA accepts (ServiceAccount istio-csr-openbao / audience vault://istio-system/openbao-mesh)
 set -euo pipefail
@@ -23,8 +23,8 @@ CM=system:serviceaccount:cert-manager:cert-manager
 {
   helm template openbao addons/openbao --namespace openbao --set 'mesh.groups={local}' -s templates/mesh-admission.yaml
   echo '---'
-  helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local \
-    --set-string cluster.name=dev1 -s templates/admission.yaml
+  helm template mesh addons/mesh --namespace istio-system --values addons/mesh/values/mesh-member.yaml \
+    --set-string mesh.group=local --set-string cluster.name=dev1 -s templates/csr-admission.yaml
 } > "$TMP/mrc.yaml"
 render_standalone_addon cert-manager "$TMP/cm.yaml"
 yq 'select(.kind == "CustomResourceDefinition" and .spec.group == "cert-manager.io")' "$TMP/cm.yaml" > "$TMP/crds.yaml"
@@ -171,8 +171,8 @@ cr Issuer openbao-mesh '  isCA: true
   duration: 24h' istio-system | check $P "$CSR" fail "negative: CA request"
 cr Issuer letsencrypt '  duration: 24h' istio-system | check $P alice skip "other issuers are not affected"
 P=platform-mesh-ca-certificates
-helm template istio-csr addons/istio-csr --namespace istio-system --set-string mesh.group=local --set-string cluster.name=dev1 > "$TMP/istio-csr-dev1.yaml"
-yq 'select(.kind == "Certificate" and .metadata.name == "istiod")' "$TMP/istio-csr-dev1.yaml" | check $P "$ARGO" pass "the chart's istiod Certificate"
+helm template mesh addons/mesh --namespace istio-system --values addons/mesh/values/mesh-member.yaml --set-string mesh.group=local --set-string cluster.name=dev1 > "$TMP/mesh-dev1.yaml"
+yq 'select(.kind == "Certificate" and .metadata.name == "istiod")' "$TMP/mesh-dev1.yaml" | check $P "$ARGO" pass "the chart's istiod Certificate"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: impostor, namespace: istio-system }\nspec:\n  secretName: impostor\n  uris: [spiffe://cluster.local/ns/prod/sa/payments]\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
   | check $P alice fail "negative: another Certificate minting a SPIFFE identity"
 printf 'apiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata: { name: istiod, namespace: default }\nspec:\n  secretName: x\n  issuerRef: { kind: Issuer, name: openbao-mesh }\n' \
@@ -185,7 +185,7 @@ vault_issuer() {   # vault_issuer <kind> <name> <namespace|""> <serviceAccountRe
   local md="{ name: $2 }"; [[ -n "$3" ]] && md="{ name: $2, namespace: $3 }"
   printf 'apiVersion: cert-manager.io/v1\nkind: %s\nmetadata: %s\nspec:\n  vault:\n    server: https://openbao.example:8200\n    path: pki-mesh-local-int/sign/dev1\n    auth:\n      kubernetes:\n        mountPath: /v1/auth/mesh-dev1\n        role: istio-csr\n        serviceAccountRef: %s\n' "$1" "$md" "$4"
 }
-yq 'select(.kind == "Issuer" and .metadata.name == "openbao-mesh")' "$TMP/istio-csr-dev1.yaml" | check $P "$ARGO" pass "the chart's Issuer openbao-mesh"
+yq 'select(.kind == "Issuer" and .metadata.name == "openbao-mesh")' "$TMP/mesh-dev1.yaml" | check $P "$ARGO" pass "the chart's Issuer openbao-mesh"
 vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao }' | check $P alice fail "negative: second Issuer as istio-csr-openbao"
 vault_issuer Issuer bypass istio-system '{ name: istio-csr-openbao, audiences: ["vault://istio-system/openbao-mesh"] }' \
   | check $P alice fail "negative: second Issuer with the mesh audience (the review's bypass)"

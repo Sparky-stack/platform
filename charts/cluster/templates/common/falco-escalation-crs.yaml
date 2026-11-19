@@ -1,0 +1,79 @@
+{{- if eq .Values.scope "cluster" }}
+{{- /*
+Per-cluster Falco escalation identity (docs/observability.md "Falco response"): derives sha256("<name>:<token>") on
+mgmt so the shared store token never leaves mgmt. Delivered via ClusterResourceSet (or PushSecret on byo).
+*/ -}}
+{{- if and .Values.falcoEscalation.enabled (ne (toString (dig "falco" "" (.Values.addons | default dict))) "false") }}
+{{- $name := .Values.name }}
+{{- $ns := .Values.falcoEscalation.namespace }}
+{{- $byo := eq (toString .Values.provider) "byo" }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-falco-escalation
+  namespace: fleet
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: {{ $name }}-falco-escalation
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      {{- if $byo }}
+      type: Opaque
+      data:   # gitleaks:allow: ESO template; the derived per-cluster token only
+        WEBHOOK_ADDRESS: '{{ printf "{{ printf \"%%s/%%s\" (.url | trimSuffix \"/\") %s }}" (quote $name) }}'
+        WEBHOOK_CUSTOMHEADERS: '{{ printf "{{ printf \"Authorization:Bearer %%s\" (printf \"%%s:%%s\" %s .token | sha256sum) }}" (quote $name) }}'
+      {{- else }}
+      type: addons.cluster.x-k8s.io/resource-set
+      data:   # gitleaks:allow: ESO template of the CRS payload Secret; the derived per-cluster token only
+        falco-escalation.yaml: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: {{ $ns }}
+          ---
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: falcosidekick-escalation
+            namespace: {{ $ns }}
+          type: Opaque
+          data:
+            WEBHOOK_ADDRESS: {{ printf "{{ printf \"%%s/%%s\" (.url | trimSuffix \"/\") %s | b64enc }}" (quote $name) }}
+            WEBHOOK_CUSTOMHEADERS: {{ printf "{{ printf \"Authorization:Bearer %%s\" (printf \"%%s:%%s\" %s .token | sha256sum) | b64enc }}" (quote $name) }}
+      {{- end }}
+  data:
+    - secretKey: url
+      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: url }
+    - secretKey: token
+      remoteRef: { key: {{ .Values.falcoEscalation.remoteKey }}, property: token }
+---
+{{- if $byo }}
+{{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-falco-escalation" $name) "source" (printf "%s-falco-escalation" $name)
+      "namespace" $ns "remoteName" "falcosidekick-escalation") }}
+{{- else }}
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: {{ $name }}-falco-escalation
+  namespace: fleet
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      platform.koorikla.io/name: {{ $name }}
+  resources:
+    - kind: Secret
+      name: {{ $name }}-falco-escalation
+{{- end }}
+{{- end }}
+{{- end }}

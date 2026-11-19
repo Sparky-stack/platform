@@ -163,7 +163,7 @@ Two key sources for the workflow-plane prefix (addon kyverno-policies `imageVeri
   long-lived installations with a stable key (or, better, a KMS key, [#37](https://github.com/koorikla/platform/issues/37)).
 - **From mgmt, per workload cluster** (default with `registry.type: harbor` and no `publicKey`; `installations/local`):
   `task secrets` generates a fresh pair per mgmt cluster, so no committed key could match. `charts/cluster`
-  (`templates/image-verification-crs.yaml`) builds an ESO-templated ClusterResourceSet payload on mgmt and CAPI applies
+  (`templates/common/image-verification-crs.yaml`) builds an ESO-templated ClusterResourceSet payload on mgmt and CAPI applies
   it to exactly that cluster (strategy Reconcile), into Kyverno's namespace:
 
   | Object | Content | Source on mgmt | Used by |
@@ -239,7 +239,7 @@ sourceIntegrity:
 - Best available today:
   - Exact chart versions, reviewed through Renovate PRs, signed git commits (above), so Argo CD only renders reviewed
     chart pins.
-  - Istio's charts (`addons/istio-ambient`) are also pinned by tarball sha256 (`Chart.yaml` annotation
+  - Istio's charts and cert-manager-istio-csr (`addons/mesh`) are also pinned by tarball sha256 (`Chart.yaml` annotation
     `platform.koorikla.io/dependency-digests`, checked by `hack/deps.sh` locally and in CI, not by the Argo CD repo
     server).
   - Images, whatever chart deploys them into cell namespaces, are verified at admission.
