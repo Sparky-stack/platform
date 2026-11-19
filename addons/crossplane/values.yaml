@@ -88,7 +88,7 @@ packages:
       limits: { cpu: "1", memory: 1Gi }
   # -- The PostgreSQL API package (packages/postgresql), tag@digest (a Configuration has one manifest, no index). The promotion point:
   # per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it.
-  configuration: ghcr.io/koorikla/platform/postgresql:main@sha256:063eda96fcef246d85fc084f01effa6c6618b6f243346fd011b6b1e411047878 # VERIFY: switch to vX.Y.Z once release-please tags postgresql-v*
+  configuration: ghcr.io/koorikla/platform/postgresql:main@sha256:8e5357552402966894be564da15912b99f57adc6623d7f7d702aae93d4344fc8 # VERIFY: switch to vX.Y.Z once release-please tags postgresql-v*
   # Cosign keyless verification of platform packages (ImageConfig; alpha, needs core flag
   # --enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags.
   # Off until Crossplane verifies Sigstore bundles (#247); packages are still keyless-signed with provenance in CI.
@@ -101,6 +101,10 @@ packages:
     function-environment-configs: xpkg.crossplane.io/crossplane-contrib/function-environment-configs:v0.9.2@sha256:1e4f74646d274437da6dc94d1323a0be8ccfa2e2497c0e92e6722e870ac4d3f6
     function-go-templating: xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.13.2@sha256:20198cb6ea5b4b8a48042343410ec9031e5ec43431d874364ecd3eac8e861290
     function-auto-ready: xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:cce8799e19a8f25fb84e1f8dd8855021fdbe8cd7a12a5c22a0c0c345476ae9fe
+    # The Configuration's embedded function (packages/postgresql/functions/compose-postgresql), published with it by
+    # the same CI run: bump it together with `configuration` (same tag; the Configuration's dependsOn pins this digest).
+    # The name is the one the Composition references (Crossplane's name for ghcr.io/koorikla/platform/postgresql_compose-postgresql).
+    koorikla-platform-postgresqlcompose-postgresql: ghcr.io/koorikla/platform/postgresql_compose-postgresql:main@sha256:266105c6f749d3a8961ddac162b208ee1e2becf86e65bb78318dce36909723c4 # VERIFY: switch to vX.Y.Z with configuration
   # Per backend: only the family members its Composition uses.
   providers:
     cnpg: {}
