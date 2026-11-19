@@ -365,12 +365,24 @@ assert_eq "$(result_of 'hello-world 200 in production')" PENDING "fresh: product
 assert_eq "$(result_of 'hello-world 200 in development')" PASS "fresh: development serves"
 assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" PENDING "fresh: resilience waits for the production promotion"
 assert_eq "$(result_of 'hello-world reads GREETING_SECRET from OpenBao')" PASS "fresh: development app secret still checked"
+# No gate run on a fresh stack (the gate runs on promotion; runs expire after 1h): PENDING with the reason, not FAIL.
+cp "$FIX/k3d-platform-mgmt.workflowruns" "$TMP/gate-runs.bak"
+printf '2026-11-16T18:00:00Z build-1 go True/\n' > "$FIX/k3d-platform-mgmt.workflowruns"
+run fresh-nogate
+assert_eq "$RC" 0 "fresh: no gate run before the first promotion does not fail the pre-flight"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" PENDING "fresh: no gate run yet -> PENDING"
+assert_eq "$(detail_of 'promotion-gate WorkflowRuns present')" "no promotion-gate run yet: not promoted in this stack (production pins hello-world-77ff9dc697)" "fresh: says why"
+assert_eq "$(result_of 'latest promotion gate passed')" PENDING "fresh: latest gate likewise"
+cp "$TMP/gate-runs.bak" "$FIX/k3d-platform-mgmt.workflowruns"
 printf 'hello-world staging hello-world-77ff9dc697 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
 run fresh-ready
 assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: a binding with its release that does not serve still FAILs"
 rm "$FIX/k3d-platform-mgmt.bindings"
 run fresh-none
 assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: no binding -> FAIL"
+printf '2026-11-16T18:00:00Z build-1 go True/\n' > "$FIX/k3d-platform-mgmt.workflowruns"
+run promoted-nogate
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "promoted (production not pinned to a missing release): no gate run still FAILs"
 
 # ---- API server down ------------------------------------------------------------------------------------------------
 FIX="$TMP/fix/down"; mkdir -p "$FIX"

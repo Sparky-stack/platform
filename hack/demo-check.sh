@@ -502,20 +502,31 @@ unpromoted_release() {
   printf '%s\n' "$out" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e && $4 == "ComponentReleaseNotFound" { print $3; exit }'
 }
 
+# gate_not_run_yet: true (and says why) when no gate run is expected: production still pins a release of the previous
+# stack, i.e. nothing was promoted since this clean bootstrap (the gate runs on promotion). PENDING, not FAIL.
+gate_not_run_yet() {
+  local rel
+  rel=$(unpromoted_release "$(production_env)")
+  [[ -n "$rel" ]] || return 1
+  echo "no promotion-gate run yet: not promoted in this stack ($(production_env) pins $rel)"
+}
+
 c_gate_runs() {
   local out n
   km get clusterworkflows.openchoreo.dev promotion-gate -o name >/dev/null 2>&1 \
     || { echo "ClusterWorkflow promotion-gate missing"; return 1; }
   out=$(workflow_runs) || { echo "cannot list WorkflowRuns"; return 1; }
   n=$(printf '%s\n' "$out" | awk '$3 == "promotion-gate"' | grep -c . || true)
-  [[ "$n" -gt 0 ]] || { echo "no promotion-gate WorkflowRun in $NS (runs expire 1h after completion; promote to start one)"; return 1; }
+  [[ "$n" -gt 0 ]] || { gate_not_run_yet && return 2
+    echo "no promotion-gate WorkflowRun in $NS (runs expire 1h after completion; promote to start one)"; return 1; }
   echo "$n promotion-gate run(s) in $NS"
 }
 
 c_gate_latest() {
   local out last
   out=$(workflow_runs) || { echo "cannot list WorkflowRuns"; return 1; }
-  last=$(printf '%s\n' "$out" | awk '$3 == "promotion-gate"' | latest_run) || { echo "no promotion-gate run"; return 1; }
+  last=$(printf '%s\n' "$out" | awk '$3 == "promotion-gate"' | latest_run) || { gate_not_run_yet && return 2
+    echo "no promotion-gate run"; return 1; }
   # shellcheck disable=SC2086  # split the run line into its fields
   set -- $last
   echo "$2: $(outcome "${4:-/}")"
