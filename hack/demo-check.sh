@@ -471,6 +471,28 @@ c_http() {
   return 1
 }
 
+# c_resilience: production pods of the demo component carry the resilience defaults (#251, ClusterTrait resilience
+# embedded in the Deployment component types): PodDisruptionBudget maxUnavailable 1, spread over nodes and zones,
+# PriorityClass app-production.
+c_resilience() {
+  local env dp ns dep pdb rel
+  env=$(production_env); dp=$(env_dataplane "$env")
+  [[ -n "$env" && -n "$dp" ]] || { echo "no production environment with a data plane"; return 1; }
+  ns=$(cell_namespace "$dp" "$env")
+  dep=$(kw "$dp" get deployments -n "${ns:-none}" -l "openchoreo.dev/component=$COMP" \
+    -o jsonpath='{.items[0].metadata.name} {.items[0].spec.template.spec.priorityClassName} {.items[0].spec.template.spec.topologySpreadConstraints[*].topologyKey}' 2>/dev/null)
+  if [[ -z "${dep// /}" ]]; then
+    rel=$(unpromoted_release "$env")
+    [[ -n "$rel" ]] && { echo "not promoted in this stack yet ($env pins $rel)"; return 2; }
+    echo "no $COMP Deployment in $env (cell ${ns:-missing})"; return 1
+  fi
+  pdb=$(kw "$dp" get poddisruptionbudgets -n "$ns" -l "openchoreo.dev/component=$COMP" \
+    -o jsonpath='{.items[0].spec.maxUnavailable}/{.items[0].spec.unhealthyPodEvictionPolicy}' 2>/dev/null)
+  echo "$dep pdb=$pdb"
+  [[ "$pdb" == "1/AlwaysAllow" && "$dep" == *" app-production "* && "$dep" == *kubernetes.io/hostname* \
+    && "$dep" == *topology.kubernetes.io/zone* ]]
+}
+
 # unpromoted_release <env>: the release the component's binding for <env> pins when this stack has no such
 # ComponentRelease (Ready reason ComponentReleaseNotFound), else empty.
 unpromoted_release() {
@@ -648,6 +670,7 @@ while IFS= read -r env; do
 done < <(env_names)
 check 5 gate-runs "promotion-gate WorkflowRuns present" c_gate_runs
 check 5 gate-latest "latest promotion gate passed" c_gate_latest
+check 5 resilience-production "$COMP PDB + spread + priority in production" c_resilience
 
 check 6 metrics-clusters "metrics from every workload cluster" c_metrics_clusters
 check 6 metrics-app "$COMP metrics in observability plane" c_metrics_app
