@@ -147,6 +147,7 @@ xp_cleanup() {
   # shellcheck disable=SC2086 # word-split pids
   [[ -z "$pids" ]] || kill $pids 2>/dev/null || true
   xp_cleanup_run "$XP_NET"
+  [[ -z "${XP_FN_IMAGE:-}" ]] || docker rmi -f "$XP_FN_IMAGE" >/dev/null 2>&1 || true
   rm -rf "$TMP"
 }
 trap xp_cleanup EXIT
@@ -165,20 +166,38 @@ if ! out=$(docker network create --label "$XP_LABEL" --label "koorikla.platform/
   assert_eq failed ok "crossplane render: create the run's Docker network $XP_NET"
   finish; exit 1
 fi
-# The addon's own Function objects (same pinned packages), run as the run's named containers on its network; the
-# first render starts them, the others reuse them (Orphan: the render leaves them running, xp_cleanup removes them).
+# The embedded function compose-postgresql, built from the working tree's templates exactly like `crossplane project
+# build` does (CLI 2.4.1: FROM function-go-templating v0.12.0, templates in /src): renders test the templates you edit.
+XP_FN=koorikla-platform-postgresqlcompose-postgresql
+XP_FN_IMAGE="koorikla.local/postgresql_compose-postgresql:render-$$"
+if ! out=$(printf '%s\n' \
+  'FROM xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.12.0@sha256:ec55f6817a88c884a33158e7f50d7356405ef4d4e7efb00fd1a0e136275d9c54' \
+  'COPY . /src' 'ENV FUNCTION_GO_TEMPLATING_DEFAULT_SOURCE=/src' \
+  | retry_with_backoff 3 2 docker build -q -t "$XP_FN_IMAGE" -f - packages/postgresql/functions/compose-postgresql 2>&1); then
+  echo "$out" >&2
+  assert_eq failed ok "crossplane render: build the embedded function image"
+  finish; exit 1
+fi
+printf 'apiVersion: pkg.crossplane.io/v1\nkind: Function\nmetadata:\n  name: %s\nspec:\n  package: %s\n' \
+  "$XP_FN" "$XP_FN_IMAGE" > "$TMP/embedded-function.yaml"
+# The addon's own Function objects (same pinned packages; its published compose-postgresql replaced by the local build),
+# run as the run's named containers on its network; the first render starts them, the others reuse them (Orphan: the
+# render leaves them running, xp_cleanup removes them). Container names stay <= 63 chars (a DNS label: the engine dials
+# them by name; a longer one hangs the render), hence the embedded function's container is named after compose-postgresql.
+yq 'select(.kind == "Function" and .metadata.name != "'"$XP_FN"'")' "$TMP/addon-cnpg.yaml" > "$TMP/addon-functions.yaml"
+printf -- '---\n' >> "$TMP/addon-functions.yaml"; cat "$TMP/embedded-function.yaml" >> "$TMP/addon-functions.yaml"
 XP_NET="$XP_NET" yq 'select(.kind == "Function")
   | .metadata.annotations["render.crossplane.io/runtime-docker-pull-policy"] = "IfNotPresent"
   | .metadata.annotations["render.crossplane.io/runtime-docker-network"] = strenv(XP_NET)
-  | .metadata.annotations["render.crossplane.io/runtime-docker-name"] = strenv(XP_NET) + "-" + .metadata.name
-  | .metadata.annotations["render.crossplane.io/runtime-docker-cleanup"] = "Orphan"' "$TMP/addon-cnpg.yaml" \
+  | .metadata.annotations["render.crossplane.io/runtime-docker-name"] = strenv(XP_NET) + "-" + (.metadata.name | sub("^koorikla-platform-postgresql", ""))
+  | .metadata.annotations["render.crossplane.io/runtime-docker-cleanup"] = "Orphan"' "$TMP/addon-functions.yaml" \
   > "$TMP/functions.yaml"
 # Pull every image once, serially and with retries, before the parallel renders: ten renders pulling the same images
 # at once from xpkg.crossplane.io get connection resets (#140). The renders then find them locally (IfNotPresent).
 pkgs=()
 read_lines pkgs yq -N -r '.spec.package' "$TMP/functions.yaml"
 for img in "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}; do
-  [[ -n "$img" && "$img" != null ]] || continue
+  [[ -n "$img" && "$img" != null && "$img" != "$XP_FN_IMAGE" ]] || continue
   docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
 done
 
@@ -208,6 +227,8 @@ render_bg azure-minimal "$TMP/env-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
 render_bg azure-production "$TMP/env-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
 render_bg unknown-backend "$TMP/env-unknown.yaml" "$FIX/xr-minimal.yaml"
 wait
+# XP_RENDER_OUT=<dir>: keep every case's raw render (diff renders before/after a template change).
+if [[ -n "${XP_RENDER_OUT:-}" ]]; then mkdir -p "$XP_RENDER_OUT" && cp "$TMP"/render-*.yaml "$XP_RENDER_OUT"/; fi
 
 # render <case>: the render_bg result of that case -> composed resources $TMP/out-<case>.yaml, XR $TMP/xr-<case>.yaml
 render() {

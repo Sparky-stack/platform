@@ -32,12 +32,35 @@ PostgreSQL facts (`postgresql.*` values -> `EnvironmentConfig platform-postgresq
 object store). Example: `installations/aws-example/addons/crossplane/values.yaml`. Identity values
 (`postgresql.<cloud>.identity`) configure the provider ServiceAccounts, not the EnvironmentConfig.
 
-## One dispatching Composition per API
+## One Composition per API, templates laid out like a Helm chart
 
-The XRD's `defaultCompositionRef` names one Composition, the same on every cluster. When an API has several backends
-(PostgreSQL: cnpg, aws-rds, gcp-cloudsql, azure-flexible) the go-template holds one `{{ define }}` per backend and
-dispatches on `$facts.backend`; an unknown or missing backend is a fatal result with a clear message. Only that
-backend's resources are rendered, so the cluster only needs that backend's providers.
+The XRD's `defaultCompositionRef` names one Composition, the same on every cluster: `environment`
+(function-environment-configs) -> `compose-<api>` -> `ready` (function-auto-ready). `compose-<api>` is the Project's
+embedded function (`crossplane function generate compose-<api> --language go-templating`): function-go-templating with
+the templates of `functions/compose-<api>/` baked into its image. One file per composed object, file names say what
+they render (the same convention in every package):
+
+```text
+packages/postgresql/functions/compose-postgresql/
+  00-prelude.yaml.gotmpl            # facts, backend check (unknown = fatal result), XR spec defaults, derived values
+  1x-<object>.yaml.gotmpl           # objects every backend composes (none in postgresql; e.g. mysql's connection Secret)
+  90-xr-status.yaml.gotmpl          # the XR status (an object with the XR's apiVersion/kind)
+  <backend>-<object>.yaml.gotmpl    # cnpg-cluster, aws-rds-kms-key, gcp-cloudsql-connection-secret, ...
+```
+
+The files render in name order as ONE template, so the prelude's variables reach every file; it runs on every
+backend, so it never `fail`s outside the backend check. An object file starts with its guard
+(`{{- if eq $backend "cnpg" }}`) and sets `gotemplating.fn.crossplane.io/composition-resource-name`; only
+`$facts.backend`'s files render, so a cluster needs only that backend's providers. Add an object: add
+`<backend>-<object>.yaml.gotmpl`, then run the render tests (below). Every file in the directory is a template: no
+README or other files there.
+
+The Composition references the function as `koorikla-platform-postgresqlcompose-postgresql`, the name Crossplane derives
+from its package `ghcr.io/koorikla/platform/postgresql_compose-postgresql` (`crossplane project build --repository`
+decides it); addons/crossplane installs the Function under that name. Upstream Functions keep the names the addon
+installs them under (`function-environment-configs`, `function-auto-ready`), not the resolver's
+`crossplane-contrib-function-*`: the cluster skips dependency resolution. CLI 2.4.1 builds go-templating functions `FROM
+function-go-templating:v0.12.0` (not configurable) for amd64 + arm64.
 
 ## Dependencies stay pinned by the addon
 
@@ -60,7 +83,8 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   `app-crossplane-configuration.yaml` with `package_root: packages/<name>`: PRs run `crossplane resource validate`
   and `crossplane composition render` of every example against `tests/render/expected/`; `main` and `<name>-v*`
   tags run `crossplane project build` + `crossplane project push` to `ghcr.io/koorikla/platform/<name>` (tags: short
-  SHA, `main`, `vX.Y.Z` from the component tag), then cosign keyless signing and SLSA provenance. release-please
+  SHA, `main`, `vX.Y.Z` from the component tag) plus its embedded function `<name>_compose-<name>` (same tags), then
+  cosign keyless signing and SLSA provenance of both. release-please
   versions each package as its own component (`release-please-config.json`).
 - Signature verification: OFF for now ([#247](https://github.com/koorikla/platform/issues/247)). Crossplane 2.4's
   alpha cosign verifier only finds legacy `.sig` tags; cosign v3 signs with Sigstore bundles attached as OCI
@@ -82,12 +106,15 @@ The CLI is pinned in `mise.toml` (`mise exec -- crossplane ...`). `_output/`, `s
 crossplane project init <name> --directory packages/<name>         # scaffold: crossplane-project.yaml, apis/, examples/, ...
 cd packages/<name>
 crossplane dependency add 'xpkg.crossplane.io/crossplane-contrib/function-go-templating:>=v0.13.2'  # + schemas
-crossplane composition render examples/<xr>.yaml apis/<api>/composition.yaml tests/render/functions.yaml \
-  --xrd apis/<api>/definition.yaml --extra-resources tests/render/environment/<backend>.yaml
 crossplane project build                                            # _output/<name>.xpkg
 crossplane project run                                              # local KIND dev control plane (project stop)
 PACKAGE_ROOT=packages/<name> bash ../../ci/scripts/crossplane/validate-render.sh   # what CI runs; UPDATE_EXPECTED=true
+XP_RENDER_OUT=/tmp/r bash hack/tests/test_crossplane_render.sh     # from the repo root: every backend, renders kept in /tmp/r
 ```
+
+Both render harnesses build the embedded function from the working tree (validate-render.sh: `crossplane project
+build` + `docker load`; the hack test: the same `FROM` + `COPY . /src` with `docker build`). For a refactor of the
+templates, render before and after with `XP_RENDER_OUT` and `diff -r` the two directories.
 
 `project run` resolves dependencies and has no EnvironmentConfig: apply `tests/render/environment/<backend>.yaml`
 before an example (VERIFY: not exercised in CI).
