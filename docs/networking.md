@@ -104,8 +104,10 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   - `cni.exclusive: false`: Cilium must not delete istio-cni's chained config.
   - `socketLB.hostNamespaceOnly: true`: socket LB inside pod namespaces would bypass ztunnel's redirection.
   - `bpf.masquerade: false`: BPF masquerading breaks ambient's link-local `169.254.7.127` health-probe SNAT.
-  - With default-deny `CiliumNetworkPolicy`, also allow ingress from `169.254.7.127/32` and HBONE `15008/tcp` between
-    ambient pods.
+  - Any policy that isolates an ambient pod for ingress (Kubernetes `NetworkPolicy` or `CiliumNetworkPolicy`) must also
+    allow `169.254.7.127/32` (kubelet probes after istio-cni's SNAT) and HBONE `15008/tcp` between ambient pods. The
+    platform adds both to OpenChoreo's per-component policies in every ambient cell
+    ([Strict mTLS in cell namespaces](#strict-mtls-in-cell-namespaces)).
   - Any NetworkPolicy that restricts ingress ports must also open HBONE `15008/tcp` from the same peers: ztunnel
     tunnels every mesh connection to the destination pod's 15008, so the CNI never sees the app port. For OpenChoreo's
     per-component policies the platform generates that rule
@@ -187,11 +189,17 @@ enrollment (synchronized: an edited or deleted object is restored, generated for
   namespace and `openchoreo.dev/system-component` pods anywhere (the gateway). OpenChoreo's policy opens only the
   endpoint ports, and ambient tunnels every mesh connection to 15008, so without it the CNI drops ingress (and
   pod-to-pod traffic inside a cell). The peer set is unchanged, so a staging pod still can't reach production; inside
-  the tunnel the CNI no longer checks the endpoint port.
+  the tunnel the CNI no longer checks the endpoint port. A second rule admits kubelet probes (any port) from
+  `169.254.7.127/32` (IPv6 `fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128`): istio-cni SNATs every probe into an enrolled
+  pod to that link-local source (Istio's "Ambient, health probes, and Kubernetes NetworkPolicy"), Cilium classifies it
+  as `world`, not `host`, so OpenChoreo's port rule drops it. Without the rule every component with a startup probe is
+  killed into CrashLoopBackOff (`Startup probe failed ... context deadline exceeded`; seen on dev1 after the resilience
+  probes of #251). The source can't be used by anything else: it is host-local and Cilium refuses spoofed pod sources.
 - `openchoreo-cell-mtls`: the `PeerAuthentication` (STRICT, or PERMISSIVE for an opted-out cell), off with
   `ambientEnrollment.mtls.strict: false`.
 
-Unaffected: kubelet probes (ambient SNATs them to `169.254.7.127`, which ztunnel exempts), cAdvisor and
+Unaffected: kubelet probes under STRICT (ztunnel exempts the `169.254.7.127` SNAT source; the CNI needs the rule above),
+cAdvisor and
 kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API server only), the promotion gate
 (queries the gateway's Envoy metrics in the observability plane), and traffic between pods of one cell.
 

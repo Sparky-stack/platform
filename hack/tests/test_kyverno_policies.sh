@@ -34,8 +34,8 @@
 #                              type with platform.koorikla.io/requires-addons passes only to a data plane annotated with
 #                              that addon (absent or "false" is denied, with the addon named); types without a requirement
 #                              pass anywhere; a binding of a missing Resource is denied
-#   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy and a
-#                              STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
+#   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy (with the
+#                              kubelet probe source 169.254.7.127) and a STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
 #                              non-cells and platform namespaces get neither
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
@@ -327,6 +327,23 @@ for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell
   assert_eq "${got% }" "$want" "cell mesh: $p matches exactly the cells: $want"
 done
 assert_match "$(cat "$TMP/cm-openchoreo-cell-hbone.out")" 'port: 15008' "cell mesh: HBONE NetworkPolicy opens tcp 15008"
+# Kubelet probes (ambient SNATs them to a link-local source that Cilium treats as world): every generated policy has
+# one rule admitting exactly the probe sources (any port), and no ipBlock rule opens 15008. Shape per policy:
+#   <probe source CIDRs>|<ports of that rule>|<rules that combine 15008 with an ipBlock>
+sed -n '/^apiVersion: networking.k8s.io/,/^---$/p' "$TMP/cm-openchoreo-cell-hbone.out" |
+  yq -o=json -I=0 'select(.kind == "NetworkPolicy")' > "$TMP/cm-np.json"
+probes=$(python3 -c '
+import json, sys
+for line in sys.stdin:
+    rules = json.loads(line)["spec"]["ingress"]
+    blocks = [r for r in rules if any("ipBlock" in f for f in r["from"])]
+    cidrs = ",".join(f.get("ipBlock", {}).get("cidr", "peer") for r in blocks for f in r["from"])
+    ports = ",".join(str(p["port"]) for r in blocks for p in r.get("ports", [])) or "any"
+    hbone = sum(1 for r in blocks if any(p["port"] == 15008 for p in r.get("ports", [])))
+    print(f"{cidrs}|{ports}|{hbone}")
+' < "$TMP/cm-np.json" | tr '\n' ' ')
+want='169.254.7.127/32,fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128|any|0'
+assert_eq "${probes% }" "$want $want $want" "cell mesh: every HBONE NetworkPolicy admits kubelet probes from ambient's SNAT source only"
 # PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
 modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
 assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"
