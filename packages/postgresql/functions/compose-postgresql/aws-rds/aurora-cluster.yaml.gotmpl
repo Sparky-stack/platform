@@ -1,0 +1,39 @@
+{{- /* aws-rds: Aurora PostgreSQL Cluster (spec.engine aurora). */}}
+{{- if and (eq $backend "aws-rds") $aurora }}
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Cluster
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    engine: aurora-postgresql
+    engineVersion: {{ $version | quote }}     # major only: RDS picks the default minor (VERIFY on a live account)
+    databaseName: {{ $db }}
+    masterUsername: {{ $db }}
+    manageMasterUserPassword: true
+    iamDatabaseAuthenticationEnabled: true
+    storageEncrypted: true
+    kmsKeyIdRef:
+      name: {{ $name }}-storage
+    dbSubnetGroupNameRef:
+      name: {{ $name }}
+    vpcSecurityGroupIdRefs:
+      - name: {{ $name }}-db
+    port: 5432
+    backupRetentionPeriod: {{ $retentionPeriod }}
+    copyTagsToSnapshot: true
+    deletionProtection: {{ $retain }}
+    skipFinalSnapshot: {{ not $backup }}
+    {{- if $backup }}
+    finalSnapshotIdentifier: {{ $id }}-final
+    {{- end }}
+    tags: {{ toJson $tags }}
+{{- /* Writer, plus a reader in another AZ (Aurora fails over to it) when highAvailability. */}}
+{{- end }}

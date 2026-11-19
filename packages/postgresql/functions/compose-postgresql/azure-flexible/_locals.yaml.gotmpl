@@ -1,0 +1,17 @@
+{{- /* Locals of the azure-flexible/ files (evaluated on every backend: keep them side-effect free, never `fail` here).
+Only the object files, guarded by `if eq $backend "azure-flexible"`, render. */}}
+{{- /* azure-flexible: Azure Database for PostgreSQL Flexible Server with VNet integration (delegated subnet, private DNS
+zone, no public access), Entra authentication enabled next to password authentication, zone-redundant HA when
+highAvailability. The administrator password is generated in-cluster by an ESO Password generator into the connection
+Secret before the server exists (the server needs it at creation; the FQDN is deterministic); Crossplane's pipeline never
+sees it. Storage: the smallest Flexible Server size >= storageGiB. */}}
+{{- $skus := dict "S" "GP_Standard_D2ds_v5" "M" "GP_Standard_D4ds_v5" "L" "GP_Standard_D8ds_v5" }}
+{{- $storageMb := 0 }}
+{{- range $mb := list 32768 65536 131072 262144 524288 1048576 2097152 4194304 8388608 16777216 }}
+{{- if and (eq $storageMb 0) (ge $mb (mul $storage 1024)) }}{{ $storageMb = $mb }}{{ end }}
+{{- end }}
+{{- if eq $storageMb 0 }}{{ $storageMb = 16777216 }}{{ end }}
+{{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+{{- $tags := dict "platform.koorikla.io/cluster" $facts.cluster "platform.koorikla.io/namespace" $ns "platform.koorikla.io/postgresql" $name }}
+{{- $fqdn := printf "%s.postgres.database.azure.com" $id }}
+{{- $host := dig "server" "resource" "status" "atProvider" "fqdn" $fqdn $observed }}

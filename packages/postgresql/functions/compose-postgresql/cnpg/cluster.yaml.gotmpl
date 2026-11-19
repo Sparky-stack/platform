@@ -1,0 +1,41 @@
+{{- /* cnpg: the CloudNativePG Cluster (the operator writes the connection Secret <name>-app). */}}
+{{- if eq $backend "cnpg" }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster
+spec:
+  instances: {{ ternary 3 1 (eq (toString $ha) "true") }}
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ClusterImageCatalog
+    name: {{ $facts.imageCatalog }}
+    major: {{ $version | int }}
+  storage:
+    size: {{ $storage }}Gi
+  resources:
+    requests: { cpu: {{ $res.cpu | quote }}, memory: {{ $res.memory }} }
+    limits: { memory: {{ $res.limit }} }
+  bootstrap:
+    initdb:
+      database: {{ $db }}
+      owner: {{ $db }}
+  inheritedMetadata:
+    labels:
+      platform.koorikla.io/postgresql: {{ $name }}
+  {{- if $backupOn }}
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ $name }}-backups
+  {{- with (dig "backup" "serviceAccountAnnotations" dict $facts) }}
+  serviceAccountTemplate:
+    metadata:
+      annotations: {{ toJson . }}
+  {{- end }}
+  {{- end }}
+{{- end }}

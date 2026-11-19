@@ -1,0 +1,12 @@
+{{- /* cnpg: the XR status (backend, endpoint, Secret name). */}}
+{{- if eq $backend "cnpg" }}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+status:
+  backend: cnpg
+  endpoint: {{ $name }}-rw.{{ $ns }}.svc
+  port: 5432
+  secretName: {{ $name }}-app
+  backup: {{ if $backupOn }}enabled{{ else if $backup }}unavailable{{ else }}disabled{{ end }}
+{{- end }}

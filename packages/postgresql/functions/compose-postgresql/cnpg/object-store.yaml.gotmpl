@@ -1,0 +1,18 @@
+{{- /* cnpg: Barman Cloud ObjectStore, when backups are on and the cluster has an object store. */}}
+{{- if and (eq $backend "cnpg") $backupOn }}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ $name }}-backups
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: object-store
+    gotemplating.fn.crossplane.io/ready: "True"
+spec:
+  retentionPolicy: {{ printf "%dd" $retention | quote }}
+  configuration:
+    destinationPath: {{ printf "%s/%s/%s/%s" (trimSuffix "/" $dest) $facts.cluster $ns $name }}
+    {{- toYaml (dig "backup" "credentials" dict $facts) | nindent 4 }}
+    wal:
+      compression: gzip
+{{- end }}

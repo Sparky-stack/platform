@@ -1,0 +1,14 @@
+{{- /* gcp-cloudsql: the XR status. */}}
+{{- if eq $backend "gcp-cloudsql" }}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+status:
+  backend: gcp-cloudsql
+  backup: {{ ternary "enabled" "disabled" (eq (toString $backup) "true") }}
+  {{- if $host }}
+  endpoint: {{ $host }}
+  port: 5432
+  secretName: {{ $name }}-app
+  {{- end }}
+{{- end }}

@@ -1,0 +1,32 @@
+{{- /* Runs first (files render in path order as ONE template: variables set here are visible in every file).
+Facts: EnvironmentConfig platform-postgresql (addons/crossplane), loaded into the context by the pipeline's
+environment step. Each <backend>/ directory renders only when $backend names it; an unknown backend fails here. */}}
+{{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+{{- /* Shared preamble (read by every file below): the XR's spec with the XRD defaults as fallbacks,
+the cloud-side identifier and the deletion behaviour. $facts is the EnvironmentConfig data. */}}
+{{- $xr := .observed.composite.resource }}
+{{- $spec := $xr.spec | default dict }}
+{{- $name := $xr.metadata.name }}
+{{- $ns := $xr.metadata.namespace }}
+{{- $version := dig "version" "17" $spec | toString }}
+{{- $size := dig "size" "S" $spec }}
+{{- $storage := dig "storageGiB" 10 $spec | int }}
+{{- $ha := dig "highAvailability" false $spec }}
+{{- $backup := dig "backup" "enabled" false $spec }}
+{{- $retention := dig "backup" "retentionDays" 7 $spec | int }}
+{{- $db := dig "database" "app" $spec }}
+{{- $retain := eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+{{- $observed := .observed.resources | default dict }}
+{{- /* Cloud identifier: unique per cluster/namespace/name, starts with a letter, <= 52 chars, no double hyphens. */}}
+{{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 40 | trimSuffix "-" }}
+{{- $id := printf "pg-%s-%s" $base (sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) | trunc 8) }}
+{{- /* Retain: Crossplane never deletes the cloud resource (v2 managed resources have no deletionPolicy). */}}
+{{- $mp := list "*" }}
+{{- if $retain }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+{{- /* ESO template delimiters, emitted literally into ExternalSecret templates. */}}
+{{- $o := "{{" }}
+{{- $c := "}}" }}
+{{- $backend := dig "backend" "" $facts }}
+{{- if not (has $backend (list "cnpg" "aws-rds" "gcp-cloudsql" "azure-flexible")) }}
+{{ fail (printf "postgresql: unknown backend %q in EnvironmentConfig platform-postgresql (cnpg | aws-rds | gcp-cloudsql | azure-flexible)" $backend) }}
+{{- end }}

@@ -1,0 +1,16 @@
+{{- /* aws-rds: the XR status. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+status:
+  backend: aws-rds
+  backup: {{ ternary "enabled" "disabled" (eq (toString $backup) "true") }}
+  {{- if $host }}
+  endpoint: {{ $host }}
+  port: 5432
+  {{- end }}
+  {{- if and $host $secretArn }}
+  secretName: {{ $name }}-app
+  {{- end }}
+{{- end }}
