@@ -1,0 +1,28 @@
+{{- /* valkey-operator: a ValkeyCluster (valkey-io/valkey-operator; addon: follow-up) in the XR's namespace. Cluster mode only: clients must be cluster-aware. The open default user is disabled; user app reads its password from <name>-valkey. VERIFY: v1alpha1 field names, shards: 1, Ready condition. */}}
+{{- if eq $backend "valkey-operator" }}
+---
+{{- $mem := get (dict "S" "512Mi" "M" "2Gi" "L" "8Gi") $size }}
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "cluster" }}
+spec:
+  shards: 1
+  replicas: {{ ternary 1 0 $ha }}
+  config:
+    maxmemory-policy: {{ $policy }}
+  resources:
+    requests: { cpu: 100m, memory: {{ $mem }} }
+    limits: { memory: {{ $mem }} }
+  acl:
+    users:
+      - name: default
+        state: Disabled
+      - name: app
+        password:
+          type: Secret
+          secret: { name: {{ $name }}-valkey, keys: [password] }
+        permissions: "+@all -@admin -@dangerous ~* &*"
+{{- end }}

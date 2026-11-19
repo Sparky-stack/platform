@@ -6,7 +6,12 @@ offline in CI; the cloud backends are skeletons that render but were never appli
 The platform's Valkey API (`platform.koorikla.io/v1alpha1 Valkey`, namespaced XR): a Redis-protocol cache / key-value
 store. Valkey is the Linux Foundation fork of Redis (BSD-3), current practice over Redis. Same layout as
 [`packages/postgresql`](../postgresql/README.md) and [docs/crossplane.md](../../docs/crossplane.md): XRD + one
-Composition `valkey` dispatching on `$facts.backend` from the EnvironmentConfig `platform-valkey`.
+Composition `valkey` (environment-configs -> embedded function `compose-valkey` -> auto-ready) reading
+`$facts.backend` from the EnvironmentConfig `platform-valkey`. `functions/compose-valkey/` is Helm-style, one
+template per composed object: `00-prelude.yaml.gotmpl` (facts, backend check, derived values), shared objects
+`1x-*`, per-backend objects `<backend>-<object>.yaml.gotmpl` (render only on that backend), `90-xr-status`.
+Render tests run in project mode (`crossplane composition render` without a functions file builds the embedded
+function and resolves the project's dependencies; function names are the package-derived ones).
 
 ## Developer contract
 
