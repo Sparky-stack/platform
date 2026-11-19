@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon kyverno (platform keys only; upstream subchart keys stay open)",
+  "type": "object",
+  "required": [
+    "byoDelivery"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the ApplicationSet (--set-string, so every value is a string): this cluster's facts.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name."
+        },
+        "role": {
+          "type": "string",
+          "description": "mgmt or workload."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider (selects values/provider-<provider>.yaml)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment of the cluster."
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI of the cluster (selects values/cni-<cni>.yaml)."
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of the cluster."
+        }
+      }
+    },
+    "byoDelivery": {
+      "type": "object",
+      "description": "provider byo: rebuild ConfigMap platform-image-verification from the delivery store.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the ExternalSecret (also needs registry.type harbor)."
+        },
+        "store": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+          "description": "ClusterSecretStore of addon secret-stores (delivery.*)."
+        },
+        "configMap": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+          "description": "ConfigMap name, == charts/cluster imageVerification.configMap."
+        }
+      }
+    },
+    "kyverno": {
+      "type": "object",
+      "description": "Upstream kyverno chart values (not constrained here)."
+    }
+  }
+}
