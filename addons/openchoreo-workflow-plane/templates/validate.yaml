@@ -1,8 +1,8 @@
 {{- /*
 Cross-field render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no
-control-plane CA copied, agent RBAC, run NetworkPolicy labels, BuildKit mirror names. Single-key rules (types, names,
-runNamespacePrefix) are in values.schema.json. secretStore != "platform" stays here: its message says why
-(tenant isolation, asserted by hack/tests/test_secret_store_scope.sh).
+control-plane CA copied, agent RBAC, run NetworkPolicy labels, BuildKit mirror names. Single-key rules (types, names) are
+in values.schema.json. secretStore != "platform" and runNamespacePrefix stay here: their messages say why
+(tenant isolation, asserted by hack/tests/test_secret_store_scope.sh; OpenChoreo run namespaces).
 */ -}}
 {{- if not .Values.openchoreo.workflowPlane.enabled }}
 {{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
@@ -26,6 +26,10 @@ runNamespacePrefix) are in values.schema.json. secretStore != "platform" stays h
 {{- if .Values.clusterAgentRBAC.enabled }}
 {{- if $wp.clusterAgent.rbac.create }}
 {{- fail "clusterAgentRBAC.enabled: set openchoreo-workflow-plane.clusterAgent.rbac.create=false (the upstream ClusterRole is cluster-admin in all but name, #33)" }}
+{{- end }}
+{{- $prefix := toString .Values.clusterAgentRBAC.runNamespacePrefix }}
+{{- if not (regexMatch "^[a-z0-9][-a-z0-9]*-$" $prefix) }}
+{{- fail (printf "clusterAgentRBAC.runNamespacePrefix %q must be a namespace name prefix ending in - (OpenChoreo: workflows-)" $prefix) }}
 {{- end }}
 {{- end }}
 {{- $np := .Values.runNetworkPolicy }}

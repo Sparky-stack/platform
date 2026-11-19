@@ -296,15 +296,15 @@ tests:
       - notExists: { path: "spec.attestors[0].cosign.keyless.identities[1]" }
 
   - it: a transition entry that is not a full commit SHA is refused
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.github.transitionWorkflowRefs: [v1]
     asserts:
       - failedTemplate:
-          errorPattern: "/imageVerification/github/transitionWorkflowRefs/0': 'v1' does not match pattern"
+          errorMessage: 'imageVerification.github.workflowRef "v1" must be a 40-hex commit SHA of https://github.com/koorikla/platform/.github/workflows/app-container.yaml (tags and branches are mutable)'
 
   - it: at most two trusted workflow commits (current + previous)
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
       imageVerification.github.transitionWorkflowRefs:
@@ -312,7 +312,7 @@ tests:
         - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     asserts:
       - failedTemplate:
-          errorPattern: "/imageVerification/github/transitionWorkflowRefs': maxItems: got 2, want 1"
+          errorMessage: 'imageVerification.github: workflowRef + transitionWorkflowRefs trust 3 workflow commits, at most 2 (the current pin and the previous one while app repos move)'
 
   - it: a transition entry repeating workflowRef is refused
     template: templates/validate.yaml
@@ -324,20 +324,20 @@ tests:
           errorPattern: 'transitionWorkflowRefs must not repeat workflowRef'
 
   - it: a mutable workflow ref (tag) is refused
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.github.workflowRef: refs/tags/v1
     asserts:
       - failedTemplate:
-          errorPattern: "/imageVerification/github/workflowRef': 'refs/tags/v1' does not match pattern"
+          errorMessage: 'imageVerification.github.workflowRef "refs/tags/v1" must be a 40-hex commit SHA of https://github.com/koorikla/platform/.github/workflows/app-container.yaml (tags and branches are mutable)'
 
   - it: a short tag or abbreviated SHA is refused
-    template: templates/image-verification.yaml
+    template: templates/validate.yaml
     set:
       imageVerification.github.workflowRef: de39b1d
     asserts:
       - failedTemplate:
-          errorPattern: "/imageVerification/github/workflowRef': 'de39b1d' does not match pattern"
+          errorMessage: 'imageVerification.github.workflowRef "de39b1d" must be a 40-hex commit SHA of https://github.com/koorikla/platform/.github/workflows/app-container.yaml (tags and branches are mutable)'
 
   - it: a ref smuggled into the workflow URL is refused
     template: templates/image-verification.yaml
@@ -554,9 +554,16 @@ tests:
       - failedTemplate:
           errorPattern: "/imageVerification/platformKey/cluster/configMap': .* does not match pattern"
 
-  - it: the GitHub source needs a workflow pin (empty workflowRef passes the schema, validate.yaml refuses it)
+  - it: the GitHub source needs a workflow pin (validate.yaml refuses an empty workflowRef)
     template: templates/validate.yaml
     set:
       imageVerification.github.workflowRef: ""
     asserts:
-      - failedTemplate: { errorPattern: 'imageVerification.github.workflowRef must be a 40-hex commit SHA' }
+      - failedTemplate: { errorMessage: 'imageVerification.github.workflowRef "" must be a 40-hex commit SHA of https://github.com/koorikla/platform/.github/workflows/app-container.yaml (tags and branches are mutable)' }
+
+  - it: a branch name as workflow pin is refused with the reason (#311)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.workflowRef: main
+    asserts:
+      - failedTemplate: { errorMessage: 'imageVerification.github.workflowRef "main" must be a 40-hex commit SHA of https://github.com/koorikla/platform/.github/workflows/app-container.yaml (tags and branches are mutable)' }

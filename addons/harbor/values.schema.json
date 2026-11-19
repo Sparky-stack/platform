@@ -18,13 +18,12 @@
       ],
       "properties": {
         "type": {
-          "const": "harbor",
-          "description": "Must be harbor: with registry.type external disable the addon (addons.platform.koorikla.io/harbor: \"false\")."
+          "type": "string",
+          "description": "Must be harbor; templates/validate.yaml tells how to disable the addon for registry.type external."
         },
         "host": {
           "type": "string",
-          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]{1,5})?$",
-          "description": "<name>[:port] used in image refs, Harbor externalURL and node pulls."
+          "description": "<name>[:port] used in image refs, Harbor externalURL and node pulls. Format checked only with registry.type harbor (otherwise validate.yaml says to disable the addon)."
         },
         "appsProject": {
           "type": "string",
@@ -55,7 +54,24 @@
           "description": "Pull-through caches: upstream registry -> Harbor project (upstream needs a config.endpoints entry)."
         }
       },
-      "description": "installation.yaml registry: the platform registry this addon serves."
+      "description": "installation.yaml registry: the platform registry this addon serves.",
+      "if": {
+        "properties": {
+          "type": {
+            "const": "harbor"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "host": {
+            "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]{1,5})?$"
+          }
+        }
+      }
     },
     "secrets": {
       "type": "object",
