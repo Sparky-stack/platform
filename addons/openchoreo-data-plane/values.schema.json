@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "openchoreo-data-plane",
+  "description": "Values of the openchoreo-data-plane wrapper (workload clusters). Upstream subchart keys under openchoreo-data-plane are not constrained here; cross-field invariants live in templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Target cluster facts injected by the addon ApplicationSet (--set-string, so all strings).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name (== CAPI Cluster == Argo cluster secret == planeID).",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "role": {
+          "type": "string",
+          "description": "mgmt or workload."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider of the cluster (docker, aws, ...)."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment label of the cluster."
+        },
+        "cni": {
+          "type": "string",
+          "description": "CNI of the cluster."
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of the cluster."
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "Installation facts (installation.yaml openchoreo.*).",
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "description": "Control plane endpoints the agent dials.",
+          "properties": {
+            "clusterGatewayURL": {
+              "type": "string",
+              "description": "wss:// URL of the control plane cluster gateway (== clusterAgent.serverUrl).",
+              "minLength": 1,
+              "pattern": "^wss://"
+            }
+          },
+          "required": [
+            "clusterGatewayURL"
+          ]
+        }
+      },
+      "required": [
+        "controlPlane"
+      ]
+    },
+    "byoDelivery": {
+      "type": "object",
+      "description": "Bring-your-own clusters: deliver the agent cert and gateway CA via ESO instead of a ClusterResourceSet.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the ExternalSecrets for agent identity (values/provider-byo.yaml)."
+        },
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore of addon secret-stores holding delivery.* keys.",
+          "minLength": 1
+        }
+      }
+    },
+    "clusterAgentDataServices": {
+      "type": "object",
+      "description": "Extra RBAC so the cluster agent can apply platform data-service CRs.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the extra ClusterRole/binding."
+        },
+        "serviceAccount": {
+          "type": "string",
+          "description": "ServiceAccount of the upstream agent Deployment.",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "rules": {
+          "type": "array",
+          "description": "API groups and resources the agent may manage.",
+          "items": {
+            "type": "object",
+            "description": "One RBAC rule.",
+            "properties": {
+              "apiGroup": {
+                "type": "string",
+                "description": "API group.",
+                "minLength": 1
+              },
+              "resources": {
+                "type": "array",
+                "description": "Plural resource names.",
+                "items": {
+                  "type": "string",
+                  "description": "Resource.",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "apiGroup",
+              "resources"
+            ]
+          }
+        }
+      }
+    },
+    "capabilityGate": {
+      "type": "object",
+      "description": "Sync hook that waits for CRDs of advertised traits/resource types before the agent connects.",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "kubectl image, pinned by digest (image@sha256:...).",
+          "minLength": 1,
+          "pattern": "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "How long the hook waits for the CRDs (kubectl duration).",
+          "minLength": 1
+        },
+        "addons": {
+          "type": "object",
+          "description": "Per-addon CRDs to wait for, switched on by cluster labels.",
+          "additionalProperties": {
+            "type": "object",
+            "description": "One addon.",
+            "properties": {
+              "enabled": {
+                "enum": [
+                  "true",
+                  "false",
+                  true,
+                  false
+                ],
+                "description": "Cluster label addons.platform.koorikla.io/<addon> (a string from the ApplicationSet)."
+              },
+              "crds": {
+                "type": "array",
+                "description": "CRD names to wait for.",
+                "items": {
+                  "type": "string",
+                  "description": "CRD name.",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": [
+              "enabled",
+              "crds"
+            ]
+          }
+        }
+      },
+      "required": [
+        "image",
+        "timeout"
+      ]
+    },
+    "priorityClasses": {
+      "type": "object",
+      "description": "Application PriorityClasses used by ClusterTrait resilience.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "description": "One PriorityClass.",
+        "properties": {
+          "value": {
+            "type": "integer",
+            "description": "Priority value."
+          },
+          "preemptionPolicy": {
+            "enum": [
+              "Never",
+              "PreemptLowerPriority"
+            ],
+            "description": "Never: app classes order the queue only and never evict platform pods."
+          },
+          "description": {
+            "type": "string",
+            "description": "PriorityClass description."
+          }
+        },
+        "required": [
+          "value"
+        ]
+      }
+    },
+    "openchoreo-data-plane": {
+      "type": "object",
+      "description": "Upstream openchoreo-data-plane subchart values (not constrained here)."
+    }
+  },
+  "required": [
+    "cluster",
+    "openchoreo"
+  ]
+}

@@ -102,7 +102,7 @@ tests:
     template: templates/promotion-gate.yaml
     set: { promotionGate.podLabels: null }
     asserts:
-      - failedTemplate: { errorPattern: "promotionGate.podLabels is required" }
+      - failedTemplate: { errorPattern: "at '/promotionGate': missing property 'podLabels'" }
 
   - it: GitHub credential is the gate's own App (not Argo CD's platform-github), fetched once, mounted as files
     template: templates/promotion-gate.yaml
@@ -137,7 +137,7 @@ tests:
     set:
       installation.githubOrg: ""
     asserts:
-      - failedTemplate: { errorMessage: "installation.githubOrg is required (GitHub owner the gate may open PRs in)" }
+      - failedTemplate: { errorPattern: "at '/installation/githubOrg': minLength: got 0, want 1" }
 
   - it: endpoints derive from the installation and observe follows the observability switch
     template: templates/promotion-gate.yaml
@@ -162,7 +162,7 @@ tests:
     template: templates/promotion-gate.yaml
     set: { promotionGate.prometheusURL: "" }
     asserts:
-      - failedTemplate: { errorMessage: "promotionGate.prometheusURL is required" }
+      - failedTemplate: { errorPattern: "at '/promotionGate/prometheusURL': minLength: got 0, want 1" }
 
   - it: passes the shared freeze windows and gated environments to the gate base64-encoded (never JSON-looking)
     template: templates/promotion-gate.yaml
