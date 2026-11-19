@@ -82,7 +82,8 @@ metadata:
   namespace: {{ $ns }}
 spec:
   provider:
-    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" $ns "serviceAccount" "eso-harbor-ca-source") | nindent 4 }}
+    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" $ns
+      "serviceAccount" "eso-harbor-ca-source") | nindent 4 }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret

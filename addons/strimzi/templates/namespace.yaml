@@ -1,3 +1,4 @@
 {{- /* Labels on the operator namespace (namespace.podSecurity, namespace.ambient; see values.yaml). Restricted fits:
-the cluster operator meets it; Kafka pods live in the app namespaces. Template: charts/lib/templates/_operator-namespace.tpl. */ -}}
+the cluster operator meets it; Kafka pods live in the app namespaces. Template:
+charts/lib/templates/_operator-namespace.tpl. */ -}}
 {{- include "koorikla-lib.operatorNamespace" . }}

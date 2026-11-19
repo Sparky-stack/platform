@@ -6,7 +6,8 @@ Secret of this namespace (admin password, serving key) is reachable. Consumers: 
 (ns fleet, node bootstrap) and the build ClusterWorkflows (workflows-<org ns>, push/scan/sign trust).
 */ -}}
 {{- $p := .Values.caPublic }}
-{{- include "koorikla-lib.esoSecretReader" (dict "name" $p.store "secret" $p.secretName "namespace" .Release.Namespace) }}
+{{- include "koorikla-lib.esoSecretReader" (dict "name" $p.store "secret" $p.secretName
+    "namespace" .Release.Namespace) }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
@@ -19,4 +20,5 @@ spec:
     - namespaceRegexes: {{ toJson . }}
     {{- end }}
   provider:
-    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .Release.Namespace "serviceAccount" (printf "eso-%s" $p.store) "clusterStore" true "namespace" .Release.Namespace) | nindent 4 }}
+    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .Release.Namespace
+      "serviceAccount" (printf "eso-%s" $p.store) "clusterStore" true "namespace" .Release.Namespace) | nindent 4 }}

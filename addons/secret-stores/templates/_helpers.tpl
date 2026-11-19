@@ -78,8 +78,8 @@ spec:
   {{- end }}
   provider:
     {{- if eq .backend "kubernetes" }}
-    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .remoteNamespace "serviceAccount" .serviceAccount
-      "clusterStore" true "namespace" $ns) | nindent 4 }}
+    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .remoteNamespace
+      "serviceAccount" .serviceAccount "clusterStore" true "namespace" $ns) | nindent 4 }}
     {{- else if eq .backend "aws" }}
     aws:
       service: SecretsManager
