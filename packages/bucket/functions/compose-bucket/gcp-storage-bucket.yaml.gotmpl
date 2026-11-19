@@ -1,0 +1,21 @@
+{{- /* gcp-storage skeleton: GCS bucket, uniform access, public access prevention. Apps use Workload Identity Federation (IAM member per app: follow-up); S3 SDKs need the XML API interop. VERIFY: never applied. */}}
+{{- if eq $backend "gcp-storage" }}
+---
+apiVersion: storage.gcp.m.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "bucket" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    project: {{ $facts.project }}
+    location: {{ $facts.region }}
+    uniformBucketLevelAccess: true
+    publicAccessPrevention: enforced
+    versioning: { enabled: {{ $versioning }} }
+    labels: { platform-koorikla-io-cluster: {{ $facts.cluster }} }
+{{- end }}

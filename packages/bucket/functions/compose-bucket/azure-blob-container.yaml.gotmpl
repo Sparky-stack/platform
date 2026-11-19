@@ -1,0 +1,16 @@
+{{- if eq $backend "azure-blob" }}
+---
+apiVersion: storage.azure.m.upbound.io/v1beta1
+kind: Container
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "container" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    storageAccountIdRef: { name: {{ $name }} }
+    containerAccessType: private
+{{- end }}

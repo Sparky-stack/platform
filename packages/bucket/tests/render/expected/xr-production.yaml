@@ -1,0 +1,236 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Bucket
+metadata:
+  name: invoices
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: invoices-bucket
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: invoices-rustfs-admin
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: invoices-rustfs-admin
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: invoices-rustfs-app
+    - apiVersion: rustfs.com/v1alpha1
+      kind: Tenant
+      name: invoices
+    - apiVersion: v1
+      kind: ConfigMap
+      name: invoices-bucket-policy
+status:
+  backend: rustfs
+  bucket: bk-dp-default-billing-production-dfbb3683
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: admin-secret, connection-secret, and tenant'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: http://invoices-io.dp-default-billing-production-5e6f7a8b.svc:9000
+  secretName: invoices-bucket
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: admin-secret
+  labels:
+    crossplane.io/composite: invoices
+  name: invoices-rustfs-admin
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: invoices-rustfs-admin
+  refreshPolicy: CreatedOnce
+  target:
+    name: invoices-rustfs-admin
+    template:
+      data:
+        accesskey: admin
+        secretkey: '{{ .password }}'
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: invoices
+  name: invoices-bucket
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: invoices-rustfs-app
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: invoices-bucket
+    template:
+      data:
+        accessKeyId: app
+        bucket: bk-dp-default-billing-production-dfbb3683
+        endpoint: http://invoices-io.dp-default-billing-production-5e6f7a8b.svc:9000
+        region: us-east-1
+        secretAccessKey: '{{ .password }}'
+      engineVersion: v2
+      metadata:
+        labels:
+          rustfs.tenant: invoices
+      type: Opaque
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-admin
+  labels:
+    crossplane.io/composite: invoices
+  name: invoices-rustfs-admin
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+spec:
+  allowRepeat: true
+  digits: 10
+  length: 40
+  noUpper: false
+  symbols: 0
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-app
+  labels:
+    crossplane.io/composite: invoices
+  name: invoices-rustfs-app
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+spec:
+  allowRepeat: true
+  digits: 10
+  length: 40
+  noUpper: false
+  symbols: 0
+---
+apiVersion: v1
+data:
+  policy.json: |
+    {"Version": "2012-10-17", "Statement": [
+      {"Effect": "Allow", "Action": ["s3:GetBucketLocation", "s3:ListBucket", "s3:ListBucketVersions"], "Resource": ["arn:aws:s3:::bk-dp-default-billing-production-dfbb3683"]},
+      {"Effect": "Allow", "Action": ["s3:GetObject*", "s3:PutObject*", "s3:DeleteObject*", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"], "Resource": ["arn:aws:s3:::bk-dp-default-billing-production-dfbb3683/*"]}]}
+kind: ConfigMap
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: policy
+  labels:
+    crossplane.io/composite: invoices
+    rustfs.tenant: invoices
+  name: invoices-bucket-policy
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Tenant
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tenant
+  labels:
+    crossplane.io/composite: invoices
+  name: invoices
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: invoices
+    uid: a8a2f18c-b632-5551-a8b3-c68b60306a9b
+spec:
+  buckets:
+  - name: bk-dp-default-billing-production-dfbb3683
+    versioning: true
+  credsSecret:
+    name: invoices-rustfs-admin
+  image: rustfs/rustfs:1.0.0-alpha.60
+  policies:
+  - document:
+      configMapKeyRef:
+        key: policy.json
+        name: invoices-bucket-policy
+    name: invoices-readwrite
+  pools:
+  - name: pool-0
+    persistence:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 50Gi
+      volumesPerServer: 1
+    servers: 1
+  users:
+  - name: app
+    policies:
+    - invoices-readwrite
+    secret:
+      accessKeyKey: accessKeyId
+      name: invoices-bucket
+      secretKeyKey: secretAccessKey

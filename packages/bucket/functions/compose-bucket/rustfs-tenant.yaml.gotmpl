@@ -1,0 +1,32 @@
+{{- /* rustfs: a single-server RustFS Tenant (rustfs/operator; addon: follow-up) provisioning the bucket, the policy and the user. VERIFY: users[].secret mapping, pools.persistence, Service name, Ready condition. */}}
+{{- if eq $backend "rustfs" }}
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Tenant
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "tenant" }}
+spec:
+  image: {{ $facts.rustfsImage }}
+  credsSecret: { name: {{ $name }}-rustfs-admin }
+  pools:
+    - name: pool-0
+      servers: 1
+      persistence:
+        volumesPerServer: 1
+        volumeClaimTemplate:
+          spec:
+            accessModes: [ReadWriteOnce]
+            resources: { requests: { storage: {{ dig "storageGiB" 10 $spec | int }}Gi } }
+  policies:
+    - name: {{ $name }}-readwrite
+      document: { configMapKeyRef: { name: {{ $name }}-bucket-policy, key: policy.json } }
+  users:
+    - name: app
+      secret: { name: {{ $name }}-bucket, accessKeyKey: accessKeyId, secretKeyKey: secretAccessKey }
+      policies: [{{ $name }}-readwrite]
+  buckets:
+    - name: {{ $id }}
+      versioning: {{ $versioning }}
+{{- end }}

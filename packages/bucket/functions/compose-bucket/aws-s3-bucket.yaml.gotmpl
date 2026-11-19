@@ -1,0 +1,17 @@
+{{- /* aws-s3 skeleton: S3 bucket in the cluster's region. Apps use EKS Pod Identity (bucket-scoped role per app: follow-up). VERIFY: never applied. */}}
+{{- if eq $backend "aws-s3" }}
+---
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "bucket" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    tags: { platform.koorikla.io/cluster: {{ $facts.cluster }}, platform.koorikla.io/namespace: {{ $ns }} }
+{{- end }}
