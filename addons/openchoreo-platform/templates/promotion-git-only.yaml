@@ -1,6 +1,6 @@
 {{- /*
-Native admission gate (ValidatingAdmissionPolicy, Kubernetes GA): ReleaseBindings of gated environments are created,
-changed and deleted only by Argo CD applying git (docs/promotion.md "Git is the only path"). openchoreo-api (console,
+ValidatingAdmissionPolicy + binding (cluster-scoped, mgmt; docs/promotion.md "Git is the only path"): ReleaseBindings
+of gated environments are created, changed and deleted only by Argo CD applying git. openchoreo-api (console,
 occ, MCP), kubectl and any other identity are denied, whatever their RBAC. The OpenChoreo controller may still update
 metadata (finalizers) without touching spec; status is a subresource and not matched.
 Argo CD writes for every Application with one identity, so the writer must also BE the gated Application of that very

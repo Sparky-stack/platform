@@ -1,17 +1,11 @@
 {{- /*
-ClusterWorkflow promotion-gate (docs/promotion.md "Automated gate"): a generic OpenChoreo Workflow (WorkflowRun without
-a component). The run renders into the workflow plane (namespace workflows-<org namespace>, ServiceAccount workflow-sa
-injected by OpenChoreo) as an Argo Workflow with one step running files/promotion-gate/gate.py. Like the build
-ClusterWorkflows the step gets no ServiceAccount token (only Argo's executor does). The run namespace is default-deny
-(addon openchoreo-workflow-plane, NetworkPolicy build-runs-default-deny: DNS, public 80/443 incl. GitHub); podLabels
-opt the gate pod into NetworkPolicy platform-workflows-openchoreo (OpenChoreo API, Thunder, observer, observability
-Prometheus for the 5xx rate of the data-plane gateway's requests to the component).
-Credentials: a per-run ExternalSecret against the workflow plane's ClusterSecretStore (owned by the run, deleted with
-it after ttlAfterCompletion; fetched once, never refreshed), mounted read-only as files into the one gate pod (pod
-deleted on completion). GitHub: the gate's own App (store key promotionGate.github.key); the gate mints a token for
-the single repository of the component's Workload and revokes it when done. Parameters are DNS-1123 constrained; the
-target repository is not a parameter.
-The gate never writes to a cluster: on success it opens/updates the promotion pull request in the app repo.
+ClusterWorkflow promotion-gate (cluster-scoped, mgmt; docs/promotion.md "Automated gate"): a WorkflowRun without a
+component runs files/promotion-gate/gate.py as one Argo step in workflows-<org ns>. It never writes to a cluster: on
+success it opens/updates the promotion pull request in the app repo.
+Why it is locked down: no ServiceAccount token in the step (only Argo's executor), default-deny egress plus podLabels for
+the OpenChoreo API / Thunder / observer / Prometheus (addon openchoreo-workflow-plane), credentials fetched once per run
+and mounted only into the one gate pod (deleted on completion), a GitHub token minted for the single repository of the
+component's Workload and revoked at the end. Parameters are DNS-1123 constrained; the repository is not a parameter.
 */ -}}
 {{- $g := .Values.promotionGate }}
 {{- if $g.enabled }}

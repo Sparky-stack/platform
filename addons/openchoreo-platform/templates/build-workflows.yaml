@@ -1,10 +1,8 @@
 {{- /*
-Per-stack component ClusterWorkflows (values.yaml buildWorkflows.stacks). A Component selects one in spec.workflow
-(kind ClusterWorkflow, name <stack>) if its ClusterComponentType allows it; a WorkflowRun (Backstage "Build", occ, or
-an autoBuild webhook) renders runTemplate into an Argo Workflow on the ClusterWorkflowPlane, running ClusterWorkflowTemplate
-koorikla-build (addon openchoreo-workflow-plane). Parameters marked x-openchoreo-component-parameter-repository-* are
-what Backstage and the autoBuild webhook matcher read. Defaults carry the platform's choices; developers override per
-Component. CEL (${...}) is evaluated by OpenChoreo per run; ESO templates ({{ }}) by ESO.
+Per-stack component ClusterWorkflows (cluster-scoped, mgmt; values.yaml buildWorkflows.stacks): a WorkflowRun (Backstage
+"Build", occ, auto-build) renders runTemplate into an Argo Workflow running ClusterWorkflowTemplate koorikla-build on the
+ClusterWorkflowPlane. x-openchoreo-component-parameter-repository-* marks what Backstage and auto-build read.
+CEL ${...} is evaluated by OpenChoreo per run, {{ }} in the per-run resources by ESO.
 */ -}}
 {{- if .Values.buildWorkflows.enabled }}
 {{- $b := .Values.buildWorkflows }}
