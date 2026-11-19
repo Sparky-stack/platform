@@ -670,7 +670,7 @@ while IFS= read -r env; do
 done < <(env_names)
 check 5 gate-runs "promotion-gate WorkflowRuns present" c_gate_runs
 check 5 gate-latest "latest promotion gate passed" c_gate_latest
-check 5 resilience-production "$COMP PDB + spread + priority in production" c_resilience
+check 5 resilience-production "$COMP PDB/spread/priority in production" c_resilience
 
 check 6 metrics-clusters "metrics from every workload cluster" c_metrics_clusters
 check 6 metrics-app "$COMP metrics in observability plane" c_metrics_app
