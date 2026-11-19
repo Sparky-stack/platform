@@ -1,0 +1,13 @@
+# Defaults for the fixtures in templates/ (each renders one koorikla-lib helper); tests/ override them per case.
+# -- Input of `koorikla-lib.agentServerCA` (fixture templates/agent-server-ca.yaml).
+agentServerCA: { enabled: true, store: mgmt-openchoreo, sourceSecret: cluster-gateway-ca, configMapName: cluster-gateway-ca }
+# -- Input of `koorikla-lib.operatorNamespace` (fixture templates/operator-namespace.yaml).
+namespace: { podSecurity: restricted, ambient: false }
+# -- Input of `koorikla-lib.sourceIntegrity` (fixture templates/source-integrity.yaml); repos go through tpl.
+sourceIntegrity: { enabled: false, mode: head, keys: [B5690EEEBB952194], repos: ["{{ .Values.org }}/*"] }
+# -- Organisation the sourceIntegrity repo pattern templates in (stands in for installation.githubOrg).
+org: example-org
+# -- Arguments of `koorikla-lib.esoSecretReader` (fixture templates/eso-secret-reader.yaml).
+esoSecretReader: { name: mgmt-x, secret: x-ca-bundle, namespace: x }
+# -- Arguments of `koorikla-lib.esoKubernetesProvider` (fixture templates/eso-kubernetes-provider.yaml).
+esoKubernetesProvider: { remoteNamespace: x, serviceAccount: eso-mgmt-x, clusterStore: false, namespace: x }

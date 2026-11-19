@@ -10,41 +10,8 @@ SelfSubjectRulesReview, so no list/watch and no other Secret here (CA key, liste
 {{- if (((.Values.secrets).tenantStores).enabled) }}
 {{- $nss = append $nss .Values.tenantSecrets.inputsNamespace }}
 {{- end }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-automountServiceAccountToken: false
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-rules:
-  - apiGroups: [""]
-    resources: [secrets]
-    resourceNames: [{{ $p.secretName }}]
-    verbs: [get]
-  - apiGroups: [authorization.k8s.io]
-    resources: [selfsubjectrulesreviews]
-    verbs: [create]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: eso-{{ $p.store }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-{{ $p.store }} }
-subjects:
-  - { kind: ServiceAccount, name: eso-{{ $p.store }}, namespace: {{ .Release.Namespace }} }
+{{- include "koorikla-lib.esoSecretReader" (dict "name" $p.store "secret" $p.secretName "namespace" .Release.Namespace
+    "labels" (include "openbao-addon.labels" .) "automountServiceAccountToken" false) }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
@@ -56,16 +23,5 @@ spec:
   conditions:
     - namespaces: {{ toJson $nss }}
   provider:
-    kubernetes:
-      remoteNamespace: {{ .Release.Namespace }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ .Release.Namespace }}
-      auth:
-        serviceAccount:
-          name: eso-{{ $p.store }}
-          namespace: {{ .Release.Namespace }}
+    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .Release.Namespace
+      "serviceAccount" (printf "eso-%s" $p.store) "clusterStore" true "namespace" .Release.Namespace) | nindent 4 }}

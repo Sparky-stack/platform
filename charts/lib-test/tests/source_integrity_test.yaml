@@ -1,0 +1,20 @@
+suite: koorikla-lib.sourceIntegrity
+templates: [templates/source-integrity.yaml]
+tests:
+  - it: renders nothing when disabled
+    asserts:
+      - notExists: { path: spec.sourceIntegrity }
+      - equal: { path: spec.description, value: fixture }
+  - it: renders one gpg policy, repos through tpl
+    set:
+      sourceIntegrity: { enabled: true, mode: strict, keys: [K1, K2], repos: ["{{ .Values.org }}/*", "other/x"] }
+    asserts:
+      - equal:
+          path: spec.sourceIntegrity.git.policies
+          value:
+            - repos: [{ url: example-org/* }, { url: other/x }]
+              gpg: { mode: strict, keys: [K1, K2] }
+  - it: fails without keys
+    set: { sourceIntegrity: { enabled: true, keys: null } }
+    asserts:
+      - failedTemplate: { errorMessage: sourceIntegrity.keys must list GnuPG key IDs }

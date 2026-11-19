@@ -25,6 +25,15 @@ if ! py hack/lib/chartlock.py ${lock_dirs[@]+"${lock_dirs[@]}"} >&2; then
   exit 1
 fi
 
+# file:// dependencies (the library chart charts/lib) live in this repo: re-package them on every run (offline, cheap),
+# since editing the library keeps its tarball name (name-version.tgz), so the cache below would keep the old copy.
+for dir in ${lock_dirs[@]+"${lock_dirs[@]}"}; do
+  for rel in $(yq -r '.dependencies[].repository | select(test("^file://")) | sub("^file://"; "")' "$dir/Chart.yaml" \
+    | tr -d '\r'); do
+    helm package "$dir/$rel" --destination "$dir/charts" >/dev/null
+  done
+done
+
 # A chart's charts/ must hold exactly the tarballs its Chart.lock pins (name-version.tgz): a missing one (new or bumped
 # dependency) or an extra one (removed/old dependency, e.g. from a partially restored CI cache, which Helm would still
 # render as a subchart) rebuilds that chart from scratch.

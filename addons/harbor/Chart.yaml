@@ -7,3 +7,6 @@ dependencies:
   - name: harbor
     version: 1.19.4            # Harbor v2.15.4
     repository: https://helm.goharbor.io
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../../charts/lib

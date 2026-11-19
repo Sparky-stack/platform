@@ -7,3 +7,6 @@ dependencies:
   - name: keda
     version: 2.21.0
     repository: https://kedacore.github.io/charts
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../../charts/lib
