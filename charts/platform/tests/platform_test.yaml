@@ -276,14 +276,36 @@ tests:
     set:
       addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: some-label } }
     asserts:
-      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: want {label: <key>, default: <value>}" }
+      - failedTemplate: { errorPattern: "at '/addons/broken/clusterLabelParameters/a.b': got string, want object" }
 
   - it: "negative: rejects a non-string default (unquoted false would silently become empty)"
     template: appset-addons.yaml
     set:
       addons.broken: { namespace: x, roles: [workload], clusterLabelParameters: { a.b: { label: l, default: false } } }
     asserts:
-      - failedTemplate: { errorMessage: "addons.broken.clusterLabelParameters.a.b: default must be a string (quote it: \"false\")" }
+      - failedTemplate: { errorPattern: "at '/addons/broken/clusterLabelParameters/a.b/default': got boolean, want string" }
+
+  - it: "negative: rejects a clusterNameFormats entry without exactly one %s"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterNameFormats: { a: "cluster:%s-%s" } }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/addons/broken/clusterNameFormats/a': .* does not match pattern" }
+
+  - it: "negative: rejects a clusterServerParameters part other than url, host, port"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { namespace: x, roles: [workload], clusterServerParameters: { a: scheme } }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/addons/broken/clusterServerParameters/a': value must be one of" }
+
+  - it: "negative: rejects an unknown catalog entry key (typo) and a missing namespace"
+    template: appset-addons.yaml
+    set:
+      addons.broken: { roles: [workload], defualt: true }
+    asserts:
+      - failedTemplate: { errorPattern: "missing property 'namespace'" }
+      - failedTemplate: { errorPattern: "additional properties 'defualt' not allowed" }
 
   - it: external-dns is opt-in and takes provider, zones and TXT owner from the installation
     template: appset-addons.yaml
