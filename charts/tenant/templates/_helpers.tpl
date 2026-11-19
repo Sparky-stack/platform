@@ -37,12 +37,6 @@ Application <project>-<app> must never look like one. */ -}}
 {{- if not $app.promotionGates -}}[]{{- else -}}{{- $root.Values.promotion.gatedEnvironments | default list | toYaml -}}{{- end -}}
 {{- end }}
 
-{{- /* Binding file of an environment, relative to the app path. */ -}}
-{{- define "tenant.bindingFile" -}}
-{{- $env := index . 0 -}}{{- $root := index . 1 -}}
-{{- $root.Values.promotion.bindingFile | replace "{environment}" $env -}}
-{{- end }}
-
 {{- /*
 Weekly freeze window {start: "Fri 16:00", end: "Mon 08:00"} -> Argo CD sync window cron + duration. Windows wrap
 around the end of the week. Cron day of week: Sun=0 .. Sat=6.

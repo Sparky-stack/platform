@@ -1,20 +1,18 @@
 {{- /*
-One Argo CD Application per app repo: <repo>/<path> (plain manifests, recursive: Component, Workload,
-release-bindings/<env>.yaml ...) -> the control plane's org namespace, in AppProject tenant-<project>. OpenChoreo then
-renders and delivers the workloads to the data planes through their cluster-agents; Argo never touches a workload
-cluster for apps.
-Gated environments (promotion.gatedEnvironments, docs/promotion.md): their binding file is excluded from the main
-Application and synced by its own Application <project>-<app>-<env>, which the AppProject's freeze windows can stop
-without stopping development/staging.
+Applications <project>-<app> (mgmt, argocd): the app repo's plain manifests (<path>, recursive) -> the control plane's
+org namespace; OpenChoreo delivers the workloads, Argo never touches a workload cluster for apps.
+Each gated environment's binding file (docs/promotion.md) is excluded there and synced by its own Application
+<project>-<app>-<env>, so the AppProject's freeze windows stop production without stopping development/staging.
 */ -}}
 {{- $p := include "tenant.project" . }}
 {{- range $app := include "tenant.apps" . | fromYamlArray }}
 {{- $gated := include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}
 {{- $files := list }}
-{{- range $gated }}{{ $files = append $files (include "tenant.bindingFile" (list . $)) }}{{ end }}
-{{- $units := list (dict "suffix" "" "env" "" "directory" (dict "recurse" true "exclude" (ternary (printf "{%s}" (join "," $files)) (join "," $files) (gt (len $files) 1)))) }}
-{{- range $env := $gated }}
-{{- $units = append $units (dict "suffix" (printf "-%s" $env) "env" $env "directory" (dict "recurse" true "include" (include "tenant.bindingFile" (list $env $)))) }}
+{{- range $gated }}{{ $files = append $files (replace "{environment}" . $.Values.promotion.bindingFile) }}{{ end }}
+{{- /* Argo CD directory include/exclude take one glob; several files need the {a,b} form. */}}
+{{- $units := list (dict "suffix" "" "env" "" "exclude" (ternary (printf "{%s}" (join "," $files)) (join "," $files) (gt (len $files) 1))) }}
+{{- range $i, $env := $gated }}
+{{- $units = append $units (dict "suffix" (printf "-%s" $env) "env" $env "include" (index $files $i)) }}
 {{- end }}
 {{- range $u := $units }}
 ---
@@ -40,10 +38,10 @@ spec:
     path: {{ $app.path | quote }}
     directory:
       recurse: true
-      {{- with $u.directory.include }}
+      {{- with $u.include }}
       include: {{ . | quote }}
       {{- end }}
-      {{- with $u.directory.exclude }}
+      {{- with $u.exclude }}
       exclude: {{ . | quote }}
       {{- end }}
   destination:
