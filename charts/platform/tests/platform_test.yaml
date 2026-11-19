@@ -126,7 +126,7 @@ tests:
     asserts:
       - equal: { path: spec.template.spec.syncPolicy.retry.limit, value: -1 }
       - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
-      - equal: { path: spec.template.spec.syncPolicy.retry.backoff.maxDuration, value: 5m }
+      - equal: { path: spec.template.spec.syncPolicy.retry.backoff.maxDuration, value: 1m }
 
   # #192: an addon/tenant sync that gives up stays failed until the next commit (a manual step); live, addons
   # needed 5 attempts while another app installed the CRDs they reference

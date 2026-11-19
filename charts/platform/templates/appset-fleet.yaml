@@ -45,7 +45,7 @@ spec:
           - ServerSideApply=true
           - ServerSideDiff=true
         # A cluster app waits on dependencies outside it: charts/cluster gates the Cluster on its registries
-        # ExternalSecret (sync wave -1, needs e.g. the Harbor CA). Keep retrying (every 5m at most) on the latest
+        # ExternalSecret (sync wave -1, needs e.g. the Harbor CA). Keep retrying (every 1m at most) on the latest
         # revision instead of giving up after a fixed count, which would leave the cluster unsynced until the next
         # commit.
         retry:
@@ -54,4 +54,4 @@ spec:
           backoff:
             duration: 10s
             factor: 2
-            maxDuration: 5m
+            maxDuration: 1m

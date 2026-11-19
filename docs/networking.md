@@ -54,7 +54,7 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
 - **Cilium** reaches the API server without kube-proxy or cluster DNS: it dials the endpoint directly (next section).
   It runs `hostNetwork` and tolerates every taint, including the cloud provider's `uninitialized` taint, so the CCMs
   and Cilium don't wait for each other. Once its agent writes the CNI config, the node turns `Ready`.
-- **Every other addon** retries (Argo CD backoff up to 5m) until pods can be scheduled.
+- **Every other addon** retries (Argo CD backoff up to 1m) until pods can be scheduled.
 - **Scaling**: KCP's scale-up preflight requires `MachineAgentHealthy` (node `Ready`) on the existing control-plane
   machines (cluster-api-k3s `scale.go`). Control-plane machines 2 and 3 are therefore created only after Cilium has
   made machine 1 `Ready`. This delays scale-up but can't deadlock. MachineDeployments don't wait for it.

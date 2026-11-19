@@ -14,13 +14,16 @@ argo-cd:
       server.insecure: true
       # -- `true` so CAPI, ESO, cert-manager, and OpenChoreo CRD defaults do not cause permanent diffs.
       controller.diff.server.side: true   # prevent permanent diff on CAPI/ESO/cert-manager/OpenChoreo CRD defaults
-      controller.status.processors: 10
-      controller.operation.processors: 5
+      # -- Upstream defaults (20/10): ~45 apps converge at once on a clean bootstrap; 10/5 queued them.
+      controller.status.processors: 20
+      controller.operation.processors: 10
     cm:
       # -- `"true"` so `repo-server` builds HTTPS and OCI wrapper dependencies (`ARGOCD_EXEC_TIMEOUT=180s`).
       helm.dependencies.enabled: "true"   # repo-server runs helm dependency build for wrapper charts (https + OCI)
-      timeout.reconciliation: 300s
-      timeout.reconciliation.jitter: 60s
+      # -- Upstream default 120s. An app whose first comparison fails (a new workload cluster's Argo secret lands before
+      # its API serves) is only retried on this period: with 300s+60s jitter dev1's addons idled ~8 min.
+      timeout.reconciliation: 120s
+      timeout.reconciliation.jitter: 30s
       # Thunder's PreSync setup Job mounts a PVC; k3s local-path binds on first consumer (WaitForFirstConsumer).
       # Treat Pending PVCs as Healthy so the hook Job can start and bind the volume.
       # -- Treats `Pending` `WaitForFirstConsumer` PVCs as `Healthy` so hook Jobs can bind volumes.
