@@ -39,6 +39,8 @@ confidence: high
 ## Not the same: ExternalSecret thunder-bootstrap (#221)
 - That ExternalSecret is a Helm hook (`pre-install,pre-upgrade` -> Argo `PreSync`). Argo never diffs hook resources, so a
   changed hook alone never makes the app OutOfSync. Hooks run only when something else triggers a sync.
+- Fix: a normal ConfigMap labelled `platform.koorikla.io/hook-inputs` carries the hook's checksum
+  ([docs/openchoreo.md](../../docs/openchoreo.md#argo-cd-requirements), `hack/tests/test_hook_kinds.sh`).
 
 ## Links
 - [Argo CD Custom Health for Kyverno DeletingPolicy and Unmatched CRS](argocd-custom-health-deletingpolicy-and-crs.md)
