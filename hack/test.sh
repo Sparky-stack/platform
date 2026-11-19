@@ -17,8 +17,10 @@ pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
 ./hack/tools.sh check helm yq kubeconform 2>&1 | grep -E '^ *(DRIFT|MISSING)' >&2 || true
 
 # CHARTS="addons/x charts/y": lint/render/unittest only these chart dirs (git pre-commit hook: hack/hooks.sh charts).
-# charts/platform and charts/cluster still render (addons read their output); contract tests run in the full suite only.
+# charts/platform and charts/cluster still render (addons read their output); contract tests run in the full suite only,
+# unless TESTS="hack/tests/test_x.sh ..." names the related ones (hack/test-changed.sh picks them).
 CHARTS=${CHARTS:-}
+TESTS=${TESTS:-}
 selected() { [[ -z "$CHARTS" || " $CHARTS " == *" $1 "* ]]; }
 
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
@@ -255,7 +257,8 @@ done
 #    test_secret_store_scope.sh)
 export RENDERED_DIR="$TMP"
 for t in hack/tests/test_*.sh; do
-  [[ -f "$t" && -z "$CHARTS" ]] || continue
+  [[ -f "$t" ]] || continue
+  [[ -z "$CHARTS" || " $TESTS " == *" $t "* ]] || continue
   if bash "$t"; then
     passed=$((passed + 1))
   else
