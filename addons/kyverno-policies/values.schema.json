@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kyverno-policies (koorikla wrapper)",
+  "description": "Platform keys only; the upstream kyverno-policies subchart, cluster.* and installation keys stay open. Cross-field rules: templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "kyverno-policies": {
+      "description": "Upstream kyverno/kyverno-policies subchart values (not constrained here).",
+      "type": "object"
+    },
+    "imageVerification": {
+      "description": "Supply-chain gate: signature + attestation ImageValidatingPolicies per environment tier.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Render the image verification policies.",
+          "type": "boolean"
+        },
+        "environments": {
+          "description": "OpenChoreo environment -> action (Audit warns, Deny blocks).",
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "Audit",
+              "Deny"
+            ],
+            "description": "Audit or Deny."
+          }
+        },
+        "defaultAction": {
+          "description": "Action for every environment not listed in environments (empty: unchecked).",
+          "enum": [
+            "",
+            "Audit",
+            "Deny"
+          ]
+        },
+        "timeoutSeconds": {
+          "description": "Kyverno webhook timeout (API server maximum 30).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "github": {
+          "description": "Keyless (GitHub OIDC) source: images built by the pinned reusable workflow.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Trust keyless signatures from GitHub Actions.",
+              "type": "boolean"
+            },
+            "prefixes": {
+              "description": "Image reference prefixes this source covers.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "workflow": {
+              "description": "Reusable workflow URL without a ref (the ref is workflowRef); required while github.enabled.",
+              "type": "string",
+              "pattern": "^(https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml)?$"
+            },
+            "workflowRef": {
+              "description": "40-hex commit SHA of the workflow (tags and branches are mutable); required while github.enabled.",
+              "type": "string",
+              "pattern": "^([0-9a-f]{40})?$"
+            },
+            "transitionWorkflowRefs": {
+              "description": "The previous workflow commit, trusted while app repos move (at most one).",
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              }
+            },
+            "repositories": {
+              "description": "GitHub repositories (owner/name) whose builds are trusted.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "refs": {
+              "description": "Git refs whose builds are trusted (e.g. refs/heads/main).",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "triggers": {
+              "description": "Workflow trigger events whose builds are trusted (e.g. push).",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "attestations": {
+              "description": "Attestations every image of this source needs (names from attestationTypes).",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "platformKey": {
+          "description": "Platform-key source: images the workflow plane pushed to <registry.host>/<registry.appsProject>/.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Trust images signed with the platform cosign key.",
+              "type": "boolean"
+            },
+            "publicKey": {
+              "description": "Inline cosign public key (PEM); empty: the per-cluster ConfigMap when registry.type is harbor.",
+              "type": "string"
+            },
+            "cluster": {
+              "description": "Where charts/cluster delivers the key per workload cluster.",
+              "type": "object",
+              "properties": {
+                "namespace": {
+                  "description": "Namespace of the key ConfigMap (addon kyverno's namespace).",
+                  "type": "string",
+                  "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                },
+                "configMap": {
+                  "description": "Key ConfigMap name; empty disables the cluster-delivered key.",
+                  "type": "string",
+                  "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
+                }
+              }
+            },
+            "attestations": {
+              "description": "Attestations every platform-built image needs (names from attestationTypes).",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "attestationTypes": {
+          "description": "Attestation name -> in-toto predicate type.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "extraTrustedPrefixes": {
+          "description": "Extra registry prefixes trusted without signature verification.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workflowImageDigests": {
+      "description": "Workflow-plane Pods must use digest-pinned images.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Render the policy (on the cluster that runs the workflow plane).",
+          "type": "boolean"
+        },
+        "namespacePrefix": {
+          "description": "Workflow run namespace prefix (e.g. workflows-).",
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*-)?$"
+        },
+        "failurePolicy": {
+          "description": "Fail: Kyverno down blocks new run Pods; Ignore admits them unchecked.",
+          "enum": [
+            "Fail",
+            "Ignore"
+          ]
+        }
+      }
+    },
+    "previews": {
+      "description": "Pull-request preview environments.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Render the preview guards (mgmt: expiry/cap; data planes: quota/isolation).",
+          "type": "boolean"
+        },
+        "ttl": {
+          "description": "Preview lifetime in hours and/or minutes (e.g. 48h).",
+          "type": "string",
+          "pattern": "^([0-9]+h)?([0-9]+m)?$"
+        },
+        "maxPerTenant": {
+          "description": "Concurrent previews per tenant (at least 1).",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "previewGuards": {
+      "description": "Preview guard tuning.",
+      "type": "object",
+      "properties": {
+        "ttlGrace": {
+          "description": "Delete this long after expires-at, hours and/or minutes (e.g. 1h).",
+          "type": "string",
+          "pattern": "^([0-9]+h)?([0-9]+m)?$"
+        }
+      }
+    },
+    "registry": {
+      "description": "Installation registry (installation.yaml registry.*).",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Registry host[:port] of platform-built images; required when a platform key is trusted.",
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]+)?)?$"
+        },
+        "appsProject": {
+          "description": "Registry project of platform-built app images (empty: apps).",
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9._]*[a-z0-9])?)?$"
+        }
+      }
+    }
+  }
+}

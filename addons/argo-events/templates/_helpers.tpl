@@ -11,7 +11,7 @@ to apply (SkipDryRunOnMissingResource only skips the dry run) and the Sensors wo
 {{- $wp := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) -}}
 {{- and $wp (.Capabilities.APIVersions.Has "argoproj.io/v1alpha1/WorkflowTemplate") -}}
 {{- else -}}
-{{- $m -}}{{- /* "true" / "false"; anything else fails in validate.yaml */ -}}
+{{- $m -}}{{- /* "true" / "false"; anything else fails values.schema.json */ -}}
 {{- end -}}
 {{- end }}
 

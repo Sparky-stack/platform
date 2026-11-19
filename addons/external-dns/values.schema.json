@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "external-dns (koorikla wrapper)",
+  "description": "Platform keys only; the upstream external-dns subchart, cluster.* and installation keys stay open. Cross-field rules: templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "external-dns": {
+      "description": "Upstream kubernetes-sigs/external-dns subchart values (guarded in templates/validate.yaml, not constrained here).",
+      "type": "object"
+    },
+    "cluster": {
+      "description": "Injected by the addon ApplicationSet (--set-string).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Cluster name (txtOwnerId is <installation>-<name>).",
+          "type": "string"
+        },
+        "role": {
+          "description": "mgmt or workload: workload clusters read the Cloudflare token only from store dns.",
+          "type": "string"
+        }
+      }
+    },
+    "dns": {
+      "description": "installation.yaml dns.*: the DNS provider and the zones ExternalDNS may manage.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "DNS provider of the installation (empty: none).",
+          "enum": [
+            "",
+            "none",
+            "route53",
+            "cloudflare"
+          ]
+        },
+        "domainFilters": {
+          "description": "Zones ExternalDNS may manage (equals external-dns.domainFilters).",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+          }
+        }
+      }
+    },
+    "secrets": {
+      "description": "Cloudflare token via ESO (merged with installation.yaml secrets.*).",
+      "type": "object",
+      "required": [
+        "store"
+      ],
+      "properties": {
+        "store": {
+          "description": "ClusterSecretStore of the token: platform on mgmt, dns on workload clusters.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cloudflare": {
+          "description": "ExternalSecret external-dns-cloudflare.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Render the Cloudflare token ExternalSecret (values/dns-cloudflare.yaml).",
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

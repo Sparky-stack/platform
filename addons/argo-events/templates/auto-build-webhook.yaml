@@ -22,7 +22,7 @@ Values are checked in validate.yaml (same condition). */}}
 {{- $w := .Values.autoBuildWebhook }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
 {{- $sa := "auto-build-sensor" }}
-{{- $tpl := required "autoBuildWebhook.workflowTemplate is required" $w.workflowTemplate }}
+{{- $tpl := $w.workflowTemplate }}
 {{- $owner := dig "githubOrg" "" (.Values.installation | default dict) | trimSuffix "/" | splitList "/" | last }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -82,7 +82,7 @@ spec:
       namespace: {{ $w.route.gateway.namespace }}
       sectionName: {{ $w.route.sectionName }}
   hostnames:
-    - {{ printf "%s.%s" $w.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
+    - {{ printf "%s.%s" $w.route.hostPrefix .Values.openchoreo.controlPlane.host | quote }}
   rules:
     - matches:
         - path: { type: Exact, value: {{ $w.endpoint }} }

@@ -1,0 +1,20 @@
+{{- /* Cross-field rules of this chart (renders nothing). Single-field formats, enums and ranges: values.schema.json.
+Attestor and policy names are derived in templates/image-verification.yaml and checked there, next to the naming. */ -}}
+{{- $iv := .Values.imageVerification }}
+{{- if $iv.enabled }}
+{{- if $iv.github.enabled }}
+{{- if not $iv.github.workflow }}{{ fail "imageVerification.github.workflow must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" }}{{ end }}
+{{- if not $iv.github.workflowRef }}{{ fail "imageVerification.github.workflowRef must be a 40-hex commit SHA (tags and branches are mutable)" }}{{ end }}
+{{- if has (toString $iv.github.workflowRef) (($iv.github.transitionWorkflowRefs | default list) | toStrings) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
+{{- if not (and $iv.github.repositories $iv.github.refs $iv.github.triggers) }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
+{{- range ($iv.github.attestations | default list) }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ end }}
+{{- end }}
+{{- /* Same trust decision as image-verification.yaml: inline publicKey, or the cluster-delivered key with registry.type harbor. */ -}}
+{{- $reg := .Values.registry | default dict }}
+{{- $pkc := $iv.platformKey.cluster | default dict }}
+{{- $clusterKey := and (not $iv.platformKey.publicKey) (eq (toString $reg.type) "harbor") (ne (toString ($pkc.configMap | default "")) "") }}
+{{- if and $iv.platformKey.enabled (or $iv.platformKey.publicKey $clusterKey) }}
+{{- $_ := required "imageVerification.platformKey (publicKey or registry.type harbor) is set: installation registry.host is required (image prefix <host>/<appsProject>/)" $reg.host }}
+{{- range ($iv.platformKey.attestations | default list) }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ end }}
+{{- end }}
+{{- end }}
