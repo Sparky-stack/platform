@@ -638,6 +638,13 @@ spec:
       inputs:
         parameters:
           - name: digest-ref
+      # Defence in depth: OnError retries only Argo errors (pod creation rejected, e.g. a Kyverno webhook without
+      # endpoints while its controller restarts), never a failed cosign exit. ~2.5 min of backoff covers a restart; a
+      # repeated signature on the same digest is harmless.
+      retryStrategy:
+        limit: "4"
+        retryPolicy: OnError
+        backoff: { duration: 10s, factor: "2", maxDuration: 5m }
       container:
         image: "@@TOOLBOX_IMAGE@@"
         command: [bash, -euo, pipefail, -c]

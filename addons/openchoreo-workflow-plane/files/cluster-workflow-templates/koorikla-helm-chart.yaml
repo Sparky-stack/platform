@@ -137,6 +137,11 @@ spec:
       inputs:
         parameters:
           - name: digest-ref
+      # Same bounded OnError retry as koorikla-build's sign (pod creation rejected by a webhook without endpoints).
+      retryStrategy:
+        limit: "4"
+        retryPolicy: OnError
+        backoff: { duration: 10s, factor: "2", maxDuration: 5m }
       container:
         image: "@@TOOLBOX_IMAGE@@"
         command: [bash, -euo, pipefail, -c]

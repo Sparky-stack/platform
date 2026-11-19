@@ -309,6 +309,15 @@ the short leases until it is re-created; a CAPD cluster gets them through a cont
 Check: `docker logs k3d-platform-mgmt-server-0 2>&1 | grep -c 'leaderelection lost'` and
 `docker inspect k3d-platform-mgmt-server-0 --format '{{.RestartCount}}'` stay 0.
 
+In-cluster controllers with short leases still restart on those stalls even when k3s survives them. Kyverno derives its
+lease (6x) and renew deadline (5x) from `--leaderElectionRetryPeriod` (upstream 2 s = 12 s / 10 s) and every controller
+exits when a renewal misses the deadline. On a clean bootstrap two etcd stalls of 13.6 s and 10.1 s restarted all four
+Kyverno controllers together (exit 0, `Failed to renew lease ... context deadline exceeded`), and the first hello-world
+build's `sign` pod was rejected with `no endpoints available for service "kyverno-svc"` in the 4 s before the new
+admission pod was Ready. `addons/kyverno` sets the period to 10 s (60 s lease, 50 s renew deadline) on every
+controller; the build templates' `sign` step retries pod-creation errors (`retryPolicy: OnError`, 4 attempts with
+backoff) as defence in depth. Check: `kubectl -n kyverno get lease` shows `leaseDurationSeconds: 60`.
+
 ## Bootstrap time and registry caches
 
 A clean `task up` on main @474e8af took 32.9 min to 43 Synced/Healthy apps (20-core host). Argo CD's timeline showed

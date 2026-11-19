@@ -101,21 +101,33 @@ kyverno:
         imageVerifyCacheEnabled: true
         imageVerifyCacheTTLDuration: 24h
         imageVerifyCacheMaxSize: "33554432"   # bytes, quoted: helm renders a bare number as 3.3554432e+07
+        # Leader election: Kyverno derives lease = 6x and renew deadline = 5x this period (upstream 2s -> 12s/10s). Every
+        # controller exits when a renewal misses the deadline, and the admission webhook (failurePolicy Fail) then has no
+        # endpoints until the new pod is Ready: on a clean bootstrap etcd fdatasync stalls of 10-14 s restarted all four
+        # controllers together twice and failed the first build's `sign` pod creation. 10s -> 60s lease, 50s renew
+        # deadline, like k3s/CAPI (docs/dev-environment.md "Leader election on slow disks"). Same value on every controller.
+        leaderElectionRetryPeriod: &kyvernoLeaderElectionRetryPeriod 10s
   backgroundController:
     replicas: 1
     image: { tag: "v1.20.0@sha256:c72df38320a48fc9de10f9d23d087a117853bb08207b7f60f6d1e8457fb3ddb7" }
+    extraArgs:
+      leaderElectionRetryPeriod: *kyvernoLeaderElectionRetryPeriod
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }
   cleanupController:
     replicas: 1
     image: { tag: "v1.20.0@sha256:0f9ce0c203561c52499e871a987ff987371f57385fcafe7af1a01dfd6db1feee" }
+    extraArgs:
+      leaderElectionRetryPeriod: *kyvernoLeaderElectionRetryPeriod
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 128Mi }
   reportsController:
     replicas: 1
     image: { tag: "v1.20.0@sha256:f54e3cc106fadb1a615d0ec11c42f741f51d3580a5f70dfbe7bd7ec58864ef03" }
+    extraArgs:
+      leaderElectionRetryPeriod: *kyvernoLeaderElectionRetryPeriod
     # -- Raises memory to `96Mi` request / `256Mi` limit on `mgmt` (`values/role-mgmt.yaml`) for initial object-list peaks.
     resources:
       requests: { cpu: 25m, memory: 64Mi }
