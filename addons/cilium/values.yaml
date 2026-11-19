@@ -151,3 +151,4 @@ l7Visibility:
   # -- Optional L7 Envoy visibility (`l7Visibility.{enabled,httpPorts}`; `false` by default).
   enabled: false
   httpPorts: ["8080"]
+# scoped CI probe (throwaway PR, do not merge)
