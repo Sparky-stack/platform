@@ -1,13 +1,38 @@
+{{- /*
+One ApplicationSet addon-<name> per catalog entry (values.yaml `addons`), on mgmt in argocd: an Application
+<name>-<cluster> per Argo CD cluster secret whose labels match the entry. Layering: docs/architecture.md "Addons".
+*/ -}}
 {{- $inst := .Values.installation -}}
 {{- $instValues := omit .Values "addons" -}}
-{{- /* clusterServerParameters: <helm param>: <part of the Argo cluster secret's `server`> - goTemplate expressions
-evaluated by the ApplicationSet controller per cluster (sprig urlParse). hack/test.sh mirrors them. */ -}}
+{{- /* goTemplate expressions the ApplicationSet controller evaluates per cluster secret; hack/lib/addons.sh mirrors them. */ -}}
+{{- $label := dict -}}
+{{- range list "name" "role" "provider" "region" "environment" "cni" -}}
+{{- $_ := set $label . (printf "{{ index .metadata.labels \"platform.koorikla.io/%s\" }}" .) -}}
+{{- end -}}
 {{- $serverExpr := dict
   "url"  "{{ .server }}"
   "host" "{{ (urlParse .server).hostname }}"
   "port" "{{ $h := (urlParse .server).host }}{{ if regexMatch \":[0-9]+$\" $h }}{{ regexFind \"[0-9]+$\" $h }}{{ else }}443{{ end }}"
 -}}
+{{- /* Per-cluster pin (cluster secret annotation addons-revision), else installation.revision. */ -}}
+{{- $targetRevision := printf `'{{ $r := index .metadata.annotations "platform.koorikla.io/addons-revision" }}{{ if and $r (ne $r "HEAD") }}{{ $r }}{{ else }}%s{{ end }}'` ($inst.revision | default "HEAD") -}}
 {{- range $addon, $cfg := .Values.addons }}
+{{- /* Cluster selector: role (+ provider), then the per-cluster toggle label: opt-out (NotIn false) when default is
+true or unset, opt-in (In true) when default is false. */}}
+{{- $optOut := hasKey $cfg "default" | ternary $cfg.default true }}
+{{- $match := list (dict "key" "platform.koorikla.io/role" "operator" "In" "values" $cfg.roles) }}
+{{- with $cfg.providers }}
+{{- $match = append $match (dict "key" "platform.koorikla.io/provider" "operator" "In" "values" .) }}
+{{- end }}
+{{- $match = append $match (dict "key" (printf "addons.platform.koorikla.io/%s" $addon) "operator" (ternary "NotIn" "In" $optOut) "values" (list (ternary "false" "true" $optOut))) }}
+{{- $generators := list (dict "clusters" (dict "selector" (dict "matchExpressions" $match))) }}
+{{- /* fleetParameters: matrix with one flat-list element {clusters: [every platform cluster]}, so each Application still
+targets one cluster but sees the whole fleet (argo-events: one Falco endpoint per cluster). */}}
+{{- $fleet := $cfg.fleetParameters | default list }}
+{{- if $fleet }}
+{{- $allClusters := dict "clusters" (dict "flatList" true "selector" (dict "matchExpressions" (list (dict "key" "platform.koorikla.io/name" "operator" "Exists")))) }}
+{{- $generators = list (dict "matrix" (dict "generators" (append $generators $allClusters))) }}
+{{- end }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -16,37 +41,14 @@ metadata:
   namespace: argocd
 spec:
   goTemplate: true
-  {{- /* fleetParameters: the cluster generator above, matrixed with a flat list of every platform cluster (Argo CD
-  cluster secrets labelled platform.koorikla.io/name), so one Application can see the whole fleet (e.g. argo-events: one
-  Falco endpoint per cluster). The flat list is a single element {clusters: [...]}: one Application per cluster still. */}}
-  {{- $fleet := $cfg.fleetParameters | default list }}
   generators:
-    {{- if $fleet }}
-    - matrix:
-        generators:
-    {{- end }}
-    {{- $in := ternary 10 4 (not (empty $fleet)) }}
-    {{- $sel := dict "matchExpressions" (list (dict "key" "platform.koorikla.io/role" "operator" "In" "values" $cfg.roles)) }}
-    {{- if $cfg.providers }}
-    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" "platform.koorikla.io/provider" "operator" "In" "values" $cfg.providers)) }}
-    {{- end }}
-    {{- if hasKey $cfg "default" | ternary $cfg.default true }}
-    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" (printf "addons.platform.koorikla.io/%s" $addon) "operator" "NotIn" "values" (list "false"))) }}
-    {{- else }}
-    {{- $_ := set $sel "matchExpressions" (append $sel.matchExpressions (dict "key" (printf "addons.platform.koorikla.io/%s" $addon) "operator" "In" "values" (list "true"))) }}
-    {{- end }}
-    {{- $gens := list (dict "clusters" (dict "selector" $sel)) }}
-    {{- if $fleet }}
-    {{- $gens = append $gens (dict "clusters" (dict "flatList" true "selector" (dict "matchExpressions" (list (dict "key" "platform.koorikla.io/name" "operator" "Exists"))))) }}
-    {{- end }}
-    {{- toYaml $gens | nindent $in }}
+    {{- toYaml $generators | nindent 4 }}
   template:
     metadata:
-      name: '{{ $addon }}-{{ "{{" }} .name {{ "}}" }}'
-      {{- /* compareOptions: Argo CD per-Application compare options (annotation argocd.argoproj.io/compare-options).
-      IncludeMutationWebhook=true for addons rendering Argo Workflows objects: their CRD `spec` is atomic +
-      preserve-unknown, and server-side diff otherwise reverts every spec change to the live value (Synced, never
-      applied: #184, argoproj/argo-cd#27625). hack/tests/test_argocd_compare_options.sh enforces it. */}}
+      name: {{ printf "'%s-{{ .name }}'" $addon }}
+      {{- /* IncludeMutationWebhook=true for addons rendering Argo Workflows objects: their CRD spec is atomic +
+      preserve-unknown and server-side diff would report Synced while the live spec stays old (#184,
+      argoproj/argo-cd#27625). hack/tests/test_argocd_compare_options.sh enforces it. */}}
       {{- with $cfg.compareOptions }}
       annotations:
         argocd.argoproj.io/compare-options: {{ join "," . | quote }}
@@ -55,20 +57,18 @@ spec:
       project: platform
       source:
         repoURL: {{ $inst.repoURL | quote }}
-        targetRevision: {{ include "platform.addonsTargetRevision" $ }}
+        targetRevision: {{ $targetRevision }}
         path: {{ $cfg.path | default (printf "addons/%s" $addon) | quote }}
         helm:
           releaseName: {{ $cfg.releaseName | default $addon | quote }}
           ignoreMissingValueFiles: true
           valueFiles:
             - values.yaml
-            - 'values/role-{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}}" }}.yaml'
-            - 'values/provider-{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}}" }}.yaml'
-            - 'values/cni-{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}}" }}.yaml'
-            {{- /* mesh members (fleet file mesh.group -> label mesh.platform.koorikla.io/group): values/mesh-member.yaml */}}
-            - 'values/mesh-{{ "{{" }} if index .metadata.labels "mesh.platform.koorikla.io/group" {{ "}}" }}member{{ "{{" }} else {{ "}}" }}none{{ "{{" }} end {{ "}}" }}.yaml'
-            {{- /* installationValueFiles: value files chosen by installation facts (e.g. external-dns'
-            values/dns-<dns.provider>.yaml), rendered here once per installation; paths stay inside the addon. */}}
+            - 'values/role-{{ $label.role }}.yaml'
+            - 'values/provider-{{ $label.provider }}.yaml'
+            - 'values/cni-{{ $label.cni }}.yaml'
+            {{- /* mesh members (fleet file mesh.group -> label mesh.platform.koorikla.io/group) */}}
+            - {{ `'values/mesh-{{ if index .metadata.labels "mesh.platform.koorikla.io/group" }}member{{ else }}none{{ end }}.yaml'` }}
             {{- range $f := $cfg.installationValueFiles }}
             {{- $path := tpl $f $ }}
             {{- if or (hasPrefix "/" $path) (contains ".." $path) (contains "{{" $path) (not (hasPrefix "values/" $path)) }}
@@ -77,40 +77,33 @@ spec:
             - {{ $path | quote }}
             {{- end }}
             - {{ printf "../../installations/%s/addons/%s/values.yaml" $inst.name $addon | quote }}
-            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}}" }}.yaml'
-            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}.yaml'
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/env-{{ $label.environment }}.yaml'
+            - '../../installations/{{ $inst.name }}/addons/{{ $addon }}/cluster-{{ $label.name }}.yaml'
           {{- if or $cfg.clusterNameParameters $cfg.clusterNameFormats $cfg.clusterIdParameters $cfg.installationParameters $cfg.clusterServerParameters $cfg.clusterLabelParameters $fleet }}
           parameters:
             {{- range $p := $cfg.clusterNameParameters }}
             - name: {{ $p | quote }}
-              value: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
+              value: '{{ $label.name }}'
               forceString: true
             {{- end }}
-            {{- /* clusterNameFormats: <param>: <printf format with one %s> -> the cluster name inside a fixed text (e.g.
-            falcosidekick customfields "cluster:%s"); a string, never a typed value. */}}
             {{- range $p, $f := $cfg.clusterNameFormats }}
             {{- $bare := replace "%%" "" $f }}
             {{- if or (ne (len (splitList "%" $bare)) 2) (not (contains "%s" $bare)) }}
             {{- fail (printf "addons.%s.clusterNameFormats.%s: %q must contain exactly one %%s" $addon $p $f) }}
             {{- end }}
             - name: {{ $p | quote }}
-              value: {{ printf $f (printf "%s index .metadata.labels \"platform.koorikla.io/name\" %s" "{{" "}}") | squote }}
+              value: {{ printf $f $label.name | squote }}
               forceString: true
             {{- end }}
-            {{- /* fleetParameters: [<param>] -> {name1,name2,...} (helm list) of every platform cluster, sorted. */}}
             {{- range $p := $fleet }}
             - name: {{ $p | quote }}
               value: {{ `'{{ $n := list }}{{ range .clusters }}{{ $n = append $n (index .metadata.labels "platform.koorikla.io/name") }}{{ end }}{{ printf "{%s}" (join "," (sortAlpha $n)) }}'` }}
             {{- end }}
-            {{- /* clusterIdParameters: <installation>-<cluster>, unique when several installations share something
-            external (e.g. external-dns TXT owner in a shared zone). */}}
             {{- range $p := $cfg.clusterIdParameters }}
             - name: {{ $p | quote }}
-              value: '{{ required "installation.name is required" $inst.name }}-{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
+              value: '{{ required "installation.name is required" $inst.name }}-{{ $label.name }}'
               forceString: true
             {{- end }}
-            {{- /* installationParameters: <helm param>: <template over installation values>, rendered here once per
-            installation, so subchart values that must equal installation.yaml facts are never restated by hand. */}}
             {{- range $p, $t := $cfg.installationParameters }}
             - name: {{ $p | quote }}
               value: {{ tpl $t $ | quote }}
@@ -125,8 +118,6 @@ spec:
               forceString: true
               {{- end }}
             {{- end }}
-            {{- /* clusterLabelParameters: <helm param>: {label: <cluster secret label>, default: <string>} - the label's
-            value on this cluster, else the default (empty if not given). Always a string (forceString). */}}
             {{- range $p, $l := $cfg.clusterLabelParameters }}
             {{- if not (and (kindIs "map" $l) $l.label) }}
             {{- fail (printf "addons.%s.clusterLabelParameters.%s: want {label: <key>, default: <value>}" $addon $p) }}
@@ -136,28 +127,28 @@ spec:
             {{- end }}
             - name: {{ $p | quote }}
               {{- if ne (get $l "default" | default "") "" }}
-              value: '{{ "{{" }} $v := index .metadata.labels {{ $l.label | quote }} {{ "}}" }}{{ "{{" }} if $v {{ "}}" }}{{ "{{" }} $v {{ "}}" }}{{ "{{" }} else {{ "}}" }}{{ $l.default }}{{ "{{" }} end {{ "}}" }}'
+              value: {{ printf `'{{ $v := index .metadata.labels %q }}{{ if $v }}{{ $v }}{{ else }}%s{{ end }}'` $l.label $l.default }}
               {{- else }}
-              value: '{{ "{{" }} index .metadata.labels {{ $l.label | quote }} {{ "}}" }}'
+              value: {{ printf `'{{ index .metadata.labels %q }}'` $l.label }}
               {{- end }}
               forceString: true
             {{- end }}
           {{- end }}
           valuesObject:
             cluster:
-              name: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/name" {{ "}}" }}'
-              role: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/role" {{ "}}" }}'
-              provider: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/provider" {{ "}}" }}'
-              region: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/region" {{ "}}" }}'
-              environment: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/environment" {{ "}}" }}'
-              cni: '{{ "{{" }} index .metadata.labels "platform.koorikla.io/cni" {{ "}}" }}'
+              name: '{{ $label.name }}'
+              role: '{{ $label.role }}'
+              provider: '{{ $label.provider }}'
+              region: '{{ $label.region }}'
+              environment: '{{ $label.environment }}'
+              cni: '{{ $label.cni }}'
             {{- toYaml $instValues | nindent 12 }}
       destination:
-        server: '{{ "{{" }} .server {{ "}}" }}'
+        server: '{{ "{{ .server }}" }}'
         namespace: {{ $cfg.namespace | quote }}
-      {{- if $cfg.ignoreDifferences }}
+      {{- with $cfg.ignoreDifferences }}
       ignoreDifferences:
-        {{- toYaml $cfg.ignoreDifferences | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       syncPolicy:
         automated:
@@ -172,12 +163,9 @@ spec:
           {{- if $cfg.serverSideDiff }}
           - ServerSideDiff=true
           {{- end }}
-        # Retry without limit (every 1m at most) on the latest revision: an addon can wait on another app for longer than
-        # any fixed budget on a clean bootstrap (e.g. ServiceMonitors of cloudnative-pg/crossplane before telemetry's
-        # monitoring.coreos.com CRDs exist: 5 failed attempts live, #192), and an operation that gives up stays failed
-        # until the next commit - a manual step. Same policy as the fleet ApplicationSet. The 1m cap (was 5m) bounds the idle
-        # time after the missing CRD/webhook appears: with 5m, keda/cloudnative-pg/crossplane on dev1 and cluster-fleet
-        # on mgmt slept up to 5 min after their dependency was healthy (clean bootstrap timeline).
+        # Never give up: on a clean bootstrap an addon can wait on another app's CRDs longer than any fixed budget
+        # (#192), and a failed operation stays failed until the next commit. The 1m cap bounds idle time after the
+        # dependency turns healthy (5m left keda/cloudnative-pg/crossplane/cluster-fleet sleeping). Same as fleet.
         retry:
           limit: -1
           refresh: true

@@ -1,5 +1,7 @@
-# Deleting (or disabling: *.yaml.disabled) a cluster file in installations/<inst>/clusters/*.yaml prunes the Application
-# and deletes the CAPI Cluster.
+{{- /*
+ApplicationSet fleet (mgmt, argocd): installations/<inst>/clusters/<c>.yaml -> Application cluster-<c> rendering
+charts/cluster into namespace fleet. Deleting (or renaming to *.yaml.disabled) the file deletes the CAPI Cluster.
+*/ -}}
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -15,7 +17,7 @@ spec:
           - path: {{ printf "installations/%s/clusters/*.yaml" .Values.installation.name | quote }}
   template:
     metadata:
-      name: 'cluster-{{ "{{" }} .name {{ "}} " | trim }}'
+      name: {{ `'cluster-{{ .name }}'` }}
       # Background cascade: Argo CD deletes the CAPI Cluster like `kubectl delete` and CAPI tears it down in order
       # (control plane and machines, then infrastructure). The default (foreground) finalizer makes the garbage
       # collector delete the Cluster's dependents all at once: the DockerCluster went first and CAPD then never
@@ -29,10 +31,10 @@ spec:
         targetRevision: {{ .Values.installation.revision | default "HEAD" | quote }}
         path: charts/cluster
         helm:
-          releaseName: 'cluster-{{ "{{" }} .name {{ "}} " | trim }}'
+          releaseName: {{ `'cluster-{{ .name }}'` }}
           valueFiles:
             - {{ printf "../../installations/%s/installation.yaml" .Values.installation.name | quote }}
-            - '../../{{ "{{" }} .path.path {{ "}} " | trim }}/{{ "{{" }} .path.filename {{ "}} " | trim }}'
+            - {{ `'../../{{ .path.path }}/{{ .path.filename }}'` }}
           # bootstrap's REGISTRY_CACHE=0 reaches the root app as a parameter; the cluster chart reads installation.yaml
           parameters:
             - name: registry.hostCache.enabled
@@ -48,10 +50,8 @@ spec:
           - CreateNamespace=true
           - ServerSideApply=true
           - ServerSideDiff=true
-        # A cluster app waits on dependencies outside it: charts/cluster gates the Cluster on its registries
-        # ExternalSecret (sync wave -1, needs e.g. the Harbor CA). Keep retrying (every 1m at most) on the latest
-        # revision instead of giving up after a fixed count, which would leave the cluster unsynced until the next
-        # commit.
+        # Never give up: charts/cluster gates the Cluster on its registries ExternalSecret (wave -1, e.g. the Harbor
+        # CA); a fixed retry count would leave the cluster unsynced until the next commit.
         retry:
           limit: -1
           refresh: true

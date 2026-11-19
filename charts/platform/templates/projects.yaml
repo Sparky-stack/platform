@@ -1,3 +1,5 @@
+{{- /* AppProjects (mgmt, argocd): platform (addons, anything), fleet (charts/cluster: CAPI + registration only),
+previews (charts/preview). Tenant AppProjects come from charts/tenant. */ -}}
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -66,10 +68,8 @@ spec:
     - group: openchoreo.dev
       kind: Environment
 ---
-{{- /* previews: the PR preview Applications of ApplicationSets previews-<project> (charts/tenant templates/previews.yaml,
-docs/preview-environments.md). Only charts/preview of the platform repo, only the three OpenChoreo kinds one preview
-consists of, only the org namespace on mgmt. Rendered always: the Applications carry the resources
-finalizer and Argo CD can only delete them while their project exists. */}}
+{{- /* previews (docs/preview-environments.md): only the three OpenChoreo kinds charts/preview renders. Rendered even with
+previews off: the preview Applications carry the resources finalizer and Argo CD deletes them only while it exists. */}}
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:

@@ -16,11 +16,6 @@
 pr-{{ .Values.pullRequest }}-{{ .Values.component }}
 {{- end }}
 
-{{- /* ComponentRelease the binding pins: cut by the auto-build pass from the PR head build (one per commit). */ -}}
-{{- define "preview.releaseName" -}}
-{{ .Values.component }}-pr-{{ .Values.pullRequest }}-{{ substr 0 12 (toString .Values.commit) }}
-{{- end }}
-
 {{- define "preview.labels" -}}
 platform.koorikla.io/preview: "true"
 platform.koorikla.io/tenant: {{ .Values.project }}

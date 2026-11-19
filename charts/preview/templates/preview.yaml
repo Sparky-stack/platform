@@ -75,5 +75,6 @@ spec:
     projectName: {{ .Values.project }}
     componentName: {{ .Values.component }}
   environment: {{ $env }}
-  releaseName: {{ include "preview.releaseName" . }}
+  # Cut by the auto-build pass from the PR head build (one ComponentRelease per commit).
+  releaseName: {{ .Values.component }}-pr-{{ .Values.pullRequest }}-{{ substr 0 12 (toString .Values.commit) }}
 {{- end }}

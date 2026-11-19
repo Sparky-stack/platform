@@ -1,6 +1,6 @@
-# Root Application values: installations/<inst>/installation.yaml is layered on top of this file.
+# Root Application values. installations/<inst>/installation.yaml is layered on top; the defaults below only make a
+# standalone `helm template charts/platform` work. Everything except `addons` reaches every addon as values.
 
-# Defaults so standalone `helm template charts/platform` works; overridden by installation.yaml.
 installation:
   # -- GitOps repository and org scope (`installation.{name,repoURL,revision,githubOrg}`) layered from `installations/<inst>/installation.yaml`.
   name: local
@@ -17,11 +17,10 @@ mgmt:
   # -- `mgmt` addon opt-in/opt-out overrides.
   addons: {}
 
-# Git commit signature verification for Argo CD sources (AppProject sourceIntegrity, Argo CD >= 3.5; the older
-# `signatureKeys` is deprecated). Applies to the platform, fleet and tenant AppProjects. Off until every deployable
-# HEAD is signed: GitHub signs commits it creates (PR merges in the UI, REST API commits such as the promotion gate's)
-# with its web-flow key, so `head` mode with that key = only GitHub-made commits deploy. Public keys go into
-# addons/argo-cd `argo-cd.configs.gpg.keys`. docs/supply-chain.md.
+# Git commit signature verification (AppProject sourceIntegrity, Argo CD >= 3.5) for the platform, fleet and previews
+# AppProjects (charts/tenant has its own copy). Off until every deployable HEAD is signed: GitHub signs the commits it
+# creates (UI merges, REST API commits such as the promotion gate's) with its web-flow key, so `head` mode with that key
+# deploys only GitHub-made commits. Public keys go into addons/argo-cd `argo-cd.configs.gpg.keys`. docs/supply-chain.md.
 sourceIntegrity:
   # -- Enables Git commit signature verification for `platform`, `fleet`, and `tenant` `AppProject`s.
   enabled: false
@@ -29,23 +28,6 @@ sourceIntegrity:
   keys: [B5690EEEBB952194]           # GitHub web-flow commit signing key (since 2024-01; VERIFY); add maintainers' keys
   repos: ["{{ .Values.installation.githubOrg }}/*"]   # tpl over the installation values
 
-# Addon catalog. One ApplicationSet per entry, cluster generator selecting on:
-#   platform.koorikla.io/role in roles  (and platform.koorikla.io/provider in providers, if set)
-#   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
-# Optional helm parameters computed per cluster:
-#   clusterNameParameters:   [<param>]                 -> the cluster name
-#   clusterNameFormats:      {<param>: <fmt with %s>}  -> the cluster name inside fixed text (string), e.g. "cluster:%s"
-#   clusterIdParameters:     [<param>]                 -> <installation.name>-<cluster name> (unique across installations)
-#   installationParameters:  {<param>: <tpl>}          -> tpl over installation values, rendered once here
-#   clusterServerParameters: {<param>: url|host|port}  -> part of the cluster secret's API server URL
-#   clusterLabelParameters:  {<param>: {label: <key>, default: <str>}} -> a cluster secret label's value (else default)
-#   fleetParameters:         [<param>]                 -> {<name>,...}: every platform cluster's name (sorted helm list),
-#                                                         from the Argo CD cluster secrets (cluster generator flatList)
-# Optional extra value files, selected by installation facts rather than cluster labels:
-#   installationValueFiles:  [<tpl>]                   -> tpl over installation values, rendered once here; layered after
-#                                                         values/cni-*.yaml, before installations/<inst>/addons/<name>/*
-# Chart path: addons/<name>, or `path` (e.g. charts/cluster). Values layering: docs/architecture.md "Addons".
-# Standalone-render defaults; installation.yaml provides the real values.
 openchoreo:
   # -- Installation-wide OpenChoreo toggles (`openchoreo.*`) passed into catalog parameters.
   orgNamespace: default
@@ -65,14 +47,32 @@ dns:
   provider: none              # none | route53 | cloudflare (docs/dns.md)
   domainFilters: []
 secrets:
-  # The platform GitHub App (store key promotion-gate-github, docs/forking.md (c2)) is available. Auto-build and PR
-  # previews render only when true: their ESO GithubAccessToken generators fail without the key and would leave
-  # secret-stores, openchoreo-platform and every tenant Degraded (#192). Backend kubernetes: bootstrap.sh sets it on
-  # the root app (helm parameter) from whether `task secrets` seeded the key; false in installation.yaml forces it
-  # off. Other backends: set it in installation.yaml once the key is in the store.
+  # The platform GitHub App key (store key promotion-gate-github, docs/forking.md (c2)) is in the store. Auto-build and
+  # PR previews render only when true: their ESO GithubAccessToken generators fail without the key and leave
+  # secret-stores, openchoreo-platform and every tenant Degraded (#192). Backend kubernetes: bootstrap.sh sets it on the
+  # root app (helm parameter) when `task secrets` seeded the key; false in installation.yaml forces it off. Other
+  # backends: set it in installation.yaml once the key is in the store.
   githubGateApp:
     enabled: false
 
+# Addon catalog: one ApplicationSet addon-<name> per entry (templates/appset-addons.yaml), one Application per Argo CD
+# cluster secret matching:
+#   platform.koorikla.io/role In roles  (and platform.koorikla.io/provider In providers, if set)
+#   addons.platform.koorikla.io/<name>: default true -> NotIn ["false"] (opt-out); default false -> In ["true"] (opt-in)
+# Chart: addons/<name>, or `path`. releaseName defaults to <name>. Values layering: docs/architecture.md "Addons".
+# Per-cluster helm parameters (all optional):
+#   clusterNameParameters:   [<param>]                 the cluster name
+#   clusterNameFormats:      {<param>: <fmt with %s>}  the cluster name inside fixed text (string), e.g. "cluster:%s"
+#   clusterIdParameters:     [<param>]                 <installation.name>-<cluster name> (unique across installations)
+#   installationParameters:  {<param>: <tpl>}          tpl over the installation values, rendered once here
+#   clusterServerParameters: {<param>: url|host|port}  part of the cluster secret's API server URL
+#   clusterLabelParameters:  {<param>: {label: <key>, default: <str>}}  a cluster secret label's value (else default)
+#   fleetParameters:         [<param>]                 {<name>,...}: every platform cluster's name (sorted helm list)
+#   installationValueFiles:  [<tpl>]                   extra value files under addons/<name>/values/, picked by
+#                                                      installation facts; after values/cni-*, before the overlays
+# Argo CD options: serverSideDiff, compareOptions, ignoreDifferences (adds RespectIgnoreDifferences).
+#   compareOptions [IncludeMutationWebhook=true]: every addon rendering Argo Workflows objects (atomic, preserve-unknown
+#   CRD spec: server-side diff would report Synced while the live spec stays old, #184). test_argocd_compare_options.sh.
 addons:
   # -- Addon catalog entry (`namespace`, `roles`, `providers`, `default`, parameter mappings, `installationValueFiles`).
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
@@ -80,26 +80,45 @@ addons:
   external-secrets:         { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   secret-stores:            { namespace: external-secrets,         roles: [mgmt, workload], default: true }
   capi-operator:            { namespace: capi-operator-system,     roles: [mgmt],           default: true }
-  # charts/cluster in scope fleet: CAPI providers, credentials and ClusterClasses, once on mgmt (each workload cluster
-  # is the same chart in scope cluster, ApplicationSet fleet).
+  # charts/cluster in scope fleet, once on mgmt: CAPI providers, credentials, ClusterClasses. Each workload cluster is
+  # the same chart in scope cluster (ApplicationSet fleet).
   cluster-fleet:            { namespace: fleet,                    roles: [mgmt],           default: true, serverSideDiff: true, path: charts/cluster, installationParameters: { scope: fleet } }
   gateway-api-crds:         { namespace: kube-system,              roles: [mgmt, workload], default: true }
   kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
-  openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}', openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}' } }
-  # compareOptions IncludeMutationWebhook=true: every addon rendering Argo Workflows objects (ClusterWorkflowTemplate,
-  # WorkflowTemplate, CronWorkflow). Their CRD spec is atomic + preserve-unknown; Argo CD's server-side diff would
-  # otherwise report Synced while the live spec stays old (#184). hack/tests/test_argocd_compare_options.sh enforces it.
+  openchoreo-control-plane:
+    namespace: openchoreo-control-plane
+    roles: [mgmt]
+    default: true
+    installationParameters:
+      openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}'
+      openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}'
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true, compareOptions: [IncludeMutationWebhook=true] }   # OC platform CRs
-  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' }, clusterLabelParameters: { capabilityGate.addons.keda.enabled: { label: addons.platform.koorikla.io/keda, default: "false" }, capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" } } }   # capability gate: agent starts after the CRDs traits/resource types render (#246, #255)
+  openchoreo-data-plane:
+    namespace: openchoreo-data-plane
+    roles: [workload]
+    default: true
+    clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID]
+    installationParameters:
+      openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}'
+    # Capability gate: the cluster agent starts after the CRDs its traits / resource types render exist (#246, #255).
+    clusterLabelParameters:
+      capabilityGate.addons.keda.enabled:       { label: addons.platform.koorikla.io/keda,       default: "false" }
+      capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" }
   reloader:                 { namespace: reloader,                 roles: [mgmt, workload], default: true }   # workload: cluster-agent on cert/CA renewal; mgmt: Backstage on config change
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
   coredns-local:            { namespace: kube-system,              roles: [mgmt, workload], default: true, providers: [docker, byo] }   # byo: off unless the installation turns it on
-  # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. The DNS provider is installation.yaml
-  # dns.provider (not the infra provider): it picks values/dns-<provider>.yaml; dns.domainFilters and
-  # <installation>-<cluster> (TXT owner) become helm parameters.
-  external-dns:             { namespace: external-dns,             roles: [mgmt, workload], default: false, clusterIdParameters: [external-dns.txtOwnerId], installationParameters: { external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}' }, installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml'] }
+  # Public DNS for Gateway API routes (docs/dns.md), opt-in per cluster. installation.yaml dns.provider (not the infra
+  # provider) picks values/dns-<provider>.yaml; <installation>-<cluster> is the TXT owner.
+  external-dns:
+    namespace: external-dns
+    roles: [mgmt, workload]
+    default: false
+    clusterIdParameters: [external-dns.txtOwnerId]
+    installationParameters:
+      external-dns.domainFilters: '{{ printf "{%s}" (join "," .Values.dns.domainFilters) }}'
+    installationValueFiles: ['values/dns-{{ .Values.dns.provider }}.yaml']
   openchoreo-observability-plane: { namespace: openchoreo-observability-plane, roles: [mgmt], default: true }
   # AI agents (docs/ai-agents.md), opt-in: the OpenCost FinOps module next to the observability plane, and agentgateway
   # (LLM gateway the RCA / FinOps agents call instead of holding provider keys).
@@ -109,22 +128,20 @@ addons:
   obi:                      { namespace: obi,                      roles: [workload],       default: false }   # opt-in: single L7 RED source when on
   falco:                    { namespace: falco,                    roles: [mgmt, workload], default: true, clusterNameFormats: { falco.falcosidekick.config.customfields: 'cluster:%s' } }
   # Platform event receiver on mgmt (docs/promotion.md, docs/observability.md "Falco response"): Falco escalation
-  # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. The workflow objects (WorkflowTemplate,
-  # Sensors) render once the workflow plane's Argo Workflows CRDs exist (addon openchoreo-workflow-plane, workflowPlane: auto).
+  # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. Its workflow objects render once
+  # the workflow plane's Argo Workflows CRDs exist (addon openchoreo-workflow-plane).
   argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true, fleetParameters: [falco.clusters], compareOptions: [IncludeMutationWebhook=true] }
-  # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
-  # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
+  # Networking (docs/networking.md). cilium: opt-in by label (charts/cluster derives it from the fleet file's `cni`);
+  # it reaches the API server without kube-proxy through the cluster secret's server URL.
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }
-  # istiod flips its validating webhooks to failurePolicy Fail and injects caBundle once ready (manager pilot-discovery).
-  # Service mesh (docs/networking.md, docs/multicluster.md): addons/mesh = Istio ambient (base/istiod/cni/ztunnel) on
-  # every workload cluster. Mesh members (fleet file mesh.group -> labels mesh.platform.koorikla.io/{group,network},
-  # derived by charts/cluster) also get values/mesh-member.yaml: istio-csr (istiod's CA off, certificates signed by the
-  # mesh CA in OpenBao on mgmt through a cert-manager Vault Issuer) and the east-west gateway + reader RBAC.
-  # clusterName = cluster name everywhere; meshID and network only on members.
+  # Istio ambient on every workload cluster (docs/networking.md, docs/multicluster.md). Mesh members (fleet file
+  # mesh.group -> labels mesh.platform.koorikla.io/{group,network}) also get values/mesh-member.yaml: istio-csr
+  # (certificates from the mesh CA in OpenBao on mgmt) and the east-west gateway. meshID / network only on members.
   mesh:
     namespace: istio-system
     roles: [workload]
     default: true
+    # istiod flips its validating webhooks to failurePolicy Fail and injects caBundle once ready.
     ignoreDifferences: [{ group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration, managedFieldsManagers: [pilot-discovery] }]
     clusterNameParameters: [global.multiCluster.clusterName, cert-manager-istio-csr.app.server.clusterID]
     clusterLabelParameters:
@@ -134,26 +151,22 @@ addons:
       mesh.network:                               { label: mesh.platform.koorikla.io/network }
       # Joining/leaving a group rolls ztunnel (after istiod: sync wave 1 in addons/mesh/values.yaml).
       'ztunnel.podAnnotations.mesh\.platform\.koorikla\.io/group': { label: mesh.platform.koorikla.io/group }
-  # openbao (mgmt, enable via installation.yaml mgmt.addons): the mesh CA - one root + intermediate PKI mount per
-  # installation.yaml mesh.groups entry, keys generated inside OpenBao - with per-member JWT auth, plus the reader-cert
-  # admission guards.
+  # The mesh CA (enable via installation.yaml mgmt.addons): root + intermediate PKI mount per mesh.groups entry, keys
+  # generated inside OpenBao, per-member JWT auth, reader-cert admission guards.
   openbao:                  { namespace: openbao,                  roles: [mgmt],           default: false }
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
   kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true }
-  # Build plane (docs/build-plane.md): OpenChoreo workflow plane (in-cluster builds, primary path) and the Harbor
-  # registry builds push to and nodes pull through. harbor is for installation.yaml registry.type harbor (examples set
+  # Build plane (docs/build-plane.md): in-cluster builds, and Harbor for registry.type harbor (the examples set
   # mgmt.addons.harbor "false"); externalURL follows registry.host.
   openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true, compareOptions: [IncludeMutationWebhook=true] }
   harbor:                   { namespace: harbor,                   roles: [mgmt],           default: true, installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }
-  # Data services (docs/data-services.md): opt-in per cluster (label addons.platform.koorikla.io/<addon>: "true", i.e.
-  # cluster file `addons: { <addon>: true }`); nothing is generated for clusters that do not opt in, so local docker
-  # clusters stay lean. Operators watch all namespaces (OpenChoreo cell namespaces are created at runtime); CRDs apply
-  # server-side; ServerSideDiff where the operator / cert-manager owns webhook or APIService caBundles.
+  # Data services (docs/data-services.md), opt-in per cluster (fleet file `addons: { <addon>: true }`). Operators watch
+  # all namespaces (OpenChoreo cell namespaces appear at runtime). serverSideDiff where the operator / cert-manager owns
+  # webhook or APIService caBundles, or Crossplane fills TLS Secrets and defaults its package / XRD objects.
   keda:                     { namespace: keda,                     roles: [workload],       default: false, serverSideDiff: true }
   strimzi:                  { namespace: strimzi,                  roles: [workload],       default: false }
   cloudnative-pg:           { namespace: cnpg-system,              roles: [workload],       default: false, serverSideDiff: true }
-  # PostgreSQL as a service (docs/data-services.md): Crossplane v2 + the PostgreSQL XRD; the cluster's provider label
-  # picks the Composition (cnpg needs cloudnative-pg on the same cluster). ServerSideDiff: Crossplane fills its TLS
-  # Secrets and defaults its package / XRD objects.
+  # PostgreSQL as a service: Crossplane v2 + the PostgreSQL XRD; the cluster's provider label picks the Composition
+  # (cnpg needs cloudnative-pg on the same cluster).
   crossplane:               { namespace: crossplane-system,        roles: [workload],       default: false, serverSideDiff: true }

@@ -4,14 +4,14 @@
 # docs/preview-environments.md.
 
 # -- OpenChoreo `Project` (from the pull request generator alongside `component`, `pullRequest`, `commit`, `repository`, `branch`; malformed values fail the render).
-project: ""                # OpenChoreo Project (tenant file `project`)
+project: ""                # tenant file `project`
 component: ""              # Component name (== tenant app name == the app repo's Component)
 pullRequest: ""            # pull request number
 commit: ""                 # PR head SHA (40 hex): the build the ReleaseBinding pins
 repository: ""             # owner/name of the app repo (annotation only)
 branch: ""                 # PR head branch (annotation only)
-# "true" when the PR carries the label previews.expiredLabel: the TTL ran out (the auto-build pass sets it). Renders
-# nothing, so Argo CD prunes the Environment and OpenChoreo's finalizers remove bindings and the cell namespace.
+# The auto-build pass sets the label previews.expiredLabel when the TTL ran out; OpenChoreo's finalizers then remove
+# the bindings and the cell namespace.
 # -- `"true"` when the PR carries the expiry label; renders nothing, so Argo CD prunes the preview.
 expired: "false"
 
@@ -21,4 +21,4 @@ openchoreo:
   orgNamespace: default
 previews:
   # -- `ClusterDataPlane` every preview lands on (from `installation.yaml`).
-  dataPlane: dev1          # ClusterDataPlane every preview lands on (the development tier)
+  dataPlane: dev1          # the development tier

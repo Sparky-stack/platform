@@ -1,17 +1,12 @@
 {{- /*
-PR preview environments of this tenant (installation.yaml `previews`, docs/preview-environments.md).
-ApplicationSet previews-<project> (Argo CD on mgmt): per app repo of the tenant file, a matrix of
-  git files    <path>/*.yaml at the app's revision, selected to the one Component named like the app that carries the
-               annotation platform.koorikla.io/preview-environments: enabled (the per-component opt-in lives in the
-               app repo; no repository is listed anywhere else)
-  pullRequest  the repo's open pull requests (GitHub API with an installation token of the platform GitHub App, minted
-               by ESO into Secret previewToken.secretName: addon secret-stores), polled every requeueAfterSeconds
--> one Application preview-<component>-pr-<n> (AppProject previews: only Environment / ProjectReleaseBinding /
-ReleaseBinding in the org namespace, only from the platform repo) rendering charts/preview for the PR head SHA.
-A PR that is closed or merged drops out of the generator: the ApplicationSet deletes its Application, the resources
-finalizer deletes the Environment, OpenChoreo's finalizers remove bindings and the cell namespace.
-Only generator values that cannot inject anything reach the template: number, head_sha, the label list (expiry) and
-the Component name, which the selector pins to the app name. Branch names and titles are never rendered.
+ApplicationSet previews-<project> (mgmt, argocd; docs/preview-environments.md): per GitHub app repo, the matrix of
+  git files    the one Component named like the app carrying the opt-in annotation (previewOptIn; the opt-in lives
+               in the app repo only)
+  pullRequest  the repo's open PRs (token of the platform GitHub App, minted by addon secret-stores)
+-> Application preview-<component>-pr-<n> rendering charts/preview at the PR head SHA (AppProject previews). A closed or
+merged PR drops out of the generator, so its Application and Environment are deleted.
+Only values that cannot inject anything reach the template: number, head_sha, labels and the Component name (pinned
+to the app name by the selector). Branch names and titles are never rendered.
 */ -}}
 {{- $pv := .Values.previews | default dict }}
 {{- /* Only GitHub repositories have a pull request generator here; other apps of the tenant simply get no previews. */ -}}
