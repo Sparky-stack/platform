@@ -1,0 +1,21 @@
+{{- /* gcp-cloudsql: the owner User (password read from the connection Secret). */}}
+{{- if and (eq $backend "gcp-cloudsql") $host }}
+---
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: User
+metadata:
+  name: {{ $name }}-owner
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: user
+    crossplane.io/external-name: {{ $db }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    project: {{ $facts.project }}
+    instanceRef:
+      name: {{ $name }}
+    passwordSecretRef:
+      name: {{ $name }}-app
+      key: password
+{{- end }}

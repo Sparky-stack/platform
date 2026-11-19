@@ -10,8 +10,8 @@ Composition `kafka-topic` (environment-configs -> embedded function `compose-kaf
 `$facts.backend` from the EnvironmentConfig `platform-kafka-topic`. `functions/compose-kafka-topic/` is Helm-style, one
 template per composed object: `00-prelude.yaml.gotmpl` (facts, backend check, derived values), shared objects
 `1x-*`, per-backend objects `<backend>-<object>.yaml.gotmpl` (render only on that backend), `90-xr-status`.
-Render tests run in project mode (`crossplane composition render` without a functions file builds the embedded
-function and resolves the project's dependencies; function names are the package-derived ones).
+Render tests pin the upstream Functions like the addon (`tests/render/functions.yaml`); `validate-render.sh`
+builds the project and adds the embedded function (package-derived name) for the render.
 
 ## Developer contract
 

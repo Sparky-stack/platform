@@ -1,0 +1,18 @@
+{{- /* gcp-cloudsql: the application Database. */}}
+{{- if eq $backend "gcp-cloudsql" }}
+---
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: Database
+metadata:
+  name: {{ $name }}-db
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: database
+    crossplane.io/external-name: {{ $db }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    project: {{ $facts.project }}
+    instanceRef:
+      name: {{ $name }}
+{{- end }}

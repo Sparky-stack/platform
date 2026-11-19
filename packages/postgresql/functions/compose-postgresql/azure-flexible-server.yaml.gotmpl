@@ -1,0 +1,39 @@
+{{- /* azure-flexible: the Flexible Server (VNet integration, zone-redundant HA when highAvailability). */}}
+{{- if eq $backend "azure-flexible" }}
+---
+apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+kind: FlexibleServer
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: server
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    location: {{ $facts.location }}
+    version: {{ $version | quote }}
+    skuName: {{ get $skus $size }}
+    storageMb: {{ $storageMb }}
+    autoGrowEnabled: true
+    backupRetentionDays: {{ ternary $retention 7 (eq (toString $backup) "true") }}   # Azure always keeps >= 7 days
+    geoRedundantBackupEnabled: false
+    delegatedSubnetId: {{ $facts.delegatedSubnetId }}
+    privateDnsZoneId: {{ $facts.privateDnsZoneId }}
+    publicNetworkAccessEnabled: false
+    administratorLogin: {{ $db }}
+    administratorPasswordSecretRef:
+      name: {{ $name }}-app
+      key: password
+    authentication:
+      activeDirectoryAuthEnabled: true
+      passwordAuthEnabled: true
+      tenantId: {{ $facts.tenantID }}
+    {{- if $ha }}
+    highAvailability:
+      mode: ZoneRedundant
+    {{- end }}
+    tags: {{ toJson $tags }}
+{{- end }}

@@ -1,0 +1,19 @@
+{{- /* aws-rds: per-database KMS key encrypting the storage. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: kms.aws.m.upbound.io/v1beta1
+kind: Key
+metadata:
+  name: {{ $name }}-storage
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: kms-key
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    description: "PostgreSQL {{ $ns }}/{{ $name }} storage encryption ({{ $facts.cluster }})"
+    enableKeyRotation: true
+    deletionWindowInDays: 30
+    tags: {{ toJson $tags }}
+{{- end }}

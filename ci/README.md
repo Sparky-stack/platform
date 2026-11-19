@@ -5,7 +5,7 @@ What lives here and who runs it:
 | Path | What | Run by |
 |---|---|---|
 | [`scripts/<stack>/`](scripts), [`scripts/common/`](scripts/common) | build, test, scan, sign, attest scripts (env in, files out) | OpenChoreo ClusterWorkflows ([`addons/openchoreo-workflow-plane`](../addons/openchoreo-workflow-plane)) and the reusable workflows [`.github/workflows/app-*.yaml`](../.github/workflows/) |
-| [`toolbox/`](toolbox) | `ghcr.io/koorikla/ci-toolbox` image: the scripts plus trivy, syft, cosign, ... | built by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml) |
+| [`toolbox/`](toolbox) | `ghcr.io/koorikla/platform/ci-toolbox` image: the scripts plus trivy, syft, cosign, ... | built by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml) |
 | [`fixtures/`](fixtures), [`tests/`](tests) | one tiny project per stack, script unit tests | [`ci-selftest.yaml`](../.github/workflows/ci-selftest.yaml) |
 | [`templates/`](templates) | caller workflows, Dependabot configs, Dockerfiles | copied into app repos |
 
@@ -18,7 +18,7 @@ Helm charts, Crossplane configuration packages and Crossplane providers.
 
 - **Primary path: in-cluster.** OpenChoreo workflow-plane ClusterWorkflows run
   `scripts/<stack>/*.sh` and `scripts/common/*.sh` inside
-  `ghcr.io/koorikla/ci-toolbox` (see [Running in-cluster](#running-in-cluster-openchoreo-workflow-plane)).
+  `ghcr.io/koorikla/platform/ci-toolbox` (see [Running in-cluster](#running-in-cluster-openchoreo-workflow-plane)).
 - **Optional path: GitHub Actions.** Thin reusable workflows that only wire inputs to the
   same scripts (plus GitHub-only extras: CodeQL, SARIF upload, GitHub attestations,
   keyless signing). Nothing stack-specific is inlined in YAML.
@@ -29,11 +29,12 @@ vulnerability attestation.
 
 ## Toolbox image
 
-`ghcr.io/koorikla/ci-toolbox`, tagged `main`, `<short sha>` and `<full sha>`. Multi-arch, itself
+`ghcr.io/koorikla/platform/ci-toolbox` (owned by this repo; `ghcr.io/koorikla/ci-toolbox` belongs to the archived
+koorikla/ci and is frozen, #254), tagged `main`, `<short sha>`, `<full sha>` and `ci-vX.Y.Z`. Multi-arch, itself
 scanned, SBOM'd, attested and cosign-signed by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml)
 through `app-container.yaml`. Pin it by digest (`addons/openchoreo-workflow-plane/values.yaml`
-`images.TOOLBOX_IMAGE`); the `:v1` in that pin is a leftover tag from the archived koorikla/ci repo,
-only the digest counts.
+`images.TOOLBOX_IMAGE`, and `COSIGN_IMAGE` in `bootstrap/bootstrap.sh`, same pin); the short-sha tag in the pin is
+for humans, only the digest counts.
 
 Contents ([`toolbox/Dockerfile`](toolbox/Dockerfile), versions pinned, release checksums verified
 where upstream publishes them): trivy, syft, cosign, crane, helm, yq, jq, git, crossplane CLI,
@@ -90,7 +91,7 @@ GHCR uses `GITHUB_TOKEN`).
 | Elixir | `compile --warnings-as-errors`, `format --check-formatted`, credo `--strict` (if a dependency) | `mix test` (+ Postgres service) | `mix hex.audit` (retired), `mix deps.audit` (mix_audit, if a dependency), Trivy fs on mix.lock | sobelow (if a dependency, i.e. Phoenix). **CodeQL has no Elixir support.** | Trivy, SBOM, sign |
 | Ruby / Rails | rubocop (if bundled) | rspec / `bin/rails test` / `rake test` (+ Postgres) | bundler-audit, Trivy fs on Gemfile.lock | brakeman (Rails), CodeQL ruby | Trivy, SBOM, sign |
 | Helm | `helm lint --strict` | helm-unittest (`<chart>/tests/`) | - | - | chart signed + provenance |
-| Crossplane configuration | `crossplane resource validate` of XRDs/Compositions/function inputs against Crossplane + dependency schemas | `crossplane composition render` per example XR, composed resources validated, diff vs expected | - | - | xpkg signed + provenance; built + pushed with `crossplane project build/push` when the root has `crossplane-project.yaml` (Crossplane Project), else `crossplane xpkg build/push` |
+| Crossplane configuration | `crossplane resource validate` of XRDs/Compositions/function inputs against Crossplane + dependency schemas | `crossplane composition render` per example XR, composed resources validated, diff vs expected | - | - | xpkg signed + provenance; built + pushed with `crossplane project build/push` when the root has `crossplane-project.yaml` (Crossplane Project; its embedded function `<repo>_<fn>` is built into the render tests, pushed multi-arch, signed + provenance too, output `function_digest_ref`), else `crossplane xpkg build/push` |
 | Crossplane provider | `generate_command` (default: the `generate` make target) must leave a clean tree, `go vet`, golangci-lint | `go test -race` | govulncheck | CodeQL go (opt-in: slow on upjet) | controller image: Trivy, SBOM, sign; xpkg signed |
 
 Limits: images are scanned with Trivy for OS + language packages; `trivy_ignore_unfixed: true`
@@ -303,21 +304,21 @@ function-go-templating + example XR + expected render), and a tiny native provid
 
 | Package | Kind |
 |---|---|
-| `ghcr.io/koorikla/ci-selftest-go` | image |
-| `ghcr.io/koorikla/ci-selftest-python` | image |
-| `ghcr.io/koorikla/ci-selftest-node` | image |
-| `ghcr.io/koorikla/ci-selftest-rust` | image |
-| `ghcr.io/koorikla/ci-selftest-java-quarkus` | image (JVM) |
-| `ghcr.io/koorikla/ci-selftest-java-quarkus-native` | image (native) |
-| `ghcr.io/koorikla/ci-selftest-java-spring` | image |
-| `ghcr.io/koorikla/ci-selftest-nextjs` | image |
-| `ghcr.io/koorikla/ci-selftest-elixir` | image |
-| `ghcr.io/koorikla/ci-selftest-ruby` | image |
-| `ghcr.io/koorikla/ci-selftest-helm` | Helm chart (OCI) |
-| `ghcr.io/koorikla/ci-selftest-crossplane-configuration` | xpkg |
-| `ghcr.io/koorikla/ci-selftest-crossplane-provider` | xpkg (multi-arch) |
-| `ghcr.io/koorikla/ci-selftest-crossplane-provider-controller` | image |
-| `ghcr.io/koorikla/ci-toolbox` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-go` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-python` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-node` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-rust` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-java-quarkus` | image (JVM) |
+| `ghcr.io/koorikla/platform/ci-selftest-java-quarkus-native` | image (native) |
+| `ghcr.io/koorikla/platform/ci-selftest-java-spring` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-nextjs` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-elixir` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-ruby` | image |
+| `ghcr.io/koorikla/platform/ci-selftest-helm` | Helm chart (OCI) |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-configuration` | xpkg |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-provider` | xpkg (multi-arch) |
+| `ghcr.io/koorikla/platform/ci-selftest-crossplane-provider-controller` | image |
+| `ghcr.io/koorikla/platform/ci-toolbox` | image |
 
 Local checks before pushing (from `ci/`): `shellcheck -x scripts/*/*.sh tests/scripts/*.sh &&
 bash tests/scripts/workload-bump.test.sh`; actionlint runs in the prek hooks (`prek.toml`).

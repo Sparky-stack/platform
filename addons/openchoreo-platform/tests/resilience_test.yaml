@@ -1,0 +1,65 @@
+suite: openchoreo-platform - resilience defaults (ClusterTrait resilience embedded in Deployment component types, #251)
+templates:
+  - templates/platform-types.yaml
+  - templates/upstream-defaults.yaml
+tests:
+  - it: renders ClusterTrait resilience without the data-service types
+    template: templates/platform-types.yaml
+    set:
+      dataServices.enabled: false
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: resilience }
+      - isNull: { path: metadata.namespace }
+
+  - it: production PDB keeps a drain from taking every pod and never waits for unhealthy pods
+    template: templates/platform-types.yaml
+    documentSelector: { path: metadata.name, value: resilience }
+    asserts:
+      - equal:
+          path: spec.creates[0].template.kind
+          value: PodDisruptionBudget
+      - equal:
+          path: spec.creates[0].template.spec.maxUnavailable
+          value: 1
+      - equal:
+          path: spec.creates[0].template.spec.unhealthyPodEvictionPolicy
+          value: AlwaysAllow
+      - matchRegex:
+          path: spec.creates[0].includeWhen
+          pattern: 'environmentConfigs.replicas >= 2'
+
+  - it: every Deployment component type embeds it and binds the replicas and resilience knobs
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: spec.workloadType, value: deployment, matchMany: true }
+    asserts:
+      - contains:
+          path: spec.traits
+          content:
+            kind: ClusterTrait
+            name: resilience
+            instanceName: resilience
+            environmentConfigs:
+              replicas: ${environmentConfigs.replicas}
+              zoneSpread: ${environmentConfigs.resilience.zoneSpread}
+              nodePool: ${environmentConfigs.resilience.nodePool}
+              terminationGracePeriodSeconds: ${environmentConfigs.resilience.terminationGracePeriodSeconds}
+              preStopSleepSeconds: ${environmentConfigs.resilience.preStopSleepSeconds}
+      - equal:
+          path: spec.environmentConfigs.openAPIV3Schema.properties.resilience.properties.zoneSpread.default
+          value: ScheduleAnyway
+
+  - it: the scheduled-task (CronJob) type is left alone
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: metadata.name, value: scheduled-task }
+    asserts:
+      - isNull: { path: spec.traits }
+
+  - it: resilience.enabled false removes trait and embedding
+    set:
+      resilience.enabled: false
+      dataServices.enabled: false
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: metadata.name, value: service }
+    asserts:
+      - isNull: { path: spec.traits }

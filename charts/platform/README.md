@@ -128,6 +128,8 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-control-plane.installationParameters."openchoreo-control-plane.backstage.features.workflows.enabled" | string | `"{{ .Values.openchoreo.workflowPlane.enabled }}"` |  |
 | addons.openchoreo-control-plane.namespace | string | `"openchoreo-control-plane"` |  |
 | addons.openchoreo-control-plane.roles[0] | string | `"mgmt"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.crossplane.enabled".default | string | `"false"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.crossplane.enabled".label | string | `"addons.platform.koorikla.io/crossplane"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.keda.enabled".default | string | `"false"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.keda.enabled".label | string | `"addons.platform.koorikla.io/keda"` |  |
 | addons.openchoreo-data-plane.clusterNameParameters[0] | string | `"openchoreo-data-plane.clusterAgent.planeID"` |  |

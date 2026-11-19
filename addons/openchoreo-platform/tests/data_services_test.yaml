@@ -5,6 +5,8 @@ templates:
 tests:
   - it: renders keda-scaler and postgresql, cluster-scoped, skipped in dry-run while the CRDs are missing
     template: templates/platform-types.yaml
+    set:
+      resilience.enabled: false   # tests/resilience_test.yaml
     asserts:
       - hasDocuments: { count: 2 }
       - isNull: { path: metadata.namespace }
@@ -16,6 +18,7 @@ tests:
     template: templates/platform-types.yaml
     set:
       dataServices.enabled: false
+      resilience.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
 

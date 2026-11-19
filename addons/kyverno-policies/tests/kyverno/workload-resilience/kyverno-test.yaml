@@ -1,0 +1,52 @@
+# Offline: production resilience gate (templates/workload-resilience.yaml, #251). Run by
+# hack/tests/test_kyverno_policies.sh, which renders the policies into policies.yaml here.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: openchoreo-workload-resilience
+policies: [policies.yaml]
+resources: [resources.yaml]
+variables: values.yaml
+results:
+  - policy: openchoreo-workload-resilience-enforce
+    kind: Deployment
+    resources: [dp-default-demo-production-1/prod-good, dp-default-demo-production-1/prod-autoscaled]
+    result: pass
+  - policy: openchoreo-workload-resilience-enforce
+    kind: Deployment
+    resources:
+      - dp-default-demo-production-1/prod-one-replica
+      - dp-default-demo-production-1/prod-floor-one      # autoscaler floor of 1
+      - dp-default-demo-production-1/prod-floor-junk     # unparsable floor counts as 0
+      - dp-default-demo-production-1/prod-no-probe
+      - dp-default-demo-production-1/prod-no-requests
+      - dp-default-demo-production-1/prod-cpu-only
+    result: fail
+  - policy: openchoreo-workload-resilience-enforce
+    kind: HorizontalPodAutoscaler
+    resources: [dp-default-demo-production-1/prod-hpa-good]
+    result: pass
+  - policy: openchoreo-workload-resilience-enforce
+    kind: HorizontalPodAutoscaler
+    resources: [dp-default-demo-production-1/prod-hpa-one, dp-default-demo-production-1/prod-hpa-default]
+    result: fail
+  - policy: openchoreo-workload-resilience-audit
+    kind: Deployment
+    resources: [dp-default-demo-staging-1/staging-bad]
+    result: fail
+  - policy: openchoreo-workload-resilience-audit
+    kind: Deployment
+    resources: [dp-default-demo-staging-1/staging-good]
+    result: pass
+  - policy: openchoreo-workload-resilience-enforce
+    kind: Deployment
+    resources: [dp-default-demo-staging-1/staging-bad]
+    result: skip
+  - policy: openchoreo-workload-resilience-audit
+    kind: Deployment
+    resources: [dp-default-demo-production-1/prod-one-replica]
+    result: skip
+  - policy: openchoreo-workload-resilience-audit
+    kind: HorizontalPodAutoscaler
+    resources: [dp-default-demo-staging-1/staging-hpa-one]
+    result: fail

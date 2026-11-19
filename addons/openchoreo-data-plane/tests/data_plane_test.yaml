@@ -6,6 +6,7 @@ templates:
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
   - templates/cluster-agent-data-services.yaml
   - templates/capability-gate.yaml
+  - templates/priority-classes.yaml
 set:
   cluster.name: dev1
   openchoreo-data-plane.clusterAgent.planeID: dev1
@@ -119,6 +120,7 @@ tests:
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-keda-crds }
       - equal:
           path: spec.template.spec.initContainers[0].command
           value: [kubectl, wait, --for=create, --timeout=30m, crd/scaledobjects.keda.sh]
@@ -126,7 +128,31 @@ tests:
           path: spec.template.spec.containers[0].command
           value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/scaledobjects.keda.sh]
 
+  - it: "capability gate (#255): one named wait per addon (the stuck one is visible), Established waits for all"
+    template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.keda.enabled: "true"
+      capabilityGate.addons.crossplane.enabled: "true"
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-crossplane-crds }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/postgresqls.platform.koorikla.io]
+      - equal: { path: 'spec.template.spec.initContainers[1].name', value: wait-for-keda-crds }
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/postgresqls.platform.koorikla.io, crd/scaledobjects.keda.sh]
+
   - it: "capability gate: nothing rendered on a cluster without keda (the agent starts at once)"
     template: templates/capability-gate.yaml
     asserts:
       - hasDocuments: { count: 0 }
+  - it: ships the PriorityClasses ClusterTrait resilience assigns, production preempting, the rest never
+    template: templates/priority-classes.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: preemptionPolicy, value: PreemptLowerPriority }
+        documentSelector: { path: metadata.name, value: app-production }
+      - equal: { path: preemptionPolicy, value: Never }
+        documentSelector: { path: metadata.name, value: app-standard }

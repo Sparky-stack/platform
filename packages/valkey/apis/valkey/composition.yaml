@@ -4,7 +4,8 @@
 #      composed object, Helm-style (00-prelude.yaml.gotmpl: facts, backend check, derived values; then
 #      <backend>-<object>.yaml.gotmpl, each rendering only when $backend matches). Backends: valkey-operator | aws-elasticache | gcp-memorystore | azure-cache.
 #   3. ready: function-auto-ready derives the XR's readiness.
-# Function names are the ones Crossplane derives from the package paths (crossplane project render / run).
+# Function names: the upstream Functions as addons/crossplane installs them (tests/render/functions.yaml); the
+# embedded one under its package-derived name (validate-render.sh builds and adds it for render tests).
 # Status: layout. valkey-operator is render-tested offline; cloud templates are skeletons (VERIFY: never applied).
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
@@ -18,7 +19,7 @@ spec:
   pipeline:
     - step: environment
       functionRef:
-        name: crossplane-contrib-function-environment-configs
+        name: function-environment-configs
       input:
         apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
         kind: Input
@@ -32,4 +33,4 @@ spec:
         name: koorikla-platform-valkeycompose-valkey
     - step: ready
       functionRef:
-        name: crossplane-contrib-function-auto-ready
+        name: function-auto-ready

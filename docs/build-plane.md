@@ -34,7 +34,7 @@ the OpenChoreo API; here the Workload changes only by commit).
 
 One ClusterWorkflow per stack (`addons/openchoreo-platform/values.yaml` `buildWorkflows.stacks`), all running
 `koorikla-build` with the [`ci/`](../ci/) toolbox
-`ghcr.io/koorikla/ci-toolbox:v1@sha256:d950…6b79` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
+`ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22c…6858` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
 the GitOps commit, and the official toolchain image for the stack checks:
 
 | ClusterWorkflow | Checks (ci/scripts) | Toolchain image (default, override per Component) |
