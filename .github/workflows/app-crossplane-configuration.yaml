@@ -1,6 +1,8 @@
 name: crossplane-configuration
 
-# Crossplane configuration package (XRDs + Compositions + function pipeline):
+# Crossplane configuration package (XRDs + Compositions + function pipeline), either a classic package
+# (crossplane.yaml: `crossplane xpkg build/push`) or a Crossplane Project (crossplane-project.yaml:
+# `crossplane project build/push`, same validation, signing and provenance):
 # pinned Crossplane CLI, `crossplane resource validate` of package objects
 # (against Crossplane core + function/provider schemas from crossplane.yaml)
 # and of example XRs (against the XRDs), `crossplane composition render` of
@@ -112,7 +114,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/xp-cache
-          key: xp-schemas-${{ hashFiles(format('{0}/crossplane.yaml', inputs.package_root), format('{0}/{1}/functions.yaml', inputs.package_root, inputs.render_dir)) }}
+          key: xp-schemas-${{ hashFiles(format('{0}/crossplane.yaml', inputs.package_root), format('{0}/crossplane-project.yaml', inputs.package_root), format('{0}/{1}/functions.yaml', inputs.package_root, inputs.render_dir)) }}
 
       - name: Validate and render
         env:
@@ -204,6 +206,7 @@ jobs:
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
+            type=match,pattern=^[a-z0-9-]+-v(\d+\.\d+\.\d+)$,group=1,prefix=v
 
       - name: xpkg build
         id: build
@@ -211,6 +214,7 @@ jobs:
           PACKAGE_ROOT: ${{ inputs.package_root }}
           EXAMPLES_DIR: ${{ inputs.examples_dir }}
           IGNORE: ${{ inputs.ignore }}
+          REPOSITORY: ${{ steps.vars.outputs.repo }}
         run: bash "$CI_SCRIPTS/crossplane/xpkg-build.sh"
 
       - name: Log in to registry
@@ -226,6 +230,7 @@ jobs:
         if: steps.vars.outputs.should_push == 'true'
         env:
           PACKAGE_FILES: ${{ steps.build.outputs.xpkg }}
+          PROJECT_ROOT: ${{ steps.build.outputs.mode == 'project' && inputs.package_root || '' }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: bash "$CI_SCRIPTS/crossplane/xpkg-push.sh"
 

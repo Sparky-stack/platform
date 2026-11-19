@@ -23,8 +23,14 @@ require_cmd crossplane
 
 first=""
 for t in ${TAGS}; do
-  log "crossplane xpkg push -f ${PACKAGE_FILES} ${t}"
-  crossplane xpkg push -f "${PACKAGE_FILES}" "${t}"
+  if [[ -n "${PROJECT_ROOT:-}" ]]; then
+    # Crossplane Project build output (xpkg-build.sh mode=project): push with the project tooling, one tag at a time.
+    log "crossplane project push --repository ${t%:*} -t ${t##*:} (in ${PROJECT_ROOT})"
+    (cd "${PROJECT_ROOT}" && crossplane project push --package-file "${PACKAGE_FILES}" --repository "${t%:*}" -t "${t##*:}")
+  else
+    log "crossplane xpkg push -f ${PACKAGE_FILES} ${t}"
+    crossplane xpkg push -f "${PACKAGE_FILES}" "${t}"
+  fi
   [[ -n "${first}" ]] || first="${t}"
 done
 

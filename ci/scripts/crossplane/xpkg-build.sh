@@ -21,6 +21,19 @@ source "${SCRIPT_DIR}/../common/lib.sh"
 require_cmd crossplane
 
 root="${PACKAGE_ROOT:-.}"
+# Crossplane Project (crossplane-project.yaml): `crossplane project build` (Configuration + any embedded functions,
+# repository = REPOSITORY, the push target, because it names embedded function references). Tests and other non-API
+# files are not part of a project build, so IGNORE / EXAMPLES_DIR do not apply.
+if [[ -f "${root}/crossplane-project.yaml" ]]; then
+  require_env REPOSITORY
+  out="$(cd "$(out_dir)" && pwd)/project"
+  name="$(yq -r '.metadata.name' "${root}/crossplane-project.yaml")"
+  log "crossplane project build --repository ${REPOSITORY} -o ${out} (in ${root})"
+  (cd "${root}" && crossplane project build --repository "${REPOSITORY}" -o "${out}")
+  emit_output xpkg "${out}/${name}.xpkg"
+  emit_output mode project
+  exit 0
+fi
 [[ -f "${root}/crossplane.yaml" ]] || die "${root}/crossplane.yaml not found"
 out_file="${OUTPUT:-$(out_dir)/package.xpkg}"
 
@@ -44,3 +57,4 @@ fi
 log "crossplane $*"
 crossplane "$@"
 emit_output xpkg "${out_file}"
+emit_output mode xpkg

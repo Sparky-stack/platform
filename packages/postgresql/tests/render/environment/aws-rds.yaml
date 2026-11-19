@@ -1,0 +1,16 @@
+# Facts of a sample aws-rds cluster, as addons/crossplane renders them (fake ids).
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-postgresql
+data:
+  backend: aws-rds
+  cluster: prod-euc1
+  environment: production
+  nodeSecurityGroupId: sg-0123456789abcdef0
+  region: eu-central-1
+  subnetIds:
+    - subnet-0aaaaaaaaaaaaaaa1
+    - subnet-0bbbbbbbbbbbbbbb2
+    - subnet-0ccccccccccccccc3
+  vpcId: vpc-0a1b2c3d4e5f60789

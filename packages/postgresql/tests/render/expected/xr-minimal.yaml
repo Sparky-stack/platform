@@ -1,0 +1,97 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: monitoring.coreos.com/v1
+      kind: PodMonitor
+      name: orders-db
+    - apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      name: orders-db
+status:
+  backend: cnpg
+  backup: disabled
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: orders-db-rw.dp-default-shop-development-1a2b3c4d.svc
+  port: 5432
+  secretName: orders-db-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: 5c4b6c2e-3233-5d8e-bb0e-ac1ce72d2ae2
+spec:
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ClusterImageCatalog
+    major: 17
+    name: postgresql-standard
+  inheritedMetadata:
+    labels:
+      platform.koorikla.io/postgresql: orders-db
+  instances: 1
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  storage:
+    size: 10Gi
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: pod-monitor
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: 5c4b6c2e-3233-5d8e-bb0e-ac1ce72d2ae2
+spec:
+  podMetricsEndpoints:
+  - port: metrics
+  selector:
+    matchLabels:
+      cnpg.io/cluster: orders-db

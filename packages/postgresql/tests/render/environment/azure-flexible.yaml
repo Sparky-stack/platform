@@ -1,0 +1,14 @@
+# Facts of a sample azure-flexible cluster, as addons/crossplane renders them (fake ids).
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-postgresql
+data:
+  backend: azure-flexible
+  cluster: prod-weu
+  delegatedSubnetId: /subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/platform-prod-weu/providers/Microsoft.Network/virtualNetworks/platform/subnets/postgresql
+  environment: production
+  location: westeurope
+  privateDnsZoneId: /subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/platform-prod-weu/providers/Microsoft.Network/privateDnsZones/platform.private.postgres.database.azure.com
+  resourceGroupName: platform-prod-weu
+  tenantID: 00000000-0000-0000-0000-000000000002

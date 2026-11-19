@@ -9,12 +9,19 @@
       "component": "platform",
       "include-component-in-tag": false,
       "exclude-paths": [
-        "ci"
+        "ci",
+        "packages/postgresql"
       ],
       "changelog-path": "CHANGELOG.md"
     },
     "ci": {
       "component": "ci",
+      "include-component-in-tag": true,
+      "tag-separator": "-",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/postgresql": {
+      "component": "postgresql",
       "include-component-in-tag": true,
       "tag-separator": "-",
       "changelog-path": "CHANGELOG.md"

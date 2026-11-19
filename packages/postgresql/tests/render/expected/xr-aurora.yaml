@@ -1,0 +1,382 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: ec2.aws.m.upbound.io/v1beta1
+      kind: SecurityGroupIngressRule
+      name: orders-db-db-from-nodes
+    - apiVersion: ec2.aws.m.upbound.io/v1beta1
+      kind: SecurityGroup
+      name: orders-db-db
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: orders-db-app
+    - apiVersion: kms.aws.m.upbound.io/v1beta1
+      kind: Key
+      name: orders-db-storage
+    - apiVersion: rds.aws.m.upbound.io/v1beta1
+      kind: ClusterInstance
+      name: orders-db-0
+    - apiVersion: rds.aws.m.upbound.io/v1beta1
+      kind: ClusterInstance
+      name: orders-db-1
+    - apiVersion: rds.aws.m.upbound.io/v1beta1
+      kind: Cluster
+      name: orders-db
+    - apiVersion: rds.aws.m.upbound.io/v1beta1
+      kind: SubnetGroup
+      name: orders-db
+status:
+  backend: aws-rds
+  backup: enabled
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster, cluster-instance-0, cluster-instance-1,
+      and 5 more'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com
+  port: 5432
+  secretName: orders-db-app
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Cluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+    crossplane.io/external-name: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    backupRetentionPeriod: 7
+    copyTagsToSnapshot: true
+    databaseName: orders
+    dbSubnetGroupNameRef:
+      name: orders-db
+    deletionProtection: true
+    engine: aurora-postgresql
+    engineVersion: "17"
+    finalSnapshotIdentifier: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804-final
+    iamDatabaseAuthenticationEnabled: true
+    kmsKeyIdRef:
+      name: orders-db-storage
+    manageMasterUserPassword: true
+    masterUsername: orders
+    port: 5432
+    region: eu-central-1
+    skipFinalSnapshot: false
+    storageEncrypted: true
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+    vpcSecurityGroupIdRefs:
+    - name: orders-db-db
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: ClusterInstance
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster-instance-0
+    crossplane.io/external-name: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804-0
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-0
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    autoMinorVersionUpgrade: true
+    clusterIdentifierRef:
+      name: orders-db
+    dbSubnetGroupNameRef:
+      name: orders-db
+    engine: aurora-postgresql
+    instanceClass: db.t4g.medium
+    promotionTier: 0
+    publiclyAccessible: false
+    region: eu-central-1
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: ClusterInstance
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster-instance-1
+    crossplane.io/external-name: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804-1
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-1
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    autoMinorVersionUpgrade: true
+    clusterIdentifierRef:
+      name: orders-db
+    dbSubnetGroupNameRef:
+      name: orders-db
+    engine: aurora-postgresql
+    instanceClass: db.t4g.medium
+    promotionTier: 1
+    publiclyAccessible: false
+    region: eu-central-1
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-app
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  data:
+  - remoteRef:
+      key: arn:aws:secretsmanager:eu-central-1:111111111111:secret:rds!cluster-0f0e0d0c-aaaa-bbbb-cccc-123456789abc-AbCdEf
+      property: username
+    secretKey: username
+  - remoteRef:
+      key: arn:aws:secretsmanager:eu-central-1:111111111111:secret:rds!cluster-0f0e0d0c-aaaa-bbbb-cccc-123456789abc-AbCdEf
+      property: password
+    secretKey: password
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: default
+  target:
+    creationPolicy: Owner
+    name: orders-db-app
+    template:
+      data:
+        dbname: orders
+        host: pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com
+        password: '{{ .password }}'
+        port: "5432"
+        uri: postgresql://{{ .username | urlquery }}:{{ .password | urlquery }}@pg-example.cluster-abcdefghijkl.eu-central-1.rds.amazonaws.com:5432/orders?sslmode=require
+        username: '{{ .username }}'
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroupIngressRule
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: ingress-from-nodes
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-db-from-nodes
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    fromPort: 5432
+    ipProtocol: tcp
+    referencedSecurityGroupId: sg-0123456789abcdef0
+    region: eu-central-1
+    securityGroupIdRef:
+      name: orders-db-db
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+    toPort: 5432
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kms.aws.m.upbound.io/v1beta1
+kind: Key
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: kms-key
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-storage
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    deletionWindowInDays: 30
+    description: PostgreSQL dp-default-shop-production-5e6f7a8b/orders-db storage
+      encryption (prod-euc1)
+    enableKeyRotation: true
+    region: eu-central-1
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroup
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: security-group
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    description: PostgreSQL dp-default-shop-production-5e6f7a8b/orders-db - 5432 from
+      the nodes of prod-euc1 only
+    name: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804
+    region: eu-central-1
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+    vpcId: vpc-0a1b2c3d4e5f60789
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: SubnetGroup
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: subnet-group
+    crossplane.io/external-name: pg-dp-default-shop-production-5e6f7a8b-orde-0289e804
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db
+  namespace: dp-default-shop-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: PostgreSQL
+    name: orders-db
+    uid: f993ed65-57dd-5d8b-be28-64c0d6d9e17e
+spec:
+  forProvider:
+    description: PostgreSQL dp-default-shop-production-5e6f7a8b/orders-db (prod-euc1)
+    region: eu-central-1
+    subnetIds:
+    - subnet-0aaaaaaaaaaaaaaa1
+    - subnet-0bbbbbbbbbbbbbbb2
+    - subnet-0ccccccccccccccc3
+    tags:
+      platform.koorikla.io/cluster: prod-euc1
+      platform.koorikla.io/namespace: dp-default-shop-production-5e6f7a8b
+      platform.koorikla.io/postgresql: orders-db
+  managementPolicies:
+  - Observe
+  - Create
+  - Update
+  - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default

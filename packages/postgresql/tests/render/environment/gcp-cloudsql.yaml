@@ -1,0 +1,13 @@
+# Facts of a sample gcp-cloudsql cluster, as addons/crossplane renders them (fake ids).
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-postgresql
+data:
+  allocatedIpRange: platform-psa
+  backend: gcp-cloudsql
+  cluster: prod-ew4
+  environment: production
+  privateNetwork: projects/example-platform-prod/global/networks/platform
+  project: example-platform-prod
+  region: europe-west4

@@ -1,0 +1,38 @@
+name: package-postgresql
+
+# The PostgreSQL API Configuration package (packages/postgresql): PRs validate + render only; pushes to main and
+# release tags (postgresql-vX.Y.Z, release-please component "postgresql") build, push to
+# ghcr.io/koorikla/platform/postgresql, cosign keyless sign and attest SLSA provenance.
+# Clusters install it from addons/crossplane (packages.configuration, tag@digest): bumping that pin is the promotion.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/postgresql/**'
+      - '.github/workflows/package-postgresql.yaml'
+  push:
+    branches: [main]
+    tags: ['postgresql-v*']
+    paths:
+      - 'packages/postgresql/**'
+      - '.github/workflows/package-postgresql.yaml'
+
+concurrency:
+  group: package-postgresql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: ./.github/workflows/app-crossplane-configuration.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: packages/postgresql
+      registry: ghcr.io/koorikla/platform

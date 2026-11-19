@@ -1,0 +1,17 @@
+# Facts of a sample cnpg cluster, as addons/crossplane renders them (fake ids).
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-postgresql
+data:
+  backend: cnpg
+  backup:
+    credentials:
+      s3Credentials:
+        inheritFromIAMRole: true
+    destinationPath: ""
+    serviceAccountAnnotations: {}
+  cluster: sample
+  environment: development
+  imageCatalog: postgresql-standard
+  podMonitor: true
