@@ -9,6 +9,7 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 
 {{- define "chart.day2Notes" -}}
 - Control-plane triage and upgrades: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).
+- Values are checked before rendering: `values.schema.json` (hosts, `wss://` gateway URL, stores, required keys) and `templates/validate.yaml` (cross-field: subchart hostnames, gateway port and TLS SANs match `installation.yaml`, GitHub App wiring). A schema error names the failing key path.
 {{- end -}}
 
 {{- define "chart.links" -}}

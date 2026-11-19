@@ -1,9 +1,10 @@
 {{- /*
 Render-time consistency with installation.yaml: the subchart's literal hostnames must match
 openchoreo.controlPlane.host and openchoreo.controlPlane.clusterGatewayURL (which workload-cluster agents dial).
+Presence and format of single values (hosts, wss:// scheme, stores): values.schema.json.
 */ -}}
 {{- $cp := index .Values "openchoreo-control-plane" }}
-{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $host := .Values.openchoreo.controlPlane.host }}
 {{- if not (has $host $cp.backstage.http.hostnames) }}
 {{- fail (printf "openchoreo-control-plane.backstage.http.hostnames must contain %s (openchoreo.controlPlane.host)" $host) }}
 {{- end }}
@@ -13,13 +14,10 @@ openchoreo.controlPlane.host and openchoreo.controlPlane.clusterGatewayURL (whic
 {{- if not (contains (printf "//thunder.%s" $host) $cp.security.oidc.issuer) }}
 {{- fail (printf "openchoreo-control-plane.security.oidc.issuer must be served by thunder.%s" $host) }}
 {{- end }}
-{{- $u := urlParse (required "openchoreo.controlPlane.clusterGatewayURL is required" .Values.openchoreo.controlPlane.clusterGatewayURL) }}
+{{- $u := urlParse .Values.openchoreo.controlPlane.clusterGatewayURL }}
 {{- $parts := splitList ":" $u.host }}
 {{- $gwHost := first $parts }}
 {{- $gwPort := ternary (last $parts) "443" (eq (len $parts) 2) }}
-{{- if ne $u.scheme "wss" }}
-{{- fail "openchoreo.controlPlane.clusterGatewayURL must use wss://" }}
-{{- end }}
 {{- if ne (toString $gwPort) (toString $cp.gateway.httpsPort) }}
 {{- fail (printf "clusterGatewayURL port %s must equal openchoreo-control-plane.gateway.httpsPort %v (TLS passthrough listener)" $gwPort $cp.gateway.httpsPort) }}
 {{- end }}
