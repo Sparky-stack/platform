@@ -2,6 +2,20 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.4.0](https://github.com/koorikla/platform/compare/v0.3.0...v0.4.0) (2026-11-19)
+
+
+### Features
+
+* **addons:** values.schema.json for the 14 wrapper addons; strict schema contract (Wave C) ([#312](https://github.com/koorikla/platform/issues/312)) ([b6fe389](https://github.com/koorikla/platform/commit/b6fe389bad7de7bcd4fb05ec5d9fd46eb2150731)), closes [#116](https://github.com/koorikla/platform/issues/116)
+
+
+### Bug Fixes
+
+* **demo-check:** no promotion-gate run before the first promotion is PENDING, not FAIL ([#317](https://github.com/koorikla/platform/issues/317)) ([41c3d43](https://github.com/koorikla/platform/commit/41c3d43172b6b82412771b591491368bf7b01e98))
+* **openbao:** tenant CA copy syncs after openbao-ca-bundle (clean-bootstrap deadlock) ([#316](https://github.com/koorikla/platform/issues/316)) ([41c6543](https://github.com/koorikla/platform/commit/41c65430690558e2a71ca068983e6c475cebe026))
+* **schema:** keep security reasons in validate.yaml ([#311](https://github.com/koorikla/platform/issues/311)) ([#315](https://github.com/koorikla/platform/issues/315)) ([adc3782](https://github.com/koorikla/platform/commit/adc378228a268b67abec52f6227ffbb31a689d78))
+
 ## [0.3.0](https://github.com/koorikla/platform/compare/v0.2.0...v0.3.0) (2026-11-19)
 
 
