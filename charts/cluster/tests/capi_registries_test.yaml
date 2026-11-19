@@ -118,3 +118,33 @@ tests:
     asserts:
       - hasDocuments: { count: 1 }
       - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: '"ghcr.io":\n\s+auth' }
+
+  # --- Host pull-through caches (installation.yaml registry.hostCache, hack/registry-cache.sh) ----------------------
+  - it: hostCache mirrors cached upstreams to the platform-cache containers and keeps Harbor for the rest
+    template: templates/common/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set:
+      registry.proxyCache: [{ upstream: docker.io, project: dockerhub }, { upstream: gcr.io, project: gcr }]
+      registry.hostCache: { enabled: true, mirrors: [{ upstream: docker.io, remote: "https://registry-1.docker.io" }, { upstream: cr.kgateway.dev, remote: "https://cr.kgateway.dev" }] }
+    asserts:
+      - matchRegex:
+          path: 'spec.target.template.data["registries.yaml"]'
+          pattern: '"docker.io":\n *endpoint: \["http://platform-cache-docker-io:5000"\]\n *"cr.kgateway.dev":\n *endpoint: \["http://platform-cache-cr-kgateway-dev:5000"\]\n *"gcr.io":\n *endpoint: \["https://harbor.openchoreo.localhost:9443"\]'
+      - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: 'dockerhub/' }
+  - it: hostCache is ignored off the docker provider (container names resolve only on network kind)
+    template: templates/common/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set:
+      provider: hetzner
+      capi.providers.hetzner: true
+      registry.hostCache: { enabled: true, mirrors: [{ upstream: docker.io, remote: "https://registry-1.docker.io" }] }
+    asserts:
+      - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: 'platform-cache' }
+  - it: hostCache disabled keeps the Harbor mirrors
+    template: templates/common/capi-registries.yaml
+    values: [values/capi-docker.yaml, values/registry-harbor.yaml]
+    set:
+      registry.hostCache: { enabled: false, mirrors: [{ upstream: docker.io, remote: "https://registry-1.docker.io" }] }
+    asserts:
+      - notMatchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: 'platform-cache' }
+      - matchRegex: { path: 'spec.target.template.data["registries.yaml"]', pattern: 'dockerhub/' }

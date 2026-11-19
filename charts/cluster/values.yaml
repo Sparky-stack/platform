@@ -129,6 +129,11 @@ registry:
   mirror:
     enabled: false
   nodeHostAlias: ""           # docker provider only: container whose IP the registry name resolves to on CAPD nodes
+  # -- Docker provider only: host pull-through caches (hack/registry-cache.sh, docs/dev-environment.md). Each upstream
+  # is mirrored to http://platform-cache-<upstream, dots as dashes>:5000 on network kind instead of Harbor.
+  hostCache:
+    enabled: false
+    mirrors: []               # [{upstream: docker.io, remote: https://registry-1.docker.io}, ...]
 nodeRegistry:                 # Harbor node pulls (platform-side names, rarely changed)
   robot: robot$nodes          # == addons/harbor config.robots[name=nodes] with Harbor's robot$ prefix
   secretKey: harbor           # ClusterSecretStore platform key ...

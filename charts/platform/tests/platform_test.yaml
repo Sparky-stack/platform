@@ -81,6 +81,19 @@ tests:
           path: stringData.server
           value: https://kubernetes.default.svc
 
+  - it: passes registry.hostCache.enabled to the cluster chart (bootstrap REGISTRY_CACHE=0 opt-out)
+    template: appset-fleet.yaml
+    set: { registry.hostCache.enabled: false }
+    asserts:
+      - equal:
+          path: spec.template.spec.source.helm.parameters
+          value: [{ name: registry.hostCache.enabled, value: "false" }]
+  - it: hostCache follows installation.yaml (local turns it on)
+    template: appset-fleet.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.source.helm.parameters[0].value
+          value: "true"
   - it: renders fleet ApplicationSet with ServerSideApply and ServerSideDiff
     template: appset-fleet.yaml
     asserts:

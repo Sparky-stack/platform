@@ -5,6 +5,13 @@
 {{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
 {{- $reg := .Values.registry }}
 {{- $nr := .Values.nodeRegistry }}
+{{- /* Host pull-through caches (docker provider only, hack/registry-cache.sh): containers platform-cache-<upstream
+with dots as dashes> on docker network kind. They replace the Harbor mirror for the upstreams they cover (k3s applies
+one rewrite to all endpoints of a mirror, so they cannot share one); containerd falls back to the upstream itself. */ -}}
+{{- $cache := $reg.hostCache | default dict }}
+{{- $cacheOn := and $cache.enabled (eq (toString .Values.provider) "docker") }}
+{{- $cached := list }}
+{{- if $cacheOn }}{{ range $cache.mirrors }}{{ $cached = append $cached .upstream }}{{ end }}{{ end }}
 {{- if and (or $auth.enabled $harbor) (ne (include "capi.gke" .) "true") (ne (include "capi.byo" .) "true") }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -28,13 +35,19 @@ spec:
       type: Opaque
       data:
         registries.yaml: |
-          {{- if and $harbor $reg.mirror.enabled }}
+          {{- if or $cacheOn (and $harbor $reg.mirror.enabled) }}
           mirrors:
-            {{- range $reg.proxyCache }}
+            {{- range (ternary $cache.mirrors list $cacheOn) }}
+            {{ .upstream | quote }}:
+              endpoint: [{{ printf "http://platform-cache-%s:5000" (.upstream | replace "." "-") | quote }}]
+            {{- end }}
+            {{- range (ternary $reg.proxyCache list (and $harbor $reg.mirror.enabled)) }}
+            {{- if not (has .upstream $cached) }}
             {{ .upstream | quote }}:
               endpoint: [{{ printf "https://%s" $reg.host | quote }}]
               rewrite:
                 "^(.*)$": {{ printf "%s/$1" .project | quote }}
+            {{- end }}
             {{- end }}
           {{- end }}
           configs:

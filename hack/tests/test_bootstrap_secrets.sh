@@ -305,6 +305,12 @@ yq -i '.secrets.backend = "aws" | del(.secrets.githubGateApp)' "$LOCAL_INST"
 run root_gate_aws "root_app_manifest" FAKE_SECRET_DIR="$TMP/gate-seeded"
 assert_eq "$(gate_param)" none "root app: other backends -> no parameter, installation.yaml decides"
 assert_eq "$(grep -c 'get secret promotion-gate-github' "$HLOG/calls" || true)" 0 "root app: other backends -> no secret lookup"
+# --- root app: registry.hostCache.enabled (host pull-through caches) follows installation.yaml and REGISTRY_CACHE ---
+cache_param() { printf '%s\n' "$OUT" | yq -r '.spec.source.helm.parameters // [] | map(select(.name == "registry.hostCache.enabled")) | .[0].value // "none"'; }
+run root_cache_on "root_app_manifest" FAKE_SECRET_DIR="$TMP/empty"
+assert_eq "$(cache_param)" true "root app: local installation.yaml -> registry.hostCache.enabled=true"
+run root_cache_off "root_app_manifest" FAKE_SECRET_DIR="$TMP/empty" REGISTRY_CACHE=0
+assert_eq "$(cache_param)" false "root app: REGISTRY_CACHE=0 -> registry.hostCache.enabled=false (CAPD nodes keep Harbor)"
 nra true
 
 # --- no build PAT (#34): builds mint per-repository GitHub App tokens (ESO generator), nothing to seed ------------

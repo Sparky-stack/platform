@@ -97,6 +97,7 @@ The one Cluster API chart (`addons/capi-operator` only installs the upstream ope
 | providerSpec | object | `{}` | Extra `ClusterClass` provider variables passed as-is. |
 | region | string | `"local"` |  |
 | registry.host | string | `""` |  |
+| registry.hostCache | object | `{"enabled":false,"mirrors":[]}` | Docker provider only: host pull-through caches (hack/registry-cache.sh, docs/dev-environment.md). Each upstream is mirrored to http://platform-cache-<upstream, dots as dashes>:5000 on network kind instead of Harbor. |
 | registry.mirror.enabled | bool | `false` |  |
 | registry.nodeHostAlias | string | `""` |  |
 | registry.proxyCache | list | `[]` |  |

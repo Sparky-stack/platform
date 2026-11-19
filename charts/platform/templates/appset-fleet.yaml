@@ -33,6 +33,10 @@ spec:
           valueFiles:
             - {{ printf "../../installations/%s/installation.yaml" .Values.installation.name | quote }}
             - '../../{{ "{{" }} .path.path {{ "}} " | trim }}/{{ "{{" }} .path.filename {{ "}} " | trim }}'
+          # bootstrap's REGISTRY_CACHE=0 reaches the root app as a parameter; the cluster chart reads installation.yaml
+          parameters:
+            - name: registry.hostCache.enabled
+              value: {{ dig "hostCache" "enabled" false (.Values.registry | default dict) | toString | quote }}
       destination:
         server: https://kubernetes.default.svc
         namespace: fleet

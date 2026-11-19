@@ -15,13 +15,13 @@ while [[ $# -gt 0 ]]; do
       INST="${2:-}"
       shift 2
       ;;
-    up|secrets|argocd|status|ui|down)
+    up|secrets|argocd|status|ui|down|timings)
       CMD="$1"
       shift
       ;;
     -h|--help)
       cat <<'EOF'
-Usage: bootstrap/bootstrap.sh [--inst <name>] [up|secrets|argocd|status|ui|down]
+Usage: bootstrap/bootstrap.sh [--inst <name>] [up|secrets|argocd|status|ui|down|timings]
 
 Subcommands:
   up       Run full bootstrap (k3d mgmt for local, secrets, Argo CD, root-app) [default]
@@ -35,6 +35,7 @@ Subcommands:
   status   Show clusters, Argo CD apps, and UI info (how to read the admin password; never the password)
   ui       Port-forward argocd-server on localhost:8081 (prints how to read the admin password, not the password)
   down     Freeze Argo CD, delete CAPD workload clusters (if any), then k3d platform-mgmt (local only)
+  timings  Phase timings of the running stack: mgmt apps, each workload cluster provisioned/converged (read-only)
 EOF
       exit 0
       ;;
@@ -99,7 +100,16 @@ ensure_k3d() {
     log "k3d cluster 'platform-mgmt' already exists"
   else
     log "Creating k3d cluster 'platform-mgmt'"
-    k3d cluster create --config bootstrap/k3d-mgmt.yaml
+    local reg_args=() reg_file=""
+    if [[ "$(registry_cache_enabled)" == true ]]; then
+      log "Starting host registry caches (kept by 'task down'; REGISTRY_CACHE=0 opts out, 'task cache:clean' removes)"
+      bash hack/registry-cache.sh up
+      reg_file=$(mktemp)
+      bash hack/registry-cache.sh k3s-config "$reg_file"
+      reg_args=(--registry-config "$reg_file")
+    fi
+    k3d cluster create --config bootstrap/k3d-mgmt.yaml ${reg_args[@]+"${reg_args[@]}"}
+    [[ -z "${reg_file:-}" ]] || rm -f "$reg_file"
   fi
   kubectl --context "$CTX" wait --for=condition=Ready node --all --timeout=3m >/dev/null
 }
@@ -501,10 +511,24 @@ gate_app_enabled() {
   fi
 }
 
+# registry_cache_enabled -> true|false: host pull-through caches (hack/registry-cache.sh). installation.yaml
+# registry.hostCache.enabled (local: true) unless REGISTRY_CACHE=0. Passed to the root app as a parameter so CAPD nodes
+# (charts/cluster) mirror to the caches only when they run.
+registry_cache_enabled() {
+  if [[ "${REGISTRY_CACHE:-1}" == 0 ]]; then
+    echo false
+  elif [[ "$(yq '.registry.hostCache.enabled // false' "$INST_FILE")" == true ]]; then
+    echo true
+  else
+    echo false
+  fi
+}
+
 # root_app_manifest: bootstrap/root-app.yaml for this installation (repo, revision, value file, gate_app_enabled).
 root_app_manifest() {
   REPO_URL="$REPO_URL" REVISION="$REVISION" INST_NAME="$INST" GATE="$(gate_app_enabled)" \
-    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"] | del(.spec.source.helm.parameters) | with(select(strenv(GATE) != ""); .spec.source.helm.parameters = [{"name": "secrets.githubGateApp.enabled", "value": strenv(GATE)}])' \
+    CACHE="$(registry_cache_enabled)" \
+    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"] | .spec.source.helm.parameters = [{"name": "registry.hostCache.enabled", "value": strenv(CACHE)}] | with(select(strenv(GATE) != ""); .spec.source.helm.parameters += [{"name": "secrets.githubGateApp.enabled", "value": strenv(GATE)}])' \
     bootstrap/root-app.yaml
 }
 
@@ -627,6 +651,45 @@ cmd_status() {
   admin_password_hint
 }
 
+# cmd_timings: clean-bootstrap phase timings of the running stack, in minutes since the first mgmt node was created
+# (~= `task up` start + 20 s). An app counts once it is Synced+Healthy now, at the end of its first successful sync
+# (history[0]: an op only succeeds after its waves are healthy; later syncs do not move it). Workload apps are
+# <addon>-<cluster> with a non-local destination. Read-only.
+cmd_timings() {
+  load_inst
+  require_bins kubectl yq
+  local t0 rows clusters c prov
+  t0=$(kubectl --context "$CTX" get nodes -o yaml | yq '[.items[].metadata.creationTimestamp | to_unix] | min')
+  rows=$(kubectl --context "$CTX" -n argocd get applications -o yaml | yq '.items[] | [.metadata.name,
+    (if .spec.destination.server == "https://kubernetes.default.svc" then "mgmt" else "remote" end),
+    ((.status.sync.status == "Synced" and .status.health.status == "Healthy") | tostring),
+    ((.status.history // [])[0].deployedAt // "" | select(. != "") | to_unix) // 0]
+    | join(" ")')
+  # phase <label> <awk filter on $1 name, $2 mgmt|remote>: converged minute or the pending apps.
+  phase() {
+    printf '%s\n' "$rows" | awk -v t0="$t0" -v label="$1" "$2"' { n++; if ($3 == "true") { ok++; if ($4 > m) { m = $4; last = $1 } } else p = p " " $1 }
+      END { if (n == 0) exit; if (ok == n) printf "  %-28s %5.1f min  (%d apps, last %s)\n", label, (m - t0) / 60, n, last
+            else printf "  %-28s   n/a      %d/%d converged, pending:%s\n", label, ok, n, p }'
+  }
+  echo "=== Bootstrap timings (minutes since mgmt node creation) ==="
+  # shellcheck disable=SC2016 # awk programs; preview-* apps come from PRs later, not from the bootstrap
+  phase "mgmt apps converged" '$2 == "mgmt" && $1 !~ /^preview-/'
+  clusters=$(kubectl --context "$CTX" -n fleet get clusters.cluster.x-k8s.io -o yaml 2>/dev/null \
+    | yq '.items[].metadata.name' || true)
+  for c in $clusters; do
+    prov=$(kubectl --context "$CTX" -n fleet get clusters.cluster.x-k8s.io "$c" -o yaml | yq '.status.conditions[]
+      | select(.type == "ControlPlaneInitialized" and .status == "True") | .lastTransitionTime | to_unix')
+    if [[ -n "$prov" ]]; then
+      awk -v t0="$t0" -v p="$prov" -v l="$c provisioned (API up)" 'BEGIN { printf "  %-28s %5.1f min\n", l, (p - t0) / 60 }'
+    else
+      printf '  %-28s   n/a\n' "$c provisioned (API up)"
+    fi
+    phase "$c apps converged" "\$2 == \"remote\" && \$1 ~ /-$c\$/"
+  done
+  # shellcheck disable=SC2016
+  phase "all apps converged" '$1 !~ /^preview-/'
+}
+
 # admin_password_hint: how to read the Argo CD admin password, never the password itself. Output of `up`/`status` lands
 # in terminals, CI logs and agent transcripts; a printed password is an exposed password.
 admin_password_hint() {
@@ -709,4 +772,5 @@ case "$CMD" in
   status)  cmd_status ;;
   ui)      cmd_ui ;;
   down)    cmd_down ;;
+  timings) cmd_timings ;;
 esac
