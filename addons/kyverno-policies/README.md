@@ -92,6 +92,8 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | kyverno-policies.vpolExclude.excludeNamespaces[7] | string | `"platform-secrets"` |  |
 | kyverno-policies.vpolExclude.excludeNamespaces[8] | string | `"capi-operator-system"` |  |
 | kyverno-policies.vpolExclude.excludeNamespaces[9] | string | `"capi-system"` |  |
+| mesh.probeSourceCIDRs[0] | string | `"169.254.7.127/32"` |  |
+| mesh.probeSourceCIDRs[1] | string | `"fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128"` |  |
 | platformNamespaces[0] | string | `"kube-system"` |  |
 | platformNamespaces[10] | string | `"capi-k3s-bootstrap-system"` |  |
 | platformNamespaces[11] | string | `"capi-k3s-control-plane-system"` |  |

@@ -81,6 +81,12 @@ ambientEnrollment:
     strict: true
     optOutLabel: platform.koorikla.io/mtls
 
+# Link-local SNAT source CIDRs istio-cni uses for kubelet health probes into ambient-enrolled pods (admitted by
+# NetworkPolicy platform-mesh-hbone in templates/cell-mesh.yaml). Must match addons/mesh/values.yaml
+# ambient.probeSourceCIDRs (enforced by hack/tests/test_mesh_probe_cidrs.sh, #287).
+mesh:
+  probeSourceCIDRs: [169.254.7.127/32, "fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128"]
+
 # --- Supply-chain gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md) -----------------------
 # templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`,
 #   ImageValidatingPolicy  openchoreo-verify-images-<audit|enforce>   cosign signatures of trusted images
