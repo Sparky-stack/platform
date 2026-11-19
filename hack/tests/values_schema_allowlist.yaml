@@ -14,7 +14,4 @@
 - { chart: addons/kgateway, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
 - { chart: addons/kyverno, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
 - { chart: addons/obi, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
-- { chart: addons/openchoreo-observability-plane, reason: "wave C (#116): schema in progress in a parallel PR (required/fail checks to move)" }
-- { chart: addons/openchoreo-workflow-plane, reason: "wave C (#116): schema in progress in a parallel PR (required/fail checks to move)" }
 - { chart: addons/strimzi, reason: "wave C (#116): no platform-own validation yet; schema still to add" }
-- { chart: addons/telemetry, reason: "wave C (#116): schema in progress in a parallel PR (required/fail checks to move)" }
