@@ -1,15 +1,9 @@
 {{- /*
-GitHub App credentials of in-cluster builds (values.yaml buildWorkflows.github, docs/build-plane.md "Git
-credentials"), in the run namespace workflows-<org ns> of the workflow plane:
-  ExternalSecret <appSecret>             the platform GitHub App from the scoped store `workflows`; read only by ESO
-                                         (each run's GithubAccessToken generator references it, no pod mounts it)
-  Role + RoleBinding build-github-tokens OpenChoreo's workflow-plane agent may manage GithubAccessToken generators in
-                                         this namespace only (it applies each run's `<run>-git` generator)
-Per run (templates/_build.tpl build.resources): generator `<run>-git` -> an installation token for the run's one
-repository -> Secret `<run>-git`.
+GitHub App credentials of in-cluster builds in the run namespace workflows-<org ns> (mgmt workflow plane, docs/build-plane.md
+"Git credentials"): ExternalSecret <appSecret> (read only by ESO, no pod mounts it) and RBAC that lets OpenChoreo's
+workflow-plane agent apply each run's `<run>-git` GithubAccessToken generator (templates/_build.tpl build.resources).
 */ -}}
-{{- $wpEnabled := dig "workflowPlane" "enabled" true (.Values.openchoreo | default dict) }}
-{{- if and $wpEnabled .Values.buildWorkflows.enabled }}
+{{- if and .Values.openchoreo.workflowPlane.enabled .Values.buildWorkflows.enabled }}
 {{- $g := .Values.buildWorkflows.github }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
 {{- $key := required "buildWorkflows.github.key (store key of the platform GitHub App) is required" $g.key }}

@@ -51,8 +51,12 @@ resilience:
 
 # installation.yaml secrets.tenantStores.enabled (#96): component types' ExternalSecrets reference the cell namespace's
 # SecretStore tenantStoreName (== addon secret-stores tenantStores.storeName) instead of ${dataplane.secretStore}.
+# installation.yaml secrets.githubGateApp.enabled: the platform GitHub App is in the store; auto-build stays off
+# without it, else its token ExternalSecrets fail and degrade this app (#192).
 secrets:
   tenantStores:
+    enabled: false
+  githubGateApp:
     enabled: false
 tenantStoreName: openbao-tenant
 
@@ -86,7 +90,7 @@ promotion:
 
 # ClusterWorkflow `promotion-gate`: a generic OpenChoreo Workflow (WorkflowRun, no component) that verifies a release
 # in its source environment and opens the promotion pull request (files/promotion-gate/gate.py). Started by the
-# Sensor in addon argo-events after a successful rollout in an `autoTrigger` environment, or by hand
+# Sensor in addon argo-events after a successful rollout in one of its promotionGate.sourceEnvironments, or by hand
 # (occ / console Workflows / MCP / kubectl create of a WorkflowRun). Runs in the workflow plane (namespace
 # workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
 promotionGate:
@@ -96,8 +100,6 @@ promotionGate:
   # Pod labels of the gate pod: opt-in to the run namespace's NetworkPolicy platform-workflows-openchoreo (egress to the
   # control-plane Gateway (API, Thunder) and the observer). == openchoreo-workflow-plane runNetworkPolicy.platformWorkflows.podLabels
   podLabels: { platform.koorikla.io/egress: openchoreo }
-  autoTrigger:
-    sourceEnvironments: [staging]    # read by addon argo-events (Sensor filter); listed here for documentation
   image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
   resources:
     requests: { cpu: 20m, memory: 48Mi }
