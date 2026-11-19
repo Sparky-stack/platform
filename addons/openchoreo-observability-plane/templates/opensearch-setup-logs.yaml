@@ -7,19 +7,13 @@ So the module's Job is off (openSearchSetup.enabled: false in values.yaml) and t
 CD PostSync hook, like the tracing module's setup Job: after every sync, once OpenSearch is Healthy; a failure fails the
 operation, Argo CD's unlimited retry recreates the Job (BeforeHookCreation). The setup is idempotent.
 Values: observability-logs-opensearch.openSearchSetup (image, openSearchSecretName, dataRetentionTime); `run: true`
-renders it (the module's `enabled` must stay false, else two Jobs).
+renders it (the module's `enabled` must stay false, else two Jobs; templates/validate.yaml).
 */ -}}
 {{- $sub := index .Values "observability-logs-opensearch" }}
 {{- $s := $sub.openSearchSetup }}
-{{- if $s.enabled }}
-{{- fail "observability-logs-opensearch.openSearchSetup.enabled must stay false: templates/opensearch-setup-logs.yaml runs the setup as an Argo CD hook (set openSearchSetup.run)" }}
-{{- end }}
 {{- if $s.run }}
 {{- $secret := required "observability-logs-opensearch.openSearchSetup.openSearchSecretName is required" $s.openSearchSecretName }}
 {{- $prefix := $sub.auditLogs.indexPrefix }}
-{{- if not (regexMatch "^[a-z0-9][a-z0-9._-]*$" ($prefix | default "")) }}
-{{- fail (printf "observability-logs-opensearch.auditLogs.indexPrefix %q is not an OpenSearch index name prefix" $prefix) }}
-{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:

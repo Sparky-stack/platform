@@ -1,6 +1,7 @@
 suite: openchoreo-observability-plane - logs setup Job as an Argo CD hook (#192)
 templates:
   - templates/opensearch-setup-logs.yaml
+  - templates/validate.yaml
   - charts/observability-logs-opensearch/templates/opensearch-setup-logs/job.yaml
   - charts/observability-logs-opensearch/charts/openSearch/templates/statefulset.yaml
   - charts/observability-logs-opensearch/charts/openSearch/templates/configmap.yaml
@@ -35,7 +36,7 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: refuses the module's Job next to the hook (two setup Jobs)
-    template: templates/opensearch-setup-logs.yaml
+    template: templates/validate.yaml
     set: { observability-logs-opensearch.openSearchSetup.enabled: true }
     asserts:
       - failedTemplate: { errorPattern: "openSearchSetup.enabled must stay false" }
@@ -77,3 +78,9 @@ tests:
           path: 'spec.template.spec.containers[0].env'
           content: { name: OPENSEARCH_JAVA_OPTS, value: "-Xms512m -Xmx512m -XX:ActiveProcessorCount=1" }
       - equal: { path: 'spec.template.spec.containers[0].resources.limits.cpu', value: "1" }
+
+  - it: refuses an audit log index prefix OpenSearch would reject
+    template: templates/validate.yaml
+    set: { observability-logs-opensearch.auditLogs.indexPrefix: BAD }
+    asserts:
+      - failedTemplate: { errorPattern: "is not an OpenSearch index name prefix" }

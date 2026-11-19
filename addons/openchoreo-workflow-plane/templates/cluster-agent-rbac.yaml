@@ -27,23 +27,9 @@ permission they grant (workflowtaskresults create/patch): no escalate, no bind.
 */ -}}
 {{- $r := .Values.clusterAgentRBAC }}
 {{- if $r.enabled }}
-{{- $wp := index .Values "openchoreo-workflow-plane" }}
-{{- if $wp.clusterAgent.rbac.create }}
-{{- fail "clusterAgentRBAC.enabled: set openchoreo-workflow-plane.clusterAgent.rbac.create=false (the upstream ClusterRole is cluster-admin in all but name, #33)" }}
-{{- end }}
 {{- $prefix := toString $r.runNamespacePrefix }}
-{{- if not (regexMatch "^[a-z0-9][-a-z0-9]*-$" $prefix) }}{{ fail (printf "clusterAgentRBAC.runNamespacePrefix %q must be a namespace name prefix ending in - (OpenChoreo: workflows-)" $prefix) }}{{ end }}
 {{- $ns := printf "%s%s" $prefix .Values.openchoreo.orgNamespace }}
 {{- $name := $r.serviceAccount }}
-{{- if not (or .Values.runNetworkPolicy.enabled .Values.runExecutorToken.enabled) }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ $ns }}
-  annotations:
-    argocd.argoproj.io/sync-options: Delete=false
----
-{{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

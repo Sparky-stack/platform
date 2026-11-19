@@ -1,0 +1,16 @@
+{{- /*
+Build run namespace workflows-<org ns> on mgmt, rendered once while anything of this chart lives in it (run
+NetworkPolicies, executor token, agent Role). Delete=false: removing the addon must not delete run history.
+runNamespacePrefix only names it when the RBAC is all that is on (NetworkPolicy/token hardcode OpenChoreo's workflows-).
+*/ -}}
+{{- $np := .Values.runNetworkPolicy.enabled }}
+{{- $token := .Values.runExecutorToken.enabled }}
+{{- if or $np $token .Values.clusterAgentRBAC.enabled }}
+{{- $prefix := ternary "workflows-" (toString .Values.clusterAgentRBAC.runNamespacePrefix) (or $np $token) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ printf "%s%s" $prefix .Values.openchoreo.orgNamespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+{{- end }}

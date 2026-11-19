@@ -6,6 +6,7 @@ templates:
   - templates/validate.yaml
   - templates/run-network-policy.yaml
   - templates/run-executor-token.yaml
+  - templates/run-namespace.yaml
   - charts/openchoreo-workflow-plane/charts/argo-workflows/templates/controller/workflow-controller-config-map.yaml
 release:
   name: openchoreo-workflow-plane
@@ -193,13 +194,11 @@ tests:
       - equal: { path: 'metadata.annotations["kubernetes.io/service-account.name"]', value: workflow-sa }
         documentSelector: { path: kind, value: Secret }
 
-  - it: the executor token follows the org namespace, renders the namespace without the NetworkPolicy, can be off
+  - it: the executor token follows the org namespace
     template: templates/run-executor-token.yaml
     set: { openchoreo.orgNamespace: acme, runNetworkPolicy.enabled: false }
     asserts:
-      - hasDocuments: { count: 3 }
-      - equal: { path: metadata.name, value: workflows-acme }
-        documentSelector: { path: kind, value: Namespace }
+      - hasDocuments: { count: 2 }
       - equal: { path: metadata.namespace, value: workflows-acme }
         documentSelector: { path: kind, value: Secret }
 
@@ -210,13 +209,29 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: the run namespace follows openchoreo.orgNamespace and survives addon removal
+    template: templates/run-namespace.yaml
+    set: { openchoreo.orgNamespace: acme }
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: workflows-acme }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: Delete=false }
+
+  - it: the run namespace is rendered for the executor token alone and not at all when nothing lives in it
+    template: templates/run-namespace.yaml
+    set: { runNetworkPolicy.enabled: false, clusterAgentRBAC.enabled: false }
+    asserts:
+      - hasDocuments: { count: 1 }
+
+  - it: no run namespace when the NetworkPolicy, the executor token and the agent RBAC are all off
+    template: templates/run-namespace.yaml
+    set: { runNetworkPolicy.enabled: false, runExecutorToken.enabled: false, clusterAgentRBAC.enabled: false }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: the run NetworkPolicies follow openchoreo.orgNamespace
     template: templates/run-network-policy.yaml
     set: { openchoreo.orgNamespace: acme }
     asserts:
-      - equal: { path: metadata.name, value: workflows-acme }
-        documentSelector: { path: kind, value: Namespace }
-      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: Delete=false }
-        documentSelector: { path: kind, value: Namespace }
       - equal: { path: metadata.namespace, value: workflows-acme }
         documentSelector: { path: metadata.name, value: build-runs-default-deny }
       - equal: { path: metadata.namespace, value: workflows-acme }
@@ -268,7 +283,7 @@ tests:
       - equal: { path: 'spec.egress[1].ports', value: [{ protocol: TCP, port: 12080 }] }
 
   - it: refuses an empty platform-workflow selector (it would widen egress for every run pod)
-    template: templates/run-network-policy.yaml
+    template: templates/validate.yaml
     set: { runNetworkPolicy.platformWorkflows.podLabels: null }
     asserts:
       - failedTemplate: { errorPattern: "podLabels must not be empty" }

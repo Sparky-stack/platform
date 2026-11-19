@@ -5,9 +5,7 @@ allows only same-namespace ingress, so without an additive rule here the gate's 
 openchoreo-observability-prometheus:9091 (-> pod http-web :9090) is dropped. Tenant build pods never carry fromPodLabels.
 */ -}}
 {{- $pi := .Values.prometheusIngress }}
-{{- $wp := (.Values.openchoreo).workflowPlane | default dict }}
-{{- if and $pi.enabled $wp.enabled }}
-{{- if not $pi.fromPodLabels }}{{ fail "prometheusIngress.fromPodLabels must not be empty (it would open Prometheus to tenant build pods)" }}{{ end }}
+{{- if and $pi.enabled .Values.openchoreo.workflowPlane.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
