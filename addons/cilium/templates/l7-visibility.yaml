@@ -1,9 +1,6 @@
 {{- /* L7 HTTP visibility for OpenChoreo component pods: values.yaml `l7Visibility` (#104). */ -}}
 {{- with .Values.l7Visibility }}
 {{- if .enabled }}
-{{- if not .httpPorts }}
-{{- fail "l7Visibility.httpPorts is empty: Cilium L7 rules need explicit ports" }}
-{{- end }}
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:

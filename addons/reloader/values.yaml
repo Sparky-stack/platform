@@ -14,7 +14,7 @@ reloader:
     repository: ghcr.io/stakater/reloader
     tag: v1.4.24@sha256:3ab43d3eb96c59798644bf826b0444a846c0197d22ab4b6c101c4da3e1d6ef23   # index: amd64, arm64, arm/v7
   reloader:
-    # -- Scoped Role + RoleBinding per watched namespace (enforced `false` by `templates/validate.yaml`; no `ClusterRole`).
+    # -- Scoped Role + RoleBinding per watched namespace (enforced `false` by `values.schema.json`; no `ClusterRole`).
     watchGlobally: false
     # -- Watched namespaces (`[openchoreo-control-plane]` in `values/role-mgmt.yaml` with `autoReloadAll`, `resourceLabelSelector` and `ignoreSecrets: true`).
     namespaces:

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "coredns-local addon values",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Render the coredns-custom ConfigMap (false on byo unless the installation shares the docker network)."
+    },
+    "openchoreo": {
+      "type": "object",
+      "description": "From installation.yaml.",
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "description": "OpenChoreo control plane.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Control-plane base domain rewritten to rewrite.target.",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        }
+      },
+      "required": [
+        "controlPlane"
+      ]
+    },
+    "rewrite": {
+      "type": "object",
+      "description": "Main CNAME rewrite.",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "In-cluster gateway Service (mgmt) or the k3d server LB (workload).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        }
+      },
+      "required": [
+        "target"
+      ]
+    },
+    "observabilityRewrite": {
+      "type": "object",
+      "description": "Optional observability-plane rewrite (mgmt).",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Obs-plane Gateway Service; \"\" = none.",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "description": "From installation.yaml (registry.type, registry.host)."
+    },
+    "registryRewrite": {
+      "type": "object",
+      "description": "Optional Harbor rewrite (mgmt, registry.type harbor).",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Harbor Gateway Service; \"\" = none.",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+        }
+      }
+    }
+  },
+  "required": [
+    "openchoreo",
+    "rewrite"
+  ]
+}

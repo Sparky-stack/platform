@@ -71,6 +71,7 @@ secrets:
 #   installationValueFiles:  [<tpl>]                   extra value files under addons/<name>/values/, picked by
 #                                                      installation facts; after values/cni-*, before the overlays
 # Argo CD options: serverSideDiff, compareOptions, ignoreDifferences (adds RespectIgnoreDifferences).
+# Entry shape: values.schema.json (unknown keys, bad roles/parts/formats fail the render).
 #   compareOptions [IncludeMutationWebhook=true]: every addon rendering Argo Workflows objects (atomic, preserve-unknown
 #   CRD spec: server-side diff would report Synced while the live spec stays old, #184). test_argocd_compare_options.sh.
 addons:

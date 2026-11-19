@@ -27,3 +27,6 @@
 
 ## [2026-11-19] create | Helm library chart koorikla-lib (#116)
 - Added `gotchas/helm-library-chart-koorikla-lib.md`: values-scope leak into `.Values`, stale `file://` tarballs, library charts only load partials (test harness `charts/lib-test`), helm-docs needs `values.yaml`; Argo CD builds `file://` deps.
+
+## [2026-11-19] create | Helm values.schema.json vs template required (#116)
+- Added `gotchas/helm-values-schema-vs-template-required.md`: schema errors fail `helm lint` with chart defaults, template `fail` does not; where presence checks stay; errorPattern for moved unittest asserts.

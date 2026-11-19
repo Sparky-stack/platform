@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agentgateway addon values",
+  "type": "object",
+  "properties": {
+    "gateway": {
+      "type": "object",
+      "description": "Gateway agentgateway-proxy (LLM listener).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Gateway name (also the proxy Deployment/Service).",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Listener port `llm`."
+        },
+        "allowedNamespaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "description": "Namespace.",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "description": "Namespaces the NetworkPolicy admits (empty would leave the proxy open)."
+        }
+      },
+      "required": [
+        "name",
+        "allowedNamespaces"
+      ]
+    },
+    "llm": {
+      "type": "object",
+      "description": "Upstream LLM provider route.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the backend, route and provider-key ExternalSecret."
+        },
+        "provider": {
+          "type": "string",
+          "description": "AgentgatewayBackend spec.ai.provider.",
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "description": "Fixed model; \"\" = each request decides."
+        }
+      },
+      "required": [
+        "provider"
+      ]
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Provider key source.",
+      "properties": {
+        "store": {
+          "type": "string",
+          "description": "ClusterSecretStore with the provider key.",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "remoteKey": {
+          "type": "string",
+          "description": "Store key with property <provider>-api-key.",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "store"
+      ]
+    },
+    "agentgateway-crds": {
+      "type": "object",
+      "description": "Upstream CRD chart (not constrained here)."
+    },
+    "agentgateway": {
+      "type": "object",
+      "description": "Upstream agentgateway chart (not constrained here)."
+    }
+  },
+  "required": [
+    "gateway",
+    "llm",
+    "secrets"
+  ]
+}

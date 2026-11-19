@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cilium addon values",
+  "type": "object",
+  "properties": {
+    "cilium": {
+      "type": "object",
+      "description": "Upstream cilium chart; only the per-cluster API server keys are typed.",
+      "properties": {
+        "k8sServiceHost": {
+          "type": "string",
+          "description": "API server host, set per cluster by the catalog (clusterServerParameters); non-empty enforced in templates/validate.yaml."
+        },
+        "k8sServicePort": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "pattern": "^[0-9]+$",
+          "description": "API server port, set per cluster by the catalog."
+        }
+      }
+    },
+    "l7Visibility": {
+      "type": "object",
+      "description": "L7 HTTP visibility for OpenChoreo component pods (#104).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the CiliumClusterwideNetworkPolicy (needs httpPorts, templates/validate.yaml)."
+        },
+        "httpPorts": {
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "string"
+            ],
+            "pattern": "^[0-9]{1,5}$",
+            "description": "Container port."
+          },
+          "description": "Ports the L7 rules apply to (numbers become strings)."
+        }
+      }
+    }
+  },
+  "required": [
+    "cilium"
+  ]
+}

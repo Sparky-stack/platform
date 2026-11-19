@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "falco addon values",
+  "type": "object",
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "description": "Injected by the addon ApplicationSet (--set-string): cluster identity, always strings.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Cluster name (platform.koorikla.io/name label).",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "secretStore": {
+      "type": "string",
+      "description": "ClusterSecretStore of the Slack output secret (falco-slack).",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "escalation": {
+      "type": "object",
+      "description": "Escalation webhook to argo-events on mgmt (docs/observability.md \"Falco response\").",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the falcosidekick-escalation ExternalSecret when a store is set."
+        },
+        "store": {
+          "type": "string",
+          "description": "\"\" on workload clusters (mgmt delivers the Secret); `platform` on mgmt.",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$"
+        },
+        "remoteKey": {
+          "type": "string",
+          "description": "Store key with url and token.",
+          "minLength": 1
+        }
+      }
+    },
+    "slack": {
+      "type": "object",
+      "description": "Slack output.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render falcosidekick-outputs from the store key."
+        },
+        "remoteKey": {
+          "type": "string",
+          "description": "Store key with property webhook-url.",
+          "minLength": 1
+        },
+        "minimumPriority": {
+          "type": "string",
+          "description": "Lowest Falco priority sent to Slack.",
+          "enum": [
+            "emergency",
+            "alert",
+            "critical",
+            "error",
+            "warning",
+            "notice",
+            "informational",
+            "debug"
+          ]
+        }
+      }
+    },
+    "falco": {
+      "type": "object",
+      "description": "Upstream falco chart (not constrained here)."
+    },
+    "falco-talon": {
+      "type": "object",
+      "description": "Upstream falco-talon chart (not constrained here)."
+    }
+  },
+  "required": [
+    "cluster",
+    "secretStore"
+  ]
+}

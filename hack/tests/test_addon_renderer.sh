@@ -88,7 +88,7 @@ assert_eq "$(addon_appset "$R" falco | yq '.spec.generators[0].clusters.flatList
 # clusterNameFormats needs exactly one %s
 printf 'addons:\n  falco: { clusterNameFormats: { x: "no-placeholder" } }\n' > "$TMP/bad-fmt.yaml"
 if out=$(helm template platform charts/platform --namespace argocd --values "$TMP/bad-fmt.yaml" 2>&1); then out=rendered; fi
-assert_match "$out" 'clusterNameFormats.x: "no-placeholder" must contain exactly one %s' "clusterNameFormats without %s fails"
+assert_match "$out" "at '/addons/falco/clusterNameFormats/x': 'no-placeholder' does not match pattern" "clusterNameFormats without %s fails (values.schema.json)"
 
 # Values are not @tsv-escaped (a backslash arrives once).
 printf 'installation: { name: t, repoURL: https://example.test/r.git, githubOrg: https://example.test }\nregistry: { type: harbor, host: "a\\\\b.example.test" }\n' > "$TMP/inst.yaml"

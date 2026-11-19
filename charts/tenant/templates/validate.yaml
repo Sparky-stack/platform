@@ -1,0 +1,17 @@
+{{- /* Checks values.schema.json cannot express (formats and required keys live there). Renders nothing. */ -}}
+{{- $_ := required "project is required (tenant file)" .Values.project -}}
+{{- $seen := dict -}}
+{{- range $i, $a := .Values.apps -}}
+{{- if hasKey $seen $a.name -}}{{- fail (printf "apps: duplicate name %q" $a.name) -}}{{- end -}}
+{{- $_ := set $seen $a.name true -}}
+{{- /* The VAP openchoreo-gated-bindings-from-git trusts only Applications named <project>-<app>-<gated env>: a main
+Application <project>-<app> must never look like one. */ -}}
+{{- range $env := $.Values.promotion.gatedEnvironments | default list -}}
+{{- if hasSuffix (printf "-%s" $env) $a.name -}}{{- fail (printf "apps[%d].name %q must not end in -%s (gated environment: reserved for the gated Application)" $i $a.name $env) -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range $w := .Values.promotion.freezeWindows -}}
+{{- if eq (include "tenant.minuteOfWeek" $w.start) (include "tenant.minuteOfWeek" $w.end) -}}
+{{- fail (printf "promotion.freezeWindows %q: start == end" ($w.name | default $w.start)) -}}
+{{- end -}}
+{{- end -}}
