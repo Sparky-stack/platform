@@ -7,3 +7,6 @@ dependencies:
   - name: openbao
     version: 0.30.7            # OpenBao v2.7.2
     repository: https://openbao.github.io/openbao-helm
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../../charts/lib

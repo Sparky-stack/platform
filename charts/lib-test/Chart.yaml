@@ -1,0 +1,9 @@
+apiVersion: v2
+name: lib-test
+description: Test harness for the koorikla-lib library chart (charts/lib); helm unittest only, never deployed
+type: application
+version: 0.1.0
+dependencies:
+  - name: koorikla-lib
+    version: 0.1.0
+    repository: file://../lib

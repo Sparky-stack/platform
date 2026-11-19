@@ -1,0 +1,20 @@
+{{- define "chart.purpose" -}}
+Test harness for the library chart [`charts/lib`](../lib/README.md): a library chart renders nothing by itself, so this
+application chart depends on it and each file in `templates/` renders one helper; `tests/` holds the helm-unittest
+suites (`task test`).
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Target:** never deployed; rendered only by `helm unittest` (`hack/test.sh`).
+- **Selection:** not in any catalog or ApplicationSet.
+{{- end -}}
+
+{{- define "chart.keyValuesNotes" -}}{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- A new helper in `charts/lib` gets a fixture template here and a suite in `tests/`.
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [helm-unittest](https://github.com/helm-unittest/helm-unittest)
+{{- end -}}

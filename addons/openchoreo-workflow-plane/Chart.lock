@@ -2,5 +2,8 @@ dependencies:
 - name: openchoreo-workflow-plane
   repository: oci://cr.openchoreo.dev/openchoreo/helm-charts
   version: 1.3.3
-digest: sha256:e756bc8acd926335c50f09fde2ef083e77314534edc2f612207d7d0bd409fe74
-generated: "2026-11-14T13:48:51.214616469+02:00"
+- name: koorikla-lib
+  repository: file://../../charts/lib
+  version: 0.1.0
+digest: sha256:7ad62dbc66f84193b7540afbb28e1bfb5710b60ac433d09ad34244b5e032e262
+generated: "2026-11-19T13:29:35.547315446+02:00"

@@ -78,19 +78,8 @@ spec:
   {{- end }}
   provider:
     {{- if eq .backend "kubernetes" }}
-    kubernetes:
-      remoteNamespace: {{ .remoteNamespace | quote }}
-      server:
-        url: https://kubernetes.default.svc
-        caProvider:
-          type: ConfigMap
-          name: kube-root-ca.crt
-          key: ca.crt
-          namespace: {{ $ns }}
-      auth:
-        serviceAccount:
-          name: {{ .serviceAccount }}
-          namespace: {{ $ns }}
+    {{- include "koorikla-lib.esoKubernetesProvider" (dict "remoteNamespace" .remoteNamespace
+      "serviceAccount" .serviceAccount "clusterStore" true "namespace" $ns) | nindent 4 }}
     {{- else if eq .backend "aws" }}
     aws:
       service: SecretsManager

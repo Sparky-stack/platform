@@ -1,0 +1,6 @@
+dependencies:
+- name: koorikla-lib
+  repository: file://../lib
+  version: 0.1.0
+digest: sha256:7ed53dcd2b7b4e472c7b235b5183480bc05f038347aa380b00d51def6e0299d8
+generated: "2026-11-19T13:30:26.654422473+02:00"

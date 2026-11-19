@@ -1,0 +1,26 @@
+suite: koorikla-lib.operatorNamespace
+templates: [templates/operator-namespace.yaml]
+release: { namespace: keda }
+tests:
+  - it: labels the release namespace with the Pod Security level (enforce, audit, warn)
+    asserts:
+      - isKind: { of: Namespace }
+      - equal: { path: metadata.name, value: keda }
+      - equal:
+          path: metadata.labels
+          value:
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/audit: restricted
+            pod-security.kubernetes.io/warn: restricted
+  - it: adds the Istio ambient label when namespace.ambient is set
+    set: { namespace.ambient: true }
+    asserts:
+      - equal: { path: 'metadata.labels["istio.io/dataplane-mode"]', value: ambient }
+  - it: ambient alone renders only the ambient label
+    set: { namespace: { podSecurity: "", ambient: true } }
+    asserts:
+      - equal: { path: metadata.labels, value: { istio.io/dataplane-mode: ambient } }
+  - it: renders nothing when both are off
+    set: { namespace: { podSecurity: "", ambient: false } }
+    asserts:
+      - hasDocuments: { count: 0 }

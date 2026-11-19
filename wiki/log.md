@@ -24,3 +24,6 @@
 
 ## [2026-11-19] update | Ambient kubelet probes vs cell NetworkPolicy
 - Updated `gotchas/istio-ambient-port-15008-and-telemetry-dns.md`: istio-cni SNATs kubelet probes to `169.254.7.127`, Cilium drops them as `world`; `platform-mesh-hbone` now admits that source.
+
+## [2026-11-19] create | Helm library chart koorikla-lib (#116)
+- Added `gotchas/helm-library-chart-koorikla-lib.md`: values-scope leak into `.Values`, stale `file://` tarballs, library charts only load partials (test harness `charts/lib-test`), helm-docs needs `values.yaml`; Argo CD builds `file://` deps.

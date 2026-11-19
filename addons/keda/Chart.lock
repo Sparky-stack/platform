@@ -2,5 +2,8 @@ dependencies:
 - name: keda
   repository: https://kedacore.github.io/charts
   version: 2.21.0
-digest: sha256:c053e3007513f4252a331d438410aba6b4c2d2f470c38043af66a6637099fd2a
-generated: "2026-11-16T05:45:16.47791902+02:00"
+- name: koorikla-lib
+  repository: file://../../charts/lib
+  version: 0.1.0
+digest: sha256:4d7c68b9e26475aa41fd6f4c94e4be1cc2ac770bf6b27259d8c8f594894038c7
+generated: "2026-11-19T13:29:39.506289766+02:00"

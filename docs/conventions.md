@@ -125,6 +125,8 @@ charts/platform/                root chart: AppProjects, ApplicationSets (fleet,
 charts/cluster/                 CAPI: templates/<provider>/ + common/; scope fleet (providers, ClusterClasses) | cluster
 charts/tenant/                  one tenant: AppProject, OpenChoreo Project, app Applications, PR preview ApplicationSet
 charts/preview/                 one PR preview environment (Environment + bindings), rendered per open pull request
+charts/lib/                     library chart koorikla-lib: named templates several charts render identically (file:// dep)
+charts/lib-test/                helm-unittest harness for charts/lib (a library chart cannot render itself); never deployed
 addons/<addon>/                 wrapper charts (+ README.md, values/role-*.yaml, values/provider-*.yaml, values/cni-*.yaml)
 installations/<inst>/           installation.yaml, clusters/, addons/, tenants/
 docs/                           architecture, conventions, operations + runbooks/, one doc per area, diagrams
