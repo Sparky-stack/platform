@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# ghcr.io/koorikla/ci-toolbox: the tools koorikla/ci scripts need, so
-# in-cluster builds (Argo Workflows / Tekton / OpenChoreo build plane) run the
-# exact same scripts as GitHub Actions. Multi-arch (linux/amd64, linux/arm64).
+# ghcr.io/koorikla/ci-toolbox: the tools ci/scripts need, so in-cluster builds
+# (OpenChoreo ClusterWorkflows, addons/openchoreo-workflow-plane) run the exact
+# same scripts as GitHub Actions. Multi-arch (linux/amd64, linux/arm64).
 #
-#   docker run --rm -e IMAGE_REF=... ghcr.io/koorikla/ci-toolbox:v1 \
+#   docker run --rm -e IMAGE_REF=... ghcr.io/koorikla/ci-toolbox@sha256:<digest> \
 #     scan-image.sh            # scripts/common/*.sh are on PATH
 #
 # Bump versions here; Dependabot does not track these ARGs.

@@ -3,7 +3,7 @@
 #
 # Env in:
 #   WORKDIR           project directory, default .
-#   PM                npm | pnpm | yarn (default: scripts/nextjs/detect.sh)
+#   PM                npm | pnpm | yarn (default: from the lockfile, else npm)
 #   RUN_LINT          default true  (runs the `lint` script if defined)
 #   RUN_TYPECHECK     default true  (`typecheck` script, else tsc --noEmit when
 #                     tsconfig.json exists)
