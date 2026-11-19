@@ -34,7 +34,7 @@ metadata:
 spec:
   dataPlaneRef:
     kind: ClusterDataPlane
-    name: {{ required "previews.dataPlane is required (installation.yaml)" .Values.previews.dataPlane }}
+    name: {{ .Values.previews.dataPlane }}
   isProduction: false
 ---
 apiVersion: openchoreo.dev/v1alpha1
