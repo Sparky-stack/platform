@@ -33,8 +33,8 @@ vulnerability attestation.
 koorikla/ci and is frozen, #254), tagged `main`, `<short sha>`, `<full sha>` and `ci-vX.Y.Z`. Multi-arch, itself
 scanned, SBOM'd, attested and cosign-signed by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml)
 through `app-container.yaml`. Pin it by digest (`addons/openchoreo-workflow-plane/values.yaml`
-`images.TOOLBOX_IMAGE`); the `:v1` in that pin is a leftover tag from the archived koorikla/ci repo,
-only the digest counts.
+`images.TOOLBOX_IMAGE`, and `COSIGN_IMAGE` in `bootstrap/bootstrap.sh`, same pin); the short-sha tag in the pin is
+for humans, only the digest counts.
 
 Contents ([`toolbox/Dockerfile`](toolbox/Dockerfile), versions pinned, release checksums verified
 where upstream publishes them): trivy, syft, cosign, crane, helm, yq, jq, git, crossplane CLI,

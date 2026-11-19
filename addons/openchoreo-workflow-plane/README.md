@@ -29,7 +29,7 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 | clusterWorkflowPlane.secretStore | string | `"workflows"` |  |
 | images.BUILDKIT_IMAGE | string | `"docker.io/moby/buildkit:v0.35.0-rootless@sha256:5987568f92dafbfb679879de59c1cd8d26597f5f6635c314e166164e2615870c"` |  |
 | images.POSTGRES_IMAGE | string | `"docker.io/library/postgres:17.12-alpine@sha256:34261f594522cf41dfcb76aefd42b9d201098b0e6b23c9c68733f169e4218b6f"` |  |
-| images.TOOLBOX_IMAGE | string | `"ghcr.io/koorikla/ci-toolbox:v1@sha256:d9505f97eddefe4989e3b38b289aeccea15b4c35a2de3a479f339431864b6a79"` |  |
+| images.TOOLBOX_IMAGE | string | `"ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858"` |  |
 | openchoreo-workflow-plane.argo-workflows.commonLabels."openchoreo.dev/plane" | string | `"workflowplane"` |  |
 | openchoreo-workflow-plane.argo-workflows.commonLabels."openchoreo.dev/plane-id" | string | `"default"` |  |
 | openchoreo-workflow-plane.argo-workflows.controller.image.tag | string | `"v4.0.8@sha256:7a156419f80285859fc8f859927b6cc249f0d128e161e080dc17fca8fcbbceb6"` |  |
