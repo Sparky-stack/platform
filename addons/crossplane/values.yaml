@@ -37,9 +37,10 @@ crossplane:
   image:
     repository: xpkg.crossplane.io/crossplane/crossplane
     tag: "v2.4.3@sha256:1c66261d805a73cade46e2ac94b665c73aebd4a00844de5fcae4bcadaa2be638"
-  # Package signature verification (ImageConfig spec.verification) is alpha in 2.4 and off without this flag.
-  # VERIFY live: the Configuration revision reports the signature verified (packages.signatureVerification).
-  args: ["--enable-signature-verification"]
+  # Package signature verification (alpha in 2.4) stays off: its cosign verifier only finds legacy `.sig` tags, while
+  # cosign v3 signs with Sigstore bundles via OCI referrers (live: "no signatures found", #247). Re-enable with
+  # args: ["--enable-signature-verification"] + packages.signatureVerification.enabled once #247 is resolved.
+  args: []
   # Single replicas locally. HA: replicas: 2 and rbacManager.replicas: 2 (leader election is on by default).
   replicas: 1
   rbacManager:
@@ -90,8 +91,9 @@ packages:
   configuration: ghcr.io/koorikla/platform/postgresql:main@sha256:063eda96fcef246d85fc084f01effa6c6618b6f243346fd011b6b1e411047878 # VERIFY: switch to vX.Y.Z once release-please tags postgresql-v*
   # Cosign keyless verification of platform packages (ImageConfig; alpha, needs core flag
   # --enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags.
+  # Off until Crossplane verifies Sigstore bundles (#247); packages are still keyless-signed with provenance in CI.
   signatureVerification:
-    enabled: true
+    enabled: false
     prefix: ghcr.io/koorikla/platform/
     issuer: https://token.actions.githubusercontent.com
     subjectRegExp: '^https://github\.com/koorikla/platform/\.github/workflows/app-crossplane-configuration\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$'

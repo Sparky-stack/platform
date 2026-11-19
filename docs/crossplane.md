@@ -62,11 +62,13 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   tags run `crossplane project build` + `crossplane project push` to `ghcr.io/koorikla/platform/<name>` (tags: short
   SHA, `main`, `vX.Y.Z` from the component tag), then cosign keyless signing and SLSA provenance. release-please
   versions each package as its own component (`release-please-config.json`).
-- Signature verification: `ImageConfig platform-packages` (cosign keyless, issuer GitHub Actions, subject = the
-  reusable workflow `app-crossplane-configuration.yaml` at `refs/heads/main` or a `postgresql-v*` tag) for every
-  package under `ghcr.io/koorikla/platform/`. Alpha in Crossplane 2.4: core runs with
-  `--enable-signature-verification` (`crossplane.args`). Values: `packages.signatureVerification` (`enabled: false`
-  turns it off). The subject alone does not pin the calling repository (any repo can call a public reusable
+- Signature verification: OFF for now ([#247](https://github.com/koorikla/platform/issues/247)). Crossplane 2.4's
+  alpha cosign verifier only finds legacy `.sig` tags; cosign v3 signs with Sigstore bundles attached as OCI
+  referrers, so every package failed with "no signatures found". Packages are still keyless-signed with SLSA
+  provenance in CI. The ready-made config stays: `packages.signatureVerification.enabled: true` renders `ImageConfig
+  platform-packages` (cosign keyless, issuer GitHub Actions, subject = the reusable workflow
+  `app-crossplane-configuration.yaml` at `refs/heads/main` or a `postgresql-v*` tag) for every package under
+  `ghcr.io/koorikla/platform/`; it also needs `--enable-signature-verification` in `crossplane.args`. The subject alone does not pin the calling repository (any repo can call a public reusable
   workflow); the push target `ghcr.io/koorikla/platform/*` is writable only by this repo, which closes that gap.
 - Promotion: bump `packages.configuration` (`tag@sha256`) in `addons/crossplane/values.yaml`; per-environment pins in
   `installations/<inst>/addons/crossplane/env-<env>.yaml` gate dev -> prod (the Argo CD gate is #57). Renovate proposes

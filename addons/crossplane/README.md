@@ -17,7 +17,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | cluster.name | string | `"sample"` |  |
 | cluster.provider | string | `"docker"` |  |
 | cluster.region | string | `"local"` |  |
-| crossplane.args[0] | string | `"--enable-signature-verification"` |  |
+| crossplane.args | list | `[]` |  |
 | crossplane.image.repository | string | `"xpkg.crossplane.io/crossplane/crossplane"` |  |
 | crossplane.image.tag | string | `"v2.4.3@sha256:1c66261d805a73cade46e2ac94b665c73aebd4a00844de5fcae4bcadaa2be638"` |  |
 | crossplane.metrics.enabled | bool | `true` |  |
@@ -74,7 +74,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | packages.runtimeConfig.resources.limits.memory | string | `"512Mi"` |  |
 | packages.runtimeConfig.resources.requests.cpu | string | `"10m"` |  |
 | packages.runtimeConfig.resources.requests.memory | string | `"64Mi"` |  |
-| packages.signatureVerification | object | `{"enabled":true,"issuer":"https://token.actions.githubusercontent.com","prefix":"ghcr.io/koorikla/platform/","subjectRegExp":"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"}` | enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags. |
+| packages.signatureVerification | object | `{"enabled":false,"issuer":"https://token.actions.githubusercontent.com","prefix":"ghcr.io/koorikla/platform/","subjectRegExp":"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"}` | enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags. Off until Crossplane verifies Sigstore bundles (#247); packages are still keyless-signed with provenance in CI. |
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptNamespaces[1] | string | `"cnpg-system"` |  |

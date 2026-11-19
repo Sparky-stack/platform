@@ -1,0 +1,89 @@
+{{- /* Capability gate (#246, values capabilityGate, docs/data-services.md "KEDA and OpenChoreo workloads").
+
+The cluster agent (upstream Deployment, sync wave 0) is the data plane's only door to OpenChoreo: until it connects,
+nothing is deployed here. This Sync hook in wave -1 holds the agent back until the CRDs of every opt-in addon this
+cluster runs (and platform ClusterTraits render, e.g. keda-scaler -> ScaledObject) are Established.
+
+Why: on a fresh bootstrap OpenChoreo applied hello-world's ScaledObject before addon keda was installed. The apply failed
+("scaledobjects.keda.sh ... not found") and OpenChoreo 1.3.3 retries a failed RenderedRelease only on controller-runtime's
+exponential backoff (5 ms doubling, capped at 1000 s, nothing re-queues it when KEDA arrives), so development stayed down
+for ~17 min after KEDA was Healthy. With the gate the first apply that reaches this cluster finds every kind it needs.
+
+Shell-free (distroless kubectl): wait for the CRDs to exist, then for Established. A timeout fails the hook, Argo CD
+retries the sync (retry.limit -1), and the agent never starts without them: loud, not a silent 17 min wait.
+A HookSucceeded Job is deleted; it reruns on every sync of this app and passes in seconds once the CRDs exist. */ -}}
+{{- $crds := list }}
+{{- range $addon, $cfg := .Values.capabilityGate.addons }}
+{{- if eq (toString $cfg.enabled) "true" }}
+{{- range $cfg.crds }}{{ $crds = append $crds (printf "crd/%s" .) }}{{ end }}
+{{- end }}
+{{- end }}
+{{- if $crds }}
+{{- $labels := dict "app.kubernetes.io/name" "capability-gate" "app.kubernetes.io/part-of" "openchoreo" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: capability-gate
+  labels: {{- toYaml $labels | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"   # before the hook that runs as it
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openchoreo-data-plane-capability-gate
+  labels: {{- toYaml $labels | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+rules:
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openchoreo-data-plane-capability-gate
+  labels: {{- toYaml $labels | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openchoreo-data-plane-capability-gate
+subjects:
+  - { kind: ServiceAccount, name: capability-gate, namespace: {{ .Release.Namespace }} }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: capability-gate
+  labels: {{- toYaml $labels | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-1"   # the agent Deployment (upstream chart) is wave 0
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels: {{- toYaml $labels | nindent 8 }}
+    spec:
+      serviceAccountName: capability-gate
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- $container := dict "image" .Values.capabilityGate.image "imagePullPolicy" "IfNotPresent"
+          "resources" (dict "requests" (dict "cpu" "10m" "memory" "32Mi") "limits" (dict "cpu" "100m" "memory" "64Mi"))
+          "securityContext" (dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL"))) }}
+      initContainers:
+        - name: wait-for-crds
+          command: {{ concat (list "kubectl" "wait" "--for=create" "--timeout=30m") $crds | toJson }}
+          {{- toYaml $container | nindent 10 }}
+      containers:
+        - name: wait-for-established
+          command: {{ concat (list "kubectl" "wait" "--for=condition=Established" "--timeout=5m") $crds | toJson }}
+          {{- toYaml $container | nindent 10 }}
+{{- end }}

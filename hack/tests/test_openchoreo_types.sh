@@ -8,6 +8,7 @@
 #     preRenderValidation on dataplane.annotations; ClusterResourceTypes are checked on mgmt by the Kyverno policy
 #     platform-data-plane-capabilities (rendered for the mgmt role); no type renders a raw CNPG object
 #   - the ClusterDataPlane of local/dev1 announces the addons the types need (fleet file -> annotations)
+#   - the agent's capability gate (#246) waits for the CRD of every kind a ClusterTrait's required addon brings
 # Negatives: without the data-services RBAC the ScaledObject and XR are reported; a trait that drops its check and a type
 # requiring a default-on addon are reported.
 set -euo pipefail
@@ -30,14 +31,19 @@ assert_eq "$agent_sa" "$(yq -r '.clusterAgentDataServices.serviceAccount' "$dpa/
   "clusterAgentDataServices.serviceAccount is the agent Deployment's ServiceAccount"
 yq -o=json '.addons' charts/platform/values.yaml > "$TMP/catalog.json"
 
-check() { py hack/tests/openchoreo_types.py "$1" "$2" "$agent_ns/$agent_sa" "$TMP/catalog.json"; }
+# Capability gate (#246): render the data plane with every capabilityGate addon on (as on a cluster opting into all).
+gate_on=$(yq -r '.capabilityGate.addons | keys | map("capabilityGate.addons." + . + ".enabled=true") | join(",")' "$dpa/values.yaml" | tr -d '\r')
+helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" --set "$gate_on" | yq -o=json -I=0 '.' > "$TMP/dp-gated.jsonl"
+
+check() { py hack/tests/openchoreo_types.py "$1" "$2" "$agent_ns/$agent_sa" "$TMP/catalog.json" "${3:-$TMP/dp-gated.jsonl}"; }
 out=$(check "$TMP/plat.jsonl" "$TMP/dp.jsonl")
 assert_eq "$(printf '%s\n' "$out" | grep '^VIOLATION' || true)" "" "platform types vs data-plane agent: no violation"
 for ok in 'agent may apply keda.sh/scaledobjects for ClusterTrait keda-scaler' \
   'agent may apply platform.koorikla.io/postgresqls for ClusterResourceType postgresql' \
   'agent may apply apps/deployments for ClusterComponentType service' \
   'ClusterTrait keda-scaler requires opt-in workload addon keda' 'ClusterTrait keda-scaler checks addons.platform.koorikla.io/keda' \
-  'ClusterResourceType postgresql requires opt-in workload addon crossplane'; do
+  'ClusterResourceType postgresql requires opt-in workload addon crossplane' \
+  'agent waits for crd/scaledobjects.keda.sh of ClusterTrait keda-scaler'; do
   assert_match "$out" "OK $ok" "$ok"
 done
 
@@ -64,6 +70,12 @@ assert_match "$out" "VIOLATION: ClusterTrait keda-scaler renders ScaledObject \(
   "upstream agent RBAC alone: keda-scaler's ScaledObject is reported"
 assert_match "$out" "VIOLATION: ClusterResourceType postgresql renders PostgreSQL \(platform.koorikla.io/v1alpha1\) but the data-plane agent" \
   "upstream agent RBAC alone: postgresql's XR is reported"
+# Without the gate the first apply of a ScaledObject can beat addon keda to the cluster (#246).
+helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" | yq -o=json -I=0 '.' > "$TMP/dp-ungated.jsonl"
+out=$(check "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$TMP/dp-ungated.jsonl")
+assert_match "$out" 'VIOLATION: no capability-gate Sync hook before the agent Deployment' "no gate rendered: reported"
+assert_match "$out" 'VIOLATION: ClusterTrait keda-scaler renders ScaledObject \(keda.sh/v1alpha1\) but the capability gate does not wait for crd/scaledobjects.keda.sh' \
+  "a trait kind the gate does not wait for is reported"
 cat > "$TMP/bad.jsonl" <<'EOF'
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterTrait","metadata":{"name":"unchecked","annotations":{"platform.koorikla.io/requires-addons":"keda"}},"spec":{"preRenderValidations":[{"rule":"${true}","message":"x"}]}}
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterResourceType","metadata":{"name":"rawpg","annotations":{"platform.koorikla.io/requires-addons":"cert-manager, nosuch"}},"spec":{"resources":[{"id":"c","template":{"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster"}}]}}
