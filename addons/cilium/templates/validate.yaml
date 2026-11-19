@@ -2,3 +2,7 @@
 {{- if not .Values.cilium.k8sServiceHost -}}
 {{- fail "cilium.k8sServiceHost is empty: it is set per cluster by the addon catalog (clusterServerParameters) from the Argo CD cluster secret's server" -}}
 {{- end -}}
+{{- /* L7 visibility (templates/l7-visibility.yaml) needs explicit ports. */ -}}
+{{- if and .Values.l7Visibility.enabled (not .Values.l7Visibility.httpPorts) -}}
+{{- fail "l7Visibility.httpPorts is empty: Cilium L7 rules need explicit ports" -}}
+{{- end -}}
