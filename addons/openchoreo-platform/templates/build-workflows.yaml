@@ -13,10 +13,9 @@ CEL ${...} is evaluated by OpenChoreo per run, {{ }} in the per-run resources by
 {{- $relPath := include "build.relPathPattern" . }}
 {{- $refPattern := "^[A-Za-z0-9_][A-Za-z0-9._/-]*$" }}
 {{- /* Run pods in workflows-* admit only digest references (addon kyverno-policies platform-workflow-image-digests,
-#36): reject a tag at render time and in the schema, before a run starts. */ -}}
+#36): values.schema.json rejects a tagged checkImage, the parameter schema below a tagged image, before a run starts. */ -}}
 {{- $digestPattern := "^[^@\\s]+@sha256:[0-9a-f]{64}$" }}
 {{- range $st := $b.stacks }}
-{{- if and $st.checkImage (not (regexMatch $digestPattern $st.checkImage)) }}{{ fail (printf "buildWorkflows.stacks[%s].checkImage %q must be pinned by digest (image@sha256:<digest>): run pods in workflows-* admit only digest references" $st.name $st.checkImage) }}{{ end }}
 ---
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow

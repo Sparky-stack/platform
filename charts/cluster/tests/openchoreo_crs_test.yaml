@@ -4,6 +4,7 @@ templates:
   - templates/common/_openchoreo.tpl
 set:
   name: dev1
+  kubernetesVersion: v1.35.10+k3s1   # a valid cluster file (values.schema.json)
   openchoreo.dataPlane.enabled: true
   openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
 tests:

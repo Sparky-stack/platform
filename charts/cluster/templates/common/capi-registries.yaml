@@ -1,6 +1,5 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* k3s node registry config (ExternalSecret fleet/<name>-registries, wave -1); skipped on gcp-gke and byo. */ -}}
-{{- include "capi.validate" . }}
 {{- $auth := .Values.secrets.nodeRegistryAuth }}
 {{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
 {{- $reg := .Values.registry }}

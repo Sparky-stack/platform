@@ -143,7 +143,7 @@ tests:
     set:
       bootstrapSecret.aiAgentClients: [portal-assistant]
     asserts:
-      - failedTemplate: { errorMessage: 'bootstrapSecret.aiAgentClients: "portal-assistant" is not one of rca, finops' }
+      - failedTemplate: { errorPattern: 'bootstrapSecret/aiAgentClients/0' }
 
   # Regression (thunder-setup outage after PR #5): an unlisted agent was a comment-only file, which Thunder's bootstrap
   # rejects ("document N root must be a YAML mapping"). Off must mean no key, hence no file.

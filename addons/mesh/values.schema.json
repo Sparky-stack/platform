@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon mesh (platform keys; base/istiod/cni/ztunnel/cert-manager-istio-csr are upstream charts)",
+  "type": "object",
+  "required": [
+    "cluster",
+    "mesh"
+  ],
+  "properties": {
+    "cluster": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$",
+          "description": "Cluster name: DNS label; default mesh network and the PKI role this member signs with."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Infrastructure provider; anything but docker needs gateway.loadBalancerSourceRanges (templates/validate.yaml)."
+        }
+      },
+      "description": "Injected by the ApplicationSet (--set-string): this cluster's facts."
+    },
+    "mesh": {
+      "type": "object",
+      "required": [
+        "ca"
+      ],
+      "properties": {
+        "group": {
+          "type": "string",
+          "pattern": "^$|^[a-z]([-a-z0-9]{0,30}[a-z0-9])?$",
+          "description": "Mesh group (label mesh.platform.koorikla.io/group): DNS label, \"\" = not a member (standalone render)."
+        },
+        "network": {
+          "type": "string",
+          "description": "Istio network (label mesh.platform.koorikla.io/network); \"\" = cluster.name."
+        },
+        "ca": {
+          "type": "object",
+          "required": [
+            "host",
+            "port"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$",
+              "description": "OpenBao passthrough host on mgmt."
+            },
+            "port": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                }
+              ],
+              "description": "OpenBao passthrough port on mgmt."
+            }
+          },
+          "description": "installation.yaml mesh.ca: where istio-csr reaches OpenBao on mgmt."
+        },
+        "csr": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Issue workload certificates from OpenBao."
+            }
+          },
+          "description": "istio-csr + Vault Issuer openbao-mesh (values/mesh-member.yaml)."
+        },
+        "eastwest": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Render the east-west gateway."
+            }
+          },
+          "description": "East-west gateway + reader RBAC (values/mesh-member.yaml)."
+        }
+      },
+      "description": "Mesh membership: group/network labels (catalog clusterLabelParameters), mgmt OpenBao endpoint and member toggles."
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Gateway name."
+        },
+        "loadBalancerSourceRanges": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+          },
+          "description": "Peers' egress CIDRs; required outside docker (templates/validate.yaml)."
+        },
+        "serviceAnnotations": {
+          "type": "object",
+          "description": "Extra Service annotations (provider-*.yaml)."
+        }
+      },
+      "description": "East-west gateway Deployment/Service (istiod waypoint template via parametersRef)."
+    },
+    "reader": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render the reader RBAC."
+        },
+        "user": {
+          "type": "string",
+          "minLength": 1,
+          "description": "User bound to ClusterRole platform-istio-reader (== charts/cluster mesh.readerUser)."
+        },
+        "remoteCredentialsSecrets": {
+          "type": "boolean",
+          "description": "Docker-only opt-in: lets peers read every Secret (templates/validate.yaml rejects it elsewhere)."
+        }
+      },
+      "description": "Reader identity peers use for endpoint discovery (client cert from mgmt)."
+    }
+  }
+}

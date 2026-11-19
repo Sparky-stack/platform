@@ -4,14 +4,11 @@ Service <release>-active:8200 (the raft leader). OpenBao terminates TLS itself (
 a token or a CSR. Same pattern as OpenSearch on the observability plane.
 Locally klipper binds the port as a hostPort and k3d publishes it on 127.0.0.1 (bootstrap/k3d-mgmt.yaml). Elsewhere
 mesh.ca.host is a DNS name (external-dns gateway-tlsroute source) and gateway.loadBalancerSourceRanges (the members'
-egress CIDRs) is REQUIRED - the render fails, same rule as the addon mesh east-west gateway - because the listener
+egress CIDRs) is REQUIRED - templates/validate.yaml fails the render, same rule as the addon mesh east-west gateway - because the listener
 exposes the whole API, including unauthenticated sys/health, sys/seal-status and the logins. kgateway applies the ranges
 to the proxy Service through GatewayParameters (spec.infrastructure.parametersRef).
 */ -}}
 {{- $g := .Values.gateway }}
-{{- if and (ne .Values.cluster.provider "docker") (empty $g.loadBalancerSourceRanges) }}
-{{- fail (printf "openbao (%s, provider %s): gateway.loadBalancerSourceRanges is required outside docker - the mesh members' egress CIDRs (installations/<inst>/addons/openbao/values.yaml)" .Values.cluster.name .Values.cluster.provider) }}
-{{- end }}
 {{- with $g.loadBalancerSourceRanges }}
 apiVersion: gateway.kgateway.dev/v1alpha1
 kind: GatewayParameters

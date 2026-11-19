@@ -69,9 +69,3 @@ tests:
         documentIndex: 2
       - equal: { path: spec.validationActions, value: [Deny] }
         documentSelector: { path: kind, value: ValidatingAdmissionPolicyBinding, matchMany: true }
-
-  - it: needs mesh.ca.host (where members reach OpenBao)
-    set: { secrets.tenantStores.enabled: true, mesh: null }
-    template: templates/tenant-stores.yaml
-    asserts:
-      - failedTemplate: { errorPattern: "secrets.tenantStores needs mesh.ca.host" }

@@ -69,16 +69,14 @@ association, GKE / Entra federation) targets one stable subject: crossplane-syst
 {{- $labels := dict }}
 {{- if eq $cloud "aws" }}
 {{- if eq $pg.aws.identity.source "IRSA" }}
-{{- $_ := set $sa "annotations" (dict "eks.amazonaws.com/role-arn" (required "postgresql.aws.identity.roleArn is required with IRSA" $pg.aws.identity.roleArn)) }}
-{{- else if ne $pg.aws.identity.source "PodIdentity" }}
-{{- fail (printf "postgresql.aws.identity.source: %q (IRSA | PodIdentity)" $pg.aws.identity.source) }}
+{{- $_ := set $sa "annotations" (dict "eks.amazonaws.com/role-arn" $pg.aws.identity.roleArn) }}
 {{- end }}
 {{- else if eq $cloud "gcp" }}
 {{- with $pg.gcp.identity.serviceAccount }}
 {{- $_ := set $sa "annotations" (dict "iam.gke.io/gcp-service-account" .) }}
 {{- end }}
 {{- else if eq $cloud "azure" }}
-{{- $_ := set $sa "annotations" (dict "azure.workload.identity/client-id" (required "postgresql.azure.clientID is required for backend azure-flexible" $pg.azure.clientID)) }}
+{{- $_ := set $sa "annotations" (dict "azure.workload.identity/client-id" $pg.azure.clientID) }}
 {{- $labels = dict "azure.workload.identity/use" "true" }}
 {{- end }}
 ---

@@ -150,7 +150,7 @@ spec:
       namespace: {{ .Values.falco.route.gateway.namespace }}
       sectionName: {{ .Values.falco.route.sectionName }}
   hostnames:
-    - {{ printf "%s.%s" .Values.falco.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
+    - {{ printf "%s.%s" .Values.falco.route.hostPrefix .Values.openchoreo.controlPlane.host | quote }}
   rules:
     - matches:
         {{- range $c := $clusters }}

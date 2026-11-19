@@ -107,6 +107,7 @@ Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `
 
 ## Day-2 notes
 
+- Values are checked by `values.schema.json` (`cluster.name` and `mesh.group` DNS labels, `mesh.ca.host`/`mesh.ca.port` required, CIDRs; `helm` prints the failing path). Outside-docker rules (`gateway.loadBalancerSourceRanges` required, `reader.remoteCredentialsSecrets` refused) are in `templates/validate.yaml`.
 - Mesh CA rotation, member decommissioning and Istio upgrades: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#2-openbao-mesh-ca-openbao--mesh), [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md#2-remove-decommission-a-workload-cluster) and [upgrades](../../docs/runbooks/upgrades.md#5-istio-ambient-mesh).
 
 ## Links

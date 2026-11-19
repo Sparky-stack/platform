@@ -20,7 +20,8 @@ is the first; APIs that are not data services follow the same pattern.
 
 A package is one immutable artifact for every cluster, so nothing cluster-specific lives in it. The addon renders
 `EnvironmentConfig platform-<api>` from values (`installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`);
-a missing required fact fails the Helm render, not the cluster. The Composition's first step,
+a missing required fact fails the Helm render, not the cluster (`templates/validate.yaml`; types, enums and package pins in
+`values.schema.json`). The Composition's first step,
 `function-environment-configs`, loads it by name (required) into the pipeline context; `function-go-templating` reads
 it as `$facts` (`index .context "apiextensions.crossplane.io/environment"`). Developers never see or set facts.
 
@@ -144,7 +145,7 @@ alpha with few drivers (none for RustFS); Crossplane gives one API across RustFS
    backend under `extra-resources/<example>`, `observed/`, `expected/`).
 2. Copy `.github/workflows/package-postgresql.yaml`, add the release-please component, merge; record the pushed
    digest (`crane digest ghcr.io/koorikla/platform/<name>:<sha>`).
-3. In `addons/crossplane`: the Configuration and EnvironmentConfig (facts with `required`), the new Functions /
+3. In `addons/crossplane`: the Configuration and EnvironmentConfig (required facts in `templates/validate.yaml`, new keys in `values.schema.json`), the new Functions /
    Providers pinned by digest, MRAP entries, aggregated RBAC for composed plain kinds, Kyverno rules that keep tenants on
    the XR. Tests: `hack/tests/test_crossplane_render.sh`, `addons/crossplane/tests`.
 4. A developer-facing page for the API (like [data-services.md](data-services.md#postgresql-as-a-service)) and, for

@@ -11,6 +11,7 @@ The one Cluster API chart (`addons/capi-operator` only installs the upstream ope
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
+- Validation: `values.schema.json` (types, enums, patterns, per-provider required keys of a cluster file) and `templates/validate.yaml` (cross-field rules) fail `helm template` / the Argo CD sync before anything renders.
 - Provider and ClusterClass upgrades (`core.version`, `<provider>.version`, `docker.kindImage`): [upgrades](../../docs/runbooks/upgrades.md); a ClusterClass template change rolls every cluster of that class.
 - Adding/removing clusters, worker scaling, and `1` vs `3` server HA: [scaling and capacity](../../docs/runbooks/scaling-and-capacity.md) and [upgrades](../../docs/runbooks/upgrades.md).
 - Unreachable clusters or disconnected agents: [incidents](../../docs/runbooks/incidents.md#cluster-unreachable) and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md).

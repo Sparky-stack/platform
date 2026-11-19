@@ -1,34 +1,41 @@
-suite: provider byo - fleet file guards (charts/cluster capi.validate)
+suite: provider byo - fleet file guards (templates/validate.yaml)
 templates:
+  - templates/validate.yaml
   - templates/common/capi-cluster.yaml
 values: [values/byo.yaml]
 tests:
   - it: does not need capi.providers (not a CAPI provider) and renders no Cluster
+    template: templates/common/capi-cluster.yaml
     set: { capi: { providers: { docker: false } } }
     asserts:
       - hasDocuments: { count: 0 }
 
   - it: rejects kubernetesVersion (the owner manages the cluster's version)
+    template: templates/validate.yaml
     set: { kubernetesVersion: v1.35.10+k3s1 }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: kubernetesVersion does not apply to provider byo (the cluster exists; its owner manages it): drop it" }
 
   - it: rejects controlPlane sizing
+    template: templates/validate.yaml
     set: { controlPlane: { replicas: 3 } }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: controlPlane does not apply to provider byo (the cluster exists; its owner manages it): drop it" }
 
   - it: rejects workers
+    template: templates/validate.yaml
     set: { workers: [{ name: md-0 }] }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: workers does not apply to provider byo (the cluster exists; its owner manages it): drop it" }
 
   - it: rejects providerSpec
+    template: templates/validate.yaml
     set: { providerSpec: { kindImage: x } }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: providerSpec does not apply to provider byo (the cluster exists; its owner manages it): drop it" }
 
   - it: rejects addons.cilium true
+    template: templates/validate.yaml
     set: { addons: { cilium: true } }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: addons.cilium cannot be true on provider byo - the platform installs a CNI only at a cluster's birth (docs/networking.md); drop addons.cilium" }
@@ -36,9 +43,10 @@ tests:
   - it: rejects a cni that is not a DNS label
     set: { cni: "Calico!" }
     asserts:
-      - failedTemplate: { errorMessage: "cluster byo1: cni \"Calico!\" must be a DNS label naming the cluster's CNI (cilium, flannel, calico, ...)" }
+      - failedTemplate: { errorPattern: "at '/cni'" }   # values.schema.json
 
   - it: rejects mesh.group until byo mesh members exist (#174)
+    template: templates/validate.yaml
     set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test } }, mgmt: { addons: { openbao: true } } }
     asserts:
       - failedTemplate: { errorMessage: "cluster byo1: mesh.group is not available on provider byo yet (#174): drop mesh.group" }

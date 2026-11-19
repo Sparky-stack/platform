@@ -155,6 +155,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 
 ## Day-2 notes
 
+- A rejected render names the bad value: `values.schema.json` checks types, formats and enums (Helm prints `at '/<path>'`); cross-field rules live in `templates/validate.yaml`.
 - Debugging denied images and moving CI workflow SHA or `cosign` pins: [incidents](../../docs/runbooks/incidents.md#kyverno-denying-an-image), [upgrades](../../docs/runbooks/upgrades.md#6-kyverno-and-supply-chain-policy-pins), and [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#5-cosign-platform-signing-key).
 
 ## Links

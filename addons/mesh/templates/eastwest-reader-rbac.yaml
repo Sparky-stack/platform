@@ -67,9 +67,6 @@ subjects:
     kind: User
     name: {{ .Values.reader.user }}    # = charts/cluster templates/common/_mesh.tpl "mesh.readerUser" (contract test)
 {{- if .Values.reader.remoteCredentialsSecrets }}
-{{- if ne .Values.cluster.provider "docker" }}
-{{- fail (printf "mesh (%s, provider %s): reader.remoteCredentialsSecrets is a local-only (docker) opt-in - it lets every peer of the group read every Secret of this cluster. Outside docker wait for istio/istio#62295 in a release (docs/multicluster.md \"Reader RBAC\")" .Values.cluster.name .Values.cluster.provider) }}
-{{- end }}
 ---
 # OPT-IN (reader.remoteCredentialsSecrets, an installation decision, docker/local only - the render fails elsewhere):
 # lets istiod 1.32.0's remote credentials informer sync so the peer is served. list/watch: LIST returns every Secret's

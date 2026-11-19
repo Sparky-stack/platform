@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "secret-stores (koorikla)",
+  "description": "Platform keys only; cluster.* and installation keys stay open. Cross-field and tenant-isolation rules: templates/validate.yaml.",
+  "type": "object",
+  "properties": {
+    "role": {
+      "description": "Cluster role from the ApplicationSet: mgmt renders the platform stores, anything else the workload stores.",
+      "type": "string"
+    },
+    "secrets": {
+      "description": "Secret backend of the installation (installation.yaml secrets.*).",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "Where platform secrets live (empty: kubernetes).",
+          "enum": [
+            "",
+            "kubernetes",
+            "aws",
+            "vault"
+          ]
+        }
+      }
+    },
+    "platformStore": {
+      "description": "ClusterSecretStore platform (every platform credential).",
+      "type": "object",
+      "required": [
+        "namespaces"
+      ],
+      "properties": {
+        "namespaces": {
+          "description": "Namespaces allowed to read store platform (never workflows-*: templates/validate.yaml).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "workflowStore": {
+      "description": "ClusterSecretStore workflows (key-scoped, for workflow run namespaces).",
+      "type": "object",
+      "required": [
+        "keys",
+        "namespaceRegexes"
+      ],
+      "properties": {
+        "keys": {
+          "description": "Secret keys store workflows may read.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "namespaceRegexes": {
+          "description": "Namespaces allowed to read store workflows: workflow run namespaces only.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^\\^workflows-"
+          }
+        }
+      }
+    },
+    "dnsStore": {
+      "description": "ClusterSecretStore dns (the Cloudflare token, dns.provider cloudflare).",
+      "type": "object",
+      "required": [
+        "namespaces"
+      ],
+      "properties": {
+        "namespaces": {
+          "description": "Namespaces allowed to read store dns.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "repoCreds": {
+      "description": "Argo CD repo-creds ExternalSecret on mgmt.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "token (username + token) or githubApp (App ID, installation ID, private key); empty: token.",
+          "enum": [
+            "",
+            "token",
+            "githubApp"
+          ]
+        }
+      }
+    },
+    "previewToken": {
+      "description": "GitHub token of the PR preview ApplicationSets (ESO GithubAccessToken).",
+      "type": "object",
+      "required": [
+        "secretName",
+        "permissions"
+      ],
+      "properties": {
+        "secretName": {
+          "description": "Secret name of the minted token (the App credentials go to <secretName>-app).",
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "permissions": {
+          "description": "GitHub App token permissions (least privilege: pull_requests: read).",
+          "type": "object",
+          "minProperties": 1
+        }
+      }
+    }
+  }
+}
