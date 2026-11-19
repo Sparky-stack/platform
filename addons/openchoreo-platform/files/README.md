@@ -35,3 +35,8 @@ OpenChoreo types of the data-service addons (#70, docs/data-services.md "Consumi
 `allowedTraits` of the Deployment-based component types. Their annotation `platform.koorikla.io/requires-addons` names
 the addons a data plane must announce (ClusterDataPlane annotations from the fleet file); checked by
 hack/tests/test_openchoreo_types.sh.
+
+Not upstream either: `platform/cluster-traits/resilience.yaml` (#251, docs/openchoreo.md "Resilience defaults"),
+rendered by `templates/platform-types.yaml` (`resilience.enabled`). `templates/upstream-defaults.yaml` embeds it in
+the Deployment-based component types (`spec.traits`, instance `resilience`) and adds the `resilience` object to their
+`environmentConfigs`, so developers never attach it.

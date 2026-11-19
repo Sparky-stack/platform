@@ -6,6 +6,7 @@ templates:
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
   - templates/cluster-agent-data-services.yaml
   - templates/capability-gate.yaml
+  - templates/priority-classes.yaml
 set:
   cluster.name: dev1
   openchoreo-data-plane.clusterAgent.planeID: dev1
@@ -130,3 +131,11 @@ tests:
     template: templates/capability-gate.yaml
     asserts:
       - hasDocuments: { count: 0 }
+  - it: ships the PriorityClasses ClusterTrait resilience assigns, production preempting, the rest never
+    template: templates/priority-classes.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: preemptionPolicy, value: PreemptLowerPriority }
+        documentSelector: { path: metadata.name, value: app-production }
+      - equal: { path: preemptionPolicy, value: Never }
+        documentSelector: { path: metadata.name, value: app-standard }

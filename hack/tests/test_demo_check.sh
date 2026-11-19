@@ -70,6 +70,8 @@ case "\$a" in
   *" get clusterworkflows.openchoreo.dev "*) k=clusterworkflow ;;
   *" get imagevalidatingpolicies"*) k=policies ;;
   *" get daemonsets,deployments "*) k=falco ;;
+  *" get deployments "*"priorityClassName"*) k=resilience-deploy ;;
+  *" get poddisruptionbudgets "*) k=resilience-pdb ;;
   *" get deployment -n falco falco-falcosidekick "*) k=sidekick-fields ;;
   *" get sensors.argoproj.io "*) k=sensor ;;
   *" get workflowtemplates.argoproj.io "*) k=falco-response ;;
@@ -135,6 +137,8 @@ green() {
   printf '172.18.0.6\n' > "$d/k3d-platform-mgmt.machine-prod1"
   printf 'other docker.io/x/y:1\nhello-world %s\n' "$SIGNED" > "$d/k3d-platform-mgmt.workloads"
   printf 'dp-default-demo-production-1234\n' > "$d/prod1.cellns"
+  printf 'hello-world-1a2b app-production kubernetes.io/hostname topology.kubernetes.io/zone' > "$d/prod1.resilience-deploy"
+  printf '1/AlwaysAllow' > "$d/prod1.resilience-pdb"
   printf 'pod/demo-check created (server dry run)\n' > "$d/prod1.apply-signed"
   printf 'Error from server: error when creating "STDIN": admission webhook "ivpol.validate.kyverno.svc-fail" denied the request: Policy openchoreo-verify-images-enforce failed: image (ghcr.io/koorikla/) is not signed by gh-koorikla-hello-world-heads-main; verification details: no signatures found\n' > "$d/prod1.apply-unsigned"
   printf '1\n' > "$d/prod1.apply-unsigned.rc"
@@ -242,7 +246,7 @@ assert_eq "$(result_of 'PostgreSQL claim API')" PASS "green: XRD Established on 
 assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io Established on: dev1" "green: XRD detail"
 assert_match "$CALLS" "dev1.kubeconfig --request-timeout=20s get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io " "green: XRD read on the workload cluster, not mgmt"
 assert_eq "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "development: GREETING_SECRET from ExternalSecret hello-world-env-secrets-1234 (SecretStore/openbao-tenant 15s) Ready" "green: app secret"
-assert_match "$OUT" $'\n30 PASS, 0 FAIL, 0 PENDING$' "green: summary"
+assert_match "$OUT" $'\n31 PASS, 0 FAIL, 0 PENDING$' "green: summary"
 
 # Mesh members and Crossplane clusters vary: failures name the cluster.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
@@ -313,6 +317,7 @@ printf 'dev1 Provisioned True\nprod1 Provisioning\n' > "$FIX/k3d-platform-mgmt.c
 printf 'dev1 true 1\nprod1 false 0\n' > "$FIX/k3d-platform-mgmt.dataplanes"
 printf 'pod/demo-check created (server dry run)\n' > "$FIX/prod1.apply-unsigned"; rm "$FIX/prod1.apply-unsigned.rc"
 printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+rm "$FIX/prod1.resilience-pdb"   # production Deployment without its PodDisruptionBudget
 rm "$FIX/http.staging-default.dev1.apps.localhost"
 printf 'ImageValidatingPolicy openchoreo-verify-images-enforce false\nValidatingPolicy disallow-host-path true\n' > "$FIX/dev1.policies"
 printf 'DaemonSet falco 1 0\nDeployment falco-falcosidekick 1\n' > "$FIX/dev1.falco"
@@ -340,6 +345,7 @@ assert_match "$(detail_of 'unsigned image denied (production, dry-run)')" "^UNSI
 assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "red: unreachable staging"
 assert_match "$(detail_of 'hello-world 200 in staging')" "^000 http://staging" "red: 000 when unreachable"
 assert_eq "$(result_of 'hello-world 200 in production')" "PENDING #54" "red: production known-pending (#54)"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" FAIL "red: production without PDB fails"
 assert_eq "$(result_of 'latest promotion gate passed')" "PENDING #54" "red: failed gate known-pending (#54)"
 assert_eq "$(detail_of 'latest promotion gate passed')" "gate-new: failed" "red: failed gate detail"
 assert_eq "$(result_of 'in-cluster build succeeded')" FAIL "red: no build run -> FAIL (no PENDING since #17 closed)"
@@ -347,12 +353,12 @@ assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-fal
 assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
 assert_match "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "ExternalSecret is 'ClusterSecretStore/default 15s True'" "red: app secret on another store fails"
-assert_match "$OUT" $'\n14 PASS, 14 FAIL, 2 PENDING$' "red: summary"
+assert_match "$OUT" $'\n14 PASS, 15 FAIL, 2 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
-assert_match "$OUT" $'\n14 PASS, 16 FAIL, 0 PENDING$' "strict: summary"
+assert_match "$OUT" $'\n14 PASS, 17 FAIL, 0 PENDING$' "strict: summary"
 
 # ---- fresh stack (#200) ---------------------------------------------------------------------------------------------
 # A clean bootstrap: development serves (auto-build rebuilt the Workload's commit); staging/production pin release names
@@ -360,6 +366,7 @@ assert_match "$OUT" $'\n14 PASS, 16 FAIL, 0 PENDING$' "strict: summary"
 cp -R "$TMP/fix/green" "$TMP/fix/fresh"; FIX="$TMP/fix/fresh"
 printf '404' > "$FIX/http.staging-default.dev1.apps.localhost"
 printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+rm "$FIX/prod1.resilience-deploy" "$FIX/prod1.resilience-pdb"   # nothing promoted to production yet
 printf 'hello-world development hello-world-6df447bf6 Ready\nhello-world staging hello-world-77ff9dc697 ComponentReleaseNotFound\nother production other-1 ComponentReleaseNotFound\nhello-world production hello-world-77ff9dc697 ComponentReleaseNotFound\n' \
   > "$FIX/k3d-platform-mgmt.bindings"
 run fresh
@@ -368,6 +375,8 @@ assert_eq "$(result_of 'hello-world 200 in staging')" PENDING "fresh: staging no
 assert_eq "$(detail_of 'hello-world 200 in staging')" '404: not promoted in this stack yet - staging pins hello-world-77ff9dc697, not a ComponentRelease of this stack (promote: docs/demo.md "After a clean bootstrap")' "fresh: says why and what to do"
 assert_eq "$(result_of 'hello-world 200 in production')" PENDING "fresh: production likewise"
 assert_eq "$(result_of 'hello-world 200 in development')" PASS "fresh: development serves"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" PENDING "fresh: resilience waits for the production promotion"
+assert_eq "$(result_of 'hello-world reads GREETING_SECRET from OpenBao')" PASS "fresh: development app secret still checked"
 printf 'hello-world staging hello-world-77ff9dc697 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
 run fresh-ready
 assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: a binding with its release that does not serve still FAILs"

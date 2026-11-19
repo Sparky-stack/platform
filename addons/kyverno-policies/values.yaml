@@ -239,3 +239,15 @@ previewGuards:
 registry:
   host: ""
   appsProject: apps
+
+# --- Workload resilience (templates/workload-resilience.yaml, #251, docs/openchoreo.md "Resilience defaults") ----------
+# Deployments >= 2 replicas, readiness probes, cpu/memory requests; HPAs >= 2. Deny in enforcedEnvironments, Audit in
+# every other cell namespace (policy reports).
+workloadResilience:
+  # -- Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
+  enabled: true
+  # -- Environments (cell namespace label `openchoreo.dev/environment`) where the checks deny; Audit everywhere else.
+  enforcedEnvironments: [production]
+  cellNamespaceSelector:
+    matchLabels:
+      openchoreo.dev/managed-by: renderedrelease-controller

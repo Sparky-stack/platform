@@ -18,3 +18,7 @@ previewGuards:
 # OpenChoreo control plane: ResourceReleaseBindings only to data planes that run their type's operators (#70).
 dataPlaneCapabilities:
   enabled: true
+
+# mgmt has no OpenChoreo cell namespaces (#251).
+workloadResilience:
+  enabled: false

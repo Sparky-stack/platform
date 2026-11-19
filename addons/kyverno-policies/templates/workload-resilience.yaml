@@ -1,0 +1,69 @@
+{{- /*
+Production resilience of OpenChoreo components (#251, docs/openchoreo.md "Resilience defaults"). Two policies over the
+cell namespaces, split by their label openchoreo.dev/environment:
+  ValidatingPolicy openchoreo-workload-resilience-enforce   environments in workloadResilience.enforcedEnvironments: Deny
+  ValidatingPolicy openchoreo-workload-resilience-audit     every other environment: Audit (policy reports only)
+Checks: Deployments run >= 2 replicas (or declare a floor >= 2 in label resilience.platform.koorikla.io/min-replicas
+when an autoscaler owns spec.replicas; ClusterTrait resilience sets it), every container has a readinessProbe and cpu +
+memory requests; HorizontalPodAutoscalers (upstream trait, and the one KEDA creates for keda-scaler) keep >= 2.
+The PodDisruptionBudget is not an admission check: OpenChoreo applies it together with the Deployment in no fixed order,
+so it is guaranteed by construction (resilience is embedded in every Deployment component type) and asserted by
+hack/demo-check.sh. A denied Deployment shows up as an apply failure on the RenderedRelease.
+*/ -}}
+{{- $wr := .Values.workloadResilience }}
+{{- if $wr.enabled }}
+{{- $floor := "resilience.platform.koorikla.io/min-replicas" }}
+{{- range $action := list "Deny" "Audit" }}
+{{- $suffix := ternary "enforce" "audit" (eq $action "Deny") }}
+{{- $nsSelector := deepCopy $wr.cellNamespaceSelector }}
+{{- $op := ternary "In" "NotIn" (eq $action "Deny") }}
+{{- $_ := set $nsSelector "matchExpressions" (append ($nsSelector.matchExpressions | default list) (dict "key" "openchoreo.dev/environment" "operator" $op "values" $wr.enforcedEnvironments)) }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: openchoreo-workload-resilience-{{ $suffix }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Resilient workloads in OpenChoreo cells ({{ $op }} {{ join ", " $wr.enforcedEnvironments }})
+    policies.kyverno.io/description: >-
+      Deployments run at least 2 replicas with readiness probes and cpu/memory requests on every container;
+      HorizontalPodAutoscalers keep at least 2. Action {{ $action }}.
+spec:
+  validationActions: [{{ $action }}]
+  failurePolicy: {{ ternary "Fail" "Ignore" (eq $action "Deny") }}
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - { apiGroups: [apps], apiVersions: [v1], operations: [CREATE, UPDATE], resources: [deployments] }
+      - { apiGroups: [autoscaling], apiVersions: [v2], operations: [CREATE, UPDATE], resources: [horizontalpodautoscalers] }
+    namespaceSelector:
+      {{- toYaml $nsSelector | nindent 6 }}
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(request.namespace in {{ $.Values.platformNamespaces | toJson }})'
+  variables:
+    - name: isDeployment
+      expression: object.kind == 'Deployment'
+    - name: floor
+      expression: >-
+        has(object.metadata.labels) && '{{ $floor }}' in object.metadata.labels
+        && object.metadata.labels['{{ $floor }}'].matches('^[0-9]+$')
+        ? int(object.metadata.labels['{{ $floor }}']) : 0
+  validations:
+    - expression: '!variables.isDeployment || object.spec.replicas >= 2 || variables.floor >= 2'
+      message: >-
+        At least 2 replicas: set replicas: 2 (or more) in this environment's ReleaseBinding componentTypeEnvironmentConfigs
+        (with an autoscaler trait also its minReplicas).
+    - expression: '!variables.isDeployment || object.spec.template.spec.containers.all(c, has(c.readinessProbe))'
+      message: Every container needs a readinessProbe - attach ClusterTrait health-probes with readiness enabled.
+    - expression: >-
+        !variables.isDeployment || object.spec.template.spec.containers.all(c, has(c.resources) && has(c.resources.requests)
+        && 'cpu' in c.resources.requests && 'memory' in c.resources.requests)
+      message: Every container needs cpu and memory requests (componentTypeEnvironmentConfigs.resources.requests).
+    - expression: variables.isDeployment || (has(object.spec.minReplicas) && object.spec.minReplicas >= 2)
+      message: Autoscalers keep at least 2 replicas - set minReplicas (keda-scaler, horizontal-pod-autoscaler) to 2 or more.
+{{- end }}
+{{- end }}
