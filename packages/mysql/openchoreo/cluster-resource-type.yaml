@@ -1,0 +1,66 @@
+# OpenChoreo ClusterResourceType mysql - NOT DEPLOYED (status: layout). It lives here, not in
+# addons/openchoreo-platform/files/platform/cluster-resource-types/, because every file there renders into the chart
+# when dataServices.enabled and would offer an API no cluster runs yet. Enabling the API (follow-up issue) moves this
+# file there. Same shape as cluster-resource-types/postgresql.yaml: renders the platform's MySQL XR into the cell
+# namespace; plain values come from the XR's status, credentials stay on the data plane as secretKeyRefs to <name>-mysql.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterResourceType
+metadata:
+  name: mysql
+  annotations:
+    openchoreo.dev/display-name: MySQL
+    openchoreo.dev/description: >-
+      MySQL through the platform API (Crossplane MySQL XR): MOCO in-cluster, RDS / Cloud SQL / Azure Flexible Server in
+      the cloud, chosen by the cluster. Needs a data plane that runs addon crossplane.
+    platform.koorikla.io/requires-addons: crossplane
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties:
+        database:
+          type: string
+          default: app
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Database to create; the app user has the same name. Immutable.
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        size: { type: string, enum: [S, M, L], default: S }
+        storageGiB: { type: integer, minimum: 10, maximum: 16384, default: 10 }
+        highAvailability: { type: boolean, default: false }
+        deletionPolicy: { type: string, enum: [Retain, Delete], default: Retain }
+  retainPolicy: Retain
+  outputs:
+    - name: host
+      value: ${applied.mysql.status.endpoint}
+    - name: port
+      value: ${string(applied.mysql.status.port)}
+    - name: database
+      value: ${parameters.database}
+    - name: username
+      secretKeyRef: { name: "${metadata.name}-mysql", key: username }
+    - name: password
+      secretKeyRef: { name: "${metadata.name}-mysql", key: password }
+    - name: uri
+      secretKeyRef: { name: "${metadata.name}-mysql", key: uri }
+  resources:
+    - id: mysql
+      readyWhen: >-
+        ${has(applied.mysql.status.conditions)
+        && applied.mysql.status.conditions.exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: platform.koorikla.io/v1alpha1
+        kind: MySQL
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          database: ${parameters.database}
+          size: ${environmentConfigs.size}
+          storageGiB: ${environmentConfigs.storageGiB}
+          highAvailability: ${environmentConfigs.highAvailability}
+          deletionPolicy: ${environmentConfigs.deletionPolicy}

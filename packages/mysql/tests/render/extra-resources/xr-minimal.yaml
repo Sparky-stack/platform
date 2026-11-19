@@ -1,0 +1,10 @@
+# Facts of a sample moco cluster, as addons/crossplane will render them when the API is enabled (VERIFY: image pin).
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-mysql
+data:
+  backend: moco
+  cluster: sample
+  environment: development
+  mysqlImage: ghcr.io/cybozu-go/moco/mysql:8.4.10

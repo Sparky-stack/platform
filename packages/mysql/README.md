@@ -1,0 +1,69 @@
+# mysql: Crossplane Configuration package
+
+**Status: layout** (#241) - not installed on any cluster, not live-tested. The `moco` backend renders offline in CI;
+the cloud backends are skeletons that render but were never applied. Enable + live proof: follow-up issue (PR body).
+
+The platform's MySQL API (`platform.koorikla.io/v1alpha1 MySQL`, namespaced XR), same layout as
+[`packages/postgresql`](../postgresql/README.md) and [docs/crossplane.md](../../docs/crossplane.md): XRD + one
+Composition `mysql` dispatching on `$facts.backend` from the EnvironmentConfig `platform-mysql`.
+
+## Developer contract
+
+| Field | Default | Meaning |
+|---|---|---|
+| `version` | `8.4` | MySQL LTS |
+| `size` | `S` | `S` / `M` / `L` compute per instance |
+| `storageGiB` | `10` | grows, never shrinks |
+| `highAvailability` | `false` | 3 instances (MOCO semi-sync) / Multi-AZ / REGIONAL / zone-redundant |
+| `database` | `app` | database and app user name, immutable |
+| `deletionPolicy` | `Retain` | cloud: keep the database when the XR goes |
+
+Connection Secret `<name>-mysql` (`status.secretName`) in the XR's namespace, same keys on every backend:
+`host`, `port`, `database`, `username`, `password`, `uri` (`mysql://user:pass@host:3306/db`, `?tls=true` in cloud).
+The password is generated in-cluster (ESO Password generator) or by RDS (Secrets Manager); it never passes through
+the Crossplane pipeline.
+
+## Backends
+
+| `backend` | Composes | Facts |
+|---|---|---|
+| `moco` | MOCO `MySQLCluster`, ESO `Password` + `ExternalSecret`, a `Job` creating database + user | `mysqlImage` |
+| `aws-rds` | `rds.aws.m.upbound.io Instance` (engine mysql, managed master password) + ESO from Secrets Manager | `region`, `dbSubnetGroupName`, `securityGroupIds` |
+| `gcp-cloudsql` | `sql.gcp.m.upbound.io DatabaseInstance` (MYSQL_8_4, private IP), `Database`, `User` | `project`, `region`, `network` |
+| `azure-flexible` | `dbformysql.azure.m.upbound.io FlexibleServer` + `FlexibleDatabase` | `resourceGroupName`, `location`, `delegatedSubnetId`, `privateDnsZoneId` |
+
+Sample facts per backend: `tests/render/environment/`.
+
+## Local operator choice: MOCO
+
+- **Vitess (CNCF graduated) evaluated first, not chosen for the per-app API**: one database means a `VitessCluster`
+  with etcd topology, vtctld, vtgate, vttablet (mysqld + agent) and vtorc - five-plus pods and >1.5 GiB before data, too
+  heavy per XR on a k3d data plane, and apps connect through vtgate (MySQL protocol, but not every MySQL feature).
+  Vitess fits a later shared, sharded "MySQL platform" tier, not one small database per app.
+- **MOCO** ([cybozu-go/moco](https://github.com/cybozu-go/moco), Apache-2.0, maintained, production at Cybozu): one
+  `MySQLCluster` = 1 / 3 / 5 mysqld with semi-sync GTID replication, MySQL 8.4 images on ghcr.io, small footprint.
+  Gap: no database/user CRD, hence the init `Job` (idempotent SQL as `moco-admin`).
+- Also considered: Oracle MySQL Operator (InnoDB Cluster + Router, heavier, no user CRD), Percona Operator for MySQL
+  (PXC/Galera, 3 nodes + proxy), mariadb-operator (declarative users, but MariaDB is not MySQL 8.4).
+
+## VERIFY (before enabling)
+
+- MOCO: Secret `moco-<name>` key `ADMIN_PASSWORD`, primary Service `moco-<name>-primary`, `Healthy` condition, image
+  digest pin and cosign signature; PSS `restricted` for mysqld pods; aggregated RBAC for `MySQLCluster`/`Job`.
+- Cloud skeletons: field names against the provider CRDs (`crossplane resource validate` once rendered with observed
+  state), networking and IAM, Retain/deletion protection, backups, TLS enforcement.
+- OpenChoreo: `openchoreo/cluster-resource-type.yaml` is not deployed (see its header); file mounts for rotating
+  credentials in OpenChoreo 1.3.
+- Kyverno only-through-XR (deny raw `MySQLCluster` to tenants) and production HA rule: with the enable issue.
+
+## Release and developer loop
+
+As [`packages/postgresql`](../postgresql/README.md#release): `.github/workflows/package-mysql.yaml` (PR: validate +
+render against `tests/render/expected/`; main / `mysql-v*` tags: build, push `ghcr.io/koorikla/platform/mysql`, cosign
+sign), release-please component `mysql`.
+
+```bash
+PACKAGE_ROOT=packages/mysql bash ci/scripts/crossplane/validate-render.sh   # UPDATE_EXPECTED=true to accept
+cd packages/mysql && crossplane composition render examples/xr-production.yaml apis/mysql/composition.yaml \
+  tests/render/functions.yaml --xrd apis/mysql/definition.yaml --extra-resources tests/render/environment/aws-rds.yaml
+```

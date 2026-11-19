@@ -1,0 +1,11 @@
+# Production shape: HA, bigger instances, a named database.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: MySQL
+metadata:
+  name: billing-db
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  size: M
+  storageGiB: 50
+  highAvailability: true
+  database: billing

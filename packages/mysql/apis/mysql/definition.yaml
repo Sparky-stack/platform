@@ -1,0 +1,85 @@
+# The developer-facing MySQL API: one namespaced XR (Crossplane v2, no claims). The cluster decides the backend through
+# the EnvironmentConfig platform-mysql, read by the one Composition "mysql" (composition.yaml).
+# Contract, identical on every backend: Secret status.secretName (= <name>-mysql) in the XR's namespace with keys
+# host, port, database, username, password, uri. Status: layout (packages/mysql/README.md).
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: mysqls.platform.koorikla.io
+spec:
+  scope: Namespaced
+  group: platform.koorikla.io
+  names:
+    kind: MySQL
+    plural: mysqls
+    singular: mysql
+    categories: [platform]
+  defaultCompositionRef:
+    name: mysql
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - { name: Backend, type: string, jsonPath: .status.backend }
+        - { name: Endpoint, type: string, jsonPath: .status.endpoint }
+        - { name: Secret, type: string, jsonPath: .status.secretName }
+        - { name: Ready, type: string, jsonPath: '.status.conditions[?(@.type=="Ready")].status' }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                version:
+                  description: MySQL version (LTS). Upgrades only.
+                  type: string
+                  enum: ["8.4"]
+                  default: "8.4"
+                size:
+                  description: "S | M | L: compute of each instance (operator resources, RDS / Cloud SQL / Flexible Server class)."
+                  type: string
+                  enum: [S, M, L]
+                  default: S
+                storageGiB:
+                  description: Storage per instance in GiB. Can grow, never shrink.
+                  type: integer
+                  minimum: 10
+                  maximum: 16384
+                  default: 10
+                  x-kubernetes-validations:
+                    - { rule: self >= oldSelf, message: storageGiB can only grow }
+                highAvailability:
+                  description: 3 instances with semi-synchronous replication locally; Multi-AZ / REGIONAL / zone-redundant in cloud.
+                  type: boolean
+                  default: false
+                database:
+                  description: Database to create; the app user has the same name (username in the Secret). Immutable.
+                  type: string
+                  default: app
+                  maxLength: 32
+                  pattern: '^[a-z][a-z0-9_]*$'
+                  x-kubernetes-validations:
+                    - { rule: self == oldSelf, message: database is immutable }
+                    - rule: "!(self in ['mysql', 'sys', 'root', 'admin', 'rdsadmin', 'azure_superuser']) && !self.startsWith('moco')"
+                      message: database (also the username) must not be a reserved MySQL, operator or cloud name
+                deletionPolicy:
+                  description: Retain keeps the cloud database when the XR is deleted; Delete removes it.
+                  type: string
+                  enum: [Retain, Delete]
+                  default: Retain
+            status:
+              type: object
+              properties:
+                backend:
+                  description: moco | aws-rds | gcp-cloudsql | azure-flexible
+                  type: string
+                endpoint:
+                  type: string
+                port:
+                  type: integer
+                secretName:
+                  description: Connection Secret in this namespace (host, port, database, username, password, uri).
+                  type: string
