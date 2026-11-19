@@ -10,7 +10,11 @@
       "include-component-in-tag": false,
       "exclude-paths": [
         "ci",
-        "packages/postgresql"
+        "packages/postgresql",
+        "packages/mysql",
+        "packages/valkey",
+        "packages/bucket",
+        "packages/kafka-topic"
       ],
       "changelog-path": "CHANGELOG.md"
     },
@@ -22,6 +26,30 @@
     },
     "packages/postgresql": {
       "component": "postgresql",
+      "include-component-in-tag": true,
+      "tag-separator": "-",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/mysql": {
+      "component": "mysql",
+      "include-component-in-tag": true,
+      "tag-separator": "-",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/valkey": {
+      "component": "valkey",
+      "include-component-in-tag": true,
+      "tag-separator": "-",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/bucket": {
+      "component": "bucket",
+      "include-component-in-tag": true,
+      "tag-separator": "-",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/kafka-topic": {
+      "component": "kafka-topic",
       "include-component-in-tag": true,
       "tag-separator": "-",
       "changelog-path": "CHANGELOG.md"

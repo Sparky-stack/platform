@@ -1,0 +1,36 @@
+# The one Composition of the bucket API: a three-step pipeline, the same on every cluster.
+#   1. environment: function-environment-configs loads the cluster's facts, EnvironmentConfig platform-bucket.
+#   2. compose-bucket: the project's embedded go-templating function, functions/compose-bucket/ - one template file per
+#      composed object, Helm-style (00-prelude.yaml.gotmpl: facts, backend check, derived values; then
+#      <backend>-<object>.yaml.gotmpl, each rendering only when $backend matches). Backends: rustfs | aws-s3 | gcp-storage | azure-blob.
+#   3. ready: function-auto-ready derives the XR's readiness.
+# Function names: the upstream Functions as addons/crossplane installs them (tests/render/functions.yaml); the
+# embedded one under its package-derived name (validate-render.sh builds and adds it for render tests).
+# Status: layout. rustfs is render-tested offline; cloud templates are skeletons (VERIFY: never applied).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: bucket
+spec:
+  compositeTypeRef:
+    apiVersion: platform.koorikla.io/v1alpha1
+    kind: Bucket
+  mode: Pipeline
+  pipeline:
+    - step: environment
+      functionRef:
+        name: function-environment-configs
+      input:
+        apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          environmentConfigs:
+            - type: Reference
+              ref:
+                name: platform-bucket
+    - step: compose-bucket
+      functionRef:
+        name: koorikla-platform-bucketcompose-bucket
+    - step: ready
+      functionRef:
+        name: function-auto-ready

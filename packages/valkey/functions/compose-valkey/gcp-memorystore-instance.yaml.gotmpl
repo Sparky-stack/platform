@@ -1,0 +1,27 @@
+{{- /* gcp-memorystore skeleton: Memorystore for Valkey over Private Service Connect, IAM auth (app identity needs roles/memorystore.dbConnectionUser), TLS. VERIFY: never applied. */}}
+{{- if eq $backend "gcp-memorystore" }}
+---
+apiVersion: memorystore.gcp.m.upbound.io/v1beta1
+kind: Instance
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "instance" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    project: {{ $facts.project }}
+    location: {{ $facts.region }}
+    engineVersion: VALKEY_8_0
+    nodeType: {{ get (dict "S" "SHARED_CORE_NANO" "M" "STANDARD_SMALL" "L" "HIGHMEM_MEDIUM") $size }}
+    shardCount: 1
+    replicaCount: {{ ternary 1 0 $ha }}
+    authorizationMode: IAM_AUTH
+    transitEncryptionMode: SERVER_AUTHENTICATION
+    deletionProtectionEnabled: {{ $retain }}
+    engineConfigs: { maxmemory-policy: {{ $policy }} }
+    pscAutoConnections:
+      - { network: {{ $facts.network }}, projectId: {{ $facts.project }} }
+{{- end }}

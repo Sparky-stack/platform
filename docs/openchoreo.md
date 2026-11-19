@@ -169,11 +169,37 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 | `platform`, key `openchoreo` | properties `thunder-admin-password`, `admin-user-password`, `developer-user-password`, `backstage-client-secret`, `backstage-backend-secret`, `service-mcp-client-secret` (alphanumeric; seeded by `task secrets` locally, created by the operator in aws/vault) |
 | `mgmt-fleet` (ns fleet, read-only) | `<name>-agent-tls` -> CRS payload `<name>-openchoreo-agent` (ExternalSecret in ns fleet) |
 | `mgmt-openchoreo` (ns openchoreo-control-plane, read-only) | `cluster-gateway-ca` (`ca.crt` only) -> CRS payload `openchoreo-gateway-ca` (ExternalSecret in ns **fleet**) |
-| `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; app secrets (OpenChoreo `SecretReference`s) |
+| `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; platform secrets on the data plane. Refuses tenant (cell) namespaces when `secrets.tenantStores.enabled` |
+| `SecretStore openbao-tenant` (each cell namespace) | app secrets: OpenChoreo `SecretReference`s, read from the project's own OpenBao mount `kv-tenant-<project>` ([below](#application-secrets-developer-view)) |
 
 Thunder users: `admin@openchoreo.dev` (group `admins` -> OpenChoreo role admin) and `developer@openchoreo.dev`
 (group `developers` -> role developer), passwords from the `openchoreo` key. Thunder console: user `admin`,
 `thunder-admin-password`.
+
+### Application secrets (developer view)
+A value lives in OpenBao, git holds only a pointer to it (`SecretReference`), and the Workload names the pointer.
+Worked example: hello-world `GREETING_SECRET` (`deploy/openchoreo/greeting-secret.yaml` + `workload.yaml`).
+
+1. **Write the value** to your project's mount `kv-tenant-<project>` with the project's writer identity
+   (`openbao-tenants/<project>-writer`, never root): command in
+   [multicluster.md](multicluster.md#tenant-secrets-openbao) "Writing a secret". One mount per project, shared by its
+   environments: use different keys (`hello-world` vs `hello-world-prod`) when values differ per environment.
+2. **Point at it** from the app repo: `SecretReference` with `data[].secretKey` (the key in the Kubernetes Secret)
+   and `remoteRef.key` / `.property` (path and field *inside your own mount*; never a mount name or a store; there is
+   no store field). Synced by the app's Argo CD Application like the Workload.
+3. **Consume it** in `workload.yaml`: `env[].valueFrom.secretKeyRef: {name: <SecretReference>, key: <secretKey>}`
+   (or `files[].valueFrom.secretKeyRef` for a file). OpenChoreo checks the key exists in the SecretReference.
+4. **What the platform renders**: in each cell namespace an `ExternalSecret` (`refreshInterval: 15s`, set by the
+   component type, which ignores `SecretReference.spec.refreshInterval`) on that namespace's `SecretStore
+   openbao-tenant`, and the Deployment takes the Secret via `envFrom`. `task demo:check` row `app-secret` asserts it.
+5. **Rotate**: write a new version (step 1). The Kubernetes Secret follows within ~15 s, but env vars and files
+   (mounted with `subPath`) are read at container start: roll the pods
+   ([runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)).
+
+Isolation: the store is fixed by the platform, a tenant `ExternalSecret`/`SecretStore` is rejected on the data plane
+(VAP, addon secret-stores) and cannot be synced from an app repo (tenant AppProject), and OpenBao answers a cell
+namespace only from `kv-tenant-<its project>`. A `remoteRef.key` naming another project's path still resolves inside
+your own mount (ESO prefixes the store's mount), and OpenBao would deny it anyway. Tests: `hack/tests/test_tenant_app_secrets.sh`, `task test:openbao`.
 
 ## Adding a data plane
 
@@ -316,8 +342,48 @@ ComponentRelease and ReleaseBinding manifests and open a PR). A ComponentRelease
 so it is meant to be generated (workflow plane or `occ`), not hand-written. `ComponentRelease` is in the tenant
 whitelist for that reason.
 
-Secrets: declare an OpenChoreo `SecretReference` (remote key in the data plane's `default` store) and reference it
-from `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values.
+Secrets: declare an OpenChoreo `SecretReference` (key inside the project's OpenBao mount) and reference it from
+`workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values. Step by step:
+[Application secrets](#application-secrets-developer-view).
+
+## Resilience defaults
+
+Developers set nothing: every Deployment component type (`deployment/service`, `deployment/web-application`,
+`deployment/worker`) embeds the platform ClusterTrait `resilience` (addon openchoreo-platform,
+`files/platform/cluster-traits/resilience.yaml`, #251). It reads the environment name and the component's `replicas`.
+
+| Default | development / previews | staging | production |
+|---|---|---|---|
+| topologySpreadConstraints, nodes + zones, maxSkew 1, `matchLabelKeys: [pod-template-hash]` | ScheduleAnyway | ScheduleAnyway | ScheduleAnyway (zones: knob) |
+| PodDisruptionBudget `maxUnavailable: 1`, `unhealthyPodEvictionPolicy: AlwaysAllow` | - | when replicas >= 2 | when replicas >= 2 |
+| `preStop: sleep 5s`, `terminationGracePeriodSeconds: 30` | yes | yes | yes |
+| PriorityClass (addon openchoreo-data-plane) | `app-standard` (1000, never preempts) | `app-standard` | `app-production` (100000) |
+| Kyverno `openchoreo-workload-resilience-*` | Audit | Audit | **Deny** |
+
+What developers still choose:
+
+| Need | Where |
+|---|---|
+| readiness / liveness / startup probes | ClusterTrait `health-probes` on the Component (required in production) |
+| replicas, cpu/memory requests | ReleaseBinding `componentTypeEnvironmentConfigs` (production: replicas >= 2, requests set) |
+| autoscaling | ClusterTrait `keda-scaler` or `horizontal-pod-autoscaler`; production minReplicas >= 2 |
+| hard zone spread (multi-zone data planes only) | `componentTypeEnvironmentConfigs.resilience.zoneSpread: DoNotSchedule` |
+| dedicated node pool | `componentTypeEnvironmentConfigs.resilience.nodePool: <pool>` (nodes labelled `platform.koorikla.io/node-pool`) |
+| slower shutdown | `resilience.terminationGracePeriodSeconds`, `resilience.preStopSleepSeconds` |
+
+Why spread and not podAntiAffinity: required anti-affinity caps a component at one pod per node and blocks rollouts
+on small clusters; preferred anti-affinity is all-or-nothing scoring. A skew of 1 spreads any replica count evenly and
+`matchLabelKeys` keeps the old ReplicaSet out of the new one's maths. Zones stay ScheduleAnyway by default because
+nodes without `topology.kubernetes.io/zone` (k3d, single-zone clouds) are not eligible at all under DoNotSchedule.
+The preStop sleep keeps a terminating pod serving while the endpoints and the gateway drop it (native sleep action,
+no shell in the image needed).
+
+Production enforcement (addon kyverno-policies `templates/workload-resilience.yaml`): Deployments need >= 2 replicas
+(autoscaled ones state their floor in label `resilience.platform.koorikla.io/min-replicas`, set by the trait),
+a readinessProbe and cpu + memory requests on every container; HorizontalPodAutoscalers (also KEDA's) minReplicas >= 2.
+A denial shows up as an apply failure on the RenderedRelease. The PDB itself is not an admission check (OpenChoreo
+applies it together with the Deployment, in no fixed order): it exists by construction and `task demo:check`
+(row "hello-world PDB/spread/priority in production") asserts it.
 
 ## Known issue: re-created data plane clusters
 

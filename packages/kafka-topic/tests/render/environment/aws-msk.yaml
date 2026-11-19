@@ -1,0 +1,10 @@
+# Sample facts of a aws-msk cluster (fake ids): the keys the aws-msk block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-kafka-topic
+data:
+  backend: aws-msk
+  cluster: sample
+  environment: development
+  bootstrapServers: b-1.sample.kafka.eu-north-1.amazonaws.com:9098

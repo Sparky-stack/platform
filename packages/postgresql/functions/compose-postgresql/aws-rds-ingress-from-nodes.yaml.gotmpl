@@ -1,0 +1,22 @@
+{{- /* aws-rds: ingress 5432 from the cluster node security group only. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroupIngressRule
+metadata:
+  name: {{ $name }}-db-from-nodes
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: ingress-from-nodes
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    securityGroupIdRef:
+      name: {{ $name }}-db
+    referencedSecurityGroupId: {{ $facts.nodeSecurityGroupId }}
+    ipProtocol: tcp
+    fromPort: 5432
+    toPort: 5432
+    tags: {{ toJson $tags }}
+{{- end }}

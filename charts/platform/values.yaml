@@ -87,8 +87,11 @@ addons:
   kgateway:                 { namespace: kgateway-system,          roles: [mgmt, workload], default: true }
   thunder:                  { namespace: thunder,                  roles: [mgmt],           default: true }
   openchoreo-control-plane: { namespace: openchoreo-control-plane, roles: [mgmt], default: true, installationParameters: { openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}', openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}' } }
-  openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true }   # OC platform CRs
-  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' }, clusterLabelParameters: { capabilityGate.addons.keda.enabled: { label: addons.platform.koorikla.io/keda, default: "false" } } }   # capability gate: agent starts after KEDA's CRDs (#246)
+  # compareOptions IncludeMutationWebhook=true: every addon rendering Argo Workflows objects (ClusterWorkflowTemplate,
+  # WorkflowTemplate, CronWorkflow). Their CRD spec is atomic + preserve-unknown; Argo CD's server-side diff would
+  # otherwise report Synced while the live spec stays old (#184). hack/tests/test_argocd_compare_options.sh enforces it.
+  openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true, compareOptions: [IncludeMutationWebhook=true] }   # OC platform CRs
+  openchoreo-data-plane:    { namespace: openchoreo-data-plane,    roles: [workload],       default: true, clusterNameParameters: [openchoreo-data-plane.clusterAgent.planeID], installationParameters: { openchoreo-data-plane.clusterAgent.serverUrl: '{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}' }, clusterLabelParameters: { capabilityGate.addons.keda.enabled: { label: addons.platform.koorikla.io/keda, default: "false" }, capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" } } }   # capability gate: agent starts after the CRDs traits/resource types render (#246, #255)
   reloader:                 { namespace: reloader,                 roles: [mgmt, workload], default: true }   # workload: cluster-agent on cert/CA renewal; mgmt: Backstage on config change
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }
@@ -108,7 +111,7 @@ addons:
   # Platform event receiver on mgmt (docs/promotion.md, docs/observability.md "Falco response"): Falco escalation
   # webhook + OpenChoreo rollout events -> falco-response workflow / promotion gate. The workflow objects (WorkflowTemplate,
   # Sensors) render once the workflow plane's Argo Workflows CRDs exist (addon openchoreo-workflow-plane, workflowPlane: auto).
-  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true, fleetParameters: [falco.clusters] }
+  argo-events:              { namespace: argo-events,              roles: [mgmt],           default: true, fleetParameters: [falco.clusters], compareOptions: [IncludeMutationWebhook=true] }
   # Networking (docs/networking.md). cilium: opt-in by label, which charts/cluster derives from the fleet file's `cni`;
   # it reaches the API server without kube-proxy via the cluster secret's server (clusterServerParameters).
   cilium:                   { namespace: kube-system,              roles: [workload],       default: false, clusterServerParameters: { cilium.k8sServiceHost: host, cilium.k8sServicePort: port } }
@@ -141,7 +144,7 @@ addons:
   # Build plane (docs/build-plane.md): OpenChoreo workflow plane (in-cluster builds, primary path) and the Harbor
   # registry builds push to and nodes pull through. harbor is for installation.yaml registry.type harbor (examples set
   # mgmt.addons.harbor "false"); externalURL follows registry.host.
-  openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true }
+  openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true, compareOptions: [IncludeMutationWebhook=true] }
   harbor:                   { namespace: harbor,                   roles: [mgmt],           default: true, installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }
   # Data services (docs/data-services.md): opt-in per cluster (label addons.platform.koorikla.io/<addon>: "true", i.e.
   # cluster file `addons: { <addon>: true }`); nothing is generated for clusters that do not opt in, so local docker

@@ -48,14 +48,34 @@ clusterAgentDataServices:
 # boot races: OpenChoreo applies hello-world's KEDA ScaledObject before addon keda exists, the apply fails and OpenChoreo
 # 1.3.3 retries only on controller-runtime's exponential backoff (capped at 1000 s), so development served ~17 min late.
 capabilityGate:
-  # -- Agent start gate (`capabilityGate.{image,addons.<addon>.{enabled,crds}}`): an Argo CD sync hook in wave -1 waits until every CRD of each enabled addon is Established ([data services](../../docs/data-services.md#keda-and-openchoreo-workloads)).
+  # -- Agent start gate (`capabilityGate.{image,timeout,addons.<addon>.{enabled,crds}}`): an Argo CD sync hook in wave -1 waits until every CRD of each enabled addon is Established ([data services](../../docs/data-services.md#keda-and-openchoreo-workloads)).
   image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
+  # Per addon: how long one init container waits before the hook fails loudly and Argo CD retries the sync. Covers a
+  # Crossplane Configuration package pull (~20 min after the agent on a fresh local bootstrap, #255).
+  timeout: 30m
   addons:
     keda:
       # "true" where the cluster runs addon keda: charts/platform clusterLabelParameters copies the cluster secret label
       # addons.platform.koorikla.io/keda (the fleet file's opt-in, the same fact the ClusterDataPlane annotation carries).
       enabled: "false"
       crds: [scaledobjects.keda.sh]   # ClusterTrait keda-scaler (checked by hack/tests/test_openchoreo_types.sh)
+    crossplane:
+      # Label addons.platform.koorikla.io/crossplane. The XRD comes from the Configuration package crossplane installs
+      # after it is Healthy, so this wait also covers the package pull; a failed package keeps the agent waiting here.
+      enabled: "false"
+      crds: [postgresqls.platform.koorikla.io]   # ClusterResourceType postgresql
+
+# PriorityClasses ClusterTrait resilience assigns (templates/priority-classes.yaml, #251). Names are referenced by the
+# trait (addon openchoreo-platform files/platform/cluster-traits/resilience.yaml): rename both together.
+priorityClasses:
+  app-production:
+    value: 100000
+    preemptionPolicy: PreemptLowerPriority
+    description: OpenChoreo components in the production environment (ClusterTrait resilience).
+  app-standard:
+    value: 1000
+    preemptionPolicy: Never   # non-production never evicts anything to get scheduled
+    description: OpenChoreo components outside production (ClusterTrait resilience).
 
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy

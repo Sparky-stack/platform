@@ -1,0 +1,10 @@
+# Production shape: HA, bigger nodes, cache eviction.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Valkey
+metadata:
+  name: billing-cache
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  size: M
+  highAvailability: true
+  maxmemoryPolicy: allkeys-lru

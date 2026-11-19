@@ -1,9 +1,13 @@
-{{- /* Platform-owned OpenChoreo types for the data-service addons (#70, files/platform/, docs/data-services.md):
-ClusterTrait keda-scaler and ClusterResourceType postgresql. Each needs operators on the data plane
+{{- /* Platform-owned OpenChoreo types (files/platform/). ClusterTrait resilience (#251, docs/openchoreo.md "Resilience
+defaults") is embedded in the Deployment component types by templates/upstream-defaults.yaml (resilience.enabled).
+The data-service types (#70, docs/data-services.md, dataServices.enabled): ClusterTrait keda-scaler and
+ClusterResourceType postgresql. Each needs operators on the data plane
 (platform.koorikla.io/requires-addons): keda-scaler checks dataplane.annotations itself, postgresql bindings are checked
 at admission (addon kyverno-policies platform-data-plane-capabilities). Cluster-scoped. */ -}}
-{{- if .Values.dataServices.enabled }}
 {{- range $path, $_ := .Files.Glob "files/platform/*/*.yaml" }}
+{{- $enabled := $.Values.dataServices.enabled }}
+{{- if eq (base $path) "resilience.yaml" }}{{ $enabled = $.Values.resilience.enabled }}{{ end }}
+{{- if $enabled }}
 ---
 # Source: {{ $.Chart.Name }}/{{ $path }}
 {{- $obj := $.Files.Get $path | fromYaml }}

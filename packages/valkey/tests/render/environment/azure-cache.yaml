@@ -1,0 +1,11 @@
+# Sample facts of a azure-cache cluster (fake ids): the keys the azure-cache block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-valkey
+data:
+  backend: azure-cache
+  cluster: sample
+  environment: development
+  resourceGroupName: sample-rg
+  location: northeurope

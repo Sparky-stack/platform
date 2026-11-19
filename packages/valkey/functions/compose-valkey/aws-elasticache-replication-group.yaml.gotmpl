@@ -1,0 +1,28 @@
+{{- /* aws-elasticache skeleton: ElastiCache for Valkey, TLS in transit, AUTH token from <name>-valkey (user default), Multi-AZ replica for HA. VERIFY: never applied; IAM auth instead of the token. */}}
+{{- if eq $backend "aws-elasticache" }}
+---
+apiVersion: elasticache.aws.m.upbound.io/v1beta1
+kind: ReplicationGroup
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "replication-group" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    description: {{ printf "%s/%s" $ns $name }}
+    engine: valkey
+    engineVersion: "8.0"
+    nodeType: {{ get (dict "S" "cache.t4g.small" "M" "cache.m7g.large" "L" "cache.r7g.large") $size }}
+    numCacheClusters: {{ ternary 2 1 $ha }}
+    automaticFailoverEnabled: {{ $ha }}
+    multiAzEnabled: {{ $ha }}
+    transitEncryptionEnabled: true
+    atRestEncryptionEnabled: true
+    authTokenSecretRef: { name: {{ $name }}-valkey, key: password }
+    subnetGroupName: {{ $facts.subnetGroupName }}
+    securityGroupIds: {{ toJson $facts.securityGroupIds }}
+{{- end }}

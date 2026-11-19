@@ -1,0 +1,122 @@
+# Platform ClusterTrait resilience (#251, docs/openchoreo.md "Resilience defaults"): production-grade pod scheduling and
+# shutdown for every Deployment-based component. Developers never attach it: templates/upstream-defaults.yaml embeds it
+# in the service / web-application / worker component types and binds its environmentConfigs to the component type's
+# (replicas, resilience.*), so the defaults below apply in every environment unless a ReleaseBinding overrides them.
+#
+#   everywhere           topologySpreadConstraints over nodes and zones (maxSkew 1, best effort), preStop sleep +
+#                        terminationGracePeriodSeconds (the gateway stops routing before the process gets SIGTERM)
+#   staging, production  PodDisruptionBudget maxUnavailable 1 when replicas >= 2 (a drain never takes all pods)
+#   production           PriorityClass app-production (preempts non-production pods); elsewhere app-standard
+#                        (both shipped to every data plane by addon openchoreo-data-plane)
+#
+# The label resilience.platform.koorikla.io/min-replicas states the replica floor the component asked for: autoscaler
+# traits remove spec.replicas, and the production policy (addon kyverno-policies workload-resilience) reads the floor
+# from here instead of the Deployment's defaulted 1.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterTrait
+metadata:
+  name: resilience
+  annotations:
+    openchoreo.dev/display-name: Resilience defaults
+    openchoreo.dev/description: Topology spread, PodDisruptionBudget, graceful shutdown and priority per environment
+spec:
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          default: 1
+          minimum: 0
+          description: The component type's replicas (bound by the component type, not set here).
+        zoneSpread:
+          type: string
+          enum: [ScheduleAnyway, DoNotSchedule]
+          default: ScheduleAnyway
+          description: >-
+            DoNotSchedule keeps replicas in different zones even if that leaves a pod Pending. Only on data planes whose
+            nodes carry topology.kubernetes.io/zone: nodes without the label are not eligible at all.
+        nodePool:
+          type: string
+          default: ""
+          description: Opt-in dedicated node pool (nodes labelled platform.koorikla.io/node-pool=<value>).
+        terminationGracePeriodSeconds:
+          type: integer
+          default: 30
+          minimum: 1
+        preStopSleepSeconds:
+          type: integer
+          default: 5
+          minimum: 0
+          description: Seconds a terminating pod keeps serving while endpoints and the gateway drop it.
+
+  creates:
+    - includeWhen: ${metadata.environmentName in ["staging", "production"] && environmentConfigs.replicas >= 2}
+      template:
+        apiVersion: policy/v1
+        kind: PodDisruptionBudget
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          maxUnavailable: 1
+          # A crash-looping pod must never block a node drain (the default IfHealthyBudget can).
+          unhealthyPodEvictionPolicy: AlwaysAllow
+          selector:
+            matchLabels: ${metadata.podSelectors}
+
+  patches:
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+      operations:
+        # Spread instead of podAntiAffinity: it scales past one pod per node, has a skew instead of all-or-nothing, and
+        # matchLabelKeys pod-template-hash keeps a rollout's new ReplicaSet from being skewed by the old one.
+        - op: add
+          path: /spec/template/spec/topologySpreadConstraints
+          value:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels: ${metadata.podSelectors}
+              matchLabelKeys: [pod-template-hash]
+            - maxSkew: 1
+              topologyKey: topology.kubernetes.io/zone
+              whenUnsatisfiable: ${environmentConfigs.zoneSpread}
+              labelSelector:
+                matchLabels: ${metadata.podSelectors}
+              matchLabelKeys: [pod-template-hash]
+        - op: add
+          path: /spec/template/spec/priorityClassName
+          value: '${metadata.environmentName == "production" ? "app-production" : "app-standard"}'
+        - op: add
+          path: /spec/template/spec/terminationGracePeriodSeconds
+          value: ${environmentConfigs.terminationGracePeriodSeconds}
+        - op: add
+          path: /spec/template/spec/containers/[?(@.name=='main')]/lifecycle
+          value:
+            preStop:
+              sleep:
+                seconds: ${environmentConfigs.preStopSleepSeconds}
+        - op: add
+          path: /metadata/labels/resilience.platform.koorikla.io~1min-replicas
+          value: ${string(environmentConfigs.replicas)}
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+        where: ${environmentConfigs.nodePool != ""}
+      operations:
+        - op: add
+          path: /spec/template/spec/affinity
+          value:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: platform.koorikla.io/node-pool
+                        operator: In
+                        values: ["${environmentConfigs.nodePool}"]

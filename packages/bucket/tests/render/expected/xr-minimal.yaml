@@ -1,0 +1,236 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Bucket
+metadata:
+  name: uploads
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: uploads-bucket
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: uploads-rustfs-admin
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: uploads-rustfs-admin
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: uploads-rustfs-app
+    - apiVersion: rustfs.com/v1alpha1
+      kind: Tenant
+      name: uploads
+    - apiVersion: v1
+      kind: ConfigMap
+      name: uploads-bucket-policy
+status:
+  backend: rustfs
+  bucket: bk-dp-default-shop-development-1a-e4ffee91
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: admin-secret, connection-secret, and tenant'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: http://uploads-io.dp-default-shop-development-1a2b3c4d.svc:9000
+  secretName: uploads-bucket
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: admin-secret
+  labels:
+    crossplane.io/composite: uploads
+  name: uploads-rustfs-admin
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: uploads-rustfs-admin
+  refreshPolicy: CreatedOnce
+  target:
+    name: uploads-rustfs-admin
+    template:
+      data:
+        accesskey: admin
+        secretkey: '{{ .password }}'
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: uploads
+  name: uploads-bucket
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: uploads-rustfs-app
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: uploads-bucket
+    template:
+      data:
+        accessKeyId: app
+        bucket: bk-dp-default-shop-development-1a-e4ffee91
+        endpoint: http://uploads-io.dp-default-shop-development-1a2b3c4d.svc:9000
+        region: us-east-1
+        secretAccessKey: '{{ .password }}'
+      engineVersion: v2
+      metadata:
+        labels:
+          rustfs.tenant: uploads
+      type: Opaque
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-admin
+  labels:
+    crossplane.io/composite: uploads
+  name: uploads-rustfs-admin
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+spec:
+  allowRepeat: true
+  digits: 10
+  length: 40
+  noUpper: false
+  symbols: 0
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-app
+  labels:
+    crossplane.io/composite: uploads
+  name: uploads-rustfs-app
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+spec:
+  allowRepeat: true
+  digits: 10
+  length: 40
+  noUpper: false
+  symbols: 0
+---
+apiVersion: v1
+data:
+  policy.json: |
+    {"Version": "2012-10-17", "Statement": [
+      {"Effect": "Allow", "Action": ["s3:GetBucketLocation", "s3:ListBucket", "s3:ListBucketVersions"], "Resource": ["arn:aws:s3:::bk-dp-default-shop-development-1a-e4ffee91"]},
+      {"Effect": "Allow", "Action": ["s3:GetObject*", "s3:PutObject*", "s3:DeleteObject*", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"], "Resource": ["arn:aws:s3:::bk-dp-default-shop-development-1a-e4ffee91/*"]}]}
+kind: ConfigMap
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: policy
+  labels:
+    crossplane.io/composite: uploads
+    rustfs.tenant: uploads
+  name: uploads-bucket-policy
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Tenant
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tenant
+  labels:
+    crossplane.io/composite: uploads
+  name: uploads
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Bucket
+    name: uploads
+    uid: aa45f847-f9d7-5e21-a708-524c4f359293
+spec:
+  buckets:
+  - name: bk-dp-default-shop-development-1a-e4ffee91
+    versioning: false
+  credsSecret:
+    name: uploads-rustfs-admin
+  image: rustfs/rustfs:1.0.0-alpha.60
+  policies:
+  - document:
+      configMapKeyRef:
+        key: policy.json
+        name: uploads-bucket-policy
+    name: uploads-readwrite
+  pools:
+  - name: pool-0
+    persistence:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+      volumesPerServer: 1
+    servers: 1
+  users:
+  - name: app
+    policies:
+    - uploads-readwrite
+    secret:
+      accessKeyKey: accessKeyId
+      name: uploads-bucket
+      secretKeyKey: secretAccessKey

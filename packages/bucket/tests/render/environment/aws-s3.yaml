@@ -1,0 +1,10 @@
+# Sample facts of a aws-s3 cluster (fake ids): the keys the aws-s3 block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-bucket
+data:
+  backend: aws-s3
+  cluster: sample
+  environment: development
+  region: eu-north-1

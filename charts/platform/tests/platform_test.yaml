@@ -156,6 +156,25 @@ tests:
       - equal: { path: spec.template.spec.syncPolicy.retry.refresh, value: true }
         template: tenants.yaml
 
+  - it: addons rendering Argo Workflows objects diff with IncludeMutationWebhook (#184), others carry no compare options
+    template: appset-addons.yaml
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["argocd.argoproj.io/compare-options"]
+          value: IncludeMutationWebhook=true
+        documentSelector: { path: metadata.name, value: addon-openchoreo-workflow-plane }
+      - equal:
+          path: spec.template.metadata.annotations["argocd.argoproj.io/compare-options"]
+          value: IncludeMutationWebhook=true
+        documentSelector: { path: metadata.name, value: addon-openchoreo-platform }
+      - equal:
+          path: spec.template.metadata.annotations["argocd.argoproj.io/compare-options"]
+          value: IncludeMutationWebhook=true
+        documentSelector: { path: metadata.name, value: addon-argo-events }
+      - notExists:
+          path: spec.template.metadata.annotations
+        documentSelector: { path: metadata.name, value: addon-thunder }
+
   - it: renders catalog ApplicationSets including clusterNameParameters and serverSideDiff
     template: appset-addons.yaml
     asserts:
@@ -210,7 +229,7 @@ tests:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
 
   # --- catalog clusterLabelParameters (templates/appset-addons.yaml) ----------------------------------------------
-  - it: "openchoreo-data-plane gets the cluster's keda opt-in, so its capability gate waits for KEDA's CRDs (#246)"
+  - it: "openchoreo-data-plane gets the cluster's keda and crossplane opt-ins, so its capability gate waits for their CRDs (#246, #255)"
     template: appset-addons.yaml
     documentSelector: { path: metadata.name, value: addon-openchoreo-data-plane }
     asserts:
@@ -219,6 +238,12 @@ tests:
           content:
             name: capabilityGate.addons.keda.enabled
             value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/keda" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
+            forceString: true
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: capabilityGate.addons.crossplane.enabled
+            value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/crossplane" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
             forceString: true
 
   - it: "clusterLabelParameters: label value else default, always a string"

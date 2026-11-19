@@ -1,0 +1,135 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Valkey
+metadata:
+  name: sessions
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: sessions-valkey
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: sessions-valkey-password
+    - apiVersion: valkey.io/v1alpha1
+      kind: ValkeyCluster
+      name: sessions
+status:
+  backend: valkey-operator
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster, connection-secret'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: sessions.dp-default-shop-development-1a2b3c4d.svc
+  port: 6379
+  secretName: sessions-valkey
+  tls: false
+---
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+  labels:
+    crossplane.io/composite: sessions
+  name: sessions
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: sessions
+    uid: d6a1e191-8d24-5a23-a6ac-7335f626b08a
+spec:
+  acl:
+    users:
+    - name: default
+      state: Disabled
+    - name: app
+      password:
+        secret:
+          keys:
+          - password
+          name: sessions-valkey
+        type: Secret
+      permissions: +@all -@admin -@dangerous ~* &*
+  config:
+    maxmemory-policy: noeviction
+  replicas: 0
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 512Mi
+  shards: 1
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: sessions
+  name: sessions-valkey
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: sessions
+    uid: d6a1e191-8d24-5a23-a6ac-7335f626b08a
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: sessions-valkey-password
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: sessions-valkey
+    template:
+      data:
+        password: '{{ .password }}'
+        username: app
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-generator
+  labels:
+    crossplane.io/composite: sessions
+  name: sessions-valkey-password
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: sessions
+    uid: d6a1e191-8d24-5a23-a6ac-7335f626b08a
+spec:
+  allowRepeat: true
+  digits: 8
+  length: 32
+  noUpper: false
+  symbols: 0

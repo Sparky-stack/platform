@@ -1,0 +1,45 @@
+{{- /* aws-rds: RDS for PostgreSQL Instance (spec.engine postgres; Multi-AZ when highAvailability). */}}
+{{- if and (eq $backend "aws-rds") (not $aurora) }}
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Instance
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: instance
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    engine: postgres
+    engineVersion: {{ $version | quote }}     # major only: RDS picks the default minor, autoMinorVersionUpgrade keeps it current
+    autoMinorVersionUpgrade: true
+    instanceClass: {{ $class }}
+    multiAz: {{ $ha }}
+    allocatedStorage: {{ $storage }}
+    maxAllocatedStorage: {{ mul $storage 2 }}
+    storageType: gp3
+    storageEncrypted: true
+    kmsKeyIdRef:
+      name: {{ $name }}-storage
+    dbName: {{ $db }}
+    username: {{ $db }}
+    manageMasterUserPassword: true
+    iamDatabaseAuthenticationEnabled: true
+    dbSubnetGroupNameRef:
+      name: {{ $name }}
+    vpcSecurityGroupIdRefs:
+      - name: {{ $name }}-db
+    publiclyAccessible: false
+    port: 5432
+    backupRetentionPeriod: {{ $retentionPeriod }}
+    copyTagsToSnapshot: true
+    deletionProtection: {{ $retain }}
+    skipFinalSnapshot: {{ not $backup }}
+    {{- if $backup }}
+    finalSnapshotIdentifier: {{ $id }}-final
+    {{- end }}
+    tags: {{ toJson $tags }}
+{{- end }}

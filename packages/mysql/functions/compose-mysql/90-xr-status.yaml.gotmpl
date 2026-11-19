@@ -1,0 +1,9 @@
+{{- /* The XR's status, every backend: the developer contract's plain values. */}}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: MySQL
+status:
+  backend: {{ $backend }}
+  endpoint: {{ $host }}
+  port: 3306
+  secretName: {{ $name }}-mysql

@@ -1,0 +1,13 @@
+# Sample facts of a azure-flexible cluster (fake ids): the keys the azure-flexible block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-mysql
+data:
+  backend: azure-flexible
+  cluster: sample
+  environment: development
+  resourceGroupName: sample-rg
+  location: northeurope
+  delegatedSubnetId: /subscriptions/0000/resourceGroups/sample-rg/providers/Microsoft.Network/virtualNetworks/sample/subnets/mysql
+  privateDnsZoneId: /subscriptions/0000/resourceGroups/sample-rg/providers/Microsoft.Network/privateDnsZones/sample.mysql.database.azure.com

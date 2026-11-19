@@ -1,0 +1,19 @@
+{{- /* aws-rds: DB SubnetGroup over the cluster private subnets. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: SubnetGroup
+metadata:
+  name: {{ $name }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: subnet-group
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    description: "PostgreSQL {{ $ns }}/{{ $name }} ({{ $facts.cluster }})"
+    subnetIds: {{ toJson $facts.subnetIds }}
+    tags: {{ toJson $tags }}
+{{- end }}

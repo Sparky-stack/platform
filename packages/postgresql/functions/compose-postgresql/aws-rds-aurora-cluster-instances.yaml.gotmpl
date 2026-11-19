@@ -1,0 +1,28 @@
+{{- /* aws-rds: Aurora ClusterInstances (2 when highAvailability). */}}
+{{- if and (eq $backend "aws-rds") $aurora }}
+{{- range $i := until (ternary 2 1 (eq (toString $ha) "true")) }}
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: ClusterInstance
+metadata:
+  name: {{ $name }}-{{ $i }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster-instance-{{ $i }}
+    crossplane.io/external-name: {{ $id }}-{{ $i }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    engine: aurora-postgresql
+    instanceClass: {{ $class }}
+    clusterIdentifierRef:
+      name: {{ $name }}
+    dbSubnetGroupNameRef:
+      name: {{ $name }}
+    publiclyAccessible: false
+    autoMinorVersionUpgrade: true
+    promotionTier: {{ $i }}
+    tags: {{ toJson $tags }}
+{{- end }}
+{{- end }}

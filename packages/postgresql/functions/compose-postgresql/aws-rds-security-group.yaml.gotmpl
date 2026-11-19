@@ -1,0 +1,19 @@
+{{- /* aws-rds: the database SecurityGroup in the cluster VPC. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroup
+metadata:
+  name: {{ $name }}-db
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: security-group
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    vpcId: {{ $facts.vpcId }}
+    name: {{ $id }}
+    description: "PostgreSQL {{ $ns }}/{{ $name }} - 5432 from the nodes of {{ $facts.cluster }} only"
+    tags: {{ toJson $tags }}
+{{- end }}

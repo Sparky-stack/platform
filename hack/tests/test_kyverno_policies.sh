@@ -25,6 +25,10 @@
 #                              offline (#36, templates/workflow-image-digests.yaml): in workflows-* every container,
 #                              initContainer and ephemeral container image is image@sha256:<64 hex>; tag-only, implicit
 #                              latest and malformed digests are denied, other namespaces are not matched
+#   tests/kyverno/workload-resilience
+#                              offline (#251, templates/workload-resilience.yaml): production Deployments need >= 2
+#                              replicas (or an autoscaler floor label >= 2), readiness probes, cpu+memory requests; HPAs
+#                              >= 2; Deny in production, Audit (skip vs fail) elsewhere
 #   tests/kyverno/data-plane-capabilities
 #                              offline (#70, templates/data-plane-capabilities.yaml, mgmt): a ResourceReleaseBinding of a
 #                              type with platform.koorikla.io/requires-addons passes only to a data plane annotated with
@@ -85,7 +89,7 @@ fi
 addon="$ROOT/addons/kyverno-policies"
 [[ -d "$addon/charts" ]] || helm dependency build "$addon" >/dev/null
 cp -R "$addon/tests/kyverno" "$TMP/kyverno"
-suites=(registries platform-key workflow-digests)
+suites=(registries platform-key workflow-digests workload-resilience)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
   (
@@ -93,6 +97,7 @@ for s in "${suites[@]}"; do
     [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
     tpl=templates/image-verification.yaml
     [[ "$s" == workflow-digests ]] && tpl=templates/workflow-image-digests.yaml
+    [[ "$s" == workload-resilience ]] && tpl=templates/workload-resilience.yaml
     helm template kyverno-policies "$addon" --namespace kyverno -s "$tpl" \
       ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
     rc=0

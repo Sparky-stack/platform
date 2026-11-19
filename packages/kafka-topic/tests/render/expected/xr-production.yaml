@@ -1,0 +1,170 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: KafkaTopic
+metadata:
+  name: invoice-state
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: invoice-state-kafka-topic
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: invoice-state-kafka-topic-password
+    - apiVersion: kafka.strimzi.io/v1
+      kind: KafkaTopic
+      name: invoice-state
+    - apiVersion: kafka.strimzi.io/v1
+      kind: KafkaUser
+      name: invoice-state-kafka-topic
+status:
+  backend: strimzi
+  bootstrapServers: platform-kafka-bootstrap.kafka.svc:9092
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: connection-secret, topic, and user'
+    reason: Creating
+    status: "False"
+    type: Ready
+  secretName: invoice-state-kafka-topic
+  topic: dp-default-billing-production-5e6f7a8b.invoice-state
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: invoice-state
+  name: invoice-state-kafka-topic
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KafkaTopic
+    name: invoice-state
+    uid: 1879f7d1-7b80-577f-ba31-fee6707762c7
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: invoice-state-kafka-topic-password
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: invoice-state-kafka-topic
+    template:
+      data:
+        bootstrapServers: platform-kafka-bootstrap.kafka.svc:9092
+        password: '{{ .password }}'
+        saslMechanism: SCRAM-SHA-512
+        securityProtocol: SASL_PLAINTEXT
+        topic: dp-default-billing-production-5e6f7a8b.invoice-state
+        username: invoice-state-kafka-topic
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-generator
+  labels:
+    crossplane.io/composite: invoice-state
+  name: invoice-state-kafka-topic-password
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KafkaTopic
+    name: invoice-state
+    uid: 1879f7d1-7b80-577f-ba31-fee6707762c7
+spec:
+  allowRepeat: true
+  digits: 8
+  length: 32
+  noUpper: false
+  symbols: 0
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: topic
+  labels:
+    crossplane.io/composite: invoice-state
+    strimzi.io/cluster: platform
+  name: invoice-state
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KafkaTopic
+    name: invoice-state
+    uid: 1879f7d1-7b80-577f-ba31-fee6707762c7
+spec:
+  config:
+    cleanup.policy: compact
+    retention.ms: 2592000000
+  partitions: 12
+  replicas: 1
+  topicName: dp-default-billing-production-5e6f7a8b.invoice-state
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: user
+  labels:
+    crossplane.io/composite: invoice-state
+    strimzi.io/cluster: platform
+  name: invoice-state-kafka-topic
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: KafkaTopic
+    name: invoice-state
+    uid: 1879f7d1-7b80-577f-ba31-fee6707762c7
+spec:
+  authentication:
+    password:
+      valueFrom:
+        secretKeyRef:
+          key: password
+          name: invoice-state-kafka-topic
+    type: scram-sha-512
+  authorization:
+    acls:
+    - operations:
+      - Describe
+      - Read
+      - Write
+      resource:
+        name: dp-default-billing-production-5e6f7a8b.invoice-state
+        patternType: literal
+        type: topic
+    - operations:
+      - Describe
+      - Read
+      resource:
+        name: dp-default-billing-production-5e6f7a8b.invoice-state
+        patternType: prefix
+        type: group
+    type: simple

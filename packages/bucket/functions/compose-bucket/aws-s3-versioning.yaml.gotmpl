@@ -1,0 +1,16 @@
+{{- if eq $backend "aws-s3" }}
+---
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: BucketVersioning
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "versioning" }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    bucketRef: { name: {{ $name }} }
+    versioningConfiguration: { status: {{ ternary "Enabled" "Suspended" $versioning }} }
+{{- end }}

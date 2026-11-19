@@ -1,0 +1,67 @@
+# The developer-facing Bucket API (S3-compatible object storage): one namespaced XR (Crossplane v2). The cluster decides
+# the backend through the EnvironmentConfig platform-bucket, read by the one Composition "bucket".
+# Contract, identical on every backend: Secret status.secretName (= <name>-bucket) with keys endpoint, bucket, region,
+# accessKeyId, secretAccessKey. Cloud backends leave both keys empty: apps use workload identity (no static keys).
+# Status: layout (packages/bucket/README.md).
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: buckets.platform.koorikla.io
+spec:
+  scope: Namespaced
+  group: platform.koorikla.io
+  names:
+    kind: Bucket
+    plural: buckets
+    singular: bucket
+    categories: [platform]
+  defaultCompositionRef:
+    name: bucket
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - { name: Backend, type: string, jsonPath: .status.backend }
+        - { name: Bucket, type: string, jsonPath: .status.bucket }
+        - { name: Secret, type: string, jsonPath: .status.secretName }
+        - { name: Ready, type: string, jsonPath: '.status.conditions[?(@.type=="Ready")].status' }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                versioning:
+                  description: Keep every version of every object (recover overwrites and deletes).
+                  type: boolean
+                  default: false
+                storageGiB:
+                  description: rustfs backend only - volume size of the local RustFS tenant. Can grow, never shrink.
+                  type: integer
+                  minimum: 1
+                  maximum: 4096
+                  default: 10
+                  x-kubernetes-validations:
+                    - { rule: self >= oldSelf, message: storageGiB can only grow }
+                deletionPolicy:
+                  description: Retain keeps the cloud bucket and its objects when the XR is deleted; Delete removes it.
+                  type: string
+                  enum: [Retain, Delete]
+                  default: Retain
+            status:
+              type: object
+              properties:
+                backend:
+                  description: rustfs | aws-s3 | gcp-storage | azure-blob
+                  type: string
+                bucket:
+                  description: Bucket (Azure - container) name; globally unique in cloud.
+                  type: string
+                endpoint:
+                  type: string
+                secretName:
+                  description: Connection Secret in this namespace (endpoint, bucket, region, accessKeyId, secretAccessKey).
+                  type: string

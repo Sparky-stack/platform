@@ -359,6 +359,12 @@ K="kubectl --context k3d-platform-mgmt"
       BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=tenant-writer jwt="$jwt") bao kv put kv-tenant-demo/db password=-'
 ```
 
+The app consumes it with an OpenChoreo `SecretReference` (`remoteRef: {key: db, property: password}`) named in its
+Workload; developer steps, the hello-world `GREETING_SECRET` example and rotation:
+[openchoreo.md](openchoreo.md#application-secrets-developer-view). The component types render one `ExternalSecret`
+per cell namespace (`refreshInterval: 15s`); running pods keep the old value until restarted
+([runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)).
+
 Tenant self-service (OpenBao UI/CLI with OIDC from Thunder and a per-tenant group) and per-tenant build secrets on mgmt
 (`workflows-<org>` is shared by all projects of an org) are follow-ups:
 [#169](https://github.com/koorikla/platform/issues/169).

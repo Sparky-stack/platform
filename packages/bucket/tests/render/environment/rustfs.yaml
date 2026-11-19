@@ -1,0 +1,10 @@
+# Sample facts of a rustfs cluster (fake ids): the keys the rustfs block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-bucket
+data:
+  backend: rustfs
+  cluster: sample
+  environment: development
+  rustfsImage: rustfs/rustfs:1.0.0-alpha.60   # VERIFY: tag + digest pin when the addon lands

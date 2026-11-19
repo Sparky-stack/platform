@@ -1,0 +1,38 @@
+{{- /* Prelude of compose-bucket (files render in name order into one template, so these variables reach every
+file): the cluster's facts, the backend check, the developer's spec with the XRD defaults as fallbacks, and the values
+derived from them. Object files only read these. */}}
+{{- $xr := getCompositeResource . }}
+{{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+{{- $backend := dig "backend" "" $facts }}
+{{- if not (has $backend (list "rustfs" "aws-s3" "gcp-storage" "azure-blob")) }}
+{{- fail (printf "bucket: unknown backend %q in EnvironmentConfig platform-bucket (rustfs | aws-s3 | gcp-storage | azure-blob)" $backend) }}
+{{- end }}
+{{- $spec := $xr.spec | default dict }}
+{{- $name := $xr.metadata.name }}
+{{- $ns := $xr.metadata.namespace }}
+{{- $observed := .observed.resources | default dict }}
+{{- $size := dig "size" "S" $spec }}
+{{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+{{- /* Cloud identifier: unique per cluster/namespace/name, starts with a letter, no double hyphens. */}}
+{{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+{{- $hash := sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) }}
+{{- $id := printf "bk-%s-%s" $base ($hash | trunc 8) }}
+{{- /* Retain: Crossplane never deletes the cloud resource (v2 managed resources have no deletionPolicy). */}}
+{{- $retain := eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+{{- $mp := list "*" }}
+{{- if $retain }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+{{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+{{- /* ESO template delimiters, emitted literally into ExternalSecret templates. */}}
+{{- $o := "{{" }}
+{{- $c := "}}" }}
+{{- $versioning := eq (toString (dig "versioning" false $spec)) "true" }}
+{{- /* Azure storage account names: 3-24 lowercase alphanumerics, globally unique. */}}
+{{- $account := printf "bk%s" ($hash | trunc 22) }}
+{{- /* Endpoint and region of the bucket, per backend (RustFS answers on its tenant's S3 Service). */}}
+{{- $endpoint := "" }}
+{{- $region := "" }}
+{{- if eq $backend "rustfs" }}{{ $endpoint = printf "http://%s-io.%s.svc:9000" $name $ns }}{{ $region = "us-east-1" }}
+{{- else if eq $backend "aws-s3" }}{{ $endpoint = printf "https://s3.%s.amazonaws.com" $facts.region }}{{ $region = $facts.region }}
+{{- else if eq $backend "gcp-storage" }}{{ $endpoint = "https://storage.googleapis.com" }}{{ $region = $facts.region }}
+{{- else if eq $backend "azure-blob" }}{{ $endpoint = printf "https://%s.blob.core.windows.net" $account }}{{ $region = $facts.location }}
+{{- end }}

@@ -1,0 +1,12 @@
+# Sample facts of a aws-rds cluster (fake ids): the keys the aws-rds block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-mysql
+data:
+  backend: aws-rds
+  cluster: sample
+  environment: development
+  region: eu-north-1
+  dbSubnetGroupName: sample-db
+  securityGroupIds: [sg-0123456789abcdef0]

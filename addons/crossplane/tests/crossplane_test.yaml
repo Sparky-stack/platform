@@ -73,7 +73,7 @@ tests:
     asserts:
       - matchRegex:
           path: spec.package
-          pattern: '^xpkg\.crossplane\.io/crossplane-contrib/function-(environment-configs|go-templating|auto-ready):v[0-9.]+@sha256:[0-9a-f]{64}$'
+          pattern: '^(xpkg\.crossplane\.io/crossplane-contrib/function-(environment-configs|go-templating|auto-ready)|ghcr\.io/koorikla/platform/postgresql_compose-postgresql):[a-z0-9.]+@sha256:[0-9a-f]{64}$'
       - equal: { path: spec.runtimeConfigRef.name, value: restricted }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
 
@@ -91,7 +91,7 @@ tests:
   - it: cnpg clusters install no provider at all
     template: templates/packages.yaml
     asserts:
-      - hasDocuments: { count: 4 }      # restricted runtime config + 2 functions
+      - hasDocuments: { count: 5 }      # restricted runtime config + 4 functions
 
   - it: aws installs exactly the rds, ec2, kms members and the family, pinned, no dependency resolution
     template: templates/packages.yaml
@@ -104,11 +104,11 @@ tests:
       - equal: { path: spec.skipDependencyResolution, value: true }
       - equal: { path: spec.runtimeConfigRef.name, value: provider-aws }
 
-  - it: aws renders 2 runtime configs, 3 functions and 4 providers
+  - it: aws renders 2 runtime configs, 4 functions and 4 providers
     template: templates/packages.yaml
     values: [../../../hack/tests/crossplane/values-aws-rds.yaml]
     asserts:
-      - hasDocuments: { count: 9 }
+      - hasDocuments: { count: 10 }
 
   - it: aws providers authenticate with IRSA on one stable ServiceAccount
     template: templates/packages.yaml

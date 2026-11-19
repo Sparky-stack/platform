@@ -1,0 +1,12 @@
+# Sample facts of a strimzi cluster (fake ids): the keys the strimzi block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-kafka-topic
+data:
+  backend: strimzi
+  cluster: sample
+  environment: development
+  kafkaCluster: platform
+  bootstrapServers: platform-kafka-bootstrap.kafka.svc:9092
+  replicationFactor: 1

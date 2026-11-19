@@ -1,0 +1,33 @@
+{{- /* moco: a MOCO MySQLCluster in the XR's namespace (operator addon: follow-up); 3 instances with semi-sync GTID replication for HA. Ready once MOCO reports Healthy. VERIFY: Healthy condition, image pin. */}}
+{{- if eq $backend "moco" }}
+---
+{{- $res := get (dict "S" (dict "cpu" "250m" "memory" "512Mi" "limit" "1Gi") "M" (dict "cpu" "1" "memory" "2Gi" "limit" "4Gi") "L" (dict "cpu" "2" "memory" "8Gi" "limit" "8Gi")) $size }}
+apiVersion: moco.cybozu.com/v1beta2
+kind: MySQLCluster
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "cluster" }}
+    gotemplating.fn.crossplane.io/ready: {{ ternary "True" "False" $mocoHealthy | quote }}
+spec:
+  replicas: {{ ternary 3 1 $ha }}
+  podTemplate:
+    metadata:
+      labels:
+        platform.koorikla.io/mysql: {{ $name }}
+    spec:
+      containers:
+        - name: mysqld
+          image: {{ $facts.mysqlImage }}
+          resources:
+            requests: { cpu: {{ $res.cpu | quote }}, memory: {{ $res.memory }} }
+            limits: { memory: {{ $res.limit }} }
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ $storage }}Gi
+{{- end }}

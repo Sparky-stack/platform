@@ -1,0 +1,11 @@
+# Sample facts of a gcp-storage cluster (fake ids): the keys the gcp-storage block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-bucket
+data:
+  backend: gcp-storage
+  cluster: sample
+  environment: development
+  project: sample-project
+  region: europe-north1

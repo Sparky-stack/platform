@@ -1,0 +1,10 @@
+{{- /* The XR's status, every backend: the developer contract's plain values. */}}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Valkey
+status:
+  backend: {{ $backend }}
+  endpoint: {{ $host }}
+  port: {{ $port }}
+  tls: {{ ne $backend "valkey-operator" }}
+  secretName: {{ $name }}-valkey

@@ -1,0 +1,19 @@
+{{- /* azure-flexible: the application FlexibleServerDatabase. */}}
+{{- if eq $backend "azure-flexible" }}
+---
+apiVersion: dbforpostgresql.azure.m.upbound.io/v1beta1
+kind: FlexibleServerDatabase
+metadata:
+  name: {{ $name }}-db
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: database
+    crossplane.io/external-name: {{ $db }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    serverIdRef:
+      name: {{ $name }}
+    charset: UTF8
+    collation: en_US.utf8
+{{- end }}

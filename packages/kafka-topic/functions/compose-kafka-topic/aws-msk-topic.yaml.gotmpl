@@ -1,0 +1,4 @@
+{{- /* aws-msk and gcp-managedkafka skeletons: crossplane-contrib upjet has no MSK topic kind and no Managed Service for
+Apache Kafka family yet, so nothing is composed besides the Secret: the topic must come from an admin path (Kafka
+admin Job with the platform identity, or the provider once it ships). VERIFY / follow-up before these backends are
+offered. IAM for the app (kafka-cluster:*Topic* on the topic ARN, managedkafka.client) rides on its workload identity. */}}

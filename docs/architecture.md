@@ -103,6 +103,13 @@ that is not a cluster label, e.g. external-dns' DNS provider ([dns.md](dns.md)).
 layering for every offline render (test.sh, image-audit, contract tests), reading the release name, value files,
 `valuesObject` and parameters from the rendered ApplicationSet (`hack/tests/test_addon_renderer.sh`).
 
+Argo CD diffs server-side (`controller.diff.server.side`). `compareOptions` sets an Application's
+`argocd.argoproj.io/compare-options`. Addons that render Argo Workflows objects (ClusterWorkflowTemplate,
+WorkflowTemplate, CronWorkflow) need `IncludeMutationWebhook=true`. Those CRDs declare `spec` atomic +
+preserve-unknown, and without the option server-side diff reports Synced while the live spec stays old (#184,
+[wiki gotcha](../wiki/gotchas/argocd-server-side-diff-atomic-crd-spec.md)). `hack/tests/test_argocd_compare_options.sh`
+fails if an addon renders such a kind without the option, or sets it without one.
+
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (fleet file
 `addonsRevision`, default `HEAD`) is the `targetRevision` of that cluster's addon Applications, so prod can follow a
 tag while dev follows `main`. Kargo could replace this later; it is deliberately not part of v1.

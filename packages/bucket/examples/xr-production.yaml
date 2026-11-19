@@ -1,0 +1,10 @@
+# Production shape: versioned, kept when the XR goes.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Bucket
+metadata:
+  name: invoices
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  versioning: true
+  storageGiB: 50
+  deletionPolicy: Retain

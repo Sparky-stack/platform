@@ -1,0 +1,135 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Valkey
+metadata:
+  name: billing-cache
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: billing-cache-valkey
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: billing-cache-valkey-password
+    - apiVersion: valkey.io/v1alpha1
+      kind: ValkeyCluster
+      name: billing-cache
+status:
+  backend: valkey-operator
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster, connection-secret'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: billing-cache.dp-default-billing-production-5e6f7a8b.svc
+  port: 6379
+  secretName: billing-cache-valkey
+  tls: false
+---
+apiVersion: valkey.io/v1alpha1
+kind: ValkeyCluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+  labels:
+    crossplane.io/composite: billing-cache
+  name: billing-cache
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: billing-cache
+    uid: ffa7e0fe-27eb-5d8c-a8f6-3122e74336e0
+spec:
+  acl:
+    users:
+    - name: default
+      state: Disabled
+    - name: app
+      password:
+        secret:
+          keys:
+          - password
+          name: billing-cache-valkey
+        type: Secret
+      permissions: +@all -@admin -@dangerous ~* &*
+  config:
+    maxmemory-policy: allkeys-lru
+  replicas: 1
+  resources:
+    limits:
+      memory: 2Gi
+    requests:
+      cpu: 100m
+      memory: 2Gi
+  shards: 1
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: billing-cache
+  name: billing-cache-valkey
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: billing-cache
+    uid: ffa7e0fe-27eb-5d8c-a8f6-3122e74336e0
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: billing-cache-valkey-password
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: billing-cache-valkey
+    template:
+      data:
+        password: '{{ .password }}'
+        username: app
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-generator
+  labels:
+    crossplane.io/composite: billing-cache
+  name: billing-cache-valkey-password
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Valkey
+    name: billing-cache
+    uid: ffa7e0fe-27eb-5d8c-a8f6-3122e74336e0
+spec:
+  allowRepeat: true
+  digits: 8
+  length: 32
+  noUpper: false
+  symbols: 0
