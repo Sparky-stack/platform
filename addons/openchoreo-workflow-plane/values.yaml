@@ -34,8 +34,6 @@ registry:                        # installation.yaml registry
     - { upstream: gcr.io, project: gcr }
 openchoreo:
   orgNamespace: default
-  controlPlane:
-    host: openchoreo.localhost
   observability:
     enabled: true
     httpPort: 11080
