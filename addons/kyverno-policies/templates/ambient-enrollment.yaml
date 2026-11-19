@@ -30,16 +30,7 @@ spec:
         apiVersions: [v1]
         operations: [CREATE, UPDATE]
         resources: [namespaces]
-    objectSelector:
-      {{- with .Values.ambientEnrollment.cellNamespaceSelector.matchLabels }}
-      matchLabels:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      matchExpressions:
-        {{- with .Values.ambientEnrollment.cellNamespaceSelector.matchExpressions }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        - { key: istio.io/dataplane-mode, operator: DoesNotExist }
+    {{- include "kp.cellObjectSelector" (dict "sel" .Values.ambientEnrollment.cellNamespaceSelector "mode" "{ key: istio.io/dataplane-mode, operator: DoesNotExist }") | nindent 4 }}
   matchConditions:
     - name: never-platform-namespaces
       expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'

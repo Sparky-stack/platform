@@ -24,7 +24,7 @@ created with istio.io/dataplane-mode=none get neither.
 */ -}}
 {{- $ae := .Values.ambientEnrollment }}
 {{- if $ae.enabled }}
-{{- $sel := $ae.cellNamespaceSelector }}
+{{- $cells := dict "sel" $ae.cellNamespaceSelector "mode" "{ key: istio.io/dataplane-mode, operator: NotIn, values: [none] }" }}
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
@@ -48,16 +48,7 @@ spec:
         apiVersions: [v1]
         operations: [CREATE, UPDATE]
         resources: [namespaces]
-    objectSelector:
-      {{- with $sel.matchLabels }}
-      matchLabels:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      matchExpressions:
-        {{- with $sel.matchExpressions }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        - { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
   matchConditions:
     - name: never-platform-namespaces
       expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
@@ -117,16 +108,7 @@ spec:
         apiVersions: [v1]
         operations: [CREATE, UPDATE]
         resources: [namespaces]
-    objectSelector:
-      {{- with $sel.matchLabels }}
-      matchLabels:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      matchExpressions:
-        {{- with $sel.matchExpressions }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        - { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
   matchConditions:
     - name: never-platform-namespaces
       expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
