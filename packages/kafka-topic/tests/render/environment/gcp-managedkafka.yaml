@@ -1,0 +1,10 @@
+# Sample facts of a gcp-managedkafka cluster (fake ids): the keys the gcp-managedkafka block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-kafka-topic
+data:
+  backend: gcp-managedkafka
+  cluster: sample
+  environment: development
+  bootstrapServers: bootstrap.sample.europe-north1.managedkafka.sample-project.cloud.goog:9092

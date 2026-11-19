@@ -1,0 +1,38 @@
+name: package-kafka-topic
+
+# The kafka-topic API Configuration package (packages/kafka-topic): PRs validate + render only; pushes to main and
+# release tags (kafka-topic-vX.Y.Z, release-please component "kafka-topic") build, push to
+# ghcr.io/koorikla/platform/kafka-topic, cosign keyless sign and attest SLSA provenance.
+# Status: layout - no cluster installs it yet (packages/kafka-topic/README.md); enabling it adds the pin to addons/crossplane.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/kafka-topic/**'
+      - '.github/workflows/package-kafka-topic.yaml'
+  push:
+    branches: [main]
+    tags: ['kafka-topic-v*']
+    paths:
+      - 'packages/kafka-topic/**'
+      - '.github/workflows/package-kafka-topic.yaml'
+
+concurrency:
+  group: package-kafka-topic-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: ./.github/workflows/app-crossplane-configuration.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: packages/kafka-topic
+      registry: ghcr.io/koorikla/platform

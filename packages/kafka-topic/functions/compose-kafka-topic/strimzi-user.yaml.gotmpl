@@ -1,0 +1,24 @@
+{{- /* SCRAM user allowed to produce / consume this topic only (consumer groups prefixed with the topic name). */}}
+{{- if eq $backend "strimzi" }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: {{ $name }}-kafka-topic
+  labels: { strimzi.io/cluster: {{ $facts.kafkaCluster }} }
+  annotations:
+    {{ setResourceNameAnnotation "user" }}
+spec:
+  authentication:
+    type: scram-sha-512
+    password:
+      valueFrom:
+        secretKeyRef: { name: {{ $name }}-kafka-topic, key: password }
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: {{ $topic }}, patternType: literal }
+        operations: [Describe, Read, Write]
+      - resource: { type: group, name: {{ $topic }}, patternType: prefix }
+        operations: [Describe, Read]
+{{- end }}

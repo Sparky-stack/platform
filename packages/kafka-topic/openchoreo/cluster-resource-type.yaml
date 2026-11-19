@@ -1,0 +1,59 @@
+# OpenChoreo ClusterResourceType kafka-topic - NOT DEPLOYED (status: layout). It lives here, not in
+# addons/openchoreo-platform/files/platform/cluster-resource-types/, because every file there renders into the chart
+# when dataServices.enabled and would offer an API no cluster runs yet. Enabling the API (follow-up issue) moves this
+# file there. Same shape as cluster-resource-types/postgresql.yaml: renders the platform's KafkaTopic XR into the cell
+# namespace; plain values come from the XR's status, credentials stay on the data plane as secretKeyRefs.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterResourceType
+metadata:
+  name: kafka-topic
+  annotations:
+    openchoreo.dev/display-name: Kafka topic
+    openchoreo.dev/description: >-
+      Kafka topic with credentials through the platform API (Crossplane KafkaTopic XR): Strimzi in-cluster, Event Hubs
+      (MSK / Managed Kafka: VERIFY) in the cloud, chosen by the cluster. Needs addon crossplane on the data plane.
+    platform.koorikla.io/requires-addons: crossplane
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties:
+        partitions: { type: integer, minimum: 1, maximum: 100, default: 3 }
+        cleanupPolicy: { type: string, enum: [delete, compact], default: delete }
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        retentionHours: { type: integer, minimum: 1, maximum: 8760, default: 168 }
+        deletionPolicy: { type: string, enum: [Retain, Delete], default: Retain }
+  retainPolicy: Retain
+  outputs:
+    - name: bootstrapServers
+      value: ${applied.kafkatopic.status.bootstrapServers}
+    - name: topic
+      value: ${applied.kafkatopic.status.topic}
+    - name: securityProtocol
+      secretKeyRef: { name: "${metadata.name}-kafka-topic", key: securityProtocol }
+    - name: saslMechanism
+      secretKeyRef: { name: "${metadata.name}-kafka-topic", key: saslMechanism }
+    - name: username
+      secretKeyRef: { name: "${metadata.name}-kafka-topic", key: username }
+    - name: password
+      secretKeyRef: { name: "${metadata.name}-kafka-topic", key: password }
+  resources:
+    - id: kafkatopic
+      readyWhen: >-
+        ${has(applied.kafkatopic.status.conditions)
+        && applied.kafkatopic.status.conditions.exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: platform.koorikla.io/v1alpha1
+        kind: KafkaTopic
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          partitions: ${parameters.partitions}
+          cleanupPolicy: ${parameters.cleanupPolicy}
+          retentionHours: ${environmentConfigs.retentionHours}
+          deletionPolicy: ${environmentConfigs.deletionPolicy}

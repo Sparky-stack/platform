@@ -1,0 +1,10 @@
+# Production shape: more partitions, compacted (latest state per key).
+apiVersion: platform.koorikla.io/v1alpha1
+kind: KafkaTopic
+metadata:
+  name: invoice-state
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  partitions: 12
+  cleanupPolicy: compact
+  retentionHours: 720
