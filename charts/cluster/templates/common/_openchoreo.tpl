@@ -1,7 +1,7 @@
 {{- /* Shared helpers for openchoreo-*.yaml (openchoreo.name, fleetNamespace, labels, sync-wave annotations). */ -}}
 {{- define "openchoreo.fleetNamespace" -}}fleet{{- end }}
 {{- define "openchoreo.name" -}}
-{{- required "name is required (cluster file)" .Values.name -}}
+{{- .Values.name -}}
 {{- end }}
 {{- define "openchoreo.labels" -}}
 platform.koorikla.io/name: {{ include "openchoreo.name" . }}

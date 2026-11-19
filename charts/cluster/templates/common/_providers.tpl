@@ -32,14 +32,11 @@ manager:
   {{- end }}
   {{- if $p.leaseFlags }}
   {{- $le := .le }}
-  {{- if or $le.resourceName $le.resourceNamespace }}
-  {{- fail "leaderElection.resourceName/resourceNamespace must stay empty: the operator would pass --leader-election-id, which the CAPI managers do not have" }}
-  {{- end }}
   leaderElection:
     leaderElect: true
-    leaseDuration: {{ required "leaderElection.leaseDuration is required" $le.leaseDuration | quote }}
-    renewDeadline: {{ required "leaderElection.renewDeadline is required" $le.renewDeadline | quote }}
-    retryPeriod: {{ required "leaderElection.retryPeriod is required" $le.retryPeriod | quote }}
+    leaseDuration: {{ $le.leaseDuration | quote }}
+    renewDeadline: {{ $le.renewDeadline | quote }}
+    retryPeriod: {{ $le.retryPeriod | quote }}
     resourceLock: leases
     resourceName: ""        # required by the CRD; empty = the manager's default Lease
     resourceNamespace: ""

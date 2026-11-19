@@ -1,5 +1,6 @@
 suite: scope fleet providers - core, k3s and the infrastructure providers enabled by the installation
 templates:
+  - templates/validate.yaml
   - templates/common/capi-core.yaml
   - templates/docker/provider.yaml
   - templates/aws/provider.yaml
@@ -144,7 +145,7 @@ tests:
       - containsDocument: { kind: CoreProvider, apiVersion: operator.cluster.x-k8s.io/v1alpha2, name: cluster-api, namespace: capi-system, any: true }
 
   - it: fails when no infrastructure provider is enabled
-    template: templates/common/capi-core.yaml
+    template: templates/validate.yaml
     set: { capi.providers: { docker: false, aws: false, hetzner: false } }
     asserts:
       - failedTemplate: { errorPattern: "enable at least one infrastructure provider" }
@@ -194,7 +195,7 @@ tests:
           value: eyJhdWRpZW5jZSI6Ii8vaWFtLmdvb2dsZWFwaXMuY29tL3Byb2plY3RzLzEyMy9sb2NhdGlvbnMvZ2xvYmFsL3dvcmtsb2FkSWRlbnRpdHlQb29scy9wb29sL3Byb3ZpZGVycy9tZ210IiwiY2xpZW50X2VtYWlsIjoiY2FwZ0BwLmlhbS5nc2VydmljZWFjY291bnQuY29tIiwiY3JlZGVudGlhbF9zb3VyY2UiOnsiZmlsZSI6Ii92YXIvcnVuL3NlY3JldHMvdG9rZW5zL2djcC90b2tlbiIsImZvcm1hdCI6eyJ0eXBlIjoidGV4dCJ9fSwic2VydmljZV9hY2NvdW50X2ltcGVyc29uYXRpb25fdXJsIjoiaHR0cHM6Ly9pYW1jcmVkZW50aWFscy5nb29nbGVhcGlzLmNvbS92MS9wcm9qZWN0cy8tL3NlcnZpY2VBY2NvdW50cy9jYXBnQHAuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb206Z2VuZXJhdGVBY2Nlc3NUb2tlbiIsInN1YmplY3RfdG9rZW5fdHlwZSI6InVybjppZXRmOnBhcmFtczpvYXV0aDp0b2tlbi10eXBlOmp3dCIsInRva2VuX3VybCI6Imh0dHBzOi8vc3RzLmdvb2dsZWFwaXMuY29tL3YxL3Rva2VuIiwidHlwZSI6ImV4dGVybmFsX2FjY291bnQiLCJ1bml2ZXJzZV9kb21haW4iOiJnb29nbGVhcGlzLmNvbSJ9
 
   - it: fails without a WIF provider for CAPG
-    template: templates/gcp-gke/credentials.yaml
+    template: templates/validate.yaml
     set: { capi.providers.gcp: true, capi.gcp.serviceAccount: capg@p.iam.gserviceaccount.com }
     asserts:
       - failedTemplate: { errorPattern: "capi.gcp.workloadIdentityProvider must be" }
@@ -205,7 +206,7 @@ tests:
       capi.providers.gcp: true
       capi.gcp: { workloadIdentityProvider: projects/123/locations/global/workloadIdentityPools/pool/providers/mgmt, serviceAccount: someone@example.com }
     asserts:
-      - failedTemplate: { errorPattern: "capi.gcp.serviceAccount must be" }
+      - failedTemplate: { errorPattern: "at '/capi/gcp/serviceAccount'" }   # values.schema.json
 
   # #192: capi-controller-manager lost its 15s lease under bootstrap load and exited; its webhook was gone meanwhile
   - it: gives the managers with lease flags (core, CAPD, CAPA, CAPG) 60s/40s/10s leader election
@@ -249,4 +250,4 @@ tests:
     template: templates/docker/provider.yaml
     set: { leaderElection.resourceName: capi }
     asserts:
-      - failedTemplate: { errorPattern: "must stay empty" }
+      - failedTemplate: { errorPattern: "at '/leaderElection/resourceName'" }   # values.schema.json

@@ -3,6 +3,7 @@ templates:
   - templates/common/falco-escalation-crs.yaml
 set:
   name: dev1
+  kubernetesVersion: v1.35.10+k3s1   # a valid cluster file (values.schema.json)
 tests:
   - it: templates the CRS payload from the platform store key, deriving this cluster's token and endpoint
     documentSelector: { path: kind, value: ExternalSecret }
