@@ -1,6 +1,5 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* CAPI topology Cluster (class per provider: templates/<provider>/clusterclass.yaml); none for byo. */ -}}
-{{- include "capi.validate" . }}
 {{- if ne (include "capi.byo" .) "true" }}
 {{- $gke := eq (include "capi.gke" .) "true" }}
 apiVersion: cluster.x-k8s.io/v1beta2

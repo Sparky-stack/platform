@@ -38,7 +38,7 @@ spec:
         name: gateway-default
         namespace: openchoreo-data-plane
         http:
-          host: {{ required "openchoreo.dataPlane.gatewayHost is required when the data plane is enabled" $dp.gatewayHost | quote }}
+          host: {{ $dp.gatewayHost | quote }}
           port: {{ $dp.gatewayPort | int }}
           listenerName: http
 {{- range $env := $dp.environments }}

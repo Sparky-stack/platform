@@ -1,0 +1,45 @@
+suite: "validate.yaml - cross-field checks of a cluster file (types and patterns: values.schema.json)"
+templates:
+  - templates/validate.yaml
+tests:
+  - it: rejects mesh.group without the mesh CA (addon openbao) on mgmt
+    values: [values/capi-docker.yaml]
+    set: { mesh: { group: local } }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" }
+
+  - it: rejects mesh.group without mesh.ca (where members reach OpenBao)
+    values: [values/capi-docker.yaml]
+    set: { mesh: { group: local, groups: [local] }, mgmt: { addons: { openbao: true } } }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" }
+
+  - it: rejects a mesh member without the mesh addon
+    values: [values/capi-docker.yaml]
+    set: { mesh: { group: local, groups: [local], ca: { host: openbao.example.test, port: 8200 } }, mgmt: { addons: { openbao: true } }, addons: { mesh: false } }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group needs the mesh addon (addons.mesh is false)" }
+
+  - it: "negative: rejects a mesh group without its own root (not in installation.yaml mesh.groups)"
+    values: [values/capi-docker.yaml]
+    set: { mesh: { group: prod, groups: [local] }, mgmt: { addons: { openbao: true } } }
+    asserts:
+      - failedTemplate: { errorMessage: "cluster dev1: mesh.group \"prod\" is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" }
+
+  - it: fails when the provider is disabled in the installation
+    values: [values/capi-docker.yaml]
+    set: { provider: aws, region: eu-central-1 }
+    asserts:
+      - failedTemplate: { errorPattern: "provider aws is not enabled in installation.yaml capi.providers" }
+
+  - it: fails when addons.cilium contradicts cni
+    values: [values/capi-docker.yaml]
+    set: { cni: flannel, addons: { cilium: true } }
+    asserts:
+      - failedTemplate: { errorPattern: "addons.cilium=true contradicts cni=flannel" }
+
+  - it: fails on a single-server production cluster on a cloud provider
+    values: [values/capi-aws.yaml]
+    set: { controlPlane.replicas: 1 }
+    asserts:
+      - failedTemplate: { errorPattern: "production on aws needs controlPlane.replicas >= 3" }
