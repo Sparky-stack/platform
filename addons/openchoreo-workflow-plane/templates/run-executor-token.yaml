@@ -12,15 +12,6 @@ ServiceAccount (it deletes those). The Role (workflowtaskresults create/patch) s
 {{- $t := .Values.runExecutorToken }}
 {{- if $t.enabled }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
-{{- if not .Values.runNetworkPolicy.enabled }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ $ns }}
-  annotations:
-    argocd.argoproj.io/sync-options: Delete=false
----
-{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

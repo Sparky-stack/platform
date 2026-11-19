@@ -1,4 +1,7 @@
-{{- /* Render-time consistency: plane CR vs agent, no control-plane CA copied, installation toggle. */ -}}
+{{- /*
+All render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no control-plane CA
+copied, key-scoped secret store, agent RBAC, run NetworkPolicy labels, BuildKit mirror names.
+*/ -}}
 {{- if not .Values.openchoreo.workflowPlane.enabled }}
 {{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
 {{- end }}
@@ -17,4 +20,42 @@
 {{- end }}
 {{- if or (not .Values.clusterWorkflowPlane.secretStore) (eq .Values.clusterWorkflowPlane.secretStore "platform") }}
 {{- fail "clusterWorkflowPlane.secretStore must be the key-scoped store workflows, never the full platform store" }}
+{{- end }}
+{{- if .Values.clusterAgentRBAC.enabled }}
+{{- if $wp.clusterAgent.rbac.create }}
+{{- fail "clusterAgentRBAC.enabled: set openchoreo-workflow-plane.clusterAgent.rbac.create=false (the upstream ClusterRole is cluster-admin in all but name, #33)" }}
+{{- end }}
+{{- $prefix := toString .Values.clusterAgentRBAC.runNamespacePrefix }}
+{{- if not (regexMatch "^[a-z0-9][-a-z0-9]*-$" $prefix) }}
+{{- fail (printf "clusterAgentRBAC.runNamespacePrefix %q must be a namespace name prefix ending in - (OpenChoreo: workflows-)" $prefix) }}
+{{- end }}
+{{- end }}
+{{- $np := .Values.runNetworkPolicy }}
+{{- if and $np.enabled $np.platformWorkflows.enabled (not $np.platformWorkflows.podLabels) }}
+{{- fail "runNetworkPolicy.platformWorkflows.podLabels must not be empty (it would widen egress for every run pod)" }}
+{{- end }}
+{{- /* BuildKit mirrors (templates/buildkitd-config.yaml): names end up verbatim in buildkitd.toml. */}}
+{{- $reg := .Values.registry | default dict }}
+{{- if and .Values.buildkitMirrors.enabled (eq (toString $reg.type) "harbor") $reg.proxyCache }}
+{{- $hostRE := "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" }}
+{{- $host := required "registry.host is required for BuildKit mirrors (registry.type harbor)" $reg.host }}
+{{- if not (regexMatch $hostRE $host) }}
+{{- fail (printf "registry.host %q must be <hostname>[:port]" $host) }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $pc := $reg.proxyCache }}
+{{- if not (regexMatch $hostRE (toString $pc.upstream)) }}
+{{- fail (printf "registry.proxyCache upstream %q must be <hostname>[:port]" (toString $pc.upstream)) }}
+{{- end }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$" (toString $pc.project)) }}
+{{- fail (printf "registry.proxyCache project %q for %s must be a Harbor project name" (toString $pc.project) $pc.upstream) }}
+{{- end }}
+{{- if eq $pc.upstream $host }}
+{{- fail (printf "registry.proxyCache upstream %s is the registry itself (registry.host)" $host) }}
+{{- end }}
+{{- if hasKey $seen $pc.upstream }}
+{{- fail (printf "registry.proxyCache lists upstream %s twice" $pc.upstream) }}
+{{- end }}
+{{- $_ := set $seen $pc.upstream true }}
+{{- end }}
 {{- end }}

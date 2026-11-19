@@ -7,6 +7,9 @@
 #   templates/agent-server-ca.yaml        ConfigMap cluster-gateway-ca: the control plane's gateway CA PUBLIC cert
 #   templates/cluster-agent-rbac.yaml     least-privilege agent RBAC (replaces the upstream cluster-admin-like ClusterRole)
 #   templates/buildkitd-config.yaml       ConfigMap buildkitd-config: BuildKit registry mirrors to the Harbor proxy caches
+#   templates/run-*.yaml                  run namespace workflows-<org ns>: Namespace, default-deny NetworkPolicy,
+#                                         executor token
+#   templates/validate.yaml               every render-time check of this chart
 #   templates/cluster-workflow-templates.yaml  Argo ClusterWorkflowTemplates from files/cluster-workflow-templates/
 #                                         (koorikla-build: the pipeline behind the per-stack ClusterWorkflows of addon
 #                                         openchoreo-platform; koorikla-helm-chart: chart packaging)
