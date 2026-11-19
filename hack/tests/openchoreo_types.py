@@ -113,4 +113,35 @@ for obj in types:
             else:
                 out.append(f"OK {name} checks {key}")
 
+# --- capability gate (#246): the agent starts only after the CRDs of every kind a trait's required addon brings -------
+# argv[5]: the data-plane render with every capabilityGate addon enabled. Without the gate OpenChoreo applies the kind
+# before the addon exists and 1.3.3 retries only on its capped exponential backoff (~17 min on a fresh bootstrap).
+if len(sys.argv) > 5:
+    gated = load(sys.argv[5])
+    jobs = [d for d in gated if d.get("kind") == "Job" and d["metadata"]["name"] == "capability-gate"]
+    gate, wave = set(), None
+    for j in jobs:
+        ann = j["metadata"].get("annotations") or {}
+        wave = int(ann.get("argocd.argoproj.io/sync-wave", "0")) if ann.get("argocd.argoproj.io/hook") == "Sync" else None
+        pod = j["spec"]["template"]["spec"]
+        for c in (pod.get("initContainers") or []) + (pod.get("containers") or []):
+            gate.update(a[len("crd/"):] for a in c.get("command") or [] if a.startswith("crd/"))
+    if wave is None or wave >= 0:
+        out.append("VIOLATION: no capability-gate Sync hook before the agent Deployment (sync wave < 0)")
+    for obj in types:
+        if obj["kind"] != "ClusterTrait":
+            continue
+        name = f'ClusterTrait {obj["metadata"]["name"]}'
+        if not (obj["metadata"].get("annotations") or {}).get("platform.koorikla.io/requires-addons"):
+            continue
+        for plane, api, kind in templates(obj):
+            group = api.split("/")[0] if "/" in api else ""
+            if plane != "dataplane" or "." not in group or group.endswith(".k8s.io"):
+                continue  # built-in kinds exist on every cluster
+            crd = f"{plural(kind)}.{group}"
+            if crd in gate:
+                out.append(f"OK agent waits for crd/{crd} of {name}")
+            else:
+                out.append(f"VIOLATION: {name} renders {kind} ({api}) but the capability gate does not wait for crd/{crd}")
+
 print("\n".join(out))
