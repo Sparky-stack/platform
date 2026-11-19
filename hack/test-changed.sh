@@ -34,10 +34,18 @@ for u in $units; do
 done
 # shellcheck disable=SC2086  # units are space-free paths
 for t in $(bash hack/changed-units.sh --tests $units); do
+  # A test that needs every render (e.g. store allowlist == all consumers) says when a scoped run must go full:
+  # `# scoped-ci full-if: <ERE>`, matched against the changed charts' files. Otherwise the full runs on main cover it.
+  full_if=$(sed -n 's/^# scoped-ci full-if: //p' "$t")
+  if [[ -n "$full_if" ]]; then
+    # shellcheck disable=SC2086  # chart dirs are space-free paths
+    if [[ -n "$charts" ]] && grep -rEqs --exclude-dir=charts "$full_if" $charts; then
+      echo "==> $t needs every render and a changed chart matches /$full_if/: full suite"
+      exec bash hack/test.sh
+    fi
+    continue
+  fi
   tests="$tests $t"
-  # A cross-chart test names the other charts it reads from $RENDERED_DIR: `# scoped-ci renders: addons/x ...`.
-  extra=$(sed -n 's/^# scoped-ci renders: //p' "$t")
-  if [[ -n "$charts" && -n "$extra" ]]; then charts="$charts $extra"; fi
 done
 echo "==> related contract tests:${tests:- none}"
 
