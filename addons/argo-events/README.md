@@ -95,7 +95,6 @@ Wrapper chart for `argo-events` (`2.4.28` / `v1.9.11`) on `mgmt`. Runs the platf
 | falco.tokenSecret.store | string | `"platform"` |  |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
-| openchoreo.observability.enabled | bool | `true` |  |
 | openchoreo.orgNamespace | string | `"default"` |  |
 | openchoreo.workflowPlane.autoBuild | string | `"poll"` |  |
 | openchoreo.workflowPlane.enabled | bool | `true` |  |
