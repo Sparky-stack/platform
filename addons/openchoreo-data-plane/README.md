@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs the outbound `cluster-agent` (which dials `mgmt`'s `cluster-gateway` over mTLS WebSocket) and the data-plane ingress `Gateway` serving tenant components.
+Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs the outbound `cluster-agent` (which dials `mgmt`'s `cluster-gateway` over mTLS WebSocket) and the data-plane ingress `Gateway` serving tenant components, plus the PriorityClasses `app-production` / `app-standard` that ClusterTrait `resilience` assigns.
 
 ## Where it runs
 

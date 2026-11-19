@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, upstream `ClusterComponentType`/`ClusterTrait`/`ClusterProjectType` defaults, the data-service types `ClusterTrait keda-scaler` and `ClusterResourceType postgresql` (docs/data-services.md), stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
+Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, upstream `ClusterComponentType`/`ClusterTrait`/`ClusterProjectType` defaults, `ClusterTrait resilience` embedded in the Deployment component types (spread, PDB, graceful shutdown, priority; docs/openchoreo.md "Resilience defaults"), the data-service types `ClusterTrait keda-scaler` and `ClusterResourceType postgresql` (docs/data-services.md), stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
 
 ## Where it runs
 
