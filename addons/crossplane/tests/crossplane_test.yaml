@@ -274,8 +274,9 @@ tests:
       - equal: { path: spec.skipDependencyResolution, value: true }
       - equal: { path: spec.revisionActivationPolicy, value: Automatic }
 
-  - it: platform packages are cosign-verified (keyless, the signing workflow's identity)
+  - it: platform packages are cosign-verified (keyless, the signing workflow's identity) when verification is on
     template: templates/configuration.yaml
+    set: { packages.signatureVerification.enabled: true }
     documentSelector: { path: kind, value: ImageConfig }
     asserts:
       - equal: { path: 'spec.matchImages[0].prefix', value: ghcr.io/koorikla/platform/ }
@@ -284,9 +285,8 @@ tests:
           path: 'spec.verification.cosign.authorities[0].keyless.identities[0].subjectRegExp'
           pattern: 'app-crossplane-configuration'
 
-  - it: no ImageConfig when signature verification is off
+  - it: no ImageConfig by default (verification off until Crossplane reads Sigstore bundles, #247)
     template: templates/configuration.yaml
-    set: { packages.signatureVerification.enabled: false }
     asserts:
       - hasDocuments: { count: 1 }
 
