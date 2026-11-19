@@ -1,29 +1,20 @@
 {{- /*
 ClusterSecretStores and the identity each authenticates with (one secret-stores.store call per store, _helpers.tpl).
 mgmt: platform, mgmt-fleet, mgmt-openchoreo, workflows, plus Argo CD's repo-creds ExternalSecret.
-workload: default, plus dns (dns.provider cloudflare) and delivery (byo clusters). Each branch validates first.
+workload: default, plus dns (dns.provider cloudflare) and delivery (byo clusters).
+Validation: values.schema.json and templates/validate.yaml.
 */ -}}
 {{- $backend := .Values.secrets.backend | default "kubernetes" -}}
-{{- if not (has $backend (list "kubernetes" "aws" "vault")) -}}
-{{- fail (printf "secrets.backend must be kubernetes, aws, or vault (got %q)" $backend) -}}
-{{- end -}}
 {{- if eq .Values.role "mgmt" -}}
-{{- /* ---- mgmt: validation ---- */ -}}
 {{- $platformNs := .Values.secrets.kubernetes.namespace | default "platform-secrets" -}}
 {{- /* Store platform holds every platform credential: never readable from a workflows-* run namespace
        (hack/tests/test_secret_store_scope.sh checks every ExternalSecret using it is in this list). */ -}}
 {{- $platformReaders := .Values.platformStore.namespaces -}}
-{{- if not $platformReaders }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
-{{- range $platformReaders -}}
-{{- if hasPrefix "workflows-" (toString .) }}{{ fail (printf "platformStore.namespaces must not include workflow run namespace %q: use ClusterSecretStore workflows (key-scoped)" .) }}{{ end -}}
-{{- end -}}
 {{- $rcName := .Values.repoCreds.name | default "platform-repo-creds" -}}
 {{- $rcKey := .Values.repoCreds.remoteKey | default "platform-github" -}}
 {{- $rcAuth := .Values.repoCreds.auth | default "token" -}}
-{{- if not (has $rcAuth (list "token" "githubApp")) }}{{ fail (printf "repoCreds.auth must be token or githubApp (got %s)" $rcAuth) }}{{ end -}}
 {{- $rcProps := ternary (list "githubAppID" "githubAppInstallationID" "githubAppPrivateKey") (list "username" "token") (eq $rcAuth "githubApp") -}}
 {{- $wfKeys := .Values.workflowStore.keys -}}
-{{- if not $wfKeys }}{{ fail "workflowStore.keys must list the secret keys ClusterSecretStore workflows may read" }}{{ end -}}
 {{- /* registry.type external: builds push with registry.external.credentialsKey instead of the harbor robot. */ -}}
 {{- if and (eq (toString (.Values.registry.type | default "harbor")) "external") (.Values.registry.external).credentialsKey -}}
 {{- $wfKeys = append (without $wfKeys "harbor") .Values.registry.external.credentialsKey | uniq -}}
@@ -32,17 +23,7 @@ workload: default, plus dns (dns.provider cloudflare) and delivery (byo clusters
 {{- $ws := .Values.secrets.workflowStore -}}
 {{- $wfAwsRole := ($ws.aws).role | default "" -}}
 {{- $wfVaultRole := ($ws.vault).role | default "" -}}
-{{- if and (eq $backend "aws") $wfAwsRole (eq $wfAwsRole (.Values.secrets.aws.role | default "")) -}}
-{{- fail "ClusterSecretStore workflows on AWS Secrets Manager needs secrets.workflowStore.aws.role: an IAM role that reads only workflowStore.keys, distinct from secrets.aws.role (store platform's)" -}}
-{{- end -}}
-{{- if and (eq $backend "vault") (or (not $wfVaultRole) (eq $wfVaultRole (.Values.secrets.vault.auth.kubernetes.role | default ""))) -}}
-{{- fail "ClusterSecretStore workflows on Vault needs secrets.workflowStore.vault.role: a kubernetes-auth role whose policy reads only workflowStore.keys, distinct from secrets.vault.auth.kubernetes.role (store platform's)" -}}
-{{- end -}}
 {{- $wfRegexes := .Values.workflowStore.namespaceRegexes -}}
-{{- if not $wfRegexes }}{{ fail "workflowStore.namespaceRegexes must restrict ClusterSecretStore workflows to workflow run namespaces" }}{{ end -}}
-{{- range $wfRegexes -}}
-{{- if not (hasPrefix "^workflows-" (toString .)) }}{{ fail (printf "workflowStore.namespaceRegexes entry %q must start with ^workflows-" .) }}{{ end -}}
-{{- end -}}
 {{- /* ---- mgmt: objects ---- */}}
 {{ include "secret-stores.store" (dict "root" . "backend" $backend "name" "platform"
       "serviceAccount" (get (dict "kubernetes" "eso-platform" "aws" "eso-aws" "vault" "eso-vault") $backend)
@@ -112,10 +93,8 @@ without list/watch on platform-secrets.
       "remoteNamespace" $platformNs "noTokenAutomount" (eq $backend "kubernetes")
       "resourceNames" $wfKeys "irsaRole" $wfAwsRole "vaultRole" $wfVaultRole "vaultPath" ($ws.vault).path) }}
 {{- else -}}
-{{- /* ---- workload: validation ---- */ -}}
 {{- $wlNs := .Values.secrets.workloadKubernetes.namespace | default "openchoreo-secrets" -}}
 {{- $d := .Values.delivery -}}
-{{- if and $d.enabled (not (and $d.namespace $d.keys $d.namespaces)) }}{{ fail "delivery needs namespace, keys and namespaces" }}{{ end -}}
 {{- /* The Cloudflare token (zone-wide DNS:Edit) must sit where store default cannot read: anything store default reads
        is readable by every tenant. Separate location, separate identity, readers dnsStore.namespaces only. */ -}}
 {{- $dns := eq (.Values.dns.provider | default "none") "cloudflare" -}}
@@ -123,16 +102,6 @@ without list/watch on platform-secrets.
 {{- $ds := .Values.secrets.dnsStore -}}
 {{- $dnsCredNs := ($ds.kubernetes).namespace | default "external-dns-credentials" -}}
 {{- $dnsRole := (get $ds $backend | default dict).role | default "" -}}
-{{- if $dns -}}
-{{- if not $dnsReaders }}{{ fail "dnsStore.namespaces must list the namespaces allowed to read ClusterSecretStore dns" }}{{ end -}}
-{{- if and (eq $backend "kubernetes") (eq $dnsCredNs $wlNs) -}}
-{{- fail "secrets.dnsStore.kubernetes.namespace must differ from secrets.workloadKubernetes.namespace (the tenant store default reads that one)" -}}
-{{- else if and (eq $backend "aws") (or (not $dnsRole) (eq $dnsRole (.Values.secrets.aws.role | default ""))) -}}
-{{- fail "dns.provider cloudflare on AWS Secrets Manager needs secrets.dnsStore.aws.role: an IAM role that reads only the DNS key, distinct from secrets.aws.role (the tenant store default's)" -}}
-{{- else if and (eq $backend "vault") (or (not $dnsRole) (eq $dnsRole (.Values.secrets.vault.auth.kubernetes.role | default ""))) -}}
-{{- fail "dns.provider cloudflare on Vault needs secrets.dnsStore.vault.role: a kubernetes-auth role whose policy reads only the DNS key, distinct from secrets.vault.auth.kubernetes.role (the tenant store default's)" -}}
-{{- end -}}
-{{- end -}}
 {{- /* ---- workload: objects ---- */}}
 {{- if eq $backend "kubernetes" }}
 apiVersion: v1

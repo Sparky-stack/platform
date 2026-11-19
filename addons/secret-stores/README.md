@@ -74,6 +74,7 @@ Every store and its identity (ServiceAccount, plus a reader Role on the kubernet
 
 ## Day-2 notes
 
+- A rejected render names the bad value: `values.schema.json` checks types, formats and enums (Helm prints `at '/<path>'`); cross-field rules live in `templates/validate.yaml`.
 - Rotating GitHub App keys, PATs, and ESO-backed secrets: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#4-github-app-keys-and-registry-pats).
 
 ## Links
