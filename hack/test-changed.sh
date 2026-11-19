@@ -33,7 +33,12 @@ for u in $units; do
   case "$u" in charts/* | addons/*) charts="$charts $u" ;; esac
 done
 # shellcheck disable=SC2086  # units are space-free paths
-for t in $(bash hack/changed-units.sh --tests $units); do tests="$tests $t"; done
+for t in $(bash hack/changed-units.sh --tests $units); do
+  tests="$tests $t"
+  # A cross-chart test names the other charts it reads from $RENDERED_DIR: `# scoped-ci renders: addons/x ...`.
+  extra=$(sed -n 's/^# scoped-ci renders: //p' "$t")
+  if [[ -n "$charts" && -n "$extra" ]]; then charts="$charts $extra"; fi
+done
 echo "==> related contract tests:${tests:- none}"
 
 if [[ -n "$charts" ]]; then

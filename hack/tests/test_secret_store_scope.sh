@@ -10,6 +10,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 echo "== test_secret_store_scope =="
+# scoped-ci renders: addons/secret-stores
 if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
   echo "  SKIP: needs the renders from hack/test.sh (RENDERED_DIR)"
   exit 0
