@@ -52,6 +52,8 @@ jobs:
               bash --version | head -1
               find ci/scripts ci/tests -name "*.sh" | while read -r f; do bash -n "$f"; done
               for t in ci/tests/scripts/*.test.sh; do bash "$t"; done'
+      - name: app-<stack>.yaml image phase mirrors app-container.yaml
+        run: bash ci/tests/app-workflow-interfaces.test.sh
       - name: actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
