@@ -85,10 +85,41 @@ merged `appConfig` change is live after Argo CD's sync plus a Backstage restart 
 
 ### Repository creation
 
-The publish steps need the platform write GitHub App ([forking.md](forking.md#what-needs-which-credential) (c):
-Contents, Pull requests and Workflows read/write, Administration write for repository creation; installed on the
-owner of the new repos and on the platform repo). Seed it with `GITHUB_PUSH_APP_*` (`task secrets`), then switch it on
-in the installation's `installations/<inst>/addons/openchoreo-control-plane/values.yaml`:
+The publish steps need the platform write GitHub App ([forking.md](forking.md#what-needs-which-credential) (c)).
+GitHub lets an App installation create repositories only in an **organisation**, not on a personal account
+([#109](https://github.com/koorikla/platform/issues/109)), so the scaffolder needs an org for the new app repos. The
+App is owned by that org and installed twice: on the org (create repos) and on the platform repo (open the platform
+PR). Example below: org `Sparky-stack`, platform repo `koorikla/platform`.
+
+1. **Create the org** (web UI only, github.com has no API for it): *github.com/account/organizations/new?plan=free*,
+   owned by your personal account.
+2. **Create the App from a manifest**, so the permissions are exactly (c) and the private key goes straight to a file:
+
+   ```bash
+   python3 hack/github-app.py manifest --org Sparky-stack      # review the permissions first (no network)
+   python3 hack/github-app.py create --org Sparky-stack        # open http://127.0.0.1:8765/ and click Create
+   ```
+
+   The browser must be logged in as an owner of the org. The script writes `~/keys/<slug>.pem` (mode 0600) and
+   `~/keys/<slug>.json` (App ID, slug: not secret) and never prints the key. To finish on a phone, expose the port
+   through an HTTPS tunnel you control and pass its URL, e.g.
+   `tailscale serve --bg --https=8443 --set-path /ghapp http://127.0.0.1:8765/ghapp` and
+   `--public-url https://<host>.ts.net:8443/ghapp` (plain http is refused off loopback; remove the path afterwards
+   with `tailscale serve --https=8443 --set-path /ghapp off`).
+3. **Install the App twice** from *github.com/apps/&lt;slug&gt;/installations/new*: on the org with
+   *All repositories* (repos the scaffolder creates are covered at once), and on the platform repo's owner with
+   *Only select repositories* = the platform repo. Check both with the App's own credentials:
+
+   ```bash
+   python3 hack/github-app.py installs --slug sparky-stack-scaffolder   # installation IDs, selection, permissions
+   ```
+
+4. **Seed it** (`task secrets`, [forking.md](forking.md#seeding-locally-task-secrets)):
+   `GITHUB_PUSH_APP_ID=<App ID> GITHUB_PUSH_APP_INSTALLATION_ID=<org installation ID>
+   GITHUB_PUSH_APP_PRIVATE_KEY_FILE=~/keys/<slug>.pem`. Backstage reads only the App ID and key and looks up the
+   installation per repository owner itself; `task secrets` requires the installation ID for the store key.
+5. **Switch it on** in the installation's `installations/<inst>/addons/openchoreo-control-plane/values.yaml`, with both
+   owners in `allowedInstallationOwners`:
 
 ```yaml
 scaffolder:
@@ -110,12 +141,13 @@ openchoreo-control-plane:
                 privateKey: ${GITHUB_APP_PRIVATE_KEY}
                 clientId: not-used          # required by Backstage's schema; only user OAuth would use them
                 clientSecret: not-used
-                allowedInstallationOwners: [koorikla]
+                allowedInstallationOwners: [Sparky-stack, koorikla]   # org of the new repos + platform repo owner
 ```
 
-`templates/validate.yaml` of the addon fails the render when only one side is set. GitHub lets an App installation
-create repositories only in an organisation; on a personal account the publish step fails
-([#109](https://github.com/koorikla/platform/issues/109)).
+`templates/validate.yaml` of the addon fails the render when only one side is set. Argo CD read access to the new
+repos (public repos need none; private ones need the read App (a) installed on the org), production admission
+(Kyverno `imageVerification.github.repositories`) and the promotion gate App (c2) on each new repo are separate steps;
+the end-to-end run is tracked in [#109](https://github.com/koorikla/platform/issues/109).
 
 ## Adding a template
 

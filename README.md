@@ -32,7 +32,7 @@ task demo:check   # read-only pre-flight across every plane and workload cluster
 task down         # freeze Argo CD, delete CAPD workload clusters, then delete k3d mgmt
 ```
 
-Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>` ([docs/forking.md](docs/forking.md)). Offline validation before pushing: `task lint` and `task test` (`task --list` lists every target).
+Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>` ([docs/forking.md](docs/forking.md)). Offline validation before pushing: `task lint` and `task test` (`task --list` lists every target). Golden-path templates that create repos need a GitHub org and the platform write GitHub App: [repository creation](docs/project-templates.md#repository-creation).
 
 ## 9-step demo storyline
 
