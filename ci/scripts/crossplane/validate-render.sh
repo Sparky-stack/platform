@@ -105,6 +105,27 @@ crossplane resource validate ${cache_args} "${extensions}" "${examples}"
 # 3. Render tests.
 [[ -f "${functions}" ]] || die "functions file ${functions} not found (needed by composition render)"
 
+# A Crossplane Project's embedded functions (functions/<fn>/) are not in the functions file: build the project, load
+# the images it built for this machine's arch (<repo>_<fn>:<arch>) and add one Function per embedded function, named
+# like Crossplane names the dependency <repo>_<fn> (registry host dropped, / -> -, _ dropped).
+if [[ -f crossplane-project.yaml ]] && compgen -G 'functions/*/' >/dev/null; then
+  require_cmd docker
+  repo="$(yq -r '.spec.repository' crossplane-project.yaml)"
+  log "crossplane project build (embedded functions for the render tests)"
+  # shellcheck disable=SC2086
+  crossplane project build ${cache_args} --repository "${repo}" -o "${tmp}/project"
+  docker load -q -i "${tmp}/project/$(yq -r '.metadata.name' crossplane-project.yaml).xpkg" >/dev/null
+  case "$(docker info --format '{{.Architecture}}')" in aarch64 | arm64) arch=arm64 ;; *) arch=amd64 ;; esac
+  cp "${functions}" "${tmp}/functions.yaml"
+  for d in functions/*/; do
+    fn="$(basename "${d}")"
+    name="$(printf '%s_%s' "${repo#*/}" "${fn}" | tr '/' '-' | tr -d '_')"
+    printf -- '---\napiVersion: pkg.crossplane.io/v1\nkind: Function\nmetadata:\n  name: %s\n  annotations:\n    render.crossplane.io/runtime-docker-pull-policy: Never\nspec:\n  package: %s\n' \
+      "${name}" "${repo}_${fn}:${arch}" >>"${tmp}/functions.yaml"
+  done
+  functions="${tmp}/functions.yaml"
+fi
+
 find_composition() {
   # $1 = XR file; prints the composition file to use.
   local xr="$1" ref api kind f

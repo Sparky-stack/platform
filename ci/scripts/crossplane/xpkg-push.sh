@@ -10,6 +10,10 @@
 #   digest            sha256:...
 #   repo              repository (first tag without :tag)
 #   image_digest_ref  repo@sha256:...
+#   function_repo / function_digest / function_digest_ref
+#                     PROJECT_ROOT with an embedded function (functions/<fn>/): `crossplane project push` pushes it as
+#                     <repo>_<fn> (multi-arch index) under the same tags; empty without one. One embedded function per
+#                     project (the workflow signs and attests exactly one).
 # Requires: crossplane; crane or docker buildx (digest lookup); registry
 # credentials in the docker config (docker login / crane auth login).
 set -euo pipefail
@@ -35,18 +39,40 @@ for t in ${TAGS}; do
 done
 
 repo="${first%:*}"
-if command -v crane >/dev/null 2>&1; then
-  digest="$(crane digest "${first}")"
-else
-  require_cmd docker jq
-  digest="$(docker buildx imagetools inspect "${first}" --format '{{json .Manifest}}' | jq -r '.digest')"
-fi
-case "${digest}" in
-  sha256:*) ;;
-  *) die "could not resolve digest of ${first}" ;;
-esac
-
+# resolve_digest <ref>: digest of a pushed tag (crane, or docker buildx as a fallback)
+resolve_digest() {
+  local d
+  if command -v crane >/dev/null 2>&1; then
+    d="$(crane digest "$1")"
+  else
+    require_cmd docker jq
+    d="$(docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r '.digest')"
+  fi
+  case "${d}" in
+    sha256:*) printf '%s\n' "${d}" ;;
+    *) die "could not resolve digest of $1" ;;
+  esac
+}
+digest="$(resolve_digest "${first}")"
 emit_output digest "${digest}"
 emit_output repo "${repo}"
 emit_output image_digest_ref "${repo}@${digest}"
 step_summary "- Pushed package \`${repo}@${digest}\`"
+
+fns=()
+if [[ -n "${PROJECT_ROOT:-}" && -d "${PROJECT_ROOT}/functions" ]]; then
+  for d in "${PROJECT_ROOT}"/functions/*/; do
+    [[ -d "${d}" ]] && fns+=("$(basename "${d}")")
+  done
+fi
+[[ ${#fns[@]} -le 1 ]] || die "more than one embedded function (${fns[*]}): extend the workflow's sign/attest steps"
+fn_repo="" fn_digest="" fn_ref=""
+if [[ ${#fns[@]} -eq 1 ]]; then
+  fn_repo="${repo}_${fns[0]}"
+  fn_digest="$(resolve_digest "${fn_repo}:${first##*:}")"
+  fn_ref="${fn_repo}@${fn_digest}"
+  step_summary "- Pushed embedded function \`${fn_ref}\`"
+fi
+emit_output function_repo "${fn_repo}"
+emit_output function_digest "${fn_digest}"
+emit_output function_digest_ref "${fn_ref}"
