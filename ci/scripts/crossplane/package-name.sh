@@ -16,6 +16,7 @@ name="${PACKAGE_NAME:-}"
 if [[ -z "${name}" ]]; then
   require_cmd yq
   f="${PACKAGE_ROOT:-.}/crossplane.yaml"
+  [[ ! -f "${PACKAGE_ROOT:-.}/crossplane-project.yaml" ]] || f="${PACKAGE_ROOT:-.}/crossplane-project.yaml"
   [[ -f "$f" ]] || die "$f not found"
   name="$(yq -r '.metadata.name' "$f")"
 fi

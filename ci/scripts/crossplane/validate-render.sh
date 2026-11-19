@@ -10,7 +10,7 @@
 #     $RENDER_DIR/expected/<example file name> when that file exists.
 #
 # Env in:
-#   PACKAGE_ROOT     package root containing crossplane.yaml, default .
+#   PACKAGE_ROOT     package root containing crossplane.yaml or crossplane-project.yaml, default .
 #   EXAMPLES_DIR     example XRs, relative to PACKAGE_ROOT, default examples
 #   RENDER_DIR       render test assets, relative to PACKAGE_ROOT, default
 #                    tests/render (functions.yaml, observed/<name>,
@@ -34,7 +34,21 @@ out="$(out_dir)"
 out="$(cd "${out}" && pwd)"
 mkdir -p "${out}/render"
 cd "${PACKAGE_ROOT:-.}"
-[[ -f crossplane.yaml ]] || die "crossplane.yaml not found in $(pwd)"
+
+# Package metadata: crossplane.yaml (classic package) or, for a Crossplane Project (crossplane-project.yaml), an
+# equivalent Configuration generated from the project's dependencies (api-only ones too: they carry the schemas).
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+if [[ -f crossplane-project.yaml ]]; then
+  meta="${tmp}/crossplane.yaml"
+  yq '{"apiVersion": "meta.pkg.crossplane.io/v1", "kind": "Configuration", "metadata": {"name": .metadata.name},
+    "spec": {"dependsOn": [.spec.dependencies[] | select(.type == "xpkg") | .xpkg | del(.apiOnly)]}}' \
+    crossplane-project.yaml >"${meta}"
+elif [[ -f crossplane.yaml ]]; then
+  meta="crossplane.yaml"
+else
+  die "neither crossplane.yaml nor crossplane-project.yaml found in $(pwd)"
+fi
 
 examples="${EXAMPLES_DIR:-examples}"
 render_dir="${RENDER_DIR:-tests/render}"
@@ -45,13 +59,12 @@ if [[ -n "${CACHE_DIR:-}" ]]; then
 fi
 
 # Collect package YAML (everything except examples, tests, dot-dirs).
-tmp="$(mktemp -d)"
-trap 'rm -rf "${tmp}"' EXIT
 : >"${tmp}/xrds.list"
 : >"${tmp}/comps.list"
 find . -type f \( -name '*.yaml' -o -name '*.yml' \) \
   -not -path './.*' -not -path "./${examples}/*" -not -path "./${render_dir}/*" \
-  -not -path './tests/*' -not -name 'crossplane.yaml' | LC_ALL=C sort >"${tmp}/files.list"
+  -not -path './tests/*' -not -path './_output/*' -not -path './schemas/*' \
+  -not -name 'crossplane.yaml' -not -name 'crossplane-project.yaml' | LC_ALL=C sort >"${tmp}/files.list"
 while IFS= read -r f <&3; do
   kinds="$(yq -r '.kind' "$f" 2>/dev/null || true)"
   case "${kinds}" in *CompositeResourceDefinition*) echo "$f" >>"${tmp}/xrds.list" ;; esac
@@ -63,7 +76,7 @@ done 3<"${tmp}/files.list"
 [[ -s "${tmp}/xrds.list" ]] || die "no CompositeResourceDefinition found"
 [[ -s "${tmp}/comps.list" ]] || die "no Composition found"
 
-extensions="crossplane.yaml"
+extensions="${meta}"
 while IFS= read -r f; do extensions="${extensions},${f}"; done <"${tmp}/xrds.list"
 
 # 1. Package objects.
@@ -77,7 +90,7 @@ while IFS= read -r f; do
 done <"${tmp}/files.list"
 log "validate package objects against Crossplane + dependency schemas"
 # shellcheck disable=SC2086
-crossplane resource validate ${cache_args} crossplane.yaml "${tmp}/package.yaml"
+crossplane resource validate ${cache_args} "${meta}" "${tmp}/package.yaml"
 
 if [[ ! -d "${examples}" ]]; then
   warn "no ${examples}/ directory; skipping example validation and render tests"
