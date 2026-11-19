@@ -1,7 +1,7 @@
 {{- /*
 Render-time guards: what runs must equal installation.yaml `dns:` (delivered by the catalog's installationValueFiles /
 installationParameters; an installation overlay must not contradict it).
-  - dns.provider is none | route53 | cloudflare. Enabling the addon on a cluster whose installation has provider none
+  - dns.provider is none | route53 | cloudflare (values.schema.json, with the other single-field formats). Enabling the addon on a cluster whose installation has provider none
     is a mistake, not a silent no-op (`installation` values exist only in platform renders, not standalone).
   - external-dns.enabled and provider.name follow dns.provider (route53 -> aws).
   - domainFilters is never empty while running (ExternalDNS would manage every zone the credentials reach) and equals
@@ -18,9 +18,6 @@ installationParameters; an installation overlay must not contradict it).
 {{- $provider := $dns.provider | default "none" }}
 {{- $ext := index .Values "external-dns" }}
 {{- $map := dict "none" "" "route53" "aws" "cloudflare" "cloudflare" }}
-{{- if not (hasKey $map $provider) }}
-{{- fail (printf "dns.provider must be one of none, route53, cloudflare (installation.yaml), got %q" $provider) }}
-{{- end }}
 {{- if eq $provider "none" }}
 {{- if .Values.installation }}
 {{- fail (printf "external-dns is enabled on cluster %s but installation.yaml dns.provider is none: set dns.provider and dns.domainFilters, or drop the addon toggle" .Values.cluster.name) }}

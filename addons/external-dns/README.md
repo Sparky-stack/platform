@@ -38,6 +38,7 @@ Wrapper chart for `external-dns` (`1.23.0` / `v0.23.0`). Publishes DNS records f
 
 ## Day-2 notes
 
+- A rejected render names the bad value: `values.schema.json` checks types, formats and enums (Helm prints `at '/<path>'`); cross-field rules live in `templates/validate.yaml`.
 - Rotating Cloudflare DNS tokens: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#6-eso-backed-platform-and-workload-secrets).
 
 ## Links

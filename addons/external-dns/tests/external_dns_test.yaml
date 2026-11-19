@@ -74,7 +74,7 @@ tests:
     template: templates/validate.yaml
     set: { dns.provider: gcp }
     asserts:
-      - failedTemplate: { errorMessage: 'dns.provider must be one of none, route53, cloudflare (installation.yaml), got "gcp"' }
+      - failedTemplate: { errorPattern: "/dns/provider': value must be one of" }
 
   - it: rejects enabling the addon in an installation without a DNS provider
     template: templates/validate.yaml
@@ -204,3 +204,10 @@ tests:
     set: { dns.provider: cloudflare, dns.domainFilters: [a.example.com], external-dns.domainFilters: [a.example.com], external-dns.env: [] }
     asserts:
       - failedTemplate: { errorMessage: dns.provider=cloudflare needs secrets.cloudflare.enabled and CF_API_TOKEN from Secret external-dns-cloudflare (values/dns-cloudflare.yaml) }
+
+  - it: needs secrets.store (the ClusterSecretStore of the Cloudflare token)
+    template: templates/secrets.yaml
+    set:
+      secrets.store: null
+    asserts:
+      - failedTemplate: { errorPattern: "/secrets': missing property 'store'" }
