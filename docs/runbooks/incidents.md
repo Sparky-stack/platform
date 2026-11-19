@@ -223,6 +223,7 @@ Identify the matching failure mode below and execute its **Steps**, **Verify**, 
     ```bash
     $K -n default annotate renderedrelease --all platform.koorikla.io/kick="$(date +%s)" --overwrite
     ```
+  - **New cluster, agent pod never created ([#246](https://github.com/koorikla/platform/issues/246))**: the `capability-gate` Sync hook waits for the CRDs of the cluster's opt-in addons (KEDA) before the agent starts; fix the addon (`keda-<cluster>` app), then check `kubectl --kubeconfig dev1.kubeconfig -n openchoreo-data-plane logs job/capability-gate --all-containers`.
 - **Verify**: `$K get clusterdataplane dev1` is connected and `$K -n default get renderedreleases` shows `Ready`.
 - **Rollback**: if an `openchoreo.controlPlane.clusterGatewayURL` or gateway route edit broke connectivity, `git revert` the commit on `main`.
 

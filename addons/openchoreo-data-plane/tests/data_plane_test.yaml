@@ -5,6 +5,7 @@ templates:
   - charts/openchoreo-data-plane/templates/cluster-agent/certificate.yaml
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
   - templates/cluster-agent-data-services.yaml
+  - templates/capability-gate.yaml
   - templates/priority-classes.yaml
 set:
   cluster.name: dev1
@@ -111,6 +112,25 @@ tests:
           value: [{ kind: ServiceAccount, name: cluster-agent-dataplane, namespace: NAMESPACE }]
         documentIndex: 1
 
+  - it: "capability gate (#246): a Sync hook in wave -1 holds the agent (wave 0) until KEDA's CRD is Established"
+    template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.keda.enabled: "true"
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/scaledobjects.keda.sh]
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/scaledobjects.keda.sh]
+
+  - it: "capability gate: nothing rendered on a cluster without keda (the agent starts at once)"
+    template: templates/capability-gate.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
   - it: ships the PriorityClasses ClusterTrait resilience assigns, production preempting, the rest never
     template: templates/priority-classes.yaml
     asserts:
