@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon harbor (platform keys; harbor.* is the upstream chart's)",
+  "type": "object",
+  "required": [
+    "registry",
+    "secrets",
+    "pki",
+    "gateway",
+    "harbor"
+  ],
+  "properties": {
+    "registry": {
+      "type": "object",
+      "required": [
+        "type",
+        "host"
+      ],
+      "properties": {
+        "type": {
+          "const": "harbor",
+          "description": "Must be harbor: with registry.type external disable the addon (addons.platform.koorikla.io/harbor: \"false\")."
+        },
+        "host": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]{1,5})?$",
+          "description": "<name>[:port] used in image refs, Harbor externalURL and node pulls."
+        },
+        "appsProject": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Harbor project in-cluster builds push to."
+        },
+        "proxyCache": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "upstream",
+              "project"
+            ],
+            "properties": {
+              "upstream": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Upstream registry host (config.endpoints key)."
+              },
+              "project": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Harbor proxy-cache project name."
+              }
+            }
+          },
+          "description": "Pull-through caches: upstream registry -> Harbor project (upstream needs a config.endpoints entry)."
+        }
+      },
+      "description": "installation.yaml registry: the platform registry this addon serves."
+    },
+    "secrets": {
+      "type": "object",
+      "required": [
+        "store"
+      ],
+      "properties": {
+        "store": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ClusterSecretStore the Harbor Secrets are read from."
+        },
+        "remoteKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Store key with Harbor's generated secrets."
+        },
+        "ghcrKey": {
+          "type": "string",
+          "description": "Store key with GHCR credentials for private ghcr.io packages (\"\" = none)."
+        },
+        "secretName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secret the upstream chart's existingSecret* keys point at."
+        }
+      },
+      "description": "ExternalSecret inputs for Harbor's admin/DB/robot secrets."
+    },
+    "pki": {
+      "type": "object",
+      "properties": {
+        "caIssuer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Namespaced Issuer + CA Secret in ns harbor."
+        },
+        "caDuration": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "CA lifetime (Go duration)."
+        },
+        "tlsSecret": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Listener certificate Secret (== harbor.expose.tls.secret.secretName)."
+        },
+        "tokenSecret": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JWT signing Secret of Harbor's token service (== harbor.core.secretName)."
+        }
+      },
+      "description": "Namespaced CA and the listener/token certificates."
+    },
+    "gateway": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Gateway the chart's HTTPRoute attaches to."
+        },
+        "className": {
+          "type": "string",
+          "minLength": 1,
+          "description": "GatewayClass."
+        },
+        "routeName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The upstream chart's HTTPRoute name."
+        }
+      },
+      "description": "Gateway API listener in front of Harbor."
+    },
+    "harbor": {
+      "type": "object",
+      "description": "Upstream Harbor chart values (not constrained here; cross-checks in templates/validate.yaml)."
+    }
+  }
+}
