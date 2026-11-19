@@ -190,3 +190,8 @@ tests:
       - notMatchRegex:
           path: data["manifests.yaml"]
           pattern: '(kind: ClusterAuthzRoleBinding[\s\S]*){11}'
+  - it: fails when the cluster gateway URL is not wss:// (schema)
+    template: templates/validate.yaml
+    set: { openchoreo.controlPlane.clusterGatewayURL: "https://cluster-gateway.openchoreo.localhost:8443/ws" }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/openchoreo/controlPlane/clusterGatewayURL': .* does not match pattern '\\^wss://'" }

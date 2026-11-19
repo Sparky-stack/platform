@@ -11,12 +11,12 @@ component's Workload and revoked at the end. Parameters are DNS-1123 constrained
 {{- if $g.enabled }}
 {{- $script := .Files.Get "files/promotion-gate/gate.py" }}
 {{- if or (contains "${" $script) (contains "{{" $script) }}{{ fail "files/promotion-gate/gate.py must not contain '${' or '{{' (CEL / Argo templating)" }}{{ end }}
-{{- $host := required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host }}
+{{- $host := .Values.openchoreo.controlPlane.host }}
 {{- $apiURL := $g.apiURL | default (printf "http://api.%s:%v" $host $g.controlPlanePort) }}
 {{- $tokenURL := $g.tokenURL | default (printf "http://thunder.%s:%v/oauth2/token" $host $g.controlPlanePort) }}
 {{- $observerURL := $g.observerURL | default (printf "http://observer.%s:%v" $host .Values.openchoreo.observability.httpPort) }}
 {{- $observe := and $g.observe.enabled .Values.openchoreo.observability.enabled }}
-{{- $githubOwner := required "installation.githubOrg is required (GitHub owner the gate may open PRs in)" .Values.installation.githubOrg }}
+{{- $githubOwner := .Values.installation.githubOrg }}
 {{- $label := "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$" }}
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow
@@ -112,7 +112,7 @@ spec:
       executor:
         serviceAccountName: workflow-sa
       podMetadata:
-        labels: {{ toJson (required "promotionGate.podLabels is required (egress to the OpenChoreo API, Thunder, observer)" $g.podLabels) }}
+        labels: {{ toJson $g.podLabels }}
       activeDeadlineSeconds: 900
       podGC:
         strategy: OnPodCompletion       # the pod that mounted the credentials goes away with the step
@@ -157,7 +157,7 @@ spec:
               - { name: API_URL, value: {{ $apiURL | quote }} }
               - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
               - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
-              - { name: PROMETHEUS_URL, value: {{ required "promotionGate.prometheusURL is required" $g.prometheusURL | quote }} }
+              - { name: PROMETHEUS_URL, value: {{ $g.prometheusURL | quote }} }
               - { name: CLIENT_ID, value: {{ $g.clientID | quote }} }
               - { name: SECRETS_DIR, value: /var/run/secrets/promotion-gate }
               - { name: GITHUB_OWNER_URL, value: {{ $githubOwner | quote }} }

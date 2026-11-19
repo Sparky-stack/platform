@@ -16,7 +16,7 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
-    name: {{ required "scaffolder.githubApp.store" .store }}
+    name: {{ .store }}
   target:
     name: {{ .secretName }}
   data:

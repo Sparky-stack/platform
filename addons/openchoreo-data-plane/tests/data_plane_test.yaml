@@ -161,3 +161,8 @@ tests:
         documentSelector: { path: metadata.name, value: app-standard }
       - equal: { path: preemptionPolicy, value: Never }
         documentSelector: { path: metadata.name, value: app-standard }
+  - it: fails without the cluster name (schema)
+    template: templates/validate.yaml
+    set: { cluster.name: null }
+    asserts:
+      - failedTemplate: { errorPattern: "at '/cluster': missing property 'name'" }

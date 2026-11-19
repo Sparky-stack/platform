@@ -1,0 +1,11 @@
+{{- /*
+Cross-field checks of this chart (renders nothing). Single-value presence and formats (DNS labels, digests, enums,
+git prefixes, required keys) are in values.schema.json.
+*/ -}}
+{{- /* Builds need a registry: harbor pushes to registry.host, external to registry.external.repository. */ -}}
+{{- if and (eq (toString .Values.registry.type) "harbor") (not .Values.registry.host) }}
+{{- fail "registry.host is required for registry.type harbor" }}
+{{- end }}
+{{- if and (ne (toString .Values.registry.type) "harbor") (not .Values.registry.external.repository) }}
+{{- fail "registry.external.repository is required for registry.type external" }}
+{{- end }}

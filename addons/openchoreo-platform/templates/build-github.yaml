@@ -6,7 +6,7 @@ workflow-plane agent apply each run's `<run>-git` GithubAccessToken generator (t
 {{- if and .Values.openchoreo.workflowPlane.enabled .Values.buildWorkflows.enabled }}
 {{- $g := .Values.buildWorkflows.github }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
-{{- $key := required "buildWorkflows.github.key (store key of the platform GitHub App) is required" $g.key }}
+{{- $key := $g.key }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:

@@ -65,7 +65,10 @@ shows the error) on: missing/invalid `name`, missing or non-k3s `kubernetesVersi
 `aws` | `hetzner` | `gcp-gke` | `byo`), a provider
 that the installation does not enable, a cloud provider without `region`, unknown `environment` (`development` | `staging` | `production`), non-boolean `addons.*`, workers without
 `name`, an even, zero or non-integer `controlPlane.replicas`, and a single-server `environment: production` cluster on
-aws/hetzner (see "Control plane size and rollouts").
+aws/hetzner (see "Control plane size and rollouts"). Types, enums, patterns and per-provider required keys are in
+`charts/cluster/values.schema.json` (Helm reports `values don't meet the specifications of the schema(s)` with the
+failing path, e.g. `at '/kubernetesVersion'`); cross-field rules (provider enabled, byo/GKE exclusions, mesh group,
+production size) are in `charts/cluster/templates/validate.yaml`.
 
 | Fleet file | Becomes |
 |---|---|

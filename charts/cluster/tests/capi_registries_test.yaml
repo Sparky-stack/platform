@@ -1,7 +1,7 @@
 suite: capi-registries - k3s registries.yaml for private GHCR, from ClusterSecretStore/platform
 templates:
   - templates/common/capi-registries.yaml
-  - templates/common/capi-cluster.yaml     # defines capi.validate
+  - templates/common/capi-cluster.yaml
 tests:
   - it: renders ExternalSecret <name>-registries in fleet from platform-ghcr
     template: templates/common/capi-registries.yaml
@@ -63,7 +63,7 @@ tests:
     values: [values/capi-docker.yaml]
     set: { kubernetesVersion: "" }
     asserts:
-      - failedTemplate: { errorPattern: "`kubernetesVersion` is required" }
+      - failedTemplate: { errorPattern: "at '/kubernetesVersion'" }   # values.schema.json
 
   # --- Harbor (installation.yaml registry.type harbor) ---------------------------------------------------------------
   - it: harbor adds mirrors with upstream rewrite, robot auth and the CA file for the registry host

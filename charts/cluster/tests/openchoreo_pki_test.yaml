@@ -4,6 +4,7 @@ templates:
   - templates/common/_openchoreo.tpl
 set:
   name: dev1
+  kubernetesVersion: v1.35.10+k3s1   # a valid cluster file (values.schema.json)
   openchoreo.dataPlane.enabled: true
   openchoreo.dataPlane.gatewayHost: dev1.apps.localhost
 tests:
@@ -19,7 +20,7 @@ tests:
     set:
       name: ""
     asserts:
-      - failedTemplate: { errorMessage: "name is required (cluster file)" }
+      - failedTemplate: { errorPattern: "at '/name'" }   # values.schema.json
 
   - it: renders selfsigned issuer -> CA cert -> CA issuer -> client cert, all in fleet
     template: templates/common/openchoreo-agent-pki.yaml
