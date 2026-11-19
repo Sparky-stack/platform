@@ -374,7 +374,7 @@
         },
         "runNamespacePrefix": {
           "type": "string",
-          "description": "Run namespace prefix ending in - (OpenChoreo: workflows-)."
+          "description": "Run namespace prefix ending in - (OpenChoreo: workflows-); format checked in templates/validate.yaml while enabled."
         }
       },
       "required": [
@@ -391,11 +391,6 @@
         ]
       },
       "then": {
-        "properties": {
-          "runNamespacePrefix": {
-            "pattern": "^[a-z0-9][-a-z0-9]*-$"
-          }
-        },
         "required": [
           "runNamespacePrefix"
         ]

@@ -1,4 +1,7 @@
-{{- /* Renders nothing: fails the render when values contradict installation.yaml `registry` or each other (cross-field checks here; types, required keys and registry.type: values.schema.json). */ -}}
+{{- /* Renders nothing: fails the render when values contradict installation.yaml `registry` or each other (cross-field checks here; types and required keys: values.schema.json). */ -}}
+{{- if ne (toString .Values.registry.type) "harbor" }}
+{{- fail (printf "registry.type is %q: disable addon harbor for mgmt (addons.platform.koorikla.io/harbor: \"false\")" .Values.registry.type) }}
+{{- end }}
 {{- /* The subchart's literals (externalURL, route hosts, parentRefs, token secret) must match installation.yaml. */ -}}
 {{- $h := .Values.harbor }}
 {{- if ne $h.externalURL (printf "https://%s" .Values.registry.host) }}

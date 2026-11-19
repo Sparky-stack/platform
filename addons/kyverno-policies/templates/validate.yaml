@@ -1,10 +1,16 @@
-{{- /* Cross-field rules of this chart (renders nothing). Single-field formats, enums and ranges: values.schema.json.
+{{- /* Cross-field rules of this chart (renders nothing). Single-field formats, enums and ranges: values.schema.json,
+except the workflow pin and commit count, whose messages say why (tags and branches are mutable).
 Attestor and policy names are derived in templates/image-verification.yaml and checked there, next to the naming. */ -}}
 {{- $iv := .Values.imageVerification }}
 {{- if $iv.enabled }}
 {{- if $iv.github.enabled }}
 {{- if not $iv.github.workflow }}{{ fail "imageVerification.github.workflow must be https://github.com/<owner>/<repo>/.github/workflows/<file>.yaml without a ref" }}{{ end }}
-{{- if not $iv.github.workflowRef }}{{ fail "imageVerification.github.workflowRef must be a 40-hex commit SHA (tags and branches are mutable)" }}{{ end }}
+{{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
+{{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
+{{- range $wfRefs }}
+{{- if not (regexMatch "^[0-9a-f]{40}$" .) }}{{ fail (printf "imageVerification.github.workflowRef %q must be a 40-hex commit SHA of %s (tags and branches are mutable)" . $iv.github.workflow) }}{{ end }}
+{{- end }}
+{{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
 {{- if has (toString $iv.github.workflowRef) (($iv.github.transitionWorkflowRefs | default list) | toStrings) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
 {{- if not (and $iv.github.repositories $iv.github.refs $iv.github.triggers) }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
 {{- range ($iv.github.attestations | default list) }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ end }}

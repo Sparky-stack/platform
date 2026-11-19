@@ -62,17 +62,14 @@
               "pattern": "^(https://github\\.com/[^/@]+/[^/@]+/\\.github/workflows/[^/@]+\\.ya?ml)?$"
             },
             "workflowRef": {
-              "description": "40-hex commit SHA of the workflow (tags and branches are mutable); required while github.enabled.",
-              "type": "string",
-              "pattern": "^([0-9a-f]{40})?$"
+              "description": "Commit SHA of the workflow; 40-hex and required while github.enabled (templates/validate.yaml: tags and branches are mutable).",
+              "type": "string"
             },
             "transitionWorkflowRefs": {
-              "description": "The previous workflow commit, trusted while app repos move (at most one).",
+              "description": "The previous workflow commit, trusted while app repos move (at most one, 40-hex; templates/validate.yaml).",
               "type": "array",
-              "maxItems": 1,
               "items": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{40}$"
+                "type": "string"
               }
             },
             "repositories": {
