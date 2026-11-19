@@ -1,0 +1,19 @@
+{{- /* azure-eventhubs skeleton: an event hub (= Kafka topic) in the cluster's Event Hubs namespace (facts); apps get Azure Event Hubs Data Sender/Receiver through workload identity (role assignment: follow-up). VERIFY: never applied. */}}
+{{- if eq $backend "azure-eventhubs" }}
+---
+apiVersion: eventhub.azure.m.upbound.io/v1beta1
+kind: EventHub
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "event-hub" }}
+    crossplane.io/external-name: {{ $topic }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    namespaceName: {{ $facts.eventhubNamespace }}
+    partitionCount: {{ $partitions }}
+    messageRetention: {{ max 1 (div (dig "retentionHours" 168 $spec | int) 24) }}
+{{- end }}

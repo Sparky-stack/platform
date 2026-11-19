@@ -1,0 +1,28 @@
+{{- /* azure-cache skeleton: Azure Cache for Redis (no managed Valkey on Azure; protocol compatible), private only, Entra auth, access keys off; Premium zone-redundant for HA. VERIFY: never applied, Entra access-policy user. */}}
+{{- if eq $backend "azure-cache" }}
+---
+{{- $premium := or $ha (eq $size "L") }}
+apiVersion: cache.azure.m.upbound.io/v1beta1
+kind: RedisCache
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "cache" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    location: {{ $facts.location }}
+    skuName: {{ ternary "Premium" "Standard" $premium }}
+    family: {{ ternary "P" "C" $premium }}
+    capacity: {{ get (dict "S" 0 "M" 2 "L" 1) $size }}
+    minimumTlsVersion: "1.2"
+    publicNetworkAccessEnabled: false
+    accessKeysAuthenticationEnabled: false
+    redisConfiguration: { activeDirectoryAuthenticationEnabled: true, maxmemoryPolicy: {{ $policy }} }
+    {{- if $ha }}
+    zones: ["1", "2"]
+    {{- end }}
+{{- end }}

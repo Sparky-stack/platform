@@ -1,0 +1,39 @@
+name: package-bucket
+
+# The bucket API Configuration package (packages/bucket): PRs validate + render only; pushes to main and
+# release tags (bucket-vX.Y.Z, release-please component "bucket") build, push to
+# ghcr.io/koorikla/platform/bucket, cosign keyless sign and attest SLSA provenance.
+# Status: layout - no cluster installs it yet (packages/bucket/README.md); enabling it adds the pin to
+# addons/crossplane.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/bucket/**'
+      - '.github/workflows/package-bucket.yaml'
+  push:
+    branches: [main]
+    tags: ['bucket-v*']
+    paths:
+      - 'packages/bucket/**'
+      - '.github/workflows/package-bucket.yaml'
+
+concurrency:
+  group: package-bucket-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: ./.github/workflows/app-crossplane-configuration.yaml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: packages/bucket
+      registry: ghcr.io/koorikla/platform

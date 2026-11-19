@@ -1,0 +1,197 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: MySQL
+metadata:
+  name: billing-db
+  namespace: dp-default-billing-production-5e6f7a8b
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: batch/v1
+      kind: Job
+      name: billing-db-mysql-init
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: billing-db-mysql
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: billing-db-mysql-password
+    - apiVersion: moco.cybozu.com/v1beta2
+      kind: MySQLCluster
+      name: billing-db
+status:
+  backend: moco
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster, connection-secret'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: moco-billing-db-primary.dp-default-billing-production-5e6f7a8b.svc
+  port: 3306
+  secretName: billing-db-mysql
+---
+apiVersion: moco.cybozu.com/v1beta2
+kind: MySQLCluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+  labels:
+    crossplane.io/composite: billing-db
+  name: billing-db
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: billing-db
+    uid: 61de4d7d-b149-5606-8ebd-394be75faa6f
+spec:
+  podTemplate:
+    metadata:
+      labels:
+        platform.koorikla.io/mysql: billing-db
+    spec:
+      containers:
+      - image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+        name: mysqld
+        resources:
+          limits:
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+  replicas: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: billing-db
+  name: billing-db-mysql
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: billing-db
+    uid: 61de4d7d-b149-5606-8ebd-394be75faa6f
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: billing-db-mysql-password
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: billing-db-mysql
+    template:
+      data:
+        database: billing
+        host: moco-billing-db-primary.dp-default-billing-production-5e6f7a8b.svc
+        password: '{{ .password }}'
+        port: "3306"
+        uri: mysql://billing:{{ .password }}@moco-billing-db-primary.dp-default-billing-production-5e6f7a8b.svc:3306/billing
+        username: billing
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: init-user
+  labels:
+    crossplane.io/composite: billing-db
+  name: billing-db-mysql-init
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: billing-db
+    uid: 61de4d7d-b149-5606-8ebd-394be75faa6f
+spec:
+  backoffLimit: 30
+  template:
+    spec:
+      containers:
+      - command:
+        - sh
+        - -ec
+        - mysql -h moco-billing-db-primary.dp-default-billing-production-5e6f7a8b.svc
+          -u moco-admin -e "CREATE DATABASE IF NOT EXISTS \`billing\`; CREATE USER
+          IF NOT EXISTS 'billing'@'%' IDENTIFIED BY '${APP_PASSWORD}'; ALTER USER
+          'billing'@'%' IDENTIFIED BY '${APP_PASSWORD}'; GRANT ALL ON \`billing\`.*
+          TO 'billing'@'%';"
+        env:
+        - name: MYSQL_PWD
+          valueFrom:
+            secretKeyRef:
+              key: ADMIN_PASSWORD
+              name: moco-billing-db
+        - name: APP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: billing-db-mysql
+        image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+        name: init
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-generator
+  labels:
+    crossplane.io/composite: billing-db
+  name: billing-db-mysql-password
+  namespace: dp-default-billing-production-5e6f7a8b
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: billing-db
+    uid: 61de4d7d-b149-5606-8ebd-394be75faa6f
+spec:
+  allowRepeat: true
+  digits: 8
+  length: 32
+  noUpper: false
+  symbols: 0

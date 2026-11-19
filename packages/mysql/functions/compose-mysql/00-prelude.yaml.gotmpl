@@ -1,0 +1,44 @@
+{{- /* Prelude of compose-mysql (files render in name order into one template, so these variables reach every
+file): the cluster's facts, the backend check, the developer's spec with the XRD defaults as fallbacks, and the values
+derived from them. Object files only read these. */}}
+{{- $xr := getCompositeResource . }}
+{{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
+{{- $backend := dig "backend" "" $facts }}
+{{- if not (has $backend (list "moco" "aws-rds" "gcp-cloudsql" "azure-flexible")) }}
+{{- fail (printf "mysql: unknown backend %q in EnvironmentConfig platform-mysql (moco | aws-rds | gcp-cloudsql | azure-flexible)" $backend) }}
+{{- end }}
+{{- $spec := $xr.spec | default dict }}
+{{- $name := $xr.metadata.name }}
+{{- $ns := $xr.metadata.namespace }}
+{{- $observed := .observed.resources | default dict }}
+{{- $size := dig "size" "S" $spec }}
+{{- $ha := eq (toString (dig "highAvailability" false $spec)) "true" }}
+{{- /* Cloud identifier: unique per cluster/namespace/name, starts with a letter, no double hyphens. */}}
+{{- $base := regexReplaceAll "-+" (printf "%s-%s" $ns $name | replace "." "-") "-" | trunc 30 | trimSuffix "-" }}
+{{- $hash := sha1sum (printf "%s/%s/%s" $facts.cluster $ns $name) }}
+{{- $id := printf "my-%s-%s" $base ($hash | trunc 8) }}
+{{- /* Retain: Crossplane never deletes the cloud resource (v2 managed resources have no deletionPolicy). */}}
+{{- $retain := eq (dig "deletionPolicy" "Retain" $spec) "Retain" }}
+{{- $mp := list "*" }}
+{{- if $retain }}{{ $mp = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+{{- $pc := dict "kind" "ClusterProviderConfig" "name" "default" }}
+{{- /* ESO template delimiters, emitted literally into ExternalSecret templates. */}}
+{{- $o := "{{" }}
+{{- $c := "}}" }}
+{{- $db := dig "database" "app" $spec }}
+{{- $storage := dig "storageGiB" 10 $spec | int }}
+{{- /* Where the database answers: MOCO's primary Service, the RDS / Cloud SQL address once observed, the
+deterministic Azure FQDN. "" until known; cloud connection Secrets wait for it. */}}
+{{- $host := "" }}
+{{- if eq $backend "moco" }}{{ $host = printf "moco-%s-primary.%s.svc" $name $ns }}
+{{- else if eq $backend "aws-rds" }}{{ $host = dig "instance" "resource" "status" "atProvider" "address" "" $observed }}
+{{- else if eq $backend "gcp-cloudsql" }}{{ $host = dig "instance" "resource" "status" "atProvider" "privateIpAddress" "" $observed }}
+{{- else if eq $backend "azure-flexible" }}{{ $host = printf "%s.mysql.database.azure.com" $id }}
+{{- end }}
+{{- $tlsQuery := ternary "" "?tls=true" (eq $backend "moco") }}
+{{- $rdsSecretArn := "" }}
+{{- with (dig "instance" "resource" "status" "atProvider" "masterUserSecret" list $observed) }}{{ $rdsSecretArn = dig "secretArn" "" (first .) }}{{ end }}
+{{- $mocoHealthy := false }}
+{{- range (dig "cluster" "resource" "status" "conditions" list $observed) }}
+{{- if and (eq .type "Healthy") (eq .status "True") }}{{ $mocoHealthy = true }}{{ end }}
+{{- end }}

@@ -1,0 +1,10 @@
+# Sample facts of a moco cluster (fake ids): the keys the moco block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-mysql
+data:
+  backend: moco
+  cluster: sample
+  environment: development
+  mysqlImage: ghcr.io/cybozu-go/moco/mysql:8.4.10

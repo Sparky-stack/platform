@@ -1,0 +1,11 @@
+# Sample facts of a azure-blob cluster (fake ids): the keys the azure-blob block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-bucket
+data:
+  backend: azure-blob
+  cluster: sample
+  environment: development
+  resourceGroupName: sample-rg
+  location: northeurope

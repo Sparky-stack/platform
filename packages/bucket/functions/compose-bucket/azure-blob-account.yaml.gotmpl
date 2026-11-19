@@ -1,0 +1,23 @@
+{{- /* azure-blob skeleton: a storage account per bucket, shared keys off, private only. Apps use Azure Workload Identity (role assignment per app: follow-up). VERIFY: never applied. */}}
+{{- if eq $backend "azure-blob" }}
+---
+apiVersion: storage.azure.m.upbound.io/v1beta1
+kind: Account
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "account" }}
+    crossplane.io/external-name: {{ $account }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    resourceGroupName: {{ $facts.resourceGroupName }}
+    location: {{ $facts.location }}
+    accountTier: Standard
+    accountReplicationType: ZRS
+    sharedAccessKeyEnabled: false
+    allowNestedItemsToBePublic: false
+    publicNetworkAccessEnabled: false
+    blobProperties: { versioningEnabled: {{ $versioning }} }
+{{- end }}

@@ -1,0 +1,19 @@
+{{- if eq $backend "aws-s3" }}
+---
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: BucketPublicAccessBlock
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "public-access-block" }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    bucketRef: { name: {{ $name }} }
+    blockPublicAcls: true
+    blockPublicPolicy: true
+    ignorePublicAcls: true
+    restrictPublicBuckets: true
+{{- end }}

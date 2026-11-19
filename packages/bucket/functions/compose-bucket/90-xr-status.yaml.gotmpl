@@ -1,0 +1,9 @@
+{{- /* The XR's status, every backend: the developer contract's plain values. */}}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: Bucket
+status:
+  backend: {{ $backend }}
+  bucket: {{ $id }}
+  endpoint: {{ $endpoint }}
+  secretName: {{ $name }}-bucket

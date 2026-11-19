@@ -1,0 +1,26 @@
+{{- /* gcp-cloudsql skeleton: Cloud SQL for MySQL, private IP in the cluster's VPC, REGIONAL for HA. VERIFY: never applied. */}}
+{{- if eq $backend "gcp-cloudsql" }}
+---
+apiVersion: sql.gcp.m.upbound.io/v1beta1
+kind: DatabaseInstance
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "instance" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    project: {{ $facts.project }}
+    region: {{ $facts.region }}
+    databaseVersion: MYSQL_8_4
+    deletionProtection: {{ $retain }}
+    settings:
+      - tier: {{ get (dict "S" "db-custom-1-3840" "M" "db-custom-2-7680" "L" "db-custom-4-15360") $size }}
+        availabilityType: {{ ternary "REGIONAL" "ZONAL" $ha }}
+        diskSize: {{ $storage }}
+        ipConfiguration:
+          - ipv4Enabled: false
+            privateNetwork: {{ $facts.network }}
+{{- end }}

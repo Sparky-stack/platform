@@ -1,0 +1,11 @@
+# Sample facts of a azure-eventhubs cluster (fake ids): the keys the azure-eventhubs block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-kafka-topic
+data:
+  backend: azure-eventhubs
+  cluster: sample
+  environment: development
+  resourceGroupName: sample-rg
+  eventhubNamespace: sample-events

@@ -1,0 +1,196 @@
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: MySQL
+metadata:
+  name: orders-db
+  namespace: dp-default-shop-development-1a2b3c4d
+spec:
+  crossplane:
+    resourceRefs:
+    - apiVersion: batch/v1
+      kind: Job
+      name: orders-db-mysql-init
+    - apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      name: orders-db-mysql
+    - apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: orders-db-mysql-password
+    - apiVersion: moco.cybozu.com/v1beta2
+      kind: MySQLCluster
+      name: orders-db
+status:
+  backend: moco
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2024-01-01T00:00:00Z"
+    message: 'Unready resources: cluster, connection-secret'
+    reason: Creating
+    status: "False"
+    type: Ready
+  endpoint: moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc
+  port: 3306
+  secretName: orders-db-mysql
+---
+apiVersion: moco.cybozu.com/v1beta2
+kind: MySQLCluster
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: cluster
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: orders-db
+    uid: ad1149c7-8aae-5944-aff4-fbcef5a2e33b
+spec:
+  podTemplate:
+    metadata:
+      labels:
+        platform.koorikla.io/mysql: orders-db
+    spec:
+      containers:
+      - image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+        name: mysqld
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+  replicas: 1
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: connection-secret
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-mysql
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: orders-db
+    uid: ad1149c7-8aae-5944-aff4-fbcef5a2e33b
+spec:
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: orders-db-mysql-password
+  refreshPolicy: CreatedOnce
+  target:
+    creationPolicy: Owner
+    name: orders-db-mysql
+    template:
+      data:
+        database: app
+        host: moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc
+        password: '{{ .password }}'
+        port: "3306"
+        uri: mysql://app:{{ .password }}@moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc:3306/app
+        username: app
+      engineVersion: v2
+      type: Opaque
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: init-user
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-mysql-init
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: orders-db
+    uid: ad1149c7-8aae-5944-aff4-fbcef5a2e33b
+spec:
+  backoffLimit: 30
+  template:
+    spec:
+      containers:
+      - command:
+        - sh
+        - -ec
+        - mysql -h moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc
+          -u moco-admin -e "CREATE DATABASE IF NOT EXISTS \`app\`; CREATE USER IF
+          NOT EXISTS 'app'@'%' IDENTIFIED BY '${APP_PASSWORD}'; ALTER USER 'app'@'%'
+          IDENTIFIED BY '${APP_PASSWORD}'; GRANT ALL ON \`app\`.* TO 'app'@'%';"
+        env:
+        - name: MYSQL_PWD
+          valueFrom:
+            secretKeyRef:
+              key: ADMIN_PASSWORD
+              name: moco-orders-db
+        - name: APP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: orders-db-mysql
+        image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+        name: init
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: password-generator
+  labels:
+    crossplane.io/composite: orders-db
+  name: orders-db-mysql-password
+  namespace: dp-default-shop-development-1a2b3c4d
+  ownerReferences:
+  - apiVersion: platform.koorikla.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: MySQL
+    name: orders-db
+    uid: ad1149c7-8aae-5944-aff4-fbcef5a2e33b
+spec:
+  allowRepeat: true
+  digits: 8
+  length: 32
+  noUpper: false
+  symbols: 0

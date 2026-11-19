@@ -1,0 +1,9 @@
+# Sample facts of a valkey-operator cluster (fake ids): the keys the valkey-operator block of the Composition reads.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-valkey
+data:
+  backend: valkey-operator
+  cluster: sample
+  environment: development

@@ -1,0 +1,30 @@
+{{- /* aws-rds skeleton: RDS for MySQL in the cluster's subnet group / security groups (facts), Multi-AZ for HA. VERIFY: never applied. */}}
+{{- if eq $backend "aws-rds" }}
+---
+apiVersion: rds.aws.m.upbound.io/v1beta1
+kind: Instance
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{ setResourceNameAnnotation "instance" }}
+    crossplane.io/external-name: {{ $id }}
+spec:
+  managementPolicies: {{ toJson $mp }}
+  providerConfigRef: {{ toJson $pc }}
+  forProvider:
+    region: {{ $facts.region }}
+    engine: mysql
+    engineVersion: "8.4"
+    instanceClass: {{ get (dict "S" "db.t4g.medium" "M" "db.m7g.large" "L" "db.r7g.xlarge") $size }}
+    allocatedStorage: {{ $storage }}
+    storageEncrypted: true
+    multiAz: {{ $ha }}
+    dbName: {{ $db }}
+    username: {{ $db }}
+    manageMasterUserPassword: true
+    dbSubnetGroupName: {{ $facts.dbSubnetGroupName }}
+    vpcSecurityGroupIds: {{ toJson $facts.securityGroupIds }}
+    publiclyAccessible: false
+    deletionProtection: {{ $retain }}
+    port: 3306
+{{- end }}

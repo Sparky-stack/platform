@@ -1,0 +1,74 @@
+# The developer-facing KafkaTopic API: one namespaced XR (Crossplane v2) = a topic on the cluster's Kafka plus
+# credentials allowed to use it. The cluster decides the backend through the EnvironmentConfig platform-kafka-topic,
+# read by the one Composition "kafka-topic". Contract, identical on every backend: Secret status.secretName
+# (= <name>-kafka-topic) with keys bootstrapServers, topic, securityProtocol, saslMechanism, username, password
+# (username / password empty where the cloud authenticates the app's workload identity). Status: layout.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: kafkatopics.platform.koorikla.io
+spec:
+  scope: Namespaced
+  group: platform.koorikla.io
+  names:
+    kind: KafkaTopic
+    plural: kafkatopics
+    singular: kafkatopic
+    categories: [platform]
+  defaultCompositionRef:
+    name: kafka-topic
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - { name: Backend, type: string, jsonPath: .status.backend }
+        - { name: Topic, type: string, jsonPath: .status.topic }
+        - { name: Secret, type: string, jsonPath: .status.secretName }
+        - { name: Ready, type: string, jsonPath: '.status.conditions[?(@.type=="Ready")].status' }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                partitions:
+                  description: Partitions (consumer parallelism). Can grow, never shrink (Kafka cannot remove partitions).
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 3
+                  x-kubernetes-validations:
+                    - { rule: self >= oldSelf, message: partitions can only grow }
+                retentionHours:
+                  description: How long records are kept (delete cleanup policy).
+                  type: integer
+                  minimum: 1
+                  maximum: 8760
+                  default: 168
+                cleanupPolicy:
+                  description: delete (time-based retention) or compact (keep the latest record per key).
+                  type: string
+                  enum: [delete, compact]
+                  default: delete
+                deletionPolicy:
+                  description: Retain keeps the topic and its records when the XR is deleted; Delete removes them.
+                  type: string
+                  enum: [Retain, Delete]
+                  default: Retain
+            status:
+              type: object
+              properties:
+                backend:
+                  description: strimzi | aws-msk | gcp-managedkafka | azure-eventhubs
+                  type: string
+                topic:
+                  description: Topic name on the broker (<namespace>.<name>, unique per Kafka cluster).
+                  type: string
+                bootstrapServers:
+                  type: string
+                secretName:
+                  description: Connection Secret in this namespace.
+                  type: string

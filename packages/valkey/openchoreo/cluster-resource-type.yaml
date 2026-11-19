@@ -1,0 +1,57 @@
+# OpenChoreo ClusterResourceType valkey - NOT DEPLOYED (status: layout). It lives here, not in
+# addons/openchoreo-platform/files/platform/cluster-resource-types/, because every file there renders into the chart
+# when dataServices.enabled and would offer an API no cluster runs yet. Enabling the API (follow-up issue) moves this
+# file there. Same shape as cluster-resource-types/postgresql.yaml: renders the platform's Valkey XR into the cell
+# namespace; plain values come from the XR's status, credentials stay on the data plane as secretKeyRefs.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterResourceType
+metadata:
+  name: valkey
+  annotations:
+    openchoreo.dev/display-name: Valkey
+    openchoreo.dev/description: >-
+      Valkey (Redis-compatible) through the platform API (Crossplane Valkey XR): valkey-operator in-cluster,
+      ElastiCache / Memorystore / Azure Cache in the cloud, chosen by the cluster. Needs addon crossplane on the data plane.
+    platform.koorikla.io/requires-addons: crossplane
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties: {}
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        size: { type: string, enum: [S, M, L], default: S }
+        highAvailability: { type: boolean, default: false }
+        maxmemoryPolicy: { type: string, enum: [noeviction, allkeys-lru, volatile-lru, allkeys-lfu], default: noeviction }
+        deletionPolicy: { type: string, enum: [Retain, Delete], default: Retain }
+  retainPolicy: Retain
+  outputs:
+    - name: host
+      value: ${applied.valkey.status.endpoint}
+    - name: port
+      value: ${string(applied.valkey.status.port)}
+    - name: tls
+      value: ${string(applied.valkey.status.tls)}
+    - name: username
+      secretKeyRef: { name: "${metadata.name}-valkey", key: username }
+    - name: password
+      secretKeyRef: { name: "${metadata.name}-valkey", key: password }
+  resources:
+    - id: valkey
+      readyWhen: >-
+        ${has(applied.valkey.status.conditions)
+        && applied.valkey.status.conditions.exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: platform.koorikla.io/v1alpha1
+        kind: Valkey
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          size: ${environmentConfigs.size}
+          highAvailability: ${environmentConfigs.highAvailability}
+          maxmemoryPolicy: ${environmentConfigs.maxmemoryPolicy}
+          deletionPolicy: ${environmentConfigs.deletionPolicy}

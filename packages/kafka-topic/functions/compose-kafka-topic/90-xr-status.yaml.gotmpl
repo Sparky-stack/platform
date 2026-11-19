@@ -1,0 +1,9 @@
+{{- /* The XR's status, every backend: the developer contract's plain values. */}}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: KafkaTopic
+status:
+  backend: {{ $backend }}
+  topic: {{ $topic }}
+  bootstrapServers: {{ $bootstrap }}
+  secretName: {{ $name }}-kafka-topic
