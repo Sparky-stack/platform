@@ -100,7 +100,8 @@ if [[ -f addons/crossplane/values.yaml ]]; then
   XP_VER=${XP_VER%@*}
   for crd in apiextensions.crossplane.io_compositions apiextensions.crossplane.io_compositeresourcedefinitions \
     apiextensions.crossplane.io_managedresourceactivationpolicies pkg.crossplane.io_functions pkg.crossplane.io_providers \
-    pkg.crossplane.io_deploymentruntimeconfigs; do
+    pkg.crossplane.io_deploymentruntimeconfigs pkg.crossplane.io_configurations pkg.crossplane.io_imageconfigs \
+    apiextensions.crossplane.io_environmentconfigs; do
     fetch_crd "crossplane-${XP_VER}-${crd}" "https://raw.githubusercontent.com/crossplane/crossplane/${XP_VER}/cluster/crds/${crd}.yaml"
   done
   # <repo>|<tag>|<crd file>...  (only what the Compositions compose + the family's ClusterProviderConfig)
@@ -113,9 +114,9 @@ if [[ -f addons/crossplane/values.yaml ]]; then
       fetch_crd "${repo}-${tag}-${crd}" "https://raw.githubusercontent.com/crossplane-contrib/${repo}/${tag}/package/crds/${crd}.yaml"
     done
   done
-  # The CRD Crossplane derives from the PostgreSQL XRD (Crossplane adds spec.crossplane and status.conditions), so XRs
+  # The CRD Crossplane derives from the PostgreSQL XRD (packages/postgresql) (Crossplane adds spec.crossplane and status.conditions), so XRs
   # (docs examples, hack/tests/crossplane) validate like any custom resource.
-  helm template schema-extract addons/crossplane -s templates/xrd-postgresql.yaml 2>/dev/null | yq '{
+  yq '{
     "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition", "metadata": {"name": .metadata.name},
     "spec": {"group": .spec.group, "names": .spec.names, "scope": .spec.scope, "versions": [.spec.versions[] | {
       "name": .name, "served": true, "storage": true, "schema": {"openAPIV3Schema": {"type": "object", "properties": {
@@ -123,7 +124,8 @@ if [[ -f addons/crossplane/values.yaml ]]; then
         "spec": (.schema.openAPIV3Schema.properties.spec * {"properties": {"crossplane": {"type": "object",
           "x-kubernetes-preserve-unknown-fields": true}}}),
         "status": (.schema.openAPIV3Schema.properties.status * {"properties": {"conditions": {"type": "array",
-          "items": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}}}})}}}}]}}' > "$TMP/crds-xrd-postgresql.yaml" 2>/dev/null || true
+          "items": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}}}})}}}}]}}' packages/postgresql/apis/postgresql/definition.yaml \
+    > "$TMP/crds-xrd-postgresql.yaml" 2>/dev/null || true
 fi
 
 crd_files=()

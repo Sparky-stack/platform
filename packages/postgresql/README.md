@@ -3,7 +3,8 @@
 The platform's PostgreSQL API (`platform.koorikla.io/v1alpha1 PostgreSQL`, namespaced XR) as one versioned, signed
 OCI package, laid out as a Crossplane Project (`crossplane project init`): the XRD and one Composition `postgresql`. Every cluster installs the same package; the cluster's facts
 (which backend, region, network ids) come from the EnvironmentConfig `platform-postgresql` that `addons/crossplane`
-renders. Developer contract (schema, `<name>-app` Secret, status) and operator view: `docs/data-services.md`.
+renders. Developer contract (schema, `<name>-app` Secret, status) and operator view: [docs/data-services.md](../../docs/data-services.md#postgresql-as-a-service); packaging, facts,
+pinning, signing and adding APIs: [docs/crossplane.md](../../docs/crossplane.md).
 
 ## Layout
 

@@ -1,5 +1,5 @@
 {{- define "chart.purpose" -}}
-Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single namespaced `PostgreSQL` XRD (`database.platform.koorikla.io`) fulfilled by provider-selected `Composition`s: CloudNativePG (`docker`, `hetzner`), AWS RDS (`aws`), Cloud SQL, or Azure Flexible Server, guarded by ValidatingAdmissionPolicies.
+Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
@@ -12,5 +12,6 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters. Exposes a single
 {{- end -}}
 
 {{- define "chart.links" -}}
+- [Crossplane platform APIs](../../docs/crossplane.md)
 - [Data services: PostgreSQL as a service](../../docs/data-services.md#postgresql-as-a-service)
 {{- end -}}

@@ -246,21 +246,23 @@ addons:
 
 **Backend selection, no developer input.** The addon ApplicationSet passes the cluster's provider label
 (`platform.koorikla.io/provider`, from the fleet file `provider`) as `cluster.provider`; addon crossplane maps it
-(`postgresql.backendByProvider`) and installs only that backend's Composition, `postgresql-<backend>`, as the XRD's
-`defaultCompositionRef`, plus only the provider family members it composes:
+(`postgresql.backendByProvider`) to a backend, writes it with the cluster's facts into `EnvironmentConfig
+platform-postgresql`, and installs only the provider family members that backend composes. The API itself (XRD + one
+Composition `postgresql`) is the Configuration package `packages/postgresql`, the same on every cluster; how packages,
+facts, pinning and signature verification work: [crossplane.md](crossplane.md).
 
-| Provider fact | Backend / Composition | Crossplane providers (xpkg.crossplane.io/crossplane-contrib, pinned by digest) |
+| Provider fact | Backend | Crossplane providers (xpkg.crossplane.io/crossplane-contrib, pinned by digest) |
 |---|---|---|
-| `docker`, `hetzner`, `vsphere-talos` | `postgresql-cnpg` | none |
-| `aws`, `aws-eks` | `postgresql-aws-rds` | `provider-family-aws`, `provider-aws-rds`, `provider-aws-ec2`, `provider-aws-kms` |
-| `gcp-gke` | `postgresql-gcp-cloudsql` | `provider-family-gcp`, `provider-gcp-sql` |
-| `azure-aks` | `postgresql-azure-flexible` | `provider-family-azure`, `provider-azure-dbforpostgresql` |
+| `docker`, `hetzner`, `vsphere-talos` | `cnpg` | none |
+| `aws`, `aws-eks` | `aws-rds` | `provider-family-aws`, `provider-aws-rds`, `provider-aws-ec2`, `provider-aws-kms` |
+| `gcp-gke` | `gcp-cloudsql` | `provider-family-gcp`, `provider-gcp-sql` |
+| `azure-aks` | `azure-flexible` | `provider-family-azure`, `provider-azure-dbforpostgresql` |
 
 A provider missing from the map fails the render. `postgresql.backend` forces a backend for one cluster (e.g. cnpg on a
 cloud cluster). A `ManagedResourceActivationPolicy` activates only the managed resources the Composition composes
 (`provider.defaultActivations` is empty), so each provider installs a handful of CRDs, not its whole family.
 
-What each Composition creates (pipeline: function-go-templating, then function-auto-ready):
+What each backend creates:
 
 | Backend | Composed | Connection Secret | HA | Backup |
 |---|---|---|---|---|
@@ -275,12 +277,8 @@ set it on the user. Cloud identifiers are `pg-<namespace>-<name>-<hash of cluste
 `username` is the owner/master role; least-privilege per-app roles: [#107](https://github.com/koorikla/platform/issues/107).
 
 **Cluster facts** (values only, `installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`; a missing
-required fact fails the render): `postgresql.aws` (`vpcId`, two or more private `subnetIds`, `nodeSecurityGroupId`,
-`identity.source` IRSA with `roleArn` or PodIdentity), `postgresql.gcp` (`project`, `privateNetwork` with private
-services access, optional `allocatedIpRange`, `identity.serviceAccount`), `postgresql.azure` (`subscriptionID`,
-`tenantID`, `clientID`, `resourceGroupName`, `delegatedSubnetId`, `privateDnsZoneId`), `postgresql.cnpg.backup`
-(object store prefix, credentials, ServiceAccount annotations; needs `plugin-barman-cloud.enabled: true` in addon
-cloudnative-pg). Example: `installations/aws-example/addons/crossplane/values.yaml`.
+required fact fails the render): listed in [crossplane.md](crossplane.md#cluster-facts-environmentconfig). CNPG backups
+need `plugin-barman-cloud.enabled: true` in addon cloudnative-pg.
 
 **Credentials: workload identity only.** Each family's providers share ServiceAccount `crossplane-system/provider-<cloud>`
 (DeploymentRuntimeConfig `provider-<cloud>`): IRSA role annotation or an EKS Pod Identity association, GKE Workload
@@ -294,28 +292,9 @@ every tenant on that cluster can then reference them.
 leaves the database. `Delete` removes it (with a final snapshot when backups are on). CNPG data lives in PVCs owned by
 the `Cluster` and goes with the XR either way: keep backups on.
 
-**Packaging.** XRD, Compositions, Functions and providers are templates of the wrapper chart, not a Crossplane
-Configuration package: the Composition embeds per-cluster facts and the XRD's default Composition depends on the
-cluster's provider, which one immutable OCI package cannot express without its own build / sign / promote pipeline; the
-chart renders per cluster through the addon ApplicationSet and is tested like every addon. Crossplane runs on each
-workload cluster (owner decision in #91): the XR lives next to the app, uses that cluster's workload identity, and needs
-no cross-cluster Secret delivery.
-
-**Pod Security.** crossplane-system enforces `restricted`. Crossplane's default package runtime sets neither a seccomp
-profile nor a capability drop, so every Function and Provider runs under DeploymentRuntimeConfig `restricted` /
-`provider-<cloud>` (seccomp `RuntimeDefault`, drop `ALL`, non-root, read-only root filesystem). Core and RBAC manager
-get the same through the chart values. Metrics: PodMonitor for core + RBAC manager. Footprint (requests): core 50m /
-128Mi, RBAC manager 10m / 64Mi, each Function 10m / 64Mi, each provider 50m / 256Mi.
-
-**Tests (offline).** `hack/tests/test_crossplane_render.sh`: the ApplicationSet render for dev1 selects
-`postgresql-cnpg`; every backend's addon render passes kubeconform with the Crossplane and provider CRD schemas and pins
-every package; `crossplane render` (CLI from `mise.toml`, the addon's own Crossplane image and Function packages, needs
-Docker) of each Composition with the XRs and observed states in `hack/tests/crossplane/` checks the composed resources
-(kubeconform), HA / backup / deletion / Aurora mapping, the identical Secret shape and that no composed object carries a
-password. The renders share one Docker network and one container per Function per run (removed on exit, or by the next
-run when a run was killed), so concurrent runs on one Docker host do not exhaust its network address pools; at most
-`XP_RENDER_JOBS` (default 4) render at once. Admission: `hack/tests/test_kyverno_policies.sh`. Chart:
-`addons/crossplane/tests`. Live checks: [#107](https://github.com/koorikla/platform/issues/107).
+**Packaging, Pod Security, tests, upgrades:** [crossplane.md](crossplane.md) (Configuration package, EnvironmentConfig,
+pinned Functions / Providers under PSS `restricted`, offline render tests, the one-off `compositionRef` patch when
+upgrading from the Helm-templated API). Live checks: [#107](https://github.com/koorikla/platform/issues/107).
 
 ## PostgreSQL (CloudNativePG)
 

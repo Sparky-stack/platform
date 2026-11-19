@@ -1,0 +1,42 @@
+{{- /* The PostgreSQL API (XRD postgresqls.platform.koorikla.io + Composition "postgresql") as a signed Crossplane
+Configuration package, built from packages/postgresql. Pinned tag@digest: bumping packages.configuration is the
+promotion. skipDependencyResolution: the Functions and Providers it needs are declared in templates/packages.yaml,
+pinned by digest and with the PSS-restricted runtime configs; the resolver would install floating tags without them. */ -}}
+apiVersion: pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: platform-postgresql
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ required "packages.configuration is required (ghcr.io/koorikla/platform/postgresql:<tag>@sha256:...)" .Values.packages.configuration }}
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 2
+  skipDependencyResolution: true
+{{- with .Values.packages.signatureVerification }}
+{{- if .enabled }}
+---
+{{- /* Cosign keyless verification of the Configuration (alpha in Crossplane 2.4: core runs with
+--enable-signature-verification, values.yaml crossplane.args). Identity = the reusable workflow that signs it. */}}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: ImageConfig
+metadata:
+  name: platform-packages
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  matchImages:
+    - type: Prefix
+      prefix: {{ .prefix }}
+  verification:
+    provider: Cosign
+    cosign:
+      authorities:
+        - name: github-actions
+          keyless:
+            identities:
+              - issuer: {{ .issuer }}
+                subjectRegExp: {{ .subjectRegExp | quote }}
+{{- end }}
+{{- end }}
