@@ -339,7 +339,7 @@ for line in sys.stdin:
     ports = ",".join(str(p["port"]) for r in blocks for p in r.get("ports", [])) or "any"
     hbone = sum(1 for r in blocks if any(p["port"] == 15008 for p in r.get("ports", [])))
     print(f"{cidrs}|{ports}|{hbone}")
-' < "$TMP/cm-np.json" | tr '\n' ' ')
+' < "$TMP/cm-np.json" | tr -d '\r' | tr '\n' ' ')
 want='169.254.7.127/32,fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128|any|0'
 assert_eq "${probes% }" "$want $want $want" "cell mesh: every HBONE NetworkPolicy admits kubelet probes from ambient's SNAT source only"
 # PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive

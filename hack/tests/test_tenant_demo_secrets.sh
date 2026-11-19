@@ -34,8 +34,8 @@ assert_eq "$(cj .metadata.namespace)" openbao-tenants "CronJob in the writer nam
 assert_eq "$(cj .spec.jobTemplate.spec.template.spec.serviceAccountName)" demo-writer "runs as the tenant's writer ServiceAccount"
 assert_eq "$(cj .spec.jobTemplate.spec.template.spec.automountServiceAccountToken)" false "no Kubernetes API token"
 assert_eq "$(cj .spec.concurrencyPolicy)" Forbid "one run at a time"
-assert_eq "$(yq ea 'select(.kind == "ServiceAccount" and .metadata.name == "demo-writer") | .metadata.name' \
-  <(helm template t charts/tenant -f installations/local/installation.yaml -f installations/local/tenants/demo.yaml -s templates/secrets.yaml))" \
+helm template t charts/tenant -f installations/local/installation.yaml -f installations/local/tenants/demo.yaml -s templates/secrets.yaml > "$TMP/tenant-secrets.yaml"
+assert_eq "$(yq ea 'select(.kind == "ServiceAccount" and .metadata.name == "demo-writer") | .metadata.name' "$TMP/tenant-secrets.yaml" | tr -d '\r')" \
   demo-writer "writer ServiceAccount rendered by the same chart"
 n=$(helm template t charts/tenant -f installations/local/installation.yaml --set project=demo -s templates/demo-secrets.yaml 2>/dev/null | grep -c '^kind:' || true)
 assert_eq "$n" 0 "no demoSecrets -> no seed CronJob"
