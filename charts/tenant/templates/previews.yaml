@@ -21,7 +21,6 @@ only with secrets.githubGateApp.enabled): without the App no ApplicationSet, whi
 {{- if and $pv.enabled $gh $gate }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
-{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" $label) }}{{ fail (printf "previews.expiredLabel %q: letters, digits, space, . _ - only" $label) }}{{ end }}
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -78,7 +77,7 @@ spec:
     spec:
       project: {{ .Values.previewProject }}
       source:
-        repoURL: {{ required "installation.repoURL is required (installation.yaml)" .Values.installation.repoURL | quote }}
+        repoURL: {{ .Values.installation.repoURL | quote }}
         targetRevision: {{ .Values.installation.revision | default "HEAD" | quote }}
         path: charts/preview
         helm:
@@ -92,7 +91,7 @@ spec:
             openchoreo:
               orgNamespace: {{ .Values.openchoreo.orgNamespace }}
             previews:
-              dataPlane: {{ required "previews.dataPlane is required (installation.yaml)" $pv.dataPlane }}
+              dataPlane: {{ $pv.dataPlane }}
       destination:
         server: {{ .Values.argocd.server }}
         namespace: {{ .Values.openchoreo.orgNamespace }}
