@@ -1,6 +1,7 @@
 suite: openchoreo-workflow-plane - BuildKit pulls base images through the Harbor proxy caches (#38)
 templates:
   - templates/buildkitd-config.yaml
+  - templates/validate.yaml
   - templates/cluster-workflow-templates.yaml
 release:
   name: openchoreo-workflow-plane
@@ -68,35 +69,35 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: refuses an upstream listed twice (duplicate TOML table, buildkitd would not start)
-    template: templates/buildkitd-config.yaml
+    template: templates/validate.yaml
     set:
       registry.proxyCache: [{ upstream: docker.io, project: a }, { upstream: docker.io, project: b }]
     asserts:
       - failedTemplate: { errorPattern: "lists upstream docker.io twice" }
 
   - it: refuses the registry as its own upstream (duplicate table with the CA entry, a mirror loop)
-    template: templates/buildkitd-config.yaml
+    template: templates/validate.yaml
     set:
       registry.proxyCache: [{ upstream: "harbor.openchoreo.localhost:9443", project: self }]
     asserts:
       - failedTemplate: { errorPattern: "is the registry itself" }
 
   - it: refuses values that would break out of the TOML string (project, upstream, host)
-    template: templates/buildkitd-config.yaml
+    template: templates/validate.yaml
     set:
       registry.proxyCache: [{ upstream: docker.io, project: 'x"]' }]
     asserts:
       - failedTemplate: { errorPattern: "must be a Harbor project name" }
 
   - it: refuses a malformed upstream
-    template: templates/buildkitd-config.yaml
+    template: templates/validate.yaml
     set:
       registry.proxyCache: [{ upstream: "https://docker.io", project: dockerhub }]
     asserts:
       - failedTemplate: { errorPattern: "upstream .* must be <hostname>\\[:port\\]" }
 
   - it: refuses a malformed registry host
-    template: templates/buildkitd-config.yaml
+    template: templates/validate.yaml
     set: { registry.host: 'harbor"]' }
     asserts:
       - failedTemplate: { errorPattern: "registry.host .* must be <hostname>\\[:port\\]" }

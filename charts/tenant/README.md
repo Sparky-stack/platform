@@ -22,7 +22,7 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | deploymentPipeline.environments | list | `["development","staging","production"]` | Environments (`development`, `staging`, `production`) provisioned via `ProjectReleaseBinding`. |
 | deploymentPipeline.name | string | `"default"` |  |
 | description | string | `""` |  |
-| developerKinds | list | `["Component","Workload","ReleaseBinding","ComponentRelease","SecretReference","Resource","ResourceReleaseBinding"]` | Allowlisted OpenChoreo developer CRDs. |
+| developerKinds | list | `["Component","Workload","ReleaseBinding","ComponentRelease","SecretReference","Resource","ResourceReleaseBinding"]` | The only kinds (group openchoreo.dev, org namespace) an app repo may sync. |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | installation.name | string | `"local"` |  |
 | installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |

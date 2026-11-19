@@ -203,7 +203,7 @@ tests:
       - hasDocuments: { count: 0 }
 
   - it: refuses empty fromPodLabels on Prometheus workflow ingress (would expose Prometheus to tenant build pods)
-    template: templates/prometheus-network-policy.yaml
+    template: templates/validate.yaml
     set: { prometheusIngress.fromPodLabels: null }
     asserts:
       - failedTemplate: { errorPattern: "fromPodLabels must not be empty" }

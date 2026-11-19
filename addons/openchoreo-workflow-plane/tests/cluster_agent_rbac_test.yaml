@@ -1,6 +1,8 @@
 suite: openchoreo-workflow-plane - least-privilege cluster-agent RBAC (#33)
 templates:
   - templates/cluster-agent-rbac.yaml
+  - templates/run-namespace.yaml
+  - templates/validate.yaml
   - charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrole.yaml
   - charts/openchoreo-workflow-plane/templates/cluster-agent/clusterrolebinding.yaml
 release:
@@ -68,22 +70,21 @@ tests:
       - equal: { path: metadata.namespace, value: workflows-acme }
         documentSelector: { path: kind, value: RoleBinding }
 
-  - it: renders the run namespace itself when neither the NetworkPolicy nor the executor token does
-    template: templates/cluster-agent-rbac.yaml
+  - it: the run namespace is rendered for the agent's Role even when neither the NetworkPolicy nor the executor token is
+    template: templates/run-namespace.yaml
     set: { runNetworkPolicy.enabled: false, runExecutorToken.enabled: false }
     asserts:
-      - hasDocuments: { count: 7 }
+      - hasDocuments: { count: 1 }
       - equal: { path: metadata.name, value: workflows-default }
-        documentSelector: { path: kind, value: Namespace }
 
   - it: refuses the upstream ClusterRole next to the platform's
-    template: templates/cluster-agent-rbac.yaml
+    template: templates/validate.yaml
     set: { openchoreo-workflow-plane.clusterAgent.rbac.create: true }
     asserts:
       - failedTemplate: { errorPattern: "set openchoreo-workflow-plane.clusterAgent.rbac.create=false" }
 
   - it: refuses a run namespace prefix that would let the agent create any namespace
-    template: templates/cluster-agent-rbac.yaml
+    template: templates/validate.yaml
     set: { clusterAgentRBAC.runNamespacePrefix: "" }
     asserts:
       - failedTemplate: { errorPattern: "clusterAgentRBAC.runNamespacePrefix .* must be a namespace name prefix ending in -" }

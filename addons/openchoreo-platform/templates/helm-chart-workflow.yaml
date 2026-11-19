@@ -1,7 +1,6 @@
 {{- /*
-Generic ClusterWorkflow `helm-chart` (no component: run it with a WorkflowRun, e.g. from Backstage's workflows page):
-ci/scripts/helm/check.sh + helm/package-push.sh, push to <registry>/charts/<chart> (OCI), cosign-sign with the platform
-key. Argo template koorikla-helm-chart (addon openchoreo-workflow-plane).
+Generic ClusterWorkflow `helm-chart` (cluster-scoped, mgmt; no component, run it with a WorkflowRun): lint, unit-test,
+package, push to <registry>/charts/<chart> (OCI) and cosign-sign with the platform key (Argo template koorikla-helm-chart).
 */ -}}
 {{- if .Values.helmChartWorkflow.enabled }}
 {{- $b := .Values.buildWorkflows }}
@@ -78,5 +77,5 @@ spec:
           - { name: cosign-secret, value: "${metadata.workflowRunName}-cosign" }
           - { name: tlog-upload, value: {{ $b.signing.transparencyLog | toString | quote }} }
   resources:
-    {{- include "build.resources" (dict "root" . "permissions" .Values.buildWorkflows.github.readPermissions) | nindent 4 }}
+    {{- include "build.resources" (dict "root" . "permissions" $b.github.readPermissions) | nindent 4 }}
 {{- end }}

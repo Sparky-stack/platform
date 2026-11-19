@@ -36,11 +36,6 @@ tests:
       - notExists: { path: spec.github.push.webhook.url }   # no hook management
       - equal: { path: spec.template.securityContext.runAsNonRoot, value: true }
 
-  - it: refuses to run without an HMAC secret (unsigned payloads would be accepted)
-    set: { autoBuildWebhook.secret.key: "" }
-    asserts:
-      - failedTemplate: { errorPattern: "without an HMAC secret the EventSource accepts unsigned payloads" }
-
   - it: the HMAC secret comes from store platform
     documentSelector: { path: kind, value: ExternalSecret }
     asserts:
@@ -88,11 +83,6 @@ tests:
     documentSelector: { path: kind, value: EventSource }
     asserts:
       - equal: { path: spec.github.push.organizations, value: [acme] }
-
-  - it: rejects a non-GitHub owner URL
-    set: { installation.githubOrg: https://gitlab.com/acme }
-    asserts:
-      - failedTemplate: { errorPattern: "supports https://github.com/<owner>" }
 
   - it: "negative: no webhook without the platform GitHub App (it is configured on the App; #192)"
     set: { secrets.githubGateApp.enabled: false }

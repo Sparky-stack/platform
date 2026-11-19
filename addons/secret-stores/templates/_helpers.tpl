@@ -1,21 +1,19 @@
 {{- /*
 secret-stores.store: one ClusterSecretStore and the identity it authenticates with. Dict arguments:
   root             the chart context (.)
-  backend          kubernetes | aws | vault (anything else fails the render)
+  backend          kubernetes | aws | vault (validated once, at the top of stores.yaml)
   name             ClusterSecretStore name
   serviceAccount   ServiceAccount ESO authenticates as (in the release namespace)
   conditions       spec.conditions (list; omitted when empty: no namespace restriction)
+  noTokenAutomount true: automountServiceAccountToken: false
   kubernetes: remoteNamespace (where the Secrets live; the Role is created there), resourceNames (key-scoped: GET on
               only these Secrets + SelfSubjectRulesReview create for ESO's store validation; default get, list, watch
-              on every Secret of remoteNamespace), automountToken (false: automountServiceAccountToken: false)
+              on every Secret of remoteNamespace)
   aws:        irsaRole (eks.amazonaws.com/role-arn annotation when set; default secrets.aws.role)
   vault:      vaultRole (kubernetes-auth role; default secrets.vault.auth.kubernetes.role), vaultPath (default
               secrets.vault.path, else platform)
 */ -}}
 {{- define "secret-stores.store" -}}
-{{- if not (has .backend (list "kubernetes" "aws" "vault")) -}}
-{{- fail (printf "secrets.backend must be kubernetes, aws, or vault (got %q)" .backend) -}}
-{{- end -}}
 {{- $v := .root.Values.secrets -}}
 {{- $ns := .root.Release.Namespace -}}
 {{- $irsaRole := ternary .irsaRole ($v.aws).role (hasKey . "irsaRole") -}}
@@ -28,7 +26,7 @@ metadata:
   annotations:
     eks.amazonaws.com/role-arn: {{ $irsaRole | quote }}
   {{- end }}
-{{- if eq (toString .automountToken) "false" }}
+{{- if .noTokenAutomount }}
 automountServiceAccountToken: false
 {{- end }}
 {{- if eq .backend "kubernetes" }}
@@ -118,30 +116,4 @@ spec:
             name: {{ .serviceAccount }}
             namespace: {{ $ns }}
     {{- end }}
-{{- end -}}
-
-{{- /*
-Store `platform` holds every platform credential (GitHub read + write Apps, GHCR, cloud, OpenChoreo): only the mgmt
-namespaces in platformStore.namespaces may reference it, never a workflows-* run namespace.
-hack/tests/test_secret_store_scope.sh checks that every rendered ExternalSecret using it is in that list.
-*/ -}}
-{{- define "secret-stores.platformConditions" -}}
-{{- $ns := .Values.platformStore.namespaces | default list -}}
-{{- if not $ns }}{{ fail "platformStore.namespaces must list the namespaces allowed to read ClusterSecretStore platform" }}{{ end -}}
-{{- range $ns -}}
-{{- if hasPrefix "workflows-" (toString .) }}{{ fail (printf "platformStore.namespaces must not include workflow run namespace %q: use ClusterSecretStore workflows (key-scoped)" .) }}{{ end -}}
-{{- end -}}
-- namespaces:
-    {{- toYaml $ns | nindent 4 }}
-{{- end -}}
-
-{{- /* Store `workflows` admits only workflow run namespaces (workflowStore.namespaceRegexes, each ^workflows-...). */ -}}
-{{- define "secret-stores.workflowConditions" -}}
-{{- $re := (.Values.workflowStore).namespaceRegexes | default list -}}
-{{- if not $re }}{{ fail "workflowStore.namespaceRegexes must restrict ClusterSecretStore workflows to workflow run namespaces" }}{{ end -}}
-{{- range $re -}}
-{{- if not (hasPrefix "^workflows-" (toString .)) }}{{ fail (printf "workflowStore.namespaceRegexes entry %q must start with ^workflows-" .) }}{{ end -}}
-{{- end -}}
-- namespaceRegexes:
-    {{- toYaml $re | nindent 4 }}
 {{- end -}}

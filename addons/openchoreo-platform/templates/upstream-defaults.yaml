@@ -1,26 +1,28 @@
-{{- /* Upstream 1.3.3 ClusterComponentTypes, ClusterTraits, ClusterProjectType (files/README.md), verbatim except
-allowedWorkflows (the platform's build ClusterWorkflows) and allowedTraits + keda-scaler (dataServices) and the embedded resilience trait (#251). Cluster-scoped. */ -}}
+{{- /* Upstream OpenChoreo 1.3.3 ClusterComponentTypes, ClusterTraits and ClusterProjectType from files/ (cluster-scoped,
+mgmt). Verbatim (files/README.md) except the ClusterComponentType edits below, so an upstream bump stays a file copy. */ -}}
 {{- if .Values.upstreamDefaults.enabled }}
 {{- range $path, $_ := .Files.Glob "files/*/*.yaml" }}
 ---
 # Source: {{ $.Chart.Name }}/{{ $path }}
 {{- $obj := $.Files.Get $path | fromYaml }}
 {{- $_ := set $obj.metadata "annotations" (merge (default dict $obj.metadata.annotations) (dict "argocd.argoproj.io/sync-options" "SkipDryRunOnMissingResource=true")) }}
-{{- /* Component types allow the platform's build ClusterWorkflows (templates/build-workflows.yaml). */ -}}
-{{- if and (eq $obj.kind "ClusterComponentType") $.Values.buildWorkflows.enabled }}
+{{- if eq $obj.kind "ClusterComponentType" }}
+{{- $deployment := eq (toString $obj.spec.workloadType) "deployment" }}
+{{- /* Components may build with the platform's per-stack ClusterWorkflows (templates/build-workflows.yaml). */ -}}
+{{- if $.Values.buildWorkflows.enabled }}
 {{- $wf := list }}
 {{- range $.Values.buildWorkflows.stacks }}{{ $wf = append $wf (dict "kind" "ClusterWorkflow" "name" .name) }}{{ end }}
 {{- $_ := set $obj.spec "allowedWorkflows" $wf }}
 {{- end }}
 {{- /* Platform trait keda-scaler (templates/platform-types.yaml, #70) on the Deployment-based component types. */ -}}
-{{- if and (eq $obj.kind "ClusterComponentType") $.Values.dataServices.enabled (eq (toString $obj.spec.workloadType) "deployment") }}
+{{- if and $.Values.dataServices.enabled $deployment }}
 {{- $_ := set $obj.spec "allowedTraits" (append (default list $obj.spec.allowedTraits) (dict "kind" "ClusterTrait" "name" "keda-scaler")) }}
 {{- end }}
 {{- /* Resilience defaults (#251, files/platform/cluster-traits/resilience.yaml): every Deployment component type embeds
 ClusterTrait resilience, so developers get spread, PDB, graceful shutdown and priority without attaching anything.
 Its knobs are component type environmentConfigs (`resilience.*` in a ReleaseBinding's componentTypeEnvironmentConfigs);
 the trait reads the component type's replicas to decide on a PodDisruptionBudget. */ -}}
-{{- if and (eq $obj.kind "ClusterComponentType") $.Values.resilience.enabled (eq (toString $obj.spec.workloadType) "deployment") }}
+{{- if and $.Values.resilience.enabled $deployment }}
 {{- $knobs := dict "zoneSpread" (dict "type" "string" "enum" (list "ScheduleAnyway" "DoNotSchedule") "default" "ScheduleAnyway")
       "nodePool" (dict "type" "string" "default" "")
       "terminationGracePeriodSeconds" (dict "type" "integer" "default" 30 "minimum" 1)
@@ -33,10 +35,11 @@ the trait reads the component type's replicas to decide on a PodDisruptionBudget
 {{- /* Per-tenant secret stores (installation.yaml secrets.tenantStores.enabled, #96): the ExternalSecrets component
 types render for SecretReferences use the cell namespace's own SecretStore instead of the data plane's
 ClusterSecretStore (which then refuses tenant namespaces; addon secret-stores). Developers never name a store. */ -}}
-{{- if and (eq $obj.kind "ClusterComponentType") ((($.Values.secrets).tenantStores).enabled) }}
+{{- if $.Values.secrets.tenantStores.enabled }}
 {{- range $r := $obj.spec.resources }}
 {{- if and $r.template (eq (toString $r.template.kind) "ExternalSecret") }}
 {{- $_ := set $r.template.spec "secretStoreRef" (dict "kind" "SecretStore" "name" $.Values.tenantStoreName) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

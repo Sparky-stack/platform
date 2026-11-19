@@ -1,6 +1,7 @@
 {{- /*
-Auto-build webhook (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): rendered only when
-installation.yaml openchoreo.workflowPlane.autoBuild is `webhook` and the workflow plane exists.
+Auto-build webhook on mgmt (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): GitHub App push ->
+Workflow auto-build in workflows-<org ns>. Only with installation.yaml openchoreo.workflowPlane.autoBuild `webhook`,
+the workflow plane and the platform GitHub App. Objects:
   ExternalSecret github-webhook   HMAC secret of the GitHub App webhook (store platform)
   EventSource github              POST <endpoint>: X-Hub-Signature-256 validated (unsigned/forged payloads -> 400);
                                   never calls GitHub (no token: hooks are configured on the App, not managed here)
@@ -14,24 +15,15 @@ head, and never a second build of the same commit.
 */ -}}
 {{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
 {{- /* The webhook is configured on the platform GitHub App and its Workflows need the App's tokens (addon
-openchoreo-platform renders WorkflowTemplate auto-build only with it): off without secrets.githubGateApp.enabled. */ -}}
+openchoreo-platform renders WorkflowTemplate auto-build only with it): off without secrets.githubGateApp.enabled.
+Values are checked in validate.yaml (same condition). */}}
 {{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
 {{- if and (eq $trigger "webhook") (eq (include "ae.workflowPlane" .) "true") $gate }}
 {{- $w := .Values.autoBuildWebhook }}
-{{- $org := .Values.openchoreo.orgNamespace }}
-{{- $ns := printf "workflows-%s" $org }}
+{{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
 {{- $sa := "auto-build-sensor" }}
 {{- $tpl := required "autoBuildWebhook.workflowTemplate is required" $w.workflowTemplate }}
-{{- $ghOrg := required "installation.githubOrg is required (owner whose pushes trigger builds)" (dig "githubOrg" "" (.Values.installation | default dict)) }}
-{{- if not (regexMatch "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*/?$" $ghOrg) }}
-{{- fail (printf "installation.githubOrg %q: the auto-build webhook supports https://github.com/<owner>" $ghOrg) }}
-{{- end }}
-{{- $owner := trimSuffix "/" $ghOrg | splitList "/" | last }}
-{{- if not (and $w.secret.store $w.secret.key $w.secret.property) }}
-{{- fail "autoBuildWebhook.secret.{store,key,property} are required: without an HMAC secret the EventSource accepts unsigned payloads" }}
-{{- end }}
-{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
-{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
+{{- $owner := dig "githubOrg" "" (.Values.installation | default dict) | trimSuffix "/" | splitList "/" | last }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -60,12 +52,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: platform-eventsource
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" "platform-eventsource" "root" .) | nindent 4 }}
   service:
     ports:
       - name: github
@@ -141,12 +128,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: {{ $sa }}
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" $sa "root" .) | nindent 4 }}
   dependencies:
     - name: push
       eventSourceName: github

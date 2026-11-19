@@ -105,7 +105,6 @@ Wrapper chart for `openbao` (`0.30.7` / `v2.7.2`) on `mgmt`. Runs the Istio mult
 | reconcile.audience | string | `"openbao"` |  |
 | reconcile.bootstrapLoginRole | string | `"platform-mesh-bootstrap"` |  |
 | reconcile.bootstrapServiceAccount | string | `"openbao-mesh-bootstrap"` |  |
-| reconcile.enabled | bool | `true` |  |
 | reconcile.loginRole | string | `"platform-mesh-config"` |  |
 | reconcile.resources.limits.cpu | string | `"200m"` |  |
 | reconcile.resources.limits.memory | string | `"64Mi"` |  |

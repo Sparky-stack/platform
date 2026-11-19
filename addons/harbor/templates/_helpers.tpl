@@ -1,17 +1,8 @@
+{{- /* Shared partials: registry hostname, the harbor-config pod and ESO's name-scoped Secret reader. */ -}}
+
+{{- /* registry.host without its :port (Gateway listener hostname, serving cert, route hosts). */ -}}
 {{- define "harbor-addon.hostname" -}}
 {{- regexReplaceAll ":[0-9]+$" (required "registry.host is required" .Values.registry.host) "" -}}
-{{- end }}
-
-{{- define "harbor-addon.port" -}}
-{{- $m := regexFind ":[0-9]+$" .Values.registry.host -}}
-{{- if $m }}{{ trimPrefix ":" $m }}{{ else }}443{{ end -}}
-{{- end }}
-
-{{- /* Project names: apps, apps-ghcr (replication targets) and every proxy-cache project, in that order. */ -}}
-{{- define "harbor-addon.proxyProjects" -}}
-{{- $out := list -}}
-{{- range .Values.registry.proxyCache }}{{ $out = append $out .project }}{{ end -}}
-{{- toJson $out -}}
 {{- end }}
 
 {{- /* Pod spec of the harbor-config Job and CronJob (templates/config.yaml). */ -}}
@@ -50,4 +41,40 @@ containers:
 volumes:
   - name: config
     configMap: { name: harbor-config }
+{{- end }}
+
+{{- /*
+ServiceAccount + Role + RoleBinding `eso-<name>` for an ESO kubernetes-provider store: GET of Secret <secret> only
+(ESO reads a remoteRef with one GET and validates the store with a SelfSubjectRulesReview, so no list/watch).
+Args: dict "name" "secret" "ns".
+*/ -}}
+{{- define "harbor-addon.esoSecretReader" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso-{{ .name }}
+  namespace: {{ .ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-{{ .name }}
+  namespace: {{ .ns }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .secret }}]
+    verbs: [get]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-{{ .name }}
+  namespace: {{ .ns }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: eso-{{ .name }} }
+subjects:
+  - { kind: ServiceAccount, name: eso-{{ .name }}, namespace: {{ .ns }} }
 {{- end }}

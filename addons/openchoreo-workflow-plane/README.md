@@ -64,7 +64,6 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 | openchoreo-workflow-plane.clusterAgent.tls.generateCerts | bool | `true` |  |
 | openchoreo-workflow-plane.clusterAgent.tls.secretName | string | `"cluster-agent-tls"` |  |
 | openchoreo-workflow-plane.clusterAgent.tls.serverCAConfigMap | string | `"cluster-gateway-ca"` |  |
-| openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
 | openchoreo.observability.enabled | bool | `true` |  |
 | openchoreo.observability.httpPort | int | `11080` |  |
 | openchoreo.orgNamespace | string | `"default"` |  |

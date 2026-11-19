@@ -1,6 +1,7 @@
 {{- /*
-Render-time consistency with installation.yaml (openchoreo.controlPlane.host, openchoreo.observability.*): the
-subcharts' literal hostnames/ports must match, and the plane CR's planeID must equal the agent's.
+All render-time validation of this chart (renders nothing): the subcharts' literal hostnames/ports must match
+installation.yaml (openchoreo.controlPlane.host, openchoreo.observability.*), the plane CR's planeID the agent's, plus
+the OpenSearch JVM, AI agent, logs setup Job and Prometheus ingress invariants.
 */ -}}
 {{- $o := .Values.openchoreo.observability }}
 {{- if not $o.enabled }}
@@ -65,7 +66,7 @@ sizes GC threads and thread pools for every host CPU and outgrows the memory lim
 {{- fail (printf "observability-logs-opensearch.openSearch.opensearchJavaOpts must contain %s (= resources.limits.cpu %s, rounded up)" $flag $cpu) }}
 {{- end }}
 {{- end }}
-{{- /* AI agents (docs/ai-agents.md): a model is required, the published URL host is ours, the API URL is real. */}}
+{{- /* AI agents (docs/ai-agents.md): a model is required and the published URL host is ours. */}}
 {{- if $obs.rca.enabled }}
 {{- if not $obs.rca.llm.modelName }}
 {{- fail "openchoreo-observability-plane.rca.enabled needs rca.llm.modelName (docs/ai-agents.md)" }}
@@ -81,4 +82,19 @@ sizes GC threads and thread pools for every host CPU and outgrows the memory lim
 {{- if ne (first $obs.finOpsAgent.http.hostnames) (printf "finops-agent.%s" $host) }}
 {{- fail (printf "openchoreo-observability-plane.finOpsAgent.http.hostnames[0] must be finops-agent.%s" $host) }}
 {{- end }}
+{{- end }}
+{{- /* Logs setup Job (templates/opensearch-setup-logs.yaml) runs as an Argo CD hook instead of the module's own Job. */}}
+{{- $setup := index .Values "observability-logs-opensearch" "openSearchSetup" }}
+{{- if $setup.enabled }}
+{{- fail "observability-logs-opensearch.openSearchSetup.enabled must stay false: templates/opensearch-setup-logs.yaml runs the setup as an Argo CD hook (set openSearchSetup.run)" }}
+{{- end }}
+{{- if $setup.run }}
+{{- $prefix := index .Values "observability-logs-opensearch" "auditLogs" "indexPrefix" }}
+{{- if not (regexMatch "^[a-z0-9][a-z0-9._-]*$" ($prefix | default "")) }}
+{{- fail (printf "observability-logs-opensearch.auditLogs.indexPrefix %q is not an OpenSearch index name prefix" $prefix) }}
+{{- end }}
+{{- end }}
+{{- /* An empty fromPodLabels would open Prometheus to tenant build pods (templates/prometheus-network-policy.yaml). */}}
+{{- if and .Values.prometheusIngress.enabled .Values.openchoreo.workflowPlane.enabled (not .Values.prometheusIngress.fromPodLabels) }}
+{{- fail "prometheusIngress.fromPodLabels must not be empty (it would open Prometheus to tenant build pods)" }}
 {{- end }}

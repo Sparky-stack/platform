@@ -1,15 +1,13 @@
 {{- /*
-Build run namespace workflows-<org ns> (OpenChoreo's WorkflowRun controller creates it on the first run and tolerates
-an existing one; rendered here so its NetworkPolicy exists before any run) and a default-deny NetworkPolicy for every
-pod in it. Check steps and Dockerfile RUN steps execute tenant code (rootless BuildKit with
+Default-deny NetworkPolicy for every pod in the build run namespace workflows-<org ns> on mgmt (templates/run-namespace.yaml,
+so the policy exists before any run). Check steps and Dockerfile RUN steps execute tenant code (rootless BuildKit with
 --oci-worker-no-process-sandbox shares the pod network), so they reach only:
   DNS                 kube-dns in kube-system
   the registry        the Harbor Gateway proxy pods (registry host rewritten to them by coredns-local), harbor only
   the API server      Argo's executor (init/wait) writes workflowtaskresults; run containers carry no token
   the internet        80/443 outside private ranges: git, base images, package registries, Trivy DB, Sigstore
 Nothing else on mgmt (argocd-repo-server, harbor-core over HTTP, webhooks, other namespaces). No ingress at all.
-Enforced by k3s' network policy controller (flannel mgmt) or Cilium. Delete=false: removing the addon must not delete
-run history.
+Enforced by k3s' network policy controller (flannel mgmt) or Cilium.
 Platform workflows (runNetworkPolicy.platformWorkflows): pods labelled podLabels (set only by platform-authored
 ClusterWorkflows in their runTemplate spec.podMetadata, e.g. promotion-gate of addon openchoreo-platform; build
 ClusterWorkflows never set it, parameters cannot) may additionally reach the OpenChoreo API/Thunder through the
@@ -20,13 +18,6 @@ NetworkPolicies are additive: this only widens egress for those pods.
 {{- $np := .Values.runNetworkPolicy }}
 {{- if $np.enabled }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ $ns }}
-  annotations:
-    argocd.argoproj.io/sync-options: Delete=false
----
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -65,7 +56,6 @@ spec:
         {{- end }}
 {{- $pw := $np.platformWorkflows }}
 {{- if $pw.enabled }}
-{{- if not $pw.podLabels }}{{ fail "runNetworkPolicy.platformWorkflows.podLabels must not be empty (it would widen egress for every run pod)" }}{{ end }}
 {{- $obs := .Values.openchoreo.observability | default dict }}
 ---
 apiVersion: networking.k8s.io/v1

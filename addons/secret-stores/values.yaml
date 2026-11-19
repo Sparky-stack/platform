@@ -27,7 +27,7 @@ secrets:
         mountPath: kubernetes
         role: external-secrets
   # ClusterSecretStore `dns` on workload clusters while installation.yaml dns.provider is cloudflare (dnsStore below).
-  # It must read from a backend location the tenant store `default` cannot: per backend
+  # It must read from a backend location the tenant store `default` cannot. Per backend:
   dnsStore:
     kubernetes:
       namespace: external-dns-credentials   # remote namespace (not workloadKubernetes.namespace)

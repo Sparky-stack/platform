@@ -103,7 +103,6 @@ memberAuth:
   tokenTTL: 10m
 
 reconcile:
-  enabled: true
   schedule: "*/5 * * * *"          # also an Argo Sync hook (wave 1); new members are picked up within one ESO refresh + 5m
   # == openbao.server.ha.raft.config (self-initialisation; server_test.yaml checks the names match):
   serviceAccount: openbao-mesh-config          # CronJob: role platform-mesh-config (members only)

@@ -1,20 +1,16 @@
 {{- /*
-Sensors: falco-escalation (-> Workflow from WorkflowTemplate falco-response) and promotion-gate (-> OpenChoreo
-WorkflowRun of ClusterWorkflow promotion-gate). Triggers create objects with deterministic names (event uuid / rollout
-id), so a re-delivered event fails with AlreadyExists instead of running twice.
-Both need the workflow plane (Argo Workflows CRDs + controller, see _helpers.tpl): not rendered without it.
+Sensors falco-escalation (-> Workflow falco-response) and promotion-gate (-> OpenChoreo WorkflowRun of ClusterWorkflow
+promotion-gate) on mgmt, only with the workflow plane (_helpers.tpl ae.workflowPlane). Deterministic object names
+(event uuid / rollout id): a re-delivered event fails with AlreadyExists instead of running twice.
 */ -}}
 {{- $wf := eq (include "ae.workflowPlane" .) "true" }}
-{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
-{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
 {{- if and .Values.falco.enabled $wf }}
-{{- $order := list "Emergency" "Alert" "Critical" "Error" "Warning" "Notice" "Informational" "Debug" }}
-{{- $min := .Values.falco.minimumPriority | title }}
-{{- if not (has $min $order) }}{{ fail (printf "falco.minimumPriority %q is not a Falco priority" .Values.falco.minimumPriority) }}{{ end }}
-{{- $prios := list }}
-{{- $stop := false }}
-{{- range $order }}{{ if not $stop }}{{ $prios = append $prios . }}{{ end }}{{ if eq . $min }}{{ $stop = true }}{{ end }}{{ end }}
-{{- $anchored := list }}{{ range $prios }}{{ $anchored = append $anchored (printf "^%s$" .) }}{{ end }}
+{{- /* Falco priorities from most to least severe: match minimumPriority and everything above it. */}}
+{{- $min := printf "^%s$" (.Values.falco.minimumPriority | title) }}
+{{- $anchored := list }}
+{{- range list "Emergency" "Alert" "Critical" "Error" "Warning" "Notice" "Informational" "Debug" }}
+{{- if not (has $min $anchored) }}{{ $anchored = append $anchored (printf "^%s$" .) }}{{ end }}
+{{- end }}
 {{- $clusters := include "ae.falcoClusters" . | fromJsonArray }}
 ---
 apiVersion: v1
@@ -52,12 +48,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: falco-escalation-sensor
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" "falco-escalation-sensor" "root" .) | nindent 4 }}
   # One dependency + trigger per cluster: the endpoint (event falco-<cluster>) authenticated the sender, so the trigger
   # hands its cluster to the Workflow as a literal argument; the payload's own `cluster` field is only cross-checked.
   dependencies:
@@ -156,12 +147,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: promotion-gate-sensor
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" "promotion-gate-sensor" "root" .) | nindent 4 }}
   dependencies:
     - name: rollout
       eventSourceName: releasebindings

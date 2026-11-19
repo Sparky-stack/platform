@@ -1,17 +1,9 @@
 {{- /*
-EventBus + EventSource `platform` (Falco escalation webhook, OpenChoreo ReleaseBinding events) + their plumbing:
-per-cluster bearer tokens derived from the store, Service exposure through the control-plane Gateway, read-only RBAC on
-bindings. Falco: one endpoint per cluster (POST /falco/<cluster>, event falco-<cluster>), each accepting only that
-cluster's token, so the endpoint an event arrives on authenticates the cluster it names (docs/observability.md).
+EventBus `default` and EventSources `platform` (Falco escalation webhook) and `releasebindings` (OpenChoreo rollouts,
+for the promotion gate) on mgmt, namespace argo-events, with their token Secret, HTTPRoute and RBAC.
 */ -}}
-{{- $sc := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
-{{- $podSc := dict "runAsNonRoot" true "runAsUser" 65532 "runAsGroup" 65532 "seccompProfile" (dict "type" "RuntimeDefault") }}
-{{- /* The EventBus can only run a version the controller config lists (pinned images, values.yaml). */ -}}
-{{- $jsVersions := list }}
-{{- range (index .Values "argo-events" "configs" "jetstream" "versions") }}{{ $jsVersions = append $jsVersions (toString .version) }}{{ end }}
-{{- if not (has (toString .Values.eventBus.natsVersion) $jsVersions) }}
-{{- fail (printf "eventBus.natsVersion %q is not in argo-events.configs.jetstream.versions %v (pinned EventBus images)" (toString .Values.eventBus.natsVersion) $jsVersions) }}
-{{- end }}
+{{- $clusters := list }}
+{{- if .Values.falco.enabled }}{{ $clusters = include "ae.falcoClusters" . | fromJsonArray }}{{ end }}
 apiVersion: argoproj.io/v1alpha1
 kind: EventBus
 metadata:
@@ -24,16 +16,21 @@ spec:
     replicas: 1
     # Pod Security restricted (the namespace is externally reachable and stays in Kyverno/PSS scope); fsGroup lets the
     # non-root NATS server write its JetStream store (emptyDir).
-    securityContext: {{- toYaml (merge (dict "fsGroup" 65532) $podSc) | nindent 6 }}
+    securityContext:
+      fsGroup: 65532
+      runAsGroup: 65532
+      runAsNonRoot: true
+      runAsUser: 65532
+      seccompProfile: { type: RuntimeDefault }
     containerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.nats | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
     reloaderContainerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.reloader | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
     metricsContainerTemplate:
       resources: {{- toYaml .Values.eventBus.resources.metrics | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
     settings: |
       max_memory_store: {{ .Values.eventBus.maxMemoryStore }}
       max_file_store: {{ .Values.eventBus.maxFileStore }}
@@ -51,19 +48,15 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: platform-eventsource
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" "platform-eventsource" "root" .) | nindent 4 }}
   {{- if .Values.falco.enabled }}
-  {{- $clusters := include "ae.falcoClusters" . | fromJsonArray }}
   service:
     ports:
       - name: falco
         port: {{ .Values.falco.port }}
         targetPort: {{ .Values.falco.port }}
+  {{- /* One endpoint per cluster (POST /falco/<cluster>, event falco-<cluster>), each accepting only that cluster's
+  token: the endpoint an event arrives on authenticates the cluster it names (docs/observability.md). */}}
   webhook:
     {{- range $c := $clusters }}
     {{ printf "falco-%s" $c }}:
@@ -87,12 +80,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   eventBusName: default
-  template:
-    serviceAccountName: platform-eventsource
-    securityContext: {{- toYaml $podSc | nindent 6 }}
-    container:
-      resources: {{- toYaml .Values.podResources | nindent 8 }}
-      securityContext: {{- toYaml $sc | nindent 8 }}
+  template: {{- include "ae.eventPod" (dict "sa" "platform-eventsource" "root" .) | nindent 4 }}
   resource:
     releasebinding-rollout:
       namespace: {{ .Values.openchoreo.orgNamespace }}
@@ -144,7 +132,7 @@ spec:
     template:
       engineVersion: v2
       data:   # gitleaks:allow: ESO template; one derived token per cluster, the store's token is never written here
-        {{- range $c := include "ae.falcoClusters" . | fromJsonArray }}
+        {{- range $c := $clusters }}
         {{ $c | quote }}: {{ include "ae.falcoToken" $c | quote }}
         {{- end }}
   data:
@@ -165,7 +153,7 @@ spec:
     - {{ printf "%s.%s" .Values.falco.route.hostPrefix (required "openchoreo.controlPlane.host is required" .Values.openchoreo.controlPlane.host) | quote }}
   rules:
     - matches:
-        {{- range $c := include "ae.falcoClusters" . | fromJsonArray }}
+        {{- range $c := $clusters }}
         - path: { type: Exact, value: {{ printf "%s/%s" $.Values.falco.endpoint $c }} }
           method: POST
         {{- end }}

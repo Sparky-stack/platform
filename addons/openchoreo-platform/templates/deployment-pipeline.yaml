@@ -1,3 +1,5 @@
+{{- /* DeploymentPipeline (org namespace, mgmt): promotion order development -> ... -> production, one path per
+neighbouring pair. Every tenant Project references it (charts/tenant). */ -}}
 {{- $envs := .Values.deploymentPipeline.environments }}
 {{- if lt (len $envs) 1 }}{{ fail "deploymentPipeline.environments needs at least one environment" }}{{ end }}
 apiVersion: openchoreo.dev/v1alpha1

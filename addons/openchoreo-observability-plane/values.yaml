@@ -61,10 +61,8 @@ clusterObservabilityPlane:
   name: default
   planeID: default            # == openchoreo-observability-plane.clusterAgent.planeID (validated)
 
-# ConfigMap cluster-gateway-ca in this namespace (the agent verifies the cluster-gateway with it): the control plane's
-# gateway CA PUBLIC cert, read from openchoreo-control-plane/cluster-gateway-ca (ca.crt only) through the read-only
-# ClusterSecretStore `mgmt-openchoreo`. ESO writes a ConfigMap (generic target): external-secrets on mgmt needs
-# `genericTargets.enabled: true` (adds --unsafe-allow-generic-targets + ConfigMap RBAC).
+# ConfigMap cluster-gateway-ca: the control plane's gateway CA PUBLIC cert, the agent verifies the cluster-gateway with it
+# (templates/agent-server-ca.yaml; needs ESO genericTargets.enabled on mgmt).
 agentServerCA:
   enabled: true
   store: mgmt-openchoreo
