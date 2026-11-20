@@ -123,6 +123,7 @@
     {
       "description": "A Crossplane Project's Configuration and its embedded function (<name>_compose-<name>) are published by the same CI run and the Configuration's dependsOn pins the function digest: bump both in one PR",
       "matchPackageNames": ["/^ghcr\\.io/koorikla/platform/postgresql(_compose-postgresql)?$/"],
+      "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+$/",
       "groupName": "postgresql package"
     },
     {

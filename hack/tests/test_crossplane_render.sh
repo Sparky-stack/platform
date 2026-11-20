@@ -22,12 +22,14 @@ source hack/lib/addons.sh
 
 ADDON=addons/crossplane
 FIX=hack/tests/crossplane
+EX=packages/postgresql/examples   # the sample XRs live with the API (one copy)
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 [[ -d "$SCHEMAS_DIR/rds.aws.m.upbound.io" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
 [[ -d "$ADDON/charts" ]] || helm dependency build "$ADDON" >/dev/null
 kc() { assert_eq "$(kc_valid "$1")" yes "$2 passes kubeconform -strict"; }   # kc <file> <label>
 COMP=packages/postgresql/apis/postgresql/composition.yaml
-CFG_RE='^ghcr\.io/koorikla/platform/postgresql:[a-z0-9.-]+@sha256:[0-9a-f]{64}$'
+# Release tags only (release-please postgresql-vX.Y.Z -> image tag vX.Y.Z): `main` / short SHAs move or are not releases.
+CFG_RE='^ghcr\.io/koorikla/platform/postgresql:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
 PKG_RE='^(xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\.[0-9]+|ghcr\.io/koorikla/platform/[a-z0-9_-]+:[a-z0-9.-]+)@sha256:[0-9a-f]{64}$'
 
 # --- 1a. selection through the ApplicationSet for local dev1 ------------------------------------------------------------
@@ -40,6 +42,11 @@ assert_eq "$(yq -N 'select(.kind == "Composition" or .kind == "CompositeResource
   "dev1: the addon renders no XRD / Composition (they come from the Configuration package)"
 assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.package' "$TMP/dev1.yaml" | grep -cE "$CFG_RE" || true)" 1 \
   "dev1: one Configuration, ghcr.io/koorikla/platform/postgresql pinned tag@digest"
+cfg_tag=$(yq -N 'select(.kind == "Configuration") | .spec.package' "$TMP/dev1.yaml" | sed -E 's/.*:(v[^@]+)@.*/\1/')
+fn_tag=$(yq -N 'select(.kind == "Function" and .metadata.name == "koorikla-platform-postgresqlcompose-postgresql") | .spec.package' \
+  "$TMP/dev1.yaml" | grep -E '^ghcr\.io/koorikla/platform/postgresql_compose-postgresql:v[0-9.]+@sha256:[0-9a-f]{64}$' \
+  | sed -E 's/.*:(v[^@]+)@.*/\1/')
+assert_eq "$fn_tag" "$cfg_tag" "dev1: compose-postgresql is pinned at the Configuration's release tag (published together)"
 assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.skipDependencyResolution' "$TMP/dev1.yaml")" true \
   "dev1: the Configuration skips dependency resolution (the addon pins Functions / Providers)"
 assert_eq "$(yq -N 'select(.kind == "EnvironmentConfig" and .metadata.name == "platform-postgresql") | .data.backend' "$TMP/dev1.yaml")" \
@@ -209,17 +216,17 @@ render_bg() {
   while [[ $(jobs -rp | wc -l) -ge $XP_RENDER_JOBS ]]; do sleep 0.2; done
   render_one "$@" &
 }
-render_one cnpg-minimal "$TMP/env-cnpg.yaml" "$FIX/xr-minimal.yaml" || true   # starts the function containers
-render_bg cnpg-production "$TMP/env-cnpg.yaml" "$FIX/xr-production.yaml"
-render_bg cnpg-backup "$TMP/env-cnpg-backup.yaml" "$FIX/xr-production.yaml"
-render_bg aws-minimal "$TMP/env-aws-rds.yaml" "$FIX/xr-minimal.yaml"
-render_bg aws-production "$TMP/env-aws-rds.yaml" "$FIX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
-render_bg aws-aurora "$TMP/env-aws-rds.yaml" "$FIX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
-render_bg gcp-minimal "$TMP/env-gcp-cloudsql.yaml" "$FIX/xr-minimal.yaml"
-render_bg gcp-production "$TMP/env-gcp-cloudsql.yaml" "$FIX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
-render_bg azure-minimal "$TMP/env-azure-flexible.yaml" "$FIX/xr-minimal.yaml"
-render_bg azure-production "$TMP/env-azure-flexible.yaml" "$FIX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
-render_bg unknown-backend "$TMP/env-unknown.yaml" "$FIX/xr-minimal.yaml"
+render_one cnpg-minimal "$TMP/env-cnpg.yaml" "$EX/xr-minimal.yaml" || true   # starts the function containers
+render_bg cnpg-production "$TMP/env-cnpg.yaml" "$EX/xr-production.yaml"
+render_bg cnpg-backup "$TMP/env-cnpg-backup.yaml" "$EX/xr-production.yaml"
+render_bg aws-minimal "$TMP/env-aws-rds.yaml" "$EX/xr-minimal.yaml"
+render_bg aws-production "$TMP/env-aws-rds.yaml" "$EX/xr-production.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg aws-aurora "$TMP/env-aws-rds.yaml" "$EX/xr-aurora.yaml" "$FIX/observed-aws-rds.yaml"
+render_bg gcp-minimal "$TMP/env-gcp-cloudsql.yaml" "$EX/xr-minimal.yaml"
+render_bg gcp-production "$TMP/env-gcp-cloudsql.yaml" "$EX/xr-production.yaml" "$FIX/observed-gcp-cloudsql.yaml"
+render_bg azure-minimal "$TMP/env-azure-flexible.yaml" "$EX/xr-minimal.yaml"
+render_bg azure-production "$TMP/env-azure-flexible.yaml" "$EX/xr-production.yaml" "$FIX/observed-azure-flexible.yaml"
+render_bg unknown-backend "$TMP/env-unknown.yaml" "$EX/xr-minimal.yaml"
 wait
 # XP_RENDER_OUT=<dir>: keep every case's raw render (diff renders before/after a template change).
 if [[ -n "${XP_RENDER_OUT:-}" ]]; then mkdir -p "$XP_RENDER_OUT" && cp "$TMP"/render-*.yaml "$XP_RENDER_OUT"/; fi

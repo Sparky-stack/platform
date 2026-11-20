@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# ClusterSecretStore `platform` (addon secret-stores) is limited by spec.conditions to platformStore.namespaces. Every
-# ExternalSecret that reads it must live in one of those namespaces, every listed namespace must have a consumer
-# (no stale grants), and no `workflows-*` run namespace may ever read `platform`: workflow runs use the key-scoped
-# `ClusterSecretStore/workflows` (Role resourceNames = workflowStore.keys). On workload clusters, store `dns`
-# (invariant 5 exception: the external-dns Cloudflare token) is limited to namespace external-dns, and that token is
-# never read through the tenant store `default`. Uses the manifests hack/test.sh rendered for each installation's mgmt
-# cluster and CAPI clusters (RENDERED_DIR), plus opt-in consumers rendered here.
+# ClusterSecretStore `platform` (addon secret-stores) is limited by spec.conditions to platformStore.namespaces, which
+# must never admit a `workflows-*` run namespace (workflow runs use the key-scoped `ClusterSecretStore/workflows`, Role
+# resourceNames = workflowStore.keys), and every listed namespace must have a consumer (no stale grants). On workload
+# clusters, store `dns` (invariant 5 exception: the external-dns Cloudflare token) is limited to namespace external-dns.
+# Cross-chart, so it needs every render (RENDERED_DIR from hack/test.sh): runs in the full suite (push, merge_group) and
+# in a scoped PR run only when a changed chart defines a store or workflow (full-if below). Each consumer's own check
+# (in scope of its store) is test_secret_store_scope_chart.sh, which scoped PR runs include.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-# Needs every consumer render: a scoped PR run (hack/test-changed.sh) goes full when a changed chart has secrets.
-# scoped-ci full-if: ExternalSecret|SecretStore|secretStoreRef
+# scoped-ci full-if: ^(platformStore|workflowStore):|^kind: (ClusterWorkflowPlane|ClusterWorkflow|Workflow) *$|only store dns
 if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
   echo "  SKIP: needs the renders from hack/test.sh (RENDERED_DIR)"
   exit 0
@@ -20,125 +19,32 @@ cd "$ROOT"
 source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
+# shellcheck source=secret_store_scope_lib.sh
+source hack/tests/secret_store_scope_lib.sh
 
-# wp_store <file>... -> ClusterWorkflowPlane.spec.secretStoreRef.name (default: workflows)
-wp_store() {
-  local s=""
-  local -a wf_files=()
-  read_lines wf_files bash -c 'grep -l "ClusterWorkflowPlane" "$@" 2>/dev/null || true' _ "$@"
-  if [[ ${#wf_files[@]} -gt 0 ]]; then
-    s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "${wf_files[@]}" 2>/dev/null | head -n1 || true)
-  fi
-  printf '%s\n' "${s:-workflows}"
-}
-# consumers <file>... -> "<namespace> <kind>/<name>" for every object that reads store `platform`. Includes the
-# ExternalSecrets OpenChoreo renders per WorkflowRun from ClusterWorkflow/Workflow spec.resources: namespace
-# ${metadata.namespace} is workflows-<org ns> (ORG_NS), store ${workflowplane.secretStore} is the plane's (WP_STORE).
-consumers() {
-  local wps
-  wps=${WP_STORE:-$(wp_store "$@")}
-  local -a es_files=() wf_files=()
-  read_lines es_files bash -c 'grep -lE "ExternalSecret|PushSecret" "$@" 2>/dev/null || true' _ "$@"
-  if [[ ${#es_files[@]} -gt 0 ]]; then
-    yq -N 'select(.kind == "ExternalSecret" or .kind == "ClusterExternalSecret" or .kind == "PushSecret")
-      | select(([.spec.secretStoreRef.name, .spec.externalSecretSpec.secretStoreRef.name,
-                 .spec.secretStoreRefs[]?.name, .spec.data[]?.sourceRef.storeRef.name,
-                 .spec.dataFrom[]?.sourceRef.storeRef.name] | any_c(. == "platform")))
-      | (.metadata.namespace // "<none>") + " " + .kind + "/" + .metadata.name' "${es_files[@]}" 2>/dev/null | grep -v '^$' || true
-  fi
-  read_lines wf_files bash -c 'grep -l "Workflow" "$@" 2>/dev/null || true' _ "$@"
-  if [[ ${#wf_files[@]} -gt 0 ]]; then
-    # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
-    ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
-      select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
-      | .spec.resources[]?.template | select(.kind == "ExternalSecret")
-      | select((.spec.secretStoreRef.name | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) == "platform")
-      | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " ExternalSecret/"
-        + $k + ":" + $wf + ":" + .metadata.name' "${wf_files[@]}" 2>/dev/null | grep -v '^$' || true
-  fi
-}
-# allowed <secret-stores render> -> namespaces of store platform's conditions, one per line
-allowed() {
-  yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform") | .spec.conditions[].namespaces[]' "$1"
-}
-# platform_workflow_conds <secret-stores render> -> any workflows-* namespace or regex on store platform
-platform_workflow_conds() {
-  yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "platform")
-    | (.spec.conditions[].namespaces[]?, .spec.conditions[].namespaceRegexes[]?)
-    | select(test("(^|\^)workflows-"))' "$1" 2>/dev/null | grep -v '^$' || true
-}
+# The fixture test_secret_store_scope_chart.sh uses when a scoped run did not render the stores.
+if [[ -n "${SECRET_STORE_FIXTURE_UPDATE:-}" ]]; then ss_fixture_now > "$SS_FIXTURE"; fi
+assert_eq "$(ss_fixture_now)" "$(cat "$SS_FIXTURE")" \
+  "hack/tests/fixtures/secret-store-scope.txt == rendered store scope (regenerate: SECRET_STORE_FIXTURE_UPDATE=1 task test)"
 
 USED=""
-check() {   # check <label> <store render> <render>...
-  local label=$1 store=$2; shift 2
-  local ok ns what n=0
-  ok=$(allowed "$store")
-  assert_nonempty "$ok" "$label: store platform has namespace conditions"
+check_store() {   # check_store <label> <store render> [<render>...]: no <render> = store only (consumers counted elsewhere)
+  local label=$1 store=$2 n c; shift 2
+  assert_nonempty "$(allowed "$store")" "$label: store platform has namespace conditions"
   assert_eq "$(platform_workflow_conds "$store")" "" "$label: store platform never admits workflows-* namespaces"
-  while read -r ns what; do
-    [[ -n "$ns" ]] || continue
-    n=$((n + 1))
-    USED="$USED $ns"
-    case "$what" in
-      ClusterExternalSecret/*|PushSecret/*) assert_eq "$what" "an ExternalSecret" "$label: $what reads store platform (not covered by namespace conditions)" ;;
-    esac
-    if printf '%s\n' "$ok" | grep -qx -- "$ns"; then
-      assert_eq ok ok "$label: $ns $what allowed"
-    else
-      assert_eq "$ns not allowed" "$ns allowed" "$label: $what reads store platform from $ns: add it to addons/secret-stores platformStore.namespaces"
-    fi
-  done <<EOF
-$(consumers "$@")
-EOF
+  [[ $# -gt 0 ]] || return 0
+  c=$(consumers "$@")
+  n=$(printf '%s\n' "$c" | grep -c . || true)
+  USED="$USED $(printf '%s\n' "$c" | awk '{ print $1 }' | tr '\n' ' ')"
   assert_match "$n" '^[1-9]' "$label: consumers found"
 }
-
-# --- mgmt store `workflows` (ClusterWorkflowPlane secretStoreRef, key-scoped in workflows-*) ------------------------
-# wf_es_records <wp_store> <file>... -> "<ns> <wf>/<es> <store> <dataFrom count> <keys csv>" per workflow ExternalSecret
-# (<store> = generator:<kind> for a store-less ExternalSecret fed by generators; generatorRef entries are not counted
-# as dataFrom extract/find)
-wf_es_records() {
-  local wps=$1; shift
-  local -a wf_files=()
-  read_lines wf_files bash -c 'grep -l "Workflow" "$@" 2>/dev/null || true' _ "$@"
-  [[ ${#wf_files[@]} -gt 0 ]] || return 0
-  # shellcheck disable=SC2016  # yq variables ($wf, $k), not shell
-  ORG_NS="${ORG_NS:-default}" WP_STORE="$wps" yq -N '
-    select(.kind == "ClusterWorkflow" or .kind == "Workflow") | .metadata.name as $wf | .kind as $k
-    | .spec.resources[]?.template | select(.kind == "ExternalSecret")
-    | (.metadata.namespace | sub("\\$\\{metadata.namespace\\}", "workflows-" + strenv(ORG_NS))) + " "
-      + $k + ":" + $wf + ":" + .metadata.name + " "
-      + ((.spec.secretStoreRef.name // ("generator:" + ([.spec.dataFrom[]?.sourceRef.generatorRef.kind] | unique | join("+"))))
-         | sub("\\$\\{workflowplane.secretStore\\}", strenv(WP_STORE))) + " "
-      + ([.spec.dataFrom[]? | select(.sourceRef.generatorRef == null)] | length | tostring) + " "
-      + ([.spec.data[]?.remoteRef.key] | join(","))' "${wf_files[@]}" 2>/dev/null | grep -v '^$' || true
-}
-check_workflows() {   # check_workflows <label> <store render> <render>...
-  local label=$1 store=$2; shift 2
-  local wps ns what s df keys k used_keys="" role_keys role_verbs
+check_workflows_store() {   # check_workflows_store <label> <store render> <render>...
+  local label=$1 store=$2 wps used_keys role_keys role_verbs; shift 2
   assert_eq "$(yq -N -o json -I0 'select(.kind == "ClusterSecretStore" and .metadata.name == "workflows") | .spec.conditions' "$store")" \
     '[{"namespaceRegexes":["^workflows-.+$"]}]' "$label: store workflows admits workflows-* namespaces only"
   wps=$(wp_store "$@")
   assert_eq "$wps" workflows "$label: ClusterWorkflowPlane secretStoreRef is workflows"
-  while read -r ns what s df keys; do
-    [[ -n "$ns" ]] || continue
-    assert_match "$ns" '^workflows-.+$' "$label: $what runs in a workflows-* namespace ($ns)"
-    assert_eq "$df" 0 "$label: $what uses explicit spec.data keys (no dataFrom extract/find)"
-    case "$s" in
-      workflows)
-        for k in ${keys//,/ }; do
-          [[ -n "$k" ]] && used_keys="${used_keys:+$used_keys$'\n'}$k"
-        done
-        ;;
-      mgmt-harbor) assert_eq "$keys" harbor-ca-bundle "$label: $what reads only harbor-ca-bundle from mgmt-harbor" ;;
-      # per-run GitHub App installation token (#34): generator output only, no store, no store key
-      generator:GithubAccessToken) assert_eq "$keys" "" "$label: $what (GitHub App token generator) reads no store key" ;;
-      *) assert_eq "$s" workflows "$label: $what uses store workflows (got $s)" ;;
-    esac
-  done <<EOF
-$(wf_es_records "$wps" "$@")
-EOF
-  used_keys=$(printf '%s\n' "$used_keys" | LC_ALL=C sort -u | paste -sd, -)
+  used_keys=$(wf_es_records "$wps" "$@" | awk '$3 == "workflows" { gsub(",", "\n", $5); print $5 }' | grep -v '^$' | LC_ALL=C sort -u | paste -sd, - || true)
   assert_nonempty "$used_keys" "$label: workflow ExternalSecrets read keys from store workflows"
   role_verbs=$(yq -N -o json -I0 'select(.kind == "Role" and .metadata.name == "eso-workflows") | .rules[0].verbs' "$store" 2>/dev/null || true)
   if [[ -n "$role_verbs" && "$role_verbs" != "null" ]]; then
@@ -156,66 +62,31 @@ EOF
   fi
 }
 
-for inst_dir in installations/*; do
-  [[ -f "$inst_dir/installation.yaml" ]] || continue
-  inst=$(basename "$inst_dir")
-  store="$RENDERED_DIR/addon-secret-stores-$inst-mgmt.yaml"
-  [[ -f "$store" ]] || { assert_eq missing present "$inst: secret-stores mgmt render"; continue; }
+for l in $(ss_labels); do
+  store=$(ss_store "$l")
+  [[ -f "$store" ]] || { assert_eq missing present "$l: secret-stores mgmt render"; continue; }
   files=()
-  for f in "$RENDERED_DIR"/addon-*-"$inst"-mgmt.yaml "$RENDERED_DIR"/cluster-"$inst"-*.yaml; do
-    [[ -f "$f" ]] && files+=("$f")
-  done
-  ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' "$inst_dir/installation.yaml") check "$inst" "$store" "${files[@]}"
-  ORG_NS=$(yq '.openchoreo.orgNamespace // "default"' "$inst_dir/installation.yaml") check_workflows "$inst" "$store" "${files[@]}"
+  read_lines files ss_files "$l"
+  ORG_NS=$(ss_org_ns "$l") check_store "$l" "$store" "${files[@]}"
+  ORG_NS=$(ss_org_ns "$l") check_workflows_store "$l" "$store" "${files[@]}"
 done
-
-files=()
-for f in "$RENDERED_DIR"/addon-*-standalone.yaml; do [[ -f "$f" ]] && files+=("$f"); done
-check standalone "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "${files[@]}"
-check_workflows standalone "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "${files[@]}"
-
-# Opt-in consumers that the default renders leave out: falco's sidekick outputs on mgmt.
-falco_ns=$(yq '.addons.falco.namespace // "falco"' charts/platform/values.yaml)
-helm template falco addons/falco --namespace "$falco_ns" -f addons/falco/values.yaml -f addons/falco/values/role-mgmt.yaml \
-  --set escalation.enabled=true --set slack.enabled=true > "$TMP/falco-mgmt-outputs.yaml"
-check "falco outputs (mgmt)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" "$TMP/falco-mgmt-outputs.yaml"
-
-# Opt-in consumers on mgmt (catalog default false): external-dns with Cloudflare, agentgateway's provider key, and the
-# observability plane's AI agents.
-ns_of() { yq ".addons[\"$1\"].namespace" charts/platform/values.yaml; }
-helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" -f addons/external-dns/values.yaml \
-  -f addons/external-dns/values/role-mgmt.yaml -f addons/external-dns/values/dns-cloudflare.yaml \
-  --set dns.provider=cloudflare --set 'dns.domainFilters={example.com}' --set 'external-dns.domainFilters={example.com}' \
-  --set-string external-dns.txtOwnerId=sample --show-only templates/secrets.yaml > "$TMP/external-dns-mgmt.yaml"
-render_standalone_addon agentgateway "$TMP/agentgateway-mgmt.yaml"
-helm template openchoreo-observability-plane addons/openchoreo-observability-plane \
-  --namespace "$(ns_of openchoreo-observability-plane)" --show-only templates/secrets.yaml \
-  --set openchoreo-observability-plane.rca.enabled=true --set openchoreo-observability-plane.rca.llm.modelName=m \
-  --set openchoreo-observability-plane.finOpsAgent.enabled=true --set openchoreo-observability-plane.finOpsAgent.llmName=m \
-  > "$TMP/obs-ai-agents.yaml"
-check "opt-in mgmt consumers (external-dns, agentgateway, AI agents)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml" \
-  "$TMP/external-dns-mgmt.yaml" "$TMP/agentgateway-mgmt.yaml" "$TMP/obs-ai-agents.yaml"
+# Opt-in consumers (their per-consumer checks: test_secret_store_scope_chart.sh); their namespaces count as used.
+ss_render_opt_in "$TMP"
+check_store "falco outputs (mgmt)" "$RENDERED_DIR/addon-secret-stores-standalone.yaml"
+check_store "$SS_OPT_IN_LABEL" "$RENDERED_DIR/addon-secret-stores-standalone.yaml"
+USED="$USED $(consumers "$TMP/falco-mgmt-outputs.yaml" "$TMP/external-dns-mgmt.yaml" "$TMP/agentgateway-mgmt.yaml" \
+  "$TMP/obs-ai-agents.yaml" | awk '{ print $1 }' | tr '\n' ' ')"
 
 # --- workload store `dns` -------------------------------------------------------------------------------------------
-# es_reading <store> <file>... -> "<namespace> <name> <remote keys>" for every ExternalSecret using that store.
-es_reading() {
-  local store=$1; shift
-  local -a es_files=()
-  read_lines es_files bash -c 'grep -l "ExternalSecret" "$@" 2>/dev/null || true' _ "$@"
-  [[ ${#es_files[@]} -gt 0 ]] || return 0
-  S="$store" yq -N 'select(.kind == "ExternalSecret" and .spec.secretStoreRef.name == strenv(S))
-    | (.metadata.namespace // "<none>") + " " + .metadata.name + " " + ([.spec.data[]?.remoteRef.key] | join(","))' "${es_files[@]}" 2>/dev/null | grep -v '^$' || true
-}
 dns_checked=0
-for inst_dir in installations/*; do
-  [[ -f "$inst_dir/installation.yaml" ]] || continue
-  inst=$(basename "$inst_dir") dnsp=$(yq '.dns.provider // "none"' "$inst_dir/installation.yaml")
+for inst in $(ss_labels | grep -vx standalone); do
+  dnsp=$(yq '.dns.provider // "none"' "installations/$inst/installation.yaml")
   render_platform "$inst" "$TMP/platform-$inst.yaml"
-  for cf in "$inst_dir"/clusters/*.yaml; do
+  for cf in installations/"$inst"/clusters/*.yaml; do
     [[ -f "$cf" ]] || continue
     c=$(yq '.name' "$cf") store="$RENDERED_DIR/addon-secret-stores-$inst-$c.yaml"
     [[ -f "$store" ]] || continue
-    n_dns=$(yq -N 'select(.kind == "ClusterSecretStore" and .metadata.name == "dns") | .metadata.name' "$store" | grep -c . || true)
+    n_dns=$(n_dns_store "$store")
     if [[ "$dnsp" != cloudflare ]]; then
       assert_eq "$n_dns" 0 "$inst/$c: no store dns without dns.provider cloudflare"
       continue
@@ -223,22 +94,9 @@ for inst_dir in installations/*; do
     assert_eq "$n_dns" 1 "$inst/$c: store dns exists (dns.provider cloudflare)"
     assert_eq "$(yq -N -o json -I0 'select(.kind == "ClusterSecretStore" and .metadata.name == "dns") | .spec.conditions' "$store")" \
       '[{"namespaces":["external-dns"]}]' "$inst/$c: store dns readable from namespace external-dns only"
-    # external-dns forced on, rendered like its ApplicationSet; every other workload addon as test.sh rendered it
-    args=()
-    read_lines args addon_helm_args external-dns "$inst_dir" "$TMP/platform-$inst.yaml" workload "$c" "$(yq '.provider' "$cf")" \
-      "$(yq '.environment // "development"' "$cf")" "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" https://192.0.2.10:6443
-    helm template external-dns addons/external-dns --namespace "$(ns_of external-dns)" "${args[@]}" > "$TMP/edns-$inst-$c.yaml"
-    files=("$TMP/edns-$inst-$c.yaml")
-    for f in "$RENDERED_DIR"/addon-*-"$inst"-"$c".yaml; do [[ -f "$f" ]] && files+=("$f"); done
-    while read -r ns name _keys; do
-      [[ -n "$ns" ]] || continue
-      dns_checked=$((dns_checked + 1))
-      assert_eq "$ns" external-dns "$inst/$c: ExternalSecret $name reads store dns from namespace external-dns"
-    done <<EOF
-$(es_reading dns "${files[@]}")
-EOF
-    assert_eq "$(es_reading default "${files[@]}" | awk '$3 ~ /(^|,)external-dns-/' | head -1)" "" \
-      "$inst/$c: no external-dns credential through the tenant store default"
+    files=()
+    read_lines files ss_dns_files "$inst" "$cf" "$TMP/platform-$inst.yaml" "$TMP"
+    dns_checked=$((dns_checked + $(es_reading dns "${files[@]}" | grep -c . || true)))
   done
 done
 assert_match "$dns_checked" '^[1-9]' "store dns consumers found (hetzner-example, Cloudflare)"

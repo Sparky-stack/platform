@@ -86,9 +86,10 @@ packages:
     providerResources:              # upjet providers hold the Terraform schema in memory
       requests: { cpu: 50m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }
-  # -- The PostgreSQL API package (packages/postgresql), tag@digest (a Configuration has one manifest, no index). The promotion point:
-  # per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it.
-  configuration: ghcr.io/koorikla/platform/postgresql:main@sha256:8e5357552402966894be564da15912b99f57adc6623d7f7d702aae93d4344fc8 # VERIFY: switch to vX.Y.Z once release-please tags postgresql-v*
+  # -- The PostgreSQL API package (packages/postgresql), release tag vX.Y.Z (release-please postgresql-vX.Y.Z) @digest (a
+  # Configuration has one manifest, no index); never the moving `main` tag. The promotion point: per-environment pins go
+  # in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it.
+  configuration: ghcr.io/koorikla/platform/postgresql:v0.2.0@sha256:478419ad87ba4e90756b6826638c6977bfda3d23ecdee48b5fa0bca539ba5be1
   # Cosign keyless verification of platform packages (ImageConfig; alpha, needs core flag
   # --enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags.
   # Off until Crossplane verifies Sigstore bundles (#247); packages are still keyless-signed with provenance in CI.
@@ -104,7 +105,7 @@ packages:
     # The Configuration's embedded function (packages/postgresql/functions/compose-postgresql), published with it by
     # the same CI run: bump it together with `configuration` (same tag; the Configuration's dependsOn pins this digest).
     # The name is the one the Composition references (Crossplane's name for ghcr.io/koorikla/platform/postgresql_compose-postgresql).
-    koorikla-platform-postgresqlcompose-postgresql: ghcr.io/koorikla/platform/postgresql_compose-postgresql:main@sha256:266105c6f749d3a8961ddac162b208ee1e2becf86e65bb78318dce36909723c4 # VERIFY: switch to vX.Y.Z with configuration
+    koorikla-platform-postgresqlcompose-postgresql: ghcr.io/koorikla/platform/postgresql_compose-postgresql:v0.2.0@sha256:7f4d5cb26e8ca5d2736a28acea5dadbee07b45d0900d614889ed416b7d2cc2ce
   # Per backend: only the family members its Composition uses.
   providers:
     cnpg: {}

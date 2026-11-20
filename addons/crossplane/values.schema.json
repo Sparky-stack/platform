@@ -78,8 +78,8 @@
         },
         "configuration": {
           "type": "string",
-          "pattern": "^[a-z0-9][-a-z0-9._/]*(:[0-9]+)?/[-a-z0-9._/]+:[-A-Za-z0-9._]+@sha256:[a-f0-9]{64}$",
-          "description": "The platform's PostgreSQL Configuration package (ghcr.io/koorikla/platform/postgresql:<tag>@sha256:...)."
+          "pattern": "^[a-z0-9][-a-z0-9._/]*(:[0-9]+)?/[-a-z0-9._/]+:v[0-9]+\\.[0-9]+\\.[0-9]+@sha256:[a-f0-9]{64}$",
+          "description": "The platform's PostgreSQL Configuration package at a release tag (ghcr.io/koorikla/platform/postgresql:vX.Y.Z@sha256:...), never a moving tag such as main."
         },
         "signatureVerification": {
           "type": "object",
