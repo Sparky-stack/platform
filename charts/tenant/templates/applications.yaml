@@ -54,7 +54,9 @@ spec:
     syncOptions:
       - CreateNamespace=false
     retry:
-      limit: 10
+      # Never give up: on a clean bootstrap the app's Environments/data planes (and the capability gate's addons on them)
+      # can arrive long after this Application; a finite limit leaves it OutOfSync for good (as tenants.yaml, #192).
+      limit: -1
       backoff:
         duration: 15s
         factor: 2

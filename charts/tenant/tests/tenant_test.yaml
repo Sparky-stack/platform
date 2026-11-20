@@ -97,6 +97,11 @@ tests:
       - equal: { path: spec, value: { owner: { projectName: demo }, environment: production } }
         documentIndex: 3
 
+  - it: app Applications never stop retrying (Environments and data planes can arrive after them on a clean bootstrap)
+    template: templates/applications.yaml
+    asserts:
+      - equal: { path: spec.syncPolicy.retry.limit, value: -1 }
+
   - it: one Application per app (+ one per gated environment) with defaults applied, in the tenant AppProject
     template: templates/applications.yaml
     asserts:
