@@ -49,6 +49,9 @@ tests:
           content: { apiGroups: [openchoreo.dev], resources: [components, environments], verbs: [get] }
       - contains:
           path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [environments/finalizers], verbs: [update] }
+      - contains:
+          path: rules
           content: { apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, patch] }
       - notContains:
           path: rules

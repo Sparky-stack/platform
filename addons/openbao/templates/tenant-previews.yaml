@@ -7,7 +7,8 @@ charts/preview creates those: tenants cannot write ProjectReleaseBindings) into 
 The ExternalSecret tenant-clients turns them into <tenant>.previews; files/tenant-reconcile.sh computes each cell
 namespace from ORG_NAMESPACE + tenant + environment (never from the input) and binds it to the tenant's role and entity
 (metadata tenant=<project>): the preview reads exactly kv-tenant-<project>, like the project's other environments.
-Closing the PR or the TTL deletes the binding; synchronize deletes the descriptor and the next reconcile run unbinds it.
+Closing the PR or the TTL deletes the binding; synchronize deletes the descriptor (also on the terminating binding's
+later UPDATEs, which no longer match) and the next reconcile run unbinds it.
 */ -}}
 {{- if and (((.Values.secrets).tenantStores).enabled) ((.Values.previews).enabled) }}
 {{- $t := .Values.tenantSecrets }}
@@ -48,6 +49,11 @@ spec:
       expression: "object.spec.owner.projectName.matches('^[a-z0-9]([-a-z0-9]{0,48}[a-z0-9])?$')"
     - name: environment-is-a-preview
       expression: "object.spec.environment.matches('^pr-[0-9]+-[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && size(object.spec.environment) <= 63"
+    # A terminating binding gets no descriptor. The DELETE removes the descriptor (synchronize), but OpenChoreo's
+    # finalizer removal afterwards is an UPDATE of a still-matching binding: without this Kyverno re-creates the
+    # descriptor and nothing ever deletes it (leak after hello-world#35). Non-matching UPDATE + synchronize = delete.
+    - name: binding-is-not-terminating
+      expression: "!has(object.metadata.deletionTimestamp)"
   variables:
     - name: project
       expression: object.spec.owner.projectName

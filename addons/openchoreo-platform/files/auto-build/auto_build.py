@@ -497,7 +497,11 @@ def preview_resource_bindings(release, namespace, project, environment, labels):
     (spec.workload.dependencies.resources[].ref): the preview gets its own instance (e.g. an empty database) in its
     cell, never development's. Owned by the preview Environment like the release, so closing the PR deletes it, and
     retainPolicy Delete removes the data with it. Pinned by ResourcePins (annotation "latest"), sized by the
-    ResourceType's environmentConfigs defaults."""
+    ResourceType's environmentConfigs defaults.
+    blockOwnerDeletion: the Environment must outlive the binding. OpenChoreo 1.3.3's binding finalizer waits for its
+    RenderedRelease, whose finalizer resolves the data plane through the Environment ("failed to get environment" ->
+    stuck forever once it is gone). The Environment is deleted in the foreground (Argo's resources finalizer, the TTL
+    DeletingPolicy), so it now waits until this binding and its data-plane objects are gone."""
     deps = (((release or {}).get("spec") or {}).get("workload") or {}).get("dependencies") or {}
     env_name = environment["metadata"]["name"]
     out = []
@@ -511,7 +515,8 @@ def preview_resource_bindings(release, namespace, project, environment, labels):
                 "name": "%s-%s" % (ref, env_name), "namespace": namespace, "labels": labels,
                 "annotations": {RESOURCE_RELEASE_ANNOTATION: "latest"},
                 "ownerReferences": [{"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Environment",
-                                     "name": env_name, "uid": environment["metadata"]["uid"]}],
+                                     "name": env_name, "uid": environment["metadata"]["uid"],
+                                     "blockOwnerDeletion": True}],
             },
             "spec": {"owner": {"projectName": project, "resourceName": ref}, "environment": env_name,
                      "retainPolicy": "Delete"},

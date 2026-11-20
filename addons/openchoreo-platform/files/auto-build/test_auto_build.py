@@ -848,6 +848,10 @@ class PreviewResources(unittest.TestCase):
         self.assertEqual(rrb["metadata"]["annotations"], {ab.RESOURCE_RELEASE_ANNOTATION: "latest"})
         self.assertEqual(rrb["metadata"]["ownerReferences"][0]["kind"], "Environment")
         self.assertEqual(rrb["metadata"]["ownerReferences"][0]["name"], "pr-7-hello-world")
+        # The Environment must outlive the binding: OpenChoreo's RenderedRelease finalizer resolves the data plane
+        # through it, so a binding outliving its Environment never finalizes (hello-world#35 leak). blockOwnerDeletion
+        # makes the foreground delete of the Environment (Argo, TTL policy) wait for the binding.
+        self.assertIs(rrb["metadata"]["ownerReferences"][0].get("blockOwnerDeletion"), True)
         self.assertEqual(rrb["metadata"]["labels"][ab.PREVIEW_LABEL], "true")
         self.assertNotIn("resourceRelease", rrb["spec"])     # ResourcePins sets it
         self.assertEqual(api.statuses[-1][1], "pending")     # Ready only once the app binding (and so the DB) is

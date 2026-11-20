@@ -70,6 +70,9 @@ tests:
     asserts:
       - equal: { path: spec.schedule, value: "*/5 * * * *" }
         documentSelector: { path: kind, value: DeletingPolicy }
+      # the Environment must outlive its ResourceReleaseBindings (OpenChoreo finalizes them through it, hello-world#35)
+      - equal: { path: spec.deletionPropagationPolicy, value: Foreground }
+        documentSelector: { path: kind, value: DeletingPolicy }
       - matchRegex: { path: "spec.conditions[1].expression", pattern: 'variables.expiresAt \+ duration\("1h"\).getSeconds\(\)' }
         documentSelector: { path: kind, value: DeletingPolicy }
       - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [environments], verbs: [get, list, watch, delete] }] }

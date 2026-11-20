@@ -110,7 +110,9 @@ metadata:
       unstamped). OpenChoreo's finalizer removes their bindings and cell namespaces.
 spec:
   schedule: {{ $g.schedule | quote }}
-  deletionPropagationPolicy: Background
+  # Foreground: the Environment stays until the preview's ResourceReleaseBindings (blockOwnerDeletion) are gone, because
+  # OpenChoreo finalizes their data-plane objects through it; Background deletes it first and strands them forever.
+  deletionPropagationPolicy: Foreground
   matchConstraints:
     resourceRules:
       - { apiGroups: [openchoreo.dev], apiVersions: [v1alpha1], operations: ["*"], resources: [environments] }
