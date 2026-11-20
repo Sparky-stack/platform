@@ -4,7 +4,7 @@
 # Runs in the OpenChoreo workflow plane for one component and one promotion edge (source -> target environment):
 #   1. pipeline   the edge exists in the project's DeploymentPipeline (1.3.3 does not enforce it server-side)
 #   2. readiness  the source ReleaseBinding is Ready, its rollout succeeded, it runs the release being promoted
-#   3. smoke      HTTP GET on every external endpoint of the source binding answers 2xx/3xx
+#   3. smoke      HTTP GET on every external endpoint of the source binding answers 2xx (redirects fail)
 #   4. observe    observer API: no alert fired for the component in the source environment during the window;
 #                 observability Prometheus: HTTP 5xx share of the gateway's requests to the component (kgateway Envoy
 #                 envoy_cluster_upstream_rq) at or below the threshold
@@ -198,23 +198,59 @@ def endpoint_urls(binding):
     return urls
 
 
-def smoke(urls, path, attempts=5):
+def pod_host_ips(tree):
+    """hostIPs of the running Pods in a release binding's k8sresources tree (OpenChoreo API, read via the agent)."""
+    ips = set()
+    for rel in tree.get("renderedReleases") or []:
+        for node in rel.get("nodes") or []:
+            st = (node.get("object") or {}).get("status") or {}
+            if node.get("kind") == "Pod" and st.get("phase") == "Running" and st.get("hostIP"):
+                ips.add(st["hostIP"])
+    return sorted(ips)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # a 3xx is an answer of its own, not a pass: raise it as HTTPError
+        return None
+
+
+_SMOKE_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def smoke_request(url, connect_ip=None):
+    """GET request for url; with connect_ip, connect to that address on the URL's port and send the URL host as Host."""
+    headers = {"User-Agent": "koorikla-promotion-gate"}
+    if connect_ip:
+        u = urllib.parse.urlsplit(url)
+        if u.scheme != "http":
+            raise GateFailed("smoke connect podHostIP supports http endpoints only, got %s" % url)
+        headers["Host"] = u.netloc
+        url = urllib.parse.urlunsplit(("http", "%s:%d" % (connect_ip, u.port or 80), u.path, u.query, ""))
+    return urllib.request.Request(url, headers=headers)
+
+
+def smoke(urls, path, attempts=5, connect_ip=None, sleep=time.sleep):
     for base in urls:
         url = base.rstrip("/") + "/" + path.lstrip("/")
+        via = " via %s" % connect_ip if connect_ip else ""
         last = ""
         for i in range(attempts):
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "koorikla-promotion-gate"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    if 200 <= resp.status < 400:
-                        log("  smoke ok  %s -> %d" % (url, resp.status))
+                with _SMOKE_OPENER.open(smoke_request(url, connect_ip), timeout=10) as resp:
+                    if 200 <= resp.status < 300:
+                        log("  smoke ok  %s%s -> %d" % (url, via, resp.status))
                         break
                     last = "HTTP %d" % resp.status
+            except GateFailed:
+                raise
+            except urllib.error.HTTPError as e:
+                last = "HTTP %d" % e.code
+                e.close()
             except Exception as e:  # noqa: BLE001 - any failure is a failed probe
                 last = str(e)
-            time.sleep(3 * (i + 1))
+            sleep(3 * (i + 1))
         else:
-            raise GateFailed("smoke test failed: %s (%s)" % (url, last))
+            raise GateFailed("smoke test failed: %s%s (%s)" % (url, via, last))
 
 
 def observe_alerts(tok, scope, window_minutes):
@@ -529,8 +565,17 @@ def main():
     if env("SMOKE_HTTP", "true") == "true":
         urls = endpoint_urls(src)
         if urls:
-            smoke(urls, env("SMOKE_PATH", "/"))
-            evidence.append("smoke GET %s -> 2xx/3xx" % ", ".join(urls))
+            # podHostIP (local): app hosts do not resolve from mgmt; the Gateway listens on every node (klipper
+            # hostPort), so connect to the node of a running Pod of the binding and send the host as Host header.
+            ip = None
+            if env("SMOKE_CONNECT", "dns") == "podHostIP":
+                tree = api("/api/v1/namespaces/%s/releasebindings/%s/k8sresources/tree" % (ns, src["metadata"]["name"]), tok)
+                ips = pod_host_ips(tree)
+                if not ips:
+                    raise GateFailed("smoke: no running Pod with a hostIP in %s" % src["metadata"]["name"])
+                ip = ips[0]
+            smoke(urls, env("SMOKE_PATH", "/"), connect_ip=ip)
+            evidence.append("smoke GET %s%s -> 2xx" % (", ".join(urls), " via node %s" % ip if ip else ""))
         else:
             log("  smoke     no external endpoint: skipped")
             evidence.append("smoke: no external endpoint")

@@ -166,9 +166,33 @@ spec:
               - { name: BINDING_PATH, value: {{ $g.bindingPath | quote }} }
               - { name: SMOKE_HTTP, value: {{ $g.smoke.http | toString | quote }} }
               - { name: SMOKE_PATH, value: {{ $g.smoke.path | quote }} }
+              - { name: SMOKE_CONNECT, value: {{ $g.smoke.connect | default "dns" | quote }} }
               - { name: OBSERVE, value: {{ $observe | toString | quote }} }
               - { name: OBSERVE_WINDOW_MINUTES, value: {{ $g.observe.windowMinutes | toString | quote }} }
               - { name: MAX_ERROR_RATE, value: {{ $g.observe.maxErrorRate | toString | quote }} }
             source: |
               {{- $script | nindent 14 }}
+{{- if and $g.smoke.http (eq ($g.smoke.connect | default "dns") "podHostIP") }}
+{{- if not $g.smoke.egressPorts }}{{ fail "promotionGate.smoke.connect podHostIP needs promotionGate.smoke.egressPorts (the data-plane Gateway port)" }}{{ end }}
+---
+# The gate pod's smoke probe dials data-plane node IPs on the Gateway port (connect podHostIP). Additive to the run
+# namespace's default deny (addon openchoreo-workflow-plane), selects only the gate's podLabels. Any address: CAPD node
+# IPs come from a docker network whose CIDR differs per host (same reason as runNetworkPolicy.apiServer :6443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: promotion-gate-smoke
+  namespace: workflows-{{ .Values.openchoreo.orgNamespace }}
+spec:
+  podSelector:
+    matchLabels: {{ toJson $g.podLabels }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        {{- range $g.smoke.egressPorts }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+{{- end }}
 {{- end }}

@@ -157,6 +157,8 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | promotionGate.resources.limits.memory | string | `"128Mi"` |  |
 | promotionGate.resources.requests.cpu | string | `"20m"` |  |
 | promotionGate.resources.requests.memory | string | `"48Mi"` |  |
+| promotionGate.smoke.connect | string | `"dns"` |  |
+| promotionGate.smoke.egressPorts | list | `[]` |  |
 | promotionGate.smoke.http | bool | `true` |  |
 | promotionGate.smoke.path | string | `"/"` |  |
 | promotionGate.statusContext | string | `"openchoreo/promotion-gate"` |  |
