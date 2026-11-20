@@ -670,6 +670,41 @@ c_postgres() {
   echo "XRD postgresqls.platform.koorikla.io Established on: $ok"
 }
 
+# c_db_claim: the developer side of step 9 (#70, docs/data-services.md "PostgreSQL from OpenChoreo"). The demo
+# component's Workload depends on a Resource of ClusterResourceType postgresql; in the first environment its
+# ResourceReleaseBinding is Ready (OpenChoreo applied the XR, the type's readyWhen = XR Ready), the XR in the cell
+# namespace is Ready and the component's Deployment takes its credentials from the XR's <xr>-app Secret. The XR name
+# comes from the binding's username output (secretKeyRef <xr>-app). PENDING while the demo declares no such Resource.
+c_db_claim() {
+  local ref res="" env dp ns rrb secret xr ready refs
+  for ref in $(km get workloads.openchoreo.dev -n "$NS" \
+      -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.dependencies.resources[*].ref}{"\n"}{end}' \
+      2>/dev/null | awk -v c="$COMP" '$1 == c { $1 = ""; print }'); do
+    [[ "$(km get resources.openchoreo.dev -n "$NS" "$ref" -o jsonpath='{.spec.type.kind}/{.spec.type.name}' 2>/dev/null)" \
+      == ClusterResourceType/postgresql ]] && { res=$ref; break; }
+  done
+  [[ -n "$res" ]] || { echo "$COMP declares no postgresql Resource (app repo deploy/openchoreo, docs/data-services.md)"; return 2; }
+  env=$(env_names | head -n1)
+  rrb=$(km get resourcereleasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.resourceName}{" "}{.spec.environment}{" "}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{" "}{.status.outputs[?(@.name=="username")].secretKeyRef.name}{"\n"}{end}' \
+    2>/dev/null | awk -v r="$res" -v e="$env" '$1 == r && $2 == e { print $3, $4, $5; exit }')
+  [[ -n "$rrb" ]] || { echo "Resource $res has no ResourceReleaseBinding for environment '${env:-none}'"; return 1; }
+  read -r rrb ready secret <<<"$rrb"
+  [[ "$ready" == True && "$secret" == *-app ]] \
+    || { echo "ResourceReleaseBinding $rrb: Ready=${ready:-unknown}, username secret '${secret:-none}'"; return 1; }
+  xr=${secret%-app}
+  dp=$(env_dataplane "$env")
+  ns=$(cell_namespace "$dp" "$env")
+  [[ -n "$ns" ]] || { echo "no cell namespace for environment '$env' on '${dp:-none}'"; return 1; }
+  ready=$(kw "$dp" -n "$ns" get postgresqls.platform.koorikla.io "$xr" \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+  [[ "$ready" == True ]] || { echo "$dp/$ns: PostgreSQL $xr Ready=${ready:-missing}"; return 1; }
+  refs=$(kw "$dp" -n "$ns" get deployments -l "openchoreo.dev/component=$COMP" \
+    -o jsonpath='{range .items[*].spec.template.spec.containers[*].env[*]}{.valueFrom.secretKeyRef.name}{"\n"}{end}' 2>/dev/null)
+  printf '%s\n' "$refs" | grep -qx "$secret" \
+    || { echo "$dp/$ns: $COMP's Deployment takes no env from Secret $secret"; return 1; }
+  echo "$env: PostgreSQL $xr Ready on $dp, $COMP reads Secret $secret (binding $rrb)"
+}
+
 # ---- main -----------------------------------------------------------------------------------------------------------
 CLUSTERS=()
 cluster_names() {
@@ -724,6 +759,7 @@ done
 check 8 app-secret "$COMP reads $SECRET_ENV from OpenBao" c_app_secret
 
 check 9 postgres "PostgreSQL claim API" c_postgres
+check 9 db-claim "$COMP database claim Ready" c_db_claim
 
 echo
 echo "$N_PASS PASS, $N_FAIL FAIL, $N_PENDING PENDING"

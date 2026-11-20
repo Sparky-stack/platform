@@ -58,7 +58,11 @@ case "\$a" in
   *" get environments.openchoreo.dev "*) k=envs ;;
   *" get machines.cluster.x-k8s.io "*)
     for w in "\$@"; do case "\$w" in *cluster-name=*) k=machine-\${w#*cluster-name=} ;; esac; done ;;
+  *" get workloads.openchoreo.dev "*dependencies*) k=workload-deps ;;
   *" get workloads.openchoreo.dev "*) k=workloads ;;
+  *" get resources.openchoreo.dev "*) k=resource-type ;;
+  *" get resourcereleasebindings.openchoreo.dev "*) k=resource-bindings ;;
+  *" get postgresqls.platform.koorikla.io "*) k=pg-ready ;;
   *" get namespaces "*) k=cellns ;;
   *" get workflowruns.openchoreo.dev "*) k=workflowruns ;;
   *" get releasebindings.openchoreo.dev "*) k=bindings ;;
@@ -74,6 +78,7 @@ case "\$a" in
   *" get certificates.cert-manager.io "*) k=mesh-cert ;;
   *" get clustersecretstores.external-secrets.io "*) k=stores ;;
   *" get compositeresourcedefinitions"*) k=xrds ;;
+  *" get deployments "*secretKeyRef*) k=app-env-refs ;;
   *" get deployments "*"openchoreo.dev/component="*) k=app-envfrom ;;
   *" get secret "*".data.GREETING_SECRET"*) k=app-secret ;;
   *" get externalsecrets.external-secrets.io "*) k=app-es ;;
@@ -158,6 +163,12 @@ green() {
   printf 'hello-world-env-secrets-1234\n' > "$d/dev1.app-envfrom"
   printf 'aGVsbG8=' > "$d/dev1.app-secret"
   printf 'SecretStore/openbao-tenant 15s True' > "$d/dev1.app-es"
+  # database claim (#70): hello-world depends on Resource orders-db (postgresql), bound and Ready in development
+  printf 'other\nhello-world orders-db\n' > "$d/k3d-platform-mgmt.workload-deps"
+  printf 'ClusterResourceType/postgresql' > "$d/k3d-platform-mgmt.resource-type"
+  printf 'orders-db staging orders-db-staging True orders-db-staging-9f8e7d6c-app\norders-db development orders-db-development True orders-db-development-1a2b3c4d-app\n' > "$d/k3d-platform-mgmt.resource-bindings"
+  printf 'True' > "$d/dev1.pg-ready"
+  printf '\norders-db-development-1a2b3c4d-app\n' > "$d/dev1.app-env-refs"
   printf '200' > "$d/http.development-default.dev1.apps.localhost"
   printf '200' > "$d/http.staging-default.dev1.apps.localhost"
   printf '200' > "$d/http.production-default.prod1.apps.localhost"
@@ -234,7 +245,38 @@ assert_eq "$(result_of 'PostgreSQL claim API')" PASS "green: XRD Established on 
 assert_eq "$(detail_of 'PostgreSQL claim API')" "XRD postgresqls.platform.koorikla.io Established on: dev1" "green: XRD detail"
 assert_match "$CALLS" "dev1.kubeconfig --request-timeout=20s get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io " "green: XRD read on the workload cluster, not mgmt"
 assert_eq "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "development: GREETING_SECRET from ExternalSecret hello-world-env-secrets-1234 (SecretStore/openbao-tenant 15s) Ready" "green: app secret"
-assert_match "$OUT" $'\n31 PASS, 0 FAIL, 0 PENDING$' "green: summary"
+assert_eq "$(result_of 'hello-world database claim Ready')" PASS "green: database claim"
+assert_eq "$(detail_of 'hello-world database claim Ready')" "development: PostgreSQL orders-db-development-1a2b3c4d Ready on dev1, hello-world reads Secret orders-db-development-1a2b3c4d-app (binding orders-db-development)" "green: claim detail (first environment's binding, XR name from its Secret)"
+assert_match "$CALLS" "dev1.kubeconfig --request-timeout=20s -n dp-default-demo-development-1234 get postgresqls.platform.koorikla.io orders-db-development-1a2b3c4d " "green: XR read in the development cell on dev1"
+assert_match "$OUT" $'\n32 PASS, 0 FAIL, 0 PENDING$' "green: summary"
+
+# Database claim (#70): PENDING until the demo declares one; once declared every link must hold.
+cp -R "$FIX" "$TMP/fix/db"; FIX="$TMP/fix/db"
+printf 'hello-world\n' > "$FIX/k3d-platform-mgmt.workload-deps"
+run db-none
+assert_eq "$(result_of 'hello-world database claim Ready')" PENDING "db: no Resource dependency -> PENDING"
+assert_eq "$RC" 0 "db: PENDING does not fail the run"
+printf 'hello-world orders-db\n' > "$FIX/k3d-platform-mgmt.workload-deps"
+printf 'ClusterResourceType/valkey' > "$FIX/k3d-platform-mgmt.resource-type"
+run db-other-type
+assert_eq "$(result_of 'hello-world database claim Ready')" PENDING "db: a non-postgresql Resource is no database claim"
+printf 'ClusterResourceType/postgresql' > "$FIX/k3d-platform-mgmt.resource-type"
+printf 'orders-db staging orders-db-staging True orders-db-staging-9f8e7d6c-app\n' > "$FIX/k3d-platform-mgmt.resource-bindings"
+run db-unbound
+assert_eq "$(detail_of 'hello-world database claim Ready')" "Resource orders-db has no ResourceReleaseBinding for environment 'development'" "db: no binding in the first environment fails"
+printf 'orders-db development orders-db-development False\n' > "$FIX/k3d-platform-mgmt.resource-bindings"
+run db-binding-not-ready
+assert_eq "$(detail_of 'hello-world database claim Ready')" "ResourceReleaseBinding orders-db-development: Ready=False, username secret 'none'" "db: binding not Ready fails"
+printf 'orders-db development orders-db-development True orders-db-development-1a2b3c4d-app\n' > "$FIX/k3d-platform-mgmt.resource-bindings"
+printf 'False' > "$FIX/dev1.pg-ready"
+run db-xr-not-ready
+assert_eq "$(detail_of 'hello-world database claim Ready')" "dev1/dp-default-demo-development-1234: PostgreSQL orders-db-development-1a2b3c4d Ready=False" "db: XR not Ready fails"
+printf 'True' > "$FIX/dev1.pg-ready"
+printf 'some-other-secret\n' > "$FIX/dev1.app-env-refs"
+run db-not-mounted
+assert_eq "$(result_of 'hello-world database claim Ready')" FAIL "db: credentials not wired into the Deployment fails"
+assert_eq "$RC" 1 "db: a failing claim fails the run"
+common_asserts db-not-mounted
 
 # Mesh members and Crossplane clusters vary: failures name the cluster.
 cp -R "$FIX" "$TMP/fix/addons"; FIX="$TMP/fix/addons"
@@ -315,6 +357,7 @@ printf '1' > "$FIX/cosign.rc"
 printf 'platform True\nmgmt-fleet False\n' > "$FIX/k3d-platform-mgmt.stores"
 # app secret synced through another store (e.g. the data plane's ClusterSecretStore) is not the tenant path
 printf 'ClusterSecretStore/default 15s True' > "$FIX/dev1.app-es"
+printf 'Unknown' > "$FIX/dev1.pg-ready"
 run red
 common_asserts red
 assert_eq "$RC" 1 "red: exit 1 on FAIL"
@@ -341,12 +384,12 @@ assert_eq "$(detail_of 'Falco running (dev1)')" "not ready: falco 0/1, falco-fal
 assert_eq "$(result_of 'cluster name in Falco events')" FAIL "red: cluster name must match exactly (cluster:prod1x is not prod1)"
 assert_eq "$(detail_of 'ClusterSecretStores Ready (mgmt)')" "not Ready: mgmt-fleet" "red: store not ready"
 assert_match "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "ExternalSecret is 'ClusterSecretStore/default 15s True'" "red: app secret on another store fails"
-assert_match "$OUT" $'\n14 PASS, 15 FAIL, 2 PENDING$' "red: summary"
+assert_match "$OUT" $'\n14 PASS, 16 FAIL, 2 PENDING$' "red: summary"
 
 run red-strict DEMO_STRICT=1
 assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: known-pending becomes FAIL"
 assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
-assert_match "$OUT" $'\n14 PASS, 17 FAIL, 0 PENDING$' "strict: summary"
+assert_match "$OUT" $'\n14 PASS, 18 FAIL, 0 PENDING$' "strict: summary"
 
 # ---- fresh stack (#200) ---------------------------------------------------------------------------------------------
 # A clean bootstrap: development serves (auto-build rebuilt the Workload's commit); staging/production pin release names
