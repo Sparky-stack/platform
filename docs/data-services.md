@@ -226,10 +226,10 @@ metadata:
   name: orders-db-development
   annotations:
     argocd.argoproj.io/sync-wave: "1"                    # after the Resource (the admission check reads it)
+    platform.koorikla.io/resource-release: latest        # the platform pins spec.resourceRelease (docs/promotion.md)
 spec:
   owner: { projectName: demo, resourceName: orders-db }
   environment: development
-  resourceRelease: orders-db-6c9d7b8f4                   # from: kubectl get resource orders-db -o jsonpath='{.status.latestRelease.name}'
   retainPolicy: Delete                                   # default (type): Retain - unbinding keeps the database
   resourceTypeEnvironmentConfigs: { size: S, storageGiB: 10 }   # + highAvailability, backup, deletionPolicy
 ```
@@ -245,9 +245,11 @@ spec:
 
 `host`, `port` and `database` arrive as plain env values (from the XR status), `username`, `password` and `uri` as
 `secretKeyRef`s to `<name>-app`: the credentials never leave the data plane. OpenChoreo 1.3.3 has no auto-deploy for
-Resources: a binding stays `ResourceReleaseNotSet` until `resourceRelease` names a release. The release name is a
-deterministic hash of the type's spec and the parameters (stable across a clean bootstrap); a platform change to the
-type cuts a new release, which an app adopts by bumping the pin. Every environment the component is promoted to needs
+Resources: a binding stays `ResourceReleaseNotSet` until `resourceRelease` names a release, and the release name is a
+hash of the type's spec and the parameters that changes with every platform change to the type. So no hash goes into
+Git: the annotation `platform.koorikla.io/resource-release: latest` lets the platform keep the pin on the Resource's
+latest release ([promotion.md](promotion.md#resources-no-hand-computed-release)); production pins it in Git. PR
+previews get their own instance automatically ([preview-environments.md](preview-environments.md)). Every environment the component is promoted to needs
 its own binding (the Workload's dependency is shared): ReleaseBindings there wait for it. Production bindings belong in
 `release-bindings/production.yaml` (gated Application, reviewed pull request, docs/promotion.md) and must ask for
 `highAvailability: true` and `backup: { enabled: true }` (policy above).

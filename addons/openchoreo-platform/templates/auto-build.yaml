@@ -43,6 +43,14 @@ rules:
   - apiGroups: [openchoreo.dev]
     resources: [workflowruns]
     verbs: [get, list, create]
+  # Resource pins: ResourceReleaseBindings annotated platform.koorikla.io/resource-release: latest follow their
+  # Resource's latest ResourceRelease (OpenChoreo 1.3.3 never sets the pin; docs/promotion.md "Resources")
+  - apiGroups: [openchoreo.dev]
+    resources: [resources]
+    verbs: [get]
+  - apiGroups: [openchoreo.dev]
+    resources: [resourcereleasebindings]
+    verbs: [list, patch{{ if $pv.enabled }}, create{{ end }}]   # create: a preview's own Resources
   {{- if $pv.enabled }}
   # PR previews: read the preview's Component and Environment, cut its ComponentRelease, and annotate the binding once
   # per release (OpenChoreo 1.3.3 does not requeue a binding whose release appears later)
@@ -307,6 +315,8 @@ spec:
           - { name: MAX_RUNS, value: {{ $a.maxRunsPerPass | toString | quote }} }
           - { name: STALE_SECONDS, value: {{ $a.staleRunSeconds | toString | quote }} }
           - { name: MIN_RATE_REMAINING, value: {{ $a.minRateRemaining | toString | quote }} }
+          # never pinned by the pass: their ResourceReleaseBindings change only through Git (promotion-git-only.yaml)
+          - { name: GATED_ENVIRONMENTS, value: {{ ternary (join " " .Values.promotion.gatedEnvironments) "" .Values.promotion.gitOnly.enabled | quote }} }
           {{- if $harbor }}
           # registry-aware "already built": a Workload pinning a digest this registry does not have is rebuilt (#200)
           - { name: REGISTRY_HOST, value: {{ include "build.registryHost" . | quote }} }

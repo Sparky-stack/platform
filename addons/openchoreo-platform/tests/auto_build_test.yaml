@@ -97,7 +97,7 @@ tests:
     asserts:
       - failedTemplate: { errorPattern: "at '/autoBuild/github': missing property 'permissions'" }
 
-  - it: org-namespace RBAC is read + create only (no update, patch or delete of tenant objects)
+  - it: org-namespace RBAC is read + create only, plus patching ResourceReleaseBinding pins (no update or delete)
     documentSelector: { path: 'rules[0].resources[0]', value: components }
     asserts:
       - isKind: { of: Role }
@@ -108,6 +108,23 @@ tests:
             - { apiGroups: [openchoreo.dev], resources: [components], verbs: [list] }
             - { apiGroups: [openchoreo.dev], resources: [workflows], verbs: [get] }
             - { apiGroups: [openchoreo.dev], resources: [workflowruns], verbs: [get, list, create] }
+            - { apiGroups: [openchoreo.dev], resources: [resources], verbs: [get] }
+            - { apiGroups: [openchoreo.dev], resources: [resourcereleasebindings], verbs: [list, patch] }
+
+  - it: the pass never pins ResourceReleaseBindings of git-only (gated) environments (#330)
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - contains:
+          path: spec.templates[0].script.env
+          content: { name: GATED_ENVIRONMENTS, value: production }
+
+  - it: without the git-only VAP no environment is skipped
+    set: { promotion.gitOnly.enabled: false }
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - contains:
+          path: spec.templates[0].script.env
+          content: { name: GATED_ENVIRONMENTS, value: "" }
 
   - it: run-namespace RBAC writes only the cache ConfigMap (by name) and Argo task results
     documentSelector: { path: 'rules[0].resources[0]', value: configmaps }

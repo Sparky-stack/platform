@@ -53,6 +53,9 @@ tests:
       - notContains:
           path: rules
           content: { apiGroups: [openchoreo.dev], resources: [releasebindings], verbs: [get, create] }
+      - contains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [resourcereleasebindings], verbs: [list, patch, create] }
 
   - it: lists only Argo CD Applications (the preview ones, by label) in argocd
     documentSelector: { path: "rules[0].resources[0]", value: applications }

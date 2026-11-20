@@ -402,13 +402,15 @@ Expected: `BACKEND cnpg`, `SECRET orders-db-app`, `COMPOSITION postgresql`. A ra
 is denied by the `postgresql-only-through-the-platform-api` policy (also a native ValidatingAdmissionPolicy).
 
 Through OpenChoreo (what developers actually do): the app repo declares a `Resource` of `ClusterResourceType
-postgresql`, a `ResourceReleaseBinding` per environment and a Workload dependency with `envBindings`
-(docs/data-services.md "PostgreSQL from OpenChoreo"). The cluster agent applies the XR into the cell namespace (its RBAC
+postgresql`, a `ResourceReleaseBinding` per environment (annotated `platform.koorikla.io/resource-release: latest`:
+the auto-build pass pins the release, no hash in Git, docs/promotion.md "Resources") and a Workload dependency with
+`envBindings` (docs/data-services.md "PostgreSQL from OpenChoreo"). Every PR preview of hello-world gets its own empty
+`orders-db` (`orders-db-pr-<n>-hello-world`, deleted with the preview, docs/preview-environments.md). The cluster agent applies the XR into the cell namespace (its RBAC
 grants exactly `platform.koorikla.io` `postgresqls`, addon openchoreo-data-plane) and the app gets `host`/`port`/
 `database` as values and `username`/`password`/`uri` as `secretKeyRef`s to `<xr>-app`, which never leaves dev1:
 
 ```bash
-kubectl --context k3d-platform-mgmt get resourcereleasebindings -n default        # READY True
+kubectl --context k3d-platform-mgmt get resourcereleasebindings -n default        # READY True, RELEASE orders-db-<hash>
 kubectl --kubeconfig dev1.kubeconfig get postgresqls -A                          # in the dp-default-demo-development-* cell
 ```
 

@@ -536,6 +536,20 @@ class FakePreviewApi(FakeApi):
         b = self.objects.get(("releasebindings", name))
         b.setdefault("metadata", {}).setdefault("annotations", {})[ab.RELEASE_ANNOTATION] = release
 
+    def create_resource_binding(self, binding):
+        key = ("resourcereleasebindings", binding["metadata"]["name"])
+        if key in self.objects:
+            return False                   # AlreadyExists
+        self.objects[key] = binding
+        return True
+
+    def resource_bindings(self):
+        return [o for (r, _), o in self.objects.items() if r == "resourcereleasebindings"]
+
+    def pin_resource_release(self, name, release):
+        self.calls.append(("pin", name, release))
+        self.objects[("resourcereleasebindings", name)]["spec"]["resourceRelease"] = release
+
 
 def previews(api, state=None, **kw):
     pv = ab.Previews(api, "default", PREFIXES, state if state is not None else {}, OPT_IN, "preview-expired",
@@ -756,6 +770,117 @@ class PreviewReconcile(unittest.TestCase):
         api = self.api()
         previews(api, repository="koorikla/other")
         self.assertEqual(api.created, [])
+
+
+DB_RELEASE = {"metadata": {"name": "hello-world-pr-7-bbbbbbbbbbbb"},
+              "spec": {"workload": {"container": {"image": PR_IMAGE},
+                                    "dependencies": {"resources": [{"ref": "orders-db", "envBindings": {"uri": "X"}}]}}}}
+
+
+class PreviewResources(unittest.TestCase):
+    """#330: a preview of an app with dependencies.resources gets its own instance of each Resource."""
+
+    def api(self, objects=None):
+        objs = {("environments", "pr-7-hello-world"): environment(expires=int(NOW.timestamp()) + 3600),
+                ("componentreleases", "hello-world-pr-7-bbbbbbbbbbbb"): DB_RELEASE,
+                ("releasebindings", "hello-world-pr-7"): binding(ready_=False)}
+        objs.update(objects or {})
+        return FakePreviewApi([preview_app()], [opted_in()], {"7": pull()}, objs)
+
+    def test_each_declared_resource_gets_a_binding_in_the_preview_environment_owned_by_it(self):
+        api = self.api()
+        previews(api)
+        rrb = api.objects[("resourcereleasebindings", "orders-db-pr-7-hello-world")]
+        self.assertEqual(rrb["spec"], {"owner": {"projectName": "demo", "resourceName": "orders-db"},
+                                       "environment": "pr-7-hello-world", "retainPolicy": "Delete"})
+        self.assertEqual(rrb["metadata"]["annotations"], {ab.RESOURCE_RELEASE_ANNOTATION: "latest"})
+        self.assertEqual(rrb["metadata"]["ownerReferences"][0]["kind"], "Environment")
+        self.assertEqual(rrb["metadata"]["ownerReferences"][0]["name"], "pr-7-hello-world")
+        self.assertEqual(rrb["metadata"]["labels"][ab.PREVIEW_LABEL], "true")
+        self.assertNotIn("resourceRelease", rrb["spec"])     # ResourcePins sets it
+        self.assertEqual(api.statuses[-1][1], "pending")     # Ready only once the app binding (and so the DB) is
+
+    def test_existing_binding_is_left_alone(self):
+        mine = {"metadata": {"name": "orders-db-pr-7-hello-world"}, "spec": {"resourceRelease": "orders-db-1"}}
+        api = self.api({("resourcereleasebindings", "orders-db-pr-7-hello-world"): mine})
+        previews(api)
+        self.assertIs(api.objects[("resourcereleasebindings", "orders-db-pr-7-hello-world")], mine)
+
+    def test_app_without_resources_gets_none(self):
+        api = self.api({("componentreleases", "hello-world-pr-7-bbbbbbbbbbbb"): {"metadata": {}}})
+        previews(api)
+        self.assertEqual(api.resource_bindings(), [])
+
+
+def rrb(name, env="development", resource="orders-db", pin=None, follow=True):
+    spec = {"owner": {"projectName": "demo", "resourceName": resource}, "environment": env}
+    if pin:
+        spec["resourceRelease"] = pin
+    ann = {ab.RESOURCE_RELEASE_ANNOTATION: "latest"} if follow else {}
+    return {"metadata": {"name": name, "annotations": ann}, "spec": spec}
+
+
+def resource(latest="orders-db-7bbd4b8fc7"):
+    return {"metadata": {"name": "orders-db"}, "status": {"latestRelease": {"name": latest}} if latest else {}}
+
+
+class ResourcePins(unittest.TestCase):
+    """#330: ResourceReleaseBindings annotated "latest" need no hand-computed resourceRelease."""
+
+    def run_pins(self, bindings, res=None, gated=("production",)):
+        objs = {("resourcereleasebindings", b["metadata"]["name"]): b for b in bindings}
+        objs[("resources", "orders-db")] = res if res is not None else resource()
+        api = FakePreviewApi([], [], {}, objs)
+        pins = ab.ResourcePins(api, gated)
+        pins.run()
+        return api, pins
+
+    def pin(self, api, name):
+        return api.objects[("resourcereleasebindings", name)]["spec"].get("resourceRelease")
+
+    def test_unset_pin_is_set_to_the_resources_latest_release(self):
+        api, _ = self.run_pins([rrb("orders-db-development")])
+        self.assertEqual(self.pin(api, "orders-db-development"), "orders-db-7bbd4b8fc7")
+
+    def test_new_release_after_a_type_change_moves_the_pin(self):
+        api, _ = self.run_pins([rrb("orders-db-development", pin="orders-db-7bbd4b8fc7")],
+                               res=resource("orders-db-0123456789"))
+        self.assertEqual(self.pin(api, "orders-db-development"), "orders-db-0123456789")
+
+    def test_up_to_date_pin_is_not_written(self):
+        api, _ = self.run_pins([rrb("orders-db-development", pin="orders-db-7bbd4b8fc7")])
+        self.assertEqual(api.calls, [])
+
+    def test_binding_without_the_annotation_keeps_its_git_pin(self):
+        api, _ = self.run_pins([rrb("orders-db-staging", env="staging", pin="orders-db-old", follow=False)])
+        self.assertEqual(self.pin(api, "orders-db-staging"), "orders-db-old")
+
+    def test_negative_gated_environment_is_never_written_even_when_annotated(self):
+        api, _ = self.run_pins([rrb("orders-db-production", env="production", pin="orders-db-old")])
+        self.assertEqual(self.pin(api, "orders-db-production"), "orders-db-old")
+        self.assertEqual(api.calls, [])
+
+    def test_resource_without_a_release_yet_waits(self):
+        api, _ = self.run_pins([rrb("orders-db-development")], res=resource(latest=None))
+        self.assertIsNone(self.pin(api, "orders-db-development"))
+
+    def test_preview_binding_is_pinned_like_any_other(self):
+        api, _ = self.run_pins([rrb("orders-db-pr-7-hello-world", env="pr-7-hello-world")])
+        self.assertEqual(self.pin(api, "orders-db-pr-7-hello-world"), "orders-db-7bbd4b8fc7")
+
+    def test_error_on_one_binding_does_not_stop_the_others(self):
+        class Boom(FakePreviewApi):
+            def get(self, kind, name):
+                if name == "broken":
+                    raise ab.Failed("GET resources/broken -> HTTP 500")
+                return super().get(kind, name)
+        objs = {("resourcereleasebindings", "a"): rrb("a", resource="broken"),
+                ("resourcereleasebindings", "b"): rrb("b"), ("resources", "orders-db"): resource()}
+        api = Boom([], [], {}, objs)
+        pins = ab.ResourcePins(api, ["production"])
+        pins.run()
+        self.assertEqual(len(pins.errors), 1)
+        self.assertEqual(self.pin(api, "b"), "orders-db-7bbd4b8fc7")
 
 
 if __name__ == "__main__":
