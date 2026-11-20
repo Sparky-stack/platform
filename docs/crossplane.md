@@ -96,7 +96,7 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   `ghcr.io/koorikla/platform/`; it also needs `--enable-signature-verification` in `crossplane.args`. The subject alone does not pin the calling repository (any repo can call a public reusable
   workflow); the push target `ghcr.io/koorikla/platform/*` is writable only by this repo, which closes that gap.
 - Promotion: bump `packages.configuration` and its embedded Function `packages.functions.koorikla-platform-postgresqlcompose-postgresql`
-  (same tag, both `tag@sha256`; one Renovate group) in `addons/crossplane/values.yaml`; per-environment pins in
+  (same release tag `vX.Y.Z`, both `vX.Y.Z@sha256`, never `main`: the schema and the render test reject it; one Renovate group) in `addons/crossplane/values.yaml`; per-environment pins in
   `installations/<inst>/addons/crossplane/env-<env>.yaml` gate dev -> prod (the Argo CD gate is #57). Renovate proposes
   digest bumps (`renovate.json`, ghcr.io/koorikla/platform packages).
 

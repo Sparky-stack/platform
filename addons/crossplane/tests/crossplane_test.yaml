@@ -271,9 +271,15 @@ tests:
     asserts:
       - matchRegex:
           path: spec.package
-          pattern: '^ghcr\.io/koorikla/platform/postgresql:[a-z0-9.-]+@sha256:[0-9a-f]{64}$'
+          pattern: '^ghcr\.io/koorikla/platform/postgresql:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
       - equal: { path: spec.skipDependencyResolution, value: true }
       - equal: { path: spec.revisionActivationPolicy, value: Automatic }
+
+  - it: the Configuration must be pinned at a release tag, not the moving main tag (values.schema.json)
+    template: templates/configuration.yaml
+    set: { packages.configuration: "ghcr.io/koorikla/platform/postgresql:main@sha256:8e5357552402966894be564da15912b99f57adc6623d7f7d702aae93d4344fc8" }
+    asserts:
+      - failedTemplate: { errorPattern: "configuration" }
 
   - it: platform packages are cosign-verified (keyless, the signing workflow's identity) when verification is on
     template: templates/configuration.yaml
