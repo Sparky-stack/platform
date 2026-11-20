@@ -5,6 +5,7 @@ templates:
   - templates/backstage-secrets.yaml
   - templates/backstage-github-app.yaml
   - templates/mcp-service-role.yaml
+  - templates/backstage-cost-views.yaml
   - charts/openchoreo-control-plane/templates/authz/bootstrap-configmap.yaml
   - charts/openchoreo-control-plane/templates/backstage/extra-config-configmap.yaml
   - charts/openchoreo-control-plane/templates/backstage/deployment.yaml
@@ -115,6 +116,53 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].args
           content: app-config.extra.yaml
+
+  # --- console cost views (#207, values.yaml costViews) ------------------------------------------------------------
+  - it: FinOps off (default) switches the cost views off and keeps the image's extensions
+    template: templates/backstage-cost-views.yaml
+    asserts:
+      - equal: { path: metadata.name, value: backstage-cost-views }
+      - equal: { path: 'metadata.labels["app.kubernetes.io/component"]', value: backstage }   # reloader restarts Backstage
+      - matchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: '- page:openchoreo-observability/cost-insights: false\n'
+      - matchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: '- entity-card:openchoreo-observability/cost-insights-summary: false\n'
+      - matchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: '- entity-content:openchoreo-observability/project-cost-analysis: false\n'
+      - matchRegex:   # arrays replace: the image's list must come first, intact
+          path: data["app-config.cost-views.yaml"]
+          pattern: '^app:\n  extensions:\n  - sub-page:platform-engineer-core/overview\n'
+      - matchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: '- page:home:\n      config:\n        path: /\n'
+
+  - it: FinOps on (cluster label "true") offers the cost views
+    template: templates/backstage-cost-views.yaml
+    set:
+      costViews.enabled: "true"
+    asserts:
+      - notMatchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: 'cost-insights|cost-analysis'
+      - matchRegex:
+          path: data["app-config.cost-views.yaml"]
+          pattern: '- entity-card:gitlab/languages: false\n$'
+
+  - it: Backstage loads the cost-views config last, from the mounted ConfigMap
+    template: charts/openchoreo-control-plane/templates/backstage/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: app-config.cost-views.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: cost-views-config, configMap: { name: backstage-cost-views } }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: cost-views-config, mountPath: /app/app-config.cost-views.yaml, subPath: app-config.cost-views.yaml, readOnly: true }
 
   - it: no GitHub App credential unless switched on
     template: templates/backstage-github-app.yaml

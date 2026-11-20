@@ -45,6 +45,59 @@ scaffolder:
     remoteKey: platform-github-app
     secretName: backstage-github-app
 
+# Console cost views (#207). The portal shows Cost Insights (sidebar page, Overview card on projects and components)
+# and the project's Cost Analysis tab whenever observability is on, and each call fails while the FinOps module is
+# off: the observer has no finops-adapter to ask ("Failed to retrieve data from the FinOps adapter", HTTP 500) and
+# the FinOps agent URL is unset ("FinOps service is not configured"). openchoreo-ui 1.3.3 has no feature flag for
+# them, so templates/backstage-cost-views.yaml writes app-config.cost-views.yaml (loaded after the extra config) with
+# app.extensions = `appExtensions` plus, while `costViews.enabled` is false, the three cost extensions switched off.
+costViews:
+  # -- Show the console's cost views. Set by the catalog from the mgmt cluster label `addons.platform.koorikla.io/finops-opencost` (`installation.yaml` `mgmt.addons.finops-opencost`); a string from the ApplicationSet.
+  enabled: "false"
+  # -- Backstage extension IDs (`<kind>:<plugin>/<name>`) of the cost views, switched off while `enabled` is false.
+  extensions:
+    - page:openchoreo-observability/cost-insights                    # sidebar "Cost Insights"
+    - entity-card:openchoreo-observability/cost-insights-summary     # Overview card "Cost Insights"
+    - entity-content:openchoreo-observability/project-cost-analysis  # project tab "Cost Analysis" (FinOps agent)
+
+# -- Backstage `app.extensions` of the openchoreo-ui image, verbatim (v1.3.3 /app/app-config.yaml). Backstage REPLACES arrays from earlier config files, so templates/backstage-cost-views.yaml repeats this list before its own entries; a chart bump re-checks it.
+# @default -- the image's 32 entries (values.yaml)
+appExtensions:
+  - sub-page:platform-engineer-core/overview
+  - sub-page:openchoreo-observability/platform-logs
+  - page:home:
+      config:
+        path: /
+  - home-page-widget:home/toolkit: false
+  - home-page-widget:home/random-joke: false
+  - home-page-widget:home/most-visited: false
+  - home-page-widget:home/recently-visited: false
+  - home-page-widget:home/world-clock: false
+  - theme:app/light: false
+  - theme:app/dark: false
+  - page:kubernetes: false
+  - entity-card:catalog/about: false
+  - entity-card:catalog/links: false
+  - entity-card:catalog/labels: false
+  - entity-card:catalog/depends-on-components: false
+  - entity-card:catalog/depends-on-resources: false
+  - entity-card:catalog/has-subcomponents: false
+  - entity-card:catalog/has-components: false
+  - entity-card:catalog/has-resources: false
+  - entity-card:catalog-graph/relations: false
+  - entity-card:api-docs/provided-apis: false
+  - entity-card:api-docs/consumed-apis: false
+  - entity-card:api-docs/has-apis: false
+  - entity-card:api-docs/definition: false
+  - entity-card:api-docs/providing-components: false
+  - entity-card:api-docs/consuming-components: false
+  - entity-card:gitlab/readme: false
+  - entity-card:gitlab/coverage: false
+  - entity-card:gitlab/releases: false
+  - entity-card:gitlab/merge-requests-stats: false
+  - entity-card:gitlab/people: false
+  - entity-card:gitlab/languages: false
+
 # Shared CAPI ClusterResourceSet payload `fleet/openchoreo-gateway-ca` (templates/gateway-ca-crs.yaml): ConfigMap
 # openchoreo-data-plane/cluster-gateway-ca with the gateway CA's PUBLIC certificate, read through ClusterSecretStore
 # `mgmt-openchoreo` (read-only on this namespace). Every workload cluster's CRS (charts/cluster) lists it.
@@ -218,6 +271,16 @@ openchoreo-control-plane:
             rules: [{ allow: [Template] }]
           - type: url
             target: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
+    # platform: app-config.cost-views.yaml (templates/backstage-cost-views.yaml, #207), loaded after app-config.extra.yaml
+    extraArgs: ["--config", "app-config.cost-views.yaml"]
+    extraVolumes:
+      - name: cost-views-config
+        configMap: { name: backstage-cost-views }
+    extraVolumeMounts:
+      - name: cost-views-config
+        mountPath: /app/app-config.cost-views.yaml
+        subPath: app-config.cost-views.yaml
+        readOnly: true
     resources:                  # platform: upstream requests 200m/256Mi, limits 2/2Gi
       requests: { cpu: 100m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }

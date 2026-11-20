@@ -13,8 +13,11 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| appExtensions | list | the image's 32 entries (values.yaml) | Backstage `app.extensions` of the openchoreo-ui image, verbatim (v1.3.3 /app/app-config.yaml). Backstage REPLACES arrays from earlier config files, so templates/backstage-cost-views.yaml repeats this list before its own entries; a chart bump re-checks it. |
 | backstageSecrets.remoteKey | string | `"openchoreo"` |  |
 | backstageSecrets.store | string | `"platform"` | Pulls Backstage secrets (`openchoreo`) and optional `scaffolder.githubApp` credentials from `ClusterSecretStore/platform`. |
+| costViews.enabled | string | `"false"` | Show the console's cost views. Set by the catalog from the mgmt cluster label `addons.platform.koorikla.io/finops-opencost` (`installation.yaml` `mgmt.addons.finops-opencost`); a string from the ApplicationSet. |
+| costViews.extensions | list | `["page:openchoreo-observability/cost-insights","entity-card:openchoreo-observability/cost-insights-summary","entity-content:openchoreo-observability/project-cost-analysis"]` | Backstage extension IDs (`<kind>:<plugin>/<name>`) of the cost views, switched off while `enabled` is false. |
 | gatewayCA.enabled | bool | `true` | Exports `cluster-gateway-ca` (`gatewayCA.{enabled,store,namespace,sourceSecret}`) via `ClusterSecretStore/mgmt-openchoreo` to `fleet` for workload agent trust. |
 | gatewayCA.name | string | `"openchoreo-gateway-ca"` |  |
 | gatewayCA.namespace | string | `"fleet"` |  |
@@ -75,6 +78,14 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[1].locations[0].exact | string | `"https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[1].locations[0].type | string | `"url"` |  |
 | openchoreo-control-plane.backstage.baseUrl | string | `"http://openchoreo.localhost:8080"` |  |
+| openchoreo-control-plane.backstage.extraArgs[0] | string | `"--config"` |  |
+| openchoreo-control-plane.backstage.extraArgs[1] | string | `"app-config.cost-views.yaml"` |  |
+| openchoreo-control-plane.backstage.extraVolumeMounts[0].mountPath | string | `"/app/app-config.cost-views.yaml"` |  |
+| openchoreo-control-plane.backstage.extraVolumeMounts[0].name | string | `"cost-views-config"` |  |
+| openchoreo-control-plane.backstage.extraVolumeMounts[0].readOnly | bool | `true` |  |
+| openchoreo-control-plane.backstage.extraVolumeMounts[0].subPath | string | `"app-config.cost-views.yaml"` |  |
+| openchoreo-control-plane.backstage.extraVolumes[0].configMap.name | string | `"backstage-cost-views"` |  |
+| openchoreo-control-plane.backstage.extraVolumes[0].name | string | `"cost-views-config"` |  |
 | openchoreo-control-plane.backstage.features.observability.enabled | bool | `true` |  |
 | openchoreo-control-plane.backstage.features.workflows.enabled | bool | `true` | Wired from `installation.yaml` via `installationParameters` (alongside `features.observability.enabled`). |
 | openchoreo-control-plane.backstage.http.hostnames[0] | string | `"openchoreo.localhost"` |  |
@@ -198,6 +209,7 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 ## Day-2 notes
 
 - Control-plane triage and upgrades: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).
+- Console cost views follow the FinOps module (#207): `costViews.enabled` comes from the mgmt label `addons.platform.koorikla.io/finops-opencost`; while false, ConfigMap `backstage-cost-views` (Backstage's last config file) switches off Cost Insights and Cost Analysis. It repeats the image's `app.extensions` (`appExtensions`): re-check that list on an openchoreo-ui bump.
 - Values are checked before rendering: `values.schema.json` (hosts, `wss://` gateway URL, stores, required keys) and `templates/validate.yaml` (cross-field: subchart hostnames, gateway port and TLS SANs match `installation.yaml`, GitHub App wiring). A schema error names the failing key path.
 
 ## Links

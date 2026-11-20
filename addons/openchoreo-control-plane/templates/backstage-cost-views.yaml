@@ -1,0 +1,21 @@
+{{- /*
+Console cost views on/off (#207, values.yaml costViews). Backstage loads this file last (subchart extraArgs), so its
+app.extensions replaces the image's list: the image's own entries (appExtensions) first, then the cost views switched
+off while the FinOps module is off. Labelled component=backstage so addon reloader restarts Backstage on a change.
+*/ -}}
+{{- $extensions := .Values.appExtensions }}
+{{- if ne (toString .Values.costViews.enabled) "true" }}
+{{- range .Values.costViews.extensions }}
+{{- $extensions = append $extensions (dict . false) }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-cost-views
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: backstage
+data:
+  app-config.cost-views.yaml: |
+    {{- toYaml (dict "app" (dict "extensions" $extensions)) | nindent 4 }}

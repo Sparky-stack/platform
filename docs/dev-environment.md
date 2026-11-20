@@ -160,8 +160,11 @@ know (when unsure: full). Push to `main`, `merge_group` and `workflow_dispatch` 
 "related" when it names the unit's path (including after a `/` prefix like `$W/` or `$ROOT/` for docs), or, for charts
 and addons, checks every chart (`addons/*`, `charts/*`, `$RENDERED_DIR`): `hack/changed-units.sh --tests addons/harbor`
 lists them. A test that needs every render carries
-`# scoped-ci full-if: <regex>`: the run goes full when a changed chart's files match (`test_secret_store_scope.sh`:
-any chart with an `ExternalSecret` / `SecretStore`), else the test waits for the full run on `main`. Example: an
+`# scoped-ci full-if: <regex>`: the run goes full when a changed chart's files match, else the test waits for the full
+run (`merge_group`, `main`). Keep that regex narrow and split the per-chart part out: `test_secret_store_scope.sh`
+(stores, unused grants) goes full only for a chart that defines a store or workflow, while
+`test_secret_store_scope_chart.sh` checks each rendered consumer in every scoped run, reading the store scope from
+`hack/tests/fixtures/secret-store-scope.txt` when `addons/secret-stores` was not rendered. Example: an
 `addons/cilium` PR renders 1 of 38 charts (plus `charts/platform` / `charts/cluster`) and runs 11 of 73 suites, about
 1.5 min instead of 4.5 min locally. `task test:changed` (`BASE=<ref>`) gives you the same scope locally, uncommitted
 files included; `task test` still runs everything. Fixtures: `hack/tests/test_changed_units.sh`.
