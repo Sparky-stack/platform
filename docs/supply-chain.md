@@ -65,7 +65,9 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   report them. `mutateDigest` is off on purpose: OpenChoreo's agent re-applies the rendered Deployment, and a mutated
   digest would flap. See "Digest references" below for what app repos must do.
 - **Trusted sources**: `openchoreo-trusted-registries-*` requires every container, init and ephemeral image to match a
-  trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`).
+  trusted prefix (the sources' prefixes plus `extraTrustedPrefixes`), or be exactly one of the digest-pinned
+  CloudNativePG images (operator + `imageCatalog` of addons/cloudnative-pg, read through the catalog's
+  `valuesFromAddons`, #327): whole references, so another digest of the same repository is still denied.
 - **One policy per check**: `openchoreo-verify-images-<audit|enforce>` verifies the signature and
   `openchoreo-attest-<sbom|provenance|vuln>-<audit|enforce>` one required attestation each, so the checks run in
   parallel ("Admission latency" below). An image is admitted only if every one of them passes.

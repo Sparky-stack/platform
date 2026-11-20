@@ -199,6 +199,9 @@ Rules enforced at admission (Kyverno `ValidatingPolicy`, also emitted as native 
 - **Production is HA and backed up.** XRs in OpenChoreo cells labelled `openchoreo.dev/environment: production` must
   set `highAvailability: true` and `backup.enabled: true` (Deny; Audit on local docker clusters, which have neither an
   object store nor more than one node).
+- **Production cells admit the pinned images.** `openchoreo-trusted-registries-enforce` (addon kyverno-policies) admits
+  exactly the operator image and the `imageCatalog` images of `addons/cloudnative-pg/values.yaml` by digest (#327).
+  Bump them there only; an installation override of these pins is denied in production until kyverno-policies reads it.
 
 ### PostgreSQL from OpenChoreo
 

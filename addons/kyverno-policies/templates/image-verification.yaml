@@ -73,6 +73,19 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- $trusted := $iv.extraTrustedPrefixes | default list }}
 {{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
 {{- $trusted = concat $trusted $platformPrefixes }}
+{{- /* CloudNativePG operand images (#327): exactly the digest-pinned images of addon cloudnative-pg, matched as whole
+references (another digest of the same repository stays untrusted): its imageCatalog (PostgreSQL per major version,
+what every PostgreSQL XR's Cluster runs) and the operator image, which CNPG injects into every instance / job pod as
+init container bootstrap-controller. Not restated here: the catalog entry passes addons/cloudnative-pg/values.yaml to
+this addon (charts/platform values.yaml addons.kyverno-policies.sharedValueFiles). Without it none is admitted. */ -}}
+{{- $operand := list }}
+{{- $cat := .Values.imageCatalog | default dict }}
+{{- if $cat.enabled }}{{ range $k := keys ($cat.images | default dict) | sortAlpha }}{{ $operand = append $operand (index $cat.images $k) }}{{ end }}{{ end }}
+{{- $op := (index .Values "cloudnative-pg" | default dict).image | default dict }}
+{{- if and $operand $op.repository }}{{ $operand = append $operand (printf "%s:%s" $op.repository (toString $op.tag)) }}{{ end }}
+{{- range $operand }}
+{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: CloudNativePG image %q (addons/cloudnative-pg values) is not pinned by digest" .) }}{{ end }}
+{{- end }}
 {{- $usedAttestations := list }}
 {{- range $sources }}{{ range .attestations }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
 {{- range $action := keys $byAction | sortAlpha }}
@@ -272,10 +285,16 @@ spec:
         object.spec.containers.map(c, c.image)
         + (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
         + (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : [])
+    - name: operandImages
+      expression: '{{ $operand | uniq | toJson }}'
+    - name: untrusted
+      expression: >-
+        variables.images.filter(i, !variables.trusted.exists(t, i.startsWith(t)) && !(i in variables.operandImages))
   validations:
-    - expression: 'variables.images.all(i, variables.trusted.exists(t, i.startsWith(t)))'
+    - expression: 'size(variables.untrusted) == 0'
       messageExpression: >-
-        'images must come from ' + variables.trusted.join(', ') + '; untrusted: ' +
-        variables.images.filter(i, !variables.trusted.exists(t, i.startsWith(t))).join(', ')
+        'images must come from ' + variables.trusted.join(', ') +
+        (size(variables.operandImages) > 0 ? ' or be a pinned CloudNativePG image' : '') +
+        '; untrusted: ' + variables.untrusted.join(', ')
 {{- end }}
 {{- end }}

@@ -371,6 +371,22 @@ tests:
       - failedTemplate:
           errorMessage: 'addons.evil.installationValueFiles: "../../installations/local/installation.yaml" must be a file under addons/evil/values/'
 
+  - it: valuesFromAddons - kyverno-policies reads addons/cloudnative-pg values first (lowest precedence, #327)
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-kyverno-policies }
+    asserts:
+      - equal: { path: "spec.template.spec.source.helm.valueFiles[0]", value: ../../addons/cloudnative-pg/values.yaml }
+      - equal: { path: "spec.template.spec.source.helm.valueFiles[1]", value: values.yaml }
+
+  - it: valuesFromAddons must name another catalog addon
+    template: appset-addons.yaml
+    set:
+      addons:
+        evil: { namespace: evil, roles: [mgmt], valuesFromAddons: ["../../installations"] }
+    asserts:
+      - failedTemplate:
+          errorMessage: 'addons.evil.valuesFromAddons: "../../installations" is not another addon of the catalog'
+
   - it: AI agent addons are catalog entries switched off by default on mgmt
     template: appset-addons.yaml
     asserts:

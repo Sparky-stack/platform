@@ -78,6 +78,7 @@ cluster generator selecting on `platform.koorikla.io/role` (and optionally provi
 `addons.platform.koorikla.io/<addon>`. Values are layered by Helm value files (missing files ignored):
 
 ```
+addons/<other>/values.yaml                                   catalog valuesFromAddons: facts read from another addon
 addons/<addon>/values.yaml                                   chart defaults (all clusters)
 addons/<addon>/values/role-<role>.yaml                       mgmt vs workload
 addons/<addon>/values/provider-<provider>.yaml               docker vs aws vs hetzner
@@ -89,6 +90,8 @@ installations/<inst>/addons/<addon>/cluster-<name>.yaml      this cluster (ident
 ```
 
 plus generated `cluster.*` values (name, role, provider, region, environment, cni) and `installation.*` values.
+`valuesFromAddons` lets one addon derive facts from another's single source instead of restating them (kyverno-policies
+reads addons/cloudnative-pg's image pins; installation overlays of the other addon are not read, so they fail closed).
 Catalog entries can add Helm parameters computed per cluster: `clusterNameParameters` (the cluster name),
 `clusterIdParameters` (`<installation>-<cluster>`, unique across installations, e.g. the external-dns TXT owner),
 `installationParameters` (a template over installation values), `clusterServerParameters` (`url`, `host` or `port`

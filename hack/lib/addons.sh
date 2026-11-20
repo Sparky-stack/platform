@@ -56,6 +56,12 @@ addon_label_valuefiles() {
   done < <(addon_appset "$1" "$2" | yq -r '.spec.template.spec.source.helm.valueFiles[] | select(test("^values/") and test("[{][{]") and (test("^values/(role|provider|cni)-") | not))' | tr -d '\r')
 }
 
+# addon_from_valuefiles <platform render> <addon> -> catalog valuesFromAddons as rendered (../../<other addon>/values.yaml,
+# relative to the addon's chart): the leading valueFiles entries outside the chart.
+addon_from_valuefiles() {
+  addon_appset "$1" "$2" | yq -r '.spec.template.spec.source.helm.valueFiles[] | select(test("^[.][.]/[.][.]/addons/"))' | tr -d '\r'
+}
+
 # addon_installation_valuefiles <platform render> <addon> -> catalog installationValueFiles as rendered (relative to
 # addons/<addon>): the valueFiles entries under values/ with no per-cluster goTemplate left in them.
 addon_installation_valuefiles() {
@@ -100,7 +106,7 @@ addon_values_object() {
 # addon_helm_args <addon> <inst dir> <platform render> <role> <name> <provider> <environment> <region> <cni> <server>
 #   [<labels file>] -> `helm template` arguments, one per line, in ApplicationSet precedence, all taken from the addon's ApplicationSet in
 #    the charts/platform render (Argo parity):
-#    valueFiles (chart, role, provider, cni, label-selected files, installationValueFiles, installation overlays) < valuesObject
+#    valueFiles (valuesFromAddons, chart, role, provider, cni, label-selected files, installationValueFiles, installation overlays) < valuesObject
 #    (charts/platform values + installation.yaml, then cluster.*) < parameters (as rendered; the per-cluster goTemplate
 #    expressions - cluster name label, server parts, fleet list, other cluster labels from <labels file> - resolved
 #    for this cluster; forceString -> --set-string).
@@ -111,7 +117,11 @@ addon_helm_args() {
   local dir vf p v fs part fleet vo="$3.values-$1.yaml"
   dir=$(yq -r ".addons[\"$addon\"].path // \"addons/$addon\"" "$ADDONS_CATALOG" | tr -d '\r')
   local name_expr='{{ index .metadata.labels "platform.koorikla.io/name" }}'
-  local -a files=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
+  local -a files=()
+  while IFS= read -r vf; do
+    if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
+  done < <(addon_from_valuefiles "$render" "$addon")
+  files+=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
   while IFS= read -r vf; do
     if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
   done < <(addon_label_valuefiles "$render" "$addon" "$labels")

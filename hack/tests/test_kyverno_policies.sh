@@ -20,6 +20,9 @@
 # and of the kyverno-policies addon (supply-chain gate per environment):
 #   tests/kyverno/registries   offline: trusted-registry policy per environment (Audit vs Deny, default action for
 #                              unlisted environments, init/ephemeral containers, platform registry untrusted w/o key)
+#                              CloudNativePG (#327): exactly the pinned operator + imageCatalog images of
+#                              addons/cloudnative-pg pass in production (fixtures generated from its values); another
+#                              digest, an unlisted or tag-only image, or an untrusted sidecar next to them are denied
 #   tests/kyverno/platform-key offline: with a platform key only <registry.host>/<appsProject>/ is trusted
 #   tests/kyverno/workflow-digests
 #                              offline (#36, templates/workflow-image-digests.yaml): in workflows-* every container,
@@ -87,6 +90,33 @@ fi
 addon="$ROOT/addons/kyverno-policies"
 [[ -d "$addon/charts" ]] || helm dependency build "$addon" >/dev/null
 cp -R "$addon/tests/kyverno" "$TMP/kyverno"
+# Argo parity: the catalog's valuesFromAddons (charts/platform values.yaml) come before the chart's own values.yaml.
+from=()
+while IFS= read -r a; do
+  if [[ -n "$a" ]]; then from+=(-f "$ROOT/addons/$a/values.yaml"); fi
+done < <(yq -r '.addons["kyverno-policies"].valuesFromAddons // [] | .[]' "$ROOT/charts/platform/values.yaml" | tr -d '\r')
+assert_eq "${from[*]:-}" "-f $ROOT/addons/cloudnative-pg/values.yaml" "kyverno-policies reads addons/cloudnative-pg values (catalog valuesFromAddons)"
+# CloudNativePG fixtures (#327) from the pins in addons/cloudnative-pg/values.yaml, so a pin bump needs no test edit:
+# operator (bootstrap-controller) + catalog image pass; another digest, an unlisted image, the tag only and an
+# untrusted sidecar next to the pinned images are denied in production.
+cnpg="$ROOT/addons/cloudnative-pg/values.yaml"
+pg=$(yq -r '.imageCatalog.images["17"]' "$cnpg" | tr -d '\r')
+op=$(yq -r '.["cloudnative-pg"].image | .repository + ":" + .tag' "$cnpg" | tr -d '\r')
+z64=$(printf '%064d' 0)
+cnpg_pod() {  # <name> <init image> <container image>...
+  local n=$1 init=$2 i; shift 2
+  printf -- '---\napiVersion: v1\nkind: Pod\nmetadata: { name: %s, namespace: dp-default-demo-production-1, labels: { cnpg.io/cluster: pg } }\nspec:\n' "$n"
+  printf '  initContainers:\n    - { name: bootstrap-controller, image: "%s" }\n  containers:\n' "$init"
+  for i in "$@"; do printf '    - { name: c%s, image: "%s" }\n' "${#i}" "$i"; done
+}
+{
+  cnpg_pod prod-cnpg-catalog "$op" "$pg"
+  cnpg_pod prod-cnpg-other-digest "$op" "${pg%@*}@sha256:$z64"
+  cnpg_pod prod-cnpg-operator-other-digest "${op%@*}@sha256:$z64" "$pg"
+  cnpg_pod prod-cnpg-unlisted "$op" "ghcr.io/cloudnative-pg/postgresql:15.14-standard-trixie@sha256:$z64"
+  cnpg_pod prod-cnpg-tag-only "$op" "${pg%@*}"
+  cnpg_pod prod-cnpg-untrusted-sidecar "$op" "$pg" "docker.io/library/busybox:1.37"
+} > "$TMP/kyverno/registries/resources-cnpg.yaml"
 suites=(registries platform-key workflow-digests workload-resilience)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
@@ -96,7 +126,7 @@ for s in "${suites[@]}"; do
     tpl=templates/image-verification.yaml
     [[ "$s" == workflow-digests ]] && tpl=templates/workflow-image-digests.yaml
     [[ "$s" == workload-resilience ]] && tpl=templates/workload-resilience.yaml
-    helm template kyverno-policies "$addon" --namespace kyverno -s "$tpl" \
+    helm template kyverno-policies "$addon" --namespace kyverno -s "$tpl" ${from[@]+"${from[@]}"} -f "$addon/values.yaml" \
       ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
     rc=0
     "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || rc=$?
