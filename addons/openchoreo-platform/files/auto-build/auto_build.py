@@ -72,6 +72,8 @@ PR_LABEL = "platform.koorikla.io/pull-request"
 COMPONENT_LABEL = "platform.koorikla.io/component"
 REPOSITORY_ANNOTATION = "platform.koorikla.io/repository"
 RELEASE_ANNOTATION = "platform.koorikla.io/release"
+# On a ResourceReleaseBinding: "latest" = the pass keeps spec.resourceRelease on the Resource's latest ResourceRelease.
+RESOURCE_RELEASE_ANNOTATION = "platform.koorikla.io/resource-release"
 NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 NUMBER_RE = re.compile(r"^[1-9][0-9]{0,6}$")
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
@@ -448,6 +450,33 @@ def preview_release(base, name, namespace, image, sha, branch, environment, labe
     }
 
 
+def preview_resource_bindings(release, namespace, project, environment, labels):
+    """One ResourceReleaseBinding per Resource the preview's ComponentRelease depends on
+    (spec.workload.dependencies.resources[].ref): the preview gets its own instance (e.g. an empty database) in its
+    cell, never development's. Owned by the preview Environment like the release, so closing the PR deletes it, and
+    retainPolicy Delete removes the data with it. Pinned by ResourcePins (annotation "latest"), sized by the
+    ResourceType's environmentConfigs defaults."""
+    deps = (((release or {}).get("spec") or {}).get("workload") or {}).get("dependencies") or {}
+    env_name = environment["metadata"]["name"]
+    out = []
+    for ref in sorted(set(d.get("ref", "") for d in deps.get("resources") or [])):
+        if not NAME_RE.match(ref):
+            continue
+        out.append({
+            "apiVersion": "openchoreo.dev/v1alpha1",
+            "kind": "ResourceReleaseBinding",
+            "metadata": {
+                "name": "%s-%s" % (ref, env_name), "namespace": namespace, "labels": labels,
+                "annotations": {RESOURCE_RELEASE_ANNOTATION: "latest"},
+                "ownerReferences": [{"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Environment",
+                                     "name": env_name, "uid": environment["metadata"]["uid"]}],
+            },
+            "spec": {"owner": {"projectName": project, "resourceName": ref}, "environment": env_name,
+                     "retainPolicy": "Delete"},
+        })
+    return out
+
+
 def ready(binding, release):
     """The binding points at `release` and OpenChoreo reports it Ready for the current generation."""
     if not binding or (binding.get("spec") or {}).get("releaseName") != release:
@@ -613,6 +642,13 @@ class Previews:
                  "openchoreo.dev/project": comp["spec"]["owner"]["projectName"]}))
             log("%s: ComponentRelease %s <- %s" % (key, release, image))
             self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
+        project = comp["spec"]["owner"]["projectName"]
+        for rrb in preview_resource_bindings(self.api.get("componentreleases", release), self.namespace, project, env,
+                                             {PREVIEW_LABEL: "true", PR_LABEL: number, COMPONENT_LABEL: comp_name,
+                                              "openchoreo.dev/project": project}):
+            if self.api.create_resource_binding(rrb):
+                log("%s: ResourceReleaseBinding %s (the preview's own %s)"
+                    % (key, rrb["metadata"]["name"], rrb["spec"]["owner"]["resourceName"]))
         binding = self.api.get("releasebindings", binding_name)
         if binding and ((binding.get("metadata") or {}).get("annotations") or {}).get(RELEASE_ANNOTATION) != release:
             # OpenChoreo 1.3.3 does not requeue a binding whose ComponentRelease appears after it (ReleaseSynced stays
@@ -641,6 +677,43 @@ class Previews:
         for gone in [k for k in self.state["previews"] if k not in names]:
             del self.state["previews"][gone]       # PR closed: Argo CD removed the Application
         return self.created
+
+
+class ResourcePins:
+    """Keeps every ResourceReleaseBinding annotated platform.koorikla.io/resource-release: latest on its Resource's
+    latest ResourceRelease. OpenChoreo 1.3.3 never writes spec.resourceRelease (the CRD: "advanced manually via occ
+    resource promote or kubectl edit"; `occ resource promote` is a client doing exactly this write). The release name
+    is <resource>-<hash of the ResourceType spec and parameters>, so pinning it in Git would break on every platform
+    change to the type. Gated environments change only through a reviewed pull request (VAP
+    openchoreo-gated-bindings-from-git): there the pin stays in Git and this pass never writes."""
+
+    def __init__(self, api, gated_environments):
+        self.api = api
+        self.gated = set(gated_environments)
+        self.errors = []
+
+    def run(self):
+        for b in sorted(self.api.resource_bindings(), key=lambda o: o["metadata"]["name"]):
+            name = b["metadata"]["name"]
+            if ((b["metadata"].get("annotations") or {}).get(RESOURCE_RELEASE_ANNOTATION)) != "latest":
+                continue
+            spec = b.get("spec") or {}
+            if spec.get("environment") in self.gated:
+                log("ResourceReleaseBinding %s: %s is gated, pin spec.resourceRelease in Git (annotation ignored)"
+                    % (name, spec.get("environment")))
+                continue
+            try:
+                res = self.api.get("resources", (spec.get("owner") or {}).get("resourceName", ""))
+                latest = (((res or {}).get("status") or {}).get("latestRelease") or {}).get("name")
+                if not latest:
+                    log("ResourceReleaseBinding %s: Resource has no release yet, next pass" % name)
+                elif spec.get("resourceRelease") != latest:
+                    self.api.pin_resource_release(name, latest)
+                    log("ResourceReleaseBinding %s: resourceRelease %s -> %s"
+                        % (name, spec.get("resourceRelease") or "(unset)", latest))
+            except Failed as e:
+                log("ResourceReleaseBinding %s: error: %s" % (name, e))
+                self.errors.append(str(e))
 
 
 # --- clients ------------------------------------------------------------------------------------------------------------
@@ -754,6 +827,22 @@ class Api:
     def create_release(self, release):
         self.kube("POST", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/componentreleases" % self.namespace,
                   body=release, ok=(201, 409))
+
+    # Resource pins
+    def resource_bindings(self):
+        _, body = self.kube("GET", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/resourcereleasebindings"
+                            % self.namespace)
+        return body.get("items") or []
+
+    def create_resource_binding(self, binding):
+        status, _ = self.kube("POST", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/resourcereleasebindings"
+                              % self.namespace, body=binding, ok=(201, 409))
+        return status == 201
+
+    def pin_resource_release(self, name, release):
+        self.kube("PATCH", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/resourcereleasebindings/%s"
+                  % (self.namespace, urllib.parse.quote(name)), body={"spec": {"resourceRelease": release}},
+                  content_type="application/merge-patch+json")
 
     def load_state(self):
         status, body = self.kube("GET", "/api/v1/namespaces/%s/configmaps/%s"
@@ -921,6 +1010,11 @@ def main():
     except RateLimited as e:
         log("paused: %s" % e)
         created = created or rec.created
+    # Kubernetes only (no GitHub call), so it runs even when GitHub paused the pass; after the previews, whose new
+    # ResourceReleaseBindings it pins in the same pass.
+    pins = ResourcePins(api, env("GATED_ENVIRONMENTS").split())
+    pins.run()
+    errors += pins.errors
     api.save_state(rec.state, current)
     log("pass done: %d WorkflowRun(s) created%s, GitHub rate limit remaining %s"
         % (len(created), (": " + ", ".join(created)) if created else "", api.remaining))
