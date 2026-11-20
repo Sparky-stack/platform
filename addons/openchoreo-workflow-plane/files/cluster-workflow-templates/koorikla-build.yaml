@@ -295,6 +295,15 @@ spec:
     # The toolbox (init container) copies the scripts and turns check-env (JSON object of the script's env flags) into
     # an env file: toolchain images carry neither the scripts nor jq. Caches live on the run's volume.
     - name: check
+      # Infrastructure retry: a step whose pod was killed under it (a k3s/node restart ends every container with exit
+      # 255 "Unknown", as happened mid-bootstrap when etcd stalled and k3s lost its leader lease) or that hit an Argo
+      # error (pod creation rejected) runs again. A step that failed on its own exit code is not retried. Without this
+      # one restart fails the whole run, and auto-build's missing-digest rebuild is named once per digest.
+      retryStrategy: &infra-retry
+        limit: "2"
+        retryPolicy: Always
+        expression: "lastRetry.status == 'Error' || asInt(lastRetry.exitCode) == 255"
+        backoff: { duration: 30s, factor: "2", maxDuration: 5m }
       initContainers: &check-init
         - name: scripts
           image: "@@TOOLBOX_IMAGE@@"
@@ -353,6 +362,7 @@ spec:
     # Same, with an ephemeral PostgreSQL sidecar (Elixir/Rails test suites). Trust auth on localhost only: the database
     # lives and dies with the pod, there is no credential to manage.
     - name: check-with-postgres
+      retryStrategy: *infra-retry
       initContainers: *check-init
       container:
         # never empty: Argo validates every referenced template's image at submission, even when `when` skips the task
@@ -413,6 +423,7 @@ spec:
         - { name: pgrun, emptyDir: {} }
 
     - name: scan-fs
+      retryStrategy: *infra-retry
       container:
         image: "@@TOOLBOX_IMAGE@@"
         command: [bash, -euo, pipefail, -c]
@@ -446,6 +457,7 @@ spec:
     # --oci-worker-no-process-sandbox avoids needing a PID namespace. Per-arch images: --opt platform builds every
     # platform (cross-compiling Dockerfiles need no emulation; RUN steps of a foreign arch need QEMU binfmt on the node).
     - name: build
+      retryStrategy: *infra-retry
       inputs:
         parameters:
           - name: short-sha
@@ -571,6 +583,7 @@ spec:
     # HOME and TRIVY_CACHE_DIR live in the pod's own /tmp emptyDir, never on the run volume the tenant check step
     # writes (no planted tool config, no poisoned Trivy DB); scan-fs does the same.
     - name: scan-image
+      retryStrategy: *infra-retry
       inputs:
         parameters:
           - name: digest-ref
@@ -606,6 +619,7 @@ spec:
         - { name: tmp, emptyDir: {} }
 
     - name: sbom
+      retryStrategy: *infra-retry
       inputs:
         parameters:
           - name: digest-ref
