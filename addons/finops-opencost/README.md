@@ -19,6 +19,7 @@ Wrapper chart for OpenChoreo's `finops-opencost` module (`0.2.1`) on `mgmt`. Run
 
 ## Day-2 notes
 
+- Switching it on or off also shows or hides the console's cost views (Cost Insights, Cost Analysis): the catalog passes the same label to `openchoreo-control-plane` `costViews.enabled` ([observability](../../docs/observability.md#backstage-and-mcp), #207).
 - Verifying Prometheus metrics backing OpenCost: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
 
 ## Links

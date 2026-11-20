@@ -111,6 +111,46 @@
         }
       }
     },
+    "costViews": {
+      "type": "object",
+      "description": "Console cost views (Cost Insights page and card, Cost Analysis tab), templates/backstage-cost-views.yaml.",
+      "properties": {
+        "enabled": {
+          "enum": [
+            "true",
+            "false",
+            true,
+            false
+          ],
+          "description": "Cluster label addons.platform.koorikla.io/finops-opencost (a string from the ApplicationSet)."
+        },
+        "extensions": {
+          "type": "array",
+          "description": "Backstage extension IDs switched off while enabled is false.",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z-]+:[a-z0-9-]+/[a-z0-9-]+$"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "enabled",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "appExtensions": {
+      "type": "array",
+      "description": "The openchoreo-ui image's app.extensions, repeated because Backstage replaces arrays.",
+      "minItems": 1,
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      }
+    },
     "gatewayCA": {
       "type": "object",
       "description": "Publish the cluster-gateway CA (public part) to fleet for ClusterResourceSets.",
