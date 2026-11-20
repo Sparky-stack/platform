@@ -5,6 +5,7 @@ Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collec
 {{- define "chart.whereItRuns" -}}
 - **Roles / providers:** `roles: [workload]`, all providers (`namespace: telemetry`).
 - **Catalog label:** `addons.platform.koorikla.io/telemetry` (`default: true`, opt-out with `"false"`).
+- **Istio ambient:** the namespace stays out of the mesh; only the Prometheus agent pod joins (prometheus-operator `--labels`), so it scrapes targets in STRICT-mTLS cells over HBONE (#209, [networking](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}

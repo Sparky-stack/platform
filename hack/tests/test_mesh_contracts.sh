@@ -5,6 +5,10 @@
 # A mismatch here breaks mesh trust only on a live multi-cluster install, which no single-chart test renders.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
+# shellcheck source=../lib/addons.sh
+source "$ROOT/hack/lib/addons.sh"
 
 helm template platform "$ROOT/charts/platform" --namespace argocd \
   --values "$ROOT/installations/local/installation.yaml" > "$TMP/platform.yaml"
@@ -223,8 +227,10 @@ assert_eq "$(yq '(.mesh.csr.enabled|tostring) + ":" + (.mesh.eastwest.enabled|to
 # 4. Istio ambient, STRICT mTLS in cell namespaces (#53): while addon kyverno-policies generates STRICT
 # PeerAuthentications into the cells (templates/cell-mesh.yaml), ztunnel refuses plaintext there, so every in-cluster
 # client of cell pods has to be in the mesh: the data-plane gateway proxy (ingress) and the data-service operators
-# (instance / broker / scaler endpoints in cells). Addon telemetry must stay out: ztunnel's DNS proxy answers the local
-# installation's *.localhost ingest hosts with loopback, which cut every remote write to mgmt on dev1.
+# (instance / broker / scaler endpoints in cells), and the telemetry Prometheus agent (PodMonitors into cells, #209).
+# Only the agent pod of addon telemetry joins (operator --labels; the namespace stays `none`), and docker clusters run
+# without ambient DNS capture: ztunnel answers the local installation's *.localhost ingest hosts with loopback, which
+# cut every remote write to mgmt on dev1.
 if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$ROOT/addons/kyverno-policies/values.yaml")" == true ]]; then
   render_standalone_addon openchoreo-data-plane "$TMP/mc-odp.yaml"
   gw=$(yq 'select(.kind == "Gateway" and .metadata.name == "gateway-default") | .spec.infrastructure.labels["istio.io/dataplane-mode"]' "$TMP/mc-odp.yaml")
@@ -232,6 +238,20 @@ if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$RO
   render_standalone_addon telemetry "$TMP/mc-telemetry.yaml"
   tl=$(yq 'select(.kind == "Namespace") | .metadata.labels["istio.io/dataplane-mode"]' "$TMP/mc-telemetry.yaml")
   assert_eq "$tl" none "addon telemetry stays out of the ambient mesh (ztunnel DNS resolves *.localhost ingest hosts to loopback)"
+  # the agent pod: ambient + the peer label platform-mesh-hbone admits on HBONE 15008 (else the CNI drops the tunnel)
+  args=$(yq 'select(.kind == "Deployment") | .spec.template.spec.containers[].args[]' "$TMP/mc-telemetry.yaml" | grep '^--labels=' || true)
+  assert_match "$args" '(=|,)istio\.io/dataplane-mode=ambient(,|$)' "STRICT cells: the telemetry Prometheus agent pod is in the ambient mesh"
+  helm template kyverno-policies "$ROOT/addons/kyverno-policies" --namespace kyverno > "$TMP/mc-kp.yaml"
+  peer=$(yq 'select(.kind == "GeneratingPolicy" and .metadata.name == "openchoreo-cell-hbone") | .spec.generate[0].template.value' "$TMP/mc-kp.yaml" \
+    | yq '.spec.ingress[0].from[] | select(.namespaceSelector) | .podSelector.matchExpressions[0].key')
+  assert_match "$args" "(=|,)$peer=[a-z-]+(,|\$)" "STRICT cells: the agent pod carries the HBONE peer label ($peer) of platform-mesh-hbone"
+  render_platform local "$TMP/mc-platform.yaml"
+  render_layered_addon local mesh "$TMP/mc-mesh-dev1.yaml" "$TMP/mc-platform.yaml" workload dev1 docker development local \
+    cilium https://192.0.2.10:6443
+  if [[ "$(yq '.openchoreo.controlPlane.host' "$ROOT/installations/local/installation.yaml")" == *.localhost ]]; then
+    assert_eq "$(yq 'select(.kind == "ConfigMap" and .metadata.name == "istio-cni-config") | .data.AMBIENT_DNS_CAPTURE' "$TMP/mc-mesh-dev1.yaml")" \
+      false "local dev1: no ambient DNS capture (ztunnel would resolve the *.localhost remote-write host to loopback)"
+  fi
   for a in cloudnative-pg keda strimzi; do
     render_standalone_addon "$a" "$TMP/mc-$a.yaml"
     ns=$(yq ".addons[\"$a\"].namespace" "$ROOT/charts/platform/values.yaml")
