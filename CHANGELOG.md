@@ -2,6 +2,19 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.7.0](https://github.com/koorikla/platform/compare/v0.6.0...v0.7.0) (2026-11-20)
+
+
+### Features
+
+* **kyverno-policies:** per-cell AuthorizationPolicy admits only the cell and platform identities ([#324](https://github.com/koorikla/platform/issues/324)) ([#347](https://github.com/koorikla/platform/issues/347)) ([a77bfa0](https://github.com/koorikla/platform/commit/a77bfa06ab086cdee0659100b11711d6755bf891))
+
+
+### Bug Fixes
+
+* **bootstrap:** mgmt etcd without fsync and long k3s leases ([#344](https://github.com/koorikla/platform/issues/344)) ([#349](https://github.com/koorikla/platform/issues/349)) ([11d9f60](https://github.com/koorikla/platform/commit/11d9f60f61242be70eb07ad326137e254d68492b))
+* **openchoreo:** per-project developer authz (negative test), correct preview comment, reconcile test gaps ([#335](https://github.com/koorikla/platform/issues/335)) ([#348](https://github.com/koorikla/platform/issues/348)) ([5ca9014](https://github.com/koorikla/platform/commit/5ca9014e0ce569d9ad9298584bfa59a4996e89ef))
+
 ## [0.6.0](https://github.com/koorikla/platform/compare/v0.5.0...v0.6.0) (2026-11-20)
 
 
