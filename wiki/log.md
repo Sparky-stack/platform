@@ -30,3 +30,6 @@
 
 ## [2026-11-19] create | Helm values.schema.json vs template required (#116)
 - Added `gotchas/helm-values-schema-vs-template-required.md`: schema errors fail `helm lint` with chart defaults, template `fail` does not; where presence checks stay; errorPattern for moved unittest asserts.
+
+## [2026-11-20] create | Preview cells: tenant secrets and CNPG under Cilium (#267, #331)
+- Added `gotchas/preview-cells-tenant-secrets-and-cnpg.md`: preview namespaces bound per Kyverno descriptor with the namespace computed by the reconcile; quota vs postgresql minimum; Cilium ipBlock never matches the API server; CNPG job pods need the API too.

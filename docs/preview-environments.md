@@ -92,14 +92,27 @@ component. The installation switch is `installation.yaml` `previews`:
   `maxPerTenant`. The Application retries without a limit (every 5 minutes at most), so the next PR's preview starts
   when a slot frees up; the commit status shows the denial meanwhile.
 - **Per-preview quota**: GeneratingPolicy `platform-preview-guardrails` puts a ResourceQuota and a LimitRange
-  (`addons/kyverno-policies/values.yaml` `previewGuards`) into every preview cell namespace.
+  (`addons/kyverno-policies/values.yaml` `previewGuards`) into every preview cell namespace. `requests.storage` (15Gi)
+  fits the smallest volume ClusterResourceType `postgresql` allows (its `storageGiB` minimum, 10) next to the app; a
+  contract test fails when the type's minimum outgrows the quota (#331).
 
 ## Isolation and policy tier
 
 - **Network**: the same GeneratingPolicy adds NetworkPolicy `platform-preview-isolation`: egress only inside the
   preview namespace, to platform namespaces (DNS, gateway) and outside the cluster, never to another OpenChoreo cell
   (staging, production, development or other previews). Ingress is OpenChoreo's per-component policy (same namespace
-  and system components such as the gateway only), so no other cell reaches a preview either.
+  and system components such as the gateway only), so no other cell reaches a preview either. Cilium never matches
+  the `ipBlock` rule against the Kubernetes API server, so on `cni: cilium` clusters the GeneratingPolicy also adds
+  CiliumNetworkPolicy `platform-preview-database-apiserver`: egress to the `kube-apiserver` entity (TCP 443/6443) only
+  for pods the CloudNativePG operator labels `cnpg.io/podRole: instance` or `cnpg.io/jobRole` (initdb waits for the
+  Cluster object), never for OpenChoreo workloads (`openchoreo.dev/component`). App pods keep no API access (#331).
+- **Secrets**: a preview reads exactly its tenant's OpenBao secrets (`kv-tenant-<project>`, like the project's other
+  environments; #267). GeneratingPolicy `platform-preview-tenant-secrets` (addon openbao, mgmt) writes a descriptor
+  `openbao-tenants/<project>-openbao-tenant-<environment>` per preview ProjectReleaseBinding (tenant =
+  `spec.owner.projectName`); CronJob `tenant-reconcile` computes the preview's cell namespace itself (org + project +
+  environment, OpenChoreo's naming) and adds it to that tenant's OpenBao role only. The descriptor goes with the
+  binding (PR closed, TTL); the next run (every 5 minutes) unbinds the namespace. A first preview waits up to one ESO
+  refresh plus one run (~10 minutes) before its `ExternalSecret` syncs.
 - **Admission tier**: preview environment names are not listed in `imageVerification.environments`, so the
   supply-chain gate applies `defaultAction` (Audit, the development tier; contract check 17 keeps them equal). Preview
   images are platform-signed anyway.
@@ -141,5 +154,9 @@ kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workfl
 - Status `Build ... failed`: the WorkflowRun in the console (Workflows), as for `main` builds.
 - Status stays `Deploying` and the ReleaseBinding says `ResourceDependenciesPending`: the preview's
   ResourceReleaseBinding (`status.conditions`); a quota denial of the database pod or PVC shows in the cell namespace's
-  events (`previewGuards.quota` must fit the ResourceType's smallest size; open gaps for databases in preview cells:
-  [#331](https://github.com/koorikla/platform/issues/331)).
+  events (`previewGuards.quota` must fit the ResourceType's smallest size). A database pod that never gets Ready on a
+  Cilium cluster: does the cell have CiliumNetworkPolicy `platform-preview-database-apiserver`?
+- Pod in `CreateContainerConfigError` with a `SecretReference`: the cell's `ExternalSecret` / SecretStore
+  `openbao-tenant`. `claim "sub" does not match` means the preview is not bound yet: is there a descriptor
+  `openbao-tenants/<project>-openbao-tenant-<environment>` on mgmt, and what did the last `tenant-reconcile` job log
+  in namespace `openbao`?
