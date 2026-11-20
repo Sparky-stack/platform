@@ -398,11 +398,28 @@
           "properties": {
             "http": {
               "type": "boolean",
-              "description": "Run it."
+              "description": "Run it (only 2xx passes)."
             },
             "path": {
               "type": "string",
               "description": "Path to request."
+            },
+            "connect": {
+              "type": "string",
+              "enum": [
+                "dns",
+                "podHostIP"
+              ],
+              "description": "dns: connect to the endpoint host; podHostIP: connect to a running source Pod's node IP with the host as Host header."
+            },
+            "egressPorts": {
+              "type": "array",
+              "description": "Gate egress TCP ports for connect podHostIP (NetworkPolicy promotion-gate-smoke).",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
             }
           }
         },
