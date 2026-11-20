@@ -51,6 +51,9 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
 source "$ROOT/hack/lib/portable.sh"
+# kc_valid: CRD schemas from hack/schemas.sh (fetched once; the Cilium CNP schema checks the generated preview policy)
+SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
+[[ -s "$SCHEMAS_DIR/cilium.io/ciliumnetworkpolicy_v2.json" ]] || (cd "$ROOT" && SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null)
 
 # Keyless identity (#41): the trusted app-container.yaml workflow is a commit SHA, and Renovate's custom manager
 # (renovate.json) really matches that line - otherwise the pin would silently never be bumped.
@@ -381,13 +384,18 @@ pods = {
     "cluster-label-only": {"cnpg.io/cluster": "orders-db"},
     "role-without-cluster": {"cnpg.io/podRole": "instance"},
 }
-specs = cnp["spec"]["specs"]
+assert "spec" not in cnp, "multi-rule CNP: specs is top-level, never inside spec"
+specs = cnp["specs"]
 for s in specs:
     assert s["egress"] == [{"toEntities": ["kube-apiserver"], "toPorts": [{"ports": [{"port": "443", "protocol": "TCP"}, {"port": "6443", "protocol": "TCP"}]}]}], s
 print(" ".join(n for n, l in pods.items() if any(matches(s["endpointSelector"], l) for s in specs)))
 PY
 )
 assert_eq "$sel" "instance initdb" "previews (cilium): kube-apiserver egress only for CNPG instance and job pods"
+# The generated payload must pass the CiliumNetworkPolicy CRD schema: kyverno apply does not check it, and the live
+# background controller then fails the whole generation (nested spec.specs, found live on dev1).
+yq -P <<<"$cnp" > "$TMP/pv-cnp.yaml"
+assert_eq "$(kc_valid "$TMP/pv-cnp.yaml")" yes "previews (cilium): the generated CiliumNetworkPolicy passes kubeconform -strict with the Cilium CRD schema"
 
 # openbao preview descriptors: exactly the preview binding in the org namespace, tenant = its project (not a label)
 out=$(cat "$TMP/ob-previews.out")

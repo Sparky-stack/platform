@@ -85,6 +85,8 @@ done
 # CiliumClusterwideNetworkPolicy, templates/l7-visibility.yaml). Version = the addon's chart dependency.
 CILIUM_VER=v$(yq '.dependencies[] | select(.name == "cilium") | .version' addons/cilium/Chart.yaml)
 fetch_crd "cilium-${CILIUM_VER}-ccnp" "https://raw.githubusercontent.com/cilium/cilium/${CILIUM_VER}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml"
+# CiliumNetworkPolicy: generated into preview cells by addon kyverno-policies (templates/previews.yaml, #331).
+fetch_crd "cilium-${CILIUM_VER}-cnp" "https://raw.githubusercontent.com/cilium/cilium/${CILIUM_VER}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml"
 fetch_crd "prometheus-servicemonitor" "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
 
 # Crossplane v2 installs its CRDs from its init container (not in the chart), the upjet providers bring theirs with the
