@@ -189,6 +189,23 @@ for bad in ../evil staging pr-1-X dp-default-demo-production-7cbe998d; do
   assert_match "$(cat "$TMP/out")" "skip preview '$bad' of tenant rogue" "previews: invalid preview '$bad' skipped and logged"
 done
 assert_eq "$([[ -e "$S/roles/auth_tenants-dev1_role_ghost" ]] && echo role || echo none)" none "negative: previews alone never create a tenant"
+# Computed preview namespaces take part in the contested-namespace check (#335). Cell names are ambiguous across '-':
+# project foo + environment pr-1-pr-2-x and project foo-pr-1 + environment pr-2-x both hash "dp-default-foo-pr-1-pr-2-x"
+# and name the same namespace. The reconcile cannot tell the owner and binds it to neither (pinned on purpose: at worst
+# those previews get no secrets, never one tenant reading another's).
+AMB=dp-default-foo-pr-1-pr-2-x-f3471bb7; BP=dp-default-bar-pr-4-y-ef80cb85   # cell_namespace(default, <p>, <env>)
+tenant foo dp-default-foo-development-11111111; printf 'pr-1-pr-2-x' > "$IN/tenants/foo.previews"
+tenant foo-pr-1 dp-default-foo-pr-1-development-22222222; printf 'pr-2-x' > "$IN/tenants/foo-pr-1.previews"
+tenant bar dp-default-bar-development-33333333; printf 'pr-4-y' > "$IN/tenants/bar.previews"
+tenant baz "dp-default-baz-development-44444444 $BP"            # names bar's preview namespace in its descriptor
+: > "$S/calls"; run
+assert_match "$(cat "$TMP/out")" "namespace $AMB is claimed by several tenants: bound to none" "'-' ambiguity: the shared cell namespace is reported as contested"
+assert_eq "$(subs foo)" "dp-default-foo-development-11111111 " "negative: '-' ambiguity - foo/pr-1-pr-2-x's namespace is not bound to foo"
+assert_eq "$(subs foo-pr-1)" "dp-default-foo-pr-1-development-22222222 " "negative: '-' ambiguity - nor to foo-pr-1 (pr-2-x)"
+assert_eq "$(ents | grep -c "$AMB" || true)" 0 "negative: '-' ambiguity - no entity for the shared namespace"
+assert_eq "$(subs bar)" "dp-default-bar-development-33333333 " "negative: a preview namespace another tenant's descriptor lists is contested - not bound to bar"
+assert_eq "$(subs baz)" "dp-default-baz-development-44444444 " "negative: nor to baz (the contested check includes computed preview namespaces)"
+rm -f "$IN"/tenants/foo.* "$IN"/tenants/foo-pr-1.* "$IN"/tenants/bar.* "$IN"/tenants/baz.*
 # PR closed / TTL: the descriptor goes, the next run unbinds the namespace
 rm -f "$IN"/tenants/*.previews; : > "$S/calls"; run
 assert_eq "$(subs demo)" "$D1 $D3 " "previews: closed PR - demo's role back to its pipeline namespaces"
