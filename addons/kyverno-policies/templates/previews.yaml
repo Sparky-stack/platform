@@ -252,18 +252,18 @@ spec:
             name: platform-preview-database-apiserver
             namespace: (( object.metadata.name ))
             labels: { platform.koorikla.io/preview: "true" }
-          spec:
-            specs:
-              {{- range $role := list (dict "key" "cnpg.io/podRole" "operator" "In" "values" (list "instance")) (dict "key" "cnpg.io/jobRole" "operator" "Exists") }}
-              - endpointSelector:
-                  matchExpressions:
-                    - { key: cnpg.io/cluster, operator: Exists }
-                    - {{ toJson $role }}
-                    - { key: openchoreo.dev/component, operator: DoesNotExist }
-                egress:
-                  - toEntities: [kube-apiserver]
-                    toPorts: [{ ports: [{ port: "443", protocol: TCP }, { port: "6443", protocol: TCP }] }]
-              {{- end }}
+          # `specs` (a list of rules) is a top-level field of CiliumNetworkPolicy, a sibling of `spec`, not inside it.
+          specs:
+            {{- range $role := list (dict "key" "cnpg.io/podRole" "operator" "In" "values" (list "instance")) (dict "key" "cnpg.io/jobRole" "operator" "Exists") }}
+            - endpointSelector:
+                matchExpressions:
+                  - { key: cnpg.io/cluster, operator: Exists }
+                  - {{ toJson $role }}
+                  - { key: openchoreo.dev/component, operator: DoesNotExist }
+              egress:
+                - toEntities: [kube-apiserver]
+                  toPorts: [{ ports: [{ port: "443", protocol: TCP }, { port: "6443", protocol: TCP }] }]
+            {{- end }}
           {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
