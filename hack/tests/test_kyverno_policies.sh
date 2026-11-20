@@ -234,6 +234,9 @@ pvt="$addon/tests/kyverno/previews"
   done
   "$KYVERNO" apply "$TMP/pv-DeletingPolicy.yaml" --resource "$TMP/pv-environments-ttl.yaml" "${crd[@]}" > "$TMP/pv-ttl.out" 2>&1 || true
   "$KYVERNO" apply "$TMP/pv-GeneratingPolicy.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails.out" 2>&1 || true
+  helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
+    --set cluster.cni=cilium | yq 'select(.kind == "GeneratingPolicy")' > "$TMP/pv-GeneratingPolicy-cilium.yaml"
+  "$KYVERNO" apply "$TMP/pv-GeneratingPolicy-cilium.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails-cilium.out" 2>&1 || true
 ) &
 # Data-plane capabilities of resource types (templates/data-plane-capabilities.yaml, #70): resource.List context.
 dpct="$addon/tests/kyverno/data-plane-capabilities"
@@ -331,6 +334,49 @@ assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: guardrails 
 for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolation'; do
   assert_match "$out" "$k" "previews: preview cell namespace gets $k"
 done
+assert_eq "$(grep -c 'kind: CiliumNetworkPolicy' <<<"$out" || true)" 0 "previews: no CiliumNetworkPolicy without cni cilium"
+# #331: the preview's own database. Quota: the smallest postgresql volume the ClusterResourceType allows must fit next
+# to the app (the type's minimum is the one source; a smaller quota denies the CNPG PVC).
+crt_min=$(yq -r '.spec.environmentConfigs.openAPIV3Schema.properties.storageGiB.minimum' \
+  "$ROOT/addons/openchoreo-platform/files/platform/cluster-resource-types/postgresql.yaml" | tr -d '\r')
+quota=$(yq -r '.previewGuards.quota["requests.storage"]' "$addon/values.yaml" | tr -d '\r')
+assert_match "$crt_min" '^[0-9]+$' "previews: ClusterResourceType postgresql declares a storageGiB minimum ($crt_min)"
+assert_match "$quota" '^[0-9]+Gi$' "previews: the storage quota is in Gi ($quota)"
+assert_eq "$([[ ${quota%Gi} -ge $((crt_min + 5)) ]] && echo fits)" fits \
+  "previews: storage quota $quota >= postgresql minimum ${crt_min}Gi + 5Gi app volumes"
+# API egress (Cilium never matches ipBlocks against the API server): generated only with cni cilium, and its selectors
+# match exactly CNPG instance / job pods - never an app pod, even one that copies CNPG labels.
+out=$(cat "$TMP/pv-guardrails-cilium.out")
+assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews (cilium): guardrails match only the preview cell namespace"
+assert_match "$out" 'name: platform-preview-database-apiserver' "previews (cilium): the preview cell gets the database API egress policy"
+cnp=$(yq 'select(.kind == "GeneratingPolicy") | .spec.generate[0].template.value' "$TMP/pv-GeneratingPolicy-cilium.yaml" \
+  | yq -o=json 'select(.kind == "CiliumNetworkPolicy")')
+sel=$(py - "$cnp" <<'PY'
+import json, sys
+cnp = json.loads(sys.argv[1])
+def matches(sel, labels):
+    for e in sel["matchExpressions"]:
+        k, op = e["key"], e["operator"]
+        if op == "Exists" and k not in labels: return False
+        if op == "DoesNotExist" and k in labels: return False
+        if op == "In" and labels.get(k) not in e["values"]: return False
+    return True
+pods = {
+    "instance": {"cnpg.io/cluster": "orders-db", "cnpg.io/podRole": "instance", "cnpg.io/instanceName": "orders-db-1"},
+    "initdb": {"cnpg.io/cluster": "orders-db", "cnpg.io/jobRole": "initdb", "batch.kubernetes.io/job-name": "x"},
+    "app": {"openchoreo.dev/component": "hello-world", "openchoreo.dev/project": "demo"},
+    "app-forging-cnpg": {"openchoreo.dev/component": "hello-world", "cnpg.io/cluster": "x", "cnpg.io/podRole": "instance"},
+    "pooler": {"cnpg.io/cluster": "orders-db", "cnpg.io/podRole": "pooler"},
+    "cluster-label-only": {"cnpg.io/cluster": "orders-db"},
+    "role-without-cluster": {"cnpg.io/podRole": "instance"},
+}
+specs = cnp["spec"]["specs"]
+for s in specs:
+    assert s["egress"] == [{"toEntities": ["kube-apiserver"], "toPorts": [{"ports": [{"port": "443", "protocol": "TCP"}, {"port": "6443", "protocol": "TCP"}]}]}], s
+print(" ".join(n for n, l in pods.items() if any(matches(s["endpointSelector"], l) for s in specs)))
+PY
+)
+assert_eq "$sel" "instance initdb" "previews (cilium): kube-apiserver egress only for CNPG instance and job pods"
 
 # data-plane capabilities: context:binding:expected
 pass='pass: 1, fail: 0, warn: 0, error: 0'; fail='pass: 0, fail: 1, warn: 0, error: 0'
