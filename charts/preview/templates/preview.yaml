@@ -8,7 +8,9 @@ chart later without changing what runs.
                                               deletes expired ones (addon kyverno-policies templates/previews.yaml).
   ProjectReleaseBinding  <project>-pr-<n>-<component>   the project's cell namespace on that data plane, labelled
                                               platform.koorikla.io/preview so Kyverno there adds ResourceQuota,
-                                              LimitRange and the isolating NetworkPolicy.
+                                              LimitRange and the isolating NetworkPolicy. On mgmt Kyverno turns it
+                                              into an OpenBao tenant descriptor (addon openbao tenant-previews.yaml):
+                                              the cell reads its project's secrets, no other tenant's (#267).
   ReleaseBinding         <component>-pr-<n>   pins ComponentRelease <component>-pr-<n>-<sha[:12]>, which the auto-build
                                               pass cuts from the in-cluster build of the PR head (addon
                                               openchoreo-platform files/auto-build/auto_build.py).

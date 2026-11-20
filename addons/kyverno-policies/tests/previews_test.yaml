@@ -98,6 +98,39 @@ tests:
       - matchRegex: { path: "spec.generate[0].template.value", pattern: "kind: LimitRange" }
       - matchRegex: { path: "spec.generate[0].template.value", pattern: "policyTypes: \\[Egress\\]" }
       - matchRegex: { path: "spec.generate[0].template.value", pattern: "key: openchoreo.dev/environment, operator: DoesNotExist" }
+      # without Cilium the ipBlock rule already reaches the API server: no Cilium object, no Cilium RBAC (#331)
+      - notMatchRegex: { path: "spec.generate[0].template.value", pattern: "CiliumNetworkPolicy" }
+
+  - it: sizes the storage quota for the preview's own database (postgresql minimum 10Gi + app volumes)
+    documentSelector: { path: kind, value: GeneratingPolicy }
+    asserts:
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "requests.storage: 15Gi" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'persistentvolumeclaims: "2"' }
+
+  - it: "cni cilium: kube-apiserver egress only for CloudNativePG instance and job pods, never OpenChoreo workloads"
+    set:
+      cluster.cni: cilium
+    asserts:
+      - matchRegex:
+          path: "spec.generate[0].template.value"
+          pattern: "kind: CiliumNetworkPolicy\\nmetadata:\\n  name: platform-preview-database-apiserver"
+        documentSelector: { path: kind, value: GeneratingPolicy }
+      - matchRegex:
+          path: "spec.generate[0].template.value"
+          pattern: '- \{"key":"cnpg.io/podRole","operator":"In","values":\["instance"\]\}'
+        documentSelector: { path: kind, value: GeneratingPolicy }
+      - matchRegex:
+          path: "spec.generate[0].template.value"
+          pattern: "- toEntities: \\[kube-apiserver\\]"
+        documentSelector: { path: kind, value: GeneratingPolicy }
+      - notMatchRegex:
+          path: "spec.generate[0].template.value"
+          pattern: "toEntities: \\[(world|cluster|all|host|remote-node)"
+        documentSelector: { path: kind, value: GeneratingPolicy }
+      - contains:
+          path: rules
+          content: { apiGroups: [cilium.io], resources: [ciliumnetworkpolicies], verbs: [get, list, watch, create, update, patch, delete] }
+        documentSelector: { path: kind, value: ClusterRole }
 
   - it: refuses a TTL that is not hours/minutes and a cap below 1
     set:

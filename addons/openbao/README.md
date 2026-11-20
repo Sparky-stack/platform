@@ -115,6 +115,8 @@ Wrapper chart for `openbao` (`0.30.7` / `v2.7.2`) on `mgmt`. Runs the Istio mult
 | secrets.tenantStores.enabled | bool | `false` | Enables per-tenant KV v2 mounts `kv-tenant-<tenant>`, JWT auth `tenants-<cluster>` per mesh member, and CronJobs `tenant-reconcile` (`tenantSecrets.*`) and `policy-reconcile` ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao), [policy reconciler](../../docs/multicluster.md#policies-from-git-the-policy-reconciler)). |
 | tenantSecrets.audience | string | `"openbao-tenant-secrets"` |  |
 | tenantSecrets.inputsNamespace | string | `"openbao-tenants"` |  |
+| tenantSecrets.kyvernoBackgroundController.name | string | `"kyverno-background-controller"` |  |
+| tenantSecrets.kyvernoBackgroundController.namespace | string | `"kyverno"` |  |
 | tenantSecrets.label | string | `"openbao.platform.koorikla.io/tenant"` |  |
 | tenantSecrets.loginRole | string | `"tenant-config"` |  |
 | tenantSecrets.readerPolicy | string | `"tenant-read"` |  |

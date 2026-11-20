@@ -19,6 +19,8 @@ namespaceLabels platform.koorikla.io/preview=true on namespaces OpenChoreo's ren
                                             platform-preview-isolation: egress only inside the namespace, to platform
                                             namespaces (no openchoreo.dev/environment label: DNS, gateways) and outside
                                             the cluster - never to another cell (staging, production, other previews).
+                                            With cni cilium also CiliumNetworkPolicy platform-preview-database-apiserver:
+                                            kube-apiserver egress for CloudNativePG instance / job pods only (#331).
                                             Ingress isolation is OpenChoreo's own per-component NetworkPolicy (same
                                             namespace + system components only). Kept in sync (tampering is reverted).
 Policy tier: preview cell namespaces have an environment name outside imageVerification.environments, so the
@@ -238,6 +240,31 @@ spec:
                   # Cilium matches CIDR rules only against peers outside the cluster: no pod or node of any cell.
                   - ipBlock: { cidr: 0.0.0.0/0 }
                   - ipBlock: { cidr: "::/0" }
+          {{- if eq (toString (.Values.cluster).cni) "cilium" }}
+          ---
+          # Cilium never matches ipBlocks against the API server (identity kube-apiserver, #331), but every pod of a
+          # CloudNativePG database runs the instance manager, which needs the API: open it to exactly the pods the
+          # CNPG operator labels as its instances or its bootstrap/join jobs (initdb waits for the Cluster object
+          # before it starts). OpenChoreo workloads (label openchoreo.dev/component) never match, whatever they claim.
+          apiVersion: cilium.io/v2
+          kind: CiliumNetworkPolicy
+          metadata:
+            name: platform-preview-database-apiserver
+            namespace: (( object.metadata.name ))
+            labels: { platform.koorikla.io/preview: "true" }
+          spec:
+            specs:
+              {{- range $role := list (dict "key" "cnpg.io/podRole" "operator" "In" "values" (list "instance")) (dict "key" "cnpg.io/jobRole" "operator" "Exists") }}
+              - endpointSelector:
+                  matchExpressions:
+                    - { key: cnpg.io/cluster, operator: Exists }
+                    - {{ toJson $role }}
+                    - { key: openchoreo.dev/component, operator: DoesNotExist }
+                egress:
+                  - toEntities: [kube-apiserver]
+                    toPorts: [{ ports: [{ port: "443", protocol: TCP }, { port: "6443", protocol: TCP }] }]
+              {{- end }}
+          {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -252,5 +279,10 @@ rules:
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [get, list, watch, create, update, patch, delete]
+  {{- if eq (toString (.Values.cluster).cni) "cilium" }}
+  - apiGroups: [cilium.io]
+    resources: [ciliumnetworkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  {{- end }}
 {{- end }}
 {{- end }}

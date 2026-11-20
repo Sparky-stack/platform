@@ -134,7 +134,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | previewGuards.quota."limits.memory" | string | `"2Gi"` |  |
 | previewGuards.quota."requests.cpu" | string | `"1"` |  |
 | previewGuards.quota."requests.memory" | string | `"1Gi"` |  |
-| previewGuards.quota."requests.storage" | string | `"5Gi"` |  |
+| previewGuards.quota."requests.storage" | string | `"15Gi"` |  |
 | previewGuards.quota."services.loadbalancers" | string | `"0"` |  |
 | previewGuards.quota."services.nodeports" | string | `"0"` |  |
 | previewGuards.quota.persistentvolumeclaims | string | `"2"` |  |
