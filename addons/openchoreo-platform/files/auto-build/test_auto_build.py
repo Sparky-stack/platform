@@ -94,6 +94,9 @@ class FakeApi:
     def run_exists(self, name):
         return name in self.runs
 
+    def get_run(self, name):
+        return self.runs.get(name)
+
     def image_exists(self, host, repository, digest):
         self.calls.append(("registry", host, repository, digest))
         return self.registry.get(digest, True)
@@ -412,6 +415,55 @@ class Reconcile(unittest.TestCase):
         api = self.fresh_stack({DIGEST: False}, runs={"hello-world-aaaaaaaaaaaa": running})
         reconcile(api, registry_host=REGISTRY, now=dt.datetime(2026, 11, 17, 12, 5, tzinfo=dt.timezone.utc))
         self.assertEqual(api.created, [])
+
+    # --- a failed rebuild is retried (live: a k3s restart killed `check`, development stayed ImagePullBackOff) -------
+    NOW = dt.datetime(2026, 11, 20, 18, 0, tzinfo=dt.timezone.utc)
+    REBUILD = "hello-world-bbbbbbbbbbbb-dddddddd"
+
+    def failed_run(self, name, completed_at="2026-11-20T17:36:38Z"):
+        run = run_obj(name, done=True, ok=False)
+        run["metadata"]["labels"] = {"platform.koorikla.io/trigger": "auto-build", "openchoreo.dev/component": "hello-world"}
+        run["status"]["completedAt"] = completed_at
+        return run
+
+    def test_failed_rebuild_is_retried_on_the_next_pass(self):
+        api = self.fresh_stack({DIGEST: False})
+        state = {}
+        reconcile(api, state, registry_host=REGISTRY, now=self.NOW)
+        api.runs[self.REBUILD] = self.failed_run(self.REBUILD)               # the run fails
+        rec = reconcile(api, state, registry_host=REGISTRY, now=self.NOW)    # same head, same state
+        self.assertEqual(rec.created, [self.REBUILD + "-r2"])
+        self.assertEqual(api.created[-1]["spec"]["workflow"]["parameters"]["repository"]["revision"]["commit"], SHA_B)
+        self.assertEqual(state["components"]["hello-world"], dict(state["components"]["hello-world"],
+                                                                  result="rebuilt", run=self.REBUILD + "-r2"))
+
+    def test_failed_rebuild_waits_before_the_retry(self):
+        api = self.fresh_stack({DIGEST: False}, runs={self.REBUILD: self.failed_run(self.REBUILD, "2026-11-20T17:58:00Z")})
+        rec = reconcile(api, registry_host=REGISTRY, now=self.NOW)
+        self.assertEqual(rec.created, [])
+        self.assertEqual(rec.errors, [])
+
+    def test_succeeded_rebuild_is_not_retried(self):
+        ok = self.failed_run(self.REBUILD)
+        ok["status"]["conditions"] = run_obj(self.REBUILD, done=True, ok=True)["status"]["conditions"]
+        api = self.fresh_stack({DIGEST: False}, runs={self.REBUILD: ok})
+        self.assertEqual(reconcile(api, registry_host=REGISTRY, now=self.NOW).created, [])
+
+    def test_rebuild_gives_up_loudly_after_the_last_attempt(self):
+        names = [self.REBUILD, self.REBUILD + "-r2", self.REBUILD + "-r3"]
+        api = self.fresh_stack({DIGEST: False}, runs={n: self.failed_run(n) for n in names})
+        state = {}
+        rec = reconcile(api, state, registry_host=REGISTRY, now=self.NOW)
+        self.assertEqual(rec.created, [])
+        self.assertEqual(len(rec.errors), 1)
+        self.assertIn("FAILED 3 times", rec.errors[0])
+        self.assertEqual(state["components"]["hello-world"]["result"], "rebuild-failed")
+        rec = reconcile(api, state, registry_host=REGISTRY, now=self.NOW)    # reported once per head
+        self.assertEqual((rec.created, rec.errors), ([], []))
+
+    def test_retry_names_stay_dns_labels(self):
+        self.assertEqual(ab.rebuild_name("hello-world", SHA_B, DIGEST, 2), "hello-world-bbbbbbbbbbbb-dddddddd-r2")
+        self.assertLessEqual(len(ab.rebuild_name("x" * 63, SHA_B, DIGEST, 3)), 63)
 
     def test_rate_limit_stops_the_pass(self):
         class Limited(FakeApi):
@@ -796,6 +848,10 @@ class PreviewResources(unittest.TestCase):
         self.assertEqual(rrb["metadata"]["annotations"], {ab.RESOURCE_RELEASE_ANNOTATION: "latest"})
         self.assertEqual(rrb["metadata"]["ownerReferences"][0]["kind"], "Environment")
         self.assertEqual(rrb["metadata"]["ownerReferences"][0]["name"], "pr-7-hello-world")
+        # The Environment must outlive the binding: OpenChoreo's RenderedRelease finalizer resolves the data plane
+        # through it, so a binding outliving its Environment never finalizes (hello-world#35 leak). blockOwnerDeletion
+        # makes the foreground delete of the Environment (Argo, TTL policy) wait for the binding.
+        self.assertIs(rrb["metadata"]["ownerReferences"][0].get("blockOwnerDeletion"), True)
         self.assertEqual(rrb["metadata"]["labels"][ab.PREVIEW_LABEL], "true")
         self.assertNotIn("resourceRelease", rrb["spec"])     # ResourcePins sets it
         self.assertEqual(api.statuses[-1][1], "pending")     # Ready only once the app binding (and so the DB) is

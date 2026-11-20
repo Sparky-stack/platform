@@ -20,6 +20,9 @@
 #     stack's Harbor), the Workload's own spec.source.commit is rebuilt (never the branch head, which is a GitOps-only
 #     commit the build's checkout skips) as WorkflowRun <component>-<sha[:12]>-<digest[:8]>: one rebuild per missing
 #     digest. The hand-off then commits the new digest. Unknown answers (registry down, no credentials) never rebuild.
+#     A failed rebuild is retried (-r2, -r3, REBUILD_RETRY_SECONDS apart): until one succeeds the environment pulls a
+#     missing image, so one killed pod must not leave it there. After REBUILD_ATTEMPTS failures the pass logs and
+#     exits non-zero once per head. A failed build never changes what is deployed: only its signed hand-off does.
 # The ConfigMap STATE_CONFIGMAP is only a cache (branch ETags, last handled head per component): GitHub answers a
 # conditional request with 304 when nothing changed, which does not count against the rate limit. Losing it costs API
 # calls, never a duplicate build.
@@ -66,6 +69,8 @@ MANIFEST_TYPES = ", ".join(["application/vnd.oci.image.index.v1+json", "applicat
 TRIGGER_LABEL = "platform.koorikla.io/trigger"
 COMMIT_ANNOTATION = "platform.koorikla.io/commit"
 DEFAULT_WORKLOAD_PATH = "deploy/openchoreo/workload.yaml"
+REBUILD_ATTEMPTS = 3          # runs per missing digest: a failed rebuild (k3s restart mid-bootstrap) is retried
+REBUILD_RETRY_SECONDS = 300   # wait after a failed attempt before the next one
 PREVIEW_LABEL = "platform.koorikla.io/preview"
 EXPIRES_LABEL = "platform.koorikla.io/expires-at"
 PR_LABEL = "platform.koorikla.io/pull-request"
@@ -176,9 +181,12 @@ def image_parts(ref):
     return (m.group(1).lower(), m.group(2), m.group(3)) if m else None
 
 
-def rebuild_name(component, sha, digest):
-    """WorkflowRun that rebuilds `sha` because `digest` is missing: one per (commit, missing digest)."""
-    return "%s-%s-%s" % (component[:40].rstrip("-"), sha[:12], digest.split(":")[-1][:8])
+def rebuild_name(component, sha, digest, attempt=1):
+    """WorkflowRun that rebuilds `sha` because `digest` is missing: one per (commit, missing digest), plus a suffixed
+    run per retry after a failed attempt (-r2, -r3; the component is cut 3 characters shorter to stay <= 63)."""
+    if attempt <= 1:
+        return "%s-%s-%s" % (component[:40].rstrip("-"), sha[:12], digest.split(":")[-1][:8])
+    return "%s-%s-%s-r%d" % (component[:37].rstrip("-"), sha[:12], digest.split(":")[-1][:8], attempt)
 
 
 def bearer_challenge(header):
@@ -304,6 +312,28 @@ class Reconciler:
             return False
         return self.api.image_exists(*parts) is False
 
+    def next_rebuild(self, name, commit, digest):
+        """(run name, why not now) for the rebuild of `commit`: the first attempt without a run is created (why ""),
+        a running or succeeded attempt waits; a failed attempt is retried after REBUILD_RETRY_SECONDS (the k3s restart
+        that killed a step is long over), at most REBUILD_ATTEMPTS runs in total, then "failed"."""
+        for attempt in range(1, REBUILD_ATTEMPTS + 1):
+            rn = rebuild_name(name, commit, digest, attempt)
+            run = self.api.get_run(rn)
+            if run is None:
+                return rn, ""
+            if not completed(run):
+                return rn, "is running"
+            if succeeded(run):
+                return rn, "succeeded (the hand-off commit follows)"
+            done = parse_time((run.get("status") or {}).get("completedAt"))
+            if attempt < REBUILD_ATTEMPTS and done and self.now - done < dt.timedelta(seconds=REBUILD_RETRY_SECONDS):
+                return rn, "failed, retried after %ds" % REBUILD_RETRY_SECONDS
+        return rn, "failed"
+
+    def rebuild_failed(self, run_name_):
+        run = self.api.get_run(run_name_) if run_name_ else None
+        return bool(run) and completed(run) and not succeeded(run)
+
     def up_to_date(self, comp, paths, slug, sha, built, image):
         """The head needs no build of its own. Rebuild the Workload's commit `built` if its pinned image is gone."""
         name = comp["metadata"]["name"]
@@ -311,9 +341,19 @@ class Reconciler:
             self.record(name, sha, "up-to-date", image=image or "")
             return
         commit = built if SHA_RE.match(built) else self.api.commit_sha(slug, built)
-        rn = rebuild_name(name, commit, image_parts(image)[2])
-        if self.api.run_exists(rn):
-            log("%s: %s is not in the registry; rebuild %s exists" % (name, image, rn))
+        rn, wait = self.next_rebuild(name, commit, image_parts(image)[2])
+        if wait == "failed":
+            # Every attempt failed: the environment stays on the pinned (missing) image, nothing newer is deployed.
+            # Loud once per head; the next push (or deleting the failed runs) starts over.
+            msg = ("%s: rebuild of %s %s for missing %s FAILED %d times (last WorkflowRun %s): the Workload keeps "
+                   "pulling a missing image until the build is fixed" % (name, slug, commit[:12], image,
+                                                                         REBUILD_ATTEMPTS, rn))
+            log(msg)
+            self.errors.append(msg)
+            self.record(name, sha, "rebuild-failed", rn)
+            return
+        if wait:
+            log("%s: %s is not in the registry; rebuild %s %s" % (name, image, rn, wait))
             self.record(name, sha, "rebuilt", rn)
             return
         if len(self.created) >= self.max_runs:
@@ -354,7 +394,9 @@ class Reconciler:
             return
         sha = self.head(slug, branch)
         last = self.state["components"].get(name) or {}
-        if last.get("sha") == sha and not (last.get("result") == "up-to-date" and self.missing(last.get("image"))):
+        recheck = (last.get("result") == "up-to-date" and self.missing(last.get("image"))) or \
+            (last.get("result") == "rebuilt" and self.rebuild_failed(last.get("run")))
+        if last.get("sha") == sha and not recheck:
             return                                  # nothing new since the last pass, the image is still there
         rn = run_name(name, sha)
         if self.api.run_exists(rn):
@@ -455,7 +497,11 @@ def preview_resource_bindings(release, namespace, project, environment, labels):
     (spec.workload.dependencies.resources[].ref): the preview gets its own instance (e.g. an empty database) in its
     cell, never development's. Owned by the preview Environment like the release, so closing the PR deletes it, and
     retainPolicy Delete removes the data with it. Pinned by ResourcePins (annotation "latest"), sized by the
-    ResourceType's environmentConfigs defaults."""
+    ResourceType's environmentConfigs defaults.
+    blockOwnerDeletion: the Environment must outlive the binding. OpenChoreo 1.3.3's binding finalizer waits for its
+    RenderedRelease, whose finalizer resolves the data plane through the Environment ("failed to get environment" ->
+    stuck forever once it is gone). The Environment is deleted in the foreground (Argo's resources finalizer, the TTL
+    DeletingPolicy), so it now waits until this binding and its data-plane objects are gone."""
     deps = (((release or {}).get("spec") or {}).get("workload") or {}).get("dependencies") or {}
     env_name = environment["metadata"]["name"]
     out = []
@@ -469,7 +515,8 @@ def preview_resource_bindings(release, namespace, project, environment, labels):
                 "name": "%s-%s" % (ref, env_name), "namespace": namespace, "labels": labels,
                 "annotations": {RESOURCE_RELEASE_ANNOTATION: "latest"},
                 "ownerReferences": [{"apiVersion": "openchoreo.dev/v1alpha1", "kind": "Environment",
-                                     "name": env_name, "uid": environment["metadata"]["uid"]}],
+                                     "name": env_name, "uid": environment["metadata"]["uid"],
+                                     "blockOwnerDeletion": True}],
             },
             "spec": {"owner": {"projectName": project, "resourceName": ref}, "environment": env_name,
                      "retainPolicy": "Delete"},
@@ -784,6 +831,10 @@ class Api:
             ("/apis/openchoreo.dev/v1alpha1/namespaces/%s/workflows/%s" % (namespace, name))
         _, body = self.kube("GET", path)
         return ((body.get("spec") or {}).get("parameters") or {}).get("openAPIV3Schema") or {}
+
+    def get_run(self, name):
+        """A WorkflowRun of the org namespace, or None."""
+        return self.get("workflowruns", name)
 
     def run_exists(self, name):
         status, _ = self.kube("GET", "/apis/openchoreo.dev/v1alpha1/namespaces/%s/workflowruns/%s"

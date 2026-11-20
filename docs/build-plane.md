@@ -20,6 +20,10 @@ WorkflowRun (Backstage / occ / auto-build)         mgmt
 Git stays the source of truth: no step writes a Workload into the cluster (upstream's samples PUT the Workload through
 the OpenChoreo API; here the Workload changes only by commit).
 
+Steps re-run a pod that was killed under them (a k3s/node restart ends every container with exit 255 "Unknown") or hit
+an Argo error, at most twice with backoff; a step that fails on its own exit code fails the run (`retryStrategy` in
+`koorikla-build` / `koorikla-helm-chart`). A failed run never reaches `gitops`, so nothing deployed changes.
+
 ## What runs where
 
 | Where | Addon | Namespace | What |
@@ -110,7 +114,12 @@ Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org
    Never the branch head: that is the GitOps-only hand-off commit the build's checkout skips. The hand-off then commits
    the new digest and Argo CD rolls development out again, about 6 minutes after the first pass. An unknown answer
    (Harbor still starting, any other status) never rebuilds; the next pass asks again. Images outside the platform
-   registry are not checked.
+   registry are not checked. A failed rebuild is retried as `<...>-r2`, then `-r3`, each 5 minutes after the previous
+   one failed (a k3s restart mid-bootstrap once killed hello-world's `check` pod and left development in
+   ImagePullBackOff). After the third failure the pass logs `rebuild ... FAILED 3 times` and exits non-zero once per head
+   (`kubectl -n workflows-default logs -l workflows.argoproj.io/cron-workflow=auto-build-poll`); state
+   `rebuild-failed` in `auto-build-state`. A failed build never changes what is deployed: only the GitOps hand-off after
+   `sign` does, so development keeps its last pinned image.
 6. Otherwise creates WorkflowRun `<component>-<sha[:12]>` (labels `openchoreo.dev/component`, `openchoreo.dev/project`,
    `platform.koorikla.io/trigger: auto-build`; annotation `platform.koorikla.io/commit`) from the Component's workflow
    with `repository.revision.commit` set to the head. From there it is an ordinary build: hand-off commit, Argo CD,

@@ -117,6 +117,27 @@ tests:
           path: 'spec.templates[?(@.name == "sign")].retryStrategy'
           value: { limit: "4", retryPolicy: OnError, backoff: { duration: 10s, factor: "2", maxDuration: 5m } }
 
+  # A k3s restart mid-bootstrap killed hello-world's `check` pod (main: Unknown, exit code 255) and failed the run that
+  # had to rebuild development's missing image: every step that does not retry already re-runs an infra-killed pod.
+  - it: check, scans, sbom and build re-run a pod killed by a node restart (exit 255) or an Argo error, not a failed exit
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-build }
+    asserts:
+      - equal:
+          path: 'spec.templates[?(@.name == "check")].retryStrategy'
+          value: &retry { limit: "2", retryPolicy: Always, expression: "lastRetry.status == 'Error' || asInt(lastRetry.exitCode) == 255", backoff: { duration: 30s, factor: "2", maxDuration: 5m } }
+      - equal: { path: 'spec.templates[?(@.name == "check-with-postgres")].retryStrategy', value: *retry }
+      - equal: { path: 'spec.templates[?(@.name == "scan-fs")].retryStrategy', value: *retry }
+      - equal: { path: 'spec.templates[?(@.name == "build")].retryStrategy', value: *retry }
+      - equal: { path: 'spec.templates[?(@.name == "scan-image")].retryStrategy', value: *retry }
+      - equal: { path: 'spec.templates[?(@.name == "sbom")].retryStrategy', value: *retry }
+
+  - it: helm chart packaging re-runs an infra-killed pod too
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-helm-chart }
+    asserts:
+      - equal: { path: 'spec.templates[?(@.name == "package")].retryStrategy', value: *retry }
+
   - it: run pods get no ServiceAccount token, only the executor does (both templates)
     template: templates/cluster-workflow-templates.yaml
     asserts:

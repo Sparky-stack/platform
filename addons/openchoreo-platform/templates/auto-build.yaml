@@ -57,6 +57,11 @@ rules:
   - apiGroups: [openchoreo.dev]
     resources: [components, environments]
     verbs: [get]
+  # The preview's ResourceReleaseBindings block their Environment's deletion until their databases are gone
+  # (ownerReference blockOwnerDeletion; clusters with OwnerReferencesPermissionEnforcement require this to set it)
+  - apiGroups: [openchoreo.dev]
+    resources: [environments/finalizers]
+    verbs: [update]
   - apiGroups: [openchoreo.dev]
     resources: [releasebindings]
     verbs: [get, patch]

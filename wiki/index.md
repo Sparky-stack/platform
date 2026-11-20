@@ -18,6 +18,7 @@
 - [Talos on Hetzner Waits for Upstream CACPPT Release](decisions/talos-on-hetzner-waits-for-upstream.md) — Switch Hetzner example from k3s to Talos once upstream Sidero CACPPT releases `TalosControlPlaneTemplate` (#189).
 
 ## Gotchas
+- [Preview Teardown - Stuck ResourceReleaseBinding and Re-created Tenant Descriptor](gotchas/preview-teardown-leaks.md) — The Environment must outlive the preview's ResourceReleaseBindings (blockOwnerDeletion + foreground); terminating bindings must not match the descriptor GeneratingPolicy.
 - [Preview Cells - Tenant Secrets and CloudNativePG under Cilium](gotchas/preview-cells-tenant-secrets-and-cnpg.md) — Previews bind to their tenant's OpenBao role via Kyverno descriptors; CNPG pods need kube-apiserver egress that Cilium never grants via ipBlock (#267, #331).
 - [OpenChoreo SecretReference Rotation and Scope](gotchas/openchoreo-secretreference-rotation-and-scope.md) — App secrets refresh in 15 s but pods need a restart; the store is platform-fixed; `targetPlane` belongs to the secrets API.
 - [Argo CD Custom Health for Kyverno DeletingPolicy and Unmatched CRS](gotchas/argocd-custom-health-deletingpolicy-and-crs.md) — Kyverno `DeletingPolicy` never sets `Ready` and unmatched peers-only `ClusterResourceSet`s stay `Progressing` without custom Lua checks (#187, #198).
