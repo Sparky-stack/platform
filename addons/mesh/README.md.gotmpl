@@ -3,7 +3,7 @@ Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
-- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel, `values/provider-gcp-gke.yaml` on GKE, `values/provider-aws.yaml` on AWS, and `values/mesh-member.yaml` on mesh members).
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: istio-system`; layers `values/cni-flannel.yaml` on flannel, `values/provider-gcp-gke.yaml` on GKE, `values/provider-aws.yaml` on AWS, `values/provider-docker.yaml` on docker (no ambient DNS capture: `*.localhost` hosts, #209), and `values/mesh-member.yaml` on mesh members).
 - **Catalog label:** `addons.platform.koorikla.io/mesh` (`default: true`, opt-out with `"false"`); `mesh.csr.enabled` and `mesh.eastwest.enabled` turn on via `values/mesh-member.yaml` when `mesh.platform.koorikla.io/group` is set.
 {{- end -}}
 

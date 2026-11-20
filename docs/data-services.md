@@ -554,9 +554,9 @@ The rendered ScaledObject is `<component>-<env>-<hash>-<instanceName>` next to t
   `cnpg-system` are mesh clients too (namespace label `istio.io/dataplane-mode: ambient`, `namespace.ambient` in each
   addon): the CNPG operator reaches instance pods (`:8000`), the Strimzi operator the brokers, KEDA its scaler
   endpoints (Kafka bootstrap, Prometheus, an app's metrics URL) over HBONE mTLS. Verified live with CNPG; Strimzi and
-  KEDA follow the same path (VERIFY). The Prometheus agent stays outside the mesh, so a PostgreSQL cluster's
-  per-cluster PodMonitor (`:9187`) in a STRICT cell is refused
-  ([networking.md](networking.md#strict-mtls-in-cell-namespaces), exceptions). An app's metrics URL on a component pod is also behind OpenChoreo's per-component NetworkPolicy (same cell
+  KEDA follow the same path (VERIFY). The Prometheus agent pod is a mesh client too (#209), so a PostgreSQL cluster's
+  per-cluster PodMonitor (`:9187`) in a STRICT cell is scraped over HBONE mTLS
+  ([networking.md](networking.md#strict-mtls-in-cell-namespaces)). An app's metrics URL on a component pod is also behind OpenChoreo's per-component NetworkPolicy (same cell
   and system components only). Pod CPU/memory targets are exact in ambient (no sidecar inflating the pod's usage).
   The kube-apiserver -> KEDA metrics apiserver and admission webhook paths come from outside the mesh and stay
   accepted (no `PeerAuthentication` in the operator namespaces). Scaled to zero, requests to the component fail until

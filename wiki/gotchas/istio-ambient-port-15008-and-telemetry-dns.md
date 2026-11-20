@@ -22,7 +22,8 @@ confidence: high
 ## Fix
 - Enroll `kgateway` ingress in the ambient mesh and add a supplementary `NetworkPolicy` in cell namespaces allowing ingress on TCP port `15008` alongside `STRICT` `PeerAuthentication` (PR #206; see #210 for Strimzi operator policies).
 - The same platform `NetworkPolicy` `platform-mesh-hbone` carries a second rule: ingress on any port from `169.254.7.127/32` and the IPv6 equivalent, scoped to the pods OpenChoreo isolates (`openchoreo.dev/component`). Selecting all pods (`podSelector: {}`) would newly isolate pods no other policy selects. Any other policy that isolates an ambient pod needs the same rule.
-- Keep the `telemetry` namespace **out** of the ambient mesh (`addons/telemetry`, PR #208; see #209 for `PodMonitor` scraping into `STRICT` cells).
+- Keep the `telemetry` namespace **out** of the ambient mesh (`addons/telemetry`, PR #208). Scraping into `STRICT` cells (#209): enroll only the Prometheus agent pod (prometheus-operator `--labels=istio.io/dataplane-mode=ambient,openchoreo.dev/system-component=prometheus-agent`; the upstream PrometheusAgent has no podMetadata) and turn off ambient DNS capture on docker clusters (addon mesh `values/provider-docker.yaml`). The per-pod `ambient.istio.io/dns-capture: "false"` annotation would be narrower, but nothing can set it on the agent pod. Both pieces are needed: outside the mesh STRICT resets the scrape, and without the peer label the CNI drops HBONE 15008.
+- Testing `*.localhost` from a pod with curl proves nothing: curl resolves `*.localhost` to loopback itself (RFC 6761). Use `nslookup`, then curl the IP with a `Host:` header.
 
 ## Where enforced
 - `addons/mesh`, `addons/telemetry`, `addons/kyverno-policies`, and `hack/tests/test_mesh_admission.sh`; probe rule: `addons/kyverno-policies/templates/cell-mesh.yaml`, `hack/tests/test_kyverno_policies.sh` (structural check of the generated policy), helm-unittest `addons/kyverno-policies/tests/kyverno_policies_test.yaml`.

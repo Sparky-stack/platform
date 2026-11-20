@@ -107,6 +107,21 @@ tests:
             hostPath:
               path: /etc/cni/net.d
 
+  - it: "provider docker (values/provider-docker.yaml): no ambient DNS capture, ztunnel answers *.localhost with loopback (#209)"
+    template: charts/cni/templates/configmap-cni.yaml
+    values:
+      - ../values/provider-docker.yaml
+    asserts:
+      - equal: { path: data.AMBIENT_DNS_CAPTURE, value: "false" }
+      - equal: { path: data.AMBIENT_ENABLED, value: "true" }
+
+  - it: "other providers keep Istio's default ambient DNS capture (real DNS names)"
+    template: charts/cni/templates/configmap-cni.yaml
+    values:
+      - ../values/provider-aws.yaml
+    asserts:
+      - equal: { path: data.AMBIENT_DNS_CAPTURE, value: "true" }
+
   - it: "provider gcp-gke - ResourceQuotas admit the system-node-critical cni and ztunnel pods on GKE"
     values:
       - ../values/provider-gcp-gke.yaml

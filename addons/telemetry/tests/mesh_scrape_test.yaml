@@ -1,0 +1,28 @@
+suite: telemetry - Prometheus agent scrapes STRICT-mTLS cells from inside the ambient mesh (#209)
+templates:
+  - charts/observability-metrics-prometheus/charts/kube-prometheus-stack/templates/prometheus-operator/deployment.yaml
+  - charts/observability-metrics-prometheus/templates/prometheus-agent.yaml
+set:
+  cluster.name: dev1
+tests:
+  # Cells enforce STRICT mTLS (addon kyverno-policies): a scraper outside the mesh is refused by ztunnel (connection
+  # reset), one in the mesh without the peer label is dropped by the CNI on HBONE 15008 (both seen live on dev1).
+  - it: the operator labels the agent pod ambient + OpenChoreo system component (the PrometheusAgent has no podMetadata)
+    template: charts/observability-metrics-prometheus/charts/kube-prometheus-stack/templates/prometheus-operator/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --labels=istio.io/dataplane-mode=ambient,openchoreo.dev/system-component=prometheus-agent
+
+  - it: the operator pod itself stays out of the mesh (only objects it creates carry the labels)
+    template: charts/observability-metrics-prometheus/charts/kube-prometheus-stack/templates/prometheus-operator/deployment.yaml
+    asserts:
+      - notExists: { path: 'spec.template.metadata.labels["istio.io/dataplane-mode"]' }
+
+  - it: the agent the labels apply to is the operator-managed PrometheusAgent in this namespace
+    template: charts/observability-metrics-prometheus/templates/prometheus-agent.yaml
+    release: { namespace: telemetry }
+    asserts:
+      - isKind: { of: PrometheusAgent }
+      - equal: { path: metadata.namespace, value: telemetry }
+      - equal: { path: spec.podMonitorNamespaceSelector, value: {} }

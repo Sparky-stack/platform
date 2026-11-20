@@ -173,14 +173,14 @@ in-cluster client of cell pods is itself in the mesh:
 |---|---|---|
 | data-plane gateway `gateway-default` (kgateway Envoy, `openchoreo-data-plane`) | component endpoints (ingress) | pod label through `Gateway.spec.infrastructure.labels` (addon `openchoreo-data-plane`) |
 | CNPG / Strimzi / KEDA operators (`cnpg-system`, `strimzi`, `keda`) | instance, broker and scaler endpoints | namespace label (each addon, `namespace.ambient`) |
+| Prometheus agent (`telemetry`, [#209](https://github.com/koorikla/platform/issues/209)) | PodMonitor / ServiceMonitor targets (app metrics, CloudNativePG `:9187`) | pod labels `istio.io/dataplane-mode=ambient` + `openchoreo.dev/system-component=prometheus-agent` through prometheus-operator `--labels` (addon `telemetry`) |
 
 The gateway follows upstream's ambient ingress setup (kgateway docs "Ingress" for ambient: put the proxy in the mesh,
 ztunnel carries its upstream connections as HBONE). Only the proxy pod is labelled, so the cluster-agent next to it
 stays out. kgateway's own ambient settings (`KGW_ENABLE_ISTIO_INTEGRATION`, waypoint routing) are for DestinationRules
 and waypoints and aren't needed for L4 mTLS. The mesh clients carry no `PeerAuthentication`: they keep accepting
-plaintext from outside the mesh (the cloud LB / klipper into the gateway, the Prometheus agent's scrape of the
-gateway, kube-apiserver into operator webhooks). `hack/tests/test_mesh_contracts.sh` fails if one of them leaves
-the mesh while STRICT is on.
+plaintext from outside the mesh (the cloud LB / klipper into the gateway, kube-apiserver into operator webhooks).
+`hack/tests/test_mesh_contracts.sh` fails if one of them leaves the mesh while STRICT is on.
 
 `addons/kyverno-policies/templates/cell-mesh.yaml`, two `GeneratingPolicy`s on the same cell selector as the
 enrollment (synchronized: an edited or deleted object is restored, generated for existing cells too):
@@ -203,14 +203,24 @@ cAdvisor and
 kube-state-metrics (node / API level), Falco (syscalls), the cluster-agent (API server only), the promotion gate
 (queries the gateway's Envoy metrics in the observability plane), and traffic between pods of one cell.
 
-**Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an
-operator not listed above) is refused. That includes the Prometheus agent (addon `telemetry`), which stays outside
-(its namespace pins `istio.io/dataplane-mode: none`): ztunnel's DNS proxy (`AMBIENT_DNS_CAPTURE`, Istio's default)
-answers `*.localhost` names with loopback, so enrolled, the agent and the collectors lost the local installation's
-ingest hosts (`*.observability.openchoreo.localhost`, seen live). PodMonitors whose targets sit in a STRICT cell
-(CloudNativePG's per-cluster `:9187`) are therefore refused; the platform's own metrics (cAdvisor,
-kube-state-metrics, the gateway's Envoy) are unaffected. The same DNS behaviour applies to any ambient pod that
-calls a `*.localhost` host. Either enroll the client, or keep one environment `PERMISSIVE` with the
+**Prometheus agent (#209).** Only the agent pod joins; its namespace keeps `istio.io/dataplane-mode: none`, so the
+collectors stay out. The PrometheusAgent of OpenChoreo's metrics module has no `podMetadata` knob, so the labels come
+from prometheus-operator's `--labels` flag, which puts them on the agent's pod template. `istio.io/dataplane-mode=ambient`
+means ztunnel carries every scrape into a cell as HBONE mTLS with the agent's SPIFFE identity
+(`spiffe://cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent`), so STRICT stays as it is.
+`openchoreo.dev/system-component` is the peer label that OpenChoreo's per-component policy and `platform-mesh-hbone`
+admit (the same one the gateway carries), so the CNI lets the tunnel through on 15008. Seen live on dev1 with probe pods:
+outside the mesh a scrape gets a reset from ztunnel (STRICT), and in the mesh without the peer label it times out at the
+CNI. Docker clusters run without ambient DNS capture (addon `mesh` `values/provider-docker.yaml`,
+`cni.ambient.dnsCapture: false`). ztunnel's DNS proxy answers every `*.localhost` name with loopback, so with capture on an
+enrolled agent lost the local installation's remote-write host (`prometheus.observability.openchoreo.localhost` ->
+`::1`, `dial tcp [::1]:11080`). The same applied to any cell app calling a local ingress host. With capture off, pods
+resolve through CoreDNS (coredns-local). Nothing uses ServiceEntry hostnames, the only thing capture adds in ambient.
+Other providers keep Istio's default, since their hosts are real DNS names. `hack/tests/test_mesh_contracts.sh` checks
+the agent's labels against the hbone peer label, and DNS capture on local dev1.
+
+**Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an operator
+not listed above) is refused. Either enroll the client, or keep one environment `PERMISSIVE` with the
 namespace label `platform.koorikla.io/mtls=permissive` through
 `ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels`: the generated `PeerAuthentication` switches to
 `PERMISSIVE` (a mode, not a selector: Kyverno never deletes a synchronized object whose trigger stops matching, but

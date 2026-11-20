@@ -8,6 +8,7 @@ Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collec
 
 - **Roles / providers:** `roles: [workload]`, all providers (`namespace: telemetry`).
 - **Catalog label:** `addons.platform.koorikla.io/telemetry` (`default: true`, opt-out with `"false"`).
+- **Istio ambient:** the namespace stays out of the mesh; only the Prometheus agent pod joins (prometheus-operator `--labels`), so it scrapes targets in STRICT-mTLS cells over HBONE (#209, [networking](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
 
 ## Key values
 
@@ -73,6 +74,7 @@ Wrapper chart for workload data-plane telemetry: node-local OpenTelemetry Collec
 | observability-metrics-prometheus.kube-prometheus-stack.kubelet.serviceMonitor.kubelet | bool | `false` |  |
 | observability-metrics-prometheus.kube-prometheus-stack.prometheus.enabled | bool | `false` |  |
 | observability-metrics-prometheus.kube-prometheus-stack.prometheusOperator.admissionWebhooks.certManager.enabled | bool | `true` |  |
+| observability-metrics-prometheus.kube-prometheus-stack.prometheusOperator.extraArgs[0] | string | `"--labels=istio.io/dataplane-mode=ambient,openchoreo.dev/system-component=prometheus-agent"` |  |
 | observability-metrics-prometheus.kube-prometheus-stack.prometheusOperator.image.sha | string | `"7c88d4e7bae63bd8d0f8da986054337c23b4472fa8d3c6817f5bc4b8407a2d6a"` |  |
 | observability-metrics-prometheus.kube-prometheus-stack.prometheusOperator.image.tag | string | `"v0.94.1"` |  |
 | observability-metrics-prometheus.kube-prometheus-stack.prometheusOperator.prometheusConfigReloader.image.sha | string | `"06b52bd4dbe3ed6dd5905aadaf8b9987d9da4c31d37bb86deaadae68cee2d26b"` |  |
