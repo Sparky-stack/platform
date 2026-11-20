@@ -2,6 +2,20 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.5.0](https://github.com/koorikla/platform/compare/v0.4.0...v0.5.0) (2026-11-20)
+
+
+### Features
+
+* **promotion-gate:** HTTP smoke probe on in installation local via node IP ([#156](https://github.com/koorikla/platform/issues/156)) ([#319](https://github.com/koorikla/platform/issues/319)) ([40af5e4](https://github.com/koorikla/platform/commit/40af5e44f860e8c4b1f85e53eece42934eac6b3e))
+
+
+### Bug Fixes
+
+* **console:** hide Cost Insights / Cost Analysis while FinOps is off ([#322](https://github.com/koorikla/platform/issues/322)) ([a5ce3a4](https://github.com/koorikla/platform/commit/a5ce3a4d6bd659646b6af2811b2afe429c51a05b)), closes [#207](https://github.com/koorikla/platform/issues/207)
+* **release:** root package without component so single-component grouped releases get tagged ([#313](https://github.com/koorikla/platform/issues/313)) ([#318](https://github.com/koorikla/platform/issues/318)) ([d34c254](https://github.com/koorikla/platform/commit/d34c254adf6c7ccc882df3f32ece0b6d0e3b10e9))
+* **telemetry:** scrape STRICT-mTLS ambient cells from inside the mesh ([#323](https://github.com/koorikla/platform/issues/323)) ([d374e43](https://github.com/koorikla/platform/commit/d374e43c5099c7abb211490acd4cc8e5cea7326d)), closes [#209](https://github.com/koorikla/platform/issues/209)
+
 ## [0.4.0](https://github.com/koorikla/platform/compare/v0.3.0...v0.4.0) (2026-11-19)
 
 
