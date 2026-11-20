@@ -381,13 +381,19 @@ pods = {
     "cluster-label-only": {"cnpg.io/cluster": "orders-db"},
     "role-without-cluster": {"cnpg.io/podRole": "instance"},
 }
-specs = cnp["spec"]["specs"]
+specs = cnp["specs"]   # top-level, sibling of spec (CiliumNetworkPolicy schema)
 for s in specs:
     assert s["egress"] == [{"toEntities": ["kube-apiserver"], "toPorts": [{"ports": [{"port": "443", "protocol": "TCP"}, {"port": "6443", "protocol": "TCP"}]}]}], s
 print(" ".join(n for n, l in pods.items() if any(matches(s["endpointSelector"], l) for s in specs)))
 PY
 )
 assert_eq "$sel" "instance initdb" "previews (cilium): kube-apiserver egress only for CNPG instance and job pods"
+# The generated object must be a valid CiliumNetworkPolicy: Kyverno fails the WHOLE generate (quota, isolation, this)
+# when the API server rejects it, and kubeconform never sees objects embedded in a policy (#331 live: spec.specs).
+SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
+[[ -s "$SCHEMAS_DIR/cilium.io/ciliumnetworkpolicy_v2.json" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" "$ROOT/hack/schemas.sh" >/dev/null
+yq -P '.metadata.namespace = "dp-x"' <<<"$cnp" > "$TMP/pv-cnp.yaml"
+assert_eq "$(kc_valid "$TMP/pv-cnp.yaml")" yes "previews (cilium): the generated CiliumNetworkPolicy validates against the Cilium CRD schema"
 
 # openbao preview descriptors: exactly the preview binding in the org namespace, tenant = its project (not a label)
 out=$(cat "$TMP/ob-previews.out")
