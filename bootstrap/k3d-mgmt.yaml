@@ -25,6 +25,13 @@ options:
       - arg: --cluster-init
         nodeFilters:
           - server:0
+      # No fsync in the mgmt etcd (#344): this host-shared disk stalled WAL and bolt fsyncs past 8 s and one apply for
+      # 29-31 s during a clean bootstrap; a stall over 30 s makes k3s exit ("leaderelection lost for k3s") and Docker
+      # restarts every mgmt pod. A container restart keeps the host page cache; only a host/VM crash can lose recent
+      # writes, and the lab is rebuilt with `task down up` then. Inside the container, so the same on every Docker host.
+      - arg: --etcd-arg=unsafe-no-fsync=true
+        nodeFilters:
+          - server:0
       # Longer leader election for the embedded controllers, to ride out slow etcd fsyncs. k3s exits on a missed renewal
       # ("leaderelection lost"), and the clean bootstrap's I/O burst (CAPD nodes, Harbor, image pulls) stalls etcd
       # fdatasync for 5-8 s on a busy host: 5 mgmt restarts in the first 15 min, each restarting every mgmt pod.
@@ -48,6 +55,15 @@ options:
         nodeFilters: [server:*]
       - arg: --kube-cloud-controller-manager-arg=leader-elect-retry-period=10s
         nodeFilters: [server:*]
+# k3s's own leases ("k3s", "k3s-etcd") come from wrangler, not the args above: upstream 45 s lease / 30 s renew
+# deadline, exit on a missed renewal (#344). One server, so nothing fails over: ride out 90 s stalls instead.
+env:
+  - envVar: CATTLE_ELECTION_LEASE_DURATION=120s
+    nodeFilters: [server:*]
+  - envVar: CATTLE_ELECTION_RENEW_DEADLINE=90s
+    nodeFilters: [server:*]
+  - envVar: CATTLE_ELECTION_RETRY_PERIOD=10s
+    nodeFilters: [server:*]
 volumes:
   - volume: /var/run/docker.sock:/var/run/docker.sock
     nodeFilters:
