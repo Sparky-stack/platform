@@ -39,3 +39,6 @@
 
 ## [2026-11-20] create | Preview teardown leaks (stuck RRB, re-created OpenBao descriptor)
 - Added `gotchas/preview-teardown-leaks.md`: RenderedRelease cleanup needs the Environment (blockOwnerDeletion + foreground TTL delete); Kyverno re-generated the descriptor on the terminating binding's finalizer-removal UPDATE (matchCondition on deletionTimestamp).
+
+## [2026-11-20] create | OpenChoreo developer authz per project
+- Added `gotchas/openchoreo-authz-per-project-developers.md`: deny is resolved per entitlement value; `developers` org-wide read-only, tenant developer groups get `developer` scoped to their project with the gated-env condition in the allow (#335).
