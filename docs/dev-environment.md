@@ -123,6 +123,7 @@ once, `task doctor` warns until you do) installs `pre-commit` and
 | mise-tools-table | `mise.toml` | every `[tools]` entry parses for `task doctor` |
 | chart-lock | `Chart.yaml` / `Chart.lock` | lock digest in sync (`hack/lib/chartlock.py`; skipped with a note until it is on `main`) |
 | helm-docs | `charts/` `addons/` `Chart.yaml` / `values.yaml` / `README.md*`, `hack/helm-docs/` | `README.md` in sync with `helm-docs` (`hack/helm-docs/README.md.gotmpl` + per-chart `README.md.gotmpl`) |
+| reference-docs | `packages/*/apis/` `packages/*/openchoreo/` `addons/openchoreo-platform/`, `hack/gen-reference.py`, `docs/reference/` | `docs/reference/` in sync with `hack/gen-reference.py` (regenerate: `task docs:reference`) |
 | charts | `charts/` `addons/` `installations/` | `CHARTS=<changed charts> hack/test.sh`: helm lint + template per installation/cluster + kubeconform (cached schemas) + helm unittest of the changed charts only; installation/cluster files select `charts/platform` + `charts/cluster`. Everything else is `task test` / CI |
 | conventional-commit | commit message | warns, never blocks: squash merges make the PR title the commit on `main` |
 
