@@ -84,20 +84,39 @@ tests:
           path: "spec.generate[0].template.value"
           pattern: "mode: \"\\(\\( object.metadata.\\?labels\\[\\?'platform.koorikla.io/mtls'\\].orValue\\(''\\) == 'permissive' \\? 'PERMISSIVE' : 'STRICT' \\)\\)\""
 
-  - it: "cell mesh (#53): Kyverno's background controller may manage NetworkPolicies and PeerAuthentications"
+  - it: "cell mesh (#324): AuthorizationPolicy in ambient cells admits the cell itself and platformPeers only, allow-all when opted out"
+    template: templates/cell-mesh.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-cell-authz }
+    asserts:
+      - isKind: { of: GeneratingPolicy }
+      - equal: { path: spec.evaluation, value: { synchronize: { enabled: true }, generateExisting: { enabled: true } } }
+      - contains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+      - matchRegex: { path: "spec.matchConditions[0].expression", pattern: '"kgateway-system","istio-system"' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'kind: AuthorizationPolicy\n' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'action: ALLOW\n' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "'permissive' \\? \\[\\{\\}\\] :" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: "\\{'namespaces': \\[object.metadata.name\\]\\}" }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: '"cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent"' }
+      # never a wildcard principal or namespace: "*" is any mesh identity, i.e. back to STRICT-only
+      - notMatchRegex: { path: "spec.generate[0].template.value", pattern: '"\*"|/\*"' }
+
+  - it: "cell mesh (#53, #324): Kyverno's background controller may manage the generated kinds, RBAC a wave before the policies"
     template: templates/cell-mesh.yaml
     documentSelector: { path: kind, value: ClusterRole }
     asserts:
       - equal: { path: 'metadata.labels["rbac.kyverno.io/aggregate-to-background-controller"]', value: "true" }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "-1" }
       - contains: { path: rules, content: { apiGroups: [networking.k8s.io], resources: [networkpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
-      - contains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications], verbs: [get, list, watch, create, update, patch, delete] } }
+      - contains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications, authorizationpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
 
-  - it: "cell mesh: mtls.strict false keeps the HBONE policy, drops STRICT"
+  - it: "cell mesh: mtls.strict false keeps the HBONE policy, drops STRICT and the AuthorizationPolicy (plaintext has no identity)"
     template: templates/cell-mesh.yaml
     set: { ambientEnrollment.mtls.strict: false }
     asserts:
       - hasDocuments: { count: 2 }
-      - notContains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications], verbs: [get, list, watch, create, update, patch, delete] } }
+      - notContains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications, authorizationpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
         documentSelector: { path: kind, value: ClusterRole }
 
   - it: "cell mesh: nothing on mgmt (values/role-mgmt.yaml)"

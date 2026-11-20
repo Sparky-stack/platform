@@ -39,7 +39,8 @@
 #                              pass anywhere; a binding of a missing Resource is denied
 #   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy (with the
 #                              kubelet probe source 169.254.7.127) and a STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
-#                              non-cells and platform namespaces get neither
+#                              non-cells and platform namespaces get neither. #324: AuthorizationPolicy platform-cell-peers,
+#                              replayed with Istio's ALLOW semantics: another cell's workload and plaintext are refused
 #   tests/kyverno/signatures   online (registry + Sigstore): cosign keyless verification of a real signed image (built
 #                              through koorikla/ci@v1, so rejected by the commit-SHA identity pin); KYVERNO_ONLINE=1 only
 #   tests/kyverno/signatures-transition
@@ -268,7 +269,7 @@ dpct="$addon/tests/kyverno/data-plane-capabilities"
 cmt="$addon/tests/kyverno/cell-mesh"
 (
   helm template kyverno-policies "$addon" --namespace kyverno -s templates/cell-mesh.yaml > "$TMP/cm.yaml"
-  for p in openchoreo-cell-hbone openchoreo-cell-mtls; do
+  for p in openchoreo-cell-hbone openchoreo-cell-mtls openchoreo-cell-authz; do
     yq "select(.kind == \"GeneratingPolicy\" and .metadata.name == \"$p\")" "$TMP/cm.yaml" > "$TMP/cm-$p.yaml"
     "$KYVERNO" apply "$TMP/cm-$p.yaml" --resource "$cmt/namespaces.yaml" > "$TMP/cm-$p.out" 2>&1 || true
   done
@@ -419,7 +420,8 @@ assert_match "$(cat "$TMP/dpc-capable-binding-orphan.out")" 'Resource ghost does
 assert_eq "$(grep -c 'kind:' "$TMP/dpc-workload.yaml" || true)" 0 "data-plane capabilities: not rendered on workload clusters"
 
 # cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
-for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy'; do
+for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy' \
+  openchoreo-cell-authz:3:'development production legacy'; do
   p=${c%%:*}; rest=${c#*:}; n=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/cm-$p.out")
   assert_match "$out" "pass: $n, fail: 0, warn: 0, error: 0" "cell mesh: $p generates into $n of 6 namespaces"
@@ -447,5 +449,48 @@ assert_eq "${probes% }" "$want $want $want" "cell mesh: every HBONE NetworkPolic
 # PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
 modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
 assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"
+# #324: who gets into a cell. The generated AuthorizationPolicies replayed with Istio's L4 ALLOW semantics (ztunnel: a
+# request passes when any rule matches; namespaces/principals need a peer identity, so plaintext never matches). No
+# policy at all (before #324) admits every case below, so the "refused" lines are the negative security test.
+sed -n '/^apiVersion: security.istio.io/,/^---$/p' "$TMP/cm-openchoreo-cell-authz.out" |
+  yq -o=json -I=0 'select(.kind == "AuthorizationPolicy")' > "$TMP/cm-ap.json"
+dev=dp-default-demo-development-1234abcd; prod=dp-default-demo-production-1234abcd; legacy=dp-default-demo-legacy-1234abcd
+authz=$(python3 - "$TMP/cm-ap.json" "$dev:$dev/sa/default" "$dev:$dev/sa/r-orders-db" \
+  "$dev:openchoreo-data-plane/sa/gateway-default" "$dev:telemetry/sa/openchoreo-prometheus-agent" "$dev:cnpg-system/sa/cnpg" \
+  "$dev:$prod/sa/default" "$dev:dp-default-other-development-1234abcd/sa/default" "$dev:telemetry/sa/fluent-bit" \
+  "$dev:openchoreo-data-plane/sa/cluster-agent-dataplane" "$dev:plaintext" "$prod:$dev/sa/default" "$legacy:plaintext" <<'PY'
+import fnmatch, json, sys
+pols = {}
+for line in open(sys.argv[1]):
+    ap = json.loads(line)
+    pols.setdefault(ap["metadata"]["namespace"], []).append(ap)
+def source_ok(src, peer):  # peer: "<ns>/sa/<sa>" or None (plaintext)
+    if not src:
+        return True
+    if peer is None:
+        return False
+    ns, principal = peer.split("/")[0], "cluster.local/ns/" + peer
+    ok = True  # every field given must match (Istio "*" prefix/suffix wildcards ~ fnmatch)
+    if "namespaces" in src:
+        ok = any(fnmatch.fnmatchcase(ns, n) for n in src["namespaces"])
+    if "principals" in src:
+        ok = ok and any(fnmatch.fnmatchcase(principal, p) for p in src["principals"])
+    return ok
+def allowed(cell, peer):
+    allow = [ap for ap in pols.get(cell, []) if ap["spec"].get("action", "ALLOW") == "ALLOW"]
+    if not allow:  # no ALLOW policy: Istio admits everything
+        return True
+    return any(not r.get("from") or any(source_ok(f.get("source"), peer) for f in r["from"])
+               for ap in allow for r in ap["spec"].get("rules", []))
+for case in sys.argv[2:]:
+    cell, peer = case.split(":", 1)
+    print("admit" if allowed(cell, None if peer == "plaintext" else peer) else "refuse", end=" ")
+PY
+)
+assert_eq "${authz% }" "admit admit admit admit admit refuse refuse refuse refuse refuse refuse admit" \
+  "cell mesh: development admits its own workloads, gateway, telemetry agent, CNPG; refuses production's and another project's workloads, other platform identities, plaintext; production refuses development; the permissive cell admits plaintext"
+yq -P '.' <<<"$(head -1 "$TMP/cm-ap.json")" > "$TMP/cm-ap.yaml"
+[[ -s "$SCHEMAS_DIR/security.istio.io/authorizationpolicy_v1.json" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" "$ROOT/hack/schemas.sh" >/dev/null
+assert_eq "$(kc_valid "$TMP/cm-ap.yaml")" yes "cell mesh: the generated AuthorizationPolicy validates against the Istio CRD schema"
 
 finish
