@@ -47,4 +47,7 @@ for root in charts addons; do
 done
 git diff --exit-code -- '*/README.md'
 
+echo "==> Checking docs/reference/ is in sync with its sources (hack/gen-reference.py)"
+py hack/gen-reference.py --check
+
 echo "lint OK"

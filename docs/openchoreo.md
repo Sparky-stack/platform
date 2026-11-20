@@ -5,6 +5,9 @@ mgmt; every workload cluster with `openchoreo.dataPlane.enabled: true` is a **da
 syncs OpenChoreo resources into the control plane; app workloads reach data planes only through OpenChoreo's
 cluster-agent (never through Argo CD). Design background: [architecture.md](architecture.md).
 
+Every platform `ClusterComponentType`, `ClusterTrait`, `ClusterResourceType` and `ClusterWorkflow` with its parameters
+(generated from the chart): [reference/](reference/README.md).
+
 ## What runs where
 
 | Where | Addon / chart | Namespace | What |
