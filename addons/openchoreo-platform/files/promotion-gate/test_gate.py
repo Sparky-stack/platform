@@ -98,6 +98,69 @@ class Bindings(unittest.TestCase):
         self.assertEqual(gate.next_environment(p, "production"), [])
 
 
+class Smoke(unittest.TestCase):
+    """smoke: 2xx only; connect podHostIP reaches the Gateway by node IP with the app host as Host header (#156)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import http.server
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                host = self.headers.get("Host", "")
+                code = {"/ok/": 200, "/down/": 503, "/moved/": 302}.get(self.path, 404)
+                if not host.startswith("staging-default.dev1.apps.localhost:"):
+                    code = 404             # like the Gateway: unknown Host -> no route
+                self.send_response(code)
+                if code == 302:
+                    self.send_header("Location", "/ok/")
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        cls.srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.port = cls.srv.server_address[1]
+        cls.base = "http://staging-default.dev1.apps.localhost:%d" % cls.port
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def probe(self, path, ip="127.0.0.1"):
+        gate.smoke([self.base + path], "/", attempts=2, connect_ip=ip, sleep=lambda s: None)
+
+    def test_pod_host_ips_only_running_pods(self):
+        tree = {"renderedReleases": [{"nodes": [
+            {"kind": "Pod", "object": {"status": {"phase": "Running", "hostIP": "172.18.0.15"}}},
+            {"kind": "Pod", "object": {"status": {"phase": "Pending", "hostIP": "172.18.0.16"}}},
+            {"kind": "Service", "object": {"status": {"hostIP": "172.18.0.17"}}}]}]}
+        self.assertEqual(gate.pod_host_ips(tree), ["172.18.0.15"])
+        self.assertEqual(gate.pod_host_ips({}), [])
+
+    def test_request_connects_to_node_with_host_header(self):
+        req = gate.smoke_request("http://staging-default.dev1.apps.localhost:19080/hello-world-http/", "172.18.0.15")
+        self.assertEqual(req.full_url, "http://172.18.0.15:19080/hello-world-http/")
+        self.assertEqual(req.get_header("Host"), "staging-default.dev1.apps.localhost:19080")
+        self.assertRaises(gate.GateFailed, gate.smoke_request, "https://a.example/", "172.18.0.15")
+
+    def test_200_via_node_ip_passes(self):
+        self.probe("/ok")
+
+    def test_non_2xx_fails(self):
+        for path in ("/down", "/moved", "/missing"):
+            with self.subTest(path=path), self.assertRaisesRegex(gate.GateFailed, "smoke test failed.*HTTP"):
+                self.probe(path)
+
+    def test_without_connect_the_localhost_name_is_not_the_gateway(self):
+        # what the probe did before #156 locally: the host resolves to loopback, nothing serves its port there
+        with self.assertRaises(gate.GateFailed):
+            gate.smoke(["http://127.0.0.1:9/ok"], "/", attempts=1, sleep=lambda s: None)
+
+
 def staging_binding(ready="True", ready_since="2026-11-16T18:33:15Z", spec_changed="2026-11-16T18:33:01Z",
                     ready_gen=3, observed=3, delivery=None):
     """A ReleaseBinding as openchoreo-api 1.3.3 returns it (no status.delivery) unless delivery is given."""
