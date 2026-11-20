@@ -29,3 +29,15 @@ metadata:
   namespace: not-the-org
   labels: {platform.koorikla.io/preview: "true"}
 spec: {owner: {projectName: demo}, environment: pr-34-hello-world}
+---
+# Terminating preview binding (OpenChoreo's finalizer still cleaning the cell): its finalizer-removal UPDATE must not
+# re-create the descriptor that the DELETE just removed (live leak after closing hello-world#35).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata:
+  name: demo-pr-35-hello-world
+  namespace: default
+  labels: {platform.koorikla.io/preview: "true"}
+  deletionTimestamp: "2026-11-20T18:43:50Z"
+  finalizers: [openchoreo.dev/projectreleasebinding-cleanup]
+spec: {owner: {projectName: demo}, environment: pr-35-hello-world}

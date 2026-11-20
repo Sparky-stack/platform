@@ -22,6 +22,8 @@ tests:
       - equal: { path: "spec.matchConstraints.resourceRules[0].resources", value: [projectreleasebindings] }
       - equal: { path: spec.matchConstraints.objectSelector, value: { matchLabels: { platform.koorikla.io/preview: "true" } } }
       - equal: { path: "spec.matchConditions[0].expression", value: "object.metadata.namespace == 'default'" }
+      # terminating bindings never (re)generate: the descriptor goes with the binding (hello-world#35 leak)
+      - contains: { path: spec.matchConditions, content: { name: binding-is-not-terminating, expression: "!has(object.metadata.deletionTimestamp)" } }
       - equal: { path: "spec.variables[0].expression", value: object.spec.owner.projectName }
       - matchRegex: { path: "spec.variables[2].expression", pattern: '"name": variables.project \+ "-openbao-tenant-" \+ variables.environment' }
       - matchRegex: { path: "spec.variables[2].expression", pattern: '"openbao.platform.koorikla.io/tenant": "true"' }
