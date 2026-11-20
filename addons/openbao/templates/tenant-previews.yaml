@@ -80,6 +80,9 @@ metadata:
   labels:
     {{- include "openbao-addon.labels" . | nindent 4 }}
     rbac.kyverno.io/aggregate-to-background-controller: "true"
+    # The policy only turns Ready (RBACPermissionsGranted) when the reports controller can read its match kinds too;
+    # until then Argo sees it Degraded and the openbao sync stalls before openbao-ca-bundle (clean-bootstrap deadlock).
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
 rules:
   - apiGroups: [openchoreo.dev]
     resources: [projectreleasebindings]

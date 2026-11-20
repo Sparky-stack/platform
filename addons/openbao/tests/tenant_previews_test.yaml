@@ -37,6 +37,16 @@ tests:
         documentSelector: { path: kind, value: RoleBinding }
       - equal: { path: rules, value: [{ apiGroups: [openchoreo.dev], resources: [projectreleasebindings], verbs: [get, list, watch] }] }
         documentSelector: { path: kind, value: ClusterRole }
+      # background (generate) AND reports controller: without the latter the policy never turns Ready and Argo's
+      # openbao sync stalls on a clean bootstrap
+      - equal:
+          path: metadata.labels["rbac.kyverno.io/aggregate-to-background-controller"]
+          value: "true"
+        documentSelector: { path: kind, value: ClusterRole }
+      - equal:
+          path: metadata.labels["rbac.kyverno.io/aggregate-to-reports-controller"]
+          value: "true"
+        documentSelector: { path: kind, value: ClusterRole }
 
   - it: the reconcile computes preview namespaces in the installation's org namespace
     set: { secrets.tenantStores.enabled: true, openchoreo.orgNamespace: acme }
