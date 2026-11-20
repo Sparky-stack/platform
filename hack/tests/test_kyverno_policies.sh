@@ -200,6 +200,17 @@ eso="$ROOT/addons/external-secrets"
   done
 ) &
 
+# Kyverno GeneratingPolicy of addon openbao (#267): a tenant descriptor per preview ProjectReleaseBinding
+ob="$ROOT/addons/openbao"
+(
+  helm show crds "$cp_chart" | yq 'select(.metadata.name == "projectreleasebindings.openchoreo.dev")' > "$TMP/prb-crd.yaml"
+  helm template openbao "$ob" --namespace openbao --values "$ROOT/installations/local/installation.yaml" \
+    --set secrets.tenantStores.enabled=true --set previews.enabled=true -s templates/tenant-previews.yaml \
+    | yq 'select(.kind == "GeneratingPolicy")' > "$TMP/ob-previews.yaml"
+  "$KYVERNO" apply "$TMP/ob-previews.yaml" --resource "$ob/tests/kyverno/preview-tenant-secrets/bindings.yaml" \
+    --crd-paths "$TMP/prb-crd.yaml" > "$TMP/ob-previews.out" 2>&1 || true
+) &
+
 # Kyverno ValidatingPolicies of addon crossplane: PostgreSQL only through the platform API
 xp="$ROOT/addons/crossplane"
 [[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
@@ -377,6 +388,15 @@ print(" ".join(n for n, l in pods.items() if any(matches(s["endpointSelector"], 
 PY
 )
 assert_eq "$sel" "instance initdb" "previews (cilium): kube-apiserver egress only for CNPG instance and job pods"
+
+# openbao preview descriptors: exactly the preview binding in the org namespace, tenant = its project (not a label)
+out=$(cat "$TMP/ob-previews.out")
+assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "openbao previews: only the pr-<n> preview binding in the org namespace"
+assert_match "$out" 'name: demo-openbao-tenant-pr-33-hello-world' "openbao previews: descriptor <project>-openbao-tenant-<environment>"
+assert_match "$out" 'namespace: openbao-tenants' "openbao previews: descriptor in the inputs namespace"
+assert_match "$out" "tenant: $(printf demo | base64)" "openbao previews: tenant = spec.owner.projectName (demo), never the tenant label"
+assert_match "$out" "environment: $(printf pr-33-hello-world | base64)" "openbao previews: environment = spec.environment"
+assert_match "$out" 'openbao.platform.koorikla.io/tenant: "true"' "openbao previews: descriptor label (found by tenant-clients)"
 
 # data-plane capabilities: context:binding:expected
 pass='pass: 1, fail: 0, warn: 0, error: 0'; fail='pass: 0, fail: 1, warn: 0, error: 0'

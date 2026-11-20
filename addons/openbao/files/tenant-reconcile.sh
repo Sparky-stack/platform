@@ -9,6 +9,11 @@
 #   $IN/tenants/<t>.namespaces   space-separated cell namespaces of tenant <t> on the data planes (charts/tenant
 #                                computes them like OpenChoreo does); rejected.<secret> = a descriptor whose name is not
 #                                <t>-openbao-tenant (templates/tenant-secrets.yaml)
+#   $IN/tenants/<t>.previews     space-separated OpenChoreo Environments pr-<n>-<component> of <t>'s open PR previews
+#                                (one Kyverno-generated descriptor per preview ProjectReleaseBinding, #267). Their cell
+#                                namespaces are computed here from ORG_NAMESPACE + <t> + the environment, never taken
+#                                from an input: a preview binds only a namespace of its own tenant, and only a tenant
+#                                that has a <t>.namespaces descriptor (same scope as its pipeline environments).
 #   $IN/clusters/<c>.server, <c>.ca, <c>.group   the mesh members (the mesh-clients Secret of the mesh reconcile)
 # Per tenant <t>:
 #   kv-tenant-<t>                       KV v2 mount (created if missing; never deleted here - data outlives a tenant)
@@ -32,6 +37,8 @@
 set -eu
 
 IN=${INPUT_DIR:-/inputs}
+ORG_NAMESPACE=${ORG_NAMESPACE:-}
+WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 : "${READER_SA:?}" "${READER_AUDIENCE:?}" "${WRITER_NS:?}"
 READER_POLICY=${READER_POLICY:-tenant-read}
 TOKEN_TTL=${TOKEN_TTL:-10m}
@@ -43,6 +50,13 @@ status() { log "$*"; { printf '%s\n' "$*" > "$TERMINATION_LOG"; } 2>/dev/null ||
 die() { status "ERROR: $*"; exit 1; }
 label() { printf '%s' "$1" | grep -Eq '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'; }
 q() { bao "$@" >/dev/null; }
+first() { _f=$1; while [ ${#_f} -gt "$2" ]; do _f=${_f%?}; done; printf '%s' "$_f"; }   # <string> <n>: first n characters
+# OpenChoreo's cell namespace of <org> <project> <environment> (== charts/tenant tenant.cellNamespace): the four names
+# truncated to 13+13+13+12 characters, then the first 8 hex of sha256("dp-<org>-<project>-<environment>").
+cell_namespace() {
+  h=$(printf 'dp-%s-%s-%s' "$1" "$2" "$3" | sha256sum); h=$(first "$h" 8)
+  printf 'dp-%s-%s-%s-%s' "$(first "$1" 13)" "$(first "$2" 13)" "$(first "$3" 12)" "$h"
+}
 
 if [ -z "${BAO_TOKEN:-}" ]; then
   : "${LOGIN_ROLE:?}" "${TOKEN_FILE:?}"
@@ -64,6 +78,14 @@ for f in "$IN"/tenants/*.namespaces; do
   nss=$(cat "$f")
   bad=""; for ns in $nss; do label "$ns" || bad="$bad $ns"; done
   if [ -n "$bad" ] || [ -z "$nss" ]; then log "skip tenant $t: invalid namespaces '${bad# }'"; invalid="$invalid $t"; continue; fi
+  # shellcheck disable=SC2013  # space-separated words, validated one by one
+  [ ! -e "$IN/tenants/$t.previews" ] || for e in $(cat "$IN/tenants/$t.previews"); do
+    if [ -z "$ORG_NAMESPACE" ] || ! label "$e" || ! printf '%s' "$e" | grep -Eq '^pr-[0-9]+-[a-z0-9]'; then
+      log "skip preview '$e' of tenant $t: not an environment pr-<n>-<component> (or ORG_NAMESPACE unset)"; continue
+    fi
+    nss="$nss $(cell_namespace "$ORG_NAMESPACE" "$t" "$e")"
+  done
+  printf '%s' "$nss" > "$WORK/$t.namespaces"
   tenants="$tenants$t "
   for ns in $nss; do claims="$claims$ns:$t "; done
 done
@@ -77,7 +99,7 @@ for c in $claims; do
 done
 namespaces_of() { # <tenant>: its namespaces, minus contested ones
   # shellcheck disable=SC2013  # space-separated words, validated above
-  for ns in $(cat "$IN/tenants/$1.namespaces"); do case "$dup" in *" $ns "*) ;; *) printf '%s ' "$ns" ;; esac; done
+  for ns in $(cat "$WORK/$1.namespaces"); do case "$dup" in *" $ns "*) ;; *) printf '%s ' "$ns" ;; esac; done
 }
 
 if [ "$tenants" = " " ]; then

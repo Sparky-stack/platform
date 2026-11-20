@@ -167,6 +167,34 @@ assert_eq "$(grep -c 'secrets disable' "$S/calls" || true)" 0 "departed tenant: 
 assert_eq "$([[ -e "$S/auth/tenants-prod1" ]] && echo kept || echo pruned)" pruned "departed cluster: tenants-prod1 disabled"
 assert_eq "$([[ -e "$S/roles/auth_tenants-dev1_role_demo" ]] && echo kept || echo pruned)" kept "remaining tenant untouched"
 
+# PR previews (#267): <t>.previews lists environments; the reconcile computes their cell namespaces (OpenChoreo's naming,
+# org from ORG_NAMESPACE) and binds them to the tenant's own role and entity - never to another tenant's.
+P=dp-default-demo-pr-33-hello--94401323     # the live cell namespace of hello-world PR 33 (project demo, org default)
+printf 'pr-33-hello-world' > "$IN/tenants/demo.previews"
+printf 'pr-7-api ../evil staging pr-1-X dp-default-demo-production-7cbe998d' > "$IN/tenants/rogue.previews"
+tenant other "$O1"; printf 'pr-5-web' > "$IN/tenants/other.previews"
+printf 'pr-9-hello-world' > "$IN/tenants/ghost.previews"      # previews of a tenant without a descriptor
+: > "$S/calls"; rc=0; run || rc=$?
+assert_eq "$rc" 0 "previews: exit 0"
+subs() { yq -p json -r '.bound_claims.sub[]' < "$S/roles/auth_tenants-dev1_role_$1" | sed 's/^system:serviceaccount://; s/:openbao-tenant$//' | tr '\n' ' '; }
+assert_eq "$(subs demo)" "$D1 $D3 $P " "previews: demo's role adds exactly its preview's cell namespace (== OpenChoreo's name)"
+assert_eq "$(wr "identity/entity/name/tenant-demo.dev1.$P" | tr '\n' ' ')" "metadata=tenant=demo " "previews: the preview namespace's entity is tenant demo (reads kv-tenant-demo only)"
+O5=$(subs other); assert_match "$O5" "^$O1 dp-default-other-pr-5-web-[0-9a-f]{8} $" "previews: other's preview binds to other only"
+assert_eq "$(grep -c "$P" "$S/roles/auth_tenants-dev1_role_other" "$S/roles/auth_tenants-dev1_role_rogue" | grep -cv ':0$' || true)" 0 \
+  "negative: demo's preview namespace is in no other tenant's role"
+assert_eq "$(ents | grep -c "^tenant-other\..*demo" || true)" 0 "negative: no entity of tenant other for a demo namespace"
+assert_match "$(subs rogue)" "^dp-default-rogue-development-12345678 dp-default-rogue-pr-7-api-[0-9a-f]{8} $" \
+  "negative: a preview list cannot name another tenant's namespace, a non-preview environment or a path"
+for bad in ../evil staging pr-1-X dp-default-demo-production-7cbe998d; do
+  assert_match "$(cat "$TMP/out")" "skip preview '$bad' of tenant rogue" "previews: invalid preview '$bad' skipped and logged"
+done
+assert_eq "$([[ -e "$S/roles/auth_tenants-dev1_role_ghost" ]] && echo role || echo none)" none "negative: previews alone never create a tenant"
+# PR closed / TTL: the descriptor goes, the next run unbinds the namespace
+rm -f "$IN"/tenants/*.previews; : > "$S/calls"; run
+assert_eq "$(subs demo)" "$D1 $D3 " "previews: closed PR - demo's role back to its pipeline namespaces"
+assert_eq "$([[ -e "$S/entities/tenant-demo.dev1.$P" ]] && echo kept || echo pruned)" pruned "previews: closed PR - its entity is pruned"
+rm -f "$IN/tenants/other.namespaces"; run
+
 # per-cluster fail-safe: unreachable cluster reported, the others configured; every cluster failing fails the run
 cluster down1 https://unreachable.test:6443
 rc=0; run || rc=$?
@@ -186,6 +214,32 @@ assert_eq "$(grep -cE 'delete|disable' "$S/calls" || true)" 0 "no tenant inputs:
 tenant Bad_Name x
 rc=0; run || rc=$?
 assert_eq "$rc" 1 "only invalid tenant inputs: exit 1"
+
+# ExternalSecret tenant-clients template (ESO engine v2 = Go template + sprig; executed here by helm on fake
+# descriptors): main descriptors -> <t>.namespaces, preview descriptors -> <t>.previews, misnamed ones rejected.
+mkdir -p "$TMP/eso/templates"; printf 'apiVersion: v2\nname: eso-template\nversion: 0.0.0\n' > "$TMP/eso/Chart.yaml"
+{ echo '{{- with .Values.descriptors }}'
+  helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
+    --set secrets.tenantStores.enabled=true -s templates/tenant-secrets.yaml \
+    | yq 'select(.metadata.name == "tenant-clients") | .spec.target.template.templateFrom[0].literal'
+  echo '{{- end }}'; } > "$TMP/eso/templates/out.yaml"
+cat > "$TMP/eso/values.yaml" <<'EOF'
+descriptors:
+  demo-openbao-tenant: '{"tenant":"demo","namespaces":"dp-a dp-b"}'
+  demo-openbao-tenant-pr-33-hello-world: '{"tenant":"demo","environment":"pr-33-hello-world"}'
+  demo-openbao-tenant-pr-34-api: '{"tenant":"demo","environment":"pr-34-api"}'
+  other-openbao-tenant: '{"tenant":"other","namespaces":"dp-o"}'
+  other-openbao-tenant-pr-1-web: '{"tenant":"demo","environment":"pr-1-web"}'
+  demo-openbao-tenant-pr-2-web: '{"tenant":"demo","environment":"pr-3-web"}'
+EOF
+eso=$(helm template t "$TMP/eso" | yq -o json -I0 'select(. != null)')
+assert_eq "$(yq -r '.["demo.namespaces"]' <<<"$eso")" "dp-a dp-b" "tenant-clients: main descriptor -> demo.namespaces"
+assert_eq "$(yq -r '.["demo.previews"]' <<<"$eso")" "pr-33-hello-world pr-34-api" "tenant-clients: preview descriptors -> demo.previews"
+assert_eq "$(yq -r '.["other.previews"]' <<<"$eso")" "null" "negative: a preview descriptor claiming another tenant adds no previews to it"
+assert_match "$(yq -r '.["rejected.other-openbao-tenant-pr-1-web"]' <<<"$eso")" 'preview of tenant "demo" does not match the Secret name' \
+  "negative: preview descriptor named for another tenant is rejected"
+assert_match "$(yq -r '.["rejected.demo-openbao-tenant-pr-2-web"]' <<<"$eso")" 'want <tenant>-openbao-tenant-<environment>' \
+  "negative: preview descriptor whose name and environment differ is rejected"
 
 # name contracts across charts (a mismatch silently breaks every tenant login or the descriptor discovery)
 V=addons/openbao/values.yaml; SS=addons/secret-stores/values.yaml; TV=charts/tenant/values.yaml

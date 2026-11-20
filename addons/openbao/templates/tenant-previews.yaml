@@ -1,0 +1,110 @@
+{{- /*
+PR previews read their tenant's OpenBao secrets (#267; installation.yaml secrets.tenantStores.enabled + previews.enabled,
+docs/preview-environments.md). A preview's cell namespace exists only while its pull request is open, so charts/tenant
+cannot list it in the tenant descriptor. Kyverno generates one more descriptor per preview ProjectReleaseBinding (only
+charts/preview creates those: tenants cannot write ProjectReleaseBindings) into tenantSecrets.inputsNamespace:
+  Secret <project>-openbao-tenant-<environment>   data tenant = spec.owner.projectName, environment = spec.environment
+The ExternalSecret tenant-clients turns them into <tenant>.previews; files/tenant-reconcile.sh computes each cell
+namespace from ORG_NAMESPACE + tenant + environment (never from the input) and binds it to the tenant's role and entity
+(metadata tenant=<project>): the preview reads exactly kv-tenant-<project>, like the project's other environments.
+Closing the PR or the TTL deletes the binding; synchronize deletes the descriptor and the next reconcile run unbinds it.
+*/ -}}
+{{- if and (((.Values.secrets).tenantStores).enabled) ((.Values.previews).enabled) }}
+{{- $t := .Values.tenantSecrets }}
+{{- $kbc := $t.kyvernoBackgroundController }}
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: platform-preview-tenant-secrets
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: PR previews read their tenant's OpenBao secrets
+    policies.kyverno.io/description: >-
+      Per preview ProjectReleaseBinding a tenant descriptor {{ $t.inputsNamespace }}/<project>-openbao-tenant-<environment>,
+      so the preview's cell namespace may log in to OpenBao as its own project (kv-tenant-<project>) and nothing else.
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [openchoreo.dev]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [projectreleasebindings]
+    objectSelector:
+      matchLabels: { platform.koorikla.io/preview: "true" }
+  matchConditions:
+    - name: org-namespace
+      expression: {{ printf "object.metadata.namespace == '%s'" (((.Values.openchoreo).orgNamespace) | default "default") | quote }}
+    - name: project-is-a-tenant-name
+      expression: "object.spec.owner.projectName.matches('^[a-z0-9]([-a-z0-9]{0,48}[a-z0-9])?$')"
+    - name: environment-is-a-preview
+      expression: "object.spec.environment.matches('^pr-[0-9]+-[a-z0-9]([-a-z0-9]*[a-z0-9])?$') && size(object.spec.environment) <= 63"
+  variables:
+    - name: project
+      expression: object.spec.owner.projectName
+    - name: environment
+      expression: object.spec.environment
+    - name: downstream
+      expression: >-
+        [
+          {
+            "apiVersion": dyn("v1"),
+            "kind": dyn("Secret"),
+            "metadata": dyn({
+              "name": variables.project + "-openbao-tenant-" + variables.environment,
+              "namespace": "{{ $t.inputsNamespace }}",
+              "labels": {"{{ $t.label }}": "true", "app.kubernetes.io/part-of": "tenant-secrets", "platform.koorikla.io/preview": "true"}
+            }),
+            "type": dyn("Opaque"),
+            "data": dyn({
+              "tenant": base64.encode(bytes(variables.project)),
+              "environment": base64.encode(bytes(variables.environment))
+            })
+          }
+        ]
+  generate:
+    - expression: generator.Apply("{{ $t.inputsNamespace }}", variables.downstream)
+---
+# Kyverno's background controller reads the preview bindings (cluster-wide list for generateExisting) and writes the
+# descriptors in the inputs namespace only (Role, not ClusterRole).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:background-controller:preview-tenant-secrets
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: [openchoreo.dev]
+    resources: [projectreleasebindings]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kyverno-preview-tenant-secrets
+  namespace: {{ $t.inputsNamespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kyverno-preview-tenant-secrets
+  namespace: {{ $t.inputsNamespace }}
+  labels:
+    {{- include "openbao-addon.labels" . | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: kyverno-preview-tenant-secrets }
+subjects:
+  - { kind: ServiceAccount, name: {{ $kbc.name }}, namespace: {{ $kbc.namespace }} }
+{{- end }}

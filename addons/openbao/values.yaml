@@ -141,6 +141,9 @@ tenantSecrets:
   serviceAccount: openbao-tenant-config         # == role tenant-config (written by the policy reconciler, pinned)
   loginRole: tenant-config
   schedule: "*/5 * * * *"
+  # PR previews (templates/tenant-previews.yaml, with previews.enabled): the identity that writes the preview
+  # descriptors here (Kyverno GeneratingPolicy platform-preview-tenant-secrets), bound by a Role in inputsNamespace.
+  kyvernoBackgroundController: { namespace: kyverno, name: kyverno-background-controller }
 
 # Policy reconciler (templates/policy-reconcile.yaml + files/policy-reconcile.sh; with secrets.tenantStores.enabled):
 # CronJob policy-reconcile writes every files/policies/tenant-*.hcl as ACL policy <name> (prunes tenant-* policies no

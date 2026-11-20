@@ -1,0 +1,31 @@
+# platform-preview-tenant-secrets (templates/tenant-previews.yaml, #267): only preview ProjectReleaseBindings in the
+# org namespace whose environment is pr-<n>-<component> get a tenant descriptor; the tenant comes from
+# spec.owner.projectName (what OpenChoreo labels the cell namespace with), never from a label.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata:
+  name: demo-pr-33-hello-world
+  namespace: default
+  labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: other}
+spec: {owner: {projectName: demo}, environment: pr-33-hello-world}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata: {name: demo-staging, namespace: default}
+spec: {owner: {projectName: demo}, environment: staging}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata:
+  name: demo-staging-labelled-preview
+  namespace: default
+  labels: {platform.koorikla.io/preview: "true"}
+spec: {owner: {projectName: demo}, environment: staging}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: ProjectReleaseBinding
+metadata:
+  name: demo-pr-34-hello-world
+  namespace: not-the-org
+  labels: {platform.koorikla.io/preview: "true"}
+spec: {owner: {projectName: demo}, environment: pr-34-hello-world}
