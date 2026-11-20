@@ -5,6 +5,8 @@
 # addons/kyverno-policies/values.yaml, kubeconfig secret content never reaches the output, context koorikla is refused.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
 
 R="$TMP/root"; BIN="$TMP/bin"
 mkdir -p "$R/hack" "$R/addons/kyverno-policies" "$R/installations" "$R/charts/cluster"
@@ -44,6 +46,8 @@ case "\$a" in
   *" get --raw "*k8s_cluster_name*) k=prom-clusters ;;
   *" get --raw "*kube_pod_labels*) k=prom-app ;;
   *" get applications.argoproj.io "*sync.status*) k=apps ;;
+  *" get applications.argoproj.io "*" -o json "*) k=apps-json ;;
+  *" get appprojects.argoproj.io "*" -o json "*) k=appprojects ;;
   *" get applications.argoproj.io "*) [[ -f "\$FIX/\$t.apps" ]] && awk '{ print \$1 }' "\$FIX/\$t.apps"; exit 0 ;;
   *" get clusters.cluster.x-k8s.io "*" -l mesh.platform.koorikla.io/group "*) k=mesh-members ;;
   *" get clusters.cluster.x-k8s.io "*'{.metadata.name}{"\\n"}'*) k=cluster-names ;;
@@ -175,11 +179,15 @@ green() {
   printf '200' > "$d/http.openchoreo.localhost"
 }
 
+# Python for hack/lib/syncwindow.py: run_isolated's PATH has no mise tools, so pass the absolute path.
+pick_python || { echo "python >= 3.8 not found" >&2; exit 1; }
+PY=$(command -v "$PYTHON")
+
 # run <name> [env assignments...]: run demo-check.sh against $FIX; sets RC, OUT, CALLS.
 run() {
   local name=$1
   shift
-  run_isolated "$name" "$R/hack/demo-check.sh" FIX="$FIX" KUBECONFIG_MODE=direct DEMO_HTTP_MODE=direct "$@"
+  run_isolated "$name" "$R/hack/demo-check.sh" FIX="$FIX" KUBECONFIG_MODE=direct DEMO_HTTP_MODE=direct PYTHON="$PY" "$@"
   CALLS=$(cat "$HLOG/calls")
 }
 
@@ -426,6 +434,61 @@ assert_eq "$(result_of 'hello-world 200 in staging')" FAIL "fresh: no binding ->
 printf '2026-11-16T18:00:00Z build-1 go True/\n' > "$FIX/k3d-platform-mgmt.workflowruns"
 run promoted-nogate
 assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "promoted (production not pinned to a missing release): no gate run still FAILs"
+
+# ---- production freeze (deny sync window) ---------------------------------------------------------------------------
+# The production Application of a clean bootstrap during the weekend freeze stays OutOfSync/Missing ("Sync prevented by
+# sync window"): PENDING with the window and its end, not FAIL. Outside the window, or an app the window does not name,
+# still FAILs. The window is the chart's (charts/tenant appproject.yaml); UTC twin where Python has no tz database.
+cp -R "$TMP/fix/green" "$TMP/fix/freeze"; FIX="$TMP/fix/freeze"
+if "$PY" -c 'import zoneinfo; zoneinfo.ZoneInfo("Europe/Tallinn")' >/dev/null 2>&1; then
+  WTZ=Europe/Tallinn; WCRON="0 16 * * 5"; WEND="2026-11-23T08:00+02:00"
+else
+  WTZ=UTC; WCRON="0 14 * * 5"; WEND="2026-11-23T06:00Z"
+fi
+WDESC="freeze weekend: no promotions to production (Fri 16:00 - Mon 08:00 Europe/Tallinn)"
+printf '{"items":[{"metadata":{"name":"tenant-demo"},"spec":{"syncWindows":[{"kind":"deny","schedule":"%s","duration":"64h","timeZone":"%s","applications":["demo-hello-world-production"],"manualSync":false,"description":"%s"}]}}]}' \
+  "$WCRON" "$WTZ" "$WDESC" > "$FIX/k3d-platform-mgmt.appprojects"
+freeze_apps() {   # freeze_apps <app>...: these apps OutOfSync/Missing in project tenant-demo, the rest of green Synced
+  local a items=""
+  cp "$TMP/fix/green/k3d-platform-mgmt.apps" "$FIX/k3d-platform-mgmt.apps"
+  for a in "$@"; do
+    printf '%s OutOfSync Missing\n' "$a" >> "$FIX/k3d-platform-mgmt.apps"
+    items="$items${items:+,}{\"metadata\":{\"name\":\"$a\"},\"spec\":{\"project\":\"tenant-demo\"},\"status\":{\"sync\":{\"status\":\"OutOfSync\"},\"health\":{\"status\":\"Missing\"}}}"
+  done
+  printf '{"items":[%s]}' "$items" > "$FIX/k3d-platform-mgmt.apps-json"
+}
+freeze_apps demo-hello-world-production
+# ...and so no production ReleaseBinding, Deployment or gate run: those checks are PENDING with the freeze reason too.
+printf 'hello-world development hello-world-6df447bf6 Ready\nhello-world staging hello-world-6df447bf6 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
+printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+rm "$FIX/prod1.resilience-deploy" "$FIX/prod1.resilience-pdb"
+printf '2026-11-16T18:00:00Z build-1 go True/\n' > "$FIX/k3d-platform-mgmt.workflowruns"
+WHY="demo-hello-world-production frozen by sync window \"$WDESC\" until $WEND"
+run freeze DEMO_NOW=2026-11-20T18:28:00Z
+assert_eq "$(result_of 'hello-world 200 in production')" PENDING "freeze: production not served -> PENDING (not #54)"
+assert_eq "$(detail_of 'hello-world 200 in production')" "404: $WHY" "freeze: production says why"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" PENDING "freeze: no gate run -> PENDING"
+assert_eq "$(detail_of 'promotion-gate WorkflowRuns present')" "no promotion-gate run yet: $WHY" "freeze: gate says why"
+assert_eq "$(result_of 'latest promotion gate passed')" PENDING "freeze: latest gate -> PENDING"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" PENDING "freeze: resilience -> PENDING"
+assert_eq "$(detail_of 'hello-world PDB/spread/priority in production')" "not deployed yet: $WHY" "freeze: resilience says why"
+assert_eq "$RC" 0 "freeze: an app held by an active deny window does not fail the pre-flight"
+assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" PENDING "freeze: frozen app -> PENDING"
+assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "6/7 Synced/Healthy; demo-hello-world-production frozen by sync window \"$WDESC\" until $WEND" "freeze: says which window and until when"
+run freeze-after DEMO_NOW=2026-11-23T07:00:00Z
+assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" FAIL "freeze: same app outside the window -> FAIL"
+assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "6/7 Synced/Healthy; not: demo-hello-world-production(OutOfSync/Missing)" "freeze: outside the window, plain detail"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "freeze: outside the window, no gate run -> FAIL"
+assert_eq "$(result_of 'latest promotion gate passed')" "PENDING #54" "freeze: outside the window, latest gate -> back to pending_issue #54, not the freeze"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" FAIL "freeze: outside the window, no Deployment -> FAIL"
+printf 'hello-world production hello-world-6df447bf6 Ready\n' >> "$FIX/k3d-platform-mgmt.bindings"
+run freeze-bound DEMO_NOW=2026-11-20T18:28:00Z
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" FAIL "freeze: a production binding without its Deployment still FAILs in the window"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "freeze: a production binding without a gate run still FAILs in the window"
+freeze_apps demo-hello-world-production demo-hello-world-staging
+run freeze-uncovered DEMO_NOW=2026-11-20T18:28:00Z
+assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" FAIL "freeze: an OutOfSync app the window does not name -> FAIL"
+assert_match "$(detail_of 'Argo CD apps Synced/Healthy')" "not: demo-hello-world-production\(OutOfSync/Missing\), demo-hello-world-staging\(OutOfSync/Missing\); demo-hello-world-production frozen by" "freeze: lists the failing app and the frozen one"
 
 # ---- API server down ------------------------------------------------------------------------------------------------
 FIX="$TMP/fix/down"; mkdir -p "$FIX"
