@@ -16,6 +16,8 @@ auto-build pass (every minute locally) ──> WorkflowRun <component>-pr<n>-<sh
                                             push to Harbor, no GitOps commit
                                        ──> ComponentRelease <component>-pr-<n>-<sha12> = the Component's latest release
                                             with the PR image (owned by the Environment)
+                                       ──> ResourceReleaseBinding <resource>-pr-<n>-<component> per Resource the
+                                            release depends on: the preview's own database (owned by the Environment)
                                        ──> commit status openchoreo/preview: pending -> success + URL
 PR closed/merged ──> Application deleted ──> Environment deleted ──> OpenChoreo finalizers delete bindings + namespace
 ```
@@ -35,6 +37,13 @@ PR closed/merged ──> Application deleted ──> Environment deleted ──>
   change to `deploy/openchoreo/` in the PR is therefore not part of the preview (only the code is). The pass then
   annotates the ReleaseBinding (`platform.koorikla.io/release`): OpenChoreo 1.3.3 does not requeue a binding whose
   release appears after it.
+- **Resources** (#330): for every `dependencies.resources[].ref` of that release (e.g. hello-world's `orders-db`) the
+  pass creates `ResourceReleaseBinding/<resource>-pr-<n>-<component>` in the preview environment: an empty instance of
+  its own in the preview cell (never development's data), sized by the ResourceType's defaults, `retainPolicy: Delete`,
+  owned by the Environment and annotated `platform.koorikla.io/resource-release: latest`, so the same pass pins it to
+  the Resource's latest release ([promotion.md](promotion.md#resources-no-hand-computed-release)). Without it the
+  preview would wait at `ResourceDependenciesPending`. A Resource the PR itself adds is not on mgmt before the merge,
+  so it is not part of that PR's preview (same rule as `deploy/openchoreo/` above).
 - **URL**: OpenChoreo's own external route of the environment, `http://pr-<n>-<component>-<org ns>.<gateway host>/<endpoint path>`
   (locally `http://pr-7-hello-world-default.dev1.apps.localhost:19080/hello-world-http`, reachable like the other
   environments, [demo.md](demo.md) "5. Deploy and promote"), read from the ReleaseBinding's `status.endpoints` and
@@ -68,7 +77,8 @@ component. The installation switch is `installation.yaml` `previews`:
 
 - **PR closed or merged**: the generator drops the PR, the ApplicationSet deletes the Application, its resources
   finalizer deletes the Environment, and OpenChoreo's environment finalizer deletes the bindings and the cell namespace
-  on the data plane (via its cluster agent). The ComponentRelease goes with the Environment (owner reference).
+  on the data plane (via its cluster agent). The ComponentRelease and the preview's ResourceReleaseBindings go with the
+  Environment (owner reference); `retainPolicy: Delete` removes their databases.
 - **New push**: the Application's commit changes, the binding points at the new release, the pass builds the new head.
 - **TTL**: Kyverno stamps `platform.koorikla.io/expires-at` (unix seconds, creation + `ttl`) on the Environment at
   creation (MutatingPolicy `platform-preview-expiry`). When it passes, the auto-build pass labels the PR
@@ -118,7 +128,8 @@ exactly those stock objects, so switching means replacing the chart with one ins
 ```bash
 kubectl --context k3d-platform-mgmt -n argocd get applicationset -l platform.koorikla.io/preview=true
 kubectl --context k3d-platform-mgmt -n argocd get applications -l platform.koorikla.io/preview=true
-kubectl --context k3d-platform-mgmt -n default get environments,releasebindings -l platform.koorikla.io/preview=true \
+kubectl --context k3d-platform-mgmt -n default get environments,releasebindings,resourcereleasebindings \
+  -l platform.koorikla.io/preview=true \
   -L platform.koorikla.io/expires-at
 kubectl --context k3d-platform-mgmt -n default get workflowruns -l platform.koorikla.io/trigger=preview
 kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workflows.argoproj.io/cron-workflow=auto-build-poll
@@ -128,3 +139,6 @@ kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workfl
   Component manifest on the app's revision, directly under the app path?
 - Status `Waiting for environment`: the Application's sync message, usually the per-tenant cap.
 - Status `Build ... failed`: the WorkflowRun in the console (Workflows), as for `main` builds.
+- Status stays `Deploying` and the ReleaseBinding says `ResourceDependenciesPending`: the preview's
+  ResourceReleaseBinding (`status.conditions`); a quota denial of the database pod or PVC shows in the cell namespace's
+  events (`previewGuards.quota` must fit the ResourceType's smallest size).

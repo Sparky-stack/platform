@@ -269,6 +269,27 @@ spec:
       dryRun: true            # run every check, open no PR
 ```
 
+## Resources: no hand-computed release
+
+A `ResourceReleaseBinding` (a database bound to an environment) deploys the ResourceRelease named in
+`spec.resourceRelease`. OpenChoreo 1.3.3 cuts `<resource>-<hash>` itself (`Resource.status.latestRelease.name`; the
+hash covers the ResourceType's spec and the parameters), but it never writes the pin: the CRD says it is "advanced
+manually via `occ resource promote` or `kubectl edit`" (source at v1.3.3, `internal/controller/resourcereleasebinding`,
+reason `ResourceReleaseNotSet`; the Resource controller never touches bindings, unlike the Project controller, which
+seeds empty ProjectReleaseBinding pins). There is no auto-deploy mode for Resources upstream (none on upstream
+main in November 2026 either). A hash in Git breaks silently on every platform change to the type, so:
+
+| Environment | Who sets `spec.resourceRelease` | App repo writes |
+|---|---|---|
+| development (any non-gated one) | the auto-build pass (`auto_build.py` class `ResourcePins`), every pass: the Resource's latest release | annotation `platform.koorikla.io/resource-release: latest`, no `resourceRelease` |
+| PR previews | the same pass, on the binding it creates for the preview | nothing ([preview-environments.md](preview-environments.md)) |
+| production (`promotion.gatedEnvironments`) | Git only (VAP above): the pass skips gated environments even when annotated | `resourceRelease: <name>`, copied from `kubectl get resource <name> -o jsonpath='{.status.latestRelease.name}'` like a ComponentRelease name |
+
+The pass runs with the auto-build trigger (every minute with `poll`, each push plus `resyncSchedule` with `webhook`),
+patches only `spec.resourceRelease` (RBAC `resourcereleasebindings: list, patch`) and logs each move
+(`resourceRelease A -> B`) in the `auto-build-poll` workflow. A ResourceType change therefore rolls into development
+within a pass, exactly like a new ComponentRelease with `autoDeploy`.
+
 ## Configuration reference
 
 | Key | Where | Default |

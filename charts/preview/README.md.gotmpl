@@ -1,5 +1,5 @@
 {{- define "chart.purpose" -}}
-Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<component>` on the preview data plane, the project's `ProjectReleaseBinding` for it (cell namespace labelled `platform.koorikla.io/preview`) and `ReleaseBinding/<component>-pr-<n>` pinning `ComponentRelease/<component>-pr-<n>-<sha[:12]>`, which the auto-build pass cuts from the in-cluster build of the PR head. Only stock OpenChoreo objects, so the upstream ephemeral-environment resource can replace this chart later.
+Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<component>` on the preview data plane, the project's `ProjectReleaseBinding` for it (cell namespace labelled `platform.koorikla.io/preview`) and `ReleaseBinding/<component>-pr-<n>` pinning `ComponentRelease/<component>-pr-<n>-<sha[:12]>`, which the auto-build pass cuts from the in-cluster build of the PR head. The same pass gives the preview its own instance of every Resource the app depends on (`ResourceReleaseBinding/<resource>-pr-<n>-<component>`, owned by the Environment, so it goes with the preview). Only stock OpenChoreo objects, so the upstream ephemeral-environment resource can replace this chart later.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}

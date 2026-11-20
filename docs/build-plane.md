@@ -132,6 +132,10 @@ stays in a Secret that only ESO reads. No PAT.
 of an opted-in Component (WorkflowRun `<component>-pr<n>-<sha[:12]>`, label `platform.koorikla.io/trigger: preview`,
 `gitops.enabled: false`) for its preview environment: [preview-environments.md](preview-environments.md).
 
+**Resource pins.** Every pass (Kubernetes API only, also when GitHub paused it) moves `spec.resourceRelease` of each
+ResourceReleaseBinding annotated `platform.koorikla.io/resource-release: latest` to its Resource's latest release,
+except in gated environments: [promotion.md](promotion.md#resources-no-hand-computed-release).
+
 **Least privilege.** ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create`
 WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and
 Argo's task results. Registry: the pull-only robot `robot$nodes` (`autoBuild.registry`, the nodes' and Kyverno's) and
