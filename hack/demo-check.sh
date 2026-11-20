@@ -255,19 +255,39 @@ short_image() { printf '%s' "$1" | sed -E 's/@sha256:([0-9a-f]{12})[0-9a-f]+/@sh
 # An Application OutOfSync only because an active deny sync window of its AppProject covers it (the production freeze,
 # docs/promotion.md#freeze-windows) is correct behaviour: PENDING with the window and its end, not FAIL. Argo CD puts no
 # "blocked by window" status on the Application, so hack/lib/syncwindow.py evaluates the windows (DEMO_NOW overrides now).
+# frozen_apps: lines "<app>\t<window description>\t<end>", cached in $KCDIR (checks run in subshells); 1 when the
+# windows cannot be evaluated (reason on stdout).
+frozen_apps() {
+  local apps="$KCDIR/applications.json" projects="$KCDIR/appprojects.json" cache="$KCDIR/frozen"
+  [[ -f "$cache" ]] && { cat "$cache"; return 0; }
+  if ! { km get applications.argoproj.io -n argocd -o json > "$apps" 2>/dev/null \
+    && km get appprojects.argoproj.io -n argocd -o json > "$projects" 2>/dev/null \
+    && py hack/lib/syncwindow.py "$(native_path "$apps")" "$(native_path "$projects")" ${DEMO_NOW:+"$DEMO_NOW"} \
+      > "$cache.tmp" 2> "$KCDIR/syncwindow.err"; }; then
+    echo "sync windows not evaluated: $(tail -n 1 "$KCDIR/syncwindow.err" 2>/dev/null)"; return 1
+  fi
+  mv "$cache.tmp" "$cache"; cat "$cache"
+}
+
+# frozen_env <env>: the freeze reason when the demo component has no ReleaseBinding for <env> and an active deny window
+# holds its Argo CD Application (<project>-<component>-<env>): nothing to check there until the window ends.
+frozen_env() {
+  local bindings why
+  bindings=$(km get releasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.environment}{" "}{.spec.releaseName}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}' 2>/dev/null) \
+    || return 1
+  printf '%s\n' "$bindings" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e { f = 1 } END { exit !f }' && return 1
+  why=$(frozen_apps 2>/dev/null | awk -F '\t' -v s="-$COMP-$1" 'substr($1, length($1) - length(s) + 1) == s {
+    printf "%s frozen by sync window \"%s\" until %s", $1, $2, $3; exit }') || return 1
+  [[ -n "$why" ]] && echo "$why"
+}
+
 c_argo_apps() {
-  local out detail apps projects frozen names why rest
+  local out detail frozen names why rest
   out=$(km get applications.argoproj.io -n argocd \
     -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.sync.status}{" "}{.status.health.status}{"\n"}{end}') \
     || { echo "cannot list Argo CD Applications (context $CTX)"; return 1; }
   detail=$(printf '%s\n' "$out" | summarize_apps) && { echo "$detail"; return 0; }
-  apps="$KCDIR/applications.json"; projects="$KCDIR/appprojects.json"
-  if ! { km get applications.argoproj.io -n argocd -o json > "$apps" 2>/dev/null \
-    && km get appprojects.argoproj.io -n argocd -o json > "$projects" 2>/dev/null \
-    && frozen=$(py hack/lib/syncwindow.py "$(native_path "$apps")" "$(native_path "$projects")" ${DEMO_NOW:+"$DEMO_NOW"} \
-      2> "$KCDIR/syncwindow.err"); }; then
-    echo "$detail (sync windows not evaluated: $(tail -n 1 "$KCDIR/syncwindow.err" 2>/dev/null))"; return 1
-  fi
+  frozen=$(frozen_apps) || { echo "$detail ($frozen)"; return 1; }
   [[ -n "$frozen" ]] || { echo "$detail"; return 1; }
   names=" $(printf '%s\n' "$frozen" | cut -f1 | tr '\n' ' ')"
   why=$(printf '%s\n' "$frozen" | awk -F '\t' '{ printf "%s%s frozen by sync window \"%s\" until %s", (NR > 1 ? "; " : ""), $1, $2, $3 }')
@@ -489,6 +509,7 @@ c_http() {
     echo "$code: not promoted in this stack yet - $env pins $rel, not a ComponentRelease of this stack (promote: docs/demo.md \"After a clean bootstrap\")"
     return 2
   fi
+  rel=$(frozen_env "$env") && { echo "$code: $rel"; return 2; }
   echo "$code http://$env-$NS.$host:$port$path (node $ip)"
   return 1
 }
@@ -506,6 +527,7 @@ c_resilience() {
   if [[ -z "${dep// /}" ]]; then
     rel=$(unpromoted_release "$env")
     [[ -n "$rel" ]] && { echo "not promoted in this stack yet ($env pins $rel)"; return 2; }
+    rel=$(frozen_env "$env") && { echo "not deployed yet: $rel"; return 2; }
     echo "no $COMP Deployment in $env (cell ${ns:-missing})"; return 1
   fi
   pdb=$(kw "$dp" get poddisruptionbudgets -n "$ns" -l "openchoreo.dev/component=$COMP" \
@@ -525,10 +547,14 @@ unpromoted_release() {
 
 # gate_not_run_yet: true (and says why) when no gate run is expected: production still pins a release of the previous
 # stack, i.e. nothing was promoted since this clean bootstrap (the gate runs on promotion). PENDING, not FAIL.
+# Likewise when production has no binding yet because the freeze holds its Application (no promotion during a freeze).
 gate_not_run_yet() {
   local rel
   rel=$(unpromoted_release "$(production_env)")
-  [[ -n "$rel" ]] || return 1
+  if [[ -z "$rel" ]]; then
+    rel=$(frozen_env "$(production_env)") || return 1
+    echo "no promotion-gate run yet: $rel"; return 0
+  fi
   echo "no promotion-gate run yet: not promoted in this stack ($(production_env) pins $rel)"
 }
 

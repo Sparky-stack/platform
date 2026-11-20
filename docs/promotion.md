@@ -211,8 +211,9 @@ scope and test evidence: [supply-chain.md](supply-chain.md#image-signatures-and-
 - A bootstrap during a freeze leaves `<project>-<app>-production` OutOfSync/Missing (Argo CD: "Sync prevented by
   sync window"; no production ReleaseBinding) until the window ends. That is the freeze working: `task demo:check`
   shows the app PENDING `frozen by sync window "<description>" until <end>` instead of FAIL
-  (`hack/lib/syncwindow.py` evaluates the AppProject's deny windows, Argo CD has no status field for it). Any other
-  OutOfSync app still FAILs.
+  (`hack/lib/syncwindow.py` evaluates the AppProject's deny windows, Argo CD has no status field for it). While the
+  production binding is absent, production HTTP, the promotion-gate runs and the production PDB/spread/priority
+  check are PENDING with the same reason. Any other OutOfSync app, or a production binding that exists, still FAILs.
 
 ## hello-world (tenant `demo`) walkthrough
 

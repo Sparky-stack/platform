@@ -458,13 +458,33 @@ freeze_apps() {   # freeze_apps <app>...: these apps OutOfSync/Missing in projec
   printf '{"items":[%s]}' "$items" > "$FIX/k3d-platform-mgmt.apps-json"
 }
 freeze_apps demo-hello-world-production
+# ...and so no production ReleaseBinding, Deployment or gate run: those checks are PENDING with the freeze reason too.
+printf 'hello-world development hello-world-6df447bf6 Ready\nhello-world staging hello-world-6df447bf6 Ready\n' > "$FIX/k3d-platform-mgmt.bindings"
+printf '404' > "$FIX/http.production-default.prod1.apps.localhost"
+rm "$FIX/prod1.resilience-deploy" "$FIX/prod1.resilience-pdb"
+printf '2026-11-16T18:00:00Z build-1 go True/\n' > "$FIX/k3d-platform-mgmt.workflowruns"
+WHY="demo-hello-world-production frozen by sync window \"$WDESC\" until $WEND"
 run freeze DEMO_NOW=2026-11-20T18:28:00Z
+assert_eq "$(result_of 'hello-world 200 in production')" PENDING "freeze: production not served -> PENDING (not #54)"
+assert_eq "$(detail_of 'hello-world 200 in production')" "404: $WHY" "freeze: production says why"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" PENDING "freeze: no gate run -> PENDING"
+assert_eq "$(detail_of 'promotion-gate WorkflowRuns present')" "no promotion-gate run yet: $WHY" "freeze: gate says why"
+assert_eq "$(result_of 'latest promotion gate passed')" PENDING "freeze: latest gate -> PENDING"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" PENDING "freeze: resilience -> PENDING"
+assert_eq "$(detail_of 'hello-world PDB/spread/priority in production')" "not deployed yet: $WHY" "freeze: resilience says why"
 assert_eq "$RC" 0 "freeze: an app held by an active deny window does not fail the pre-flight"
 assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" PENDING "freeze: frozen app -> PENDING"
 assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "6/7 Synced/Healthy; demo-hello-world-production frozen by sync window \"$WDESC\" until $WEND" "freeze: says which window and until when"
 run freeze-after DEMO_NOW=2026-11-23T07:00:00Z
 assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" FAIL "freeze: same app outside the window -> FAIL"
 assert_eq "$(detail_of 'Argo CD apps Synced/Healthy')" "6/7 Synced/Healthy; not: demo-hello-world-production(OutOfSync/Missing)" "freeze: outside the window, plain detail"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "freeze: outside the window, no gate run -> FAIL"
+assert_eq "$(result_of 'latest promotion gate passed')" "PENDING #54" "freeze: outside the window, latest gate -> back to pending_issue #54, not the freeze"
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" FAIL "freeze: outside the window, no Deployment -> FAIL"
+printf 'hello-world production hello-world-6df447bf6 Ready\n' >> "$FIX/k3d-platform-mgmt.bindings"
+run freeze-bound DEMO_NOW=2026-11-20T18:28:00Z
+assert_eq "$(result_of 'hello-world PDB/spread/priority in production')" FAIL "freeze: a production binding without its Deployment still FAILs in the window"
+assert_eq "$(result_of 'promotion-gate WorkflowRuns present')" FAIL "freeze: a production binding without a gate run still FAILs in the window"
 freeze_apps demo-hello-world-production demo-hello-world-staging
 run freeze-uncovered DEMO_NOW=2026-11-20T18:28:00Z
 assert_eq "$(result_of 'Argo CD apps Synced/Healthy')" FAIL "freeze: an OutOfSync app the window does not name -> FAIL"
