@@ -125,7 +125,8 @@ openchoreo-control-plane:
         authorization:
           bootstrap:   # authz bootstrap Job (kubectl apply of the default roles and mappings)
             image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
-            # platform: upstream's 10 default role bindings verbatim except mcp-tryout-client-binding (client_id
+            # platform: upstream's 10 default role bindings verbatim except developer-binding (below) and
+            # mcp-tryout-client-binding (client_id
             # service_mcp_client, Thunder script 57), which binds to ClusterAuthzRole mcp-service
             # (templates/mcp-service-role.yaml: read-only + workflowrun:create) instead of admin (docs/ai-agents.md).
             # Keeping the binding name updates an existing cluster's mcp-tryout-client-binding in place on sync.
@@ -135,9 +136,14 @@ openchoreo-control-plane:
                 roleMappings: [{ roleRef: { name: admin, kind: ClusterAuthzRole } }]
                 entitlement: { claim: groups, value: admins }
                 effect: allow
+              # platform (#335): group developers gets org-wide READ-ONLY roles instead of `developer` (upstream:
+              # write access to every project). Write access is per project: charts/tenant developer-authz.yaml binds
+              # `developer` to each tenant's developerGroups, scoped to that project.
               - name: developer-binding
                 kind: ClusterAuthzRoleBinding
-                roleMappings: [{ roleRef: { name: developer, kind: ClusterAuthzRole } }]
+                roleMappings:
+                  - { roleRef: { name: cluster-reader, kind: ClusterAuthzRole } }
+                  - { roleRef: { name: namespace-reader, kind: ClusterAuthzRole } }
                 entitlement: { claim: groups, value: developers }
                 effect: allow
               - name: platform-engineer-binding

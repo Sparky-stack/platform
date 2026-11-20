@@ -1,0 +1,46 @@
+{{- /*
+Per-project developer access (#335). The OpenChoreo control plane binds group `developers` org-wide to READ-ONLY roles
+(addon openchoreo-control-plane, developer-binding). Write access comes only from here: per developer group of this
+tenant (developerGroups, default <project>-developers) one AuthzRoleBinding granting ClusterAuthzRole developer, scoped
+to THIS project. A developer of project A therefore gets OpenChoreo's default deny for Components, (Project)Release-
+Bindings, Resources, ... of project B, and `spec.owner.projectName` of what they create is always their own project.
+Gated environments are excluded by a condition on the binding writes of this allow, NOT by the deny of addon
+openchoreo-platform: OpenChoreo resolves deny per entitlement value, so a deny on `developers` never revokes what
+`<project>-developers` grants. templates/authz.yaml also denies these groups deleting gated Components.
+*/ -}}
+{{- $p := include "tenant.project" . }}
+{{- $ns := .Values.openchoreo.orgNamespace }}
+{{- $gated := list }}
+{{- range .Values.promotion.gatedEnvironments | default list }}{{ $gated = append $gated (printf "%s/%s" $ns .) }}{{ end }}
+{{- range $group := include "tenant.developerGroups" . | fromYamlArray }}
+---
+apiVersion: openchoreo.dev/v1alpha1
+kind: AuthzRoleBinding
+metadata:
+  name: {{ printf "%s-developer-%s" $p ($group | lower | replace "_" "-") | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tenant.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    openchoreo.dev/description: {{ printf "%s develop project %s only; bindings in %s change by reviewed pull request" $group $p (join ", " ($.Values.promotion.gatedEnvironments | default list)) | quote }}
+spec:
+  effect: allow
+  entitlement:
+    claim: groups
+    value: {{ $group | quote }}
+  roleMappings:
+    - roleRef:
+        kind: ClusterAuthzRole
+        name: {{ $.Values.developerRole }}
+      scope:
+        project: {{ $p }}
+      {{- if $gated }}
+      conditions:
+        - actions:
+            {{- range $.Values.promotion.bindingWriteActions }}
+            - {{ . }}
+            {{- end }}
+          expression: {{ printf "!(resource.environment in %s)" ($gated | toJson) | quote }}
+      {{- end }}
+{{- end }}

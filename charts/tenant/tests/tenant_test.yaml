@@ -5,6 +5,7 @@ templates:
   - templates/project.yaml
   - templates/applications.yaml
   - templates/authz.yaml
+  - templates/developer-authz.yaml
 set:
   project: demo
   description: Demo project
@@ -237,12 +238,14 @@ tests:
                   gpg: { mode: head, keys: [B5690EEEBB952194] }
       - notExists: { path: spec.signatureKeys }
 
-  - it: restricted groups may not delete gated Components (deny AuthzRoleBinding per group, one mapping per gated app)
+  - it: restricted and project developer groups may not delete gated Components (deny per group, one mapping per gated app)
     template: templates/authz.yaml
     set:
       promotion.restrictedGroups: [developers, Contractors_EU]
     asserts:
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 3 }
+      - equal: { path: spec.entitlement.value, value: demo-developers }
+        documentIndex: 2
       - isKind: { of: AuthzRoleBinding }
       - equal: { path: metadata.namespace, value: default }
       - equal: { path: spec.effect, value: deny }
@@ -277,9 +280,65 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: no component:delete deny without restricted groups
+  - it: without restricted groups the project's developer group is still denied component:delete (deny is per group)
     template: templates/authz.yaml
     set:
       promotion.restrictedGroups: []
     asserts:
-      - hasDocuments: { count: 0 }
+      - hasDocuments: { count: 1 }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: demo-developers } }
+
+  # Per-project developer authz (#335): the only OpenChoreo write grant for developers, scoped to the tenant's project.
+  - it: project developers get role developer in their own project only, gated binding writes excluded
+    template: templates/developer-authz.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - isKind: { of: AuthzRoleBinding }
+      - equal: { path: metadata.name, value: demo-developer-demo-developers }
+      - equal: { path: metadata.namespace, value: default }
+      - equal: { path: spec.effect, value: allow }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: demo-developers } }
+      - equal:
+          path: spec.roleMappings
+          value:
+            - roleRef: { kind: ClusterAuthzRole, name: developer }
+              scope: { project: demo }
+              conditions:
+                - actions: [releasebinding:create, releasebinding:update, releasebinding:delete,
+                    projectreleasebinding:create, projectreleasebinding:update, projectreleasebinding:delete,
+                    resourcereleasebinding:create, resourcereleasebinding:update, resourcereleasebinding:delete]
+                  expression: '!(resource.environment in ["default/production"])'
+
+  - it: "negative: project B's tenant never grants project A (developer of A cannot create a binding in B)"
+    template: templates/developer-authz.yaml
+    set:
+      project: billing
+    asserts:
+      - equal: { path: spec.entitlement.value, value: billing-developers }
+      - equal:
+          path: spec.roleMappings[0].scope
+          value: { project: billing }
+      - notEqual: { path: spec.entitlement.value, value: demo-developers }
+      - lengthEqual: { path: spec.roleMappings, count: 1 }
+
+  - it: explicit developer groups, one binding each; no gated environments = no conditions
+    template: templates/developer-authz.yaml
+    set:
+      developerGroups: [team-a, Team_B]
+      promotion.gatedEnvironments: []
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: metadata.name, value: demo-developer-team-b }
+        documentIndex: 1
+      - notExists:
+          path: spec.roleMappings[0].conditions
+      - equal:
+          path: spec.roleMappings[0].scope
+          value: { project: demo }
+
+  - it: "negative: an org-wide restricted group (developers) is rejected as a project developer group"
+    template: templates/validate.yaml
+    set:
+      developerGroups: [demo-team, developers]
+    asserts:
+      - failedTemplate: { errorMessage: 'developerGroups: "developers" is an org-wide group (promotion.restrictedGroups); use a group of this project''s developers' }

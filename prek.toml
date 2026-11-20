@@ -135,6 +135,17 @@ files = '^(charts|addons)/[^/]+/(Chart\.yaml|values\.yaml|README\.md(\.gotmpl)?)
 require_serial = true
 priority = "check"
 
+# docs/reference/ is generated from the XRDs and the OpenChoreo types (hack/gen-reference.py): fail when stale.
+[[repos.hooks]]
+id = "reference-docs"
+name = "docs/reference/ in sync with hack/gen-reference.py"
+language = "system"
+entry = "bash hack/hooks.sh reference-docs"
+files = '^packages/[^/]+/(apis|openchoreo)/|^packages/[^/]+/README\.md$|^addons/openchoreo-platform/|^hack/gen-reference\.py$|^docs/reference/'
+pass_filenames = false
+require_serial = true
+priority = "check"
+
 # helm lint + template + kubeconform (+ helm unittest) of the changed charts only (CHARTS=... hack/test.sh). CI skips
 # it in `task hooks:run` because `task test` runs the whole suite right after.
 [[repos.hooks]]

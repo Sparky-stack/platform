@@ -5,6 +5,9 @@ mgmt; every workload cluster with `openchoreo.dataPlane.enabled: true` is a **da
 syncs OpenChoreo resources into the control plane; app workloads reach data planes only through OpenChoreo's
 cluster-agent (never through Argo CD). Design background: [architecture.md](architecture.md).
 
+Every platform `ClusterComponentType`, `ClusterTrait`, `ClusterResourceType` and `ClusterWorkflow` with its parameters
+(generated from the chart): [reference/](reference/README.md).
+
 ## What runs where
 
 | Where | Addon / chart | Namespace | What |
@@ -182,8 +185,24 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 | `SecretStore openbao-tenant` (each cell namespace) | app secrets: OpenChoreo `SecretReference`s, read from the project's own OpenBao mount `kv-tenant-<project>` ([below](#application-secrets-developer-view)) |
 
 Thunder users: `admin@openchoreo.dev` (group `admins` -> OpenChoreo role admin) and `developer@openchoreo.dev`
-(group `developers` -> role developer), passwords from the `openchoreo` key. Thunder console: user `admin`,
+(groups `developers` and `demo-developers`), passwords from the `openchoreo` key. Thunder console: user `admin`,
 `thunder-admin-password`.
+
+### Developer access is per project
+
+Since #335:
+- Group `developers` (every developer) gets org-wide READ-ONLY roles `cluster-reader` + `namespace-reader` (addon
+  openchoreo-control-plane `developer-binding`; upstream gives it role `developer`, i.e. write access to every project).
+- Each tenant's `developerGroups` (tenant file, default `<project>-developers`) get role `developer` scoped to that
+  project only (`charts/tenant` `AuthzRoleBinding <project>-developer-<group>`), with binding writes in gated
+  environments excluded by a condition. A developer of project A gets OpenChoreo's default deny in project B, so the
+  `spec.owner.projectName` of anything they create through console, `occ` or MCP is their own project.
+- The deny bindings (`promotion.restrictedGroups`) cover only grants of the same group value: OpenChoreo resolves deny
+  per entitlement value, so project groups carry their production exclusion in their own binding.
+- Onboarding a developer = add them to `developers` and to the project's group in the IdP. `developerGroups` may not
+  list `developers` (chart validation: that would reopen the project to everyone).
+- `SecretReference` is namespace-level in OpenChoreo, so developers no longer create them through the API: app repos
+  sync them from git ([App repo contract](#app-repo-contract)).
 
 ### Application secrets (developer view)
 A value lives in OpenBao, git holds only a pointer to it (`SecretReference`), and the Workload names the pointer.

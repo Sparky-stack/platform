@@ -12,6 +12,8 @@ description: ""
 apps: []
 # -- DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `CronJob/<project>-demo-secrets` with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
 demoSecrets: []             # installations/local/tenants/demo.yaml only
+# -- Groups (JWT claim `groups`) that develop this project: OpenChoreo role `developer` scoped to this project only, binding writes in `promotion.gatedEnvironments` excluded (`templates/developer-authz.yaml`). Empty = `[<project>-developers]`. Members also need group `developers` for the org-wide read-only views (component types, environments).
+developerGroups: []
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
@@ -64,6 +66,8 @@ projectType:
 # Project / ProjectReleaseBinding stay platform-owned (this chart); platform kinds (Environment, DeploymentPipeline,
 # *ComponentType, *Trait, planes, authz) are never allowed.
 # -- The only kinds (group openchoreo.dev, org namespace) an app repo may sync.
+# ClusterAuthzRole the developerGroups get in their own project (upstream default role of the OpenChoreo control plane).
+developerRole: developer
 developerKinds:
   - Component
   - Workload
@@ -84,6 +88,11 @@ promotion:
   # MCP (the cascade would delete its gated bindings). Same list addon openchoreo-platform denies gated binding writes.
   restrictedGroups: [developers]
   componentDeleterRole: promotion-component-deleter   # ClusterAuthzRole of addon openchoreo-platform (component:delete)
+  # Binding writes developerGroups may not do in gatedEnvironments (templates/developer-authz.yaml); == the actions of
+  # ClusterAuthzRole promotion-release-binding-writer (addon openchoreo-platform; hack/tests/test_gitops_contracts.sh).
+  bindingWriteActions: [releasebinding:create, releasebinding:update, releasebinding:delete,
+    projectreleasebinding:create, projectreleasebinding:update, projectreleasebinding:delete,
+    resourcereleasebinding:create, resourcereleasebinding:update, resourcereleasebinding:delete]
   bindingFile: release-bindings/{environment}.yaml   # relative to the app path (app repo contract)
   # Weekly windows -> Argo CD deny sync windows on the gated Applications (manual sync blocked too; break glass =
   # change this list in git). PRs merged during a window sync when it ends.

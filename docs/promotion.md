@@ -62,7 +62,10 @@ Application excludes that file.
   `projectreleasebinding:create|update|delete` and `resourcereleasebinding:create|update|delete` (deleting or editing
   the project's production `ProjectReleaseBinding` would deprovision or re-bind the project namespace on the production
   data plane).
-  - Developers keep full control of development and staging through the console, `occ` and MCP.
+  - Developers keep full control of development and staging of their OWN project through the console, `occ` and MCP:
+    their write access is `charts/tenant`'s per-project `AuthzRoleBinding` for the tenant's `developerGroups`, which
+    excludes binding writes in the gated environments by the same condition (a deny on `developers` does not revoke
+    a grant to another group value; [developer access](openchoreo.md#developer-access-is-per-project)).
   - Production is rejected with a clear authz error, also for AI agents using MCP.
   - `component:delete` is denied too, for every gated app's Component: `charts/tenant` renders an `AuthzRoleBinding`
     `<project>-promotion-deny-component-delete-<group>` (effect `deny`, scope project + component) on the

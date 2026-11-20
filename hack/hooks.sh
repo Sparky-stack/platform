@@ -5,6 +5,7 @@
 #   hack/hooks.sh py-compile <file>...   Python syntax (python -m py_compile without writing .pyc files)
 #   hack/hooks.sh chart-lock <file>...   Chart.lock in sync with Chart.yaml for the charts the files belong to
 #   hack/hooks.sh helm-docs <file>...    chart README.md in sync with helm-docs for the charts the files belong to
+#   hack/hooks.sh reference-docs         docs/reference/ in sync with the XRDs and OpenChoreo types (gen-reference.py)
 #   hack/hooks.sh charts <file>...       helm lint + template + kubeconform (+ helm unittest) for those charts only,
 #                                        via `CHARTS=... hack/test.sh` (same rendering as `task test`)
 #   hack/hooks.sh commit-msg <msg-file>  warn (never fail) when the subject is not a conventional commit
@@ -99,6 +100,10 @@ cmd_helm_docs() {
   git diff --exit-code -- 'charts/*/README.md' 'addons/*/README.md'
 }
 
+cmd_reference_docs() {
+  py hack/gen-reference.py --check
+}
+
 cmd_charts() {
   local dirs=()
   read_lines dirs chart_dirs "$@"
@@ -130,8 +135,9 @@ case "$cmd" in
   py-compile) cmd_py_compile "$@" ;;
   chart-lock) cmd_chart_lock "$@" ;;
   helm-docs) cmd_helm_docs "$@" ;;
+  reference-docs) cmd_reference_docs ;;
   charts) cmd_charts "$@" ;;
   commit-msg) cmd_commit_msg "$@" ;;
   chart-dirs) chart_dirs "$@" ;;
-  *) echo "usage: $0 gitleaks|py-compile|chart-lock|helm-docs|charts|commit-msg|chart-dirs <file>..." >&2; exit 2 ;;
+  *) echo "usage: $0 gitleaks|py-compile|chart-lock|helm-docs|reference-docs|charts|commit-msg|chart-dirs <file>..." >&2; exit 2 ;;
 esac

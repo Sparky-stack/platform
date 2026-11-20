@@ -185,6 +185,24 @@ assert_eq "$(k3d_le_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-
 yq 'del(.options.k3s.extraArgs[] | select(.arg == "--kube-scheduler-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-nole.yaml"
 assert_match "$(k3d_le_missing "$TMP/k3d-nole.yaml")" "kube-scheduler-arg=leader-elect-lease-duration" "contract catches a k3d config without the scheduler leader election"
 
+# 8c. etcd stalls (#344): k3s's own wrangler leases ("k3s", "k3s-etcd": 45 s / 30 s upstream) ignore the args above and a
+#     29-31 s fsync-bound stall killed mgmt k3s. The mgmt etcd skips fsync and k3s's leases tolerate 90 s.
+k3d_stall_missing() {   # k3d_stall_missing <k3d file> -> the stall guards it lacks
+  local miss="" kv
+  yq -e '[.options.k3s.extraArgs[] | select(.arg == "--etcd-arg=unsafe-no-fsync=true" and (.nodeFilters[] == "server:0"))] | length > 0' \
+    "$1" >/dev/null 2>&1 || miss="$miss unsafe-no-fsync"
+  for kv in CATTLE_ELECTION_LEASE_DURATION=120s CATTLE_ELECTION_RENEW_DEADLINE=90s CATTLE_ELECTION_RETRY_PERIOD=10s; do
+    KV="$kv" yq -e '[.env[] | select(.envVar == strenv(KV) and (.nodeFilters[] == "server:*"))] | length > 0' "$1" >/dev/null 2>&1 \
+      || miss="$miss ${kv%%=*}"
+  done
+  printf '%s' "$miss"
+}
+assert_eq "$(k3d_stall_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-mgmt.yaml guards mgmt k3s against etcd stalls (no fsync, long k3s leases)"
+yq 'del(.env)' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noenv.yaml"
+assert_match "$(k3d_stall_missing "$TMP/k3d-noenv.yaml")" "CATTLE_ELECTION_RENEW_DEADLINE" "contract catches a k3d config with upstream k3s leases"
+yq 'del(.options.k3s.extraArgs[] | select(.arg == "--etcd-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-fsync.yaml"
+assert_match "$(k3d_stall_missing "$TMP/k3d-fsync.yaml")" "unsafe-no-fsync" "contract catches a k3d config with fsync in the mgmt etcd"
+
 # 9b. external-dns is NOT a Kyverno-excluded platform namespace either: the chart defaults meet Pod Security restricted.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
   assert_eq "$(grep -cE '^ *- external-dns( |$)' "$ROOT/$f" || true)" 0 "external-dns not excluded from Kyverno ($f)"
@@ -325,6 +343,26 @@ assert_eq "$(yq 'select(.kind == "ClusterAuthzRole" and .metadata.name == "promo
   "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-release-binding-writer covers component, project and resource release bindings"
 assert_eq "$(yq 'select(.kind == "ClusterAuthzRoleBinding" and .metadata.name == "promotion-deny-developers") | .spec.roleMappings[0].conditions[0].actions | join(",")' \
   "$TMP/promotion-authz.yaml")" "$binding_actions" "promotion-deny-developers condition actions match promotion-release-binding-writer"
+# 12b. Developer authz is per project (#335). Org-wide, group developers holds read-only roles only (upstream binds it to
+#      role developer: write access to every project); each tenant's developer groups get role developer scoped to that
+#      project only, gated binding writes excluded by a condition (a deny on `developers` would not revoke them).
+assert_eq "$(yq '.promotion.bindingWriteActions | join(",")' "$tenant_values")" "$binding_actions" \
+  "charts/tenant promotion.bindingWriteActions == promotion-release-binding-writer actions"
+authz_mappings='.openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[]'
+assert_eq "$(yq "$authz_mappings | select(.name == \"developer-binding\") | [.roleMappings[].roleRef.name] | join(\",\")" \
+  "$ROOT/addons/openchoreo-control-plane/values.yaml")" "cluster-reader,namespace-reader" \
+  "negative: org-wide group developers gets read-only roles only"
+assert_eq "$(yq "[$authz_mappings | select(.entitlement.claim == \"groups\" and .roleMappings[].roleRef.name == \"developer\")] | length" \
+  "$ROOT/addons/openchoreo-control-plane/values.yaml")" 0 "negative: no group gets role developer cluster-wide"
+for p in demo billing; do
+  helm template t "$ROOT/charts/tenant" --namespace argocd -f "$ROOT/installations/local/installation.yaml" \
+    -f "$ROOT/installations/local/tenants/demo.yaml" --set project="$p" > "$TMP/tenant-$p.yaml"
+  allow='select(.kind == "AuthzRoleBinding" and .spec.effect == "allow")'
+  assert_eq "$(yq ea "[$allow] | length" "$TMP/tenant-$p.yaml")" 1 "tenant $p: one allow AuthzRoleBinding (its developers)"
+  assert_eq "$(yq ea "[$allow | .spec.roleMappings[] | .scope.project // \"<namespace-wide>\"] | unique | join(\",\")" "$TMP/tenant-$p.yaml")" "$p" \
+    "negative: tenant $p grants developer rights in project $p only (never another project or namespace-wide)"
+  assert_eq "$(yq "$allow | .spec.entitlement.value" "$TMP/tenant-$p.yaml")" "$p-developers" "tenant $p: developer group $p-developers"
+done
 helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
   -s templates/upstream-defaults.yaml > "$TMP/upstream-defaults.yaml"
 assert_eq "$(yq 'select(.kind == "ClusterTrait" and .metadata.name == "observability-alert-rule") | .spec.creates[0].template.kind' \

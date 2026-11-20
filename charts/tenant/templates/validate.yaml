@@ -15,3 +15,10 @@ Application <project>-<app> must never look like one. */ -}}
 {{- fail (printf "promotion.freezeWindows %q: start == end" ($w.name | default $w.start)) -}}
 {{- end -}}
 {{- end -}}
+{{- /* The restricted groups (developers) hold EVERY developer: as a tenant developer group they would give all of them
+write access to this project, which is what per-project authz (templates/developer-authz.yaml, #335) prevents. */ -}}
+{{- range $g := .Values.developerGroups | default list -}}
+{{- if has $g ($.Values.promotion.restrictedGroups | default list) -}}
+{{- fail (printf "developerGroups: %q is an org-wide group (promotion.restrictedGroups); use a group of this project's developers" $g) -}}
+{{- end -}}
+{{- end -}}

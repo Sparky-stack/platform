@@ -40,5 +40,8 @@
 ## [2026-11-20] create | Preview teardown leaks (stuck RRB, re-created OpenBao descriptor)
 - Added `gotchas/preview-teardown-leaks.md`: RenderedRelease cleanup needs the Environment (blockOwnerDeletion + foreground TTL delete); Kyverno re-generated the descriptor on the terminating binding's finalizer-removal UPDATE (matchCondition on deletionTimestamp).
 
+## [2026-11-20] create | OpenChoreo developer authz per project
+- Added `gotchas/openchoreo-authz-per-project-developers.md`: deny is resolved per entitlement value; `developers` org-wide read-only, tenant developer groups get `developer` scoped to their project with the gated-env condition in the allow (#335).
+
 ## [2026-11-20] update | Cell AuthorizationPolicy (#324)
 - `gotchas/istio-ambient-port-15008-and-telemetry-dns.md`: STRICT authenticates but admits any mesh identity; per-cell AuthorizationPolicy `platform-cell-peers` admits the cell + platformPeers; read principals from ztunnel metrics; permissive cells need allow-all.

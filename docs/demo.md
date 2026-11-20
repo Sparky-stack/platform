@@ -167,6 +167,8 @@ Show: a developer creates a component in the console without touching Kubernetes
 - Console: http://openchoreo.localhost:8080 -> project `demo` -> component `hello-world`: Overview, Deploy tab
   (environments development / staging / production), Runtime Logs.
 - Create: Create -> pick a component type (`service`, `web-application`, `worker`, `scheduled-task`).
+- Logged in as `developer@openchoreo.dev` (groups `developers` + `demo-developers`): write access in project `demo`
+  only, production bindings excluded ([developer access](openchoreo.md#developer-access-is-per-project)).
 
 ```bash
 kubectl --context k3d-platform-mgmt get clustercomponenttypes
