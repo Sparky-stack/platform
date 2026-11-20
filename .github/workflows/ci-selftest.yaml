@@ -13,6 +13,9 @@ on:
       - 'ci/fixtures/**'
       - 'ci/scripts/**'
       - 'ci/tests/**'
+      - '.github/workflows/release.yaml'
+      - 'release-please-config.json'
+      - '.release-please-manifest.json'
   push:
     branches: [main]
     paths:
@@ -21,6 +24,9 @@ on:
       - 'ci/fixtures/**'
       - 'ci/scripts/**'
       - 'ci/tests/**'
+      - '.github/workflows/release.yaml'
+      - 'release-please-config.json'
+      - '.release-please-manifest.json'
 
 concurrency:
   group: selftest-${{ github.ref }}
@@ -54,6 +60,15 @@ jobs:
               for t in ci/tests/scripts/*.test.sh; do bash "$t"; done'
       - name: app-<stack>.yaml image phase mirrors app-container.yaml
         run: bash ci/tests/app-workflow-interfaces.test.sh
+      - name: release-please tags single-component grouped releases (#313)
+        run: |
+          # The release-please version the pinned action bundles (its package-lock.json at that SHA).
+          sha="$(grep -oE 'release-please-action@[0-9a-f]{40}' .github/workflows/release.yaml | cut -d@ -f2)"
+          RELEASE_PLEASE_VERSION="$(curl -fsSL "https://raw.githubusercontent.com/googleapis/release-please-action/$sha/package-lock.json" \
+            | jq -r '.packages["node_modules/release-please"].version')"
+          export RELEASE_PLEASE_VERSION
+          npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/rp" "release-please@$RELEASE_PLEASE_VERSION" >/dev/null
+          NODE_PATH="$RUNNER_TEMP/rp/node_modules" node ci/tests/release-please-tagging.test.js
       - name: actionlint
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12

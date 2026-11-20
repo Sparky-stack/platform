@@ -6,7 +6,6 @@
   "group-pull-request-title-pattern": "chore: release ${branch}",
   "packages": {
     ".": {
-      "component": "platform",
       "include-component-in-tag": false,
       "exclude-paths": [
         "ci",
