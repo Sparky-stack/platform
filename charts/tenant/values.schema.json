@@ -88,6 +88,14 @@
         }
       }
     },
+    "developerGroups": {
+      "type": "array",
+      "description": "Groups (JWT claim groups) with OpenChoreo role developer in this project only; empty = [<project>-developers].",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "installation": {
       "type": "object",
       "description": "From installation.yaml.",

@@ -22,7 +22,15 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | deploymentPipeline.environments | list | `["development","staging","production"]` | Environments (`development`, `staging`, `production`) provisioned via `ProjectReleaseBinding`. |
 | deploymentPipeline.name | string | `"default"` |  |
 | description | string | `""` |  |
-| developerKinds | list | `["Component","Workload","ReleaseBinding","ComponentRelease","SecretReference","Resource","ResourceReleaseBinding"]` | The only kinds (group openchoreo.dev, org namespace) an app repo may sync. |
+| developerGroups | list | `[]` | Groups (JWT claim `groups`) that develop this project: OpenChoreo role `developer` scoped to this project only, binding writes in `promotion.gatedEnvironments` excluded (`templates/developer-authz.yaml`). Empty = `[<project>-developers]`. Members also need group `developers` for the org-wide read-only views (component types, environments). |
+| developerKinds[0] | string | `"Component"` |  |
+| developerKinds[1] | string | `"Workload"` |  |
+| developerKinds[2] | string | `"ReleaseBinding"` |  |
+| developerKinds[3] | string | `"ComponentRelease"` |  |
+| developerKinds[4] | string | `"SecretReference"` |  |
+| developerKinds[5] | string | `"Resource"` |  |
+| developerKinds[6] | string | `"ResourceReleaseBinding"` |  |
+| developerRole | string | `"developer"` | The only kinds (group openchoreo.dev, org namespace) an app repo may sync. ClusterAuthzRole the developerGroups get in their own project (upstream default role of the OpenChoreo control plane). |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | installation.name | string | `"local"` |  |
 | installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |
@@ -40,6 +48,15 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | projectType.kind | string | `"ClusterProjectType"` |  |
 | projectType.name | string | `"default"` |  |
 | promotion.bindingFile | string | `"release-bindings/{environment}.yaml"` |  |
+| promotion.bindingWriteActions[0] | string | `"releasebinding:create"` |  |
+| promotion.bindingWriteActions[1] | string | `"releasebinding:update"` |  |
+| promotion.bindingWriteActions[2] | string | `"releasebinding:delete"` |  |
+| promotion.bindingWriteActions[3] | string | `"projectreleasebinding:create"` |  |
+| promotion.bindingWriteActions[4] | string | `"projectreleasebinding:update"` |  |
+| promotion.bindingWriteActions[5] | string | `"projectreleasebinding:delete"` |  |
+| promotion.bindingWriteActions[6] | string | `"resourcereleasebinding:create"` |  |
+| promotion.bindingWriteActions[7] | string | `"resourcereleasebinding:update"` |  |
+| promotion.bindingWriteActions[8] | string | `"resourcereleasebinding:delete"` |  |
 | promotion.componentDeleterRole | string | `"promotion-component-deleter"` |  |
 | promotion.freezeWindows[0].end | string | `"Mon 08:00"` |  |
 | promotion.freezeWindows[0].environments[0] | string | `"production"` |  |

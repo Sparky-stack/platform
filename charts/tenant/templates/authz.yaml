@@ -3,7 +3,8 @@ Gated Components may not be deleted through console, openchoreo-api, occ or MCP 
 (promotion.restrictedGroups, docs/promotion.md "Git is the only path"): deleting a Component makes the garbage collector
 delete its ReleaseBindings, production included, bypassing the reviewed pull request. Offboarding is a git change
 (remove the app from the tenant file; the Application's resources finalizer deletes the objects).
-One OpenChoreo AuthzRoleBinding per restricted group, effect deny (wins over the upstream developer role's allow),
+One OpenChoreo AuthzRoleBinding per restricted group and per developer group (developerGroups; a deny only
+revokes what the same group value allows), effect deny (wins over the upstream developer role's allow),
 scoped to each gated app's Component (app name == Component name, docs/openchoreo.md "App repo contract"). The role
 ClusterAuthzRole promotion-component-deleter (component:delete) comes from addon openchoreo-platform.
 */ -}}
@@ -13,7 +14,8 @@ ClusterAuthzRole promotion-component-deleter (component:delete) comes from addon
 {{- if include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}{{ $components = append $components $app.name }}{{ end }}
 {{- end }}
 {{- if $components }}
-{{- range $group := .Values.promotion.restrictedGroups | default list }}
+{{- $groups := concat (.Values.promotion.restrictedGroups | default list) (include "tenant.developerGroups" . | fromYamlArray) | uniq }}
+{{- range $group := $groups }}
 ---
 apiVersion: openchoreo.dev/v1alpha1
 kind: AuthzRoleBinding
