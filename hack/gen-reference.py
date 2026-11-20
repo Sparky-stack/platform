@@ -125,7 +125,7 @@ def page(title, src, intro, sections):
 def crossplane_page():
     sections = []
     for pkg in sorted(os.listdir(os.path.join(ROOT, "packages"))):
-        apis = os.path.join("packages", pkg, "apis")
+        apis = f"packages/{pkg}/apis"  # "/" not os.path.join: the path is printed into the page (Windows: "\\")
         for api in sorted(os.listdir(os.path.join(ROOT, apis))) if os.path.isdir(os.path.join(ROOT, apis)) else []:
             rel = f"{apis}/{api}/definition.yaml"
             if not os.path.isfile(os.path.join(ROOT, rel)):
