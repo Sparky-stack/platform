@@ -54,3 +54,24 @@ tests:
     documentSelector: { path: kind, value: CronJob }
     asserts:
       - contains: { path: "spec.jobTemplate.spec.template.spec.containers[0].env", content: { name: ORG_NAMESPACE, value: acme } }
+
+  - it: RBAC syncs before the GeneratingPolicy (Kyverno checks RBACPermissionsGranted only when the policy changes)
+    set: { secrets.tenantStores.enabled: true, previews.enabled: true }
+    template: templates/tenant-previews.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "-1"
+        documentSelector: { path: kind, value: ClusterRole }
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "-1"
+        documentSelector: { path: kind, value: Role }
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "-1"
+        documentSelector: { path: kind, value: RoleBinding }
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "0"
+        documentSelector: { path: kind, value: GeneratingPolicy }
