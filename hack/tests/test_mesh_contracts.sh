@@ -252,11 +252,24 @@ if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$RO
     assert_eq "$(yq 'select(.kind == "ConfigMap" and .metadata.name == "istio-cni-config") | .data.AMBIENT_DNS_CAPTURE' "$TMP/mc-mesh-dev1.yaml")" \
       false "local dev1: no ambient DNS capture (ztunnel would resolve the *.localhost remote-write host to loopback)"
   fi
+  # #324: the identities AuthorizationPolicy platform-cell-peers admits must be the real ones (a renamed ServiceAccount
+  # would lock the gateway, the scrapes or an operator out of every cell): trust domain, gateway, telemetry agent.
+  peers=$(yq '.ambientEnrollment.mtls.platformPeers[]' "$ROOT/addons/kyverno-policies/values.yaml")
+  td=$(yq '.["cert-manager-istio-csr"].app.tls.trustDomain' "$ROOT/addons/mesh/values.yaml")
+  assert_eq "$(cut -d/ -f1 <<<"$peers" | sort -u)" "$td" "STRICT cells: every platformPeers principal is in the mesh trust domain ($td)"
+  gwp=$(yq 'select(.kind == "Gateway" and .metadata.name == "gateway-default") | "cluster.local/ns/" + .metadata.namespace + "/sa/" + .metadata.name' "$TMP/mc-odp.yaml")
+  assert_match "$peers" "(^|"$'\n'")$gwp($|"$'\n'")" "STRICT cells: platformPeers admits the data-plane gateway ($gwp: kgateway names the proxy ServiceAccount after the Gateway)"
+  agp=$(yq 'select(.kind == "PrometheusAgent" or .kind == "Prometheus") | "cluster.local/ns/telemetry/sa/" + .spec.serviceAccountName' "$TMP/mc-telemetry.yaml")
+  assert_match "$peers" "(^|"$'\n'")$agp($|"$'\n'")" "STRICT cells: platformPeers admits the telemetry Prometheus agent ($agp)"
   for a in cloudnative-pg keda strimzi; do
     render_standalone_addon "$a" "$TMP/mc-$a.yaml"
     ns=$(yq ".addons[\"$a\"].namespace" "$ROOT/charts/platform/values.yaml")
     l=$(yq "select(.kind == \"Namespace\" and .metadata.name == \"$ns\") | .metadata.labels[\"istio.io/dataplane-mode\"]" "$TMP/mc-$a.yaml")
     assert_eq "$l" ambient "STRICT cells: addon $a (namespace $ns) reaches cell pods from inside the mesh"
+    # #324: and AuthorizationPolicy platform-cell-peers admits its operator, a ServiceAccount the addon really renders
+    sas=$(yq 'select(.kind == "ServiceAccount") | .metadata.namespace + "/sa/" + .metadata.name' "$TMP/mc-$a.yaml")
+    hit=$(comm -12 <(cut -d/ -f3- <<<"$peers" | sort) <(sort <<<"$sas"))
+    assert_nonempty "$hit" "STRICT cells: platformPeers admits the $a operator (one of its rendered ServiceAccounts)"
   done
 fi
 

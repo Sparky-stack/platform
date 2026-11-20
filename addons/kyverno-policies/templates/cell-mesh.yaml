@@ -19,8 +19,16 @@ so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
                                             environment through ProjectReleaseBinding namespaceLabels). The opt-out is a
                                             mode, not a selector: Kyverno never deletes a synchronized object when its
                                             trigger stops matching, but it does re-render it on every trigger update.
-Both: kept in sync (an edited or deleted object is restored), existing cells included (generateExisting). Cells
-created with istio.io/dataplane-mode=none get neither.
+  GeneratingPolicy openchoreo-cell-authz    AuthorizationPolicy platform-cell-peers in every enrolled cell (#324): STRICT
+                                            proves the caller is *a* mesh workload, this decides *which*. ALLOW (so
+                                            deny-by-default for every pod in the cell, databases included) only for the
+                                            cell's own workloads (source namespace == the cell) and the platform identities
+                                            in <mtls.platformPeers> (gateway, telemetry agent, data-service operators).
+                                            A workload of another cell, same cluster or another mesh member, is refused by
+                                            ztunnel. Opted-out (permissive) cells allow everything: plaintext has no
+                                            identity to check. Kubelet probes bypass ztunnel, so no rule needed for them.
+All: kept in sync (an edited or deleted object is restored), existing cells included (generateExisting). Cells
+created with istio.io/dataplane-mode=none get none of them.
 */ -}}
 {{- $ae := .Values.ambientEnrollment }}
 {{- if $ae.enabled }}
@@ -125,6 +133,54 @@ spec:
           spec:
             mtls:
               mode: "(( object.metadata.?labels[?'{{ $ae.mtls.optOutLabel }}'].orValue('') == 'permissive' ? 'PERMISSIVE' : 'STRICT' ))"
+---
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: openchoreo-cell-authz
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Only known mesh identities into ambient OpenChoreo cells
+    policies.kyverno.io/description: >-
+      AuthorizationPolicy platform-cell-peers in every ambient-enrolled cell namespace: ztunnel admits only the cell's
+      own workloads and the listed platform identities (gateway, telemetry agent, data-service operators), so a
+      workload of another cell is refused. Allows everything in a cell with {{ $ae.mtls.optOutLabel }}=permissive.
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  generate:
+    - template:
+        interpolate: cel
+        # rules is one CEL value (a list): a permissive cell gets [{}] (allow all: plaintext carries no identity),
+        # every other cell two rules - its own namespace, then the platform peers (a JSON list is a CEL list).
+        # Like the PeerAuthentication mode, the opt-out switches the content, never the selector (Kyverno keeps a
+        # synchronized object whose trigger stops matching).
+        value: |
+          apiVersion: security.istio.io/v1
+          kind: AuthorizationPolicy
+          metadata:
+            name: platform-cell-peers
+            namespace: (( object.metadata.name ))
+            labels: { app.kubernetes.io/managed-by: kyverno }
+          spec:
+            action: ALLOW
+            rules: >-
+              (( object.metadata.?labels[?'{{ $ae.mtls.optOutLabel }}'].orValue('') == 'permissive' ? [{}] : [
+              {'from': [{'source': {'namespaces': [object.metadata.name]}}]},
+              {'from': [{'source': {'principals': {{ $ae.mtls.platformPeers | toJson }}}}]} ] ))
 {{- end }}
 ---
 # Kyverno's background controller creates, updates and deletes the generated objects.
@@ -134,13 +190,17 @@ metadata:
   name: kyverno:background-controller:cell-mesh
   labels:
     rbac.kyverno.io/aggregate-to-background-controller: "true"
+  annotations:
+    # Before the GeneratingPolicies (wave 0): Kyverno checks RBACPermissionsGranted only when a policy changes, so a
+    # policy that raced its RBAC stays not-Ready (#337).
+    argocd.argoproj.io/sync-wave: "-1"
 rules:
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [get, list, watch, create, update, patch, delete]
   {{- if $ae.mtls.strict }}
   - apiGroups: [security.istio.io]
-    resources: [peerauthentications]
+    resources: [peerauthentications, authorizationpolicies]
     verbs: [get, list, watch, create, update, patch, delete]
   {{- end }}
 {{- end }}

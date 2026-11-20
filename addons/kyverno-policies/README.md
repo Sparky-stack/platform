@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies. Workload clusters: Istio ambient enrollment and strict mTLS for OpenChoreo cell namespaces, per-environment image signature/attestation gates, production workload resilience (replicas, probes, requests; Deny in production, Audit elsewhere) and PR preview cell guardrails. `mgmt`: digest-only images in workflow run namespaces, PR preview expiry/cap/TTL, and ResourceReleaseBindings only to data planes that run the addons their type needs.
+Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus platform policies. Workload clusters: Istio ambient enrollment, strict mTLS and identity allow-lists (AuthorizationPolicy) for OpenChoreo cell namespaces, per-environment image signature/attestation gates, production workload resilience (replicas, probes, requests; Deny in production, Audit elsewhere) and PR preview cell guardrails. `mgmt`: digest-only images in workflow run namespaces, PR preview expiry/cap/TTL, and ResourceReleaseBindings only to data planes that run the addons their type needs.
 
 ## Where it runs
 
@@ -20,6 +20,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | ambientEnrollment.cellNamespaceSelector.matchLabels."openchoreo.dev/managed-by" | string | `"renderedrelease-controller"` |  |
 | ambientEnrollment.enabled | bool | `true` | `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient. |
 | ambientEnrollment.mtls.optOutLabel | string | `"platform.koorikla.io/mtls"` |  |
+| ambientEnrollment.mtls.platformPeers | list | `["cluster.local/ns/openchoreo-data-plane/sa/gateway-default","cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent","cluster.local/ns/cnpg-system/sa/cnpg","cluster.local/ns/keda/sa/keda-operator","cluster.local/ns/strimzi/sa/strimzi-cluster-operator"]` | With `strict`: AuthorizationPolicy `platform-cell-peers` admits into a cell only its own workloads and these SPIFFE principals (`<trust domain>/ns/<namespace>/sa/<service account>`); any other mesh identity, e.g. another cell, is refused (#324). |
 | ambientEnrollment.mtls.strict | bool | `true` | Every enrolled cell gets NetworkPolicy `platform-mesh-hbone` and a `STRICT` `PeerAuthentication`, or `PERMISSIVE` where `<optOutLabel>=permissive` ([strict mTLS in cell namespaces](../../docs/networking.md#strict-mtls-in-cell-namespaces)). |
 | dataPlaneCapabilities.enabled | bool | `false` | On `mgmt` only, denies a `ResourceReleaseBinding` whose (Cluster)ResourceType names an addon in `platform.koorikla.io/requires-addons` that the environment's data plane does not announce (`ValidatingPolicy/platform-data-plane-capabilities`, [data services](../../docs/data-services.md#only-on-data-planes-that-run-the-operator)). |
 | imageVerification.attestationTypes.provenance | string | `"https://slsa.dev/provenance/v1"` |  |

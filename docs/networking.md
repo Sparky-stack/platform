@@ -182,7 +182,7 @@ and waypoints and aren't needed for L4 mTLS. The mesh clients carry no `PeerAuth
 plaintext from outside the mesh (the cloud LB / klipper into the gateway, kube-apiserver into operator webhooks).
 `hack/tests/test_mesh_contracts.sh` fails if one of them leaves the mesh while STRICT is on.
 
-`addons/kyverno-policies/templates/cell-mesh.yaml`, two `GeneratingPolicy`s on the same cell selector as the
+`addons/kyverno-policies/templates/cell-mesh.yaml`, three `GeneratingPolicy`s on the same cell selector as the
 enrollment (synchronized: an edited or deleted object is restored, generated for existing cells too):
 - `openchoreo-cell-hbone`: NetworkPolicy `platform-mesh-hbone` admitting `15008/tcp` to pods with an
   `openchoreo.dev/component` label, from the peers OpenChoreo's per-component NetworkPolicy admits: pods of the same
@@ -197,6 +197,17 @@ enrollment (synchronized: an edited or deleted object is restored, generated for
   probes of #251). The source can't be used by anything else: it is host-local and Cilium refuses spoofed pod sources.
 - `openchoreo-cell-mtls`: the `PeerAuthentication` (STRICT, or PERMISSIVE for an opted-out cell), off with
   `ambientEnrollment.mtls.strict: false`.
+- `openchoreo-cell-authz` ([#324](https://github.com/koorikla/platform/issues/324)): `AuthorizationPolicy`
+  `platform-cell-peers`. STRICT proves the caller is *a* mesh workload; this decides *which*. An `ALLOW` policy without
+  a selector covers every pod of the cell (databases too, which no NetworkPolicy selects), so ztunnel refuses any
+  identity not listed: source namespace == the cell (its own workloads, on any mesh member), plus the SPIFFE principals
+  in `ambientEnrollment.mtls.platformPeers`: the gateway, the Prometheus agent and the CNPG / KEDA / Strimzi operators
+  of the table above (`spiffe://cluster.local/ns/<ns>/sa/<sa>`, as seen on dev1 in ztunnel's
+  `istio_tcp_connections_opened_total`). A pod of another cell, even one carrying the `openchoreo.dev/system-component`
+  label the CNI trusts, gets its connection reset. An opted-out (permissive) cell gets a single allow-all rule
+  (plaintext carries no identity); off together with STRICT. `hack/tests/test_kyverno_policies.sh` replays the
+  generated policies with Istio's ALLOW semantics, `test_mesh_contracts.sh` checks each principal against the rendered
+  ServiceAccounts.
 
 Unaffected: kubelet probes under STRICT (ztunnel exempts the `169.254.7.127` SNAT source; the CNI needs the rule above),
 cAdvisor and
@@ -220,7 +231,8 @@ Other providers keep Istio's default, since their hosts are real DNS names. `hac
 the agent's labels against the hbone peer label, and DNS capture on local dev1.
 
 **Exceptions.** A client outside the mesh that must reach a cell pod directly (a VM, a non-mesh namespace, an operator
-not listed above) is refused. Either enroll the client, or keep one environment `PERMISSIVE` with the
+not listed above) is refused. A new in-mesh platform client of cell pods (another operator, a scraper) needs its
+principal in `ambientEnrollment.mtls.platformPeers`, or ztunnel refuses it. Either enroll the client, or keep one environment `PERMISSIVE` with the
 namespace label `platform.koorikla.io/mtls=permissive` through
 `ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels`: the generated `PeerAuthentication` switches to
 `PERMISSIVE` (a mode, not a selector: Kyverno never deletes a synchronized object whose trigger stops matching, but

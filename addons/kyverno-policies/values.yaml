@@ -4,7 +4,8 @@
 #   kyverno-policies (upstream)          Pod Security Standards baseline as CEL ValidatingPolicies, Audit only
 #                                        (PolicyReports, nothing is blocked), platform namespaces excluded.
 #   templates/ambient-enrollment.yaml    cell namespaces get istio.io/dataplane-mode=ambient        (workload)
-#   templates/cell-mesh.yaml             HBONE NetworkPolicy + STRICT PeerAuthentication per cell   (workload)
+#   templates/cell-mesh.yaml             HBONE NetworkPolicy, STRICT PeerAuthentication and an      (workload)
+#                                        AuthorizationPolicy (own cell + platformPeers only) per cell
 #   templates/image-verification.yaml    supply-chain gate: signatures, attestations, registries    (workload)
 #   templates/workload-resilience.yaml   replicas, probes, requests; Deny in production             (workload)
 #   templates/previews.yaml              PR previews: expiry/cap/TTL (mgmt), cell guardrails        (workload)
@@ -80,6 +81,13 @@ ambientEnrollment:
     # -- Every enrolled cell gets NetworkPolicy `platform-mesh-hbone` and a `STRICT` `PeerAuthentication`, or `PERMISSIVE` where `<optOutLabel>=permissive` ([strict mTLS in cell namespaces](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
     strict: true
     optOutLabel: platform.koorikla.io/mtls
+    # -- With `strict`: AuthorizationPolicy `platform-cell-peers` admits into a cell only its own workloads and these SPIFFE principals (`<trust domain>/ns/<namespace>/sa/<service account>`); any other mesh identity, e.g. another cell, is refused (#324).
+    platformPeers:
+      - cluster.local/ns/openchoreo-data-plane/sa/gateway-default   # data-plane gateway: all ingress into cells
+      - cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent   # metrics scrapes of cell pods (#209, #323)
+      - cluster.local/ns/cnpg-system/sa/cnpg                        # CloudNativePG operator -> instance manager
+      - cluster.local/ns/keda/sa/keda-operator                      # KEDA scalers polling in-cell endpoints
+      - cluster.local/ns/strimzi/sa/strimzi-cluster-operator        # Strimzi operator -> Kafka brokers in cells
 
 # Link-local SNAT source CIDRs istio-cni uses for kubelet health probes into ambient-enrolled pods (admitted by
 # NetworkPolicy platform-mesh-hbone in templates/cell-mesh.yaml). Must match addons/mesh/values.yaml
