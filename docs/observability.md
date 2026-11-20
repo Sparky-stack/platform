@@ -198,6 +198,13 @@ Data planes use the OpenSearch admin credentials (upstream recipe); a dedicated 
   UIDs against openchoreo-api with the client-credentials client `openchoreo-observer-resource-reader-client`
   (role binding `observer-resource-reader-binding` ships in the control-plane chart; the Thunder app, upstream script
   59, is in addon `thunder` with the secret from `observer-client-secret`).
+- Cost views (#207): the console's Cost Insights (sidebar page, Overview card on projects and components) and the
+  project's Cost Analysis tab need the FinOps module (`installation.yaml` `mgmt.addons.finops-opencost: "true"`; the
+  tab also needs the FinOps agent, docs/ai-agents.md). Without it the observer has no `finops-adapter` and answers 500
+  "Failed to retrieve data from the FinOps adapter". openchoreo-ui 1.3.3 has no flag for them, so the catalog passes the
+  mgmt label to `openchoreo-control-plane` `costViews.enabled`, which switches those three Backstage extensions off in
+  ConfigMap `backstage-cost-views` (loaded last; reloader restarts Backstage on a change). The observer MCP
+  `query_costs` tool still answers 500 without the module.
 - MCP servers in 1.3.3 (no new exposure needed; both are behind existing routes, OAuth 2.0 protected-resource metadata
   pointing at Thunder):
   - **openchoreo-api MCP** `http://api.openchoreo.localhost:8080/mcp` — toolsets namespace, project, component,

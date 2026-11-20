@@ -124,6 +124,8 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openbao.default | bool | `false` |  |
 | addons.openbao.namespace | string | `"openbao"` |  |
 | addons.openbao.roles[0] | string | `"mgmt"` |  |
+| addons.openchoreo-control-plane.clusterLabelParameters."costViews.enabled".default | string | `"false"` |  |
+| addons.openchoreo-control-plane.clusterLabelParameters."costViews.enabled".label | string | `"addons.platform.koorikla.io/finops-opencost"` |  |
 | addons.openchoreo-control-plane.default | bool | `true` |  |
 | addons.openchoreo-control-plane.installationParameters."openchoreo-control-plane.backstage.features.observability.enabled" | string | `"{{ .Values.openchoreo.observability.enabled }}"` |  |
 | addons.openchoreo-control-plane.installationParameters."openchoreo-control-plane.backstage.features.workflows.enabled" | string | `"{{ .Values.openchoreo.workflowPlane.enabled }}"` |  |

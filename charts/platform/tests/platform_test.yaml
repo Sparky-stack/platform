@@ -246,6 +246,17 @@ tests:
             value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/crossplane" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
             forceString: true
 
+  - it: "openchoreo-control-plane gets mgmt's finops-opencost opt-in, so the console offers cost views only with FinOps (#207)"
+    template: appset-addons.yaml
+    documentSelector: { path: metadata.name, value: addon-openchoreo-control-plane }
+    asserts:
+      - contains:
+          path: spec.template.spec.source.helm.parameters
+          content:
+            name: costViews.enabled
+            value: '{{ $v := index .metadata.labels "addons.platform.koorikla.io/finops-opencost" }}{{ if $v }}{{ $v }}{{ else }}false{{ end }}'
+            forceString: true
+
   - it: "clusterLabelParameters: label value else default, always a string"
     template: appset-addons.yaml
     documentSelector: { path: metadata.name, value: addon-mesh }

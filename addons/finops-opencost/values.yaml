@@ -4,6 +4,7 @@
 #                   Service opencost: 9003 API, 8081 MCP (= finOpsAgent.opencostMcpServerUrl default)
 #   finops-adapter  Cost Insights adapter API on 9101 (= observer.finOpsAdapter.url default http://finops-adapter:9101)
 # Needed by the FinOps agent (finOpsAgent in addon openchoreo-observability-plane) and the portal's Cost Insights.
+# The same label switches the console's cost views (addon openchoreo-control-plane costViews, #207).
 # No secrets. docs/ai-agents.md.
 finops-opencost:
   opencost:

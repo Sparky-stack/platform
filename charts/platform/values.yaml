@@ -94,6 +94,9 @@ addons:
     installationParameters:
       openchoreo-control-plane.backstage.features.observability.enabled: '{{ .Values.openchoreo.observability.enabled }}'
       openchoreo-control-plane.backstage.features.workflows.enabled: '{{ .Values.openchoreo.workflowPlane.enabled }}'
+    # Console cost views only while the FinOps module runs (#207, addon values.yaml costViews).
+    clusterLabelParameters:
+      costViews.enabled: { label: addons.platform.koorikla.io/finops-opencost, default: "false" }
   openchoreo-platform:      { namespace: default,                  roles: [mgmt],           default: true, compareOptions: [IncludeMutationWebhook=true] }   # OC platform CRs
   openchoreo-data-plane:
     namespace: openchoreo-data-plane
