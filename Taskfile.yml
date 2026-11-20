@@ -135,7 +135,7 @@ tasks:
     desc: "task test for only what changed since BASE (default origin/main), as PR CI does; shared inputs run it all"
     cmds:
       - task: tools:plugins
-      - 'BASE={{shellQuote .BASE}} "{{.BASH}}" hack/test-changed.sh'
+      - 'BASE={{shellQuote (.BASE | default "origin/main")}} "{{.BASH}}" hack/test-changed.sh'
 
   test:openbao:
     desc: "Opt-in integration test of the mesh CA: pinned OpenBao in docker, chart config, reconcile, member signing"
