@@ -1,7 +1,0 @@
-# What a developer writes: everything else comes from the XRD defaults and the cluster.
-apiVersion: platform.koorikla.io/v1alpha1
-kind: PostgreSQL
-metadata:
-  name: orders-db
-  namespace: dp-default-shop-development-1a2b3c4d
-spec: {}

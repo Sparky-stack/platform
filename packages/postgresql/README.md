@@ -34,7 +34,7 @@ Provider itself, pinned by multi-arch digest, with the PSS-restricted `Deploymen
 - `main` and `postgresql-v*` tags: `crossplane project build` + `project push` of the Configuration
   `ghcr.io/koorikla/platform/postgresql` and the function `ghcr.io/koorikla/platform/postgresql_compose-postgresql`
   (amd64 + arm64), cosign keyless signature + SLSA provenance of both. release-please versions the package as its own component (`postgresql`).
-- Promotion: bump `packages.configuration` and the compose-postgresql Function (tag@digest, same tag) in `addons/crossplane/values.yaml` (or a per-environment
+- Promotion: bump `packages.configuration` and the compose-postgresql Function (`vX.Y.Z@sha256`, the same release tag) in `addons/crossplane/values.yaml` (or a per-environment
   pin under `installations/<inst>/addons/crossplane/`). Renovate proposes the bump.
 
 ## Developer loop (Crossplane CLI 2.4 Project tooling, beta; CLI pinned in `mise.toml`)
