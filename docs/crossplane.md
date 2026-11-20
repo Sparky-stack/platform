@@ -123,6 +123,8 @@ before an example (VERIFY: not exercised in CI).
 
 ## APIs and their status
 
+Field-by-field reference of every XRD (generated): [reference/crossplane-apis.md](reference/crossplane-apis.md).
+
 | API | Package | Local backend (operator) | Cloud backends | Status |
 |---|---|---|---|---|
 | PostgreSQL | [`packages/postgresql`](../packages/postgresql/README.md) | CloudNativePG | RDS / Aurora, Cloud SQL, Azure Flexible | tested locally |
@@ -149,7 +151,8 @@ alpha with few drivers (none for RustFS); Crossplane gives one API across RustFS
    Providers pinned by digest, MRAP entries, aggregated RBAC for composed plain kinds, Kyverno rules that keep tenants on
    the XR. Tests: `hack/tests/test_crossplane_render.sh`, `addons/crossplane/tests`.
 4. A developer-facing page for the API (like [data-services.md](data-services.md#postgresql-as-a-service)) and, for
-   OpenChoreo, a `ClusterResourceType`.
+   OpenChoreo, a `ClusterResourceType`. Every schema field gets a `description`; `task docs:reference` regenerates the
+   field reference ([reference/crossplane-apis.md](reference/crossplane-apis.md)).
 
 ## Tests (offline)
 

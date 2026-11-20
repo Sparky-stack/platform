@@ -147,6 +147,11 @@ tasks:
     cmds:
       - '"{{.BASH}}" hack/schemas.sh'
 
+  docs:reference:
+    desc: Regenerate docs/reference/ (Crossplane XRDs, OpenChoreo types) from their sources
+    cmds:
+      - '"{{.BASH}}" -c "source hack/lib/portable.sh && py hack/gen-reference.py"'
+
   images:audit:
     desc: List every image the local installation renders and check linux/amd64 + linux/arm64 manifests (crane)
     cmds:
