@@ -133,8 +133,16 @@ promotionGate:
   baseBranch: main
   bindingPath: deploy/openchoreo/release-bindings/{environment}.yaml   # app repo contract (docs/openchoreo.md)
   smoke:
-    http: true                       # GET every external endpoint of the source binding
+    http: true                       # GET every external endpoint of the source binding; only 2xx passes
     path: /
+    # How the probe reaches an endpoint. dns: connect to the externalURL host (cloud: public DNS / load balancer).
+    # podHostIP: connect to the hostIP of a running Pod of the source binding (OpenChoreo API k8sresources tree) on the
+    # externalURL port (= ClusterDataPlane gateway port) and send the URL host as Host header. For data planes whose
+    # Gateway listens on every node (k3s klipper hostPort, CAPD) and whose hosts do not resolve from mgmt (local).
+    connect: dns
+    # Extra gate egress for connect podHostIP: TCP ports to any address (NetworkPolicy promotion-gate-smoke in
+    # workflows-<org ns>; CAPD node IPs come from a per-host docker network). == charts/cluster openchoreo.dataPlane.gatewayPort
+    egressPorts: []
   observe:
     enabled: true
     windowMinutes: 15

@@ -139,6 +139,44 @@ tests:
     asserts:
       - failedTemplate: { errorPattern: "at '/installation/githubOrg': minLength: got 0, want 1" }
 
+  - it: smoke connects by DNS by default and adds no egress
+    template: templates/promotion-gate.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: SMOKE_HTTP, value: "true" } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: SMOKE_CONNECT, value: dns } }
+
+  - it: smoke connect podHostIP (installation local, #156) opens only the Gateway port for the gate pods
+    template: templates/promotion-gate.yaml
+    values: [../../../installations/local/addons/openchoreo-platform/values.yaml]
+    asserts:
+      - documentIndex: 0
+        contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: SMOKE_HTTP, value: "true" } }
+      - documentIndex: 0
+        contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: SMOKE_CONNECT, value: podHostIP } }
+      - documentIndex: 1
+        isKind: { of: NetworkPolicy }
+      - documentIndex: 1
+        equal: { path: metadata.namespace, value: workflows-default }
+      - documentIndex: 1
+        equal: { path: spec.podSelector.matchLabels, value: { platform.koorikla.io/egress: openchoreo } }
+      - documentIndex: 1
+        equal:
+          path: spec.egress
+          value: [{ to: [{ ipBlock: { cidr: 0.0.0.0/0 } }], ports: [{ protocol: TCP, port: 19080 }] }]
+
+  - it: smoke connect podHostIP requires the Gateway egress port
+    template: templates/promotion-gate.yaml
+    set: { promotionGate.smoke.connect: podHostIP }
+    asserts:
+      - failedTemplate: { errorPattern: "needs promotionGate.smoke.egressPorts" }
+
+  - it: rejects an unknown smoke connect mode
+    template: templates/promotion-gate.yaml
+    set: { promotionGate.smoke.connect: proxy }
+    asserts:
+      - failedTemplate: {}
+
   - it: endpoints derive from the installation and observe follows the observability switch
     template: templates/promotion-gate.yaml
     set:

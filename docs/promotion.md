@@ -143,7 +143,12 @@ For one component and one edge (default staging → next environment) the gate c
    `Ready` of the previous release fails). openchoreo-api 1.3.3 does not return `status.delivery`; when the object has
    it, its rollout must have started after the last spec change and succeeded.
 3. **smoke**: `GET` on every external endpoint of the source binding (`status.endpoints[].externalURLs`) answers
-   2xx/3xx (5 tries with backoff).
+   2xx (5 tries with backoff; a redirect, 4xx or 5xx fails the gate). `promotionGate.smoke.connect` picks how the
+   probe reaches the host: `dns` (default, cloud) or `podHostIP` (installation local): the gate reads the binding's
+   rendered Pods from the OpenChoreo API (`releasebindings/<name>/k8sresources/tree`, `releasebinding:view`), connects
+   to the `hostIP` of a running one on the endpoint port (the ClusterDataPlane gateway port, 19080; klipper binds it
+   on every node) and sends the endpoint host as `Host`. NetworkPolicy `promotion-gate-smoke` opens
+   `smoke.egressPorts` for the gate pods only. Evidence: `smoke GET <url> via node <ip> -> 2xx`.
 4. **observability**:
    - observer API (Thunder client credentials), `POST /api/v1alpha1/alerts/query`: no alert fired for the component in
      the source environment during the last `observe.windowMinutes` (15).
@@ -287,9 +292,9 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 ## Limits
 
 - The gate fails closed until its GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
-- Locally `<env>-default.<cluster>.apps.localhost` resolves to the gate pod's own loopback on mgmt, so the smoke probe
-  is off in `installations/local/addons/openchoreo-platform/values.yaml`; other installations keep it on
-  ([#156](https://github.com/koorikla/platform/issues/156)).
+- Locally `<env>-default.<cluster>.apps.localhost` resolves to the gate pod's own loopback on mgmt and CAPD node
+  containers have no stable DNS name, so the local smoke probe connects by node IP (`smoke.connect: podHostIP`,
+  [#156](https://github.com/koorikla/platform/issues/156)); it supports plain-HTTP endpoints only.
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
   ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a

@@ -1,8 +1,8 @@
 # Local installation: the workflow plane runs on mgmt, where data-plane app hosts
-# (<env>-<org ns>.<cluster>.apps.localhost:19080) resolve to the pod's own loopback (*.localhost); CAPD node containers
-# have no stable DNS name or load balancer for the app Gateway. The gate's HTTP probe is off here; readiness, observer
-# and freeze checks still run. In a cloud installation the app hosts resolve publicly and the probe stays on
-# (docs/promotion.md). Turning it on locally: #156.
+# (<env>-<org ns>.<cluster>.apps.localhost:19080) resolve to the pod's own loopback (*.localhost) and CAPD node
+# containers have no stable DNS name. The gate's HTTP probe therefore connects to the node IP of a running Pod of the
+# source binding (the Gateway's klipper hostPort listens on every node) with the app host as Host header (#156).
 promotionGate:
   smoke:
-    http: false
+    connect: podHostIP
+    egressPorts: [19080]             # == charts/cluster openchoreo.dataPlane.gatewayPort (ClusterDataPlane gateway HTTP port)
