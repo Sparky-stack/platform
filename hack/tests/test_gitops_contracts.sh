@@ -185,6 +185,24 @@ assert_eq "$(k3d_le_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-
 yq 'del(.options.k3s.extraArgs[] | select(.arg == "--kube-scheduler-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-nole.yaml"
 assert_match "$(k3d_le_missing "$TMP/k3d-nole.yaml")" "kube-scheduler-arg=leader-elect-lease-duration" "contract catches a k3d config without the scheduler leader election"
 
+# 8c. etcd stalls (#344): k3s's own wrangler leases ("k3s", "k3s-etcd": 45 s / 30 s upstream) ignore the args above and a
+#     29-31 s fsync-bound stall killed mgmt k3s. The mgmt etcd skips fsync and k3s's leases tolerate 90 s.
+k3d_stall_missing() {   # k3d_stall_missing <k3d file> -> the stall guards it lacks
+  local miss="" kv
+  yq -e '[.options.k3s.extraArgs[] | select(.arg == "--etcd-arg=unsafe-no-fsync=true" and (.nodeFilters[] == "server:0"))] | length > 0' \
+    "$1" >/dev/null 2>&1 || miss="$miss unsafe-no-fsync"
+  for kv in CATTLE_ELECTION_LEASE_DURATION=120s CATTLE_ELECTION_RENEW_DEADLINE=90s CATTLE_ELECTION_RETRY_PERIOD=10s; do
+    KV="$kv" yq -e '[.env[] | select(.envVar == strenv(KV) and (.nodeFilters[] == "server:*"))] | length > 0' "$1" >/dev/null 2>&1 \
+      || miss="$miss ${kv%%=*}"
+  done
+  printf '%s' "$miss"
+}
+assert_eq "$(k3d_stall_missing "$ROOT/bootstrap/k3d-mgmt.yaml")" "" "bootstrap/k3d-mgmt.yaml guards mgmt k3s against etcd stalls (no fsync, long k3s leases)"
+yq 'del(.env)' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-noenv.yaml"
+assert_match "$(k3d_stall_missing "$TMP/k3d-noenv.yaml")" "CATTLE_ELECTION_RENEW_DEADLINE" "contract catches a k3d config with upstream k3s leases"
+yq 'del(.options.k3s.extraArgs[] | select(.arg == "--etcd-arg=*"))' "$ROOT/bootstrap/k3d-mgmt.yaml" > "$TMP/k3d-fsync.yaml"
+assert_match "$(k3d_stall_missing "$TMP/k3d-fsync.yaml")" "unsafe-no-fsync" "contract catches a k3d config with fsync in the mgmt etcd"
+
 # 9b. external-dns is NOT a Kyverno-excluded platform namespace either: the chart defaults meet Pod Security restricted.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
   assert_eq "$(grep -cE '^ *- external-dns( |$)' "$ROOT/$f" || true)" 0 "external-dns not excluded from Kyverno ($f)"

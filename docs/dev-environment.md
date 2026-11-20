@@ -317,6 +317,25 @@ the short leases until it is re-created; a CAPD cluster gets them through a cont
 Check: `docker logs k3d-platform-mgmt-server-0 2>&1 | grep -c 'leaderelection lost'` and
 `docker inspect k3d-platform-mgmt-server-0 --format '{{.RestartCount}}'` stay 0.
 
+**etcd stalls and k3s's own leases.** The leases above do not cover k3s itself: its `k3s` and `k3s-etcd` leases come
+from wrangler (45 s lease, 30 s renew deadline) and k3s exits with `leaderelection lost for k3s` when one misses
+([#344](https://github.com/koorikla/platform/issues/344)). A clean bootstrap on main stalled etcd at 17:34:54Z, k3s exited
+and Docker restarted the server (RestartCount 1, every pod `Unknown`, exit 255). The next clean bootstrap survived by a
+hair: one etcd apply took 29-31 s (19:55:16Z; kube-scheduler/ccm/kcm lease updates failed with `etcdserver: request timed
+out`), and its metrics showed the cause is the disk: 48,849 WAL fsyncs (mean 17 ms, 1.4% over 128 ms, one over 8 s) and
+bolt commits over 8 s, on a disk shared with image pulls, Harbor, CNPG and the CAPD nodes. `bootstrap/k3d-mgmt.yaml`
+therefore runs the mgmt etcd with `--etcd-arg=unsafe-no-fsync=true` (a scratch k3s with it committed 1,220 proposals with
+2 WAL fsyncs) and sets `CATTLE_ELECTION_LEASE_DURATION=120s`, `CATTLE_ELECTION_RENEW_DEADLINE=90s` and
+`CATTLE_ELECTION_RETRY_PERIOD=10s` on the server (single server: nothing fails over, so a long lease costs nothing).
+Both work inside the container, so Linux, macOS and Windows Docker hosts behave the same (Docker Desktop's VM disk has the
+slowest fsync). Trade-off: a `docker restart` keeps the host page cache, but a host or Docker VM crash can lose the last
+writes; rebuild with `task down` and `task up` then. Rejected: kine/SQLite (k3s then disables leader election, but its
+compaction crash-looped, #76), etcd on tmpfs (k3d has no portable tmpfs option and a restart would wipe the cluster) and a
+separate volume (same disk). k3d applies both at create time only. Check after a clean `task up`:
+`docker exec k3d-platform-mgmt-server-0 kubectl -n kube-system get lease k3s k3s-etcd` shows
+`leaseDurationSeconds` 120 and `grep fsync /var/lib/rancher/k3s/server/db/etcd/config` in the container prints
+`unsafe-no-fsync: true`.
+
 In-cluster controllers with short leases still restart on those stalls even when k3s survives them. Kyverno derives its
 lease (6x) and renew deadline (5x) from `--leaderElectionRetryPeriod` (upstream 2 s = 12 s / 10 s) and every controller
 exits when a renewal misses the deadline. On a clean bootstrap two etcd stalls of 13.6 s and 10.1 s restarted all four
