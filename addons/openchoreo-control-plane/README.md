@@ -127,7 +127,9 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].kind | string | `"ClusterAuthzRoleBinding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].name | string | `"developer-binding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[0].roleRef.kind | string | `"ClusterAuthzRole"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[0].roleRef.name | string | `"developer"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[0].roleRef.name | string | `"cluster-reader"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[1].roleRef.kind | string | `"ClusterAuthzRole"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[1].roleRef.name | string | `"namespace-reader"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].effect | string | `"allow"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].entitlement.claim | string | `"groups"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].entitlement.value | string | `"platform-engineers"` |  |

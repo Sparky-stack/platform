@@ -62,3 +62,9 @@ tests/secrets_test.yaml (dp-default-demo-development-ad621210). Context: dict or
 {{- end -}}
 {{- printf "%s-%s" (join "-" $parts) (join "-" $names | sha256sum | trunc $hashLen) -}}
 {{- end }}
+
+{{- /* Groups with developer rights in this project only (templates/developer-authz.yaml); default <project>-developers. */ -}}
+{{- define "tenant.developerGroups" -}}
+{{- $groups := .Values.developerGroups | default (list (printf "%s-developers" (include "tenant.project" .))) }}
+{{- toYaml (uniq $groups) }}
+{{- end }}

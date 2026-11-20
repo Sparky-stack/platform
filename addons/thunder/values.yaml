@@ -8,7 +8,8 @@
 # YAML by Thunder's bootstrap):
 #   thunder-admin-password    Thunder console admin (user `admin`)
 #   admin-user-password       OpenChoreo user admin@openchoreo.dev     (group admins     -> OpenChoreo role admin)
-#   developer-user-password   OpenChoreo user developer@openchoreo.dev (group developers -> OpenChoreo role developer)
+#   developer-user-password   OpenChoreo user developer@openchoreo.dev (groups developers -> org-wide read-only, and
+#                             demo-developers -> role developer in project demo only; charts/tenant developerGroups)
 #   backstage-client-secret   OAuth client openchoreo-backstage-client (also read by addon openchoreo-control-plane)
 #   backstage-backend-secret  (read by addon openchoreo-control-plane only)
 #   service-mcp-client-secret OAuth client service_mcp_client (headless MCP clients, client_credentials; docs/ai-agents.md)
@@ -292,6 +293,15 @@ thunderid:
         id: 01900000-0000-7000-8001-000000000041
         name: developers
         description: Openchoreo Developers group
+        ouHandle: default
+        members:
+          - id: 01900000-0000-7000-8001-000000000031
+            type: user
+        ---
+        resource_type: group
+        id: 01900000-0000-7000-8001-000000000042
+        name: demo-developers
+        description: Developers of OpenChoreo project demo (platform, DEMO; charts/tenant developerGroups default)
         ouHandle: default
         members:
           - id: 01900000-0000-7000-8001-000000000031

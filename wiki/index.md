@@ -2,7 +2,7 @@
 
 > Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-19 | Total pages: 25
+> Last updated: 2026-11-20 | Total pages: 26
 
 ## Decisions
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
@@ -18,6 +18,7 @@
 - [Talos on Hetzner Waits for Upstream CACPPT Release](decisions/talos-on-hetzner-waits-for-upstream.md) — Switch Hetzner example from k3s to Talos once upstream Sidero CACPPT releases `TalosControlPlaneTemplate` (#189).
 
 ## Gotchas
+- [OpenChoreo Authz - Deny Is Per Entitlement Value; Developers Per Project](gotchas/openchoreo-authz-per-project-developers.md) — Upstream binds `developers` to write every project; a deny only revokes grants of the same group value. Org-wide read-only + per-project `AuthzRoleBinding` with the production condition in the allow (#335).
 - [Preview Teardown - Stuck ResourceReleaseBinding and Re-created Tenant Descriptor](gotchas/preview-teardown-leaks.md) — The Environment must outlive the preview's ResourceReleaseBindings (blockOwnerDeletion + foreground); terminating bindings must not match the descriptor GeneratingPolicy.
 - [Preview Cells - Tenant Secrets and CloudNativePG under Cilium](gotchas/preview-cells-tenant-secrets-and-cnpg.md) — Previews bind to their tenant's OpenBao role via Kyverno descriptors; CNPG pods need kube-apiserver egress that Cilium never grants via ipBlock (#267, #331).
 - [OpenChoreo SecretReference Rotation and Scope](gotchas/openchoreo-secretreference-rotation-and-scope.md) — App secrets refresh in 15 s but pods need a restart; the store is platform-fixed; `targetPlane` belongs to the secrets API.
