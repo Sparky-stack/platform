@@ -399,6 +399,31 @@ tests:
     asserts:
       - equal: { path: "spec.variables[0].expression", value: '["ghcr.io/koorikla/"]' }
 
+  - it: CloudNativePG (#327) - exactly the pinned operator + imageCatalog images of addons/cloudnative-pg values
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+    set:
+      imageCatalog: { enabled: true, images: { "17": "r/pg:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+      cloudnative-pg.image: { repository: r/op, tag: "1.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    asserts:
+      - equal: { path: "spec.variables[2]", value: { name: operandImages, expression: '["r/pg:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","r/op:1.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]' } }
+
+  - it: CloudNativePG - none admitted without addons/cloudnative-pg values (plain render) or with the catalog off
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }
+    set:
+      imageCatalog: { enabled: false, images: { "17": "r/pg:17@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+      cloudnative-pg.image: { repository: r/op, tag: "1.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    asserts:
+      - equal: { path: "spec.variables[2].expression", value: "[]" }
+
+  - it: CloudNativePG - a pin without digest fails the render (never a tag-only exception)
+    template: templates/image-verification.yaml
+    set:
+      imageCatalog: { enabled: true, images: { "17": "r/pg:17" } }
+    asserts:
+      - failedTemplate: { errorPattern: 'CloudNativePG image "r/pg:17" .* is not pinned by digest' }
+
   - it: with a public key exactly <registry.host>/<appsProject>/ is trusted (host, port and project pinned)
     template: templates/image-verification.yaml
     documentSelector: { path: metadata.name, value: openchoreo-trusted-registries-enforce }

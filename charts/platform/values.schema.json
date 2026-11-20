@@ -344,6 +344,11 @@
               "description": "tpl rendering to a file under values/ (checked after tpl in appset-addons.yaml)."
             },
             "description": "Extra value files picked by installation facts (after cni-*)."
+          },
+          "valuesFromAddons": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Other catalog addons whose chart values.yaml is the first value file (lowest precedence)."
           }
         }
       },

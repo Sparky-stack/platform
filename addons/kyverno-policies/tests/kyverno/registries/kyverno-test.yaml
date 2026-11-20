@@ -7,12 +7,15 @@ kind: Test
 metadata:
   name: openchoreo-trusted-registries
 policies: [policies.yaml]
-resources: [resources.yaml]
+# resources-cnpg.yaml: written by the script from the pins in addons/cloudnative-pg/values.yaml (#327).
+resources: [resources.yaml, resources-cnpg.yaml]
 variables: values.yaml
 results:
   - policy: openchoreo-trusted-registries-enforce
     kind: Pod
-    resources: [dp-default-demo-production-1/prod-trusted]
+    resources:
+      - dp-default-demo-production-1/prod-trusted
+      - dp-default-demo-production-1/prod-cnpg-catalog            # pinned CNPG operator + imageCatalog image
     result: pass
   - policy: openchoreo-trusted-registries-enforce
     kind: Pod
@@ -22,6 +25,11 @@ results:
       - dp-default-demo-production-1/prod-lookalike
       - dp-default-demo-production-1/prod-registry-port          # old in-cluster registry prefix: never trusted
       - dp-default-demo-production-1/prod-platform-unsigned      # unsigned image denied in production (no key)
+      - dp-default-demo-production-1/prod-cnpg-other-digest      # catalog repository + tag, another digest
+      - dp-default-demo-production-1/prod-cnpg-operator-other-digest
+      - dp-default-demo-production-1/prod-cnpg-unlisted          # same registry, not in the catalog
+      - dp-default-demo-production-1/prod-cnpg-tag-only          # catalog image without its digest
+      - dp-default-demo-production-1/prod-cnpg-untrusted-sidecar # pinned images + docker.io sidecar
     result: fail
   - policy: openchoreo-trusted-registries-audit
     kind: Pod

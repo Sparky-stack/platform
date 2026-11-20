@@ -192,6 +192,8 @@ imageVerification:
   # Every container image in a checked cell namespace must match a trusted prefix: github.prefixes, the platform
   # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
   # would simply not be matched by the signature policy.
+  # CloudNativePG operand images are admitted as whole digest references, not prefixes: the operator + imageCatalog
+  # pins of addons/cloudnative-pg/values.yaml, which the catalog entry (valuesFromAddons) passes in (#327).
   extraTrustedPrefixes: []
 
 # --- Digest-only images in workflow run namespaces (#36, docs/supply-chain.md "Digest references") ---------------------

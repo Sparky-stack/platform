@@ -64,6 +64,12 @@ spec:
           releaseName: {{ $cfg.releaseName | default $addon | quote }}
           ignoreMissingValueFiles: true
           valueFiles:
+            {{- /* valuesFromAddons: other catalog addons' chart values first (lowest precedence), read as their single source */}}
+            {{- range $from := $cfg.valuesFromAddons }}
+            {{- $src := get $.Values.addons $from }}
+            {{- if or (not $src) (eq $from $addon) }}{{ fail (printf "addons.%s.valuesFromAddons: %q is not another addon of the catalog" $addon $from) }}{{ end }}
+            - {{ printf "../../%s/values.yaml" ($src.path | default (printf "addons/%s" $from)) | quote }}
+            {{- end }}
             - values.yaml
             - 'values/role-{{ $label.role }}.yaml'
             - 'values/provider-{{ $label.provider }}.yaml'

@@ -101,6 +101,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.kyverno-policies.namespace | string | `"kyverno"` |  |
 | addons.kyverno-policies.roles[0] | string | `"mgmt"` |  |
 | addons.kyverno-policies.roles[1] | string | `"workload"` |  |
+| addons.kyverno-policies.valuesFromAddons[0] | string | `"cloudnative-pg"` |  |
 | addons.kyverno.default | bool | `true` |  |
 | addons.kyverno.namespace | string | `"kyverno"` |  |
 | addons.kyverno.roles[0] | string | `"mgmt"` |  |
