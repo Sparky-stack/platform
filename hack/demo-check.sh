@@ -10,6 +10,7 @@
 # PENDING: the feature behind the check is not merged yet. A check whose feature is absent can report it itself
 # (return 2, detail "#<issue> ..."); a failing check listed in pending_issue() reports PENDING #<issue> instead of FAIL.
 # DEMO_STRICT=1 turns the pending_issue() ones back into FAIL. Drop both once the issue closes.
+# Also PENDING: an Argo CD app held OutOfSync by an active deny sync window (production freeze), see c_argo_apps.
 #
 # Environment (defaults in brackets):
 #   KUBE_CTX            mgmt kubectl context [k3d-platform-mgmt]
@@ -20,6 +21,7 @@
 #   DEMO_HTTP_MODE      direct | docker: how app URLs on CAPD node IPs are reached [direct on Linux, docker elsewhere:
 #                       only a native Linux host routes to container IPs (docs/dev-environment.md)]
 #   DEMO_STRICT=1       no PENDING for known-unmerged features
+#   DEMO_NOW            ISO 8601 time sync windows are evaluated at [now] (tests)
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 # shellcheck source=lib/portable.sh
@@ -250,12 +252,31 @@ dry_run_pod() {
 short_image() { printf '%s' "$1" | sed -E 's/@sha256:([0-9a-f]{12})[0-9a-f]+/@sha256:\1.../'; }
 
 # ---- step 1: clean bootstrap ----------------------------------------------------------------------------------------
+# An Application OutOfSync only because an active deny sync window of its AppProject covers it (the production freeze,
+# docs/promotion.md#freeze-windows) is correct behaviour: PENDING with the window and its end, not FAIL. Argo CD puts no
+# "blocked by window" status on the Application, so hack/lib/syncwindow.py evaluates the windows (DEMO_NOW overrides now).
 c_argo_apps() {
-  local out
+  local out detail apps projects frozen names why rest
   out=$(km get applications.argoproj.io -n argocd \
     -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.sync.status}{" "}{.status.health.status}{"\n"}{end}') \
     || { echo "cannot list Argo CD Applications (context $CTX)"; return 1; }
-  printf '%s\n' "$out" | summarize_apps
+  detail=$(printf '%s\n' "$out" | summarize_apps) && { echo "$detail"; return 0; }
+  apps="$KCDIR/applications.json"; projects="$KCDIR/appprojects.json"
+  if ! { km get applications.argoproj.io -n argocd -o json > "$apps" 2>/dev/null \
+    && km get appprojects.argoproj.io -n argocd -o json > "$projects" 2>/dev/null \
+    && frozen=$(py hack/lib/syncwindow.py "$(native_path "$apps")" "$(native_path "$projects")" ${DEMO_NOW:+"$DEMO_NOW"} \
+      2> "$KCDIR/syncwindow.err"); }; then
+    echo "$detail (sync windows not evaluated: $(tail -n 1 "$KCDIR/syncwindow.err" 2>/dev/null))"; return 1
+  fi
+  [[ -n "$frozen" ]] || { echo "$detail"; return 1; }
+  names=" $(printf '%s\n' "$frozen" | cut -f1 | tr '\n' ' ')"
+  why=$(printf '%s\n' "$frozen" | awk -F '\t' '{ printf "%s%s frozen by sync window \"%s\" until %s", (NR > 1 ? "; " : ""), $1, $2, $3 }')
+  # Pass/fail on the apps no active window holds; any other OutOfSync/unhealthy app still FAILs.
+  rest=$(printf '%s\n' "$out" | awk -v f="$names" 'NF && !index(f, " " $1 " ")')
+  if [[ -z "$rest" ]] || printf '%s\n' "$rest" | summarize_apps >/dev/null; then
+    echo "${detail%%;*}; $why"; return 2
+  fi
+  echo "$detail; $why"; return 1
 }
 
 # ---- step 2: add a cluster by adding a file -------------------------------------------------------------------------

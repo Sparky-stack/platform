@@ -208,6 +208,11 @@ scope and test evidence: [supply-chain.md](supply-chain.md#image-signatures-and-
 - The gate workflow refuses to open promotion PRs while a window is active.
 - A PR merged during a freeze syncs when the window ends. Revert it if that is not wanted. Break glass: change the
   window in git.
+- A bootstrap during a freeze leaves `<project>-<app>-production` OutOfSync/Missing (Argo CD: "Sync prevented by
+  sync window"; no production ReleaseBinding) until the window ends. That is the freeze working: `task demo:check`
+  shows the app PENDING `frozen by sync window "<description>" until <end>` instead of FAIL
+  (`hack/lib/syncwindow.py` evaluates the AppProject's deny windows, Argo CD has no status field for it). Any other
+  OutOfSync app still FAILs.
 
 ## hello-world (tenant `demo`) walkthrough
 

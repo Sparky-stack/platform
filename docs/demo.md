@@ -34,6 +34,7 @@ STEP CHECK                                          RESULT       DETAIL
 | PASS | the step works on the live stack | show it live |
 | FAIL | it should work and does not (exit code 1) | fix it, or use the step's fallback |
 | PENDING #NN | the feature is not merged yet (issue NN) | tell the story with the fallback; do not improvise it live |
+| PENDING | expected on this stack right now, the detail says why (e.g. production frozen by sync window ... until ...) | show the reason; promote after the window |
 
 What it checks, per step: Argo CD apps, CAPI clusters, OpenChoreo data-plane agents, the cluster file rendered for the
 other providers (offline `helm template`), the Backstage console, component types, the latest image's signature
@@ -51,6 +52,8 @@ How it works and what it never does:
   is removed on exit; no secret value is printed. Context `koorikla` is refused.
 - Known-unmerged features: a failing check listed in `pending_issue()` of `hack/demo-check.sh` shows PENDING #NN instead
   of FAIL; delete the line when the issue closes. `DEMO_STRICT=1 task demo:check` shows them as FAIL.
+- Freeze windows: an Argo CD app OutOfSync only because an active deny sync window of its AppProject covers it is
+  PENDING with the window and its end (`hack/lib/syncwindow.py`; `DEMO_NOW=<ISO 8601>` evaluates another time).
 - Variables: `KUBE_CTX`, `DEMO_NAMESPACE` (org namespace, `default`), `DEMO_COMPONENT` (`hello-world`),
   `DEMO_UNSIGNED_IMAGE`, `DEMO_HTTP_MODE=direct|docker` (default `docker` on macOS / Windows / WSL, where container IPs
   are not routable from the host: docs/dev-environment.md "Host differences (Docker Desktop and friends)").
@@ -67,6 +70,7 @@ stack's OpenChoreo cut. What happens per environment ([#200](https://github.com/
 | development | Auto-build finds the pinned digest missing in Harbor and rebuilds the Workload's commit (WorkflowRun `hello-world-<sha[:12]>-<digest[:8]>`, docs/build-plane.md "Auto-build" step 5); the hand-off commits the new digest, `autoDeploy` rolls it out. Serves about 10 minutes after the workflow plane is up, usually before `task up` reports every app Healthy. | none |
 | development, the app secret | OpenBao starts empty. CronJob `openbao-tenants/demo-demo-secrets` (every 5 minutes, `demoSecrets` in `installations/local/tenants/demo.yaml`) writes `kv-tenant-demo/hello-world` property `greeting` as `demo-writer` once the tenant mount exists: a generated `demo-only-<hex>` value, never in git, never overwritten. The ExternalSecret picks it up on its next retry (ESO backs off after failures, up to ~17 minutes; `kubectl annotate externalsecret <name> force-sync=$(date +%s)` in the cell namespace skips the wait) and the pod starts. | none |
 | staging, production | The pinned release does not exist in this stack (binding `ComponentReleaseNotFound`). `task demo:check` shows them PENDING `not promoted in this stack yet`. | one promotion, the demo's step 5 |
+| production, in a freeze | Between Fri 16:00 and Mon 08:00 Europe/Tallinn the weekend freeze (docs/promotion.md "Freeze window") denies syncs of `demo-hello-world-production`: OutOfSync/Missing, no production ReleaseBinding. `task demo:check` step 1 shows PENDING `frozen by sync window "freeze weekend: ..." until <end>`; any other OutOfSync app still FAILs. | none; production syncs when the window ends |
 
 Staging and production come back only through a promotion, on purpose: a release reaches them after its rollout,
 smoke test and 5xx rate were checked in the environment before (docs/promotion.md "The gates"), and that evidence
