@@ -3,6 +3,13 @@
 `ci-vX.Y.Z` releases of `ci/` and the `app-*` reusable workflows, maintained by release-please
 ([docs/releases.md](../docs/releases.md)).
 
+## [1.1.1](https://github.com/koorikla/platform/compare/ci-v1.1.0...ci-v1.1.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **release:** root package without component so single-component grouped releases get tagged ([#313](https://github.com/koorikla/platform/issues/313)) ([#318](https://github.com/koorikla/platform/issues/318)) ([d34c254](https://github.com/koorikla/platform/commit/d34c254adf6c7ccc882df3f32ece0b6d0e3b10e9))
+
 ## [1.1.0](https://github.com/koorikla/platform/compare/ci-v1.0.0...ci-v1.1.0) (2026-11-19)
 
 
