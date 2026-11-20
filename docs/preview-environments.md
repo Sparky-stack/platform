@@ -19,7 +19,8 @@ auto-build pass (every minute locally) ──> WorkflowRun <component>-pr<n>-<sh
                                        ──> ResourceReleaseBinding <resource>-pr-<n>-<component> per Resource the
                                             release depends on: the preview's own database (owned by the Environment)
                                        ──> commit status openchoreo/preview: pending -> success + URL
-PR closed/merged ──> Application deleted ──> Environment deleted ──> OpenChoreo finalizers delete bindings + namespace
+PR closed/merged ──> Application deleted ──> Environment deleted (foreground) ──> OpenChoreo finalizers delete bindings
+                     + namespace; the Environment stays until the ResourceReleaseBindings and their databases are gone
 ```
 
 - **Trigger**: the `pullRequest` generator of `charts/tenant/templates/previews.yaml`, one per app repo of the tenant
@@ -78,7 +79,11 @@ component. The installation switch is `installation.yaml` `previews`:
 - **PR closed or merged**: the generator drops the PR, the ApplicationSet deletes the Application, its resources
   finalizer deletes the Environment, and OpenChoreo's environment finalizer deletes the bindings and the cell namespace
   on the data plane (via its cluster agent). The ComponentRelease and the preview's ResourceReleaseBindings go with the
-  Environment (owner reference); `retainPolicy: Delete` removes their databases.
+  Environment (owner reference); `retainPolicy: Delete` removes their databases. The bindings' owner reference blocks
+  the Environment's (foreground) deletion until they are gone, because OpenChoreo cleans their data-plane objects
+  through the Environment; a binding stuck `Finalizing` with `failed to get environment` on its RenderedRelease is the
+  old leak ([wiki](../wiki/gotchas/preview-teardown-leaks.md)). An Environment stuck terminating means its data plane
+  is unreachable.
 - **New push**: the Application's commit changes, the binding points at the new release, the pass builds the new head.
 - **TTL**: Kyverno stamps `platform.koorikla.io/expires-at` (unix seconds, creation + `ttl`) on the Environment at
   creation (MutatingPolicy `platform-preview-expiry`). When it passes, the auto-build pass labels the PR
@@ -111,7 +116,7 @@ component. The installation switch is `installation.yaml` `previews`:
   `openbao-tenants/<project>-openbao-tenant-<environment>` per preview ProjectReleaseBinding (tenant =
   `spec.owner.projectName`); CronJob `tenant-reconcile` computes the preview's cell namespace itself (org + project +
   environment, OpenChoreo's naming) and adds it to that tenant's OpenBao role only. The descriptor goes with the
-  binding (PR closed, TTL); the next run (every 5 minutes) unbinds the namespace. A first preview waits up to one ESO
+  binding (PR closed, TTL; a terminating binding no longer matches, so its later updates cannot re-create it); the next run (every 5 minutes) unbinds the namespace. A first preview waits up to one ESO
   refresh plus one run (~10 minutes) before its `ExternalSecret` syncs.
 - **Admission tier**: preview environment names are not listed in `imageVerification.environments`, so the
   supply-chain gate applies `defaultAction` (Audit, the development tier; contract check 17 keeps them equal). Preview

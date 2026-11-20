@@ -36,3 +36,6 @@
 
 ## [2026-11-20] update | Missing-digest rebuild killed by a k3s restart
 - `gotchas/openchoreo-releasebinding-and-fresh-registry.md`: etcd stall -> k3s leader-lease loss kills every pod (exit 255); build steps retry infra kills, auto-build retries a failed rebuild (-r2/-r3) then reports.
+
+## [2026-11-20] create | Preview teardown leaks (stuck RRB, re-created OpenBao descriptor)
+- Added `gotchas/preview-teardown-leaks.md`: RenderedRelease cleanup needs the Environment (blockOwnerDeletion + foreground TTL delete); Kyverno re-generated the descriptor on the terminating binding's finalizer-removal UPDATE (matchCondition on deletionTimestamp).
