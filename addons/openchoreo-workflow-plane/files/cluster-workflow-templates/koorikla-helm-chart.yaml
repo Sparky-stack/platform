@@ -93,6 +93,12 @@ spec:
                 - { name: digest-ref, value: "{{tasks.package.outputs.parameters.digest-ref}}" }
 
     - name: package
+      # Infrastructure retry (pod killed by a node/k3s restart: exit 255; Argo errors), as in koorikla-build.
+      retryStrategy:
+        limit: "2"
+        retryPolicy: Always
+        expression: "lastRetry.status == 'Error' || asInt(lastRetry.exitCode) == 255"
+        backoff: { duration: 30s, factor: "2", maxDuration: 5m }
       container:
         image: "@@TOOLBOX_IMAGE@@"
         command: [bash, -euo, pipefail, -c]
