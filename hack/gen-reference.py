@@ -10,6 +10,7 @@ Sources, read with yq (+ helm for the chart, so templated ClusterWorkflows are i
 Field tables come from each openAPIV3Schema: field (dotted path), type, required, default, description (+ limits).
 --check writes nothing and exits 1 when docs/reference/ differs from what the sources generate (task lint, prek).
 """
+import difflib
 import json
 import os
 import re
@@ -38,7 +39,8 @@ FAMILIES = [  # (kind, page, title, intro)
 
 
 def run(cmd, data=None):
-    return subprocess.run(cmd, input=data, capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    # utf-8 explicitly: Windows would otherwise encode stdin / decode stdout with the ANSI code page (cp1252).
+    return subprocess.run(cmd, input=data, capture_output=True, encoding="utf-8", check=True, cwd=ROOT).stdout
 
 
 def yaml_docs(text):
@@ -207,6 +209,9 @@ def main():
         old = read(os.path.relpath(path, ROOT)) if name in existing else None
         if old != text:
             problems.append(name)
+            if CHECK and old is not None:  # the first differing line makes a CI failure actionable
+                diff = [d for d in difflib.unified_diff(old.splitlines(), text.splitlines(), "committed", "generated", n=0)]
+                print(f"{name}:\n" + "\n".join(diff[2:6]), file=sys.stderr)
             if not CHECK:
                 os.makedirs(OUT, exist_ok=True)
                 with open(path, "w", encoding="utf-8", newline="\n") as f:
