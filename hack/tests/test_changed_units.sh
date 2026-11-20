@@ -55,4 +55,20 @@ assert_match "$tests" " hack/tests/test_diagrams.sh " "docs/diagrams -> test_dia
 tests=" $(cd "$ROOT" && bash hack/changed-units.sh --tests packages/postgresql | tr '\n' ' ')"
 assert_match "$tests" " hack/tests/test_data_services.sh " "packages/postgresql -> test_data_services (XRD examples)"
 
+# Secret store scope (#244): a chart with ExternalSecrets gets the per-chart check in a scoped run; only a chart that
+# defines a store or workflow takes the cross-chart test's full-if (hack/test-changed.sh greps the changed charts).
+tests=" $(cd "$ROOT" && bash hack/changed-units.sh --tests addons/telemetry | tr '\n' ' ')"
+assert_match "$tests" " hack/tests/test_secret_store_scope_chart.sh " "addons/telemetry -> per-chart secret store scope"
+assert_eq "$(sed -n 's/^# scoped-ci full-if: //p' "$ROOT/hack/tests/test_secret_store_scope_chart.sh")" "" \
+  "test_secret_store_scope_chart runs in scoped PR runs (no full-if)"
+full_if=$(sed -n 's/^# scoped-ci full-if: //p' "$ROOT/hack/tests/test_secret_store_scope.sh")
+for c in addons/telemetry addons/harbor addons/falco charts/tenant; do
+  assert_eq "$(grep -rEqs --exclude-dir=charts "$full_if" "$ROOT/$c" && echo full || echo scoped)" scoped \
+    "$c (ExternalSecrets only) stays scoped"
+done
+for c in addons/secret-stores addons/openchoreo-workflow-plane addons/openchoreo-platform addons/external-dns; do
+  assert_eq "$(grep -rEqs --exclude-dir=charts "$full_if" "$ROOT/$c" && echo full || echo scoped)" full \
+    "$c (defines a store, workflow plane, workflows or the dns guard) -> full"
+done
+
 finish
