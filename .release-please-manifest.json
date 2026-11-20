@@ -1,5 +1,5 @@
 {
-  ".": "0.5.0",
+  ".": "0.6.0",
   "ci": "1.1.1",
   "packages/postgresql": "0.2.0",
   "packages/mysql": "0.2.0",

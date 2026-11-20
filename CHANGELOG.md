@@ -2,6 +2,28 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.6.0](https://github.com/koorikla/platform/compare/v0.5.0...v0.6.0) (2026-11-20)
+
+
+### Features
+
+* **demo-check:** step 9 hello-world database claim Ready check ([#70](https://github.com/koorikla/platform/issues/70)) ([#326](https://github.com/koorikla/platform/issues/326)) ([cda9288](https://github.com/koorikla/platform/commit/cda92886c7ddcd741d593c5f56a0e4adba410332))
+* previews provision the app's Resources; ResourceReleaseBindings need no hand-computed release ([#330](https://github.com/koorikla/platform/issues/330)) ([#333](https://github.com/koorikla/platform/issues/333)) ([8571514](https://github.com/koorikla/platform/commit/8571514635affe49b02c573965194a78cbaa1c3b))
+
+
+### Bug Fixes
+
+* **build:** retry infra-killed build steps and failed missing-digest rebuilds (development stuck on unbuilt image) ([#343](https://github.com/koorikla/platform/issues/343)) ([b4d4f41](https://github.com/koorikla/platform/commit/b4d4f4152ff1b5f1788c4ae159d20bca3ea74723))
+* **demo-check:** app held by an active deny sync window (production freeze) is PENDING with the reason, not FAIL ([#342](https://github.com/koorikla/platform/issues/342)) ([8d7dcd8](https://github.com/koorikla/platform/commit/8d7dcd867f0382a842fb9f0bb816308b422adc0d))
+* **kyverno-policies:** admit exactly the pinned CloudNativePG images in production cells ([#327](https://github.com/koorikla/platform/issues/327)) ([#329](https://github.com/koorikla/platform/issues/329)) ([4f2f1a3](https://github.com/koorikla/platform/commit/4f2f1a39e242fd71e71975d2c159fd0c5c9d34a8))
+* **kyverno-policies:** preview CiliumNetworkPolicy uses top-level specs (Cilium rejected it; whole preview generate failed) ([#339](https://github.com/koorikla/platform/issues/339)) ([d50193f](https://github.com/koorikla/platform/commit/d50193fce35d15658c617a970f19753f202165b1))
+* **openbao:** preview GeneratingPolicy syncs after its RBAC (Kyverno never re-checks RBACPermissionsGranted) ([#337](https://github.com/koorikla/platform/issues/337)) ([e2506e6](https://github.com/koorikla/platform/commit/e2506e651fc3ea016b25a1a72f92c6d213e83804))
+* **openbao:** preview tenant GeneratingPolicy readable by Kyverno's reports controller (clean-bootstrap stall) ([#336](https://github.com/koorikla/platform/issues/336)) ([0f225a3](https://github.com/koorikla/platform/commit/0f225a328fbd27c1e870dd28a858328829083e1e))
+* PR previews read their tenant's OpenBao secrets and run their own PostgreSQL ([#267](https://github.com/koorikla/platform/issues/267), [#331](https://github.com/koorikla/platform/issues/331)) ([#334](https://github.com/koorikla/platform/issues/334)) ([782fb53](https://github.com/koorikla/platform/commit/782fb53f8c7bb1de1c5b1940f1e8109daff139ce))
+* **previews:** teardown leaks the preview's ResourceReleaseBinding (stuck finalizer) and its OpenBao descriptor ([#345](https://github.com/koorikla/platform/issues/345)) ([49f7e36](https://github.com/koorikla/platform/commit/49f7e36c247e8780f36f35f06096f6ba2607676c))
+* **task:** test:changed defaults BASE to origin/main (shellQuote of an unset var failed) ([#332](https://github.com/koorikla/platform/issues/332)) ([67dd8a7](https://github.com/koorikla/platform/commit/67dd8a73c322352bd642f3a79b047833d0b5f21a))
+* **tenant:** app Applications retry without limit (clean bootstrap: environments arrive later) ([#338](https://github.com/koorikla/platform/issues/338)) ([801401e](https://github.com/koorikla/platform/commit/801401ee4afb3ad31dfd90add70d789745d2a53e))
+
 ## [0.5.0](https://github.com/koorikla/platform/compare/v0.4.0...v0.5.0) (2026-11-20)
 
 
