@@ -141,4 +141,5 @@ kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workfl
 - Status `Build ... failed`: the WorkflowRun in the console (Workflows), as for `main` builds.
 - Status stays `Deploying` and the ReleaseBinding says `ResourceDependenciesPending`: the preview's
   ResourceReleaseBinding (`status.conditions`); a quota denial of the database pod or PVC shows in the cell namespace's
-  events (`previewGuards.quota` must fit the ResourceType's smallest size).
+  events (`previewGuards.quota` must fit the ResourceType's smallest size; open gaps for databases in preview cells:
+  [#331](https://github.com/koorikla/platform/issues/331)).
