@@ -24,8 +24,9 @@ STEP CHECK                                          RESULT       DETAIL
 5    promotion-gate WorkflowRuns present            FAIL         no promotion-gate WorkflowRun in default (runs expire 1h after completion; promote to start one)
 ...
 9    PostgreSQL claim API                           PASS         XRD postgresqls.platform.koorikla.io Established on: dev1
+9    hello-world database claim Ready               PENDING      hello-world declares no postgresql Resource (app repo deploy/openchoreo, docs/data-services.md)
 
-23 PASS, 1 FAIL, 2 PENDING
+23 PASS, 1 FAIL, 3 PENDING
 ```
 
 | Result | Meaning | Before the demo |
@@ -40,7 +41,9 @@ other providers (offline `helm template`), the Backstage console, component type
 image admitted and an unsigned one denied in the production cell namespace (`kubectl apply --dry-run=server`, nothing
 is stored), in-cluster builds, hello-world HTTP 200 per environment through the CAPD node IP, promotion-gate
 WorkflowRuns, metrics per cluster and per app in the observability plane, Falco on every cluster and the escalation
-path, OpenBao-issued mesh certificates, ClusterSecretStores, the PostgreSQL claim API.
+path, OpenBao-issued mesh certificates, ClusterSecretStores, the PostgreSQL claim API and hello-world's database claim (its `postgresql` Resource bound and
+Ready in the first environment, the XR Ready in the cell namespace, the Deployment reading `<xr>-app`; PENDING while
+the app declares none).
 
 How it works and what it never does:
 - Reads only: `kubectl get`, `kubectl get --raw` (Prometheus through the API server's service proxy), server-side
@@ -398,8 +401,22 @@ kubectl --kubeconfig dev1.kubeconfig -n pg-demo get postgresql orders-db -w   # 
 Expected: `BACKEND cnpg`, `SECRET orders-db-app`, `COMPOSITION postgresql`. A raw CNPG `Cluster` from a tenant
 is denied by the `postgresql-only-through-the-platform-api` policy (also a native ValidatingAdmissionPolicy).
 
+Through OpenChoreo (what developers actually do): the app repo declares a `Resource` of `ClusterResourceType
+postgresql`, a `ResourceReleaseBinding` per environment and a Workload dependency with `envBindings`
+(docs/data-services.md "PostgreSQL from OpenChoreo"). The cluster agent applies the XR into the cell namespace (its RBAC
+grants exactly `platform.koorikla.io` `postgresqls`, addon openchoreo-data-plane) and the app gets `host`/`port`/
+`database` as values and `username`/`password`/`uri` as `secretKeyRef`s to `<xr>-app`, which never leaves dev1:
+
+```bash
+kubectl --context k3d-platform-mgmt get resourcereleasebindings -n default        # READY True
+kubectl --kubeconfig dev1.kubeconfig get postgresqls -A                          # in the dp-default-demo-development-* cell
+```
+
+`task demo:check` row "hello-world database claim Ready" proves the whole chain (PENDING until hello-world declares
+the Resource).
+
 Talking points: the same XR becomes RDS / Aurora, Cloud SQL or Azure Flexible Server on those providers (rendered and
-tested offline, live accounts pending #107); production XRs must set HA and backups. OpenChoreo resource types: #70.
+tested offline, live accounts pending #107); production XRs must set HA and backups.
 
 Fallback: show docs/data-services.md "PostgreSQL as a service". Clean up with `kubectl delete namespace pg-demo`.
 
