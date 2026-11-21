@@ -34,7 +34,9 @@ Wrapper chart for MOCO (`0.28.0` / `0.38.0`) on workload clusters: the in-cluste
 
 ## Day-2 notes
 
-- The upstream Deployment `moco-controller` runs 0 replicas by design; the controller is `moco-controller-restricted` (values.yaml header).
+- The upstream Deployment `moco-controller` runs 0 replicas by design: the controller is `moco-controller-restricted` (`templates/controller.yaml`, same image, args, probes and labels plus a Pod Security `restricted` securityContext, which upstream chart 0.28.0 has no values for). Delete it and restore `moco.replicaCount` once upstream exposes them.
+- CRDs come from the upstream chart (`crds.enabled`, applied server-side). Its webhook and controller-agent mTLS certificates need addon `cert-manager` on the cluster.
+- Watch scope is cluster-wide (cells `dp-*` appear at runtime): ClusterRole `moco-manager-role` manages the StatefulSets, Pods, PVCs, Services, Secrets, Jobs and PDBs of every MySQL cluster in every namespace.
 
 ## Links
 

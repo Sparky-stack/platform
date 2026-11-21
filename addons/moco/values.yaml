@@ -1,33 +1,14 @@
-# MOCO on workload clusters: opt-in (catalog default false; enable per cluster with label
-# addons.platform.koorikla.io/moco: "true", i.e. cluster file `addons: { moco: true }`). The same label makes addon
-# crossplane install the MySQL API (packages/mysql, backend moco) and the capability gate wait for it (#256).
-# docs/data-services.md "MySQL as a service".
-#
-# Why MOCO: packages/mysql/README.md "Local operator choice" (#241). Footprint (upstream defaults, docs/data-services.md):
-# one controller pod requesting 100m / 20Mi, nothing per namespace; each MySQL XR adds its own mysqld pod(s).
-#
-# CRDs (MySQLCluster, BackupPolicy): rendered by the upstream chart (crds.enabled), applied server-side by Argo CD.
-# Certificates: the upstream chart's cert-manager Issuers/Certificates (webhook serving cert, controller<->agent gRPC
-# mTLS CA): needs addon cert-manager on the cluster (a workload default).
-# Watch scope: cluster-wide (OpenChoreo cell namespaces dp-* appear at runtime). ClusterRole moco-manager-role:
-# MySQLClusters/BackupPolicies plus the StatefulSets, Pods, PVCs, Services, Secrets, ConfigMaps, Jobs, CronJobs, PDBs,
-# ServiceAccounts and Events it creates per MySQL cluster, in every namespace.
-#
-# Pod Security restricted (#256): the upstream Deployment sets neither a seccomp profile nor a capability drop and has
-# no values for them (upstream deployment.yaml at chart 0.28.0). So the upstream Deployment runs 0 replicas
-# (moco.replicaCount) and templates/controller.yaml runs the same controller - same image, args, ports, probes, service
-# account, pod labels (the upstream webhook Service selects them) - with a restricted securityContext. Delete
-# templates/controller.yaml and restore replicaCount once upstream exposes securityContext values.
+# MOCO MySQL operator, opt-in per workload cluster (`addons: { moco: true }`); the same label turns on the MySQL API in
+# addon crossplane. Why MOCO: packages/mysql/README.md "Local operator choice"; docs/data-services.md "MySQL as a service".
 
 namespace:
   # -- `restricted` Pod Security admission label on namespace `moco-system`.
   podSecurity: restricted
-  # Istio ambient mesh client (#53, #347): the controller dials the moco-agent (gRPC :9080) and mysqld (:3306) of
-  # every MySQL pod in cell namespaces, which enforce STRICT mTLS. Its identity is a platformPeer of the cell
-  # AuthorizationPolicy (addon kyverno-policies cellMesh.platformPeers). Inert without Istio.
+  # Istio ambient mesh client (#53): the controller dials moco-agent and mysqld in STRICT-mTLS cells (a platformPeer
+  # of kyverno-policies cellMesh). Inert without Istio.
   ambient: true
 
-# The controller pod the platform runs (templates/controller.yaml). Same keys as the upstream chart's.
+# The controller the platform runs (templates/controller.yaml): upstream's Deployment has no securityContext values.
 controller:
   replicas: 1                       # leader election is on; 1 keeps the local footprint low (MySQL pods do not need it up)
   resources:
@@ -35,15 +16,14 @@ controller:
     limits: { cpu: 500m, memory: 256Mi }    # platform: upstream sets none
 
 moco:
-  replicaCount: 0                   # see the header: templates/controller.yaml runs the controller
+  replicaCount: 0                   # templates/controller.yaml runs the controller under Pod Security restricted
   image:
     repository: ghcr.io/cybozu-go/moco
     tag: "0.38.0@sha256:35f9f4434a0e92b78ef9dc55a518d002dadece576a9094fa638e59574ecedfe3"   # index: amd64, arm64
   crds:
     enabled: true
-  # Images MOCO injects into every MySQL pod: moco-agent (containers agent + copy-moco-init) on every pod; fluent-bit
-  # (slow-log) and mysqld_exporter only when a cluster asks for them (the MySQL Composition disables slow-log and sets
-  # no collectors). Multi-arch, pinned by digest. Production cells admit exactly these + mysqlImageCatalog (#329).
+  # Images MOCO injects into MySQL pods (fluent-bit and mysqld_exporter only on request). Production cells admit
+  # exactly these plus mysqlImageCatalog (#329).
   agent:
     image:
       repository: ghcr.io/cybozu-go/moco-agent
