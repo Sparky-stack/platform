@@ -12,8 +12,7 @@ for bin in helm yq kubeconform; do
   command -v "$bin" >/dev/null || { echo "missing required tool: $bin" >&2; exit 1; }
 done
 pick_python || { echo "missing required tool: python3 (>= 3.8)" >&2; exit 1; }
-# Name tool drift up front: a non-interactive shell whose mise PATH was activated outside the repo runs the global
-# yq/helm, not mise.toml's, and an older yq fails deep in a test with a bare parse error. A warning only.
+# Warn about tool drift up front (global yq/helm instead of mise.toml's): an old yq fails deep in a test otherwise.
 ./hack/tools.sh check helm yq kubeconform 2>&1 | grep -E '^ *(DRIFT|MISSING)' >&2 || true
 
 # CHARTS="addons/x charts/y": lint/render/unittest only these chart dirs (git pre-commit hook: hack/hooks.sh charts).
@@ -92,19 +91,27 @@ check_kubeconform() {
   echo "  PASS $label ($out)"
 }
 
+# sample_param_args <addon>: catalog server and label parameters for a render outside any cluster.
+sample_param_args() {
+  server_param_args "$1" "$SAMPLE_SERVER"
+  label_param_args "$1" "$NO_LABELS"
+}
+
+# tally <command...>: run one suite and count it as passed or failed.
+passed=0
+failed=0
+tally() {
+  if "$@"; then passed=$((passed + 1)); else failed=$((failed + 1)); fi
+}
+
 # 2. Lint every chart in charts/ and addons/ (charts/cluster linted per cluster below)
 for dir in charts/* addons/*; do
-  [[ -f "$dir/Chart.yaml" ]] || continue
+  [[ -f "$dir/Chart.yaml" && "$dir" != charts/cluster ]] || continue
   selected "$dir" || continue
-  if [[ "$dir" != "charts/cluster" ]]; then
-    echo "==> helm lint $dir"
-    lint_sets=()
-    read_lines lint_sets server_param_args "$(basename "$dir")" "$SAMPLE_SERVER"
-    lp_args=()
-    read_lines lp_args label_param_args "$(basename "$dir")" "$NO_LABELS"
-    lint_sets+=(${lp_args[@]+"${lp_args[@]}"})
-    helm lint "$dir" ${lint_sets[@]+"${lint_sets[@]}"} >/dev/null
-  fi
+  echo "==> helm lint $dir"
+  lint_sets=()
+  read_lines lint_sets sample_param_args "$(basename "$dir")"
+  helm lint "$dir" ${lint_sets[@]+"${lint_sets[@]}"} >/dev/null
 done
 
 # 3. Render + kubeconform charts/platform for standalone + every installation
@@ -153,12 +160,9 @@ for dir in addons/* $(yq '.addons[] | select(.path) | .path' charts/platform/val
   for p in ${cn_params[@]+"${cn_params[@]}"}; do
     [[ -n "$p" ]] && standalone_sets+=(--set-string "${p}=sample" --set-string cluster.name=sample)
   done
-  sp_args=()
-  read_lines sp_args server_param_args "$addon" "$SAMPLE_SERVER"
-  standalone_sets+=(${sp_args[@]+"${sp_args[@]}"})
-  lp_args=()
-  read_lines lp_args label_param_args "$addon" "$NO_LABELS"
-  standalone_sets+=(${lp_args[@]+"${lp_args[@]}"})
+  param_args=()
+  read_lines param_args sample_param_args "$addon"
+  standalone_sets+=(${param_args[@]+"${param_args[@]}"})
 
   if [[ "$dir" == addons/* ]]; then   # a `path` chart has its own standalone render (charts/cluster: step 4 + unittest)
     helm template "$(yq ".addons[\"$addon\"].releaseName // \"$addon\"" charts/platform/values.yaml)" "$dir" --namespace "$ns" \
@@ -212,12 +216,9 @@ for dir in addons/* $(yq '.addons[] | select(.path) | .path' charts/platform/val
           continue
         fi
         c_cni=$(yq '.cni // "cilium"' "$cf")
-        # the cluster's labels as charts/cluster renders them (step 4): mesh group/network, derived addon toggles. Taken
-        # from the Argo CD cluster secret's template (the ApplicationSets select on it; == the CAPI Cluster's labels, and
-        # the only copy for provider byo, which has no CAPI Cluster)
-        yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels | del(.["argocd.argoproj.io/secret-type"])' \
-          "$TMP/cluster-$inst-$c_name.yaml" > "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$inst-$c_name.yaml"
-        # addon labels as rendered by charts/cluster (step 4), e.g. addons.platform.koorikla.io/cilium derives from cni
+        # the cluster's labels as charts/cluster renders them (step 4): mesh group/network, derived addon toggles such
+        # as addons.platform.koorikla.io/cilium from cni
+        addon_cluster_labels "$TMP/cluster-$inst-$c_name.yaml" "$TMP/labels-$inst-$c_name.yaml"
         c_toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$TMP/labels-$inst-$c_name.yaml" 2>/dev/null || true)
         [[ -n "$c_toggle" && "$c_toggle" != "null" ]] || c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
         if [[ "$c_toggle" == "false" ]] || { [[ "$addon_default" == "false" ]] && [[ "$c_toggle" != "true" ]]; }; then
@@ -240,17 +241,11 @@ echo "==> Validating bootstrap/root-app.yaml"
 check_kubeconform "bootstrap/root-app.yaml" bootstrap/root-app.yaml
 
 # 7. helm unittest where tests/ exists (after helm dependency build above)
-passed=0
-failed=0
 for dir in charts/* addons/*; do
   [[ -d "$dir/tests" ]] || continue
   selected "$dir" || continue
   echo "==> helm unittest $dir"
-  if helm unittest "$dir"; then
-    passed=$((passed + 1))
-  else
-    failed=$((failed + 1))
-  fi
+  tally helm unittest "$dir"
 done
 
 # 8. Contract & invariant tests in hack/tests/test_*.sh (RENDERED_DIR: the manifests rendered above, e.g. for
@@ -259,11 +254,7 @@ export RENDERED_DIR="$TMP"
 for t in hack/tests/test_*.sh; do
   [[ -f "$t" ]] || continue
   [[ -z "$CHARTS" || " $TESTS " == *" $t "* ]] || continue
-  if bash "$t"; then
-    passed=$((passed + 1))
-  else
-    failed=$((failed + 1))
-  fi
+  tally bash "$t"
 done
 
 echo

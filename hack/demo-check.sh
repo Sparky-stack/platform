@@ -7,10 +7,8 @@
 # (admission runs, nothing is stored), curl GETs and `cosign verify`. Workload-cluster kubeconfigs are written by
 # hack/kubeconfig.sh into a private temp dir and removed on exit; no secret value is printed.
 #
-# PENDING: the feature behind the check is not merged yet. A check whose feature is absent can report it itself
-# (return 2, detail "#<issue> ..."); a failing check listed in pending_issue() reports PENDING #<issue> instead of FAIL.
-# DEMO_STRICT=1 turns the pending_issue() ones back into FAIL. Drop both once the issue closes.
-# Also PENDING: an Argo CD app held OutOfSync by an active deny sync window (production freeze), see c_argo_apps.
+# PENDING: nothing to check yet - a feature not merged (check returns 2, detail "#<issue> ...", or an entry in
+# pending_issue()), a production freeze window, or no promotion since a clean bootstrap. See docs/demo.md.
 #
 # Environment (defaults in brackets):
 #   KUBE_CTX            mgmt kubectl context [k3d-platform-mgmt]
@@ -38,7 +36,6 @@ CURL_IMAGE="curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da
 OBS_NS=openchoreo-observability-plane
 PROM_PROXY="/api/v1/namespaces/$OBS_NS/services/prometheus-operated:9090/proxy/api/v1/query"
 KYVERNO_VALUES=addons/kyverno-policies/values.yaml
-# In-cluster builds (docs/build-plane.md): images under <registry.host>/<registry.appsProject>/ carry the platform key.
 INSTALLATION=installations/local/installation.yaml
 
 if [[ "$CTX" == koorikla ]]; then
@@ -52,9 +49,8 @@ done
 KCDIR=$(mktemp -d)
 trap 'rm -rf "$KCDIR"' EXIT
 
-# Known-unmerged features: a FAILing check with an entry here reports PENDING #<issue>. Delete the entry when the issue
-# closes (tracking: #98). None open today: production (#54, closed) is PENDING only for its live reasons, reported by the
-# checks themselves (freeze window: frozen_env; not promoted since a clean bootstrap: unpromoted_release), else FAIL.
+# pending_issue <check id> -> issue number: a FAILing check of a known-unmerged feature reports PENDING #<issue>.
+# One case line per open issue (tracking: #98); none open today.
 pending_issue() {
   case "$1" in
     *) return 1 ;;
@@ -251,12 +247,22 @@ dry_run_pod() {
 
 short_image() { printf '%s' "$1" | sed -E 's/@sha256:([0-9a-f]{12})[0-9a-f]+/@sha256:\1.../'; }
 
+# join_comma: non-empty stdin lines as "a, b, c".
+join_comma() { grep . | paste -sd, - | sed 's/,/, /g'; }
+
+# first_error <cosign output>: its first line mentioning an error, else its last line.
+first_error() { printf '%s\n' "$1" | grep -m1 -i 'error' || printf '%s' "$1" | tail -n1; }
+
+# release_bindings: "<component> <env> <release> <Ready reason>" for every ReleaseBinding of the org namespace.
+release_bindings() {
+  km get releasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.environment}{" "}{.spec.releaseName}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}' 2>/dev/null
+}
+
 # ---- step 1: clean bootstrap ----------------------------------------------------------------------------------------
-# An Application OutOfSync only because an active deny sync window of its AppProject covers it (the production freeze,
-# docs/promotion.md#freeze-windows) is correct behaviour: PENDING with the window and its end, not FAIL. Argo CD puts no
-# "blocked by window" status on the Application, so hack/lib/syncwindow.py evaluates the windows (DEMO_NOW overrides now).
-# frozen_apps: lines "<app>\t<window description>\t<end>", cached in $KCDIR (checks run in subshells); 1 when the
-# windows cannot be evaluated (reason on stdout).
+# An app OutOfSync only because an active deny sync window holds it (production freeze, docs/promotion.md#freeze-windows)
+# is PENDING, not FAIL. Argo CD does not report that, so hack/lib/syncwindow.py evaluates the windows.
+# frozen_apps: lines "<app>\t<window description>\t<end>", cached in $KCDIR (checks run in subshells); returns 1 with
+# the reason on stdout when the windows cannot be evaluated.
 frozen_apps() {
   local apps="$KCDIR/applications.json" projects="$KCDIR/appprojects.json" cache="$KCDIR/frozen"
   [[ -f "$cache" ]] && { cat "$cache"; return 0; }
@@ -273,8 +279,7 @@ frozen_apps() {
 # holds its Argo CD Application (<project>-<component>-<env>): nothing to check there until the window ends.
 frozen_env() {
   local bindings why
-  bindings=$(km get releasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.environment}{" "}{.spec.releaseName}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}' 2>/dev/null) \
-    || return 1
+  bindings=$(release_bindings) || return 1
   printf '%s\n' "$bindings" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e { f = 1 } END { exit !f }' && return 1
   why=$(frozen_apps 2>/dev/null | awk -F '\t' -v s="-$COMP-$1" 'substr($1, length($1) - length(s) + 1) == s {
     printf "%s frozen by sync window \"%s\" until %s", $1, $2, $3; exit }') || return 1
@@ -353,7 +358,7 @@ c_component_types() {
     || { echo "cannot list ClusterComponentTypes"; return 1; }
   n=$(printf '%s\n' "$out" | grep -c . || true)
   [[ "$n" -gt 0 ]] || { echo "no ClusterComponentTypes"; return 1; }
-  echo "$n: $(printf '%s\n' "$out" | grep . | paste -sd, - | sed 's/,/, /g')"
+  echo "$n: $(printf '%s\n' "$out" | join_comma)"
 }
 
 # ---- step 4: build & supply chain -----------------------------------------------------------------------------------
@@ -382,7 +387,7 @@ cosign_platform() {
       > "$d/docker/config.json" )
   if ! err=$(DOCKER_CONFIG="$d/docker" cosign verify --timeout 60s --key "$d/cosign.pub" --insecure-ignore-tlog=true \
       --registry-cacert "$d/ca.crt" "$image" 2>&1 >/dev/null); then
-    echo "$(short_image "$image") NOT verified: $(printf '%s\n' "$err" | grep -m1 -i 'error' || printf '%s' "$err" | tail -n1)"
+    echo "$(short_image "$image") NOT verified: $(first_error "$err")"
     return 1
   fi
   echo "$(short_image "$image") signed by the platform key (in-cluster build)"
@@ -406,7 +411,7 @@ c_cosign() {
       --certificate-oidc-issuer "$issuer" --certificate-identity "$workflow@$wref" \
       --certificate-github-workflow-repository "$repo" --certificate-github-workflow-ref "$ref" \
       --certificate-github-workflow-trigger "$trig" "$image" 2>&1 >/dev/null); then
-    echo "$(short_image "$image") NOT verified: $(printf '%s\n' "$err" | grep -m1 -i 'error' || printf '%s' "$err" | tail -n1)"
+    echo "$(short_image "$image") NOT verified: $(first_error "$err")"
     return 1
   fi
   echo "$(short_image "$image") signed by ${workflow##*/}@${wref:0:7} ($repo, $ref, $trig)"
@@ -478,14 +483,15 @@ outcome() {
 }
 
 c_build_in_cluster() {
-  local out last
+  local out last result
   out=$(workflow_runs) || { echo "cannot list WorkflowRuns"; return 1; }
   last=$(printf '%s\n' "$out" | awk 'NF >= 3 && $3 != "promotion-gate"' | latest_run) \
     || { echo "no build WorkflowRun in namespace $NS (workflow plane: ClusterWorkflowPlane default)"; return 1; }
   # shellcheck disable=SC2086  # split the run line into its fields
   set -- $last
-  echo "latest build $2 ($3): $(outcome "${4:-/}")"
-  [[ "$(outcome "${4:-/}")" == succeeded ]]
+  result=$(outcome "${4:-/}")
+  echo "latest build $2 ($3): $result"
+  [[ "$result" == succeeded ]]
 }
 
 # ---- step 5: deploy & promote ---------------------------------------------------------------------------------------
@@ -504,8 +510,6 @@ c_http() {
   [[ "$code" == 200 ]] && { echo "$code http://$env-$NS.$host:$port$path (node $ip)"; return 0; }
   rel=$(unpromoted_release "$env")
   if [[ -n "$rel" ]]; then
-    # A clean bootstrap keeps the release names git pins for staging/production, but the ComponentReleases were cut
-    # by the previous stack: nothing to serve until the next promotion (docs/demo.md "After a clean bootstrap").
     echo "$code: not promoted in this stack yet - $env pins $rel, not a ComponentRelease of this stack (promote: docs/demo.md \"After a clean bootstrap\")"
     return 2
   fi
@@ -514,9 +518,8 @@ c_http() {
   return 1
 }
 
-# c_resilience: production pods of the demo component carry the resilience defaults (#251, ClusterTrait resilience
-# embedded in the Deployment component types): PodDisruptionBudget maxUnavailable 1, spread over nodes and zones,
-# PriorityClass app-production.
+# c_resilience: production pods carry the resilience defaults of the Deployment component types (#251): PDB
+# maxUnavailable 1, spread over nodes and zones, PriorityClass app-production.
 c_resilience() {
   local env dp ns dep pdb rel
   env=$(production_env); dp=$(env_dataplane "$env")
@@ -538,24 +541,24 @@ c_resilience() {
 }
 
 # unpromoted_release <env>: the release the component's binding for <env> pins when this stack has no such
-# ComponentRelease (Ready reason ComponentReleaseNotFound), else empty.
+# ComponentRelease (a clean bootstrap keeps git's release names; docs/demo.md "After a clean bootstrap"), else empty.
 unpromoted_release() {
   local out
-  out=$(km get releasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.environment}{" "}{.spec.releaseName}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}' 2>/dev/null) || return 0
+  out=$(release_bindings) || return 0
   printf '%s\n' "$out" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e && $4 == "ComponentReleaseNotFound" { print $3; exit }'
 }
 
-# gate_not_run_yet: true (and says why) when no gate run is expected: production still pins a release of the previous
-# stack, i.e. nothing was promoted since this clean bootstrap (the gate runs on promotion). PENDING, not FAIL.
-# Likewise when production has no binding yet because the freeze holds its Application (no promotion during a freeze).
+# gate_not_run_yet: true (and says why) when no gate run is expected (the gate runs on promotion): nothing promoted
+# since this clean bootstrap, or the freeze holds production's Application.
 gate_not_run_yet() {
-  local rel
-  rel=$(unpromoted_release "$(production_env)")
+  local prod rel
+  prod=$(production_env)
+  rel=$(unpromoted_release "$prod")
   if [[ -z "$rel" ]]; then
-    rel=$(frozen_env "$(production_env)") || return 1
+    rel=$(frozen_env "$prod") || return 1
     echo "no promotion-gate run yet: $rel"; return 0
   fi
-  echo "no promotion-gate run yet: not promoted in this stack ($(production_env) pins $rel)"
+  echo "no promotion-gate run yet: not promoted in this stack ($prod pins $rel)"
 }
 
 c_gate_runs() {
@@ -570,14 +573,15 @@ c_gate_runs() {
 }
 
 c_gate_latest() {
-  local out last
+  local out last result
   out=$(workflow_runs) || { echo "cannot list WorkflowRuns"; return 1; }
   last=$(printf '%s\n' "$out" | awk '$3 == "promotion-gate"' | latest_run) || { gate_not_run_yet && return 2
     echo "no promotion-gate run"; return 1; }
   # shellcheck disable=SC2086  # split the run line into its fields
   set -- $last
-  echo "$2: $(outcome "${4:-/}")"
-  [[ "$(outcome "${4:-/}")" == succeeded ]]
+  result=$(outcome "${4:-/}")
+  echo "$2: $result"
+  [[ "$result" == succeeded ]]
 }
 
 # ---- step 6: observe ------------------------------------------------------------------------------------------------
@@ -590,14 +594,14 @@ c_metrics_clusters() {
     printf '%s\n' "$have" | grep -qx "$c" || missing="$missing${missing:+, }$c"
   done
   [[ -z "$missing" ]] || { echo "no series from: $missing"; return 1; }
-  echo "series from: $(printf '%s\n' "$have" | grep . | paste -sd, - | sed 's/,/, /g')"
+  echo "series from: $(printf '%s\n' "$have" | join_comma)"
 }
 
 c_metrics_app() {
   local json envs
   json=$(prom_query "count by (label_openchoreo_dev_environment) (kube_pod_labels{label_openchoreo_dev_component=\"$COMP\"})") \
     || { echo "Prometheus of the observability plane not reachable (service proxy)"; return 1; }
-  envs=$(prom_label_values label_openchoreo_dev_environment "$json" | grep . | paste -sd, - | sed 's/,/, /g')
+  envs=$(prom_label_values label_openchoreo_dev_environment "$json" | join_comma)
   [[ -n "$envs" ]] || { echo "no $COMP pod metrics in the observability plane"; return 1; }
   echo "$COMP pods seen in: $envs"
 }
@@ -634,10 +638,8 @@ c_falco_cluster_name() {
 }
 
 # ---- step 8: zero trust ---------------------------------------------------------------------------------------------
-# Mesh members (CAPI Clusters labelled mesh.platform.koorikla.io/group, from the fleet file's mesh.group; addon mesh
-# turns istio-csr on there): cert-manager Issuer istio-system/openbao-mesh is a Vault issuer pointing at OpenBao on
-# mgmt, and istiod's serving Certificate is Ready and issued by it (addons/mesh templates/csr-issuer.yaml). Workload
-# certificates follow the same issuer through istio-csr; no CA key is on the member.
+# Mesh members (CAPI Clusters labelled mesh.platform.koorikla.io/group): Issuer istio-system/openbao-mesh (Vault issuer
+# for OpenBao on mgmt) is Ready and issued istiod's serving Certificate (addons/mesh templates/csr-issuer.yaml).
 c_mesh_certs() {
   local apps members c iss crt ok="" bad="" skip=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
@@ -675,10 +677,8 @@ c_secret_stores() {
   printf '%s\n' "$out" | summarize_stores
 }
 
-# c_app_secret: the demo component reads $SECRET_ENV from OpenBao through an OpenChoreo SecretReference (#250,
-# docs/openchoreo.md "Secrets"). In the first environment's cell namespace its Deployment takes the env from a Secret
-# that an ExternalSecret on the namespace's own SecretStore openbao-tenant keeps synced. The value is never printed:
-# only its length is looked at.
+# c_app_secret: in the first environment, the component's Deployment takes $SECRET_ENV from a Secret that an
+# ExternalSecret on SecretStore openbao-tenant keeps synced (docs/openchoreo.md "Secrets"). Only the value's length is read.
 c_app_secret() {
   local env dp ns name es len
   env=$(env_names | head -n1)
@@ -700,9 +700,8 @@ c_app_secret() {
 }
 
 # ---- step 9: app with a database ------------------------------------------------------------------------------------
-# Crossplane runs on each workload cluster that opts in (fleet file `addons: { crossplane: true, cloudnative-pg: true }`,
-# docs/data-services.md): the PostgreSQL XRD must be Established there. No opted-in cluster fails (step 9 has nothing
-# to show).
+# On every workload cluster opted in to addon crossplane (docs/data-services.md) the PostgreSQL XRD is Established.
+# No opted-in cluster fails: step 9 has nothing to show.
 c_postgres() {
   local apps c est ok="" bad=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
@@ -717,11 +716,8 @@ c_postgres() {
   echo "XRD postgresqls.platform.koorikla.io Established on: $ok"
 }
 
-# c_db_claim: the developer side of step 9 (#70, docs/data-services.md "PostgreSQL from OpenChoreo"). The demo
-# component's Workload depends on a Resource of ClusterResourceType postgresql; in the first environment its
-# ResourceReleaseBinding is Ready (OpenChoreo applied the XR, the type's readyWhen = XR Ready), the XR in the cell
-# namespace is Ready and the component's Deployment takes its credentials from the XR's <xr>-app Secret. The XR name
-# comes from the binding's username output (secretKeyRef <xr>-app). PENDING while the demo declares no such Resource.
+# c_db_claim: the component's postgresql Resource is bound and Ready in the first environment and its Deployment reads
+# the XR's <xr>-app Secret (docs/data-services.md "PostgreSQL from OpenChoreo"). PENDING while it declares no Resource.
 c_db_claim() {
   local ref res="" env dp ns rrb secret xr ready refs
   for ref in $(km get workloads.openchoreo.dev -n "$NS" \
