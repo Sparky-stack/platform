@@ -46,6 +46,7 @@ for f in "$dir"/app-*.yaml; do
   # OpenChoreo manifests: every stack validates the app's deploy/openchoreo (app repos carry no validation code).
   [[ "$(yq -r '.jobs.manifests.uses // ""' "$f")" == '$/.github/workflows/app-openchoreo-manifests.yaml' ]] ||
     fail "$name: no 'manifests' job calling app-openchoreo-manifests.yaml"
+  # shellcheck disable=SC2016 # the literal ${{ }} expression is the expected value
   [[ "$(yq -r '.on.workflow_call.inputs.openchoreo_manifests.default // ""' "$f")" == deploy/openchoreo &&
     "$(yq -r '.jobs.manifests.with.directory // ""' "$f")" == '${{ inputs.openchoreo_manifests }}' ]] ||
     fail "$name: input openchoreo_manifests (default deploy/openchoreo) is not passed to the manifests job"
