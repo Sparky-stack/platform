@@ -14,6 +14,11 @@ Invariants:
   - a ClusterTrait with requirements checks each one (dataplane.annotations["addons.platform.koorikla.io/<addon>"] ==
     "true") in a preRenderValidation
   - no type renders a raw CloudNativePG object (tenants get PostgreSQL only through the platform XR)
+  - platform.koorikla.io/uses-addons names DEFAULT-ON workload addons whose kinds a ClusterTrait renders (#252, metrics ->
+    PodMonitor of addon telemetry); a fleet file can still opt out, so each such create is skipped (includeWhen) where
+    dataplane.annotations["addons.platform.koorikla.io/<addon>"] == "false"
+  - capability gate: every non-built-in kind a ClusterTrait / ClusterResourceType renders is waited for under one of its
+    required or used addons (a type naming no addon for such a kind is reported)
 """
 import json
 import re
@@ -90,6 +95,36 @@ for obj in types:
         else:
             out.append(f"OK agent may apply {group or 'core'}/{plural(kind)} for {name}")
 
+def addon_list(obj, key):
+    raw = (obj["metadata"].get("annotations") or {}).get(key) or ""
+    return [a.strip() for a in raw.split(",") if a.strip()]
+
+
+def builtin(api):
+    group = api.split("/")[0] if "/" in api else ""
+    return "." not in group or group.endswith(".k8s.io") or group == "openchoreo.dev"
+
+
+# --- uses: default-on workload addons (#252); the trait skips their kinds where a data plane opts out ---------------
+for obj in types:
+    name = f'{obj["kind"]} {obj["metadata"]["name"]}'
+    for a in addon_list(obj, "platform.koorikla.io/uses-addons"):
+        entry = catalog.get(a)
+        if entry is None or "workload" not in (entry.get("roles") or []):
+            out.append(f"VIOLATION: {name} uses addon {a}, which is not a workload addon of the catalog")
+            continue
+        if entry.get("default") is False:
+            out.append(f"VIOLATION: {name} uses addon {a}, which is opt-in: name it in platform.koorikla.io/requires-addons")
+        want = f'dataplane.annotations["addons.platform.koorikla.io/{a}"] == "false"'
+        for c in (obj["spec"].get("creates") or []) if obj["kind"] == "ClusterTrait" else []:
+            t = c.get("template") or {}
+            if builtin(t.get("apiVersion", "")):
+                continue
+            if want in (c.get("includeWhen") or ""):
+                out.append(f"OK {name} skips its {t.get('kind')} where a data plane opts out of {a}")
+            else:
+                out.append(f"VIOLATION: {name} renders {t.get('kind')} of default-on addon {a} without includeWhen {want}")
+
 # --- requirements: real opt-in workload addons, checked by traits ----------------------------------------------------
 for obj in types:
     name = f'{obj["kind"]} {obj["metadata"]["name"]}'
@@ -141,15 +176,19 @@ if len(sys.argv) > 5:
     labels = (catalog.get("openchoreo-data-plane") or {}).get("clusterLabelParameters") or {}
     for obj in types:
         name = f'{obj["kind"]} {obj["metadata"]["name"]}'
-        raw = (obj["metadata"].get("annotations") or {}).get("platform.koorikla.io/requires-addons") or ""
-        req = [a.strip() for a in raw.split(",") if a.strip()]
-        if not req or obj["kind"] == "ClusterComponentType":
+        uses = addon_list(obj, "platform.koorikla.io/uses-addons")
+        req = addon_list(obj, "platform.koorikla.io/requires-addons") + uses
+        if obj["kind"] == "ClusterComponentType":
             continue
         for plane, api, kind in templates(obj):
-            group = api.split("/")[0] if "/" in api else ""
-            if plane != "dataplane" or "." not in group or group.endswith(".k8s.io") or group == "openchoreo.dev":
+            if plane != "dataplane" or builtin(api):
                 continue  # built-in kinds exist on every cluster
+            group = api.split("/")[0]
             crd = f"{plural(kind)}.{group}"
+            if not req:
+                out.append(f"VIOLATION: {name} renders {kind} ({api}) but names no addon (requires-addons or "
+                           f"uses-addons) whose capability gate waits for crd/{crd}")
+                continue
             by = [a for a in req if crd in created.get(a, set())]
             if not by or crd not in established:
                 out.append(f"VIOLATION: {name} renders {kind} ({api}) but the capability gate does not wait for "
@@ -160,6 +199,9 @@ if len(sys.argv) > 5:
                 if lp.get("label") != f"addons.platform.koorikla.io/{a}":
                     out.append(f"VIOLATION: {name} needs the {a} gate but charts/platform does not enable "
                                f"capabilityGate.addons.{a}.enabled from label addons.platform.koorikla.io/{a}")
+                elif a in uses and lp.get("default") != "true":
+                    out.append(f"VIOLATION: {name} uses default-on addon {a} but its gate label parameter does not "
+                               f"default to \"true\" (clusters without the label run {a})")
                 else:
                     out.append(f"OK agent waits for crd/{crd} of {name} (addon {a})")
 

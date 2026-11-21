@@ -7,6 +7,7 @@ tests:
     template: templates/platform-types.yaml
     set:
       dataServices.enabled: false
+      appMetrics.enabled: false
     asserts:
       - hasDocuments: { count: 1 }
       - equal: { path: metadata.name, value: resilience }

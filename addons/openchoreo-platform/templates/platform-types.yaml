@@ -1,9 +1,13 @@
 {{- /* Platform-owned OpenChoreo types from files/platform/ (cluster-scoped, mgmt): ClusterTrait resilience (#251,
-embedded by templates/upstream-defaults.yaml) and the data-service types keda-scaler + postgresql (#70, docs/data-services.md).
+embedded by templates/upstream-defaults.yaml), ClusterTrait metrics (#252, opt-in app metrics scraping) and the
+data-service types keda-scaler + postgresql (#70, docs/data-services.md), each behind its values switch below.
 The data-service types need operators on the data plane (platform.koorikla.io/requires-addons): keda-scaler checks
 dataplane.annotations itself, postgresql bindings are checked at admission (addon kyverno-policies). */ -}}
+{{- $switch := dict "resilience.yaml" .Values.resilience.enabled "metrics.yaml" .Values.appMetrics.enabled }}
 {{- range $path, $_ := .Files.Glob "files/platform/*/*.yaml" }}
-{{- if ternary $.Values.resilience.enabled $.Values.dataServices.enabled (eq (base $path) "resilience.yaml") }}
+{{- $on := $.Values.dataServices.enabled }}
+{{- if hasKey $switch (base $path) }}{{ $on = get $switch (base $path) }}{{ end }}
+{{- if $on }}
 ---
 # Source: {{ $.Chart.Name }}/{{ $path }}
 {{- $obj := $.Files.Get $path | fromYaml }}

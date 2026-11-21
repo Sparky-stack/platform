@@ -1,0 +1,99 @@
+suite: openchoreo-platform - app config files and metrics scraping (#252)
+templates:
+  - templates/platform-types.yaml
+  - templates/upstream-defaults.yaml
+tests:
+  # --- metrics: opt-in ClusterTrait, PodMonitor in the cell ---------------------------------------------------------
+  - it: renders ClusterTrait metrics on its own switch
+    template: templates/platform-types.yaml
+    set:
+      dataServices.enabled: false
+      resilience.enabled: false
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: metrics }
+      - equal: { path: 'metadata.annotations["platform.koorikla.io/uses-addons"]', value: telemetry }
+
+  - it: appMetrics.enabled false removes it and leaves the other platform types alone
+    template: templates/platform-types.yaml
+    set:
+      appMetrics.enabled: false
+    asserts:
+      - hasDocuments: { count: 3 }
+      - notEqual: { path: metadata.name, value: metrics }
+
+  - it: the PodMonitor scrapes the declared metrics port of the component's pods, bounded per scrape
+    template: templates/platform-types.yaml
+    documentSelector: { path: metadata.name, value: metrics }
+    asserts:
+      - equal: { path: 'spec.creates[0].template.kind', value: PodMonitor }
+      - equal: { path: 'spec.creates[0].template.metadata.namespace', value: '${metadata.namespace}' }
+      - equal: { path: 'spec.creates[0].template.spec.selector.matchLabels', value: '${metadata.podSelectors}' }
+      - equal: { path: 'spec.creates[0].template.spec.podMetricsEndpoints[0].port', value: metrics }
+      - equal: { path: 'spec.creates[0].template.spec.sampleLimit', value: '${environmentConfigs.sampleLimit}' }
+      - contains:
+          path: spec.patches[0].operations
+          content:
+            op: add
+            path: "/spec/template/spec/containers/[?(@.name=='main')]/ports/-"
+            value: { name: metrics, containerPort: '${parameters.port}', protocol: TCP }
+      - contains: { path: spec.parameters.openAPIV3Schema.required, content: port }
+
+  - it: no PodMonitor where the data plane opts out of telemetry (no CRD, no scraper) or the environment turns it off
+    template: templates/platform-types.yaml
+    documentSelector: { path: metadata.name, value: metrics }
+    asserts:
+      - matchRegex:
+          path: spec.creates[0].includeWhen
+          pattern: 'environmentConfigs.enabled && !\(has\(dataplane.annotations\)'
+      - matchRegex:
+          path: spec.creates[0].includeWhen
+          pattern: 'dataplane.annotations\["addons.platform.koorikla.io/telemetry"\] == "false"'
+
+  - it: developers may attach it to every Deployment component type
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: spec.workloadType, value: deployment, matchMany: true }
+    asserts:
+      - contains:
+          path: spec.allowedTraits
+          content: { kind: ClusterTrait, name: metrics }
+
+  - it: not allowed anywhere with appMetrics.enabled false
+    template: templates/upstream-defaults.yaml
+    set:
+      appMetrics.enabled: false
+    documentSelector: { path: spec.workloadType, value: deployment, matchMany: true }
+    asserts:
+      - notContains:
+          path: spec.allowedTraits
+          content: { kind: ClusterTrait, name: metrics }
+
+  # --- config files: upstream Workload files, rolled out by OpenChoreo's dp-resource-hash ---------------------------
+  # No platform trait: OpenChoreo 1.3.3 renders each Workload `files` entry as a ConfigMap mounted at mountPath/key and
+  # hashes every non-workload data-plane resource of a Deployment into the pod template (openchoreo.dev/dp-resource-hash),
+  # so a changed file restarts the pods. These guard the platform's edits of the component types against dropping it.
+  - it: Deployment component types render Workload files as mounted ConfigMaps
+    template: templates/upstream-defaults.yaml
+    documentSelector: { path: spec.workloadType, value: deployment, matchMany: true }
+    asserts:
+      - contains:
+          path: spec.resources
+          content:
+            id: file-config
+            forEach: ${configurations.toConfigFileList()}
+            var: config
+            template:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: ${config.resourceName}
+                namespace: ${metadata.namespace}
+              data:
+                ${config.name}: |
+                  ${config.value}
+      - matchRegex:
+          path: spec.resources[0].template.spec.template.spec.containers[0].volumeMounts
+          pattern: configurations.toContainerVolumeMounts\(\)
+      - matchRegex:
+          path: spec.resources[0].template.spec.template.spec.volumes
+          pattern: configurations.toVolumes\(\)

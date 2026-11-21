@@ -1,0 +1,97 @@
+# Platform ClusterTrait metrics (#252, docs/openchoreo.md "Application metrics"): opt-in Prometheus scraping of the
+# component's own /metrics. The developer attaches it with the port (and path) the app serves metrics on:
+#
+#   traits:
+#     - { kind: ClusterTrait, name: metrics, instanceName: metrics, parameters: { port: 8080 } }
+#
+# It declares that port on the main container as `metrics` (OpenChoreo 1.3.3 declares no container ports, and a
+# PodMonitor can only select a declared one) and renders a PodMonitor in the cell. The data plane's Prometheus agent
+# (addon telemetry: selects every PodMonitor in every namespace) scrapes it and remote-writes to the observability plane.
+# Cells enforce STRICT mTLS: the agent is in the ambient mesh and its identity is a platformPeer of the cell
+# AuthorizationPolicy (#209, #323, #324), so nothing else has to be opened.
+#
+# Where a data plane opts out of addon telemetry (fleet file `addons.telemetry: false` -> ClusterDataPlane annotation)
+# there is no scraper and no PodMonitor CRD: the PodMonitor is skipped and the app deploys as without the trait.
+# Default-on addon, so no requires-addons check; platform.koorikla.io/uses-addons makes the agent's capability gate wait
+# for the PodMonitor CRD (hack/tests/test_openchoreo_types.sh).
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterTrait
+metadata:
+  name: metrics
+  annotations:
+    openchoreo.dev/display-name: Prometheus metrics
+    openchoreo.dev/description: Scrapes the component's metrics endpoint into the observability plane
+    platform.koorikla.io/uses-addons: telemetry
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required: [port]
+      properties:
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Container port serving Prometheus metrics (may be the HTTP endpoint's port).
+        path:
+          type: string
+          default: /metrics
+          pattern: ^/
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+          description: false skips the PodMonitor in this environment.
+        interval:
+          type: string
+          default: 30s
+          pattern: ^[0-9]+(s|m)$
+        sampleLimit:
+          type: integer
+          default: 5000
+          minimum: 1
+          description: >-
+            A scrape with more samples is rejected whole: one app's label explosion cannot exhaust the shared agent
+            (its memory limit is tight, #83).
+
+  creates:
+    - includeWhen: >-
+        ${environmentConfigs.enabled && !(has(dataplane.annotations)
+        && "addons.platform.koorikla.io/telemetry" in dataplane.annotations
+        && dataplane.annotations["addons.platform.koorikla.io/telemetry"] == "false")}
+      template:
+        apiVersion: monitoring.coreos.com/v1
+        kind: PodMonitor
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          selector:
+            matchLabels: ${metadata.podSelectors}
+          sampleLimit: ${environmentConfigs.sampleLimit}
+          podMetricsEndpoints:
+            - port: metrics
+              path: ${parameters.path}
+              interval: ${environmentConfigs.interval}
+              # Pod labels carry only OpenChoreo UIDs: name the series by component, project and environment.
+              relabelings:
+                - { action: replace, targetLabel: component, replacement: "${metadata.componentName}" }
+                - { action: replace, targetLabel: project, replacement: "${metadata.projectName}" }
+                - { action: replace, targetLabel: environment, replacement: "${metadata.environmentName}" }
+
+  patches:
+    - target:
+        group: apps
+        version: v1
+        kind: Deployment
+      operations:
+        - op: add
+          path: /spec/template/spec/containers/[?(@.name=='main')]/ports/-
+          value:
+            name: metrics
+            containerPort: ${parameters.port}
+            protocol: TCP
