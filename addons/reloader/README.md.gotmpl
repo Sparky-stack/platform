@@ -1,5 +1,5 @@
 {{- define "chart.purpose" -}}
-Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to explicit namespaces (no `ClusterRole`). Rolls `openchoreo-data-plane` `cluster-agent-dataplane` on TLS renewal on workload clusters, and `openchoreo-control-plane` Backstage on `ConfigMap` changes on `mgmt`.
+Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), Workload clusters: rolls `openchoreo-data-plane` `cluster-agent-dataplane` on TLS renewal and app Deployments in tenant cells (incl. previews) when their OpenBao-backed Secret rotates (#268); it watches cluster-wide because cells have runtime names, and ValidatingAdmissionPolicy `reloader-rollout-only` (`templates/rollout-guard.yaml`) lets it change only the rollout annotation, only in cells and `rolloutGuard.platformNamespaces`. `mgmt`: scoped `Role` in `openchoreo-control-plane`, rolls Backstage on `ConfigMap` changes.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
@@ -8,6 +8,7 @@ Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to e
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
+- App secret rotation (pods roll within the ExternalSecret refresh, 15 s): [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao).
 - Agent certificate rotation and reload checks: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#3-openchoreo-agent-certificates) and [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected).
 {{- end -}}
 
