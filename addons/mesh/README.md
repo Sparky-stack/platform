@@ -95,8 +95,6 @@ Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `
 | reader.enabled | bool | `true` | Scoped discovery RBAC (`reader.{enabled,user,remoteCredentialsSecrets}`) for `platform:istio-reader`. |
 | reader.remoteCredentialsSecrets | bool | `false` |  |
 | reader.user | string | `"platform:istio-reader"` |  |
-| rootCA.key | string | `"root-cert.pem"` |  |
-| rootCA.secret | string | `"mesh-root-ca"` | Pins `mesh-root-ca` (`root-cert.pem`) delivered from `mgmt` via CAPI `ClusterResourceSet`. |
 | ztunnel.annotations."argocd.argoproj.io/sync-wave" | string | `"1"` |  |
 | ztunnel.image | string | `"docker.io/istio/ztunnel:1.32.0-distroless@sha256:953a77fc17379301de4b7c6697b1668471c9c1f6ff912c9c5b78f454ab362180"` |  |
 | ztunnel.podAnnotations | object | `{}` |  |

@@ -1,30 +1,11 @@
 {{- /*
-PR preview environments (installation.yaml `previews`, docs/preview-environments.md). Two halves, by cluster role:
-
-mgmt (previewGuards.environments, values/role-mgmt.yaml) - the OpenChoreo Environments charts/preview renders, matched
-by their label platform.koorikla.io/preview=true:
-  MutatingPolicy   platform-preview-expiry  CREATE: stamps platform.koorikla.io/expires-at = now + previews.ttl (unix
-                                            seconds), once; the chart never renders it, so syncs cannot move it
-  ValidatingPolicy platform-preview-cap     CREATE: at most previews.maxPerTenant live previews per tenant (label
-                                            platform.koorikla.io/tenant); the denied Application keeps retrying, so the
-                                            preview starts when a slot frees up
-  DeletingPolicy   platform-preview-ttl     every previewGuards.schedule: deletes previews ttlGrace past expires-at (or
-                                            past creation + ttl when the stamp is missing). Backstop only: the
-                                            auto-build pass expires the PR first (label previews.expiredLabel, the
-                                            Application renders empty). OpenChoreo's environment finalizer then removes
-                                            the bindings and the cell namespace.
-data planes (previewGuards.namespaces) - the cell namespaces of preview Environments (ProjectReleaseBinding
-namespaceLabels platform.koorikla.io/preview=true on namespaces OpenChoreo's renderedrelease controller creates):
-  GeneratingPolicy platform-preview-guardrails  ResourceQuota + LimitRange (development-sized) and NetworkPolicy
-                                            platform-preview-isolation: egress only inside the namespace, to platform
-                                            namespaces (no openchoreo.dev/environment label: DNS, gateways) and outside
-                                            the cluster - never to another cell (staging, production, other previews).
-                                            With cni cilium also CiliumNetworkPolicy platform-preview-database-apiserver:
-                                            kube-apiserver egress for CloudNativePG instance / job pods only (#331).
-                                            Ingress isolation is OpenChoreo's own per-component NetworkPolicy (same
-                                            namespace + system components only). Kept in sync (tampering is reverted).
-Policy tier: preview cell namespaces have an environment name outside imageVerification.environments, so the
-supply-chain gate applies imageVerification.defaultAction (Audit = development tier).
+PR preview environments (docs/preview-environments.md), by cluster role.
+mgmt (previewGuards.environments), on Environments labelled platform.koorikla.io/preview=true:
+  MutatingPolicy   platform-preview-expiry  stamps platform.koorikla.io/expires-at = now + previews.ttl, once
+  ValidatingPolicy platform-preview-cap     at most previews.maxPerTenant live previews per tenant
+  DeletingPolicy   platform-preview-ttl     backstop: deletes previews ttlGrace past expires-at
+data planes (previewGuards.namespaces), on preview cell namespaces:
+  GeneratingPolicy platform-preview-guardrails  ResourceQuota, LimitRange and egress isolation from other cells
 */ -}}
 {{- $pv := .Values.previews | default dict }}
 {{- $g := .Values.previewGuards }}
