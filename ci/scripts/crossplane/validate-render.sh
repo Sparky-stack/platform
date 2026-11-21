@@ -17,6 +17,7 @@
 #                    expected/<name>, extra-resources/<name>)
 #   FUNCTIONS_FILE   default $RENDER_DIR/functions.yaml (absent in a Crossplane Project: embedded functions)
 #   UPDATE_EXPECTED  true = (re)write expected outputs instead of diffing
+#   RENDER_TIMEOUT   render timeout without a functions file (Crossplane Project), default 15m
 #   CACHE_DIR        schema cache dir (crossplane --cache-dir)
 #   CI_OUT_DIR       output dir, default ./.ci-out
 # Files out:
@@ -66,11 +67,10 @@ find . -type f \( -name '*.yaml' -o -name '*.yml' \) \
   -not -path './tests/*' -not -path './_output/*' -not -path './schemas/*' \
   -not -name 'crossplane.yaml' -not -name 'crossplane-project.yaml' | LC_ALL=C sort >"${tmp}/files.list"
 while IFS= read -r f <&3; do
+  # One kind per document of a multi-document file.
   kinds="$(yq -r '.kind' "$f" 2>/dev/null || true)"
   case "${kinds}" in *CompositeResourceDefinition*) echo "$f" >>"${tmp}/xrds.list" ;; esac
-  case "${kinds}" in *Composition*)
-    if printf '%s\n' "${kinds}" | grep -qx Composition; then echo "$f" >>"${tmp}/comps.list"; fi ;;
-  esac
+  if printf '%s\n' "${kinds}" | grep -qx Composition; then echo "$f" >>"${tmp}/comps.list"; fi
 done 3<"${tmp}/files.list"
 
 [[ -s "${tmp}/xrds.list" ]] || die "no CompositeResourceDefinition found"
@@ -105,10 +105,8 @@ crossplane resource validate ${cache_args} "${extensions}" "${examples}"
 # 3. Render tests.
 [[ -f "${functions}" || -f crossplane-project.yaml ]] || die "functions file ${functions} not found (needed by composition render)"
 
-# A Crossplane Project WITH a functions file (Functions pinned like the cluster installs them): its embedded functions
-# (functions/<fn>/) are not in it: build the project, load
-# the images it built for this machine's arch (<repo>_<fn>:<arch>) and add one Function per embedded function, named
-# like Crossplane names the dependency <repo>_<fn> (registry host dropped, / -> -, _ dropped).
+# A Crossplane Project with a functions file lacks its embedded functions (functions/<fn>/): build the project, load the
+# images for this arch and add one Function each, named like Crossplane names the dependency (<repo>_<fn>, see below).
 if [[ -f crossplane-project.yaml && -f "${functions}" ]] && compgen -G 'functions/*/' >/dev/null; then
   require_cmd docker
   repo="$(yq -r '.spec.repository' crossplane-project.yaml)"
@@ -120,6 +118,7 @@ if [[ -f crossplane-project.yaml && -f "${functions}" ]] && compgen -G 'function
   cp "${functions}" "${tmp}/functions.yaml"
   for d in functions/*/; do
     fn="$(basename "${d}")"
+    # Registry host dropped, / -> -, _ dropped.
     name="$(printf '%s_%s' "${repo#*/}" "${fn}" | tr '/' '-' | tr -d '_')"
     printf -- '---\napiVersion: pkg.crossplane.io/v1\nkind: Function\nmetadata:\n  name: %s\n  annotations:\n    render.crossplane.io/runtime-docker-pull-policy: Never\nspec:\n  package: %s\n' \
       "${name}" "${repo}_${fn}:${arch}" >>"${tmp}/functions.yaml"
