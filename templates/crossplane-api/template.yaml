@@ -1,0 +1,162 @@
+# Golden-path template for a new platform API (docs/project-templates.md, docs/crossplane.md "Inner loop"): a repository
+# with the `crossplane project init` layout (XRD + Composition + embedded go-templating function + example) and the
+# koorikla/platform reusable workflow app-crossplane-configuration.yaml wired. Not a service: no OpenChoreo Component
+# and no tenant file (hack/tests/test_project_templates.sh checks it apart from the service templates).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: crossplane-api
+  title: Platform API (Crossplane Configuration)
+  description: A platform API as a Crossplane Project (XRD, Composition, embedded function), validated, rendered, built, pushed and signed by koorikla/platform app-crossplane-configuration.yaml.
+  tags: [golden-path, crossplane, platform-api]
+  annotations:
+    platform.koorikla.io/stack: crossplane
+    platform.koorikla.io/ci-workflow: app-crossplane-configuration.yaml
+spec:
+  owner: group:default/openchoreo-users
+  type: platform-api
+  parameters:
+    - title: Platform API
+      required: [name, kind, plural, group, owner, project]
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Repository, Crossplane Project and package name (lowercase letters, digits, dashes)
+          pattern: '^[a-z]([-a-z0-9]{0,38}[a-z0-9])?$'
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          default: A platform API
+          maxLength: 200
+        kind:
+          title: XR kind
+          type: string
+          description: Kind of the composite resource developers create (PascalCase, e.g. Widget)
+          pattern: '^[A-Z][A-Za-z0-9]{0,62}$'
+        plural:
+          title: Plural
+          type: string
+          description: Lowercase plural of the kind (e.g. widgets); the XRD is <plural>.<group>
+          pattern: '^[a-z]([a-z0-9]{0,61}[a-z0-9])?$'
+        group:
+          title: API group
+          type: string
+          default: platform.koorikla.io
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$'
+        owner:
+          title: Owner
+          type: string
+          description: Team that owns the API in the catalog
+          default: group:default/openchoreo-users
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+        project:
+          title: Owning tenant
+          type: string
+          description: Tenant recorded as the repository owner in the governance record (installations/<installation>/repos/)
+          pattern: '^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$'
+        installation:
+          title: Installation
+          type: string
+          default: local
+          enum: [local, aws-example, hetzner-example]
+    - title: Repository
+      required: [repoOwner, codeowners, visibility]
+      properties:
+        repoOwner:
+          title: GitHub owner
+          type: string
+          description: Owner the platform write GitHub App (platform-github-app) is installed on
+          default: koorikla
+          enum: [koorikla]
+        visibility:
+          title: Visibility
+          type: string
+          default: public
+          enum: [public, private]
+        codeowners:
+          title: Code owners
+          type: string
+          description: GitHub users or teams for CODEOWNERS, space separated
+          default: '@koorikla'
+          pattern: '^@[A-Za-z0-9][-A-Za-z0-9]*(/[-A-Za-z0-9_.]+)?( @[A-Za-z0-9][-A-Za-z0-9]*(/[-A-Za-z0-9_.]+)?)*$'
+  steps:
+    - id: fetch-project
+      name: Crossplane Project skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          kind: ${{ parameters.kind }}
+          plural: ${{ parameters.plural }}
+          group: ${{ parameters.group }}
+          repoOwner: ${{ parameters.repoOwner }}
+          imageOwner: ${{ parameters.repoOwner | lower }}
+          codeowners: ${{ parameters.codeowners }}
+          stack: crossplane
+        # GitHub Actions expressions and function-go-templating templates are not scaffolder placeholders
+        copyWithoutTemplating:
+          - .github/workflows/*
+          - functions/compose/*
+    - id: publish
+      name: Create the repository
+      action: publish:github
+      input:
+        # No token input: the GitHub integration authenticates as the platform write GitHub App. Repository settings
+        # and rulesets come from the governance record below, reconciled by Crossplane (koorikla/platform#100).
+        repoUrl: github.com?owner=${{ parameters.repoOwner }}&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+        repoVisibility: ${{ parameters.visibility }}
+        defaultBranch: main
+        protectDefaultBranch: false
+        gitCommitMessage: 'feat: scaffold ${{ parameters.name }} from the crossplane-api golden path'
+    - id: fetch-platform-repo
+      name: Governance record
+      action: fetch:template:file
+      input:
+        url: ../_platform/github-repository.yaml
+        targetPath: ./platform/installations/${{ parameters.installation }}/repos/${{ parameters.name }}.yaml
+        values:
+          name: ${{ parameters.name }}
+          project: ${{ parameters.project }}
+          installation: ${{ parameters.installation }}
+          repoOwner: ${{ parameters.repoOwner }}
+          visibility: ${{ parameters.visibility }}
+          codeowners: ${{ parameters.codeowners }}
+          stack: crossplane
+    - id: platform-pr
+      name: Platform pull request
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=koorikla&repo=platform
+        sourcePath: ./platform
+        branchName: scaffold/${{ parameters.name }}
+        title: 'feat(repos): govern ${{ parameters.repoOwner }}/${{ parameters.name }} (crossplane-api)'
+        description: |
+          Scaffolded by the Backstage `crossplane-api` golden path: https://github.com/${{ parameters.repoOwner }}/${{ parameters.name }}
+
+          - `installations/${{ parameters.installation }}/repos/${{ parameters.name }}.yaml`: governance record (#100); Crossplane applies settings, ruleset and permissions.
+
+          Installing the API on a cluster is a separate change to `addons/crossplane` (Configuration pinned by digest after the first CI push, docs/crossplane.md "Adding a new API").
+    - id: register
+      name: Register in the catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Platform pull request
+        url: ${{ steps['platform-pr'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

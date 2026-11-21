@@ -1,0 +1,10 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $xr.metadata.name }}-settings
+  annotations:
+    {{ setResourceNameAnnotation "settings" }}
+    gotemplating.fn.crossplane.io/ready: "True"
+data:
+  size: {{ $size | quote }}

@@ -21,10 +21,10 @@ deployed by Argo CD + OpenChoreo ([openchoreo.md](openchoreo.md#tenants)).
 Each stack workflow runs the stack's linters, tests, dependency audit and CodeQL, then calls `container.yaml`, which
 builds, scans, signs and attests the multi-arch image; the Dockerfile's build stage runs the tests again, so
 `docker build` alone also fails on a broken test. More frameworks
-(Elixir, Next.js, Ruby, Spring Boot, NestJS, Crossplane configuration, Helm chart, GraphQL):
+(Elixir, Next.js, Ruby, Spring Boot, NestJS, Helm chart, GraphQL):
 [#59](https://github.com/koorikla/platform/issues/59).
 
-Every generated repository contains:
+Every generated service repository contains:
 
 - the app with unit tests, `GET /healthz` and `GET /version`, listening on `PORT` (8080);
 - a multi-arch `Dockerfile`: bases pinned by index digest, non-root runtime on distroless, tests in the build stage;
@@ -39,6 +39,22 @@ Every generated repository contains:
 `catalog-info.yaml` declares a `Resource` (type `repository`, `dependencyOf` the component), not a `Component`:
 OpenChoreo's catalog provider already publishes `component:default/<name>` from the OpenChoreo Component, and a second
 entity with the same ref would conflict.
+
+### Platform API: `crossplane-api`
+
+Not a service (`spec.type: platform-api`): a repository for a new platform API as a Crossplane Configuration package,
+laid out by `crossplane project init` - `crossplane-project.yaml`, `apis/api/{definition,composition}.yaml` (an XRD
+for the chosen kind / plural / group and its Composition), `functions/compose/` (embedded function-go-templating
+function, one file per composed resource; copied without templating), `examples/example.yaml`, `tests/`,
+`operations/`, `mise.toml` (the platform's Crossplane CLI) and the same `catalog-info.yaml` (type
+`crossplane-configuration`), CODEOWNERS, renovate.json and SECURITY.md. `.github/workflows/ci.yaml` calls
+`app-crossplane-configuration.yaml` pinned at `# ci-v1.1.1` (Crossplane Project builds need ci-v1.1.0 or later; not
+the `ci-v1.0.0` commit Kyverno trusts for app images: Crossplane packages are not admitted by Kyverno). The platform PR
+carries only the governance record (no tenant file, no OpenChoreo `deploy/`); installing the API is a later
+`addons/crossplane` change ([crossplane.md](crossplane.md#adding-a-new-api)). The developer loop is
+[crossplane.md "Inner loop"](crossplane.md#inner-loop-crossplane-cli-24-project-tooling-beta). Contract:
+`hack/tests/test_crossplane_api_template.sh` (`TEMPLATES_BUILD=1` also renders the example and runs `crossplane
+project build` on the generated repository).
 
 ## Scaffolder flow
 
@@ -158,7 +174,8 @@ the end-to-end run is tracked in [#109](https://github.com/koorikla/platform/iss
    only `${{ values.<key> }}` (optionally `| dump` or `| lower`); `{%` and `{#` are refused because nunjucks would
    parse them in code.
 3. Add it to `templates/catalog-info.yaml`.
-4. `bash hack/tests/test_project_templates.sh` (part of `task test`); `TEMPLATES_BUILD=1` also builds and smoke-tests
+4. `bash hack/tests/test_project_templates.sh` (part of `task test`; a non-service template gets its own test, like
+   `test_crossplane_api_template.sh`); `TEMPLATES_BUILD=1` also builds and smoke-tests
    the images (needs Docker; CI workflow `templates.yaml` runs it on amd64 and arm64).
 
 Forks: change `github.com?owner=koorikla&repo=platform`, the `repoOwner` enum in every template and the catalog url
