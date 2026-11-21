@@ -1,0 +1,9 @@
+# Sample XR: `crossplane xrd generate examples/example.yaml` derived apis/api/definition.yaml from it; the CI renders
+# it through the Composition (app-crossplane-configuration.yaml).
+apiVersion: ${{ values.group }}/v1alpha1
+kind: ${{ values.kind }}
+metadata:
+  name: example
+  namespace: default
+spec:
+  size: small

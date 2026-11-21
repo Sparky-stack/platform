@@ -8,6 +8,7 @@ metadata:
   description: koorikla/platform golden-path project templates (docs/project-templates.md)
 spec:
   targets:
+    - ./crossplane-api/template.yaml
     - ./docker-service/template.yaml
     - ./go-service/template.yaml
     - ./java-quarkus-service/template.yaml

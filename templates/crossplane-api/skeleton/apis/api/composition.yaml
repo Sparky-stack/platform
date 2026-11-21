@@ -1,0 +1,19 @@
+# One Composition for the ${{ values.kind }} API (`crossplane composition generate apis/api/definition.yaml`, then
+# `crossplane function generate compose apis/api/composition.yaml`). The embedded function's name is derived from
+# spec.repository of crossplane-project.yaml (host dropped, / -> -) + the function directory.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: ${{ values.plural }}.${{ values.group }}
+spec:
+  compositeTypeRef:
+    apiVersion: ${{ values.group }}/v1alpha1
+    kind: ${{ values.kind }}
+  mode: Pipeline
+  pipeline:
+    - step: compose
+      functionRef:
+        name: ${{ values.imageOwner }}-${{ values.name }}compose
+    - step: crossplane-contrib-function-auto-ready
+      functionRef:
+        name: crossplane-contrib-function-auto-ready
