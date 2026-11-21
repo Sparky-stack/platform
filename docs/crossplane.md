@@ -128,7 +128,7 @@ Field-by-field reference of every XRD (generated): [reference/crossplane-apis.md
 | API | Package | Local backend (operator) | Cloud backends | Status |
 |---|---|---|---|---|
 | PostgreSQL | [`packages/postgresql`](../packages/postgresql/README.md) | CloudNativePG | RDS / Aurora, Cloud SQL, Azure Flexible | tested locally |
-| MySQL | [`packages/mysql`](../packages/mysql/README.md) | MOCO (Vitess evaluated: too heavy per app) | RDS, Cloud SQL, Azure Flexible | layout |
+| MySQL | [`packages/mysql`](../packages/mysql/README.md) | MOCO (Vitess evaluated: too heavy per app) | RDS, Cloud SQL, Azure Flexible (layout) | moco installed with addon moco (#256); cloud layout |
 | Valkey | [`packages/valkey`](../packages/valkey/README.md) | valkey-io/valkey-operator | ElastiCache, Memorystore, Azure Cache for Redis | layout |
 | Bucket | [`packages/bucket`](../packages/bucket/README.md) | RustFS operator | S3, GCS, Azure Blob | layout |
 | KafkaTopic | [`packages/kafka-topic`](../packages/kafka-topic/README.md) | Strimzi | Event Hubs (MSK, Managed Kafka: no upjet kind yet) | layout |

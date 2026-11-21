@@ -19,6 +19,9 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 | capabilityGate.addons.crossplane.enabled | string | `"false"` |  |
 | capabilityGate.addons.keda.crds[0] | string | `"scaledobjects.keda.sh"` |  |
 | capabilityGate.addons.keda.enabled | string | `"false"` |  |
+| capabilityGate.addons.moco.crds[0] | string | `"mysqlclusters.moco.cybozu.com"` |  |
+| capabilityGate.addons.moco.crds[1] | string | `"mysqls.platform.koorikla.io"` |  |
+| capabilityGate.addons.moco.enabled | string | `"false"` |  |
 | capabilityGate.image | string | `"registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39"` | Agent start gate (`capabilityGate.{image,timeout,addons.<addon>.{enabled,crds}}`): an Argo CD sync hook in wave -1 waits until every CRD of each enabled addon is Established ([data services](../../docs/data-services.md#keda-and-openchoreo-workloads)). |
 | capabilityGate.timeout | string | `"30m"` |  |
 | cluster.name | string | `"default"` |  |
@@ -27,6 +30,7 @@ Wrapper chart for `openchoreo-data-plane` (`1.3.3`) on workload clusters. Runs t
 | clusterAgentDataServices.rules[0].resources[0] | string | `"scaledobjects"` |  |
 | clusterAgentDataServices.rules[1].apiGroup | string | `"platform.koorikla.io"` |  |
 | clusterAgentDataServices.rules[1].resources[0] | string | `"postgresqls"` |  |
+| clusterAgentDataServices.rules[1].resources[1] | string | `"mysqls"` |  |
 | clusterAgentDataServices.serviceAccount | string | `"cluster-agent-dataplane"` |  |
 | openchoreo-data-plane.clusterAgent.image.tag | string | `"v1.3.3@sha256:de4907fcf4ffa6822dcbcaff876b02861bae0804c3aa86db6df64f918ef8451c"` |  |
 | openchoreo-data-plane.clusterAgent.planeID | string | `"default"` |  |

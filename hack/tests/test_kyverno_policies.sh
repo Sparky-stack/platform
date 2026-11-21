@@ -96,7 +96,7 @@ from=()
 while IFS= read -r a; do
   if [[ -n "$a" ]]; then from+=(-f "$ROOT/addons/$a/values.yaml"); fi
 done < <(yq -r '.addons["kyverno-policies"].valuesFromAddons // [] | .[]' "$ROOT/charts/platform/values.yaml" | tr -d '\r')
-assert_eq "${from[*]:-}" "-f $ROOT/addons/cloudnative-pg/values.yaml" "kyverno-policies reads addons/cloudnative-pg values (catalog valuesFromAddons)"
+assert_eq "${from[*]:-}" "-f $ROOT/addons/cloudnative-pg/values.yaml -f $ROOT/addons/moco/values.yaml" "kyverno-policies reads addons/cloudnative-pg + addons/moco values (catalog valuesFromAddons)"
 # CloudNativePG fixtures (#327) from the pins in addons/cloudnative-pg/values.yaml, so a pin bump needs no test edit:
 # operator (bootstrap-controller) + catalog image pass; another digest, an unlisted image, the tag only and an
 # untrusted sidecar next to the pinned images are denied in production.
@@ -118,6 +118,19 @@ cnpg_pod() {  # <name> <init image> <container image>...
   cnpg_pod prod-cnpg-tag-only "$op" "${pg%@*}"
   cnpg_pod prod-cnpg-untrusted-sidecar "$op" "$pg" "docker.io/library/busybox:1.37"
 } > "$TMP/kyverno/registries/resources-cnpg.yaml"
+# MOCO fixtures (#256) from the pins in addons/moco/values.yaml: a MySQL pod (mysqld + moco-init = catalog image, agent +
+# copy-moco-init = moco-agent) passes; another digest, the tag only and the slow-log sidecar (fluent-bit, not trusted:
+# the Composition turns it off) are denied in production.
+moco="$ROOT/addons/moco/values.yaml"
+my=$(yq -r '.mysqlImageCatalog["8.4"]' "$moco" | tr -d '\r')
+ag=$(yq -r '.moco.agent.image | .repository + ":" + .tag' "$moco" | tr -d '\r')
+fb=$(yq -r '.moco.fluentbit.image | .repository + ":" + .tag' "$moco" | tr -d '\r')
+{
+  cnpg_pod prod-moco-mysql "$ag" "$my" "$ag"
+  cnpg_pod prod-moco-other-digest "$ag" "${my%@*}@sha256:$z64" "$ag"
+  cnpg_pod prod-moco-agent-tag-only "${ag%@*}" "$my"
+  cnpg_pod prod-moco-slow-log "$ag" "$my" "$ag" "$fb"
+} > "$TMP/kyverno/registries/resources-moco.yaml"
 suites=(registries platform-key workflow-digests workload-resilience)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
@@ -464,6 +477,7 @@ sed -n '/^apiVersion: security.istio.io/,/^---$/p' "$TMP/cm-openchoreo-cell-auth
 dev=dp-default-demo-development-1234abcd; prod=dp-default-demo-production-1234abcd; legacy=dp-default-demo-legacy-1234abcd
 authz=$(python3 - "$TMP/cm-ap.json" "$dev:$dev/sa/default" "$dev:$dev/sa/r-orders-db" \
   "$dev:openchoreo-data-plane/sa/gateway-default" "$dev:telemetry/sa/openchoreo-prometheus-agent" "$dev:cnpg-system/sa/cnpg" \
+  "$dev:moco-system/sa/moco-controller-manager" \
   "$dev:$prod/sa/default" "$dev:dp-default-other-development-1234abcd/sa/default" "$dev:telemetry/sa/fluent-bit" \
   "$dev:openchoreo-data-plane/sa/cluster-agent-dataplane" "$dev:plaintext" "$prod:$dev/sa/default" "$legacy:plaintext" <<'PY'
 import fnmatch, json, sys
@@ -494,8 +508,8 @@ for case in sys.argv[2:]:
     print("admit" if allowed(cell, None if peer == "plaintext" else peer) else "refuse", end=" ")
 PY
 )
-assert_eq "${authz% }" "admit admit admit admit admit refuse refuse refuse refuse refuse refuse admit" \
-  "cell mesh: development admits its own workloads, gateway, telemetry agent, CNPG; refuses production's and another project's workloads, other platform identities, plaintext; production refuses development; the permissive cell admits plaintext"
+assert_eq "${authz% }" "admit admit admit admit admit admit refuse refuse refuse refuse refuse refuse admit" \
+  "cell mesh: development admits its own workloads, gateway, telemetry agent, CNPG, MOCO; refuses production's and another project's workloads, other platform identities, plaintext; production refuses development; the permissive cell admits plaintext"
 yq -P '.' <<<"$(head -1 "$TMP/cm-ap.json")" > "$TMP/cm-ap.yaml"
 [[ -s "$SCHEMAS_DIR/security.istio.io/authorizationpolicy_v1.json" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" "$ROOT/hack/schemas.sh" >/dev/null
 assert_eq "$(kc_valid "$TMP/cm-ap.yaml")" yes "cell mesh: the generated AuthorizationPolicy validates against the Istio CRD schema"

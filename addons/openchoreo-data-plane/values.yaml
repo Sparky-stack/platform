@@ -41,7 +41,7 @@ clusterAgentDataServices:
   serviceAccount: cluster-agent-dataplane   # == the upstream agent Deployment's ServiceAccount (checked by the test)
   rules:
     - { apiGroup: keda.sh, resources: [scaledobjects] }
-    - { apiGroup: platform.koorikla.io, resources: [postgresqls] }
+    - { apiGroup: platform.koorikla.io, resources: [postgresqls, mysqls] }   # mysqls: ClusterResourceType mysql (#256)
 
 # Capability gate (templates/capability-gate.yaml, #246): the cluster agent is the data plane's only door to OpenChoreo,
 # so it starts only once the opt-in addons whose kinds platform ClusterTraits render are installed. Without it a first
@@ -64,6 +64,11 @@ capabilityGate:
       # after it is Healthy, so this wait also covers the package pull; a failed package keeps the agent waiting here.
       enabled: "false"
       crds: [postgresqls.platform.koorikla.io]   # ClusterResourceType postgresql
+    moco:
+      # Label addons.platform.koorikla.io/moco: addon moco (MySQLCluster CRD) and, with it, the MySQL API that addon
+      # crossplane installs on the same label (XRD from the platform-mysql Configuration package, #256).
+      enabled: "false"
+      crds: [mysqlclusters.moco.cybozu.com, mysqls.platform.koorikla.io]   # ClusterResourceType mysql
 
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy

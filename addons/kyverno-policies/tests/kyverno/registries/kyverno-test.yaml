@@ -7,8 +7,9 @@ kind: Test
 metadata:
   name: openchoreo-trusted-registries
 policies: [policies.yaml]
-# resources-cnpg.yaml: written by the script from the pins in addons/cloudnative-pg/values.yaml (#327).
-resources: [resources.yaml, resources-cnpg.yaml]
+# resources-cnpg.yaml / resources-moco.yaml: written by the script from the pins in addons/cloudnative-pg/values.yaml
+# (#327) and addons/moco/values.yaml (#256).
+resources: [resources.yaml, resources-cnpg.yaml, resources-moco.yaml]
 variables: values.yaml
 results:
   - policy: openchoreo-trusted-registries-enforce
@@ -16,6 +17,7 @@ results:
     resources:
       - dp-default-demo-production-1/prod-trusted
       - dp-default-demo-production-1/prod-cnpg-catalog            # pinned CNPG operator + imageCatalog image
+      - dp-default-demo-production-1/prod-moco-mysql              # pinned mysqld catalog image + moco-agent
     result: pass
   - policy: openchoreo-trusted-registries-enforce
     kind: Pod
@@ -30,6 +32,9 @@ results:
       - dp-default-demo-production-1/prod-cnpg-unlisted          # same registry, not in the catalog
       - dp-default-demo-production-1/prod-cnpg-tag-only          # catalog image without its digest
       - dp-default-demo-production-1/prod-cnpg-untrusted-sidecar # pinned images + docker.io sidecar
+      - dp-default-demo-production-1/prod-moco-other-digest      # mysqld catalog repository + tag, another digest
+      - dp-default-demo-production-1/prod-moco-agent-tag-only    # moco-agent without its digest
+      - dp-default-demo-production-1/prod-moco-slow-log          # fluent-bit slow-log sidecar: not admitted
     result: fail
   - policy: openchoreo-trusted-registries-audit
     kind: Pod

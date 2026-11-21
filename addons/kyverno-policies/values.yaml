@@ -86,6 +86,7 @@ ambientEnrollment:
       - cluster.local/ns/openchoreo-data-plane/sa/gateway-default   # data-plane gateway: all ingress into cells
       - cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent   # metrics scrapes of cell pods (#209, #323)
       - cluster.local/ns/cnpg-system/sa/cnpg                        # CloudNativePG operator -> instance manager
+      - cluster.local/ns/moco-system/sa/moco-controller-manager     # MOCO operator -> moco-agent gRPC + mysqld (#256)
       - cluster.local/ns/keda/sa/keda-operator                      # KEDA scalers polling in-cell endpoints
       - cluster.local/ns/strimzi/sa/strimzi-cluster-operator        # Strimzi operator -> Kafka brokers in cells
   # Kafka (Strimzi) pods in enrolled cells (templates/cell-mesh.yaml openchoreo-cell-strimzi, #210). Addon strimzi runs
@@ -210,7 +211,8 @@ imageVerification:
   # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
   # would simply not be matched by the signature policy.
   # CloudNativePG operand images are admitted as whole digest references, not prefixes: the operator + imageCatalog
-  # pins of addons/cloudnative-pg/values.yaml, which the catalog entry (valuesFromAddons) passes in (#327).
+  # pins of addons/cloudnative-pg/values.yaml (#327) and the moco-agent + mysqlImageCatalog pins of addons/moco/values.yaml
+  # (#256), which the catalog entry (valuesFromAddons) passes in.
   extraTrustedPrefixes: []
 
 # --- Digest-only images in workflow run namespaces (#36, docs/supply-chain.md "Digest references") ---------------------

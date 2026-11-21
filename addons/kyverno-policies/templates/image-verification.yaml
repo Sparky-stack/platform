@@ -86,6 +86,19 @@ this addon (charts/platform values.yaml addons.kyverno-policies.sharedValueFiles
 {{- range $operand }}
 {{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: CloudNativePG image %q (addons/cloudnative-pg values) is not pinned by digest" .) }}{{ end }}
 {{- end }}
+{{- /* MOCO operand images (#256), same rule: exactly the digest-pinned images of addon moco (catalog valuesFromAddons) -
+its mysqlImageCatalog (mysqld + moco-init in every MySQL pod, and the MySQL XR's init Job) and the moco-agent image (agent
++ copy-moco-init). fluent-bit / mysqld_exporter stay untrusted: the MySQL Composition turns slow-log off and sets no
+collectors. */ -}}
+{{- $mocoOperand := list }}
+{{- $myCat := .Values.mysqlImageCatalog | default dict }}
+{{- range $k := keys $myCat | sortAlpha }}{{ $mocoOperand = append $mocoOperand (index $myCat $k) }}{{ end }}
+{{- $agent := ((index .Values "moco" | default dict).agent | default dict).image | default dict }}
+{{- if and $mocoOperand $agent.repository }}{{ $mocoOperand = append $mocoOperand (printf "%s:%s" $agent.repository (toString $agent.tag)) }}{{ end }}
+{{- range $mocoOperand }}
+{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: MOCO image %q (addons/moco values) is not pinned by digest" .) }}{{ end }}
+{{- end }}
+{{- $operand = concat $operand $mocoOperand }}
 {{- $usedAttestations := list }}
 {{- range $sources }}{{ range .attestations }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
 {{- range $action := keys $byAction | sortAlpha }}
@@ -294,7 +307,7 @@ spec:
     - expression: 'size(variables.untrusted) == 0'
       messageExpression: >-
         'images must come from ' + variables.trusted.join(', ') +
-        (size(variables.operandImages) > 0 ? ' or be a pinned CloudNativePG image' : '') +
+        (size(variables.operandImages) > 0 ? ' or be a pinned CloudNativePG / MOCO image' : '') +
         '; untrusted: ' + variables.untrusted.join(', ')
 {{- end }}
 {{- end }}

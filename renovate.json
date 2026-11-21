@@ -127,6 +127,12 @@
       "groupName": "postgresql package"
     },
     {
+      "description": "Same for the MySQL API package (#256): Configuration + embedded function in one PR, release tags only (replaces the first pre-release commit pin)",
+      "matchPackageNames": ["/^ghcr\\.io/koorikla/platform/mysql(_compose-mysql)?$/"],
+      "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+$/",
+      "groupName": "mysql package"
+    },
+    {
       "description": "Mesh charts (addons/mesh: the four Istio charts from OCI ghcr.io/istio/release/charts + cert-manager-istio-csr): one PR. Helm cannot pin dependency digests, so the tarball sha256s in the Chart.yaml annotation platform.koorikla.io/dependency-digests move in the same PR (hack/deps.sh fails until they match)",
       "matchManagers": [
         "helmv3"
