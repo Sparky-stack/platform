@@ -27,10 +27,6 @@ addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- and (eq (toString .Values.registry.type) "harbor") (ne (toString .Values.registry.host) "") | toString -}}
 {{- end }}
 
-{{- define "capi.annotations" -}}
-platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
-{{- end }}
-
 {{- define "capi.variables" -}}
 {{- $gke := eq (include "capi.gke" .) "true" -}}
 {{- $harbor := and (not $gke) (eq (include "capi.registry.harbor" .) "true") -}}
