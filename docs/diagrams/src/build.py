@@ -589,6 +589,320 @@ DIAGRAMS = {
 }
 
 
+# ------------------------------------------------------------------------------- delivery lanes (#270, devops guide)
+# Appended for docs/devops-guide.md: one overview, one view per lane in the same 3-column layout, and the app +
+# database object map. Arrows follow the change (like the SDLC view), so a step text names the arrow's source first.
+CHANGE_FLOW = "numbered step: the change moves along the arrow"
+LW = 232                                      # lane views: 3 columns of 232 px with 88 px gutters (badge channels)
+LC = [44 + i * (LW + 88) for i in range(3)]
+LANE_APPS_STEPS = (
+    "App repo: a merge to main runs the reusable CI workflow it pins by commit (app-go.yaml and the other stacks, "
+    "each calling app-container.yaml): lint, tests, vulnerability scan, multi-arch build",
+    "Reusable CI pushes the image to ghcr.io and signs it keyless with cosign, with SBOM, provenance and "
+    "vulnerability attestations",
+    "Registry digest goes into the app repo: app-workload-bump.yaml commits the image digest to the Workload in "
+    "deploy/ ([skip ci])",
+    "Deploy folder is synced by Argo CD (the team's Application) into OpenChoreo: Component, Workload, "
+    "ReleaseBinding",
+    "Argo CD hands them to the OpenChoreo control plane, which cuts one immutable release and binds it to "
+    "development",
+    "OpenChoreo passes the release to the cluster-agent over the connection the agent opened from the workload "
+    "cluster",
+    "cluster-agent applies the release in the environment's namespace, where Kyverno sees every pod first",
+    "Kyverno verifies the image signature, attestations and digest before the pod starts: it blocks in production "
+    "and only warns in development and staging",
+)
+LANE_APPS_NOTE = ("Promotion: the same release moves to staging and production by pull requests, the promotion gate "
+                  "opens the production one (see the SDLC view, which also shows the in-cluster build path with "
+                  "Harbor and the platform key).")
+LR = [168 + i * 160 for i in range(3)]        # rows: source / CI / artifact, then declare / sync / hand-off
+
+
+def _lane_frame(title: str, lede: str) -> Diagram:
+    d = Diagram(title, lede, reading="columns")
+    d.flow_label = CHANGE_FLOW
+    for x, s in zip(LC, ("build and sign", "declare and sync", "run and admit")):
+        d.lane(x, LR[0] - 34, s)
+    return d
+
+
+def _lane_spine(d: Diagram, s1=1, s2=2, s3=3, s4=4):
+    """Shared arrows of every lane view: source -> CI -> artifact (column 1), artifact or CI -> git (gutter 1),
+    git -> Argo CD (column 2)."""
+    x0, x1 = LC[0] + LW / 2, LC[1] + LW / 2
+    d.arrow([(x0, LR[0] + H), (x0, LR[1])], step=s1)
+    d.arrow([(x0, LR[1] + H), (x0, LR[2])], step=s2)
+    xg = LC[0] + LW + 44
+    d.arrow([(LC[0] + LW, ymid(LR[2])), (xg, ymid(LR[2])), (xg, ymid(LR[0])), (LC[1], ymid(LR[0]))], step=s3,
+            badge=(xg, ymid(LR[1])))
+    d.arrow([(x1, LR[0] + H), (x1, LR[1])], step=s4)
+
+
+def lane_apps() -> Diagram:
+    d = _lane_frame("Apps lane · from a merge to a running, verified pod",
+                    "The app repo's reusable CI builds and signs one image; its digest goes back into the repo; "
+                    "Argo CD and OpenChoreo roll it out; Kyverno admits only that signed digest.")
+    c, w = LC, LW
+    d.box(c[0], LR[0], w, H, "external", "App repo", ["service code,", "calls the platform CI"])
+    d.box(c[0], LR[1], w, H, "external", "Reusable CI", ["tests, scans, builds,", "signs the image"])
+    d.box(c[0], LR[2], w, H, "external", "Registry", ["signed image,", "addressed by digest"])
+    d.box(c[1], LR[0], w, H, "external", "Deploy folder", ["the app repo's", "release files in git"])
+    d.box(c[1], LR[1], w, H, "mgmt", "Argo CD", ["syncs the deploy", "folder"])
+    d.box(c[1], LR[2], w, H, "mgmt", "OpenChoreo", ["cuts a release,", "promotes it"])
+    d.box(c[2], LR[0], w, H, "mgmt", "Promotion gate", ["staging to production:", "see the SDLC view"],
+          context=True)
+    d.box(c[2], LR[1], w, H, "workload", "cluster-agent", ["applies the release", "in the cluster"])
+    d.box(c[2], LR[2], w, H, "workload", "Kyverno", ["admits only signed", "images by digest"], step=8)
+    _lane_spine(d)
+    d.arrow([(c[1] + w / 2, LR[1] + H), (c[1] + w / 2, LR[2])], step=5)
+    xg = c[1] + w + 44
+    d.arrow([(c[1] + w, ymid(LR[2])), (xg, ymid(LR[2])), (xg, ymid(LR[1])), (c[2], ymid(LR[1]))], step=6,
+            badge=(xg, LR[1] + H + 40))
+    d.arrow([(c[2] + 50, LR[1] + H), (c[2] + 50, LR[2])], step=7)    # left of centre: the ring (8) sits at x+26
+    d.require("App repo", "Reusable CI", "Registry", "Deploy folder", "Argo CD", "OpenChoreo", "cluster-agent",
+              "Kyverno")
+    d.key(*LANE_APPS_STEPS)
+    d.note(LANE_APPS_NOTE)
+    return d
+
+
+LANE_INFRA_STEPS = (
+    "A pull request to the platform repo, from Renovate (a new upstream release) or a person, changes a chart pin, "
+    "addon values or a fleet file and runs ci.yaml, scoped to what changed",
+    "CI fetches the pinned upstream charts (versions in Chart.yaml and Chart.lock, sha256 pins for the mesh) and "
+    "lints, renders and unit-tests every changed chart",
+    "CI must pass before a maintainer merges: main then declares the versions, in the addon charts, the "
+    "ApplicationSets and the installation values",
+    "Main branch is read by Argo CD: dev clusters follow main, prod clusters a verified commit",
+    "Argo CD renders each fleet file into a cluster for Cluster API, which creates and upgrades its k3s nodes",
+    "Argo CD installs the addons on every cluster whose labels match, in a fixed order",
+    "Kyverno admits the addon pods with safe settings only; their images are pinned by digest in git (a test checks "
+    "it), not signature-verified: Argo CD cannot verify Helm or OCI chart signatures",
+)
+LANE_INFRA_NOTE = ("Planned: verify upstream chart signatures in the Renovate pull request and mirror the charts "
+                   "into an internal registry, once upstreams sign them (few do today). release-please tags each "
+                   "platform release.")
+
+
+def lane_infra() -> Diagram:
+    d = _lane_frame("Infra lane · addons, clusters and platform charts",
+                    "Upstream charts are pinned in git and tested by CI; Argo CD installs them on every matching "
+                    "cluster and Cluster API builds the clusters. Signatures stop at the image layer for now.")
+    c, w = LC, LW
+    d.box(c[0], LR[0], w, H, "external", "Pull request", ["Renovate or a person:", "a pin, values, a cluster"],
+          aka=("Renovate",))
+    d.box(c[0], LR[1], w, H, "external", "CI", ["lints, renders, tests", "every changed chart"])
+    d.box(c[0], LR[2], w, H, "external", "Upstream charts", ["their own registries,", "pinned by version"])
+    d.box(c[1], LR[0], w, H, "external", "Main branch", ["chart pins, addon", "catalog, fleet files"])
+    d.box(c[1], LR[1], w, H, "mgmt", "Argo CD", ["installs by", "cluster label"])
+    d.box(c[1], LR[2], w, H, "mgmt", "Cluster API", ["creates and", "upgrades clusters"])
+    d.box(c[2], LR[1], w, H, "workload", "Addons", ["network, mesh, policy,", "operators"])
+    d.box(c[2], LR[2], w, H, "workload", "Kyverno", ["checks pod settings;", "images pinned by digest"], step=7)
+    x0 = c[0] + w / 2
+    d.arrow([(x0, LR[0] + H), (x0, LR[1])], step=1)
+    d.arrow([(x0, LR[1] + H), (x0, LR[2])], step=2)
+    xg = c[0] + w + 44
+    d.arrow([(c[0] + w, ymid(LR[1])), (xg, ymid(LR[1])), (xg, ymid(LR[0])), (c[1], ymid(LR[0]))], step=3,
+            badge=(xg, LR[0] + H + 40))
+    x1 = c[1] + w / 2
+    d.arrow([(x1, LR[0] + H), (x1, LR[1])], step=4)
+    d.arrow([(x1, LR[1] + H), (x1, LR[2])], step=5)
+    d.arrow([(c[1] + w, ymid(LR[1])), (c[2], ymid(LR[1]))], step=6, badge=(c[1] + w + 34, ymid(LR[1])))
+    d.require("Pull request", "CI", "Upstream charts", "Main branch", "Argo CD", "Cluster API", "Addons", "Kyverno")
+    d.key(*LANE_INFRA_STEPS)
+    d.note(LANE_INFRA_NOTE)
+    return d
+
+
+LANE_EXT_STEPS = (
+    "A pull request to packages/<api> runs package-<api>.yaml, which calls app-crossplane-configuration.yaml: "
+    "schema checks and render tests for every backend",
+    "Package CI pushes the Configuration package and its embedded function to ghcr.io on main and on release tags, "
+    "signed keyless with cosign, with SLSA provenance",
+    "Registry tag and digest are pinned in addon crossplane's values (or one installation's) by a Renovate pull "
+    "request; merging it is the promotion",
+    "Package pin on main is synced by Argo CD to every cluster that runs addon crossplane (opt-in)",
+    "Argo CD applies the Configuration at that digest; Crossplane's package manager pulls it and its function from "
+    "the registry",
+    "Crossplane will verify the package signature before installing it: the switch is on main but stays off until "
+    "Crossplane reads cosign v3 signatures",
+    "Crossplane installs the API definition, its composition and function: apps can now claim the API, for "
+    "example a PostgreSQL database",
+)
+LANE_EXT_NOTE = ("The other extension points ride the other lanes: OpenChoreo component types, traits and resource "
+                 "types are files of the openchoreo-platform addon (infra lane), Backstage templates are read from "
+                 "git by the catalog, Backstage plugins come with its image.")
+
+
+def lane_extensions() -> Diagram:
+    d = _lane_frame("Extensions lane · a new platform API",
+                    "A Crossplane package is built, signed and pushed like an app image; a pinned digest in git "
+                    "promotes it, and Crossplane installs the API on every cluster that runs it.")
+    c, w = LC, LW
+    d.box(c[0], LR[0], w, H, "external", "Package source", ["an API, its composition", "and render tests"],
+          aka=("pull request",))
+    d.box(c[0], LR[1], w, H, "external", "Package CI", ["validates, renders,", "signs the package"])
+    d.box(c[0], LR[2], w, H, "external", "Registry", ["signed package,", "addressed by digest"])
+    d.box(c[1], LR[0], w, H, "external", "Package pin", ["version and digest", "in git"])
+    d.box(c[1], LR[1], w, H, "mgmt", "Argo CD", ["syncs the pin to", "each cluster"])
+    d.box(c[1], LR[2], w, H, "external", "Other extensions", ["component types, traits:", "the infra lane"],
+          context=True)
+    d.box(c[2], LR[0], w, H, "workload", "Platform API", ["what apps claim,", "e.g. a database"])
+    d.box(c[2], LR[1], w, H, "workload", "Crossplane", ["installs packages,", "composes claims"], status="optin")
+    d.box(c[2], LR[2], w, H, "workload", "Signature check", status="planned")
+    _lane_spine(d)
+    d.arrow([(c[1] + w, ymid(LR[1])), (c[2], ymid(LR[1]))], step=5, badge=(c[1] + w + 34, ymid(LR[1])))
+    x2 = c[2] + w / 2
+    d.arrow([(x2, LR[1] + H), (x2, LR[2])], step=6, status="planned")
+    d.arrow([(x2, LR[1]), (x2, LR[0] + H)], step=7)
+    d.require("Package source", "Package CI", "Registry", "Package pin", "Argo CD", "Crossplane", "Platform API")
+    d.key(*LANE_EXT_STEPS)
+    d.note(LANE_EXT_NOTE)
+    return d
+
+
+DELIVERY_STEPS = (
+    "App CI builds, scans and signs one image per merge (keyless cosign, attestations) and pushes it by digest",
+    "Signed image's digest is committed to the app repo's deploy folder by the bump job",
+    "Deploy folder is synced by Argo CD into OpenChoreo, which releases it to each environment through the "
+    "cluster-agent",
+    "OpenChoreo's environments run Kyverno, which admits only the signed digest: it blocks in production and "
+    "warns in development and staging",
+    "Infra CI renders and tests every chart against its pinned upstream version; Renovate opens the bump pull "
+    "requests",
+    "Upstream charts stay pinned by version (and digest where possible) on main after review",
+    "Main branch is synced by Argo CD to every cluster whose labels match; Cluster API builds the clusters",
+    "Argo CD's addons pass Kyverno for pod settings; their images are pinned by digest, chart signatures are not "
+    "checked yet",
+    "Package CI renders, tests, signs and pushes each Crossplane package by digest",
+    "Signed package's digest is pinned in addon crossplane by a reviewed Renovate pull request",
+    "Package pin is synced by Argo CD; Crossplane (opt-in) pulls the package and installs the API",
+    "Crossplane's package signature check is planned: packages are signed, verification waits for cosign v3 "
+    "support",
+)
+
+
+def delivery_lanes() -> Diagram:
+    d = Diagram("Delivery lanes · three lanes, one pattern",
+                "Apps, infra and extensions each go source and reusable CI, then a signed artifact pinned by digest, "
+                "then a version declared in git, then a reconciler and the cluster's admission check.")
+    d.flow_label = CHANGE_FLOW
+    w, g = 166, 69
+    x = [44 + i * (w + g) for i in range(4)]
+    for xi, s in zip(x, ("source + CI", "signed artifact", "declared in git", "reconciled")):
+        d.text(xi, 128, s.upper(), 13, "#cbd5e1", weight=700, spacing=1.0)
+    rows = [184 + i * 156 for i in range(3)]
+    lanes = (
+        ("apps lane", ("App CI", ["app repo, reusable", "workflows"]), ("Signed image", ["keyless signature,", "attestations"]),
+         ("Deploy folder", ["image digest in", "the app repo"]), ("OpenChoreo", ["releases to each", "environment"], "mgmt", "built")),
+        ("infra lane", ("Infra CI", ["addon wrappers,", "cluster charts"]), ("Upstream charts", ["pinned upstream", "releases"]),
+         ("Main branch", ["platform repo:", "pins and values"]), ("Argo CD", ["by cluster label;", "Cluster API"], "mgmt", "built")),
+        ("extensions lane", ("Package CI", ["Crossplane", "packages"]), ("Signed package", ["keyless signature,", "provenance"]),
+         ("Package pin", ["version and digest", "in the addon"]), ("Crossplane", ["installs the", "platform API"], "workload", "optin")),
+    )
+    n = 1
+    for r, (lane, a, b, c3, dd) in zip(rows, lanes):
+        d.lane(x[0], r - 14, lane)
+        d.box(x[0], r, w, H, "external", *a)
+        d.box(x[1], r, w, H, "external", *b)
+        d.box(x[2], r, w, H, "external", *c3)
+        d.box(x[3], r, w, H, dd[2], dd[0], dd[1], status=dd[3], step=n + 3)
+        for i in range(3):
+            d.arrow([(x[i] + w, ymid(r)), (x[i + 1], ymid(r))], step=n + i, badge=(x[i] + w + 30, ymid(r)))
+        n += 4
+    d.require("App CI", "Infra CI", "Package CI", "OpenChoreo", "Argo CD", "Crossplane")
+    d.key(*DELIVERY_STEPS)
+    return d
+
+
+APP_DB_STEPS = (
+    "Component (with the keda-scaler trait), Workload, Resource of type postgresql and SecretReference are synced "
+    "from the app repo by Argo CD into OpenChoreo",
+    "OpenChoreo renders the Resource into the cell namespace as a PostgreSQL claim (platform.koorikla.io, a "
+    "namespaced Crossplane XR)",
+    "OpenBao's value behind the SecretReference lands in the app secret: External Secrets reads the project's "
+    "own mount through the cell's SecretStore",
+    "PostgreSQL claim is composed by Crossplane with the Composition of the Configuration package; the "
+    "EnvironmentConfig platform-postgresql picks the backend",
+    "Crossplane creates a CloudNativePG Cluster on a local cluster (RDS or Aurora, Cloud SQL, Azure Flexible "
+    "Server in the cloud)",
+    "CloudNativePG creates the database and its owner and writes the connection secret <name>-app next to the "
+    "workload",
+    "App secret reaches the app pods as env, from secretKeyRef or envFrom",
+    "Connection secret reaches the app pods, which OpenChoreo deployed from the Workload: host, port and database "
+    "as values, user, password and URI as secret references; KEDA scales them",
+)
+APP_DB_NOTE = ("Planned: the same map for the event bus and its topics. Production asks for high availability and "
+               "backups (admission policy); credentials never leave the workload cluster.")
+
+
+def app_database_map() -> Diagram:
+    d = Diagram("App + database · how the objects map",
+                "A developer writes four objects in the app repo; OpenChoreo renders them into the app's cell "
+                "namespace, Crossplane turns the database claim into a real database and the secrets meet in the "
+                "pods.")
+    d.flow_label = "numbered step: one object becomes the next"
+    w, g = 166, 69
+    c = [44 + i * (w + g) for i in range(4)]
+    Z0 = 140
+    R0 = Z0 + 48
+    Z0b = R0 + H + 16
+    Z1 = Z0b + 96
+    R1 = Z1 + 48
+    Z1b = R1 + H + 16
+    Z2 = Z1b + 64
+    R2 = Z2 + 48
+    R3 = R2 + H + 80
+    d.zone(28, Z0, 904, Z0b - Z0, "app repo: written by the developer", "external")
+    d.zone(28, Z1, 904, Z1b - Z1, "management cluster", "mgmt")
+    d.zone(28, Z2, 904, R3 + H + 24 - Z2, "workload cluster", "workload", label_at="tr")
+    d.box(c[0], R0, w, H, "external", "Component", ["the service and", "its scaling trait"])
+    d.box(c[1], R0, w, H, "external", "Workload", ["image, env from the", "database"])
+    d.box(c[2], R0, w, H, "external", "Database resource", ["type postgresql:", "version, database"],
+          aka=("Resource of type postgresql",))
+    d.box(c[3], R0, w, H, "external", "Secret reference", ["points at a value", "in OpenBao"],
+          aka=("SecretReference",))
+    d.box(c[0], R1, c[2] + w - c[0], H, "mgmt", "OpenChoreo", ["control plane: renders every object", "into the cell namespace"])
+    d.box(c[3], R1, w, H, "mgmt", "OpenBao", ["the project's", "secret values"], status="optin")
+    d.box(c[0], R2, w, H, "workload", "PostgreSQL claim", ["the platform's", "database API"])
+    d.box(c[1], R2, w, H, "workload", "Crossplane", ["composes it for", "this cluster"], status="optin")
+    d.box(c[2], R2, w, H, "workload", "CloudNativePG", ["runs PostgreSQL", "in the cluster"], status="optin")
+    d.box(c[3], R2, w, H, "workload", "App secret", ["values copied", "from OpenBao"])
+    d.box(c[2], R3, w, H, "workload", "Connection secret", ["host, user,", "password"])
+    d.box(c[3], R3, w, H, "workload", "App pods", ["env from both", "secrets"])
+    yb = Z0b + 30                               # step 1: the four objects join on one bus into OpenChoreo
+    xs = [ci + w / 2 for ci in c]
+    xm = c[1] + w / 2 + 40
+    d.arrow([(xs[0], yb), (xs[3], yb)], step=1, badge=False, head=False)
+    for xi in xs:
+        d.arrow([(xi, R0 + H), (xi, yb)], step=1, badge=False, head=False)
+        d.junction(xi, yb)
+    d.arrow([(xm, yb), (xm, R1)], step=1, badge=(xm, yb + 32))
+    d.junction(xm, yb)
+    d.arrow([(xs[0], R1 + H), (xs[0], R2)], step=2, badge=(xs[0], Z1b + 32))
+    xo = c[3] - 25                              # down the gutter, left of the zone label
+    d.arrow([(c[3], ymid(R1)), (xo, ymid(R1)), (xo, ymid(R2)), (c[3], ymid(R2))], step=3, badge=(xo, Z1b + 32))
+    d.arrow([(c[0] + w, ymid(R2)), (c[1], ymid(R2))], step=4, badge=(c[0] + w + 30, ymid(R2)))
+    d.arrow([(c[1] + w, ymid(R2)), (c[2], ymid(R2))], step=5, badge=(c[1] + w + 30, ymid(R2)))
+    d.arrow([(xs[2], R2 + H), (xs[2], R3)], step=6)
+    d.arrow([(xs[3], R2 + H), (xs[3], R3)], step=7)
+    d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=8, badge=(c[2] + w + 30, ymid(R3)))
+    d.require("Component", "Workload", "Database resource", "Secret reference", "OpenChoreo", "PostgreSQL claim",
+              "Crossplane", "CloudNativePG", "Connection secret", "App pods", "OpenBao")
+    d.key(*APP_DB_STEPS)
+    d.note(APP_DB_NOTE)
+    return d
+
+
+DIAGRAMS.update({
+    "delivery-lanes": delivery_lanes,
+    "lane-apps": lane_apps,
+    "lane-infra": lane_infra,
+    "lane-extensions": lane_extensions,
+    "app-database-map": app_database_map,
+})
+
+
 # ------------------------------------------------------------------------------------------ docs steps
 def readme_steps(text: str) -> dict[str, list[str]]:
     """Numbered lists under headings that link `<name>.svg` in docs/diagrams/README.md (backticks ignored)."""
