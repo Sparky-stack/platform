@@ -10,7 +10,7 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | Diagram | One idea | Owning doc |
 |---|---|---|
 | [architecture.svg](architecture.svg) | git → mgmt → workload clusters: where every part runs | [architecture.md](../architecture.md) |
-| [security.svg](security.svg) | supply chain, admission, runtime detection and response | [supply-chain.md](../supply-chain.md) |
+| [security.svg](security.svg) | supply chain, admission, runtime detection and response | [supply-chain.md](../supply-chain.md), runtime: [observability.md](../observability.md#falco-response) |
 | [network.svg](network.svg) | a request in (kgateway, mesh), its telemetry out to the management cluster | [networking.md](../networking.md) |
 | [observability.svg](observability.svg) | every signal lands in the observability plane | [observability.md](../observability.md) |
 | [sdlc.svg](sdlc.svg) | build once in-cluster; every environment repeats merge → sync → deploy → admit; the gate links staging to production | [promotion.md](../promotion.md) |
