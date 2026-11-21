@@ -66,7 +66,7 @@ selects or reads those labels; no template names a cluster.
 |---|---|
 | `mesh.platform.koorikla.io/group: <group>` | catalog `clusterLabelParameters` → addon mesh `global.meshID`; CRS selector of the peers' remote secrets |
 | `mesh.platform.koorikla.io/network: <name>` | addon mesh `global.network` (ztunnel `NETWORK`); east-west Gateway label |
-| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE`; charts/cluster still sets `addons.platform.koorikla.io/istio-eastwest` (only the `eastwest` example selects on it) |
+| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE` |
 
 `global.multiCluster.clusterName` = cluster name on **every** cluster (catalog `clusterNameParameters`), so istiod and
 ztunnel always agree on the cluster ID. Clusters outside the mesh keep network and meshID empty: ztunnel and istiod
