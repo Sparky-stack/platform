@@ -489,8 +489,19 @@ spec:
 
 Production: separate `controller` (3) and `broker` (3+) pools, replication factor 3, `min.insync.replicas: 2`, TLS or
 SCRAM listeners with `KafkaUser`s. Broker metrics: `spec.kafka.metricsConfig` (Strimzi metrics reporter or JMX
-exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`. The operator generates a NetworkPolicy per listener
-(enforced by Cilium, and by k3s's embedded policy controller on flannel clusters).
+exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`.
+
+**NetworkPolicies (#210).** The operator runs with `STRIMZI_NETWORK_POLICY_GENERATION=false` (addon `strimzi`): its
+per-cluster policies open only the Kafka ports (replication 9091, controller 9090, listeners), but Istio ambient carries
+every mesh connection to the pod's HBONE port `15008/tcp`, so in a cell they drop broker <-> broker, client -> broker
+and operator -> broker traffic. Instead addon `kyverno-policies` generates NetworkPolicy `platform-strimzi` into every
+ambient cell (`openchoreo-cell-strimzi`, [networking.md](networking.md#strict-mtls-in-cell-namespaces)): pods with
+`strimzi.io/cluster` admit the cell's own pods, `openchoreo.dev/system-component` pods (Prometheus agent) and the
+Strimzi and KEDA operators on any port, plus kubelet probes. Inside the tunnel the CNI sees no Kafka port anyway; which
+mesh identity gets in is decided by `platform-cell-peers` (STRICT cells). A Kafka outside an ambient cell (a plain
+namespace such as `demo` above, or a cell with `istio.io/dataplane-mode=none`) gets no NetworkPolicy: write one, and
+include `15008/tcp` if the namespace is in the mesh. `hack/tests/test_mesh_contracts.sh` fails when the operator's
+generation is back on or a policy selecting Kafka pods would drop 15008 from the cell, the operator or KEDA.
 
 ## KEDA and OpenChoreo workloads
 
@@ -574,6 +585,10 @@ kubectl --context <dev1> -n cnpg-system get deploy cnpg                      # o
 kubectl --context <dev1> -n demo get clusters.postgresql.cnpg.io orders-db   # STATUS "Cluster in healthy state"
 kubectl --context <dev1> -n strimzi get deploy strimzi-cluster-operator
 kubectl --context <dev1> -n demo get kafka events                            # READY True
+# Kafka in an ambient cell (#210): platform-strimzi present, no operator-generated <name>-network-policy-*, broker Ready
+kubectl --context <dev1> -n <cell ns> get networkpolicy platform-strimzi,platform-mesh-hbone
+kubectl --context <dev1> -n <cell ns> get networkpolicy -l strimzi.io/cluster            # none
+kubectl --context <dev1> -n <cell ns> get kafka <name>                                   # READY True
 kubectl --context <dev1> -n keda get apiservice v1beta1.external.metrics.k8s.io
 kubectl --context <dev1> get providers.pkg.crossplane.io,functions.pkg.crossplane.io   # INSTALLED/HEALTHY True
 kubectl --context <dev1> get xrd postgresqls.platform.koorikla.io                       # ESTABLISHED True

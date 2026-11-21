@@ -88,6 +88,15 @@ ambientEnrollment:
       - cluster.local/ns/cnpg-system/sa/cnpg                        # CloudNativePG operator -> instance manager
       - cluster.local/ns/keda/sa/keda-operator                      # KEDA scalers polling in-cell endpoints
       - cluster.local/ns/strimzi/sa/strimzi-cluster-operator        # Strimzi operator -> Kafka brokers in cells
+  # Kafka (Strimzi) pods in enrolled cells (templates/cell-mesh.yaml openchoreo-cell-strimzi, #210). Addon strimzi runs
+  # the operator with STRIMZI_NETWORK_POLICY_GENERATION=false: its per-listener policies open only Kafka ports, and
+  # ambient carries every mesh connection on 15008. Peers outside the cell (cell pods and system components always).
+  strimzi:
+    # -- Every enrolled cell gets NetworkPolicy `platform-strimzi`: pods with `strimzi.io/cluster` admit the cell's pods, `openchoreo.dev/system-component` pods and `peers` on any port (HBONE `15008` included) plus kubelet probes.
+    enabled: true
+    peers:
+      - { namespace: strimzi, podLabels: { strimzi.io/kind: cluster-operator } }  # cluster operator: admin client, rolls
+      - { namespace: keda, podLabels: { app: keda-operator } }                    # KEDA kafka scaler: consumer lag
 
 # Link-local SNAT source CIDRs istio-cni uses for kubelet health probes into ambient-enrolled pods (admitted by
 # NetworkPolicy platform-mesh-hbone in templates/cell-mesh.yaml). Must match addons/mesh/values.yaml
