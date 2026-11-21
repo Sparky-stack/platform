@@ -1,7 +1,6 @@
 {{- /*
-Build run namespace workflows-<org ns> on mgmt, rendered once while anything of this chart lives in it (run
-NetworkPolicies, executor token, agent Role). Delete=false: removing the addon must not delete run history.
-runNamespacePrefix only names it when the RBAC is all that is on (NetworkPolicy/token hardcode OpenChoreo's workflows-).
+Run namespace workflows-<org ns>, rendered while anything of this chart lives in it. Delete=false keeps run history when
+the addon goes. runNamespacePrefix names it only when the RBAC alone is on (the other objects hardcode workflows-).
 */ -}}
 {{- $np := .Values.runNetworkPolicy.enabled }}
 {{- $token := .Values.runExecutorToken.enabled }}

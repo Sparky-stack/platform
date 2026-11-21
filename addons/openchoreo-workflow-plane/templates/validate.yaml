@@ -1,8 +1,6 @@
 {{- /*
-Cross-field render-time validation of this chart (renders nothing): installation toggle, plane CR vs agent, no
-control-plane CA copied, agent RBAC, run NetworkPolicy labels, BuildKit mirror names. Single-key rules (types, names) are
-in values.schema.json. secretStore != "platform" and runNamespacePrefix stay here: their messages say why
-(tenant isolation, asserted by hack/tests/test_secret_store_scope.sh; OpenChoreo run namespaces).
+Cross-field render-time checks (renders nothing). Single-key rules are in values.schema.json; the secretStore and
+runNamespacePrefix checks stay here because their messages say why (hack/tests/test_secret_store_scope.sh).
 */ -}}
 {{- if not .Values.openchoreo.workflowPlane.enabled }}
 {{- fail "openchoreo.workflowPlane.enabled is false: disable this addon for mgmt (addons.platform.koorikla.io/openchoreo-workflow-plane: \"false\")" }}
@@ -37,7 +35,7 @@ in values.schema.json. secretStore != "platform" and runNamespacePrefix stay her
 {{- fail "runNetworkPolicy.platformWorkflows.podLabels must not be empty (it would widen egress for every run pod)" }}
 {{- end }}
 {{- /* BuildKit mirrors (templates/buildkitd-config.yaml): names end up verbatim in buildkitd.toml. */}}
-{{- $reg := .Values.registry | default dict }}
+{{- $reg := .Values.registry }}
 {{- if and .Values.buildkitMirrors.enabled (eq (toString $reg.type) "harbor") $reg.proxyCache }}
 {{- $hostRE := "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$" }}
 {{- $host := required "registry.host is required for BuildKit mirrors (registry.type harbor)" $reg.host }}
