@@ -92,7 +92,9 @@ Argo CD diffs server-side (`controller.diff.server.side`). `compareOptions` sets
 WorkflowTemplate, CronWorkflow) need `IncludeMutationWebhook=true`. Those CRDs declare `spec` atomic +
 preserve-unknown, and without the option server-side diff reports Synced while the live spec stays old (#184,
 [wiki gotcha](../wiki/gotchas/argocd-server-side-diff-atomic-crd-spec.md)). `hack/tests/test_argocd_compare_options.sh`
-fails if an addon renders such a kind without the option, or sets it without one.
+fails if an addon renders such a kind without the option, or sets it without one. Immutable-spec kinds
+(PriorityClass, StorageClass) live in an addon with `ServerSideDiff=false`, or a changed field deadlocks the dry
+run ([conventions](conventions.md#immutable-fields), #281).
 
 Version pinning per cluster ring: the cluster secret annotation `platform.koorikla.io/addons-revision` (fleet file
 `addonsRevision`, default `HEAD`) is the `targetRevision` of that cluster's addon Applications, so prod can follow a
