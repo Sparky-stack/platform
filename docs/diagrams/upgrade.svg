@@ -57,8 +57,8 @@
 <text class="s" x="62.0" y="478.0" font-size="13.5" fill="#dde5ef">Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version</text>
 <circle cx="40" cy="501.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="506" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
-<text class="s" x="62.0" y="506.0" font-size="13.5" fill="#dde5ef">GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and arm; a maintainer reviews</text>
-<text class="s" x="62.0" y="525.0" font-size="13.5" fill="#dde5ef">and merges it into main</text>
+<text class="s" x="62.0" y="506.0" font-size="13.5" fill="#dde5ef">GitHub runs CI on the pull request: every changed chart rendered and tested (all of them nightly, on Linux, macOS and Windows); a</text>
+<text class="s" x="62.0" y="525.0" font-size="13.5" fill="#dde5ef">maintainer reviews and merges it into main</text>
 <circle cx="40" cy="548.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="553" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <text class="s" x="62.0" y="553.0" font-size="13.5" fill="#dde5ef">Argo CD reads main for every cluster that follows it</text>

@@ -10,7 +10,7 @@ Use this runbook before destructive upgrades or maintenance windows, when recove
 |---|---|---|
 | Management `etcd` (`k3d-platform-mgmt`) | CAPI `Cluster`/`Machine` objects, cluster kubeconfigs and CAs in `fleet`, `platform-secrets` (local backend) | Addons and platform CRs rebuild from Git; CAPI node/CA secrets and local `platform-secrets` do **not** |
 | Workload `etcd` (`dev1`, `prod1`, cloud) | Workload API state, local Secrets/PV bindings | Addons and OpenChoreo `RenderedRelease` resources re-sync from mgmt |
-| OpenBao (`openbao`) | PVC `data-openbao-0` (internal mesh root + intermediate keys) **and** store key `openbao-unseal` | Policies and member roles rebuild (`mesh-reconcile`); CA private keys do **not** |
+| OpenBao (`openbao`) | PVC `data-openbao-0` (internal mesh root + intermediate keys, tenant app secrets in `kv-tenant-<project>`) **and** store key `openbao-unseal` | Policies, member roles and tenant mounts rebuild (`mesh-reconcile`, tenant reconcile); CA private keys and app secret values do **not** (locally the demo tenant's value is re-seeded) |
 | Thunder (`thunder`) | PVCs `thunder-database-pvc`, `thunder-certs-pvc`, `thunder-secrets-pvc` | Default clients/roles upsert (`thunder-setup`); runtime users, sessions, and signing keys live on the PVCs |
 | Harbor (`harbor`) | PVCs `database-data-harbor-database-0`, `harbor-registry` **and** store key `harbor` (`secretKey`) | Projects, proxy caches, replication, and robots rebuild (`harbor-config`); pushed `apps/` images do **not** |
 | CloudNativePG (`cnpg-system`, tenant ns) | PostgreSQL PVCs + Barman Cloud object-store WAL/base backups | Operator and `Cluster` CRs rebuild from Git; tenant database rows come from Barman recovery |
@@ -27,7 +27,7 @@ Use this runbook before destructive upgrades or maintenance windows, when recove
 
 ### 1. Management cluster etcd (`k3d`)
 
-`bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to `server:0`, so `k3d-platform-mgmt` runs embedded `etcd` (automatic snapshots every 12h, retaining 5 under `/var/lib/rancher/k3s/server/db/snapshots`).
+`bootstrap/k3d-mgmt.yaml` passes `--cluster-init` to `server:0`, so `k3d-platform-mgmt` runs embedded `etcd` (automatic snapshots every 12h, retaining 5 under `/var/lib/rancher/k3s/server/db/snapshots`). Locally it runs without fsync (`--etcd-arg=unsafe-no-fsync=true`, [dev-environment.md](../dev-environment.md)): a host or Docker VM crash can lose the last writes, so restore from a snapshot or rebuild with `task down` and `task up`.
 
 #### On-demand snapshot and full volume backup
 
@@ -108,7 +108,7 @@ docker exec "$MACHINE" k3s etcd-snapshot ls
 
 ### 3. OpenBao (`raft` storage and unseal key)
 
-OpenBao stores mesh CA private keys (`pki-mesh-<group>-root`, `pki-mesh-<group>-int`) encrypted on PVC `data-openbao-0` (`/openbao/data` in `openbao-0`). Locally it uses `seal "static"` from `ClusterSecretStore/platform` key `openbao-unseal` ([multicluster.md](../multicluster.md#unseal)); production replaces this with KMS auto-unseal and 3 raft replicas ([#31](https://github.com/koorikla/platform/issues/31)).
+OpenBao stores mesh CA private keys (`pki-mesh-<group>-root`, `pki-mesh-<group>-int`) and the tenants' app secrets (KV mounts `kv-tenant-<project>`, [openchoreo.md](../openchoreo.md#application-secrets-developer-view)) encrypted on PVC `data-openbao-0` (`/openbao/data` in `openbao-0`). Locally it uses `seal "static"` from `ClusterSecretStore/platform` key `openbao-unseal` ([multicluster.md](../multicluster.md#unseal)); production replaces this with KMS auto-unseal and 3 raft replicas ([#31](https://github.com/koorikla/platform/issues/31)).
 
 Because OpenBao revokes its root token during self-initialization (`addons/openbao/values.yaml`) and no runtime ACL policy grants `sys/storage/raft/snapshot`, online `bao operator raft snapshot save` requires adding a snapshot role before first start ([#31](https://github.com/koorikla/platform/issues/31)). Until then, take a consistent cold copy of `data-openbao-0` **together with** verifying `openbao-unseal` `(not yet verified live)`:
 

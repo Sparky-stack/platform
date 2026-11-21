@@ -10,7 +10,7 @@ installation, then shows what changes for AWS / Hetzner.
 | [1. Fork and clone](#1-fork-and-clone) | `gh repo fork koorikla/platform --clone` | 2 min |
 | [2. Point the fork at itself](#2-point-the-fork-at-itself) | `task set-repo REPO=https://github.com/<you>/platform.git` | 1 min |
 | [3. Credentials](#3-credentials) | env vars + `task secrets` (local) / your secret manager (cloud) | 0-15 min |
-| [4. Boot](#4-boot) | `task up` | 20-30 min (first boot; image pulls dominate) |
+| [4. Boot](#4-boot) | `task up` | 20-30 min (first boot; image pulls dominate), ~15 min on a rebuild with warm registry caches |
 | [5. Troubleshooting](#5-troubleshooting) | | |
 
 ## 1. Fork and clone

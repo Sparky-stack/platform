@@ -56,10 +56,12 @@ def architecture() -> Diagram:
     d.box(c[0], 108, w, 52, "external", "Git", ["platform + app repos"])
     d.zone(28, Z1, 904, Z1b - Z1, "management cluster", "mgmt", label_at="tr")
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps engine"])
-    d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry,", "secrets, sign-in"], context=True)
+    d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry, sign-in,", "OpenBao secrets"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
-    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "k3s workload clusters", "workload", label_at="tr")
+    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "workload clusters", "workload", label_at="tr")
+    d.box(c[0], R3, w, H, "workload", "Data services", ["Crossplane databases,", "CloudNativePG"], status="optin",
+          context=True)
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
     d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
     d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
@@ -85,7 +87,7 @@ def architecture() -> Diagram:
     d.key("Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
           "Argo CD turns each fleet file into a cluster for Cluster API to build",
           "Argo CD hands each app's release to OpenChoreo",
-          "Cluster API creates each workload cluster's k3s nodes on docker, AWS or Hetzner",
+          "Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE",
           "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
           "The cluster-agent dials out to OpenChoreo and pulls the app releases",
           "The agent submits the apps to the cluster",
@@ -184,7 +186,7 @@ def network() -> Diagram:
     d.key("A client opens the app URL; kgateway takes the request",
           "kgateway, itself in the service mesh, routes it to the app pods",
           "Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and "
-          "between them; app namespaces refuse unencrypted traffic",
+          "between them; app namespaces refuse unencrypted traffic and callers from other apps' namespaces",
           "The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the "
           "Prometheus agent scrapes their metrics",
           "The app pods send their traces to the OpenTelemetry collector",
@@ -495,7 +497,7 @@ def backup() -> Diagram:
     d.box(MX, R[0], MW, H, "mgmt", "Cluster state (etcd)", ["clusters, access and CA keys:",
                                                              "a snapshot every 12 hours"], aka=("etcd",))
     d.box(MX, R[1], MW, H, "mgmt", "Thunder", ["users, sign-in clients,", "signing keys"])
-    d.box(MX, R[2], MW, H, "mgmt", "OpenBao", ["secrets and", "mesh CA keys"], status="optin")
+    d.box(MX, R[2], MW, H, "mgmt", "OpenBao", ["app secrets and", "mesh CA keys"], status="optin")
     d.box(MX, R[3], MW, H, "mgmt", "Harbor", ["pushed", "images"])
     d.box(MX, R[4], MW, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(MX, RW, MW, H, "workload", "Databases", ["app data, only if this", "cluster is lost too"],
@@ -523,7 +525,7 @@ def backup() -> Diagram:
           "The operator restores the management cluster's etcd from its latest snapshot: the workload clusters' "
           "records and the CA keys come back",
           "The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys",
-          "The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys",
+          "The operator restores OpenBao's volume copy (opt-in): app secrets and the mesh CA keys",
           "OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local "
           "setup, re-create it with task secrets)",
           "The operator restores Harbor's volume copy, or new builds push the images again",
@@ -563,8 +565,8 @@ def upgrade() -> Diagram:
     d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters", "Maintainer")
     d.stages("Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
-          "GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and "
-          "arm; a maintainer reviews and merges it into main",
+          "GitHub runs CI on the pull request: every changed chart rendered and tested (all of them nightly, on "
+          "Linux, macOS and Windows); a maintainer reviews and merges it into main",
           "Argo CD reads main for every cluster that follows it",
           "Argo CD syncs the dev clusters first, each app in a fixed order",
           "Dev clusters are verified: every app synced and healthy",
