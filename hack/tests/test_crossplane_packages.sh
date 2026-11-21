@@ -6,11 +6,13 @@
 #     XRD + Composition whose pipeline calls the embedded function functions/compose-<p>/, generated dirs gitignored;
 #   - .github/workflows/package-<p>.yaml calls app-crossplane-configuration.yaml for packages/<p>, release-please
 #     component <p>;
-#   - XP_PACKAGE_BUILD=1 (default when the crossplane CLI is on PATH; needs network for dependencies): `crossplane
+#   - XP_PACKAGE_BUILD=1 (default on Linux with the crossplane CLI on PATH, like the package CI; needs network): `crossplane
 #     project build` of a copy of each package yields the Configuration (XRD + Composition == source, the embedded
 #     function pinned by digest) and the function image for amd64 + arm64.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=../lib/portable.sh
+source "$ROOT/hack/lib/portable.sh"
 cd "$ROOT"
 
 PACKAGES="postgresql mysql valkey bucket kafka-topic"
@@ -48,7 +50,7 @@ xpkg_package_yaml() {
   done
   return 1
 }
-if [[ "${XP_PACKAGE_BUILD:-1}" == 1 ]] && command -v crossplane >/dev/null 2>&1; then
+if [[ "${XP_PACKAGE_BUILD:-$([[ "$(os_name)" == linux ]] && echo 1 || echo 0)}" == 1 ]] && command -v crossplane >/dev/null 2>&1; then
   pids=()
   for p in $PACKAGES; do   # copies: the build writes schemas/ into the project; one cache per build (no shared writes)
     mkdir -p "$TMP/src"; cp -R "packages/$p" "$TMP/src/$p"
@@ -75,7 +77,7 @@ if [[ "${XP_PACKAGE_BUILD:-1}" == 1 ]] && command -v crossplane >/dev/null 2>&1;
       '^sha256:[0-9a-f]{64}$' "$p: Configuration depends on the embedded function by digest ($fn)"
   done
 else
-  echo "  SKIP crossplane project build (XP_PACKAGE_BUILD=1 and the crossplane CLI: mise.toml)"
+  echo "  SKIP crossplane project build (XP_PACKAGE_BUILD=1, default on Linux, and the crossplane CLI: mise.toml)"
 fi
 
 finish

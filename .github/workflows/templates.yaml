@@ -9,6 +9,7 @@ on:
     paths: &paths
       - templates/**
       - hack/tests/test_project_templates.sh
+      - hack/tests/test_crossplane_api_template.sh
       - hack/tests/render_template.py
       - .github/workflows/templates.yaml
   push:
@@ -47,5 +48,10 @@ jobs:
       # every template, one after the other (TEMPLATES_ONLY="go-service ..." narrows it when debugging)
       - name: Render, check, build and smoke-test every template
         run: bash hack/tests/test_project_templates.sh
+        env:
+          TEMPLATES_BUILD: "1"
+      # platform API template: offline contract + `crossplane composition render` / `project build` of the result
+      - name: Render and build the crossplane-api template
+        run: bash hack/tests/test_crossplane_api_template.sh
         env:
           TEMPLATES_BUILD: "1"
