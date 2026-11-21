@@ -8,6 +8,7 @@
 # Contract: hack/tests/test_gitops_contracts.sh (9d).
 reloader:
   reloader:
+    watchGlobally: false   # scoped Role in the namespaces below, no ClusterRole
     namespaces:
       - openchoreo-control-plane
     autoReloadAll: true
