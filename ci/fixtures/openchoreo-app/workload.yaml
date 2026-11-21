@@ -1,0 +1,38 @@
+# The OpenChoreo Workload: image, config, endpoint, database. The build writes image and commit.
+apiVersion: openchoreo.dev/v1alpha1
+kind: Workload
+metadata:
+  name: hello-world-workload
+spec:
+  owner:
+    projectName: demo
+    componentName: hello-world
+  source:
+    repository: https://github.com/koorikla/hello-world
+    branch: main
+    commit: "1b08d359b400d7cab8136bd0be81f43172f19b31"
+  container:
+    image: harbor.openchoreo.localhost:9443/apps/demo/hello-world:1b08d35@sha256:56654ce09dd6f6dd3e8bbd81115217c659a81f37f8974620c51536238440ba7e
+    env:
+      - key: GREETING
+        value: hello
+      - key: GREETING_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: hello-world-greeting # greeting-secret.yaml (value in OpenBao)
+            key: greeting
+  endpoints:
+    http:
+      type: HTTP
+      port: 8080
+      visibility: [external]
+  dependencies:
+    resources:
+      - ref: orders-db # orders-db.yaml; libpq variable names, GET /db uses them
+        envBindings:
+          host: PGHOST
+          port: PGPORT
+          database: PGDATABASE
+          username: PGUSER
+          password: PGPASSWORD
+          uri: DATABASE_URL
