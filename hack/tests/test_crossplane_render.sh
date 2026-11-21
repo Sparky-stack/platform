@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PostgreSQL as a service (addon crossplane, docs/data-services.md "PostgreSQL as a service"):
 #   1. selection: the addon ApplicationSet's render for local dev1 opted in (`addons: {crossplane: true}`) installs no
-#      XRD / Composition, one Configuration (packages/postgresql) pinned by digest without dependency resolution and
+#      XRD / Composition, the Configuration packages/postgresql (+ packages/mysql on the moco opt-in, #256) pinned by
+#      digest without dependency resolution and
 #      EnvironmentConfig platform-postgresql with backend cnpg - from the provider label, no developer input;
 #      every backend's addon render (hack/tests/crossplane/values-<backend>.yaml) passes kubeconform -strict with the
 #      Crossplane + provider CRD schemas, pins every package by digest and installs only its provider family members;
@@ -36,24 +37,30 @@ PKG_RE='^(xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\
 render_platform local "$TMP/platform.yaml"
 assert_eq "$(yq '.addons.crossplane.default' charts/platform/values.yaml)" false "catalog: crossplane is opt-in"
 assert_eq "$(yq -o=json -I=0 '.addons.crossplane.roles' charts/platform/values.yaml)" '["workload"]' "catalog: crossplane targets workload clusters"
+# dev1's labels as charts/cluster renders them (like hack/test.sh), so the standalone run sees its moco opt-in too
+render_cluster local dev1 "$TMP/cluster-dev1.yaml"
+yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels' \
+  "$TMP/cluster-dev1.yaml" > "$TMP/labels-dev1.yaml"
 render_layered_addon local crossplane "$TMP/dev1.yaml" "$TMP/platform.yaml" workload dev1 docker development local cilium \
-  https://192.0.2.10:6443
+  https://192.0.2.10:6443 "$TMP/labels-dev1.yaml"
 assert_eq "$(yq -N 'select(.kind == "Composition" or .kind == "CompositeResourceDefinition") | .kind' "$TMP/dev1.yaml")" "" \
   "dev1: the addon renders no XRD / Composition (they come from the Configuration package)"
 assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.package' "$TMP/dev1.yaml" | grep -cE "$CFG_RE" || true)" 1 \
   "dev1: one Configuration, ghcr.io/koorikla/platform/postgresql pinned tag@digest"
-cfg_tag=$(yq -N 'select(.kind == "Configuration") | .spec.package' "$TMP/dev1.yaml" | sed -E 's/.*:(v[^@]+)@.*/\1/')
+# dev1 also opts in to moco (#256), so a second Configuration (platform-mysql) renders: select by name.
+cfg_tag=$(yq -N 'select(.kind == "Configuration" and .metadata.name == "platform-postgresql") | .spec.package' "$TMP/dev1.yaml" | sed -E 's/.*:(v[^@]+)@.*/\1/')
 fn_tag=$(yq -N 'select(.kind == "Function" and .metadata.name == "koorikla-platform-postgresqlcompose-postgresql") | .spec.package' \
   "$TMP/dev1.yaml" | grep -E '^ghcr\.io/koorikla/platform/postgresql_compose-postgresql:v[0-9.]+@sha256:[0-9a-f]{64}$' \
   | sed -E 's/.*:(v[^@]+)@.*/\1/')
 assert_eq "$fn_tag" "$cfg_tag" "dev1: compose-postgresql is pinned at the Configuration's release tag (published together)"
-assert_eq "$(yq -N 'select(.kind == "Configuration") | .spec.skipDependencyResolution' "$TMP/dev1.yaml")" true \
-  "dev1: the Configuration skips dependency resolution (the addon pins Functions / Providers)"
+assert_eq "$(yq -N 'select(.kind == "Configuration") | .metadata.name + "=" + (.spec.skipDependencyResolution | tostring)' "$TMP/dev1.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
+  "platform-mysql=true platform-postgresql=true " \
+  "dev1: both Configurations (postgresql, mysql via moco #256) skip dependency resolution (the addon pins Functions / Providers)"
 assert_eq "$(yq -N 'select(.kind == "EnvironmentConfig" and .metadata.name == "platform-postgresql") | .data.backend' "$TMP/dev1.yaml")" \
   cnpg "dev1 (provider docker): EnvironmentConfig platform-postgresql selects cnpg"
 assert_eq "$(yq -N 'select(.kind == "Function") | .metadata.name' "$TMP/dev1.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
-  "function-auto-ready function-environment-configs function-go-templating koorikla-platform-postgresqlcompose-postgresql " \
-  "dev1: the Functions of the Composition, its embedded compose-postgresql included"
+  "function-auto-ready function-environment-configs function-go-templating koorikla-platform-mysqlcompose-mysql koorikla-platform-postgresqlcompose-postgresql " \
+  "dev1: the Functions of the Compositions, embedded compose-postgresql and (moco opt-in, #256) compose-mysql included"
 assert_eq "$(yq -N 'select(.kind == "ValidatingPolicy" and .metadata.name == "postgresql-production-ha-backup") | .spec.validationActions[0]' "$TMP/dev1.yaml")" \
   Audit "dev1: values/provider-docker.yaml makes the production rule Audit (layered like the ApplicationSet)"
 
