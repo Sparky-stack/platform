@@ -249,7 +249,10 @@ python3 docs/diagrams/src/build.py network         # one diagram
 ```
 
 `hack/tests/test_diagrams.sh` (part of `task test`) runs `--check`, proves the output is deterministic and feeds
-planted defects to the checker.
+planted defects to the checker. `hack/tests/test_diagram_labels.sh` runs `hack/check-diagram-labels.py`: every box
+title must appear in the doc(s) of the "Owning doc" column above (or the doc's own term for it, listed in the script's
+`ALIASES`; `DIAGRAM_ONLY` holds the few boxes with a reason no doc names them), so a renamed or dropped component
+fails until the diagram or the doc follows. Mermaid fences are rejected by `hack/check-docs.py` (one diagram system).
 
 `src/svglib.py` registers every box, label, chip, badge and arrow segment and reports:
 
