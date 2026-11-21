@@ -134,23 +134,32 @@ kubectl --kubeconfig dev1.kubeconfig -n falco rollout restart deploy/falco-falco
 
 App secrets (OpenChoreo `SecretReference`s, [openchoreo.md](../openchoreo.md#application-secrets-developer-view)) live
 in `kv-tenant-<project>`. Rotation = write a new version with the project's writer identity
-([multicluster.md](../multicluster.md#tenant-secrets-openbao) "Writing a secret"; value from a file, never echoed),
-then roll the component's pods. ESO refreshes the cell namespace's Secret within 15 s; env vars and `subPath` files are
-only read at container start, and Reloader deliberately cannot watch tenant `dp-*` namespaces.
+([multicluster.md](../multicluster.md#tenant-secrets-openbao) "Writing a secret"; value from a file, never echoed).
+Nothing else to do: ESO refreshes the cell namespace's Secret within 15 s (`refreshInterval` of the component types'
+ExternalSecrets), and Reloader (addon `reloader`) then rolls every Deployment that references that Secret, in every
+environment and preview cell that reads the key (#268). Env vars and `subPath` files are only read at container start,
+so the roll is what makes the app see the new value. Only Deployments that reference the changed Secret roll: the
+component types annotate them `secret.reloader.stakater.com/auto: "true"`, and VAP `reloader-rollout-only` lets
+Reloader change nothing but the rollout annotation, only in cells and `openchoreo-data-plane`.
 
 ```bash
 # After the new version is written (example: project demo, component hello-world, environment development, dev1)
 task kubeconfig CLUSTER=dev1
 KD="kubectl --kubeconfig dev1.kubeconfig"
 NS=$($KD get ns -l openchoreo.dev/project=demo,openchoreo.dev/environment=development -o name | cut -d/ -f2)
-# Optional: sync now instead of waiting for the 15 s refresh
-$KD -n "$NS" annotate externalsecret -l openchoreo.dev/component=hello-world force-sync="$(date +%s)" --overwrite
-$KD -n "$NS" get externalsecret -l openchoreo.dev/component=hello-world   # READY True, LAST SYNC just now
-$KD -n "$NS" rollout restart deployment -l openchoreo.dev/component=hello-world
+$KD -n "$NS" get externalsecret -l openchoreo.dev/component=hello-world   # LAST SYNC within 15 s of the write
 $KD -n "$NS" rollout status deployment -l openchoreo.dev/component=hello-world
+# new pods (AGE since the rotation) carry the trigger: {"name":"<secret>","kind":"Secret","hash":"<new data hash>",...}
+$KD -n "$NS" get pods -l openchoreo.dev/component=hello-world \
+  -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.creationTimestamp} {.metadata.annotations.reloader\.stakater\.com/last-reloaded-from}{"\n"}{end}'
 ```
 
-Repeat the restart per environment that reads the key. `SecretSyncedError` on the ExternalSecret: wrong
+No roll within a minute: `kubectl --kubeconfig dev1.kubeconfig -n reloader logs deploy/reloader --tail=20` (a
+`denied request: ValidatingAdmissionPolicy 'reloader-rollout-only'` line means the namespace is not a cell or the
+workload is not the platform's; `forbidden` means RBAC), and check the Deployment carries the annotation. Manual
+fallback: `$KD -n "$NS" rollout restart deployment -l openchoreo.dev/component=hello-world`.
+
+`SecretSyncedError` on the ExternalSecret: wrong
 `remoteRef.key`/`property` (key missing in the mount) or the `SecretStore openbao-tenant` is not Ready (tenant
 reconcile, [multicluster.md](../multicluster.md#tenant-secrets-openbao)). Rollback: write the previous value again.
 

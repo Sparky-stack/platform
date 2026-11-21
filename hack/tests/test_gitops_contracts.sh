@@ -216,8 +216,9 @@ assert_eq "$(yq "$edns_pod | .securityContext.seccompProfile.type // .containers
 assert_eq "$(yq "$edns_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/edns-pss.yaml")" false "external-dns no privilege escalation"
 assert_eq "$(yq -o=json -I=0 "$edns_pod | .containers[0].securityContext.capabilities.drop" "$TMP/edns-pss.yaml")" '["ALL"]' "external-dns drops ALL capabilities"
 
-# 9c. reloader (#50) is NOT a Kyverno-excluded platform namespace, meets Pod Security restricted with no ClusterRole,
-#     watches openchoreo-data-plane, and cluster-agent's Reloader annotations match the CRS-delivered Secret/ConfigMap.
+# 9c. reloader (#50) is NOT a Kyverno-excluded platform namespace, meets Pod Security restricted, may roll workloads in
+#     openchoreo-data-plane (and tenant cells, #268: cluster-wide watch fenced by VAP reloader-rollout-only, CEL in
+#     test_reloader_admission.sh), and cluster-agent's Reloader annotations match the CRS-delivered Secret/ConfigMap.
 for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
   assert_eq "$(grep -cE '^ *- reloader( |$)' "$ROOT/$f" || true)" 0 "reloader not excluded from Kyverno ($f)"
 done
@@ -230,8 +231,10 @@ assert_eq "$(yq "$rel_pod | .securityContext.seccompProfile.type" "$TMP/reloader
 assert_eq "$(yq "$rel_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/reloader-pss.yaml")" false "reloader no privilege escalation"
 assert_eq "$(yq "$rel_pod | .containers[0].securityContext.readOnlyRootFilesystem" "$TMP/reloader-pss.yaml")" true "reloader readOnlyRootFilesystem"
 assert_eq "$(yq -o=json -I=0 "$rel_pod | .containers[0].securityContext.capabilities.drop" "$TMP/reloader-pss.yaml")" '["ALL"]' "reloader drops ALL capabilities"
-assert_eq "$(yq 'select(.kind == "ClusterRole" or .kind == "ClusterRoleBinding") | .metadata.name' "$TMP/reloader-pss.yaml")" "" "reloader renders no ClusterRole or ClusterRoleBinding"
-assert_eq "$(NS="$dp_ns" yq 'select(.kind == "Role" and .metadata.namespace == strenv(NS)) | .metadata.name' "$TMP/reloader-pss.yaml")" reloader-role "reloader grants a Role in $dp_ns"
+assert_eq "$(yq -N 'select(.kind == "ValidatingAdmissionPolicyBinding") | .spec.policyName + " " + (.spec.validationActions | join(","))' "$TMP/reloader-pss.yaml")" \
+  "reloader-rollout-only Deny" "reloader's cluster-wide RBAC comes with its rollout guard"
+assert_match "$(yq -N 'select(.kind == "ValidatingAdmissionPolicy") | .spec.validations[0].expression' "$TMP/reloader-pss.yaml")" \
+  "request.namespace in \\['$dp_ns'\\]" "reloader may roll workloads in $dp_ns"
 helm template openchoreo-control-plane "$ROOT/addons/openchoreo-control-plane" --namespace openchoreo-control-plane \
   -s templates/gateway-ca-crs.yaml > "$TMP/gw-ca-crs.yaml"
 # the data plane as its workload ApplicationSet renders it (per-cluster parameters as in test_mesh_contracts.sh)

@@ -1,6 +1,12 @@
-{{- /* Cross-field rule only; the single-key invariants (scoped namespace RBAC, annotation reload strategy, Pod Security
-`restricted`) are in values.schema.json. */ -}}
+{{- /* Cross-field rules only; the single-key invariants (annotation reload strategy, Pod Security `restricted`) are in
+values.schema.json. */ -}}
 {{- $r := .Values.reloader.reloader -}}
 {{- if and $r.autoReloadAll (empty $r.resourceLabelSelector) -}}
 {{- fail "reloader.reloader.autoReloadAll needs a resourceLabelSelector (otherwise every workload in the watched namespaces restarts on any ConfigMap/Secret change)" -}}
+{{- end -}}
+{{- if and (not $r.watchGlobally) (empty $r.namespaces) -}}
+{{- fail "reloader.reloader.watchGlobally=false needs reloader.reloader.namespaces (the namespaces that get a scoped Role)" -}}
+{{- end -}}
+{{- if and $r.watchGlobally $r.autoReloadAll -}}
+{{- fail "reloader.reloader.autoReloadAll with watchGlobally would roll workloads cluster-wide that never opted in; keep restarts opt-in by annotation" -}}
 {{- end -}}
