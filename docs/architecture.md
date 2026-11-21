@@ -157,8 +157,8 @@ OpenChoreo (resource type `postgresql`), never through Crossplane directly ([cro
 ### Builds in the cluster, not in a CI provider
 Components name a ClusterWorkflow; the OpenChoreo workflow plane on mgmt builds, scans, signs and commits the new image
 ref to the app repo, and Argo CD deploys it. The reusable GitHub Actions workflows (`.github/workflows/app-*.yaml`,
-scripts in [`ci/`](../ci/README.md)) run the same scripts as an optional path. This keeps CI providers thin and the build path identical on every installation
-([build-plane.md](build-plane.md)).
+scripts in [`ci/`](../ci/README.md)) run the same scripts as an optional path. This keeps CI providers thin and the
+build path identical on every installation ([build-plane.md](build-plane.md)).
 
 ### Repos
 | Repo | Owner | Contents |

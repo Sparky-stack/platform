@@ -420,7 +420,7 @@ Upstream's `istio-reader-clusterrole-istio-system` (istiod chart) grants cluster
 `configmaps`, create/delete on MCS `serviceexports` and create on `tokenreviews`/`subjectaccessreviews`. Bound to the
 reader user, every peer could read this cluster's istio-csr and istiod serving keys, the OpenChoreo agent identity and
 every tenant Secret. So the reader is bound to the platform's own roles instead (addon `mesh`
-`templates/reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
+`templates/eastwest-reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
 
 | istiod 1.32.0 source | Remote reads | Granted |
 |---|---|---|
