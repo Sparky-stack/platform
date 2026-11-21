@@ -33,11 +33,13 @@ PATH="$P" bash "$ROOT/hack/registry-cache.sh" up >/dev/null
 runs=$(grep -c '^run ' "$DOCKER_LOG" || true)
 assert_eq "$runs" "$n" "up: one registry container per upstream"
 run_line=$(grep '^run .*platform-cache-docker-io' "$DOCKER_LOG")
-assert_match "$run_line" "--network kind" "up: on network kind (CAPD + k3d nodes resolve the name)"
-assert_match "$run_line" "--restart unless-stopped" "up: survives docker/host restarts"
-assert_match "$run_line" "-v platform-cache-docker-io:/var/lib/registry" "up: named volume keeps the cache"
-assert_match "$run_line" "REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io" "up: docker.io proxies registry-1"
-assert_match "$run_line" "registry:3.0.0@sha256:" "up: image pinned by digest"
+assert_matches "$run_line" <<'CASES'
+up: on network kind (CAPD + k3d nodes resolve the name) | --network kind
+up: survives docker/host restarts | --restart unless-stopped
+up: named volume keeps the cache | -v platform-cache-docker-io:/var/lib/registry
+up: docker.io proxies registry-1 | REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io
+up: image pinned by digest | registry:3.0.0@sha256:
+CASES
 assert_eq "$(grep -c -- ' -p \| --publish' "$DOCKER_LOG" || true)" 0 "up: no host ports published"
 assert_eq "$(grep -c k3d "$DOCKER_LOG" || true)" 0 "up: not attached to any k3d cluster (task down keeps it)"
 
