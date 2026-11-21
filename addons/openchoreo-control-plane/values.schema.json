@@ -8,12 +8,6 @@
       "type": "object",
       "description": "Installation facts (installation.yaml openchoreo.*).",
       "properties": {
-        "orgNamespace": {
-          "type": "string",
-          "description": "OpenChoreo organisation namespace on mgmt.",
-          "minLength": 1,
-          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
-        },
         "controlPlane": {
           "type": "object",
           "description": "Public endpoints of the control plane.",
@@ -43,12 +37,6 @@
             "enabled": {
               "type": "boolean",
               "description": "Observability plane installed (== backstage.features.observability.enabled)."
-            },
-            "httpPort": {
-              "type": "integer",
-              "description": "Host port of the observability gateway.",
-              "minimum": 1,
-              "maximum": 65535
             }
           }
         }

@@ -36,6 +36,8 @@ if [[ ! -d "$SCHEMAS_DIR/openchoreo.dev" ]]; then   # standalone run (CI workflo
   ./hack/deps.sh >/dev/null
   SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
 fi
+# ci/schemas (what app-openchoreo-manifests.yaml validates app repos against) == the CRDs of the vendored OpenChoreo
+# charts: regenerate with `cp "$SCHEMAS_DIR"/openchoreo.dev/<kind>_v1alpha1.json ci/schemas/openchoreo.dev/` (jq .).
 # assert_same <label> <expected> <actual>: like assert_eq for long JSON documents; prints a short diff on mismatch
 assert_same() {
   if [[ "$2" == "$3" ]]; then PASS=$((PASS + 1)); return 0; fi
@@ -44,6 +46,13 @@ assert_same() {
   diff <(printf '%s' "$2" | yq -P '.') <(printf '%s' "$3" | yq -P '.') | head -n 20 >&2 || true
 }
 words_in() { local w; for w in $1; do [[ " $2 " == *" $w "* ]] || { echo "$w"; return 0; }; done; echo; }
+
+stale=""
+for f in ci/schemas/openchoreo.dev/*.json; do
+  [[ "$(jq -S . "$f")" == "$(jq -S . "$SCHEMAS_DIR/openchoreo.dev/${f##*/}" 2>/dev/null)" ]] || stale="$stale ${f##*/}"
+done
+assert_eq "$stale" "" "ci/schemas/openchoreo.dev matches the vendored OpenChoreo CRDs"
+assert_eq "$(find ci/schemas/openchoreo.dev -name '*.json' | wc -l | tr -d ' ')" 6 "ci/schemas covers the six app-repo kinds"
 
 TRUSTED_CI_SHA=$(yq -r '.imageVerification.github.workflowRef' addons/kyverno-policies/values.yaml)
 TEMPLATES=()
@@ -145,7 +154,7 @@ for t in "${SERVICES[@]}"; do
 
   # repository content
   for p in catalog-info.yaml .github/CODEOWNERS renovate.json SECURITY.md README.md Dockerfile .github/workflows/ci.yaml \
-    deploy/openchoreo/component.yaml deploy/openchoreo/workload.yaml hack/bump-workload.py hack/validate-manifests.py \
+    deploy/openchoreo/component.yaml deploy/openchoreo/workload.yaml \
     deploy/openchoreo/release-bindings/development.yaml deploy/openchoreo/release-bindings/staging.yaml \
     deploy/openchoreo/release-bindings/production.yaml; do
     assert_eq "$([[ -s "$R/$p" ]] && echo yes)" yes "$t: has $p"
@@ -156,21 +165,23 @@ for t in "${SERVICES[@]}"; do
   assert_eq "$(yq -r '.kind + " " + .metadata.name + " " + .spec.dependencyOf[0]' "$R/catalog-info.yaml")" "Resource sample-svc-repo component:default/sample-svc" "$t: catalog-info is a Resource pointing at OpenChoreo's Component (no duplicate Component ref)"
   assert_eq "$(grep -v '^#' "$R/.github/CODEOWNERS")" "* @koorikla @octocat" "$t: CODEOWNERS from the parameter"
 
-  # Workload bump script (CI job `bump`): first bump adds the commit, the result stays valid; bad input refused
+  # no code in the app repo (owner rule): no hack/, no scripts; the CI caller has no run: steps
+  assert_eq "$([[ -e "$R/hack" ]] && echo present || echo absent)" absent "$t: no hack/ (validation and bump live in the platform)"
+  assert_eq "$(yq -r '[.jobs[].steps[]? | select(has("run"))] | length' "$R/.github/workflows/ci.yaml")" 0 "$t: CI caller has no inline run: steps"
+  # the platform's bump script (app-workload-bump.yaml) pins image and commit in the rendered Workload, still valid
   cp "$R/deploy/openchoreo/workload.yaml" "$TMP/wl.yaml"
-  img="ghcr.io/koorikla/sample-svc:abc1234@sha256:$(printf 'a%.0s' $(seq 64))"
-  bump_out=$(cd "$R" && NEW_IMAGE="$img" NEW_COMMIT=abc1234def py hack/bump-workload.py 2>&1) || true
-  assert_eq "$(yq -r '.spec.container.image + " " + .spec.source.commit' "$R/deploy/openchoreo/workload.yaml")" "$img abc1234def" "$t: bump-workload pins image and commit ($bump_out)"
-  assert_eq "$(kc_valid "$R/deploy/openchoreo/workload.yaml")" yes "$t: bumped Workload passes kubeconform -strict"
-  if (cd "$R" && NEW_IMAGE=ghcr.io/koorikla/sample-svc:main NEW_COMMIT=abc1234 py hack/bump-workload.py >/dev/null 2>&1); then r=accepted; else r=refused; fi
-  assert_eq "$r" refused "$t: bump-workload refuses an image without digest"
-  cp "$TMP/wl.yaml" "$R/deploy/openchoreo/workload.yaml"
+  d64=$(printf 'a%.0s' $(seq 64))
+  CI_OUT_DIR="$TMP/wb" WORKLOAD_FILE="$TMP/wl.yaml" IMAGE=ghcr.io/koorikla/sample-svc:abc1234 DIGEST="sha256:$d64" COMMIT=abc1234def \
+    bash ci/scripts/common/workload-bump.sh >/dev/null 2>&1 || true
+  assert_eq "$(yq -r '.spec.container.image + " " + .spec.source.commit' "$TMP/wl.yaml")" "ghcr.io/koorikla/sample-svc:abc1234@sha256:$d64 abc1234def" "$t: app-workload-bump pins image and commit"
+  assert_eq "$(kc_valid "$TMP/wl.yaml")" yes "$t: bumped Workload passes kubeconform -strict"
 
   # CI caller: koorikla/platform app-* workflow by SHA (# ci-v1.0.0); every action pinned by SHA; actionlint
   wf="$R/.github/workflows/ci.yaml"
-  ci_uses=$(yq -r '.jobs[] | select(.uses) | .uses' "$wf")
+  ci_uses=$(yq -r '.jobs.build.uses' "$wf")
   assert_match "$ci_uses" '^koorikla/platform/\.github/workflows/app-[a-z-]+\.yaml@[0-9a-f]{40}$' "$t: build job calls an app-* workflow by commit SHA"
-  assert_eq "$(grep -cE 'uses: koorikla/platform/[^ ]+@[0-9a-f]{40} # ci-v[0-9]+\.[0-9]+\.[0-9]+$' "$wf")" 1 "$t: workflow SHA carries a '# ci-vX.Y.Z' release tag comment (Renovate)"
+  assert_eq "$(grep -cE 'uses: koorikla/platform/[^ ]+@[0-9a-f]{40} # ci-v[0-9]+\.[0-9]+\.[0-9]+$' "$wf")" 2 "$t: both platform workflow SHAs carry a '# ci-vX.Y.Z' release tag comment (Renovate)"
+  assert_eq "$(yq -r '.jobs.bump.uses' "$wf")" "koorikla/platform/.github/workflows/app-workload-bump.yaml@$TRUSTED_CI_SHA" "$t: bump job calls app-workload-bump.yaml at the same SHA"
   assert_eq "${ci_uses##*@}" "$TRUSTED_CI_SHA" "$t: workflow SHA == the commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef)"
   bad=""
   for u in $(yq -r '.jobs[].steps[]?.uses // ""' "$wf"); do [[ "$u" =~ $SHA_USES_RE ]] || bad="$bad $u"; done

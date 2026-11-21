@@ -80,6 +80,15 @@ GHCR uses `GITHUB_TOKEN`).
 
 ## What gets checked, per stack
 
+Every app-<stack>.yaml also runs [`app-openchoreo-manifests.yaml`](../.github/workflows/app-openchoreo-manifests.yaml)
+on `deploy/openchoreo` (input `openchoreo_manifests`, `''` skips; skipped when the directory is missing): each object
+against the CRD schemas of the OpenChoreo version the platform runs (`ci/schemas/openchoreo.dev`, strict like
+`kubeconform -strict`; hack/tests/test_project_templates.sh fails when they drift from the vendored charts) and the
+repo invariants OpenChoreo only reports after Argo CD synced (one project, no `metadata.namespace`, binding names
+`<owner>-<env>`, `secretKeyRef` -> `SecretReference` key, resource dependency -> Resource + development binding,
+production ResourceReleaseBindings pinned). Script: `ci/scripts/openchoreo/validate-manifests.py`. App repos carry
+no validation code.
+
 | Stack | Lint / static analysis | Tests | Dependency vulns | SAST | Image |
 |---|---|---|---|---|---|
 | Go | `go vet`, golangci-lint | `go test -race` + coverage | govulncheck (call-graph aware) | CodeQL go | Trivy, SBOM, sign |

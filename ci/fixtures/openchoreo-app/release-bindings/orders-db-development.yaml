@@ -1,0 +1,17 @@
+# orders-db in development only; add orders-db-<env>.yaml before promoting a release that uses it (README "Database").
+apiVersion: openchoreo.dev/v1alpha1
+kind: ResourceReleaseBinding
+metadata:
+  name: orders-db-development
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # after the Resource
+    platform.koorikla.io/resource-release: latest # the platform keeps it on orders-db's latest release
+spec:
+  owner:
+    projectName: demo
+    resourceName: orders-db
+  environment: development
+  retainPolicy: Delete # disposable development data
+  resourceTypeEnvironmentConfigs:
+    size: S
+    storageGiB: 10

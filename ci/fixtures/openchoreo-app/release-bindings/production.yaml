@@ -1,0 +1,24 @@
+# production: promote = a PR setting releaseName to the ComponentRelease running in staging (README "Promotion").
+apiVersion: openchoreo.dev/v1alpha1
+kind: ReleaseBinding
+metadata:
+  name: hello-world-production
+spec:
+  owner:
+    projectName: demo
+    componentName: hello-world
+  environment: production
+  releaseName: hello-world-77ff9dc697
+  componentTypeEnvironmentConfigs: # platform policy: replicas >= 2 and requests set (enforced in production)
+    replicas: 2
+    resources:
+      requests: { cpu: 100m, memory: 64Mi }
+      limits: { cpu: 500m, memory: 128Mi }
+  traitEnvironmentConfigs:
+    scaler:
+      minReplicas: 2
+  workloadOverrides:
+    container:
+      env:
+        - key: GREETING
+          value: hello from production
