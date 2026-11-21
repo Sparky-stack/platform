@@ -85,7 +85,7 @@ The numbered flow of each diagram, word for word.
 
 1. A client opens the app URL; kgateway takes the request
 2. kgateway, itself in the service mesh, routes it to the app pods
-3. Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and between them; app namespaces refuse unencrypted traffic
+3. Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and between them; app namespaces refuse unencrypted traffic and callers from other apps' namespaces
 4. The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the Prometheus agent scrapes their metrics
 5. The app pods send their traces to the OpenTelemetry collector
 6. The collectors dial out and ship everything to the observability plane on the management cluster
@@ -145,7 +145,7 @@ Upgrade: bump `kubernetesVersion` in the fleet file; Cluster API replaces the no
 1. The operator fetches the latest backup copies from off the host: etcd snapshots and volume copies
 2. The operator restores the management cluster's etcd from its latest snapshot: the workload clusters' records and the CA keys come back
 3. The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys
-4. The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys
+4. The operator restores OpenBao's volume copy (opt-in): app secrets and the mesh CA keys
 5. OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with `task secrets`)
 6. The operator restores Harbor's volume copy, or new builds push the images again
 7. Argo CD re-syncs everything else from Git
@@ -156,7 +156,7 @@ Telemetry is not backed up: it starts empty.
 ### Upgrade flow ([upgrade.svg](upgrade.svg))
 
 1. Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version
-2. GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and arm; a maintainer reviews and merges it into main
+2. GitHub runs CI on the pull request: every changed chart rendered and tested (all of them nightly, on Linux, macOS and Windows); a maintainer reviews and merges it into main
 3. Argo CD reads main for every cluster that follows it
 4. Argo CD syncs the dev clusters first, each app in a fixed order
 5. Dev clusters are verified: every app synced and healthy

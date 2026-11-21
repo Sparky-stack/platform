@@ -186,7 +186,7 @@ def network() -> Diagram:
     d.key("A client opens the app URL; kgateway takes the request",
           "kgateway, itself in the service mesh, routes it to the app pods",
           "Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and "
-          "between them; app namespaces refuse unencrypted traffic",
+          "between them; app namespaces refuse unencrypted traffic and callers from other apps' namespaces",
           "The collectors on each node gather the pods' logs and metrics: Fluent Bit tails their log files, the "
           "Prometheus agent scrapes their metrics",
           "The app pods send their traces to the OpenTelemetry collector",
@@ -497,7 +497,7 @@ def backup() -> Diagram:
     d.box(MX, R[0], MW, H, "mgmt", "Cluster state (etcd)", ["clusters, access and CA keys:",
                                                              "a snapshot every 12 hours"], aka=("etcd",))
     d.box(MX, R[1], MW, H, "mgmt", "Thunder", ["users, sign-in clients,", "signing keys"])
-    d.box(MX, R[2], MW, H, "mgmt", "OpenBao", ["secrets and", "mesh CA keys"], status="optin")
+    d.box(MX, R[2], MW, H, "mgmt", "OpenBao", ["app secrets and", "mesh CA keys"], status="optin")
     d.box(MX, R[3], MW, H, "mgmt", "Harbor", ["pushed", "images"])
     d.box(MX, R[4], MW, H, "mgmt", "Argo CD", ["GitOps", "engine"])
     d.box(MX, RW, MW, H, "workload", "Databases", ["app data, only if this", "cluster is lost too"],
@@ -525,7 +525,7 @@ def backup() -> Diagram:
           "The operator restores the management cluster's etcd from its latest snapshot: the workload clusters' "
           "records and the CA keys come back",
           "The operator restores Thunder's volumes from their copy: users, sign-in clients, signing keys",
-          "The operator restores OpenBao's volume copy (opt-in): secrets and the mesh CA keys",
+          "The operator restores OpenBao's volume copy (opt-in): app secrets and the mesh CA keys",
           "OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local "
           "setup, re-create it with task secrets)",
           "The operator restores Harbor's volume copy, or new builds push the images again",
@@ -565,8 +565,8 @@ def upgrade() -> Diagram:
     d.require("Renovate", "GitHub", "Argo CD", "Dev clusters", "Prod clusters", "Maintainer")
     d.stages("Dev clusters", "Prod clusters")
     d.key("Renovate opens a pull request: a Helm chart, a k3s release, an image or a tool version",
-          "GitHub runs CI on the pull request, every chart rendered and tested on Linux, macOS and Windows, x86 and "
-          "arm; a maintainer reviews and merges it into main",
+          "GitHub runs CI on the pull request: every changed chart rendered and tested (all of them nightly, on "
+          "Linux, macOS and Windows); a maintainer reviews and merges it into main",
           "Argo CD reads main for every cluster that follows it",
           "Argo CD syncs the dev clusters first, each app in a fixed order",
           "Dev clusters are verified: every app synced and healthy",

@@ -74,7 +74,7 @@
 <circle cx="40" cy="829.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="834" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
 <text class="s" x="62.0" y="834.0" font-size="13.5" fill="#dde5ef">Inside the Istio ambient service mesh, ztunnel encrypts every hop, from the gateway to the app pods and between them; app</text>
-<text class="s" x="62.0" y="853.0" font-size="13.5" fill="#dde5ef">namespaces refuse unencrypted traffic</text>
+<text class="s" x="62.0" y="853.0" font-size="13.5" fill="#dde5ef">namespaces refuse unencrypted traffic and callers from other apps&#x27; namespaces</text>
 <circle cx="40" cy="876.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="881" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
 <text class="s" x="62.0" y="881.0" font-size="13.5" fill="#dde5ef">The collectors on each node gather the pods&#x27; logs and metrics: Fluent Bit tails their log files, the Prometheus agent scrapes their metrics</text>

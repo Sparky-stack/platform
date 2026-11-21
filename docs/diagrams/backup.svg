@@ -38,7 +38,7 @@
 <text class="s" x="434.0" y="444.4" font-size="13" fill="#dde5ef" text-anchor="middle">signing keys</text>
 <rect x="284" y="500" width="300" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="6 4"/>
 <text class="s" x="434.0" y="526.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">OpenBao</text>
-<text class="s" x="434.0" y="546.4" font-size="13" fill="#dde5ef" text-anchor="middle">secrets and</text>
+<text class="s" x="434.0" y="546.4" font-size="13" fill="#dde5ef" text-anchor="middle">app secrets and</text>
 <text class="s" x="434.0" y="564.4" font-size="13" fill="#dde5ef" text-anchor="middle">mesh CA keys</text>
 <rect x="520.9" y="475" width="63.1" height="19" rx="9.5" fill="#0b1120" stroke="#dde5ef" stroke-width="1.2"/>
 <text class="s" x="552.4" y="488.8" font-size="12" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
@@ -115,7 +115,7 @@
 <text class="s" x="62.0" y="1166.0" font-size="13.5" fill="#dde5ef">The operator restores Thunder&#x27;s volumes from their copy: users, sign-in clients, signing keys</text>
 <circle cx="40" cy="1189.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="1194" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
-<text class="s" x="62.0" y="1194.0" font-size="13.5" fill="#dde5ef">The operator restores OpenBao&#x27;s volume copy (opt-in): secrets and the mesh CA keys</text>
+<text class="s" x="62.0" y="1194.0" font-size="13.5" fill="#dde5ef">The operator restores OpenBao&#x27;s volume copy (opt-in): app secrets and the mesh CA keys</text>
 <circle cx="40" cy="1217.5" r="11" fill="#fbbf24"/>
 <text class="s" x="40" y="1222" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
 <text class="s" x="62.0" y="1222.0" font-size="13.5" fill="#dde5ef">OpenBao fetches its unseal key from the secret backend, which lives outside the clusters (on a local setup, re-create it with task secrets)</text>
