@@ -1,6 +1,5 @@
-{{- /* Renders nothing: per-backend checks that need the resolved backend (types, enums and package pins:
-values.schema.json). Every managed-database fact the Composition needs must be set here, so a missing fact fails the
-Helm render, not the cluster. */ -}}
+{{- /* Renders nothing: per-backend facts the Composition needs, so a missing fact fails the render, not the cluster.
+Types, enums and package pins: values.schema.json. */ -}}
 {{- $p := .Values.postgresql }}
 {{- $b := include "crossplane.pgBackend" . }}
 {{- if not $b }}

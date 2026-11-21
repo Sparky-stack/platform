@@ -67,11 +67,8 @@ dnsStore:
   namespaces:
     - external-dns
 
-# ClusterSecretStore `delivery` on byo clusters (values/provider-byo.yaml, docs/providers.md "Bring your own cluster
-# (byo)"): mgmt pushes the PUBLIC material that CAPI clusters receive as ConfigMaps (gateway CA, image verification) as
-# Secrets into `namespace`; the consumers' ExternalSecrets (generic target ConfigMap) read them through this store.
-# Name-scoped GET of exactly `keys` (AGENTS.md invariant 5 exception: public certificates/keys only), only from
-# `namespaces`. Off elsewhere: CAPI clusters get the ConfigMaps from ClusterResourceSets.
+# ClusterSecretStore `delivery` on byo clusters (docs/providers.md "Bring your own cluster (byo)"): name-scoped GET of
+# the PUBLIC material mgmt pushes (AGENTS.md invariant 5 exception). CAPI clusters get it from ClusterResourceSets.
 delivery:
   # -- `ClusterSecretStore/delivery` on byo clusters (`values/provider-byo.yaml`), name-scoped to the public material mgmt pushes into `platform-delivery` ([byo](../../docs/providers.md#bring-your-own-cluster-byo)).
   enabled: false
@@ -101,10 +98,8 @@ platformStore:
     - external-dns                     # external-dns-cloudflare when opted in on mgmt with Cloudflare (addon external-dns)
     - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
 
-# ClusterSecretStore `workflows` on mgmt (ClusterWorkflowPlane `default` secretStoreRef): per-run ExternalSecrets of
-# build and promotion-gate ClusterWorkflows in `workflows-<openchoreo.orgNamespace>`. Restricted by namespaceRegexes to
-# `workflows-*` and, on the kubernetes backend, by Role resourceNames to only the keys those workflows read (never the
-# full `platform` store: AGENTS.md invariant 5; hack/tests/test_secret_store_scope.sh).
+# ClusterSecretStore `workflows` on mgmt: per-run ExternalSecrets in `workflows-*`, key-scoped on the kubernetes
+# backend, never the full `platform` store (AGENTS.md invariant 5; hack/tests/test_secret_store_scope.sh).
 workflowStore:
   # -- Least-privilege `workflows` store (`workflowStore.{namespaceRegexes,keys}` and `secrets.workflowStore`) for `workflows-*` build and promotion runs.
   namespaceRegexes:
@@ -120,9 +115,8 @@ workflowStore:
 previews:
   enabled: false
 
-# GitHub token of the PR preview ApplicationSets' pull request generators (charts/tenant templates/previews.yaml
-# previewToken.secretName must match). Installation token of the platform GitHub App (store key below, the promotion
-# gate's App), restricted to `permissions`; Argo CD gets only the token.
+# Pull-request-read installation token of the platform GitHub App for the preview ApplicationSets (name must match
+# charts/tenant previewToken.secretName); Argo CD gets only the token.
 previewToken:
   # -- Pull-request-read installation token (`previewToken.*` with `previews.enabled`) of the platform GitHub App for the preview ApplicationSets (`argocd/preview-github-token`).
   secretName: preview-github-token
@@ -131,10 +125,8 @@ previewToken:
   permissions: { pull_requests: read }
   refreshInterval: 30m
 
-# Per-tenant SecretStores on workload clusters (templates/tenant-stores.yaml; installation.yaml
-# secrets.tenantStores.enabled, default off; needs addon openbao on mgmt and the cluster to be a mesh member: OpenBao
-# verifies the logins against the members' JWKS from the mesh-clients inputs, and the CA comes with the mesh trust).
-# ClusterSecretStore default then excludes tenant namespaces (conditions), which use SecretStore storeName only.
+# Per-tenant SecretStores on workload clusters (templates/tenant-stores.yaml): needs addon openbao on mgmt and mesh
+# membership; ClusterSecretStore default then excludes tenant namespaces.
 tenantStores:
   tenantLabel: openchoreo.dev/project          # set by OpenChoreo on every cell namespace (value = project)
   storeName: openbao-tenant

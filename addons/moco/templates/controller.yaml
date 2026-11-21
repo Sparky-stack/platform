@@ -1,6 +1,5 @@
-{{- /* The MOCO controller under Pod Security restricted (values.yaml header): the upstream chart's Deployment
-(charts/moco templates/deployment.yaml) with a seccomp profile, a capability drop and a fixed non-root user added. The
-upstream Deployment runs 0 replicas; its ServiceAccount, RBAC, webhook Service + certificates are used as they are. */ -}}
+{{- /* Upstream's controller Deployment (chart 0.28.0, which runs 0 replicas) plus seccomp, a capability drop and a fixed
+user. Delete this and restore moco.replicaCount once upstream exposes securityContext values. */ -}}
 {{- $up := .Values.moco }}
 {{- $img := printf "%s:%s" $up.image.repository (toString $up.image.tag) }}
 {{- if not (regexMatch "@sha256:[0-9a-f]{64}$" $img) }}{{ fail (printf "moco.image %q is not pinned by digest" $img) }}{{ end }}

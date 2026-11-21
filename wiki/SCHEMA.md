@@ -1,7 +1,10 @@
 # Wiki Schema — koorikla/platform
 
+> [!WARNING]
+> **LLM wiki: AI-agent working memory, not human documentation.** It may be stale or wrong. Human docs live in [docs/](../docs/) and win on any conflict. See [README.md](README.md).
+
 ## Purpose & Authority Rule
-This `wiki/` is the compounding synthesis layer for AI agents and maintainers working on `koorikla/platform`: architectural **decisions** (why we chose X and rejected Y), operational **gotchas** (non-obvious failure modes learned live), **concepts** (high-level mental models), and **queries** (reusable investigations).
+This `wiki/` is the compounding synthesis layer for AI agents working on `koorikla/platform`: architectural **decisions** (why we chose X and rejected Y), operational **gotchas** (non-obvious failure modes learned live), **concepts** (high-level mental models), and **queries** (reusable investigations).
 
 **Not a second source of truth:**
 - The authoritative sources of truth are [AGENTS.md](../AGENTS.md), [docs/](../docs/conventions.md) (including [docs/runbooks/](../docs/operations.md) and addon/chart `README.md` files), and the code itself.

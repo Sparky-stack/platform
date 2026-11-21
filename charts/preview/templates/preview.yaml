@@ -1,28 +1,10 @@
 {{- /*
-One PR preview (docs/preview-environments.md), shaped like the upstream ephemeral-environment proposal
-(openchoreo/openchoreo discussion 4994): only stock OpenChoreo objects, so the upstream root resource can replace this
-chart later without changing what runs.
-  Environment            pr-<n>-<component>   on previews.dataPlane, never production, not in any DeploymentPipeline
-                                              (nothing can be promoted from or to it). Kyverno on mgmt stamps
-                                              platform.koorikla.io/expires-at at creation, caps previews per tenant and
-                                              deletes expired ones (addon kyverno-policies templates/previews.yaml).
-  ProjectReleaseBinding  <project>-pr-<n>-<component>   the project's cell namespace on that data plane, labelled
-                                              platform.koorikla.io/preview so Kyverno there adds ResourceQuota,
-                                              LimitRange and the isolating NetworkPolicy. On mgmt Kyverno turns it
-                                              into an OpenBao tenant descriptor (addon openbao tenant-previews.yaml):
-                                              the cell reads its project's secrets, no other tenant's (#267).
-  ReleaseBinding         <component>-pr-<n>   pins ComponentRelease <component>-pr-<n>-<sha[:12]>, which the auto-build
-                                              pass cuts from the in-cluster build of the PR head (addon
-                                              openchoreo-platform files/auto-build/auto_build.py).
-Not rendered here, because only the release says which Resources the app uses: the same auto-build pass creates one
-  ResourceReleaseBinding <resource>-pr-<n>-<component> per dependencies.resources[].ref of that ComponentRelease (the
-                                              preview's own, empty database; owned by the Environment, retainPolicy
-                                              Delete) and pins it to the Resource's latest release (#330).
-Closing the PR deletes the Application (ApplicationSet), whose resources finalizer deletes the Environment; OpenChoreo's
-environment finalizer removes the bindings and the cell namespace; the Environment's owner references take the
-ComponentRelease and the ResourceReleaseBindings (and so the databases) with it. The bindings' owner reference has
-blockOwnerDeletion, so the (foreground) Environment delete waits for them: OpenChoreo finalizes their data-plane
-objects through the Environment and would wait forever once it is gone. expired: "true" renders nothing (same cleanup).
+One PR preview from stock OpenChoreo objects (docs/preview-environments.md):
+  Environment            pr-<n>-<component>             on previews.dataPlane, never production, in no pipeline
+  ProjectReleaseBinding  <project>-pr-<n>-<component>   the project's cell namespace, labelled preview for Kyverno
+  ReleaseBinding         <component>-pr-<n>             pins the auto-build's ComponentRelease of the PR head
+Closing the PR (or expired: "true") removes the Environment; OpenChoreo's finalizers take the bindings, cell namespace,
+ComponentRelease and the auto-build's ResourceReleaseBindings with it (the delete waits for the bindings: blockOwnerDeletion).
 */ -}}
 {{- if ne (toString .Values.expired) "true" }}
 {{- $env := include "preview.environment" . }}

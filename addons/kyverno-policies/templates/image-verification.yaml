@@ -1,20 +1,11 @@
 {{- /*
-Supply-chain policy gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md).
-For every distinct action (Audit | Deny) in imageVerification.environments and defaultAction one set of policies,
-scoped to OpenChoreo cell namespaces by their label openchoreo.dev/environment:
-  ImageValidatingPolicy openchoreo-verify-images-<audit|enforce>      per trusted source: cosign signature
-  ImageValidatingPolicy openchoreo-attest-<name>-<audit|enforce>      one per required attestation (sbom, provenance,
-                                                                      vuln): signed by the source's attestors
-  ValidatingPolicy      openchoreo-trusted-registries-<audit|enforce> every image matches a trusted source prefix
-One policy per check, not one policy with every check (#136): each keyless verification costs ~5 s (Kyverno 1.20 refreshes
-the Sigstore TUF metadata and walks the registry referrers on every call) and validations of one policy run one after
-the other, so signature + 3 attestations took ~20 s of the 30 s webhook timeout for an image not yet in Kyverno's
-verification cache. Separate policies get separate (fine-grained) webhooks that the API server calls in parallel, and
-Kyverno evaluates them concurrently. Verified results are cached per image DIGEST (addons/kyverno, imageVerifyCache*).
-The defaultAction policy covers every cell namespace whose environment has no other action (In -> NotIn), so a new
-environment is never unchecked. Pods (containers, initContainers, ephemeralContainers) and pods/ephemeralcontainers
-(kubectl debug) are matched; controllers through Kyverno autogen.
-Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyverno) and by matchConditions here.
+Supply-chain gate per environment (docs/supply-chain.md, docs/promotion.md "Policy gate"). Per distinct action
+(Audit | Deny) in imageVerification.environments + defaultAction, over cell namespaces by openchoreo.dev/environment:
+  ImageValidatingPolicy openchoreo-verify-images-<audit|enforce>      cosign signature per trusted source
+  ImageValidatingPolicy openchoreo-attest-<name>-<audit|enforce>      one per required attestation
+  ValidatingPolicy      openchoreo-trusted-registries-<audit|enforce> every image matches a trusted source
+One policy per check so the API server calls their webhooks in parallel (a keyless verification costs ~5 s, #136).
+The defaultAction policy covers every environment without another action, so a new environment is never unchecked.
 */ -}}
 {{- $iv := .Values.imageVerification }}
 {{- if $iv.enabled }}
@@ -29,16 +20,12 @@ Platform namespaces: excluded by Kyverno's webhook namespaceSelector (addons/kyv
 {{- $sources := list }}
 {{- $keyless := list }}
 {{- if $iv.github.enabled }}
-{{- /* Keyless identity: the reusable workflow pinned by commit SHA (a tag or branch ref is mutable). workflowRef is the
-current pin; transitionWorkflowRefs keeps the previous one trusted while app repos move to the new pin (at most two).
-Kyverno 1.20 verifies only ONE identity per attestor ("multiple identities are not supported"), so every trusted commit
-renders its own attestors (name suffix -<sha7> for transition commits) and the validations accept any of them. */ -}}
+{{- /* Kyverno 1.20 verifies one identity per attestor, so each trusted workflow commit (workflowRef, then
+transitionWorkflowRefs) renders its own attestors; transition ones get the suffix -<sha7>. */ -}}
 {{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
 {{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
 {{- $triggers := $iv.github.triggers | default list }}
-{{- /* Every attestor of the CURRENT pin comes first: validations try the attestors one at a time (CEL ||, the first that
-verifies wins) and only a successful single-attestor verification is cached, so images at the current pin cost one
-verification per check; only images still at the transition pin pay the failed attempts before theirs. */ -}}
+{{- /* Current pin first: validations try attestors in order and stop at the first that verifies. */ -}}
 {{- range $i, $wf := $wfRefs }}
 {{- range $repo := $iv.github.repositories }}
 {{- range $ref := $iv.github.refs }}
@@ -55,11 +42,10 @@ verification per check; only images still at the transition pin pay the failed a
 {{- if ne (len $names) (len (uniq $names)) }}{{ fail (printf "imageVerification.github: attestor names collide after truncation to 60 characters: %s" (join ", " $names)) }}{{ end }}
 {{- $sources = append $sources (dict "kind" "github" "prefixes" $iv.github.prefixes "attestors" $names "attestations" ($iv.github.attestations | default list)) }}
 {{- end }}
-{{- /* Platform key: images the workflow plane pushed to <registry.host>/<registry.appsProject>/ (installation.yaml).
-Trusted ONLY with a public key configured: without a key nothing could verify them, so they are not trusted at all and
-the trusted-registries policy denies them (enforce) instead of letting them skip signature verification. */ -}}
+{{- /* Platform key: in-cluster builds under <registry.host>/<registry.appsProject>/. Without a key the registry is not
+trusted at all, so its images fail trusted-registries instead of skipping signature verification. */ -}}
 {{- $reg := .Values.registry | default dict }}
-{{- /* Key source: inline publicKey, else (registry.type harbor) the ConfigMap charts/cluster delivers per workload cluster. */ -}}
+{{- /* Key source: inline publicKey, else (registry.type harbor) the ConfigMap charts/cluster delivers. */ -}}
 {{- $pkc := $iv.platformKey.cluster | default dict }}
 {{- $clusterKey := and $iv.platformKey.enabled (not $iv.platformKey.publicKey) (eq (toString $reg.type) "harbor") (ne (toString ($pkc.configMap | default "")) "") }}
 {{- $platformKey := and $iv.platformKey.enabled (or $iv.platformKey.publicKey $clusterKey) }}
@@ -73,11 +59,8 @@ the trusted-registries policy denies them (enforce) instead of letting them skip
 {{- $trusted := $iv.extraTrustedPrefixes | default list }}
 {{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
 {{- $trusted = concat $trusted $platformPrefixes }}
-{{- /* CloudNativePG operand images (#327): exactly the digest-pinned images of addon cloudnative-pg, matched as whole
-references (another digest of the same repository stays untrusted): its imageCatalog (PostgreSQL per major version,
-what every PostgreSQL XR's Cluster runs) and the operator image, which CNPG injects into every instance / job pod as
-init container bootstrap-controller. Not restated here: the catalog entry passes addons/cloudnative-pg/values.yaml to
-this addon (charts/platform values.yaml addons.kyverno-policies.sharedValueFiles). Without it none is admitted. */ -}}
+{{- /* Operand images of the data-service operators, trusted as whole digest references (#327, #256): CloudNativePG
+imageCatalog + operator, MOCO mysqlImageCatalog + agent. Their values come from the catalog (sharedValueFiles). */ -}}
 {{- $operand := list }}
 {{- $cat := .Values.imageCatalog | default dict }}
 {{- if $cat.enabled }}{{ range $k := keys ($cat.images | default dict) | sortAlpha }}{{ $operand = append $operand (index $cat.images $k) }}{{ end }}{{ end }}
@@ -86,10 +69,6 @@ this addon (charts/platform values.yaml addons.kyverno-policies.sharedValueFiles
 {{- range $operand }}
 {{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: CloudNativePG image %q (addons/cloudnative-pg values) is not pinned by digest" .) }}{{ end }}
 {{- end }}
-{{- /* MOCO operand images (#256), same rule: exactly the digest-pinned images of addon moco (catalog valuesFromAddons) -
-its mysqlImageCatalog (mysqld + moco-init in every MySQL pod, and the MySQL XR's init Job) and the moco-agent image (agent
-+ copy-moco-init). fluent-bit / mysqld_exporter stay untrusted: the MySQL Composition turns slow-log off and sets no
-collectors. */ -}}
 {{- $mocoOperand := list }}
 {{- $myCat := .Values.mysqlImageCatalog | default dict }}
 {{- range $k := keys $myCat | sortAlpha }}{{ $mocoOperand = append $mocoOperand (index $myCat $k) }}{{ end }}
@@ -124,8 +103,7 @@ collectors. */ -}}
 {{- $checks = append $checks (dict "name" (printf "openchoreo-attest-%s-%s" . $suffix) "attestation" .) }}
 {{- end }}
 {{- range $c := $checks }}
-{{- /* Kyverno names the policy's webhook ivpol.validate.kyverno.svc-<fail|ignore>-finegrained-<policy>: one DNS label of
-at most 63 characters, so at most 40 for the policy name. */ -}}
+{{- /* Kyverno's webhook name ivpol.validate.kyverno.svc-<fail|ignore>-finegrained-<policy> is one 63-char DNS label. */ -}}
 {{- if gt (len $c.name) 40 }}{{ fail (printf "imageVerification: policy name %q is longer than 40 characters (Kyverno's webhook name label is limited to 63): shorten the attestation name" $c.name) }}{{ end }}
 {{- $att := $c.attestation }}
 {{- $cs := list }}
@@ -240,9 +218,7 @@ spec:
     {{- range $s := $cs }}
     {{- $quoted := list }}{{ range $s.prefixes }}{{ $quoted = append $quoted (toJson .) }}{{ end }}
     {{- $match := printf "[%s].exists(p, image.startsWith(p))" (join ", " $quoted) }}
-    {{- /* One attestor per call, joined with ||: CEL stops at the first attestor that verifies, and Kyverno caches a
-    result only when every attestor of the call verified - a list of several attestors would never be cached and would
-    verify all of them on every admission. */ -}}
+    {{- /* One attestor per call, joined with ||: Kyverno caches a call only when all its attestors verified. */ -}}
     {{- $calls := list }}
     {{- range $s.attestors }}
     {{- if $att }}

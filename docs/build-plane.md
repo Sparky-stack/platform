@@ -79,8 +79,9 @@ Trigger a build: Backstage → component → **Build** (WorkflowRun with live ta
 `WorkflowRun` object, or a push to the build branch when the Component sets `autoBuild: true` ("Auto-build" below).
 OpenChoreo's matcher treats appPath `.` as "every change", so the hand-off commit would re-trigger the build:
 `checkout` skips commits that only touch the GitOps directory (loop guard), the auto-build trigger does not even start
-a run for them, and the commit message carries `[skip ci]` for the GitHub Actions path (in hello-world, GitHub Actions
-runs only the checks unless `IMAGE_BUILDER=github-actions`).
+a run for them, and the commit message carries `[skip ci]` for the GitHub Actions path. koorikla/hello-world builds
+only here; its GitHub Actions run PR checks (`app-go.yaml` with `build_container: false`). Building and signing on
+GitHub Actions stays available to any app through the app-<stack>.yaml workflows (templates/ use it).
 
 ### Auto-build (poll or webhook)
 

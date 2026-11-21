@@ -1,10 +1,6 @@
 {{- /*
-ClusterWorkflowPlane (cluster-scoped, control plane on mgmt). ClusterWorkflows reference it (workflowPlaneRef, default
-`default`). Trust: exactly the plane's self-signed agent cert (Secret cluster-agent-tls in this namespace; ca.crt of a
-self-signed cert is the cert itself), read live by the cluster-gateway. secretStoreRef: the ClusterSecretStore that
-workflow resources (per-run ExternalSecrets) reference as ${workflowplane.secretStore}. Build logs and run status go
-through the agent; the observability plane (when enabled) adds metrics/logs of the build pods.
-Applied after the OpenChoreo CRDs exist (control-plane addon); skipped in dry-run until then (Argo retries).
+ClusterWorkflowPlane that ClusterWorkflows reference: trusts exactly the agent's self-signed cert (ca.crt of a self-signed
+cert is the cert itself). SkipDryRun: the CRDs come from the control-plane addon.
 */ -}}
 {{- $wp := index .Values "openchoreo-workflow-plane" }}
 apiVersion: openchoreo.dev/v1alpha1

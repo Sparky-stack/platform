@@ -1,7 +1,7 @@
 {{- /* CAPG InfrastructureProvider with the GKE gates (scope fleet, capi.providers.gcp). */ -}}
 {{- if and (eq .Values.scope "fleet") .Values.capi.providers.gcp }}
 {{- $gcp := .Values.gcp }}
-{{- $wif := .Values.capi.gcp | default dict }}
+{{- $wif := .Values.capi.gcp }}
 ---
 {{ include "providers.namespace" "capg-system" }}
 ---
