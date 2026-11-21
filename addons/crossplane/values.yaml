@@ -196,10 +196,10 @@ mysql:
   # mysqlImages fact: addons/moco values.yaml mysqlImageCatalog (catalog valuesFromAddons: [moco]), not restated here.
   # The MySQL API package (packages/mysql) and its embedded function, published by the same package-mysql CI run;
   # bump both together (the Configuration's dependsOn pins the function digest). Renovate bumps them. The first pin is
-  # the package-mysql build of commit a239626 (#256, before its release); the next release mysql-vX.Y.Z replaces it.
-  configuration: ghcr.io/koorikla/platform/mysql:a239626@sha256:0082fd0f27ad3ad9ff0b8e5aa3d036d9ccf08cf3023bb93ae3133e8ddf50cea6
+  # release mysql-v0.3.0 (release-please), digest-pinned; Renovate bumps it.
+  configuration: ghcr.io/koorikla/platform/mysql:v0.3.0@sha256:0ed7c47fd696d14315cf134e3149236c0f05e4f409c87802726ecb8e9cf5c58d
   function:
-    koorikla-platform-mysqlcompose-mysql: ghcr.io/koorikla/platform/mysql_compose-mysql:a239626@sha256:09cee6e26d7b275f3689077c9009f38b8fe8c752eb51d9f225c4be1827c0c0d2
+    koorikla-platform-mysqlcompose-mysql: ghcr.io/koorikla/platform/mysql_compose-mysql:v0.3.0@sha256:c97c760e34e56c745980164eebda4e9643bd5debddb5d371a0cb189b6752d2eb
 
 # --- Admission (Kyverno ValidatingPolicy, CRDs from addon kyverno) ----------------------------------------------------
 policy:
