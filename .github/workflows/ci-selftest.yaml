@@ -58,6 +58,9 @@ jobs:
               bash --version | head -1
               find ci/scripts ci/tests -name "*.sh" | while read -r f; do bash -n "$f"; done
               for t in ci/tests/scripts/*.test.sh; do bash "$t"; done'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: OpenChoreo manifest validator (ci/scripts/openchoreo)
+        run: uv run --no-project --with pyyaml==6.0.4 --with jsonschema==4.26.0 python3 ci/tests/openchoreo-validate-manifests.test.py
       - name: app-<stack>.yaml image phase mirrors app-container.yaml
         run: bash ci/tests/app-workflow-interfaces.test.sh
       - name: release-please tags single-component grouped releases (#313)
@@ -255,6 +258,13 @@ jobs:
       registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
       working_directory: ci/fixtures/java-spring
       image_name: ci-selftest-java-spring
+
+  openchoreo-manifests:
+    uses: ./.github/workflows/app-openchoreo-manifests.yaml
+    permissions:
+      contents: read
+    with:
+      directory: ci/fixtures/openchoreo-app
 
   workload-bump:
     # Dry run (push: false): edits and commits ci/fixtures/openchoreo/workload.yaml

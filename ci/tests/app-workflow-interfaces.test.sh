@@ -43,6 +43,13 @@ for f in "$dir"/app-*.yaml; do
     fail "$name: image inputs differ from $ref_file"$'\n'"  $name: $image_inputs"$'\n'"  $ref_file: $ref_inputs"
   fi
 
+  # OpenChoreo manifests: every stack validates the app's deploy/openchoreo (app repos carry no validation code).
+  [[ "$(yq -r '.jobs.manifests.uses // ""' "$f")" == '$/.github/workflows/app-openchoreo-manifests.yaml' ]] ||
+    fail "$name: no 'manifests' job calling app-openchoreo-manifests.yaml"
+  [[ "$(yq -r '.on.workflow_call.inputs.openchoreo_manifests.default // ""' "$f")" == deploy/openchoreo &&
+    "$(yq -r '.jobs.manifests.with.directory // ""' "$f")" == '${{ inputs.openchoreo_manifests }}' ]] ||
+    fail "$name: input openchoreo_manifests (default deploy/openchoreo) is not passed to the manifests job"
+
   [[ "$(keys '.on.workflow_call.secrets' "$f")" == "$container_secrets" ]] ||
     fail "$name: secrets are not app-container.yaml's ($container_secrets)"
   for s in $container_secrets; do
