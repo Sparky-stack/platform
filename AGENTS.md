@@ -22,8 +22,9 @@ Rules for every AI agent (Claude Code, Antigravity, Gemini CLI, Hermes) and huma
   CRD schemas, helm-unittest, contract tests in `hack/tests/`, shellcheck, the Markdown check (`hack/check-docs.py`).
 - New behaviour has a test; a security fix has a negative test.
 - Diagrams changed: `python3 docs/diagrams/src/build.py` reports 0 issues.
-- Docs: update the one doc that owns the topic. Backlog, follow-ups and "verify later" items go into GitHub issues,
-  not into docs; link the issue instead.
+- Docs: `docs/` is the human documentation and must be current after every PR; update the one doc that owns the
+  topic. `wiki/` is your (LLM) working memory, not documentation: never put something only there that a human needs.
+- Backlog, follow-ups and "verify later" items go into GitHub issues, not into docs; link the issue instead.
 - Conventional commits (`feat(cluster): …`, `fix(harbor): …`, `docs: …`).
 
 ## Claims

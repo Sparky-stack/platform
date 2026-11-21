@@ -39,7 +39,9 @@ hack/tests/test_openchoreo_types.sh.
 Not upstream either: `platform/cluster-traits/resilience.yaml` (#251, docs/openchoreo.md "Resilience defaults"),
 rendered by `templates/platform-types.yaml` (`resilience.enabled`). `templates/upstream-defaults.yaml` embeds it in
 the Deployment-based component types (`spec.traits`, instance `resilience`) and adds the `resilience` object to their
-`environmentConfigs`, so developers never attach it.
+`environmentConfigs`, so developers never attach it. It also annotates their `deployment` resource
+`secret.reloader.stakater.com/auto: "true"` (#268): addon reloader rolls the pods when a Secret they reference rotates
+(docs/runbooks/certificates-and-secrets.md section 7).
 
 Not upstream either: `platform/cluster-traits/metrics.yaml` (#252, docs/openchoreo.md "Application metrics"), rendered
 by `templates/platform-types.yaml` (`appMetrics.enabled`). Opt-in: `templates/upstream-defaults.yaml` adds it to the

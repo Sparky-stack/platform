@@ -1,6 +1,7 @@
-suite: reloader scoped RBAC, GitOps strategy, and Pod Security restricted
+suite: reloader RBAC + rollout guard, GitOps strategy, and Pod Security restricted
 templates:
   - templates/validate.yaml
+  - templates/rollout-guard.yaml
   - charts/reloader/templates/deployment.yaml
   - charts/reloader/templates/role.yaml
   - charts/reloader/templates/rolebinding.yaml
@@ -12,7 +13,7 @@ release:
   name: reloader
   namespace: reloader
 tests:
-  - it: runs digest-pinned Reloader with scoped namespaces, annotation strategy, and PSS restricted
+  - it: runs digest-pinned Reloader cluster-wide (opt-in annotations), annotation strategy, and PSS restricted
     template: charts/reloader/templates/deployment.yaml
     asserts:
       - equal: { path: metadata.name, value: reloader }
@@ -20,9 +21,12 @@ tests:
       - matchRegex:
           path: "spec.template.spec.containers[0].image"
           pattern: '^ghcr\.io/stakater/reloader:v1\.4\.24@sha256:[0-9a-f]{64}$'
-      - contains:
+      - notContains:   # cluster-wide: tenant cells (dp-*) have runtime names (#268)
           path: "spec.template.spec.containers[0].args"
           content: --namespaces=openchoreo-data-plane,reloader
+      - notContains:   # restarts stay opt-in by annotation
+          path: "spec.template.spec.containers[0].args"
+          content: --auto-reload-all=true
       - contains:
           path: "spec.template.spec.containers[0].args"
           content: --reload-strategy=annotations
@@ -38,52 +42,71 @@ tests:
           path: spec.template.spec.volumes
           content: { name: tmp-volume, emptyDir: {} }
 
-  - it: grants namespaced Roles only in openchoreo-data-plane and reloader (no ClusterRole, Secret, or Service)
+  # --- workload: cluster-wide watch, writes fenced by templates/rollout-guard.yaml (#268) ------------------------------
+  - it: grants a ClusterRole (read Secrets/ConfigMaps, update workloads) and no Secret or Service
     asserts:
-      - hasDocuments: { count: 0 }
+      - isKind: { of: ClusterRole }
         template: charts/reloader/templates/clusterrole.yaml
-      - hasDocuments: { count: 0 }
-        template: charts/reloader/templates/clusterrolebinding.yaml
       - hasDocuments: { count: 0 }
         template: charts/reloader/templates/secret.yaml
       - hasDocuments: { count: 0 }
         template: charts/reloader/templates/service.yaml
-      - isKind: { of: Role }
-        template: charts/reloader/templates/role.yaml
-        documentIndex: 0
-      - equal: { path: metadata.name, value: reloader-role }
-        template: charts/reloader/templates/role.yaml
-        documentIndex: 0
-      - equal: { path: metadata.namespace, value: openchoreo-data-plane }
-        template: charts/reloader/templates/role.yaml
-        documentIndex: 0
-      - isKind: { of: RoleBinding }
-        template: charts/reloader/templates/rolebinding.yaml
-        documentIndex: 0
-      - equal: { path: metadata.name, value: reloader-role-binding }
-        template: charts/reloader/templates/rolebinding.yaml
-        documentIndex: 0
-      - equal: { path: metadata.namespace, value: openchoreo-data-plane }
-        template: charts/reloader/templates/rolebinding.yaml
-        documentIndex: 0
       - equal:
           path: subjects
           value: [{ kind: ServiceAccount, name: reloader, namespace: reloader }]
-        template: charts/reloader/templates/rolebinding.yaml
+        template: charts/reloader/templates/clusterrolebinding.yaml
+
+  - it: denies (binding) any Reloader write outside tenant cells and openchoreo-data-plane
+    template: templates/rollout-guard.yaml
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: spec.validationActions, value: [Deny] }
+        documentIndex: 1
+      - equal: { path: spec.failurePolicy, value: Fail }
+        documentIndex: 0
+      - equal:
+          path: spec.matchConditions[0].expression
+          value: request.userInfo.username == 'system:serviceaccount:reloader:reloader'
+        documentIndex: 0
+      - equal:
+          path: spec.matchConstraints.resourceRules[0].resources
+          value: [deployments, statefulsets, daemonsets]
+        documentIndex: 0
+      - matchRegex:
+          path: spec.validations[0].expression
+          pattern: "^request.namespace in \\['openchoreo-data-plane'\\]"
+        documentIndex: 0
+      - matchRegex:
+          path: spec.validations[0].expression
+          pattern: "labels\\[\\?'openchoreo.dev/project'\\].hasValue\\(\\)\\s+&& namespaceObject.metadata.\\?labels\\[\\?'openchoreo.dev/environment'\\]"
         documentIndex: 0
 
-  - it: fails when watchGlobally is enabled
+  - it: lets an update change only the pod-template rollout annotation (UPDATE rule; the kyverno CLI is CREATE-only)
+    template: templates/rollout-guard.yaml
+    documentIndex: 0
+    asserts:
+      - matchRegex:
+          path: spec.validations[1].expression
+          pattern: "object.spec.template.spec == oldObject.spec.template.spec"
+      - matchRegex:
+          path: spec.validations[1].expression
+          pattern: "object.spec.all\\(k, k == 'template' \\|\\| \\(k in oldObject.spec && object.spec\\[k\\] == oldObject.spec\\[k\\]\\)\\)"
+      - matchRegex:
+          path: spec.validations[1].expression
+          pattern: "k == 'reloader.stakater.com/last-reloaded-from' \\|\\| variables.oldAnnotations\\[\\?k\\] == optional.of"
+
+  - it: fails when autoReloadAll is combined with the cluster-wide watch
     template: templates/validate.yaml
     set:
-      reloader.reloader.watchGlobally: true
-      reloader.reloader.namespaces: []
+      reloader.reloader.autoReloadAll: true
+      reloader.reloader.resourceLabelSelector: a=b
     asserts:
       - failedTemplate: {}
 
-  - it: fails when watched namespaces are empty
+  - it: fails when the scoped mode has no namespaces
     template: templates/validate.yaml
     set:
-      reloader.reloader.namespaces: []
+      reloader.reloader.watchGlobally: false
     asserts:
       - failedTemplate: {}
 
@@ -127,6 +150,8 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
         template: charts/reloader/templates/clusterrole.yaml
+      - hasDocuments: { count: 0 }   # scoped Role: nothing to fence
+        template: templates/rollout-guard.yaml
       - equal: { path: metadata.namespace, value: openchoreo-control-plane }
         template: charts/reloader/templates/role.yaml
         documentIndex: 0

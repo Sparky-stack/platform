@@ -38,6 +38,8 @@ on:
         description: 'Extra shell command run in working_directory after tests'
         type: string
         default: ''
+      # OpenChoreo manifests: app-openchoreo-manifests.yaml (schemas + repo invariants), same in every app-<stack>.yaml.
+      openchoreo_manifests: {type: string, default: 'deploy/openchoreo', description: "OpenChoreo manifests directory ('' skips)"}
       # Image phase: passed through unchanged to app-container.yaml (build, Trivy scan, SBOM,
       # provenance, keyless cosign signature). Same names and defaults in every app-<stack>.yaml;
       # ci/tests/app-workflow-interfaces.test.sh fails when they drift from app-container.yaml.
@@ -161,6 +163,13 @@ jobs:
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:go/${{ inputs.working_directory }}
+
+  manifests:
+    uses: $/.github/workflows/app-openchoreo-manifests.yaml
+    permissions:
+      contents: read
+    with:
+      directory: ${{ inputs.openchoreo_manifests }}
 
   container:
     name: image
