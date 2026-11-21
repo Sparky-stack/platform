@@ -6,7 +6,6 @@ templates:
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
   - templates/cluster-agent-data-services.yaml
   - templates/capability-gate.yaml
-  - templates/priority-classes.yaml
 set:
   cluster.name: dev1
   openchoreo-data-plane.clusterAgent.planeID: dev1

@@ -54,8 +54,8 @@ violations() {
   done < <(yq -N 'select(.kind != null) | (.metadata.annotations // {}) as $a
     | ($a["argocd.argoproj.io/hook"] // "") as $ah | ($a["helm.sh/hook"] // "") as $hh
     | [.kind, .metadata.name, ($a["argocd.argoproj.io/sync-options"] // ""),
-       (((($ah != "" and $ah != "Skip") or ($ah == "" and $hh != "" and $hh != "crd-install" and ($hh | test("^test") | not)))
-         | select(.) | "yes") // "no")] | join("	")' "$f" | tr -d '\r')
+       (if (($ah != "" and $ah != "Skip") or ($ah == "" and $hh != "" and $hh != "crd-install" and ($hh | test("^test") | not)))
+        then "yes" else "no" end)] | join("	")' "$f" | tr -d '\r')
 }
 
 # addon_of <render file name>: the longest addon name the file name starts with
