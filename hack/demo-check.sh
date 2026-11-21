@@ -259,7 +259,7 @@ release_bindings() {
 }
 
 # ---- step 1: clean bootstrap ----------------------------------------------------------------------------------------
-# An app OutOfSync only because an active deny sync window holds it (production freeze, docs/promotion.md#freeze-windows)
+# An app OutOfSync only because an active deny sync window holds it (production freeze, docs/promotion.md#5-freeze-window-optional)
 # is PENDING, not FAIL. Argo CD does not report that, so hack/lib/syncwindow.py evaluates the windows.
 # frozen_apps: lines "<app>\t<window description>\t<end>", cached in $KCDIR (checks run in subshells); returns 1 with
 # the reason on stdout when the windows cannot be evaluated.
