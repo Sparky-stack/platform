@@ -1,0 +1,21 @@
+# Backstage catalog entry for the platform API repository (registered by the scaffolder's catalog:register step).
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.name }}-repo
+  title: ${{ values.name }} platform API
+  description: ${{ values.description | dump }}
+  annotations:
+    github.com/project-slug: ${{ values.repoOwner }}/${{ values.name }}
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.name }}/tree/main/
+  tags:
+    - golden-path
+    - ${{ values.stack }}
+    - platform-api
+  links:
+    - url: https://github.com/${{ values.repoOwner }}/${{ values.name }}
+      title: Repository
+      icon: github
+spec:
+  type: crossplane-configuration
+  owner: ${{ values.owner }}

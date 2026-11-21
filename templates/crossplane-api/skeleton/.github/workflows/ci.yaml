@@ -1,0 +1,31 @@
+# Golden-path CI (koorikla/platform templates/crossplane-api). Thin caller: the pipeline lives in koorikla/platform
+# (.github/workflows/app-crossplane-configuration.yaml), pinned by commit SHA (Renovate bumps it, renovate.json).
+# PRs: `crossplane resource validate` + `crossplane composition render` of every example; main and tags v*: `crossplane
+# project build|push` to ghcr.io, cosign keyless signature and SLSA provenance (Configuration + embedded function).
+name: ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    uses: koorikla/platform/.github/workflows/app-crossplane-configuration.yaml@9c5354a9204d6d878775f9896c16b230d6d7bd8b # ci-v1.1.1
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      package_root: .

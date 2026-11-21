@@ -1,0 +1,5 @@
+{{- /* Embedded function-go-templating function (crossplane function generate compose). Every file in this
+directory is one template, rendered in name order: variables of this prelude reach the later files. One file
+per composed resource. */ -}}
+{{- $xr := getCompositeResource . }}
+{{- $size := dig "spec" "size" "small" $xr }}
