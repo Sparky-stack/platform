@@ -1,18 +1,8 @@
 {{- /*
-PR previews read their tenant's OpenBao secrets (#267; installation.yaml secrets.tenantStores.enabled + previews.enabled,
-docs/preview-environments.md). A preview's cell namespace exists only while its pull request is open, so charts/tenant
-cannot list it in the tenant descriptor. Kyverno generates one more descriptor per preview ProjectReleaseBinding into
-tenantSecrets.inputsNamespace. The preview label (set by charts/preview) is NOT a trust boundary: app repos cannot sync
-ProjectReleaseBindings (charts/tenant developerKinds), but a project's developers can create them in their OWN project
-through the OpenChoreo API, console, occ or MCP (charts/tenant templates/developer-authz.yaml). Safety comes from the
-reconcile deriving the cell namespace from the binding's project: a binding only opens a project's own secrets to that
-project's own preview cell. The descriptor:
-  Secret <project>-openbao-tenant-<environment>   data tenant = spec.owner.projectName, environment = spec.environment
-The ExternalSecret tenant-clients turns them into <tenant>.previews; files/tenant-reconcile.sh computes each cell
-namespace from ORG_NAMESPACE + tenant + environment (never from the input) and binds it to the tenant's role and entity
-(metadata tenant=<project>): the preview reads exactly kv-tenant-<project>, like the project's other environments.
-Closing the PR or the TTL deletes the binding; synchronize deletes the descriptor (also on the terminating binding's
-later UPDATEs, which no longer match) and the next reconcile run unbinds it.
+PR previews read their tenant's OpenBao secrets (#267, docs/preview-environments.md). Kyverno generates a descriptor
+Secret <project>-openbao-tenant-<environment> per preview ProjectReleaseBinding. The preview label is not a trust
+boundary: files/tenant-reconcile.sh derives the cell namespace from the binding's project and environment, never from
+the input, so a binding only opens a project's own secrets to that project's own preview cell.
 */ -}}
 {{- if and (((.Values.secrets).tenantStores).enabled) ((.Values.previews).enabled) }}
 {{- $t := .Values.tenantSecrets }}

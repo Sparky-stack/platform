@@ -1,14 +1,7 @@
 {{- /*
-Production resilience of OpenChoreo components (#251, docs/openchoreo.md "Resilience defaults"). Two policies over the
-cell namespaces, split by their label openchoreo.dev/environment:
-  ValidatingPolicy openchoreo-workload-resilience-enforce   environments in workloadResilience.enforcedEnvironments: Deny
-  ValidatingPolicy openchoreo-workload-resilience-audit     every other environment: Audit (policy reports only)
-Checks: Deployments run >= 2 replicas (or declare a floor >= 2 in label resilience.platform.koorikla.io/min-replicas
-when an autoscaler owns spec.replicas; ClusterTrait resilience sets it), every container has a readinessProbe and cpu +
-memory requests; HorizontalPodAutoscalers (upstream trait, and the one KEDA creates for keda-scaler) keep >= 2.
-The PodDisruptionBudget is not an admission check: OpenChoreo applies it together with the Deployment in no fixed order,
-so it is guaranteed by construction (resilience is embedded in every Deployment component type) and asserted by
-hack/demo-check.sh. A denied Deployment shows up as an apply failure on the RenderedRelease.
+Production resilience of OpenChoreo components (docs/openchoreo.md "Resilience defaults", #251): replicas >= 2 (or
+label resilience.platform.koorikla.io/min-replicas >= 2 under an autoscaler), readiness probes, cpu + memory requests,
+HPAs >= 2. Deny in workloadResilience.enforcedEnvironments, Audit elsewhere. PDBs are guaranteed by the component types.
 */ -}}
 {{- $wr := .Values.workloadResilience }}
 {{- if $wr.enabled }}
