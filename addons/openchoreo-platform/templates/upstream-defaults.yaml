@@ -18,6 +18,11 @@ mgmt). Verbatim (files/README.md) except the ClusterComponentType edits below, s
 {{- if and $.Values.dataServices.enabled $deployment }}
 {{- $_ := set $obj.spec "allowedTraits" (append (default list $obj.spec.allowedTraits) (dict "kind" "ClusterTrait" "name" "keda-scaler")) }}
 {{- end }}
+{{- /* Opt-in app metrics scraping (#252, files/platform/cluster-traits/metrics.yaml): developers attach ClusterTrait
+metrics with their metrics port to any Deployment component type. */ -}}
+{{- if and $.Values.appMetrics.enabled $deployment }}
+{{- $_ := set $obj.spec "allowedTraits" (append (default list $obj.spec.allowedTraits) (dict "kind" "ClusterTrait" "name" "metrics")) }}
+{{- end }}
 {{- /* Resilience defaults (#251, files/platform/cluster-traits/resilience.yaml): every Deployment component type embeds
 ClusterTrait resilience, so developers get spread, PDB, graceful shutdown and priority without attaching anything.
 Its knobs are component type environmentConfigs (`resilience.*` in a ReleaseBinding's componentTypeEnvironmentConfigs);

@@ -2,7 +2,7 @@
 
 > Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-20 | Total pages: 26
+> Last updated: 2026-11-21 | Total pages: 27
 
 ## Decisions
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
@@ -18,12 +18,14 @@
 - [Talos on Hetzner Waits for Upstream CACPPT Release](decisions/talos-on-hetzner-waits-for-upstream.md) — Switch Hetzner example from k3s to Talos once upstream Sidero CACPPT releases `TalosControlPlaneTemplate` (#189).
 
 ## Gotchas
+- [Crossplane Project CLI - Paths Under apis/ and Derived Function Names](gotchas/crossplane-project-cli-paths-and-function-names.md) — `--path` is relative to `apis/`; the embedded function name derives from `spec.repository` + function dir, so build/push/CI must use the same repository (#240).
 - [OpenChoreo Authz - Deny Is Per Entitlement Value; Developers Per Project](gotchas/openchoreo-authz-per-project-developers.md) — Upstream binds `developers` to write every project; a deny only revokes grants of the same group value. Org-wide read-only + per-project `AuthzRoleBinding` with the production condition in the allow (#335).
 - [Preview Teardown - Stuck ResourceReleaseBinding and Re-created Tenant Descriptor](gotchas/preview-teardown-leaks.md) — The Environment must outlive the preview's ResourceReleaseBindings (blockOwnerDeletion + foreground); terminating bindings must not match the descriptor GeneratingPolicy.
 - [Preview Cells - Tenant Secrets and CloudNativePG under Cilium](gotchas/preview-cells-tenant-secrets-and-cnpg.md) — Previews bind to their tenant's OpenBao role via Kyverno descriptors; CNPG pods need kube-apiserver egress that Cilium never grants via ipBlock (#267, #331).
 - [OpenChoreo SecretReference Rotation and Scope](gotchas/openchoreo-secretreference-rotation-and-scope.md) — App secrets refresh in 15 s but pods need a restart; the store is platform-fixed; `targetPlane` belongs to the secrets API.
 - [Argo CD Custom Health for Kyverno DeletingPolicy and Unmatched CRS](gotchas/argocd-custom-health-deletingpolicy-and-crs.md) — Kyverno `DeletingPolicy` never sets `Ready` and unmatched peers-only `ClusterResourceSet`s stay `Progressing` without custom Lua checks (#187, #198).
 - [Argo CD Server-Side Diff Hides Changes to Argo Workflows Objects](gotchas/argocd-server-side-diff-atomic-crd-spec.md) — Atomic + preserve-unknown CRD `spec` makes server-side diff report Synced while a ClusterWorkflowTemplate stays old; addons rendering Argo Workflows kinds set `IncludeMutationWebhook=true` (#184).
+- [Argo CD Server-Side Diff Deadlocks on Immutable Fields](gotchas/argocd-server-side-diff-immutable-fields.md) — A git change to an immutable field fails the dry-run apply, the app goes ComparisonError and `Force/Replace` never runs; immutable-spec kinds live in a `ServerSideDiff=false` addon (#281).
 - [Argo CD Sync-Wave Ordering for CAPI Outputs and Unlimited Retry](gotchas/argocd-sync-wave-ordering-and-unlimited-retry.md) — Separate CAPI producers and consumers across sync waves and set `retry.limit: -1` (never `controller.sync.timeout.seconds`) (#192, #195, #199).
 - [Helm values.schema.json vs Template required/fail](gotchas/helm-values-schema-vs-template-required.md) — `helm lint` passes a template `fail` but not a schema error: keys only installations fill keep their presence check in `templates/validate.yaml` (#116).
 - [Docker Network Pool Exhaustion from crossplane render](gotchas/docker-network-pool-exhaustion-crossplane-render.md) — Share one Docker bridge network and function containers across `crossplane render` tests so Docker subnet pools don't exhaust (#181).

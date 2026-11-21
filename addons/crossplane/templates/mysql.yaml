@@ -1,0 +1,83 @@
+{{- /* The MySQL API (packages/mysql, #256), only where the cluster runs addon moco (mysql.enabled from label
+addons.platform.koorikla.io/moco). Same shape as PostgreSQL: the Configuration package pinned tag@digest without
+dependency resolution, its embedded Function pinned under the restricted runtime, the EnvironmentConfig platform-mysql
+with this cluster's facts, and the RBAC Crossplane core needs for the plain kinds the moco Composition composes.
+Admission policies: templates/policies.yaml. */ -}}
+{{- $m := .Values.mysql }}
+{{- if eq (toString $m.enabled) "true" }}
+{{- if ne $m.backend "moco" }}{{ fail (printf "mysql.backend %q: only moco is enabled (cloud Compositions of packages/mysql are layout, #256)" $m.backend) }}{{ end }}
+{{- range $ref := prepend (values $m.function) $m.configuration }}
+{{- if not (regexMatch "^[^@]+:[^@]+@sha256:[0-9a-f]{64}$" $ref) }}{{ fail (printf "mysql: package %q is not pinned tag@sha256:<digest>" $ref) }}{{ end }}
+{{- end }}
+{{- $images := .Values.mysqlImageCatalog | default dict }}
+{{- if not $images }}{{ fail "mysql: mysqlImageCatalog is empty - the catalog entry must pass addons/moco values (valuesFromAddons: [moco])" }}{{ end }}
+{{- range $v, $img := $images }}
+{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" $img) }}{{ fail (printf "mysql: image %q for %s (addons/moco mysqlImageCatalog) is not pinned by digest" $img $v) }}{{ end }}
+{{- end }}
+apiVersion: pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: platform-mysql
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $m.configuration }}
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 2
+  skipDependencyResolution: true
+{{- range $name, $pkg := $m.function }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $pkg }}
+  packagePullPolicy: IfNotPresent
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: {{ $.Values.packages.runtimeConfig.name }}
+{{- end }}
+---
+{{- /* Facts of the one Composition "mysql": backend, cluster, environment, the mysqld image per version. */}}
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: platform-mysql
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+data:
+  backend: {{ $m.backend }}
+  cluster: {{ .Values.cluster.name }}
+  environment: {{ .Values.cluster.environment }}
+  mysqlImages:
+    {{- range $v := keys $images | sortAlpha }}
+    {{ $v | quote }}: {{ get $images $v }}
+    {{- end }}
+---
+{{- /* moco composes plain kinds: MOCO MySQLCluster, the init Job, ESO Password + ExternalSecret. Aggregated into
+ClusterRole crossplane. */}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane:compose-mysql
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  - apiGroups: [moco.cybozu.com]
+    resources: [mysqlclusters]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [generators.external-secrets.io]
+    resources: [passwords]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- end }}

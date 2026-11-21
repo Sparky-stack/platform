@@ -1,0 +1,36 @@
+# The ${{ values.kind }} API: one namespaced XR (Crossplane v2, no claims). Scaffolded with `crossplane xrd generate
+# examples/example.yaml`; every schema field gets a description.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: ${{ values.plural }}.${{ values.group }}
+spec:
+  group: ${{ values.group }}
+  names:
+    categories:
+      - crossplane
+    kind: ${{ values.kind }}
+    plural: ${{ values.plural }}
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      referenceable: true
+      served: true
+      schema:
+        openAPIV3Schema:
+          description: ${{ values.description | dump }}
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              description: Desired state of the ${{ values.kind }}.
+              type: object
+              properties:
+                size:
+                  description: T-shirt size of the ${{ values.kind }}.
+                  type: string
+                  enum: [small, medium, large]
+                  default: small
+            status:
+              description: Observed state of the ${{ values.kind }}.
+              type: object

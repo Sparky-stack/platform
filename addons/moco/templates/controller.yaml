@@ -1,0 +1,77 @@
+{{- /* The MOCO controller under Pod Security restricted (values.yaml header): the upstream chart's Deployment
+(charts/moco templates/deployment.yaml) with a seccomp profile, a capability drop and a fixed non-root user added. The
+upstream Deployment runs 0 replicas; its ServiceAccount, RBAC, webhook Service + certificates are used as they are. */ -}}
+{{- $up := .Values.moco }}
+{{- $img := printf "%s:%s" $up.image.repository (toString $up.image.tag) }}
+{{- if not (regexMatch "@sha256:[0-9a-f]{64}$" $img) }}{{ fail (printf "moco.image %q is not pinned by digest" $img) }}{{ end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moco-controller-restricted
+  labels:
+    app.kubernetes.io/component: moco-controller
+    app.kubernetes.io/name: moco
+    app.kubernetes.io/part-of: platform
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: moco-controller
+      app.kubernetes.io/name: moco
+      platform.koorikla.io/controller: restricted
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: moco-controller
+      labels:
+        # The first two: upstream's webhook Service (moco-webhook-service) and PodMonitor select them.
+        app.kubernetes.io/component: moco-controller
+        app.kubernetes.io/name: moco
+        platform.koorikla.io/controller: restricted
+    spec:
+      serviceAccountName: moco-controller-manager
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: moco-controller
+          image: {{ $img }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+          args:
+            {{- range $flag, $key := dict "--agent-image" "agent" "--fluent-bit-image" "fluentbit" "--mysqld-exporter-image" "mysqldExporter" }}
+            {{- $i := (get $up $key).image }}
+            - {{ $flag }}
+            - "{{ $i.repository }}:{{ $i.tag }}"
+            {{- end }}
+          ports:
+            - { containerPort: 9443, name: webhook-server, protocol: TCP }
+            - { containerPort: 8081, name: health, protocol: TCP }
+            - { containerPort: 8080, name: metrics, protocol: TCP }
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: health }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { mountPath: /tmp/k8s-webhook-server/serving-certs, name: cert, readOnly: true }
+            - { mountPath: /grpc-cert, name: grpc-cert, readOnly: true }
+      volumes:
+        - name: cert
+          secret: { secretName: moco-controller-cert }
+        - name: grpc-cert
+          secret: { secretName: moco-controller-grpc }

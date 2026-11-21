@@ -86,8 +86,18 @@ ambientEnrollment:
       - cluster.local/ns/openchoreo-data-plane/sa/gateway-default   # data-plane gateway: all ingress into cells
       - cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent   # metrics scrapes of cell pods (#209, #323)
       - cluster.local/ns/cnpg-system/sa/cnpg                        # CloudNativePG operator -> instance manager
+      - cluster.local/ns/moco-system/sa/moco-controller-manager     # MOCO operator -> moco-agent gRPC + mysqld (#256)
       - cluster.local/ns/keda/sa/keda-operator                      # KEDA scalers polling in-cell endpoints
       - cluster.local/ns/strimzi/sa/strimzi-cluster-operator        # Strimzi operator -> Kafka brokers in cells
+  # Kafka (Strimzi) pods in enrolled cells (templates/cell-mesh.yaml openchoreo-cell-strimzi, #210). Addon strimzi runs
+  # the operator with STRIMZI_NETWORK_POLICY_GENERATION=false: its per-listener policies open only Kafka ports, and
+  # ambient carries every mesh connection on 15008. Peers outside the cell (cell pods and system components always).
+  strimzi:
+    # -- Every enrolled cell gets NetworkPolicy `platform-strimzi`: pods with `strimzi.io/cluster` admit the cell's pods, `openchoreo.dev/system-component` pods and `peers` on any port (HBONE `15008` included) plus kubelet probes.
+    enabled: true
+    peers:
+      - { namespace: strimzi, podLabels: { strimzi.io/kind: cluster-operator } }  # cluster operator: admin client, rolls
+      - { namespace: keda, podLabels: { app: keda-operator } }                    # KEDA kafka scaler: consumer lag
 
 # Link-local SNAT source CIDRs istio-cni uses for kubelet health probes into ambient-enrolled pods (admitted by
 # NetworkPolicy platform-mesh-hbone in templates/cell-mesh.yaml). Must match addons/mesh/values.yaml
@@ -201,7 +211,8 @@ imageVerification:
   # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
   # would simply not be matched by the signature policy.
   # CloudNativePG operand images are admitted as whole digest references, not prefixes: the operator + imageCatalog
-  # pins of addons/cloudnative-pg/values.yaml, which the catalog entry (valuesFromAddons) passes in (#327).
+  # pins of addons/cloudnative-pg/values.yaml (#327) and the moco-agent + mysqlImageCatalog pins of addons/moco/values.yaml
+  # (#256), which the catalog entry (valuesFromAddons) passes in.
   extraTrustedPrefixes: []
 
 # --- Digest-only images in workflow run namespaces (#36, docs/supply-chain.md "Digest references") ---------------------

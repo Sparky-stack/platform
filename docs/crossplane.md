@@ -100,26 +100,44 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   `installations/<inst>/addons/crossplane/env-<env>.yaml` gate dev -> prod (the Argo CD gate is #57). Renovate proposes
   digest bumps (`renovate.json`, ghcr.io/koorikla/platform packages).
 
-## Developer loop (Crossplane CLI 2.4 Project tooling, beta)
+## Inner loop (Crossplane CLI 2.4 Project tooling, beta)
 
-The CLI is pinned in `mise.toml` (`mise exec -- crossplane ...`). `_output/`, `schemas/`, `.cache/` are gitignored.
+The CLI is pinned in `mise.toml`: `mise exec -- crossplane ...` inside the repository; outside it (a scratch
+directory) `mise exec crossplane@2.4.1 -- crossplane ...`. Every API package (`packages/*`) and every repository from
+the [`crossplane-api` golden path](project-templates.md) has this layout. `_output/`, `schemas/`, `.cache/` are
+gitignored. The sequence below was run end to end with CLI v2.4.1 (VERIFY on CLI upgrades: the commands are beta):
 
 ```bash
-crossplane project init <name> --directory packages/<name>         # scaffold: crossplane-project.yaml, apis/, examples/, ...
-cd packages/<name>
-crossplane dependency add 'xpkg.crossplane.io/crossplane-contrib/function-go-templating:>=v0.13.2'  # + schemas
-crossplane project build                                            # _output/<name>.xpkg
-crossplane project run                                              # local KIND dev control plane (project stop)
-PACKAGE_ROOT=packages/<name> bash ../../ci/scripts/crossplane/validate-render.sh   # what CI runs; UPDATE_EXPECTED=true
-XP_RENDER_OUT=/tmp/r bash hack/tests/test_crossplane_render.sh     # from the repo root: every backend, renders kept in /tmp/r
+crossplane project init widget --registry ghcr.io/koorikla   # crossplane-project.yaml, apis/ examples/ functions/ operations/ tests/
+cd widget
+$EDITOR examples/widget/example.yaml                          # a sample XR: apiVersion platform.example.io/v1alpha1, kind Widget, spec
+crossplane xrd generate examples/widget/example.yaml --path widget/definition.yaml   # -> apis/widget/definition.yaml (paths are under apis/)
+crossplane composition generate apis/widget/definition.yaml --path widget/composition.yaml   # + function-auto-ready dependency
+crossplane function generate compose-widget apis/widget/composition.yaml   # functions/compose-widget/*.gotmpl, appended as a pipeline step
+crossplane dependency add 'xpkg.crossplane.io/crossplane-contrib/function-auto-ready:>=v0.7.3'   # a real floor instead of >=v0.0.0
+$EDITOR functions/compose-widget/01-compose.yaml.gotmpl       # one file per composed resource ({{ setResourceNameAnnotation "x" }})
+crossplane composition render examples/widget/example.yaml apis/widget/composition.yaml   # builds the embedded function, ~20 s
+crossplane project build                                      # _output/widget.xpkg: Configuration + function (amd64, arm64)
+crossplane project push --tag v0.1.0                          # <repository>:v0.1.0 + <repository>_compose-widget
+crossplane project run                                        # optional: local KIND dev control plane (project stop)
 ```
 
-Both render harnesses build the embedded function from the working tree (validate-render.sh: `crossplane project
-build` + `docker load`; the hack test: the same `FROM` + `COPY . /src` with `docker build`). For a refactor of the
-templates, render before and after with `XP_RENDER_OUT` and `diff -r` the two directories.
+What to know:
 
-`project run` resolves dependencies and has no EnvironmentConfig: apply `tests/render/environment/<backend>.yaml`
-before an example (VERIFY: not exercised in CI).
+- The embedded function's name is derived from `spec.repository` (host dropped, `/` -> `-`) + the function directory:
+  `ghcr.io/koorikla/platform/mysql` + `compose-mysql` = `koorikla-platform-mysqlcompose-mysql`. Build and push with
+  the same repository, else the Composition's `functionRef` no longer matches.
+- Render in project mode passes no functions file (a functions file disables embedded functions). The package render
+  tests pin their Functions instead: `PACKAGE_ROOT=packages/<name> bash ci/scripts/crossplane/validate-render.sh`
+  (what CI runs; `UPDATE_EXPECTED=true` rewrites `tests/render/expected/`) and, from the repo root,
+  `XP_RENDER_OUT=/tmp/r bash hack/tests/test_crossplane_render.sh` (every PostgreSQL backend). Both build the embedded
+  function from the working tree; for a template refactor, render before and after and `diff -r`.
+- `project run` resolves dependencies and has no EnvironmentConfig: apply `tests/render/environment/<backend>.yaml`
+  before an example (VERIFY: not exercised in CI). The platform's k3d stack (`task up`) is the integration loop: it
+  installs the published, digest-pinned package through `addons/crossplane`, never the working tree.
+- CI (`.github/workflows/package-<name>.yaml` -> `app-crossplane-configuration.yaml`) runs the same `crossplane
+  project build|push`, then signs and attests both packages. `hack/tests/test_crossplane_packages.sh` checks the layout
+  and CI wiring of every package and builds each one (`XP_PACKAGE_BUILD=0` skips the build).
 
 ## APIs and their status
 
@@ -128,7 +146,7 @@ Field-by-field reference of every XRD (generated): [reference/crossplane-apis.md
 | API | Package | Local backend (operator) | Cloud backends | Status |
 |---|---|---|---|---|
 | PostgreSQL | [`packages/postgresql`](../packages/postgresql/README.md) | CloudNativePG | RDS / Aurora, Cloud SQL, Azure Flexible | tested locally |
-| MySQL | [`packages/mysql`](../packages/mysql/README.md) | MOCO (Vitess evaluated: too heavy per app) | RDS, Cloud SQL, Azure Flexible | layout |
+| MySQL | [`packages/mysql`](../packages/mysql/README.md) | MOCO (Vitess evaluated: too heavy per app) | RDS, Cloud SQL, Azure Flexible (layout) | moco installed with addon moco (#256); cloud layout |
 | Valkey | [`packages/valkey`](../packages/valkey/README.md) | valkey-io/valkey-operator | ElastiCache, Memorystore, Azure Cache for Redis | layout |
 | Bucket | [`packages/bucket`](../packages/bucket/README.md) | RustFS operator | S3, GCS, Azure Blob | layout |
 | KafkaTopic | [`packages/kafka-topic`](../packages/kafka-topic/README.md) | Strimzi | Event Hubs (MSK, Managed Kafka: no upjet kind yet) | layout |
@@ -141,7 +159,8 @@ alpha with few drivers (none for RustFS); Crossplane gives one API across RustFS
 
 ## Adding a new API
 
-1. `crossplane project init` under `packages/<name>/`, write `apis/<api>/definition.yaml` (namespaced XRD,
+1. Scaffold with the [inner loop](#inner-loop-crossplane-cli-24-project-tooling-beta) under `packages/<name>/` (or a
+   separate repository from the `crossplane-api` golden path), write `apis/<api>/definition.yaml` (namespaced XRD,
    `apiextensions.crossplane.io/v2`, no claims) and one Composition, add the Functions / Providers with
    `crossplane dependency add`, examples and `tests/render/` (functions pinned like the addon, an EnvironmentConfig per
    backend under `extra-resources/<example>`, `observed/`, `expected/`).

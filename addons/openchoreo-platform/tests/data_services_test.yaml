@@ -3,12 +3,13 @@ templates:
   - templates/platform-types.yaml
   - templates/upstream-defaults.yaml
 tests:
-  - it: renders keda-scaler and postgresql, cluster-scoped, skipped in dry-run while the CRDs are missing
+  - it: renders keda-scaler, postgresql and mysql (#256), cluster-scoped, skipped in dry-run while the CRDs are missing
     template: templates/platform-types.yaml
     set:
       resilience.enabled: false   # tests/resilience_test.yaml
+      appMetrics.enabled: false   # tests/app_config_metrics_test.yaml
     asserts:
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 3 }
       - isNull: { path: metadata.namespace }
       - equal:
           path: metadata.annotations["argocd.argoproj.io/sync-options"]
@@ -19,6 +20,7 @@ tests:
     set:
       dataServices.enabled: false
       resilience.enabled: false
+      appMetrics.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
 

@@ -55,7 +55,7 @@ Every platform API XRD (developer-facing contract: one namespaced XR, the cluste
 
 ## MySQL v1alpha1
 
-`apiVersion: platform.koorikla.io/v1alpha1`, `kind: MySQL`, scope Namespaced. Source: [packages/mysql/apis/mysql/definition.yaml](../../packages/mysql/apis/mysql/definition.yaml), package [README](../../packages/mysql/README.md) (status: layout).
+`apiVersion: platform.koorikla.io/v1alpha1`, `kind: MySQL`, scope Namespaced. Source: [packages/mysql/apis/mysql/definition.yaml](../../packages/mysql/apis/mysql/definition.yaml), package [README](../../packages/mysql/README.md) (status: `moco` enabled).
 
 ### spec
 

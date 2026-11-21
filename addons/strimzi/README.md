@@ -19,6 +19,8 @@ Wrapper chart for `strimzi-kafka-operator` (`1.3.1`) on workload clusters. Manag
 | strimzi-kafka-operator.buildah.image.tag | string | `"1.3.1@sha256:7a2f75ee2a66b5cd83ebadf9be5efdf452e31cf006714e8f46f8ce16b3806b98"` |  |
 | strimzi-kafka-operator.extraEnvs[0].name | string | `"STRIMZI_POD_SECURITY_PROVIDER_CLASS"` |  |
 | strimzi-kafka-operator.extraEnvs[0].value | string | `"restricted"` |  |
+| strimzi-kafka-operator.extraEnvs[1].name | string | `"STRIMZI_NETWORK_POLICY_GENERATION"` |  |
+| strimzi-kafka-operator.extraEnvs[1].value | string | `"false"` |  |
 | strimzi-kafka-operator.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` | `1.3.1` pinned by multi-arch index digest (alongside `topicOperator.image`, `userOperator.image`, `kafkaInit.image`). |
 | strimzi-kafka-operator.kafkaBridge.image.tag | string | `"1.2.1@sha256:4597700f87ab33b7768863728730bc2eb68a0d7fa9633ab2a4cebb3a2730cfa9"` |  |
 | strimzi-kafka-operator.kafkaInit.image.tag | string | `"1.3.1@sha256:55f43849559a0d151be473c588c89e9d72649ecadf088c8b9d92d37654a5e5eb"` |  |

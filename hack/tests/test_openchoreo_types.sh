@@ -45,7 +45,10 @@ for ok in 'agent may apply keda.sh/scaledobjects for ClusterTrait keda-scaler' \
   'ClusterTrait keda-scaler requires opt-in workload addon keda' 'ClusterTrait keda-scaler checks addons.platform.koorikla.io/keda' \
   'ClusterResourceType postgresql requires opt-in workload addon crossplane' \
   'agent waits for crd/scaledobjects.keda.sh of ClusterTrait keda-scaler \(addon keda\)' \
-  'agent waits for crd/postgresqls.platform.koorikla.io of ClusterResourceType postgresql \(addon crossplane\)'; do
+  'agent waits for crd/postgresqls.platform.koorikla.io of ClusterResourceType postgresql \(addon crossplane\)' \
+  'agent may apply monitoring.coreos.com/podmonitors for ClusterTrait metrics' \
+  'ClusterTrait metrics skips its PodMonitor where a data plane opts out of telemetry' \
+  'agent waits for crd/podmonitors.monitoring.coreos.com of ClusterTrait metrics \(addon telemetry\)'; do
   assert_match "$out" "OK $ok" "$ok"
 done
 
@@ -73,13 +76,16 @@ assert_match "$out" "VIOLATION: ClusterTrait keda-scaler renders ScaledObject \(
 assert_match "$out" "VIOLATION: ClusterResourceType postgresql renders PostgreSQL \(platform.koorikla.io/v1alpha1\) but the data-plane agent" \
   "upstream agent RBAC alone: postgresql's XR is reported"
 # Without the gate the first apply of a ScaledObject can beat addon keda to the cluster (#246).
-helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" | yq -o=json -I=0 '.' > "$TMP/dp-ungated.jsonl"
+helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" --set capabilityGate.addons.telemetry.enabled=false \
+  | yq -o=json -I=0 '.' > "$TMP/dp-ungated.jsonl"
 out=$(check "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$TMP/dp-ungated.jsonl")
 assert_match "$out" 'VIOLATION: no capability-gate Sync hook before the agent Deployment' "no gate rendered: reported"
 assert_match "$out" 'VIOLATION: ClusterTrait keda-scaler renders ScaledObject \(keda.sh/v1alpha1\) but the capability gate does not wait for crd/scaledobjects.keda.sh' \
   "a trait kind the gate does not wait for is reported"
 assert_match "$out" 'VIOLATION: ClusterResourceType postgresql renders PostgreSQL \(platform.koorikla.io/v1alpha1\) but the capability gate does not wait for crd/postgresqls.platform.koorikla.io' \
   "a resource type kind the gate does not wait for is reported"
+assert_match "$out" 'VIOLATION: ClusterTrait metrics renders PodMonitor \(monitoring.coreos.com/v1\) but the capability gate does not wait for crd/podmonitors.monitoring.coreos.com' \
+  "metrics' PodMonitor without the telemetry gate (#252) is reported"
 # The XRD's CRD gated under an addon the resource type does not require (wrong label) is no gate for it.
 helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" --set capabilityGate.addons.keda.enabled=true \
   --set 'capabilityGate.addons.keda.crds={scaledobjects.keda.sh,postgresqls.platform.koorikla.io}' | yq -o=json -I=0 '.' > "$TMP/dp-wrong.jsonl"
@@ -92,6 +98,23 @@ yq -o=json '.addons | del(.["openchoreo-data-plane"].clusterLabelParameters["cap
 out=$(py hack/tests/openchoreo_types.py "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$agent_ns/$agent_sa" "$TMP/catalog-nolabel.json" "$TMP/dp-gated.jsonl")
 assert_match "$out" 'VIOLATION: ClusterResourceType postgresql needs the crossplane gate but charts/platform does not enable capabilityGate.addons.crossplane.enabled' \
   "a gate without its cluster label parameter is reported"
+# Metrics (#252): the PodMonitor CRD comes from default-on addon telemetry, which a fleet file can still turn off.
+yq -o=json '.addons["openchoreo-data-plane"].clusterLabelParameters["capabilityGate.addons.telemetry.enabled"].default = "false" | .addons' \
+  charts/platform/values.yaml > "$TMP/catalog-tel-off.json"
+out=$(py hack/tests/openchoreo_types.py "$TMP/plat.jsonl" "$TMP/dp.jsonl" "$agent_ns/$agent_sa" "$TMP/catalog-tel-off.json" "$TMP/dp-gated.jsonl")
+assert_match "$out" 'VIOLATION: ClusterTrait metrics uses default-on addon telemetry but its gate label parameter does not default to "true"' \
+  "a default-on gate that defaults off is reported"
+helm template openchoreo-data-plane "$dpa" --namespace "$agent_ns" --set clusterAgentDataServices.rules=null \
+  | yq -o=json -I=0 '.' > "$TMP/dp-norules.jsonl"
+assert_match "$(check "$TMP/plat.jsonl" "$TMP/dp-norules.jsonl")" 'VIOLATION: ClusterTrait metrics renders PodMonitor \(monitoring.coreos.com/v1\) but the data-plane agent' \
+  "metrics' PodMonitor without the agent grant is reported"
+yq -p=json -o=json -I=0 'select(.metadata.name == "metrics") | del(.spec.creates[0].includeWhen)' "$TMP/plat.jsonl" > "$TMP/metrics-always.jsonl"
+yq -p=json -o=json -I=0 'select(.metadata.name == "metrics") | del(.metadata.annotations["platform.koorikla.io/uses-addons"])' "$TMP/plat.jsonl" > "$TMP/metrics-anon.jsonl"
+out=$(check "$TMP/metrics-always.jsonl" "$TMP/dp.jsonl")
+assert_match "$out" 'VIOLATION: ClusterTrait metrics renders PodMonitor of default-on addon telemetry without includeWhen' \
+  "a PodMonitor rendered where telemetry is opted out is reported"
+assert_match "$(check "$TMP/metrics-anon.jsonl" "$TMP/dp.jsonl")" 'VIOLATION: ClusterTrait metrics renders PodMonitor .* names no addon' \
+  "a CRD kind with no addon to gate on is reported"
 cat > "$TMP/bad.jsonl" <<'EOF'
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterTrait","metadata":{"name":"unchecked","annotations":{"platform.koorikla.io/requires-addons":"keda"}},"spec":{"preRenderValidations":[{"rule":"${true}","message":"x"}]}}
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterResourceType","metadata":{"name":"rawpg","annotations":{"platform.koorikla.io/requires-addons":"cert-manager, nosuch"}},"spec":{"resources":[{"id":"c","template":{"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster"}}]}}

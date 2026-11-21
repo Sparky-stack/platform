@@ -13,6 +13,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| appMetrics.enabled | bool | `true` | Render ClusterTrait `metrics` and add it to the `allowedTraits` of the Deployment component types. |
 | autoBuild.github.key | string | `"promotion-gate-github"` |  |
 | autoBuild.github.permissions.contents | string | `"read"` |  |
 | autoBuild.github.tokenRefreshInterval | string | `"30m"` |  |

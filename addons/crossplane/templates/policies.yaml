@@ -96,4 +96,94 @@ rules:
     resources: {{ .resources | toJson }}
     verbs: [get, list, watch]
   {{- end }}
+{{- /* MySQL (#256, only with mysql.enabled): MOCO objects only through the platform.koorikla.io MySQL XR, and production
+MySQL is highly available (the MySQL API has no backup field yet: MOCO BackupPolicy jobs cannot meet Pod Security
+restricted, upstream cybozu-go/moco#949). Same exemptions as PostgreSQL. */ -}}
+{{- if eq (toString .Values.mysql.enabled) "true" }}
+{{- $myRaw := list (dict "apiGroups" (list "moco.cybozu.com") "resources" (list "mysqlclusters" "backuppolicies")) }}
+{{- $myXr := dict "apiGroups" (list "platform.koorikla.io") "resources" (list "mysqls") }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: mysql-only-through-the-platform-api
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+    policies.kyverno.io/title: MySQL only through platform.koorikla.io MySQL
+    policies.kyverno.io/description: >-
+      MOCO MySQLClusters / BackupPolicies may only be created or changed by the platform (Crossplane composing a MySQL
+      XR, the MOCO operator, kube-system controllers) or in {{ join ", " $pol.exemptNamespaces }}. Everyone else asks
+      for a platform.koorikla.io/v1alpha1 MySQL.
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  autogen:
+    validatingAdmissionPolicy:
+      enabled: true
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      {{- range $myRaw }}
+      - apiGroups: {{ .apiGroups | toJson }}
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: {{ .resources | toJson }}
+      {{- end }}
+  matchConditions:
+    - name: outside-platform-namespaces
+      expression: '!(request.namespace in {{ $pol.exemptNamespaces | toJson }})'
+    - name: not-a-platform-controller
+      expression: '!{{ $saPrefixes | toJson }}.exists(p, request.userInfo.username.startsWith(p))'
+  validations:
+    - expression: "false"
+      messageExpression: >-
+        '"' + object.kind + '" is not available to tenants here: create a platform.koorikla.io/v1alpha1 MySQL
+        (docs/data-services.md "MySQL as a service").'
+---
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: mysql-production-ha
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+    policies.kyverno.io/title: Production MySQL is highly available
+    policies.kyverno.io/description: >-
+      MySQL XRs in OpenChoreo cells of {{ join ", " $pol.production.environments }} set highAvailability: true.
+      Action {{ $pol.production.action }}.
+spec:
+  validationActions: [{{ $pol.production.action }}]
+  failurePolicy: {{ ternary "Fail" "Ignore" (eq $pol.production.action "Deny") }}
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: {{ $myXr.apiGroups | toJson }}
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: {{ $myXr.resources | toJson }}
+    namespaceSelector:
+      matchExpressions:
+        - key: openchoreo.dev/environment
+          operator: In
+          values: {{ $pol.production.environments | toJson }}
+  validations:
+    - expression: has(object.spec.highAvailability) && object.spec.highAvailability == true
+      message: production MySQL needs spec.highAvailability true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:reports-controller:mysql-policies
+  labels:
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
+rules:
+  {{- range append $myRaw $myXr }}
+  - apiGroups: {{ .apiGroups | toJson }}
+    resources: {{ .resources | toJson }}
+    verbs: [get, list, watch]
+  {{- end }}
+{{- end }}
 {{- end }}

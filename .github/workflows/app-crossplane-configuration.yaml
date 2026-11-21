@@ -18,7 +18,7 @@ on:
   workflow_call:
     inputs:
       package_root:
-        description: 'Directory containing crossplane.yaml'
+        description: 'Directory containing crossplane-project.yaml (Crossplane Project, the default layout) or crossplane.yaml (classic package)'
         required: false
         type: string
         default: '.'

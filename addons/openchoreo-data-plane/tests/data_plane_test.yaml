@@ -6,7 +6,6 @@ templates:
   - charts/openchoreo-data-plane/templates/gateway/gateway.yaml
   - templates/cluster-agent-data-services.yaml
   - templates/capability-gate.yaml
-  - templates/priority-classes.yaml
 set:
   cluster.name: dev1
   openchoreo-data-plane.clusterAgent.planeID: dev1
@@ -105,7 +104,7 @@ tests:
         documentIndex: 0
       - contains:
           path: rules
-          content: { apiGroups: [platform.koorikla.io], resources: [postgresqls], verbs: [get, list, watch, create, update, patch, delete] }
+          content: { apiGroups: [platform.koorikla.io], resources: [postgresqls, mysqls], verbs: [get, list, watch, create, update, patch, delete] }
         documentIndex: 0
       - equal:
           path: subjects
@@ -116,6 +115,7 @@ tests:
     template: templates/capability-gate.yaml
     set:
       capabilityGate.addons.keda.enabled: "true"
+      capabilityGate.addons.telemetry.enabled: "false"
     documentSelector: { path: kind, value: Job }
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
@@ -133,6 +133,7 @@ tests:
     set:
       capabilityGate.addons.keda.enabled: "true"
       capabilityGate.addons.crossplane.enabled: "true"
+      capabilityGate.addons.telemetry.enabled: "false"
     documentSelector: { path: kind, value: Job }
     asserts:
       - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-crossplane-crds }
@@ -144,23 +145,45 @@ tests:
           path: spec.template.spec.containers[0].command
           value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/postgresqls.platform.koorikla.io, crd/scaledobjects.keda.sh]
 
-  - it: "capability gate: nothing rendered on a cluster without keda (the agent starts at once)"
+  - it: "capability gate (#256): addon moco waits for the MOCO CRD and the MySQL XRD crossplane installs on the same label"
     template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.moco.enabled: "true"
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-moco-crds }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io]
+      # both features (#256 + #252): moco does not replace the default-on telemetry wait
+      - equal: { path: 'spec.template.spec.initContainers[1].name', value: wait-for-telemetry-crds }
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io, crd/podmonitors.monitoring.coreos.com]
+
+  - it: "capability gate (#252): by default the agent waits for addon telemetry's PodMonitor CRD (ClusterTrait metrics)"
+    template: templates/capability-gate.yaml
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-telemetry-crds }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/podmonitors.monitoring.coreos.com]
+
+  - it: "capability gate: nothing rendered on a cluster without keda, crossplane, moco and telemetry (the agent starts at once)"
+    template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.telemetry.enabled: "false"
     asserts:
       - hasDocuments: { count: 0 }
-  - it: ships the PriorityClasses ClusterTrait resilience assigns, both Never preempting so platform pods cannot be evicted
-    template: templates/priority-classes.yaml
+
+  - it: "ClusterTrait metrics (#252): the agent may apply PodMonitors"
+    template: templates/cluster-agent-data-services.yaml
+    documentSelector: { path: kind, value: ClusterRole }
     asserts:
-      - hasDocuments: { count: 2 }
-      - equal: { path: value, value: 100000 }
-        documentSelector: { path: metadata.name, value: app-production }
-      - equal: { path: preemptionPolicy, value: Never }
-      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: "Force=true,Replace=true" }
-        documentSelector: { path: metadata.name, value: app-production }
-      - equal: { path: value, value: 1000 }
-        documentSelector: { path: metadata.name, value: app-standard }
-      - equal: { path: preemptionPolicy, value: Never }
-        documentSelector: { path: metadata.name, value: app-standard }
+      - contains:
+          path: rules
+          content: { apiGroups: [monitoring.coreos.com], resources: [podmonitors], verbs: [get, list, watch, create, update, patch, delete] }
   - it: fails without the cluster name (schema)
     template: templates/validate.yaml
     set: { cluster.name: null }

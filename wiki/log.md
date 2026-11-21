@@ -45,3 +45,9 @@
 
 ## [2026-11-20] update | Cell AuthorizationPolicy (#324)
 - `gotchas/istio-ambient-port-15008-and-telemetry-dns.md`: STRICT authenticates but admits any mesh identity; per-cell AuthorizationPolicy `platform-cell-peers` admits the cell + platformPeers; read principals from ztunnel metrics; permissive cells need allow-all.
+
+## [2026-11-21] update | Strimzi NetworkPolicies vs HBONE (#210)
+- `gotchas/istio-ambient-port-15008-and-telemetry-dns.md`: operator-generated port-only policies drop HBONE; Strimzi generation off, platform-strimzi generated into ambient cells.
+
+## [2026-11-21] create | Crossplane Project CLI paths (#240)
+- `gotchas/crossplane-project-cli-paths-and-function-names.md`: `--path` under apis/, embedded function name from spec.repository, auto-ready >=v0.0.0 floor.

@@ -13,6 +13,11 @@ so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
                                             by the CNI, the peer set stays the same (staging never reaches production).
                                             Plus kubelet probes, which ambient SNATs to 169.254.7.127 (IPv6
                                             fd16:9254:7127:1337:ffff:ffff:ffff:ffff): without it they are dropped too.
+  GeneratingPolicy openchoreo-cell-strimzi NetworkPolicy platform-strimzi in every enrolled cell (#210): Kafka pods
+                                            (strimzi.io/cluster) admit the cell's pods, system components and
+                                            <strimzi.peers> (operator, KEDA) on any port, so HBONE 15008 too, and probes.
+                                            Replaces the Strimzi operator's own per-listener policies, which open only
+                                            Kafka ports (dropping HBONE); addon strimzi turns their generation off.
   GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` in every enrolled cell: mtls STRICT, so ztunnel
                                             rejects plaintext from clients outside the mesh (kubelet probes are exempt);
                                             PERMISSIVE while the namespace carries <mtls.optOutLabel>=permissive (set per
@@ -92,6 +97,72 @@ spec:
                 {{- range .Values.mesh.probeSourceCIDRs }}
                   - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
                 {{- end }}
+{{- if $ae.strimzi.enabled }}
+---
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: openchoreo-cell-strimzi
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    policies.kyverno.io/title: Kafka (Strimzi) pods in ambient OpenChoreo cells
+    policies.kyverno.io/description: >-
+      NetworkPolicy platform-strimzi in every ambient-enrolled cell namespace, in place of the per-cluster policies the
+      Strimzi operator no longer generates (addon strimzi STRIMZI_NETWORK_POLICY_GENERATION=false, #210): Kafka pods
+      admit the cell's own pods and the listed platform peers on any port (HBONE 15008 included), and kubelet probes.
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
+  matchConditions:
+    - name: never-platform-namespaces
+      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  generate:
+    - template:
+        interpolate: cel
+        value: |
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: platform-strimzi
+            namespace: (( object.metadata.name ))
+            labels: { app.kubernetes.io/managed-by: kyverno }
+          spec:
+            # Every pod the operator creates for a Kafka / KafkaNodePool / KafkaConnect / KafkaMirrorMaker2 (brokers,
+            # controllers, entity operator, exporter, Cruise Control, Connect workers) carries strimzi.io/cluster.
+            podSelector:
+              matchExpressions:
+                - { key: strimzi.io/cluster, operator: Exists }
+            policyTypes: [Ingress]
+            ingress:
+              # Peers, not ports: ambient tunnels every mesh connection to the pod's 15008, so the CNI sees no Kafka
+              # port, and ztunnel's platform-cell-peers decides the identity. No port list: 15008, plus the listener
+              # ports for a client outside the tunnel (pod opted out, permissive cell).
+              - from:
+                  - podSelector: {}
+                  - namespaceSelector: {}
+                    podSelector:
+                      matchExpressions:
+                        - { key: openchoreo.dev/system-component, operator: Exists }
+                  {{- range $ae.strimzi.peers }}
+                  - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .namespace }} } }
+                    podSelector: { matchLabels: {{ .podLabels | toJson }} }
+                  {{- end }}
+              # Kubelet probes after istio-cni's SNAT (see platform-mesh-hbone above).
+              - from:
+                {{- range .Values.mesh.probeSourceCIDRs }}
+                  - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
+                {{- end }}
+{{- end }}
 {{- if $ae.mtls.strict }}
 ---
 apiVersion: policies.kyverno.io/v1

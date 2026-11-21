@@ -1,0 +1,21 @@
+# Crossplane Project (Crossplane CLI 2.4 Project tooling, beta): `crossplane project build` turns it into the
+# Configuration package ghcr.io/${{ values.imageOwner }}/${{ values.name }} plus the embedded function functions/compose/.
+# Add Functions / Providers with `crossplane dependency add '<package>:>=<version>'` (README.md).
+apiVersion: dev.crossplane.io/v1alpha1
+kind: Project
+metadata:
+  name: ${{ values.name }}
+spec:
+  dependencies:
+    - type: xpkg
+      xpkg:
+        apiVersion: pkg.crossplane.io/v1
+        kind: Function
+        package: xpkg.crossplane.io/crossplane-contrib/function-auto-ready
+        version: '>=v0.7.3'
+  repository: ghcr.io/${{ values.imageOwner }}/${{ values.name }}
+  description: ${{ values.description | dump }}
+  maintainer: ${{ values.owner | dump }}
+  source: github.com/${{ values.repoOwner }}/${{ values.name }}
+  crossplane:
+    version: '>=v2.4.0'

@@ -26,6 +26,13 @@ derived from them. Object files only read these. */}}
 {{- $o := "{{" }}
 {{- $c := "}}" }}
 {{- $db := dig "database" "app" $spec }}
+{{- /* moco: the mysqld image of spec.version from the cluster's catalog (addon moco mysqlImageCatalog, digest-pinned). */}}
+{{- $version := dig "version" "8.4" $spec | toString }}
+{{- $mysqlImage := "" }}
+{{- if eq $backend "moco" }}
+{{- $mysqlImage = dig $version "" (dig "mysqlImages" dict $facts) }}
+{{- if not $mysqlImage }}{{ fail (printf "mysql: no image for version %q in EnvironmentConfig platform-mysql mysqlImages" $version) }}{{ end }}
+{{- end }}
 {{- $storage := dig "storageGiB" 10 $spec | int }}
 {{- /* Where the database answers: MOCO's primary Service, the RDS / Cloud SQL address once observed, the
 deterministic Azure FQDN. "" until known; cloud connection Secrets wait for it. */}}

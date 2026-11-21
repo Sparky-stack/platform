@@ -4,11 +4,42 @@
 
 Managed dependencies a Workload binds (`dependencies.resources[]`); outputs reach the app as values or secretKeyRefs.
 
+- [mysql](#mysql)
 - [postgresql](#postgresql)
 - [bucket](#bucket)
 - [kafka-topic](#kafka-topic)
-- [mysql](#mysql)
 - [valkey](#valkey)
+
+## mysql
+
+MySQL through the platform API (Crossplane MySQL XR): MOCO in-cluster (MySQL 8.4, semi-sync replication for HA). Needs a data plane that runs addons crossplane and moco. Source: [addons/openchoreo-platform/files/platform/cluster-resource-types/mysql.yaml](../../addons/openchoreo-platform/files/platform/cluster-resource-types/mysql.yaml). Needs data-plane addons: crossplane,moco.
+
+### parameters
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `database` | string |  | `app` | Database to create; the app user has the same name. Immutable. Range ..32 chars. Pattern `^[a-z][a-z0-9_]*$`. |
+| `version` | string |  | `8.4` | MySQL LTS version. Upgrades only. One of `8.4`. |
+
+### environmentConfigs
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `deletionPolicy` | string |  | `Retain` | Cloud backends only (layout). One of `Retain`, `Delete`. |
+| `highAvailability` | boolean |  | `false` | 3 instances with semi-sync replication and automatic failover. Required in production (admission policy). |
+| `size` | string |  | `S` | Compute of each mysqld instance. One of `S`, `M`, `L`. |
+| `storageGiB` | integer |  | `10` | Storage per instance in GiB; can grow, never shrink. Range 10..16384. |
+
+### outputs
+
+| Output | Delivered as |
+|---|---|
+| `host` | value |
+| `port` | value |
+| `database` | value |
+| `username` | secretKeyRef `username` |
+| `password` | secretKeyRef `password` |
+| `uri` | secretKeyRef `uri` |
 
 ## postgresql
 
@@ -99,36 +130,6 @@ Kafka topic with credentials through the platform API (Crossplane KafkaTopic XR)
 | `saslMechanism` | secretKeyRef `saslMechanism` |
 | `username` | secretKeyRef `username` |
 | `password` | secretKeyRef `password` |
-
-## mysql
-
-MySQL through the platform API (Crossplane MySQL XR): MOCO in-cluster, RDS / Cloud SQL / Azure Flexible Server in the cloud, chosen by the cluster. Needs a data plane that runs addon crossplane. Source: [packages/mysql/openchoreo/cluster-resource-type.yaml](../../packages/mysql/openchoreo/cluster-resource-type.yaml). **Not deployed yet**: the API package is still a layout; the file moves into the chart when enabled. Needs data-plane addons: crossplane.
-
-### parameters
-
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `database` | string |  | `app` | Database to create; the app user has the same name. Immutable. Range ..32 chars. Pattern `^[a-z][a-z0-9_]*$`. |
-
-### environmentConfigs
-
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `size` | string |  | `S` | One of `S`, `M`, `L`. |
-| `storageGiB` | integer |  | `10` | Range 10..16384. |
-| `highAvailability` | boolean |  | `false` |  |
-| `deletionPolicy` | string |  | `Retain` | One of `Retain`, `Delete`. |
-
-### outputs
-
-| Output | Delivered as |
-|---|---|
-| `host` | value |
-| `port` | value |
-| `database` | value |
-| `username` | secretKeyRef `username` |
-| `password` | secretKeyRef `password` |
-| `uri` | secretKeyRef `uri` |
 
 ## valkey
 

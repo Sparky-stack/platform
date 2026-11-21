@@ -54,10 +54,13 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.coredns-local.providers[1] | string | `"byo"` |  |
 | addons.coredns-local.roles[0] | string | `"mgmt"` |  |
 | addons.coredns-local.roles[1] | string | `"workload"` |  |
+| addons.crossplane.clusterLabelParameters."mysql.enabled".default | string | `"false"` |  |
+| addons.crossplane.clusterLabelParameters."mysql.enabled".label | string | `"addons.platform.koorikla.io/moco"` |  |
 | addons.crossplane.default | bool | `false` |  |
 | addons.crossplane.namespace | string | `"crossplane-system"` |  |
 | addons.crossplane.roles[0] | string | `"workload"` |  |
 | addons.crossplane.serverSideDiff | bool | `true` |  |
+| addons.crossplane.valuesFromAddons[0] | string | `"moco"` |  |
 | addons.external-dns.clusterIdParameters[0] | string | `"external-dns.txtOwnerId"` |  |
 | addons.external-dns.default | bool | `false` |  |
 | addons.external-dns.installationParameters."external-dns.domainFilters" | string | `"{{ printf \"{%s}\" (join \",\" .Values.dns.domainFilters) }}"` |  |
@@ -102,6 +105,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.kyverno-policies.roles[0] | string | `"mgmt"` |  |
 | addons.kyverno-policies.roles[1] | string | `"workload"` |  |
 | addons.kyverno-policies.valuesFromAddons[0] | string | `"cloudnative-pg"` |  |
+| addons.kyverno-policies.valuesFromAddons[1] | string | `"moco"` |  |
 | addons.kyverno.default | bool | `true` |  |
 | addons.kyverno.namespace | string | `"kyverno"` |  |
 | addons.kyverno.roles[0] | string | `"mgmt"` |  |
@@ -119,6 +123,10 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.mesh.ignoreDifferences[0].managedFieldsManagers[0] | string | `"pilot-discovery"` |  |
 | addons.mesh.namespace | string | `"istio-system"` |  |
 | addons.mesh.roles[0] | string | `"workload"` |  |
+| addons.moco.default | bool | `false` |  |
+| addons.moco.namespace | string | `"moco-system"` |  |
+| addons.moco.roles[0] | string | `"workload"` |  |
+| addons.moco.serverSideDiff | bool | `true` |  |
 | addons.obi.default | bool | `false` |  |
 | addons.obi.namespace | string | `"obi"` |  |
 | addons.obi.roles[0] | string | `"workload"` |  |
@@ -136,6 +144,10 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.crossplane.enabled".label | string | `"addons.platform.koorikla.io/crossplane"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.keda.enabled".default | string | `"false"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.keda.enabled".label | string | `"addons.platform.koorikla.io/keda"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.moco.enabled".default | string | `"false"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.moco.enabled".label | string | `"addons.platform.koorikla.io/moco"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.telemetry.enabled".default | string | `"true"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.telemetry.enabled".label | string | `"addons.platform.koorikla.io/telemetry"` |  |
 | addons.openchoreo-data-plane.clusterNameParameters[0] | string | `"openchoreo-data-plane.clusterAgent.planeID"` |  |
 | addons.openchoreo-data-plane.default | bool | `true` |  |
 | addons.openchoreo-data-plane.installationParameters."openchoreo-data-plane.clusterAgent.serverUrl" | string | `"{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}"` |  |
@@ -152,6 +164,10 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-workflow-plane.default | bool | `true` |  |
 | addons.openchoreo-workflow-plane.namespace | string | `"openchoreo-workflow-plane"` |  |
 | addons.openchoreo-workflow-plane.roles[0] | string | `"mgmt"` |  |
+| addons.priority-classes.compareOptions[0] | string | `"ServerSideDiff=false"` |  |
+| addons.priority-classes.default | bool | `true` |  |
+| addons.priority-classes.namespace | string | `"kube-system"` |  |
+| addons.priority-classes.roles[0] | string | `"workload"` |  |
 | addons.reloader.default | bool | `true` |  |
 | addons.reloader.namespace | string | `"reloader"` |  |
 | addons.reloader.roles[0] | string | `"mgmt"` |  |

@@ -29,7 +29,10 @@ addonsRevision: HEAD
 # Data services (docs/data-services.md): PostgreSQL as a service (Crossplane + the cnpg Composition, #107) and KEDA
 # (~160Mi requests). Also the capabilities OpenChoreo checks: ClusterDataPlane annotations addons.platform.koorikla.io/*
 # let the keda-scaler trait and postgresql resource type target this cluster's environments (#70).
+# moco (#256): the MySQL operator (one pod, 100m / 20Mi requests) + the MySQL API in crossplane; no MySQL instance runs
+# until a Resource of type mysql is bound (each adds a mysqld pod, 512Mi request at size S).
 addons:
   cloudnative-pg: true
+  moco: true
   crossplane: true
   keda: true

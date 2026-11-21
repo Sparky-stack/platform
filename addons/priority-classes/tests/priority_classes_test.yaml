@@ -1,0 +1,19 @@
+suite: priority-classes
+templates:
+  - templates/priority-classes.yaml
+tests:
+  - it: ships the PriorityClasses ClusterTrait resilience assigns, both Never preempting so platform pods cannot be evicted
+    asserts:
+      - hasDocuments: { count: 2 }
+      - equal: { path: value, value: 100000 }
+        documentSelector: { path: metadata.name, value: app-production }
+      - equal: { path: value, value: 1000 }
+        documentSelector: { path: metadata.name, value: app-standard }
+      - equal: { path: preemptionPolicy, value: Never }
+  - it: immutable value/preemptionPolicy are replaced, never patched in place (#281)
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: "Force=true,Replace=true" }
+  - it: rejects a class without preemptionPolicy (schema)
+    set: { priorityClasses.app-extra.value: 5 }
+    asserts:
+      - failedTemplate: { errorPattern: "missing property 'preemptionPolicy'" }

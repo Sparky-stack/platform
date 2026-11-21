@@ -1,4 +1,4 @@
-# Data services: PostgreSQL, Kafka, event-driven autoscaling
+# Data services: PostgreSQL, MySQL, Kafka, event-driven autoscaling
 
 Three operators for workloads on workload clusters, **off by default** everywhere: a cluster runs them only after it
 opts in, so local docker environments stay lean (no Application is generated for a cluster that does not opt in).
@@ -117,7 +117,8 @@ Declarative, no cluster names: the **data plane announces** what it runs, the **
   `capability-gate` (sync wave -1, before the agent Deployment) that runs `kubectl wait` until the CRD of every enabled
   `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`; `crossplane` ->
   `postgresqls.platform.koorikla.io`, the XRD of the Configuration package crossplane pulls after it is Healthy, ~20 min
-  after the agent on a fresh local bootstrap, #255), each switched on per cluster from its
+  after the agent on a fresh local bootstrap, #255; `telemetry` -> `podmonitors.monitoring.coreos.com` for ClusterTrait
+  `metrics`, on by default like the addon, #252), each switched on per cluster from its
   `addons.platform.koorikla.io/<addon>` label. Nothing reaches the cluster before the kinds of its traits and resource
   types exist. Without it,
   OpenChoreo 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on controller-runtime's
@@ -317,6 +318,33 @@ the `Cluster` and goes with the XR either way: keep backups on.
 pinned Functions / Providers under PSS `restricted`, offline render tests, the one-off `compositionRef` patch when
 upgrading from the Helm-templated API). Live checks: [#107](https://github.com/koorikla/platform/issues/107).
 
+## MySQL as a service
+
+The platform's MySQL API (`platform.koorikla.io/v1alpha1 MySQL`, package [`packages/mysql`](../packages/mysql/README.md),
+#256) with one in-cluster backend, [MOCO](https://github.com/cybozu-go/moco) (addon [`moco`](../addons/moco/README.md)).
+The cloud Compositions of the package are layout and are not installed.
+
+- **Opt in:** cluster file `addons: { crossplane: true, moco: true }`. The one label `addons.platform.koorikla.io/moco`
+  installs the operator, makes addon crossplane install the Configuration `platform-mysql` (pinned `tag@sha256` with its
+  embedded Function) and the EnvironmentConfig `platform-mysql` (facts: backend `moco`, the mysqld image catalog of addon
+  moco), makes the capability gate wait for `mysqlclusters.moco.cybozu.com` + `mysqls.platform.koorikla.io`, and
+  announces the capability that ClusterResourceType `mysql` (`requires-addons: crossplane,moco`) needs.
+- **Developer view:** a Resource of type `mysql` (parameters `version` 8.4, `database`; per environment `size`,
+  `storageGiB`, `highAvailability`). Outputs: `host`, `port`, `database` as values, `username` / `password` / `uri` as
+  `secretKeyRef`s to `<name>-app` - the same Secret name and keys (`host`, `port`, `dbname`, `username`, `password`,
+  `uri`) as PostgreSQL. The password comes from an ESO `Password` generator; an init Job creates database + user.
+- **Production:** `highAvailability: true` (3 mysqld, semi-sync GTID replication) is required (Kyverno
+  `mysql-production-ha`; Audit on docker). No backups yet: MOCO's BackupPolicy jobs cannot meet Pod Security
+  restricted (upstream cybozu-go/moco#949).
+- **Security:** tenants cannot create `MySQLCluster` / `BackupPolicy` (Kyverno `mysql-only-through-the-platform-api`).
+  MySQL pods meet Pod Security restricted (pod seccomp + `overwriteContainers` dropping capabilities on agent,
+  copy-moco-init, moco-init; slow-log off). Production cells admit exactly the mysqld catalog image(s) and the
+  moco-agent image of addon moco (`openchoreo-trusted-registries-enforce`). The controller
+  (`moco-system/sa/moco-controller-manager`, ambient) is a platform peer of the cell AuthorizationPolicy: it dials the
+  agent (gRPC 9080) and mysqld (3306).
+- **Footprint:** the operator is one pod requesting 100m / 20Mi (upstream defaults, limit 256Mi here); each MySQL XR
+  adds 1 (or 3) mysqld pods (size S: 512Mi request). Locally `dev1` runs the operator and the API, no MySQL XR.
+
 ## PostgreSQL (CloudNativePG)
 
 One instance (development); `instances: 3` gives a primary + two streaming replicas with automated failover.
@@ -489,8 +517,19 @@ spec:
 
 Production: separate `controller` (3) and `broker` (3+) pools, replication factor 3, `min.insync.replicas: 2`, TLS or
 SCRAM listeners with `KafkaUser`s. Broker metrics: `spec.kafka.metricsConfig` (Strimzi metrics reporter or JMX
-exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`. The operator generates a NetworkPolicy per listener
-(enforced by Cilium, and by k3s's embedded policy controller on flannel clusters).
+exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`.
+
+**NetworkPolicies (#210).** The operator runs with `STRIMZI_NETWORK_POLICY_GENERATION=false` (addon `strimzi`): its
+per-cluster policies open only the Kafka ports (replication 9091, controller 9090, listeners), but Istio ambient carries
+every mesh connection to the pod's HBONE port `15008/tcp`, so in a cell they drop broker <-> broker, client -> broker
+and operator -> broker traffic. Instead addon `kyverno-policies` generates NetworkPolicy `platform-strimzi` into every
+ambient cell (`openchoreo-cell-strimzi`, [networking.md](networking.md#strict-mtls-in-cell-namespaces)): pods with
+`strimzi.io/cluster` admit the cell's own pods, `openchoreo.dev/system-component` pods (Prometheus agent) and the
+Strimzi and KEDA operators on any port, plus kubelet probes. Inside the tunnel the CNI sees no Kafka port anyway; which
+mesh identity gets in is decided by `platform-cell-peers` (STRICT cells). A Kafka outside an ambient cell (a plain
+namespace such as `demo` above, or a cell with `istio.io/dataplane-mode=none`) gets no NetworkPolicy: write one, and
+include `15008/tcp` if the namespace is in the mesh. `hack/tests/test_mesh_contracts.sh` fails when the operator's
+generation is back on or a policy selecting Kafka pods would drop 15008 from the cell, the operator or KEDA.
 
 ## KEDA and OpenChoreo workloads
 
@@ -574,6 +613,10 @@ kubectl --context <dev1> -n cnpg-system get deploy cnpg                      # o
 kubectl --context <dev1> -n demo get clusters.postgresql.cnpg.io orders-db   # STATUS "Cluster in healthy state"
 kubectl --context <dev1> -n strimzi get deploy strimzi-cluster-operator
 kubectl --context <dev1> -n demo get kafka events                            # READY True
+# Kafka in an ambient cell (#210): platform-strimzi present, no operator-generated <name>-network-policy-*, broker Ready
+kubectl --context <dev1> -n <cell ns> get networkpolicy platform-strimzi,platform-mesh-hbone
+kubectl --context <dev1> -n <cell ns> get networkpolicy -l strimzi.io/cluster            # none
+kubectl --context <dev1> -n <cell ns> get kafka <name>                                   # READY True
 kubectl --context <dev1> -n keda get apiservice v1beta1.external.metrics.k8s.io
 kubectl --context <dev1> get providers.pkg.crossplane.io,functions.pkg.crossplane.io   # INSTALLED/HEALTHY True
 kubectl --context <dev1> get xrd postgresqls.platform.koorikla.io                       # ESTABLISHED True

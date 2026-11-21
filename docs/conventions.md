@@ -157,6 +157,22 @@ Adding things:
 - **Project template**: `templates/<name>/` + an entry in `templates/catalog-info.yaml`
   ([project-templates.md](project-templates.md#adding-a-template)).
 
+## Immutable fields
+Argo CD diffs server-side (`controller.diff.server.side`): each compare is a dry-run server-side apply. A git change to
+an immutable field fails that dry run, the whole Application goes `ComparisonError` and no sync starts, so a
+per-resource `Replace=true`/`Force=true` alone never runs (#281). Argo CD 3.6 has no per-resource compare option.
+Contract (`hack/tests/test_immutable_fields.sh`, over every addon render):
+
+| Kind | Rule |
+|---|---|
+| `PriorityClass`, `StorageClass` (whole spec immutable) | `argocd.argoproj.io/sync-options: Force=true,Replace=true` (delete + create on change) AND an addon whose catalog entry sets `compareOptions: [ServerSideDiff=false]`; such an addon renders nothing else (today: `priority-classes`) |
+| `Job` (`spec.template` immutable) | an Argo CD/Helm hook with `BeforeHookCreation` (recreated per sync), or a name carrying a checksum of its spec (upstream Cilium `hubble-generate-certs-<sha>`, allowlisted in the test) |
+| `PersistentVolumeClaim` | never `Replace`/`Force` (deletes the data); a storage class or access-mode change is a migration, not a sync |
+
+Other immutable fields (Deployment/StatefulSet `selector`, StatefulSet `volumeClaimTemplates`, Service `clusterIP`,
+RoleBinding `roleRef`) are set by upstream charts and change only with a chart major: read the upstream upgrade notes
+on every bump; if one changes, rename the object (a new name is a create), never hand-delete in a live cluster.
+
 ## Tooling
 - OS/arch-agnostic ([dev-environment.md](dev-environment.md)): tools only via `mise.toml` (aqua backends;
   `task tools:lock` after a bump), entrypoints in `Taskfile.yml`.

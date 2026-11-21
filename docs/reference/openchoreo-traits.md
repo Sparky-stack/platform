@@ -7,6 +7,7 @@ Optional behaviour attached to a Component (`spec.traits[]`), within the compone
 - [health-probes](#health-probes)
 - [horizontal-pod-autoscaler](#horizontal-pod-autoscaler)
 - [keda-scaler](#keda-scaler)
+- [metrics](#metrics)
 - [observability-alert-rule](#observability-alert-rule)
 - [persistent-volume-claim](#persistent-volume-claim)
 - [resilience](#resilience)
@@ -99,6 +100,25 @@ Event-driven autoscaling with KEDA (cron, cpu, memory, prometheus, kafka, ... tr
 | `enabled` | boolean |  | `true` | When disabled, no ScaledObject is created and the component type's replicas apply again. |
 | `maxReplicas` | integer |  |  | Optional per-environment override for the upper replica bound. Range 1... |
 | `minReplicas` | integer |  |  | Optional per-environment override for the lower replica bound. Range 0... |
+
+## metrics
+
+Scrapes the component's metrics endpoint into the observability plane. Source: [addons/openchoreo-platform/files/platform/cluster-traits/metrics.yaml](../../addons/openchoreo-platform/files/platform/cluster-traits/metrics.yaml).
+
+### parameters
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string |  | `/metrics` | Pattern `^/`. |
+| `port` | integer | yes |  | Container port serving Prometheus metrics (may be the HTTP endpoint's port). Range 1..65535. |
+
+### environmentConfigs
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `enabled` | boolean |  | `true` | false skips the PodMonitor in this environment. |
+| `interval` | string |  | `30s` | Pattern `^[0-9]+(s\|m)$`. |
+| `sampleLimit` | integer |  | `5000` | A scrape with more samples is rejected whole: one app's label explosion cannot exhaust the shared agent (its memory limit is tight, #83). Range 1... |
 
 ## observability-alert-rule
 

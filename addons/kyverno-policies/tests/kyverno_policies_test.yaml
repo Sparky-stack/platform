@@ -64,6 +64,22 @@ tests:
       # never 15008 from an ipBlock: that would let any mesh pod (another cell) past OpenChoreo's isolation
       - notMatchRegex: { path: "spec.generate[0].template.value", pattern: 'ipBlock[\s\S]*port: 15008' }
 
+  - it: "cell mesh (#210): Strimzi pods in ambient cells admit the cell, system components, operator and KEDA on any port (HBONE 15008)"
+    template: templates/cell-mesh.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-cell-strimzi }
+    asserts:
+      - isKind: { of: GeneratingPolicy }
+      - equal: { path: spec.evaluation, value: { synchronize: { enabled: true }, generateExisting: { enabled: true } } }
+      - contains:
+          path: spec.matchConstraints.objectSelector.matchExpressions
+          content: { key: istio.io/dataplane-mode, operator: NotIn, values: [none] }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'key: strimzi.io/cluster, operator: Exists' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: 'kubernetes.io/metadata.name: strimzi \} \}\n\s*podSelector: \{ matchLabels: \{"strimzi.io/kind":"cluster-operator"\} \}' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: '\{"app":"keda-operator"\}' }
+      # peers, not ports: a port list without 15008 is what dropped HBONE in the operator's own policies
+      - notMatchRegex: { path: "spec.generate[0].template.value", pattern: '\n\s*ports:' }
+      - matchRegex: { path: "spec.generate[0].template.value", pattern: '- ipBlock: \{ cidr: 169\.254\.7\.127/32 \}' }
+
   - it: "cell mesh (#53): STRICT PeerAuthentication in ambient cells, PERMISSIVE when opted out (platform.koorikla.io/mtls=permissive)"
     template: templates/cell-mesh.yaml
     documentSelector: { path: metadata.name, value: openchoreo-cell-mtls }
@@ -111,11 +127,11 @@ tests:
       - contains: { path: rules, content: { apiGroups: [networking.k8s.io], resources: [networkpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
       - contains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications, authorizationpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
 
-  - it: "cell mesh: mtls.strict false keeps the HBONE policy, drops STRICT and the AuthorizationPolicy (plaintext has no identity)"
+  - it: "cell mesh: mtls.strict false keeps the HBONE and Strimzi policies, drops STRICT and the AuthorizationPolicy (plaintext has no identity)"
     template: templates/cell-mesh.yaml
     set: { ambientEnrollment.mtls.strict: false }
     asserts:
-      - hasDocuments: { count: 2 }
+      - hasDocuments: { count: 3 }
       - notContains: { path: rules, content: { apiGroups: [security.istio.io], resources: [peerauthentications, authorizationpolicies], verbs: [get, list, watch, create, update, patch, delete] } }
         documentSelector: { path: kind, value: ClusterRole }
 

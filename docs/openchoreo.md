@@ -386,7 +386,7 @@ Developers set nothing: every Deployment component type (`deployment/service`, `
 | topologySpreadConstraints, nodes + zones, maxSkew 1, `matchLabelKeys: [pod-template-hash]` | ScheduleAnyway | ScheduleAnyway | ScheduleAnyway (zones: knob) |
 | PodDisruptionBudget `maxUnavailable: 1`, `unhealthyPodEvictionPolicy: AlwaysAllow` | - | when replicas >= 2 | when replicas >= 2 |
 | `preStop: sleep 5s`, `terminationGracePeriodSeconds: 30` | yes | yes | yes |
-| PriorityClass (addon openchoreo-data-plane, `preemptionPolicy: Never` — orders the scheduling queue without evicting platform or app pods) | `app-standard` (1000) | `app-standard` (1000) | `app-production` (100000) |
+| PriorityClass (addon priority-classes, `preemptionPolicy: Never` — orders the scheduling queue without evicting platform or app pods) | `app-standard` (1000) | `app-standard` (1000) | `app-production` (100000) |
 | Kyverno `openchoreo-workload-resilience-*` | Audit | Audit | **Deny** |
 
 What developers still choose:
@@ -413,6 +413,60 @@ a readinessProbe and cpu + memory requests on every container; HorizontalPodAuto
 A denial shows up as an apply failure on the RenderedRelease. The PDB itself is not an admission check (OpenChoreo
 applies it together with the Deployment, in no fixed order): it exists by construction and `task demo:check`
 (row "hello-world PDB/spread/priority in production") asserts it.
+
+## Config files and env (developer view)
+
+Nothing platform-specific to attach (#252). OpenChoreo 1.3.3 itself turns a Workload's plain `env` values into a
+ConfigMap read through `envFrom`, and each `files` entry into a ConfigMap mounted at `<mountPath>/<key>` (secret values
+and files use `secretKeyRef`, [Application secrets](#application-secrets-developer-view)):
+
+```yaml
+# deploy/openchoreo/workload.yaml (app repo)
+spec:
+  container:
+    env:
+      - { key: GREETING, value: hello }
+    files:
+      - key: config.yaml
+        mountPath: /etc/app            # -> /etc/app/config.yaml
+        value: |
+          greeting: hello
+          features: { dark-mode: true }
+```
+
+A change rolls the pods: OpenChoreo hashes every non-workload data-plane resource of a Deployment (the ConfigMaps above,
+but also PodMonitors, PDBs, ...) into the pod template annotation `openchoreo.dev/dp-resource-hash`. Without it nothing
+would pick the change up (the ConfigMap names do not depend on the content, `envFrom` is read at start, subPath mounts
+never refresh). Per environment: `workloadOverrides` on the ReleaseBinding. Guarded by
+`addons/openchoreo-platform/tests/app_config_metrics_test.yaml`.
+
+## Application metrics
+
+Opt-in ClusterTrait `metrics` (addon openchoreo-platform `files/platform/cluster-traits/metrics.yaml`, #252), allowed on
+every Deployment component type. The developer names the port that serves Prometheus metrics (often the HTTP endpoint's):
+
+```yaml
+# deploy/openchoreo/component.yaml (app repo)
+spec:
+  traits:
+    - { kind: ClusterTrait, name: metrics, instanceName: metrics, parameters: { port: 8080 } }   # path: /metrics
+```
+
+The trait declares the port on the main container as `metrics` (OpenChoreo declares no container ports and a PodMonitor
+selects only declared ones) and renders a PodMonitor in the cell, labelled `component`, `project`, `environment`. The
+data plane's Prometheus agent (addon telemetry) selects every PodMonitor and remote-writes to the observability plane's
+Prometheus. STRICT mTLS cells need nothing extra: the agent is in the ambient mesh and a `platformPeers` principal of
+the cell AuthorizationPolicy ([networking](networking.md), #209, #323, #324). Per environment (trait
+`environmentConfigs` on the ReleaseBinding): `enabled`, `interval` (30s), `sampleLimit` (5000: a scrape with more
+samples is dropped whole so one app's label explosion cannot exhaust the shared agent). A changed interval restarts the
+pods (dp-resource-hash, above).
+
+Platform side: the data-plane agent may apply PodMonitors (addon openchoreo-data-plane `clusterAgentDataServices`), and
+its capability gate waits for the PodMonitor CRD (`capabilityGate.addons.telemetry`, on unless the cluster opts out of
+telemetry). Where a fleet file sets `addons.telemetry: false` there is no scraper: the PodMonitor is skipped and the app
+deploys as without the trait. `hack/tests/test_openchoreo_types.sh` checks grant, gate and skip
+(`platform.koorikla.io/uses-addons`). Query: `sum by (component, environment) (rate(http_requests_total[5m]))` in the
+observability plane's Prometheus.
 
 ## Known issue: re-created data plane clusters
 

@@ -51,7 +51,17 @@ for d in templates/*/template.yaml; do
   t=${d#templates/}; t=${t%/template.yaml}
   [[ "$t" == _* ]] || TEMPLATES+=("$t")
 done
-assert_eq "$([[ ${#TEMPLATES[@]} -ge 6 ]] && echo yes)" yes "at least the first batch of templates exists (${#TEMPLATES[@]})"
+# service golden paths (spec.type service) share parameters and steps; the platform API template (spec.type
+# platform-api, templates/crossplane-api) has its own contract in hack/tests/test_crossplane_api_template.sh
+SERVICES=(); OTHERS=""
+for t in "${TEMPLATES[@]}"; do
+  case "$(yq -r '.spec.type' "templates/$t/template.yaml")" in
+    service) SERVICES+=("$t") ;;
+    *) OTHERS="$OTHERS $t:$(yq -r '.spec.type' "templates/$t/template.yaml")" ;;
+  esac
+done
+assert_eq "$([[ ${#SERVICES[@]} -ge 6 ]] && echo yes)" yes "at least the first batch of service templates exists (${#SERVICES[@]})"
+assert_eq "$OTHERS" " crossplane-api:platform-api" "every non-service template is the platform API template (own test)"
 selected() { [[ -z "${TEMPLATES_ONLY:-}" || " $TEMPLATES_ONLY " == *" $1 "* ]]; }
 
 # --- renderer: the subset of nunjucks it accepts (negative cases first) ------------------------------------------
@@ -87,7 +97,7 @@ norm_steps() {   # steps with the template's own name and stack replaced, the st
 }
 ref_params=$(yq -o=json -I=0 'explode(.) | .spec.parameters' "templates/$REF/template.yaml")
 ref_steps=$(norm_steps "$REF")
-for t in "${TEMPLATES[@]}"; do
+for t in "${SERVICES[@]}"; do
   f="templates/$t/template.yaml"
   q() { yq -r "explode(.) | $1" "$f"; }
   assert_eq "$(q '.apiVersion + " " + .kind')" "scaffolder.backstage.io/v1beta3 Template" "$t: scaffolder Template v1beta3"
@@ -115,7 +125,7 @@ params() {   # <newTenant>
 params true > "$TMP/params-new.json"; params false > "$TMP/params-existing.json"
 yq -o=json '.' installations/local/installation.yaml > /dev/null
 
-for t in "${TEMPLATES[@]}"; do
+for t in "${SERVICES[@]}"; do
   selected "$t" || continue
   R="$TMP/render/$t"; mkdir -p "$TMP/render"
   yq -o=json 'explode(.)' "templates/$t/template.yaml" > "$TMP/$t.json"
@@ -213,7 +223,7 @@ if [[ "${TEMPLATES_BUILD:-0}" == 1 ]]; then
   if ! { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }; then
     echo "  FAIL: TEMPLATES_BUILD=1 needs a docker daemon" >&2; FAIL=$((FAIL + 1))
   fi
-  for t in "${TEMPLATES[@]}"; do
+  for t in "${SERVICES[@]}"; do
     selected "$t" || continue
     R="$TMP/render/$t"; img="golden-path-$t:test"; c="golden-path-$t-smoke"
     [[ -d "$R" ]] || continue

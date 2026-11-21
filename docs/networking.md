@@ -182,7 +182,7 @@ and waypoints and aren't needed for L4 mTLS. The mesh clients carry no `PeerAuth
 plaintext from outside the mesh (the cloud LB / klipper into the gateway, kube-apiserver into operator webhooks).
 `hack/tests/test_mesh_contracts.sh` fails if one of them leaves the mesh while STRICT is on.
 
-`addons/kyverno-policies/templates/cell-mesh.yaml`, three `GeneratingPolicy`s on the same cell selector as the
+`addons/kyverno-policies/templates/cell-mesh.yaml`, four `GeneratingPolicy`s on the same cell selector as the
 enrollment (synchronized: an edited or deleted object is restored, generated for existing cells too):
 - `openchoreo-cell-hbone`: NetworkPolicy `platform-mesh-hbone` admitting `15008/tcp` to pods with an
   `openchoreo.dev/component` label, from the peers OpenChoreo's per-component NetworkPolicy admits: pods of the same
@@ -195,6 +195,11 @@ enrollment (synchronized: an edited or deleted object is restored, generated for
   as `world`, not `host`, so OpenChoreo's port rule drops it. Without the rule every component with a startup probe is
   killed into CrashLoopBackOff (`Startup probe failed ... context deadline exceeded`; seen on dev1 after the resilience
   probes of #251). The source can't be used by anything else: it is host-local and Cilium refuses spoofed pod sources.
+- `openchoreo-cell-strimzi` ([#210](https://github.com/koorikla/platform/issues/210)): NetworkPolicy `platform-strimzi`
+  for Kafka pods (`strimzi.io/cluster`): the cell's pods, `openchoreo.dev/system-component` pods and
+  `ambientEnrollment.strimzi.peers` (Strimzi and KEDA operators) on any port, so `15008/tcp` too, plus the probe source.
+  It replaces the operator's per-listener policies (addon `strimzi`: `STRIMZI_NETWORK_POLICY_GENERATION=false`), which
+  open only Kafka ports and drop HBONE ([data-services.md](data-services.md#kafka-strimzi)).
 - `openchoreo-cell-mtls`: the `PeerAuthentication` (STRICT, or PERMISSIVE for an opted-out cell), off with
   `ambientEnrollment.mtls.strict: false`.
 - `openchoreo-cell-authz` ([#324](https://github.com/koorikla/platform/issues/324)): `AuthorizationPolicy`

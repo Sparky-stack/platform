@@ -7,4 +7,5 @@ data:
   backend: moco
   cluster: sample
   environment: development
-  mysqlImage: ghcr.io/cybozu-go/moco/mysql:8.4.10
+  mysqlImages:   # addon moco mysqlImageCatalog
+    "8.4": ghcr.io/cybozu-go/moco/mysql:8.4.10.1@sha256:bdb88ae2023dcba0218bf900c7f39117c7a6e4101de6b5c8f62774c1d897b68a

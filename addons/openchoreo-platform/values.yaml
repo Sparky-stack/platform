@@ -44,9 +44,16 @@ dataServices:
 
 # Resilience defaults (#251, docs/openchoreo.md "Resilience defaults"): ClusterTrait resilience embedded in the
 # Deployment component types (service, web-application, worker). Needs the PriorityClasses app-production/app-standard
-# on the data planes (addon openchoreo-data-plane priorityClasses).
+# on the data planes (addon priority-classes).
 resilience:
   # -- Embed ClusterTrait `resilience` (topology spread, PodDisruptionBudget, preStop + grace period, PriorityClass) in the Deployment component types.
+  enabled: true
+
+# Application metrics (#252, docs/openchoreo.md "Application metrics"): opt-in ClusterTrait metrics (PodMonitor for the
+# component's metrics port, scraped by the data plane's Prometheus agent of addon telemetry), allowed on the Deployment
+# component types.
+appMetrics:
+  # -- Render ClusterTrait `metrics` and add it to the `allowedTraits` of the Deployment component types.
   enabled: true
 
 # installation.yaml secrets.tenantStores.enabled (#96): component types' ExternalSecrets reference the cell namespace's

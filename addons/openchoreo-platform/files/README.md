@@ -42,3 +42,8 @@ the Deployment-based component types (`spec.traits`, instance `resilience`) and 
 `environmentConfigs`, so developers never attach it. It also annotates their `deployment` resource
 `secret.reloader.stakater.com/auto: "true"` (#268): addon reloader rolls the pods when a Secret they reference rotates
 (docs/runbooks/certificates-and-secrets.md section 7).
+
+Not upstream either: `platform/cluster-traits/metrics.yaml` (#252, docs/openchoreo.md "Application metrics"), rendered
+by `templates/platform-types.yaml` (`appMetrics.enabled`). Opt-in: `templates/upstream-defaults.yaml` adds it to the
+`allowedTraits` of the Deployment-based component types. Its PodMonitor comes from default-on addon telemetry
+(`platform.koorikla.io/uses-addons`): skipped where a data plane opts out, waited for by the agent's capability gate.

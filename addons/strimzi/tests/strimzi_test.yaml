@@ -55,6 +55,13 @@ tests:
           path: spec.template.spec.containers[0].env
           content: { name: STRIMZI_POD_SECURITY_PROVIDER_CLASS, value: restricted }
 
+  - it: generates no NetworkPolicies (Istio ambient HBONE 15008, #210; kyverno-policies ships platform-strimzi)
+    template: charts/strimzi-kafka-operator/templates/060-Deployment-strimzi-cluster-operator.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: STRIMZI_NETWORK_POLICY_GENERATION, value: "false" }
+
   - it: watches every namespace (OpenChoreo cell namespaces are created at runtime)
     template: charts/strimzi-kafka-operator/templates/060-Deployment-strimzi-cluster-operator.yaml
     asserts:
