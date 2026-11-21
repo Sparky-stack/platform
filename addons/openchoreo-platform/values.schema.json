@@ -140,6 +140,16 @@
         }
       }
     },
+    "appMetrics": {
+      "type": "object",
+      "description": "ClusterTrait metrics (opt-in app metrics scraping).",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render it and allow it on the Deployment component types."
+        }
+      }
+    },
     "secrets": {
       "type": "object",
       "description": "Optional secret integrations.",

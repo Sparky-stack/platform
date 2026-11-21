@@ -7,6 +7,7 @@ tests:
     template: templates/platform-types.yaml
     set:
       resilience.enabled: false   # tests/resilience_test.yaml
+      appMetrics.enabled: false   # tests/app_config_metrics_test.yaml
     asserts:
       - hasDocuments: { count: 2 }
       - isNull: { path: metadata.namespace }
@@ -19,6 +20,7 @@ tests:
     set:
       dataServices.enabled: false
       resilience.enabled: false
+      appMetrics.enabled: false
     asserts:
       - hasDocuments: { count: 0 }
 
