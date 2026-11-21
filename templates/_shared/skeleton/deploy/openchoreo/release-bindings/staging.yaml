@@ -1,7 +1,4 @@
-# ReleaseBinding for `staging`.
-#
-# PROMOTION = a PR that sets spec.releaseName to the ComponentRelease currently running in development. Until it is
-# set, this binding stays pending (ReleaseSynced=False, ComponentReleaseNotFound).
+# staging: promote = a PR setting releaseName to the ComponentRelease running in development (README).
 apiVersion: openchoreo.dev/v1alpha1
 kind: ReleaseBinding
 metadata:

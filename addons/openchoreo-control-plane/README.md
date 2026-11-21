@@ -199,10 +199,8 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 | openchoreo-control-plane.security.oidc.jwksUrl | string | `"http://thunder.openchoreo.localhost:8080/oauth2/jwks"` |  |
 | openchoreo-control-plane.security.oidc.tokenUrl | string | `"http://thunder.openchoreo.localhost:8080/oauth2/token"` |  |
 | openchoreo.controlPlane.clusterGatewayURL | string | `"wss://cluster-gateway.openchoreo.localhost:8443/ws"` |  |
-| openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
+| openchoreo.controlPlane.host | string | `"openchoreo.localhost"` | Console/API hostnames (`host`) and agent WebSocket endpoint (`clusterGatewayURL`). |
 | openchoreo.observability.enabled | bool | `true` |  |
-| openchoreo.observability.httpPort | int | `11080` |  |
-| openchoreo.orgNamespace | string | `"default"` | Org namespace (`default`), console/API hostnames (`controlPlane.host`), and agent WebSocket endpoint (`controlPlane.clusterGatewayURL`). |
 | scaffolder.githubApp.enabled | bool | `false` |  |
 | scaffolder.githubApp.remoteKey | string | `"platform-github-app"` |  |
 | scaffolder.githubApp.secretName | string | `"backstage-github-app"` |  |

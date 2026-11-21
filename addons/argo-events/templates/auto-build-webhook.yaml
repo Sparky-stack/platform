@@ -1,7 +1,6 @@
 {{- /*
 Auto-build webhook on mgmt (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): GitHub App push ->
-Workflow auto-build in workflows-<org ns>. Only with installation.yaml openchoreo.workflowPlane.autoBuild `webhook`,
-the workflow plane and the platform GitHub App. Objects:
+Workflow auto-build in workflows-<org ns> (condition: _helpers.tpl ae.autoBuildWebhook; checks: validate.yaml). Objects:
   ExternalSecret github-webhook   HMAC secret of the GitHub App webhook (store platform)
   EventSource github              POST <endpoint>: X-Hub-Signature-256 validated (unsigned/forged payloads -> 400);
                                   never calls GitHub (no token: hooks are configured on the App, not managed here)
@@ -13,17 +12,12 @@ The Workflow reconciles the repository's opted-in Components like a poll (addon 
 replayed or redelivered push can at most cause one extra reconcile, never a build of a commit that is not the branch
 head, and never a second build of the same commit.
 */ -}}
-{{- $trigger := toString (dig "workflowPlane" "autoBuild" "none" (.Values.openchoreo | default dict)) }}
-{{- /* The webhook is configured on the platform GitHub App and its Workflows need the App's tokens (addon
-openchoreo-platform renders WorkflowTemplate auto-build only with it): off without secrets.githubGateApp.enabled.
-Values are checked in validate.yaml (same condition). */}}
-{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
-{{- if and (eq $trigger "webhook") (eq (include "ae.workflowPlane" .) "true") $gate }}
+{{- if eq (include "ae.autoBuildWebhook" .) "true" }}
 {{- $w := .Values.autoBuildWebhook }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
 {{- $sa := "auto-build-sensor" }}
 {{- $tpl := $w.workflowTemplate }}
-{{- $owner := dig "githubOrg" "" (.Values.installation | default dict) | trimSuffix "/" | splitList "/" | last }}
+{{- $owner := .Values.installation.githubOrg | trimSuffix "/" | splitList "/" | last }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
