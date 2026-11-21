@@ -89,6 +89,7 @@ The literals in the addon values are checked against `openchoreo.controlPlane.ho
 | Pod CPU/memory | Prometheus agent: kubelet/cAdvisor + kube-state-metrics with `openchoreo.dev/*` pod labels | remote write -> Prometheus | Metrics, RuntimeHealthCard |
 | Traces | apps (OTLP SDK) / OBI -> OTel Collector (k8s_attributes: all pod labels, cluster name) | OTLP/HTTP -> receiver -> OpenSearch `otel-traces-*` | Traces |
 | OTLP metrics | apps / OBI / falcosidekick -> OTel Collector | remote write -> Prometheus | (PromQL) |
+| App metrics (opt-in) | the app's own `/metrics` -> Prometheus agent (PodMonitor of ClusterTrait `metrics`, [openchoreo.md](openchoreo.md#application-metrics), #252) | remote write -> Prometheus | (PromQL) |
 | Gateway HTTP response codes | kgateway Envoy `gateway-default` in `openchoreo-data-plane` (`envoy_cluster_upstream_rq`) -> Prometheus agent (PodMonitor `kgateway-http`) | remote write -> Prometheus | promotion gate 5xx rate (PromQL) |
 | HTTP request metrics | Cilium Hubble L7 (`hubble_http_*`, Cilium data planes only; none today) -> Prometheus agent (ServiceMonitor `hubble-http`) | remote write -> Prometheus | Metrics (HTTP) |
 | Falco alerts | Falco JSON on stdout -> Fluent Bit; falcosidekick -> collector (CloudEvents) | OpenSearch `container-logs-*` (ns falco); Datadog overlay | logs |

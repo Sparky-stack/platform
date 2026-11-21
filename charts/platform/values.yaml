@@ -114,6 +114,7 @@ addons:
       capabilityGate.addons.keda.enabled:       { label: addons.platform.koorikla.io/keda,       default: "false" }
       capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" }
       capabilityGate.addons.moco.enabled:       { label: addons.platform.koorikla.io/moco,       default: "false" }
+      capabilityGate.addons.telemetry.enabled:  { label: addons.platform.koorikla.io/telemetry,  default: "true" }    # default-on addon
   # PriorityClasses only: the one client-side-diff addon. value/preemptionPolicy are immutable, server-side diff's dry
   # run would reject a change and block the Application; client-side, Force=true,Replace=true recreates them (#281).
   priority-classes:         { namespace: kube-system,              roles: [workload],       default: true, compareOptions: [ServerSideDiff=false] }

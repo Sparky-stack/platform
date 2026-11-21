@@ -115,6 +115,7 @@ tests:
     template: templates/capability-gate.yaml
     set:
       capabilityGate.addons.keda.enabled: "true"
+      capabilityGate.addons.telemetry.enabled: "false"
     documentSelector: { path: kind, value: Job }
     asserts:
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/hook"]', value: Sync }
@@ -132,6 +133,7 @@ tests:
     set:
       capabilityGate.addons.keda.enabled: "true"
       capabilityGate.addons.crossplane.enabled: "true"
+      capabilityGate.addons.telemetry.enabled: "false"
     documentSelector: { path: kind, value: Job }
     asserts:
       - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-crossplane-crds }
@@ -153,11 +155,35 @@ tests:
       - equal:
           path: spec.template.spec.initContainers[0].command
           value: [kubectl, wait, --for=create, --timeout=30m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io]
+      # both features (#256 + #252): moco does not replace the default-on telemetry wait
+      - equal: { path: 'spec.template.spec.initContainers[1].name', value: wait-for-telemetry-crds }
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io, crd/podmonitors.monitoring.coreos.com]
 
-  - it: "capability gate: nothing rendered on a cluster without keda (the agent starts at once)"
+  - it: "capability gate (#252): by default the agent waits for addon telemetry's PodMonitor CRD (ClusterTrait metrics)"
     template: templates/capability-gate.yaml
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-telemetry-crds }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/podmonitors.monitoring.coreos.com]
+
+  - it: "capability gate: nothing rendered on a cluster without keda, crossplane, moco and telemetry (the agent starts at once)"
+    template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.telemetry.enabled: "false"
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: "ClusterTrait metrics (#252): the agent may apply PodMonitors"
+    template: templates/cluster-agent-data-services.yaml
+    documentSelector: { path: kind, value: ClusterRole }
+    asserts:
+      - contains:
+          path: rules
+          content: { apiGroups: [monitoring.coreos.com], resources: [podmonitors], verbs: [get, list, watch, create, update, patch, delete] }
   - it: fails without the cluster name (schema)
     template: templates/validate.yaml
     set: { cluster.name: null }

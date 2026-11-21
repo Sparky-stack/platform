@@ -34,7 +34,8 @@ byoDelivery:
   store: delivery             # ClusterSecretStore of addon secret-stores (delivery.*)
 
 # Agent RBAC for the kinds the platform's data-service OpenChoreo types render (templates/cluster-agent-data-services.yaml,
-# #70): ClusterTrait keda-scaler -> KEDA ScaledObject, ClusterResourceType postgresql -> PostgreSQL XR (addon crossplane).
+# #70): ClusterTrait keda-scaler -> KEDA ScaledObject, ClusterResourceType postgresql -> PostgreSQL XR (addon crossplane),
+# ClusterTrait metrics -> PodMonitor (addon telemetry, #252).
 clusterAgentDataServices:
   # -- Extra agent RBAC (`clusterAgentDataServices.{enabled,serviceAccount,rules}`) for the kinds the platform's data-service types render (KEDA `ScaledObject`, PostgreSQL XR; [data services](../../docs/data-services.md#consuming-them-from-openchoreo)).
   enabled: true
@@ -42,6 +43,7 @@ clusterAgentDataServices:
   rules:
     - { apiGroup: keda.sh, resources: [scaledobjects] }
     - { apiGroup: platform.koorikla.io, resources: [postgresqls, mysqls] }   # mysqls: ClusterResourceType mysql (#256)
+    - { apiGroup: monitoring.coreos.com, resources: [podmonitors] }   # ClusterTrait metrics (#252, addon telemetry)
 
 # Capability gate (templates/capability-gate.yaml, #246): the cluster agent is the data plane's only door to OpenChoreo,
 # so it starts only once the opt-in addons whose kinds platform ClusterTraits render are installed. Without it a first
@@ -69,6 +71,12 @@ capabilityGate:
       # crossplane installs on the same label (XRD from the platform-mysql Configuration package, #256).
       enabled: "false"
       crds: [mysqlclusters.moco.cybozu.com, mysqls.platform.koorikla.io]   # ClusterResourceType mysql
+    telemetry:
+      # Default-on addon (label addons.platform.koorikla.io/telemetry is "false" only where a fleet file opts out). The
+      # PodMonitor CRD comes from its kube-prometheus-stack, in a separate Argo CD Application that may sync after this
+      # one; ClusterTrait metrics (#252) renders PodMonitors wherever telemetry runs.
+      enabled: "true"
+      crds: [podmonitors.monitoring.coreos.com]   # ClusterTrait metrics (platform.koorikla.io/uses-addons)
 
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy

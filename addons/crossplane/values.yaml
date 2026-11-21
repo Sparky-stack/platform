@@ -190,7 +190,7 @@ postgresql:
 # gate of openchoreo-data-plane waits for both. Backend moco only: the cloud Compositions of packages/mysql are layout
 # (never applied); a cloud backend here is a follow-up with its providers, MRAP entries and facts.
 mysql:
-  # -- `"true"` installs the MySQL API (Configuration platform-mysql + EnvironmentConfig + embedded Function); a string because the ApplicationSet passes cluster labels with --set-string.
+  # -- `"true"` installs the MySQL API (Configuration platform-mysql + EnvironmentConfig + embedded Function); a string because the ApplicationSet passes cluster labels as strings (helm set-string).
   enabled: "false"
   backend: moco
   # mysqlImages fact: addons/moco values.yaml mysqlImageCatalog (catalog valuesFromAddons: [moco]), not restated here.

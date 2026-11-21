@@ -53,7 +53,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | monitoring.podMonitor | bool | `true` |  |
 | mysql.backend | string | `"moco"` |  |
 | mysql.configuration | string | `"ghcr.io/koorikla/platform/mysql:a239626@sha256:0082fd0f27ad3ad9ff0b8e5aa3d036d9ccf08cf3023bb93ae3133e8ddf50cea6"` |  |
-| mysql.enabled | string | `"false"` |  |
+| mysql.enabled | string | `"false"` | `"true"` installs the MySQL API (Configuration platform-mysql + EnvironmentConfig + embedded Function); a string because the ApplicationSet passes cluster labels as strings (helm set-string). |
 | mysql.function.koorikla-platform-mysqlcompose-mysql | string | `"ghcr.io/koorikla/platform/mysql_compose-mysql:a239626@sha256:09cee6e26d7b275f3689077c9009f38b8fe8c752eb51d9f225c4be1827c0c0d2"` |  |
 | namespace.podSecurity | string | `"restricted"` |  |
 | packages.configuration | string | `"ghcr.io/koorikla/platform/postgresql:v0.2.0@sha256:478419ad87ba4e90756b6826638c6977bfda3d23ecdee48b5fa0bca539ba5be1"` | The PostgreSQL API package (packages/postgresql), release tag vX.Y.Z (release-please postgresql-vX.Y.Z) @digest (a Configuration has one manifest, no index); never the moving `main` tag. The promotion point: per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it. |

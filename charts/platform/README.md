@@ -146,6 +146,8 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.keda.enabled".label | string | `"addons.platform.koorikla.io/keda"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.moco.enabled".default | string | `"false"` |  |
 | addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.moco.enabled".label | string | `"addons.platform.koorikla.io/moco"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.telemetry.enabled".default | string | `"true"` |  |
+| addons.openchoreo-data-plane.clusterLabelParameters."capabilityGate.addons.telemetry.enabled".label | string | `"addons.platform.koorikla.io/telemetry"` |  |
 | addons.openchoreo-data-plane.clusterNameParameters[0] | string | `"openchoreo-data-plane.clusterAgent.planeID"` |  |
 | addons.openchoreo-data-plane.default | bool | `true` |  |
 | addons.openchoreo-data-plane.installationParameters."openchoreo-data-plane.clusterAgent.serverUrl" | string | `"{{ .Values.openchoreo.controlPlane.clusterGatewayURL }}"` |  |

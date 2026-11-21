@@ -35,7 +35,7 @@ A component that runs to completion on a schedule. Source: [addons/openchoreo-pl
 
 ## service
 
-A long-running request-serving component with one or more endpoints. Source: [addons/openchoreo-platform/files/cluster-component-types/service.yaml](../../addons/openchoreo-platform/files/cluster-component-types/service.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
+A long-running request-serving component with one or more endpoints. Source: [addons/openchoreo-platform/files/cluster-component-types/service.yaml](../../addons/openchoreo-platform/files/cluster-component-types/service.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, metrics, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
 
 ### environmentConfigs
 
@@ -52,7 +52,7 @@ A long-running request-serving component with one or more endpoints. Source: [ad
 
 ## web-application
 
-A long-running component that serves web requests and exposes at least one HTTP endpoint. Source: [addons/openchoreo-platform/files/cluster-component-types/webapp.yaml](../../addons/openchoreo-platform/files/cluster-component-types/webapp.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
+A long-running component that serves web requests and exposes at least one HTTP endpoint. Source: [addons/openchoreo-platform/files/cluster-component-types/webapp.yaml](../../addons/openchoreo-platform/files/cluster-component-types/webapp.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, metrics, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
 
 ### environmentConfigs
 
@@ -69,7 +69,7 @@ A long-running component that serves web requests and exposes at least one HTTP 
 
 ## worker
 
-A long-running background or event-driven component with no endpoints. Source: [addons/openchoreo-platform/files/cluster-component-types/worker.yaml](../../addons/openchoreo-platform/files/cluster-component-types/worker.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
+A long-running background or event-driven component with no endpoints. Source: [addons/openchoreo-platform/files/cluster-component-types/worker.yaml](../../addons/openchoreo-platform/files/cluster-component-types/worker.yaml). Workload type: deployment. Allowed traits: health-probes, horizontal-pod-autoscaler, keda-scaler, metrics, observability-alert-rule, persistent-volume-claim. Allowed workflows: dockerfile, elixir, go, nextjs, ruby.
 
 ### environmentConfigs
 
