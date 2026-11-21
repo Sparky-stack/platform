@@ -14,7 +14,7 @@ metadata:
     openchoreo.dev/display-name: {{ $name | quote }}
     openchoreo.dev/description: {{ printf "%s cluster %s (%s)" (.Values.provider | default "docker") $name (.Values.region | default "local") | quote }}
     {{- include "openchoreo.crAnnotations" . | nindent 4 }}
-    {{- range $addon, $on := (.Values.addons | default dict) }}
+    {{- range $addon, $on := .Values.addons }}
     addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
     {{- end }}
 spec:
@@ -27,7 +27,7 @@ spec:
         key: ca.crt
   secretStoreRef:
     name: default
-  {{- if dig "observability" "enabled" false (.Values.openchoreo | default dict) }}
+  {{- if dig "observability" "enabled" false .Values.openchoreo }}
   observabilityPlaneRef:
     kind: ClusterObservabilityPlane
     name: {{ dig "observability" "planeName" "default" .Values.openchoreo }}
