@@ -137,27 +137,7 @@ subjects:
     name: {{ $name }}
     namespace: {{ $ns }}
 ---
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: {{ $name }}-github-app
-  namespace: {{ $ns }}
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: {{ $a.secretStore }}
-  target:
-    name: {{ $name }}-github-app
-    creationPolicy: Owner
-    deletionPolicy: Delete
-  data:
-    - secretKey: app-id
-      remoteRef: { key: {{ $a.github.key }}, property: githubAppID }
-    - secretKey: installation-id
-      remoteRef: { key: {{ $a.github.key }}, property: githubAppInstallationID }
-    - secretKey: private-key
-      remoteRef: { key: {{ $a.github.key }}, property: githubAppPrivateKey }
+{{ include "platform.githubAppSecret" (dict "name" (printf "%s-github-app" $name) "namespace" $ns "store" $a.secretStore "key" $a.github.key) }}
 ---
 {{ include "autoBuild.githubToken" (dict "name" $name "token" (printf "%s-github-token" $name) "root" $
      "permissions" $a.github.permissions) }}
