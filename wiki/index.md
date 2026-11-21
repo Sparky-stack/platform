@@ -1,6 +1,9 @@
 # Wiki Index — koorikla/platform
 
-> Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
+> [!WARNING]
+> **LLM wiki: AI-agent working memory, not human documentation.** It may be stale or wrong. Human docs live in [docs/](../docs/) and win on any conflict. See [README.md](README.md).
+
+> Synthesis knowledge base for AI agents. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
 > Last updated: 2026-11-21 | Total pages: 27
 

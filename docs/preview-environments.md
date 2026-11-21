@@ -81,9 +81,10 @@ component. The installation switch is `installation.yaml` `previews`:
   on the data plane (via its cluster agent). The ComponentRelease and the preview's ResourceReleaseBindings go with the
   Environment (owner reference); `retainPolicy: Delete` removes their databases. The bindings' owner reference blocks
   the Environment's (foreground) deletion until they are gone, because OpenChoreo cleans their data-plane objects
-  through the Environment; a binding stuck `Finalizing` with `failed to get environment` on its RenderedRelease is the
-  old leak ([wiki](../wiki/gotchas/preview-teardown-leaks.md)). An Environment stuck terminating means its data plane
-  is unreachable.
+  through the Environment. A binding stuck `Finalizing` with `failed to get environment` on its RenderedRelease means
+  the Environment went first (the leak fixed by that owner reference). An Environment stuck terminating means its data
+  plane is unreachable: fix the data plane, never remove finalizers by hand (that leaves the database or the tenant
+  secret descriptor behind).
 - **New push**: the Application's commit changes, the binding points at the new release, the pass builds the new head.
 - **TTL**: Kyverno stamps `platform.koorikla.io/expires-at` (unix seconds, creation + `ttl`) on the Environment at
   creation (MutatingPolicy `platform-preview-expiry`). When it passes, the auto-build pass labels the PR
