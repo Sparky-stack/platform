@@ -32,6 +32,16 @@ the trait reads the component type's replicas to decide on a PodDisruptionBudget
 {{- range $k, $v := $knobs }}{{ $_ := set $bind $k (printf "${environmentConfigs.resilience.%s}" $k) }}{{ end }}
 {{- $_ := set $obj.spec "traits" (append (default list $obj.spec.traits) (dict "kind" "ClusterTrait" "name" "resilience" "instanceName" "resilience" "environmentConfigs" $bind)) }}
 {{- end }}
+{{- /* Secret rotation (#268): every Deployment component type opts in to Stakater Reloader (addon reloader), which rolls
+the Deployment when a Secret it references changes - the ExternalSecret-synced env/file Secrets after an OpenBao
+rotation (refreshInterval 15s) or a resource's credentials. Secrets the pods don't reference never roll them. */ -}}
+{{- if $deployment }}
+{{- range $r := $obj.spec.resources }}
+{{- if eq (toString $r.id) "deployment" }}
+{{- $_ := set $r.template.metadata "annotations" (merge (default dict $r.template.metadata.annotations) (dict "secret.reloader.stakater.com/auto" "true")) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- /* Per-tenant secret stores (installation.yaml secrets.tenantStores.enabled, #96): the ExternalSecrets component
 types render for SecretReferences use the cell namespace's own SecretStore instead of the data plane's
 ClusterSecretStore (which then refuses tenant namespaces; addon secret-stores). Developers never name a store. */ -}}
