@@ -288,10 +288,10 @@ if [[ "$(yq '.ambientEnrollment.enabled' "$ROOT/addons/kyverno-policies/values.y
   { yq -o=json -I=0 'select(.kind == "NetworkPolicy")' "$TMP/sz.yaml" "$TMP/sz-kp.yaml"
     yq 'select(.kind == "GeneratingPolicy") | .spec.generate[].template.value' "$TMP/sz-kp.yaml" |
       yq -o=json -I=0 'select(.kind == "NetworkPolicy")'; } > "$TMP/sz-np.json"
-  peers=$(jq -c -n --slurpfile op <(yq -o=json "$op | {\"ns\": .metadata.namespace, \"labels\": .spec.template.metadata.labels}" "$TMP/sz.yaml") \
-    --slurpfile kd <(yq -o=json 'select(.kind == "Deployment" and .metadata.name == "keda-operator") | {"ns": .metadata.namespace, "labels": .spec.template.metadata.labels}' "$TMP/sz-keda.yaml") \
-    '[{"name": "cell", "ns": "", "labels": {"app": "orders"}}, ($op[0] + {"name": "strimzi-operator"}), ($kd[0] + {"name": "keda-operator"})]')
-  got=$(python3 - "$TMP/sz-np.json" "$peers" <<'PY'
+  # peers: a cell pod, and the operator pods as the addons render them (args, not process substitution: Windows jq)
+  opp=$(yq -o=json -I=0 "$op | {\"ns\": .metadata.namespace, \"labels\": .spec.template.metadata.labels}" "$TMP/sz.yaml")
+  kdp=$(yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.name == "keda-operator") | {"ns": .metadata.namespace, "labels": .spec.template.metadata.labels}' "$TMP/sz-keda.yaml")
+  got=$(python3 - "$TMP/sz-np.json" "$opp" "$kdp" <<'PY'
 import json, sys
 def sel(s, labels):  # LabelSelector semantics (In/NotIn/Exists/DoesNotExist)
     if any(labels.get(k) != v for k, v in (s.get("matchLabels") or {}).items()): return False
@@ -301,7 +301,9 @@ def sel(s, labels):  # LabelSelector semantics (In/NotIn/Exists/DoesNotExist)
                 "Exists": k in labels, "DoesNotExist": k not in labels}[op]: return False
     return True
 kafka = {"strimzi.io/cluster": "events", "strimzi.io/kind": "Kafka", "strimzi.io/name": "events-kafka"}
-peers, out = json.loads(sys.argv[2]), []
+peers = [{"name": "cell", "ns": "", "labels": {"app": "orders"}},
+         dict(json.loads(sys.argv[2]), name="strimzi-operator"), dict(json.loads(sys.argv[3]), name="keda-operator")]
+out = []
 for line in open(sys.argv[1]):
     np = json.loads(line); spec = np["spec"]
     if "Ingress" not in spec.get("policyTypes", ["Ingress"]) or not sel(spec["podSelector"], kafka): continue
@@ -314,6 +316,7 @@ for line in open(sys.argv[1]):
 print(" ".join(out))
 PY
 )
+  got=$(tr -d '\r' <<<"$got")   # Windows python
   assert_match "$got" '^[a-z]' "strimzi: at least one platform NetworkPolicy selects Kafka pods in cells"
   assert_eq "$(tr ' ' '\n' <<<"$got" | grep -v ':ok$' || true)" "" \
     "strimzi: every NetworkPolicy selecting Kafka pods admits HBONE 15008 from the cell, the operator and KEDA ($got)"
