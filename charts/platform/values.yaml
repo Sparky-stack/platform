@@ -76,6 +76,8 @@ secrets:
 # Entry shape: values.schema.json (unknown keys, bad roles/parts/formats fail the render).
 #   compareOptions [IncludeMutationWebhook=true]: every addon rendering Argo Workflows objects (atomic, preserve-unknown
 #   CRD spec: server-side diff would report Synced while the live spec stays old, #184). test_argocd_compare_options.sh.
+#   compareOptions [ServerSideDiff=false]: exactly the addons rendering PriorityClass/StorageClass (immutable spec, #281,
+#   docs/conventions.md "Immutable fields"). test_immutable_fields.sh.
 addons:
   # -- Addon catalog entry (`namespace`, `roles`, `providers`, `default`, parameter mappings, `installationValueFiles`).
   argo-cd:                  { namespace: argocd,                   roles: [mgmt],           default: true, releaseName: argocd }   # = bootstrap helm release (immutable selectors carry the instance label)
@@ -111,6 +113,9 @@ addons:
     clusterLabelParameters:
       capabilityGate.addons.keda.enabled:       { label: addons.platform.koorikla.io/keda,       default: "false" }
       capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" }
+  # PriorityClasses only: the one client-side-diff addon. value/preemptionPolicy are immutable, server-side diff's dry
+  # run would reject a change and block the Application; client-side, Force=true,Replace=true recreates them (#281).
+  priority-classes:         { namespace: kube-system,              roles: [workload],       default: true, compareOptions: [ServerSideDiff=false] }
   reloader:                 { namespace: reloader,                 roles: [mgmt, workload], default: true }   # workload: cluster-agent on cert/CA renewal; mgmt: Backstage on config change
   aws-ccm:                  { namespace: kube-system,              roles: [workload],       default: true, providers: [aws] }
   hcloud-ccm:               { namespace: kube-system,              roles: [workload],       default: true, providers: [hetzner] }

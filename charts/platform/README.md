@@ -152,6 +152,10 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.openchoreo-workflow-plane.default | bool | `true` |  |
 | addons.openchoreo-workflow-plane.namespace | string | `"openchoreo-workflow-plane"` |  |
 | addons.openchoreo-workflow-plane.roles[0] | string | `"mgmt"` |  |
+| addons.priority-classes.compareOptions[0] | string | `"ServerSideDiff=false"` |  |
+| addons.priority-classes.default | bool | `true` |  |
+| addons.priority-classes.namespace | string | `"kube-system"` |  |
+| addons.priority-classes.roles[0] | string | `"workload"` |  |
 | addons.reloader.default | bool | `true` |  |
 | addons.reloader.namespace | string | `"reloader"` |  |
 | addons.reloader.roles[0] | string | `"mgmt"` |  |

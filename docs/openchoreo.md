@@ -385,7 +385,7 @@ Developers set nothing: every Deployment component type (`deployment/service`, `
 | topologySpreadConstraints, nodes + zones, maxSkew 1, `matchLabelKeys: [pod-template-hash]` | ScheduleAnyway | ScheduleAnyway | ScheduleAnyway (zones: knob) |
 | PodDisruptionBudget `maxUnavailable: 1`, `unhealthyPodEvictionPolicy: AlwaysAllow` | - | when replicas >= 2 | when replicas >= 2 |
 | `preStop: sleep 5s`, `terminationGracePeriodSeconds: 30` | yes | yes | yes |
-| PriorityClass (addon openchoreo-data-plane, `preemptionPolicy: Never` — orders the scheduling queue without evicting platform or app pods) | `app-standard` (1000) | `app-standard` (1000) | `app-production` (100000) |
+| PriorityClass (addon priority-classes, `preemptionPolicy: Never` — orders the scheduling queue without evicting platform or app pods) | `app-standard` (1000) | `app-standard` (1000) | `app-production` (100000) |
 | Kyverno `openchoreo-workload-resilience-*` | Audit | Audit | **Deny** |
 
 What developers still choose:

@@ -65,18 +65,6 @@ capabilityGate:
       enabled: "false"
       crds: [postgresqls.platform.koorikla.io]   # ClusterResourceType postgresql
 
-# PriorityClasses ClusterTrait resilience assigns (templates/priority-classes.yaml, #251). Names are referenced by the
-# trait (addon openchoreo-platform files/platform/cluster-traits/resilience.yaml): rename both together.
-priorityClasses:
-  app-production:
-    value: 100000
-    preemptionPolicy: Never   # app priority orders the scheduling queue only and never evicts running pods
-    description: OpenChoreo components in the production environment (ClusterTrait resilience).
-  app-standard:
-    value: 1000
-    preemptionPolicy: Never   # app priority orders the scheduling queue only and never evicts running pods
-    description: OpenChoreo components outside production (ClusterTrait resilience).
-
 openchoreo-data-plane:
   # platform: Issuer + Certificate "webhook-server-cert" for a webhook this chart does not deploy
   security:
