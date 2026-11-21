@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1055" viewBox="0 0 960 1055" role="img" aria-label="Delivery lanes · three lanes, one pattern"><title>Delivery lanes · three lanes, one pattern</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 14.60s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}18.1%{opacity:1}23.1%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1055" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="1039" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<path d="M 210.0 224.0 L 279.0 224.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 445.0 224.0 L 514.0 224.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 680.0 224.0 L 749.0 224.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 210.0 380.0 L 279.0 380.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 445.0 380.0 L 514.0 380.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 680.0 380.0 L 749.0 380.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 210.0 536.0 L 279.0 536.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 445.0 536.0 L 514.0 536.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 680.0 536.0 L 749.0 536.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 210.0 224.0 L 279.0 224.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 445.0 224.0 L 514.0 224.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 680.0 224.0 L 749.0 224.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 210.0 380.0 L 279.0 380.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 445.0 380.0 L 514.0 380.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<path class="fx" d="M 680.0 380.0 L 749.0 380.0" stroke="#fde5a7" style="animation-delay:0s,6.60s"/>
+<path class="fx" d="M 210.0 536.0 L 279.0 536.0" stroke="#fde5a7" style="animation-delay:0s,8.80s"/>
+<path class="fx" d="M 445.0 536.0 L 514.0 536.0" stroke="#fde5a7" style="animation-delay:0s,9.90s"/>
+<path class="fx" d="M 680.0 536.0 L 749.0 536.0" stroke="#fde5a7" style="animation-delay:0s,11.00s"/>
+<rect x="44" y="184" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="127.0" y="210.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">App CI</text>
+<text class="s" x="127.0" y="230.4" font-size="13" fill="#dde5ef" text-anchor="middle">app repo, reusable</text>
+<text class="s" x="127.0" y="248.4" font-size="13" fill="#dde5ef" text-anchor="middle">workflows</text>
+<rect x="279" y="184" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="362.0" y="210.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Signed image</text>
+<text class="s" x="362.0" y="230.4" font-size="13" fill="#dde5ef" text-anchor="middle">keyless signature,</text>
+<text class="s" x="362.0" y="248.4" font-size="13" fill="#dde5ef" text-anchor="middle">attestations</text>
+<rect x="514" y="184" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="597.0" y="210.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Deploy folder</text>
+<text class="s" x="597.0" y="230.4" font-size="13" fill="#dde5ef" text-anchor="middle">image digest in</text>
+<text class="s" x="597.0" y="248.4" font-size="13" fill="#dde5ef" text-anchor="middle">the app repo</text>
+<rect x="749" y="184" width="166" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="855.0" y="210.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">OpenChoreo</text>
+<text class="s" x="855.0" y="230.4" font-size="13" fill="#dde5ef" text-anchor="middle">releases to each</text>
+<text class="s" x="855.0" y="248.4" font-size="13" fill="#dde5ef" text-anchor="middle">environment</text>
+<rect x="44" y="340" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="127.0" y="366.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Infra CI</text>
+<text class="s" x="127.0" y="386.4" font-size="13" fill="#dde5ef" text-anchor="middle">addon wrappers,</text>
+<text class="s" x="127.0" y="404.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster charts</text>
+<rect x="279" y="340" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="362.0" y="366.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Upstream charts</text>
+<text class="s" x="362.0" y="386.4" font-size="13" fill="#dde5ef" text-anchor="middle">pinned upstream</text>
+<text class="s" x="362.0" y="404.4" font-size="13" fill="#dde5ef" text-anchor="middle">releases</text>
+<rect x="514" y="340" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="597.0" y="366.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Main branch</text>
+<text class="s" x="597.0" y="386.4" font-size="13" fill="#dde5ef" text-anchor="middle">platform repo:</text>
+<text class="s" x="597.0" y="404.4" font-size="13" fill="#dde5ef" text-anchor="middle">pins and values</text>
+<rect x="749" y="340" width="166" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="855.0" y="366.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
+<text class="s" x="855.0" y="386.4" font-size="13" fill="#dde5ef" text-anchor="middle">by cluster label;</text>
+<text class="s" x="855.0" y="404.4" font-size="13" fill="#dde5ef" text-anchor="middle">Cluster API</text>
+<rect x="44" y="496" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="127.0" y="522.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Package CI</text>
+<text class="s" x="127.0" y="542.4" font-size="13" fill="#dde5ef" text-anchor="middle">Crossplane</text>
+<text class="s" x="127.0" y="560.4" font-size="13" fill="#dde5ef" text-anchor="middle">packages</text>
+<rect x="279" y="496" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="362.0" y="522.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Signed package</text>
+<text class="s" x="362.0" y="542.4" font-size="13" fill="#dde5ef" text-anchor="middle">keyless signature,</text>
+<text class="s" x="362.0" y="560.4" font-size="13" fill="#dde5ef" text-anchor="middle">provenance</text>
+<rect x="514" y="496" width="166" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="597.0" y="522.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Package pin</text>
+<text class="s" x="597.0" y="542.4" font-size="13" fill="#dde5ef" text-anchor="middle">version and digest</text>
+<text class="s" x="597.0" y="560.4" font-size="13" fill="#dde5ef" text-anchor="middle">in the addon</text>
+<rect x="749" y="496" width="166" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text class="s" x="855.0" y="522.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Crossplane</text>
+<text class="s" x="855.0" y="542.4" font-size="13" fill="#dde5ef" text-anchor="middle">installs the</text>
+<text class="s" x="855.0" y="560.4" font-size="13" fill="#dde5ef" text-anchor="middle">platform API</text>
+<rect x="851.9" y="471" width="63.1" height="19" rx="9.5" fill="#0b1120" stroke="#dde5ef" stroke-width="1.2"/>
+<text class="s" x="883.4" y="484.8" font-size="12" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.6">OPT-IN</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Delivery lanes · three lanes, one pattern</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">Apps, infra and extensions each go source and reusable CI, then a signed artifact pinned by digest, then a version declared in git, then a</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">reconciler and the cluster&#x27;s admission check.</text>
+<text class="s" x="44.0" y="128.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">SOURCE + CI</text>
+<text class="s" x="279.0" y="128.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">SIGNED ARTIFACT</text>
+<text class="s" x="514.0" y="128.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">DECLARED IN GIT</text>
+<text class="s" x="749.0" y="128.0" font-size="13" fill="#cbd5e1" font-weight="700" letter-spacing="1.0">RECONCILED</text>
+<text class="s" x="44.0" y="170.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">APPS LANE</text>
+<circle cx="775.0" cy="224.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="775.0" y="228.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="240.0" cy="224.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="240.0" y="228.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="475.0" cy="224.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="475.0" y="228.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="710.0" cy="224.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="710.0" y="228.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="44.0" y="326.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">INFRA LANE</text>
+<circle cx="775.0" cy="380.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="775.0" y="384.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<circle cx="240.0" cy="380.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="240.0" y="384.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="475.0" cy="380.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="475.0" y="384.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<circle cx="710.0" cy="380.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="710.0" y="384.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="44.0" y="482.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">EXTENSIONS LANE</text>
+<circle cx="775.0" cy="536.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="775.0" y="540.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">12</text>
+<circle cx="240.0" cy="536.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="240.0" y="540.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<circle cx="475.0" cy="536.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="475.0" y="540.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
+<circle cx="710.0" cy="536.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="710.0" y="540.6" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
+<line x1="28" y1="598" x2="932" y2="598" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="621.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="626" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="626.0" font-size="13.5" fill="#dde5ef">App CI builds, scans and signs one image per merge (keyless cosign, attestations) and pushes it by digest</text>
+<circle cx="40" cy="649.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="654" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="654.0" font-size="13.5" fill="#dde5ef">Signed image&#x27;s digest is committed to the app repo&#x27;s deploy folder by the bump job</text>
+<circle cx="40" cy="677.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="682" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="682.0" font-size="13.5" fill="#dde5ef">Deploy folder is synced by Argo CD into OpenChoreo, which releases it to each environment through the cluster-agent</text>
+<circle cx="40" cy="705.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="710" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="710.0" font-size="13.5" fill="#dde5ef">OpenChoreo&#x27;s environments run Kyverno, which admits only the signed digest: it blocks in production and warns in development and</text>
+<text class="s" x="62.0" y="729.0" font-size="13.5" fill="#dde5ef">staging</text>
+<circle cx="40" cy="752.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="757" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="757.0" font-size="13.5" fill="#dde5ef">Infra CI renders and tests every chart against its pinned upstream version; Renovate opens the bump pull requests</text>
+<circle cx="40" cy="780.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="785" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="785.0" font-size="13.5" fill="#dde5ef">Upstream charts stay pinned by version (and digest where possible) on main after review</text>
+<circle cx="40" cy="808.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="813" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="813.0" font-size="13.5" fill="#dde5ef">Main branch is synced by Argo CD to every cluster whose labels match; Cluster API builds the clusters</text>
+<circle cx="40" cy="836.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="841" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">8</text>
+<text class="s" x="62.0" y="841.0" font-size="13.5" fill="#dde5ef">Argo CD&#x27;s addons pass Kyverno for pod settings; their images are pinned by digest, chart signatures are not checked yet</text>
+<circle cx="40" cy="864.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="869" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">9</text>
+<text class="s" x="62.0" y="869.0" font-size="13.5" fill="#dde5ef">Package CI renders, tests, signs and pushes each Crossplane package by digest</text>
+<circle cx="40" cy="892.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="897" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">10</text>
+<text class="s" x="62.0" y="897.0" font-size="13.5" fill="#dde5ef">Signed package&#x27;s digest is pinned in addon crossplane by a reviewed Renovate pull request</text>
+<circle cx="40" cy="920.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="925" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">11</text>
+<text class="s" x="62.0" y="925.0" font-size="13.5" fill="#dde5ef">Package pin is synced by Argo CD; Crossplane (opt-in) pulls the package and installs the API</text>
+<circle cx="40" cy="948.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="953" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">12</text>
+<text class="s" x="62.0" y="953.0" font-size="13.5" fill="#dde5ef">Crossplane&#x27;s package signature check is planned: packages are signed, verification waits for cosign v3 support</text>
+<rect x="28" y="993" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="1003.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="993" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="1003.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<rect x="513.9241" y="993" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="543.9" y="1003.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 26 1025 L 70 1025" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="42" cy="1025" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="42" y="1029.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="80.0" y="1029.0" font-size="13" fill="#aab6c8">numbered step: the change moves along the arrow</text>
+<rect x="416.97326000000004" y="1015" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="426.97326000000004" cy="1025" r="7" fill="#fbbf24"/><text class="s" x="426.97326000000004" y="1029.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="449.0" y="1029.0" font-size="13" fill="#aab6c8">step at a component</text>
+<g><rect x="601.83384" y="1016" width="28" height="18" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.3" stroke-dasharray="4 2.5"/><rect x="637.83384" y="1017" width="54.3" height="16" rx="8" fill="none" stroke="#dde5ef" stroke-width="1.2"/><text class="s" x="665.0" y="1029" font-size="11" font-weight="700" fill="#dde5ef" text-anchor="middle" letter-spacing="0.4">OPT-IN</text></g>
+<text class="s" x="701.8" y="1029.0" font-size="13" fill="#aab6c8">opt-in, off by default</text>
+</svg>

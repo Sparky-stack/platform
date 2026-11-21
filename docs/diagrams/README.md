@@ -18,6 +18,11 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 | [trust.svg](trust.svg) | who signs what (agent CAs, OpenBao mesh CA) and how it renews | [runbooks/certificates-and-secrets.md](../runbooks/certificates-and-secrets.md) |
 | [backup.svg](backup.svg) | what is stateful where, and the restore order | [runbooks/backup-restore.md](../runbooks/backup-restore.md) |
 | [upgrade.svg](upgrade.svg) | every upgrade is a PR: Renovate → CI → merge → Argo CD, dev before prod | [runbooks/upgrades.md](../runbooks/upgrades.md) |
+| [delivery-lanes.svg](delivery-lanes.svg) | three delivery lanes (apps, infra, extensions), one pattern: CI → signed artifact by digest → git → reconciler → admission | [devops-guide.md](../devops-guide.md) |
+| [lane-apps.svg](lane-apps.svg) | apps lane: reusable CI signs one image, its digest goes back to the app repo, OpenChoreo rolls it out, Kyverno verifies it | [devops-guide.md](../devops-guide.md) |
+| [lane-infra.svg](lane-infra.svg) | infra lane: pinned upstream charts, CI, Argo CD by cluster label, Cluster API; signatures stop at the image layer | [devops-guide.md](../devops-guide.md) |
+| [lane-extensions.svg](lane-extensions.svg) | extensions lane: a Crossplane package built and signed like an image, promoted by its pinned digest (signature check planned) | [devops-guide.md](../devops-guide.md) |
+| [app-database-map.svg](app-database-map.svg) | app + database: Component, Workload, postgresql Resource and SecretReference → cell namespace → Crossplane → CloudNativePG → secrets → pods | [devops-guide.md](../devops-guide.md) |
 
 ## Visual system
 
@@ -164,6 +169,73 @@ Telemetry is not backed up: it starts empty.
 7. Argo CD syncs the prod clusters to that commit
 
 Kubernetes versions: a `kubernetesVersion` bump in a fleet file rolls through Cluster API instead, one server at a time, dev before prod (see the cluster lifecycle view).
+
+These five views follow the change, not the actor (like the SDLC view): each arrow carries the change or object to the next component, and the legend says so.
+
+### Delivery lanes ([delivery-lanes.svg](delivery-lanes.svg))
+
+1. App CI builds, scans and signs one image per merge (keyless cosign, attestations) and pushes it by digest
+2. Signed image's digest is committed to the app repo's deploy folder by the bump job
+3. Deploy folder is synced by Argo CD into OpenChoreo, which releases it to each environment through the cluster-agent
+4. OpenChoreo's environments run Kyverno, which admits only the signed digest: it blocks in production and warns in development and staging
+5. Infra CI renders and tests every chart against its pinned upstream version; Renovate opens the bump pull requests
+6. Upstream charts stay pinned by version (and digest where possible) on main after review
+7. Main branch is synced by Argo CD to every cluster whose labels match; Cluster API builds the clusters
+8. Argo CD's addons pass Kyverno for pod settings; their images are pinned by digest, chart signatures are not checked yet
+9. Package CI renders, tests, signs and pushes each Crossplane package by digest
+10. Signed package's digest is pinned in addon crossplane by a reviewed Renovate pull request
+11. Package pin is synced by Argo CD; Crossplane (opt-in) pulls the package and installs the API
+12. Crossplane's package signature check is planned: packages are signed, verification waits for cosign v3 support
+
+### Apps lane ([lane-apps.svg](lane-apps.svg))
+
+1. App repo: a merge to main runs the reusable CI workflow it pins by commit (app-go.yaml and the other stacks, each calling app-container.yaml): lint, tests, vulnerability scan, multi-arch build
+2. Reusable CI pushes the image to ghcr.io and signs it keyless with cosign, with SBOM, provenance and vulnerability attestations
+3. Registry digest goes into the app repo: app-workload-bump.yaml commits the image digest to the Workload in deploy/ ([skip ci])
+4. Deploy folder is synced by Argo CD (the team's Application) into OpenChoreo: Component, Workload, ReleaseBinding
+5. Argo CD hands them to the OpenChoreo control plane, which cuts one immutable release and binds it to development
+6. OpenChoreo passes the release to the cluster-agent over the connection the agent opened from the workload cluster
+7. cluster-agent applies the release in the environment's namespace, where Kyverno sees every pod first
+8. Kyverno verifies the image signature, attestations and digest before the pod starts: it blocks in production and only warns in development and staging
+
+Promotion: the same release moves to staging and production by pull requests, the promotion gate opens the production one (see the SDLC view, which also shows the in-cluster build path with Harbor and the platform key).
+
+### Infra lane ([lane-infra.svg](lane-infra.svg))
+
+1. A pull request to the platform repo, from Renovate (a new upstream release) or a person, changes a chart pin, addon values or a fleet file and runs ci.yaml, scoped to what changed
+2. CI fetches the pinned upstream charts (versions in Chart.yaml and Chart.lock, sha256 pins for the mesh) and lints, renders and unit-tests every changed chart
+3. CI must pass before a maintainer merges: main then declares the versions, in the addon charts, the ApplicationSets and the installation values
+4. Main branch is read by Argo CD: dev clusters follow main, prod clusters a verified commit
+5. Argo CD renders each fleet file into a cluster for Cluster API, which creates and upgrades its k3s nodes
+6. Argo CD installs the addons on every cluster whose labels match, in a fixed order
+7. Kyverno admits the addon pods with safe settings only; their images are pinned by digest in git (a test checks it), not signature-verified: Argo CD cannot verify Helm or OCI chart signatures
+
+Planned: verify upstream chart signatures in the Renovate pull request and mirror the charts into an internal registry, once upstreams sign them (few do today). release-please tags each platform release.
+
+### Extensions lane ([lane-extensions.svg](lane-extensions.svg))
+
+1. A pull request to packages/<api> runs package-<api>.yaml, which calls app-crossplane-configuration.yaml: schema checks and render tests for every backend
+2. Package CI pushes the Configuration package and its embedded function to ghcr.io on main and on release tags, signed keyless with cosign, with SLSA provenance
+3. Registry tag and digest are pinned in addon crossplane's values (or one installation's) by a Renovate pull request; merging it is the promotion
+4. Package pin on main is synced by Argo CD to every cluster that runs addon crossplane (opt-in)
+5. Argo CD applies the Configuration at that digest; Crossplane's package manager pulls it and its function from the registry
+6. Crossplane will verify the package signature before installing it: the switch is on main but stays off until Crossplane reads cosign v3 signatures
+7. Crossplane installs the API definition, its composition and function: apps can now claim the API, for example a PostgreSQL database
+
+The other extension points ride the other lanes: OpenChoreo component types, traits and resource types are files of the openchoreo-platform addon (infra lane), Backstage templates are read from git by the catalog, Backstage plugins come with its image.
+
+### App + database map ([app-database-map.svg](app-database-map.svg))
+
+1. Component (with the keda-scaler trait), Workload, Resource of type postgresql and SecretReference are synced from the app repo by Argo CD into OpenChoreo
+2. OpenChoreo renders the Resource into the cell namespace as a PostgreSQL claim (platform.koorikla.io, a namespaced Crossplane XR)
+3. OpenBao's value behind the SecretReference lands in the app secret: External Secrets reads the project's own mount through the cell's SecretStore
+4. PostgreSQL claim is composed by Crossplane with the Composition of the Configuration package; the EnvironmentConfig platform-postgresql picks the backend
+5. Crossplane creates a CloudNativePG Cluster on a local cluster (RDS or Aurora, Cloud SQL, Azure Flexible Server in the cloud)
+6. CloudNativePG creates the database and its owner and writes the connection secret <name>-app next to the workload
+7. App secret reaches the app pods as env, from secretKeyRef or envFrom
+8. Connection secret reaches the app pods, which OpenChoreo deployed from the Workload: host, port and database as values, user, password and URI as secret references; KEDA scales them
+
+Planned: the same map for the event bus and its topics. Production asks for high availability and backups (admission policy); credentials never leave the workload cluster.
 
 ## Editing
 

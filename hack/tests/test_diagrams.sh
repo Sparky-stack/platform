@@ -13,7 +13,8 @@ B="$ROOT/docs/diagrams/src/build.py"
 out=$(py "$B" --check 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 0 "build.py --check: committed SVGs up to date, 0 issues ($out)"
 n=$(grep -c 'issues: 0' <<<"$out" || true)
-assert_eq "$n" 9 "nine diagrams, each with 0 issues"
+want=$(find "$ROOT/docs/diagrams" -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')   # every committed SVG is generated
+assert_eq "$n" "$want" "all $want committed diagrams generated, each with 0 issues"
 
 # 2. deterministic: two runs, byte-identical output
 py "$B" --out "$TMP/a" >/dev/null
