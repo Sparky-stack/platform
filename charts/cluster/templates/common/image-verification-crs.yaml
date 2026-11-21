@@ -2,7 +2,7 @@
 {{- /* Kyverno Harbor image verification material (cosign.pub, ca.crt, pull robot) via ClusterResourceSet or byo PushSecret. */ -}}
 {{- $iv := .Values.imageVerification }}
 {{- $harbor := eq (include "capi.registry.harbor" .) "true" }}
-{{- if and $iv.enabled $harbor (ne (toString (dig "kyverno" "" (.Values.addons | default dict))) "false") }}
+{{- if and $iv.enabled $harbor (ne (toString (dig "kyverno" "" .Values.addons)) "false") }}
 {{- $name := .Values.name }}
 {{- $nr := .Values.nodeRegistry }}
 {{- $host := .Values.registry.host }}

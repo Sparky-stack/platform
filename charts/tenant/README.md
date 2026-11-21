@@ -23,14 +23,8 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | deploymentPipeline.name | string | `"default"` |  |
 | description | string | `""` |  |
 | developerGroups | list | `[]` | Groups (JWT claim `groups`) that develop this project: OpenChoreo role `developer` scoped to this project only, binding writes in `promotion.gatedEnvironments` excluded (`templates/developer-authz.yaml`). Empty = `[<project>-developers]`. Members also need group `developers` for the org-wide read-only views (component types, environments). |
-| developerKinds[0] | string | `"Component"` |  |
-| developerKinds[1] | string | `"Workload"` |  |
-| developerKinds[2] | string | `"ReleaseBinding"` |  |
-| developerKinds[3] | string | `"ComponentRelease"` |  |
-| developerKinds[4] | string | `"SecretReference"` |  |
-| developerKinds[5] | string | `"Resource"` |  |
-| developerKinds[6] | string | `"ResourceReleaseBinding"` |  |
-| developerRole | string | `"developer"` | The only kinds (group openchoreo.dev, org namespace) an app repo may sync. ClusterAuthzRole the developerGroups get in their own project (upstream default role of the OpenChoreo control plane). |
+| developerKinds | list | `["Component","Workload","ReleaseBinding","ComponentRelease","SecretReference","Resource","ResourceReleaseBinding"]` | The only kinds (group openchoreo.dev, org namespace) an app repo may sync; Project, ProjectReleaseBinding and platform kinds stay platform-owned. |
+| developerRole | string | `"developer"` |  |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | installation.name | string | `"local"` |  |
 | installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |

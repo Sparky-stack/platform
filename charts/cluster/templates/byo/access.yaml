@@ -28,7 +28,7 @@ spec:
   data:
     - secretKey: value
       remoteRef:
-        key: {{ include "byo.secretKey" . }}
+        key: byo-{{ .Values.name }}
         property: kubeconfig
 ---
 apiVersion: external-secrets.io/v1

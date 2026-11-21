@@ -30,7 +30,7 @@ Presence and format of single values (hosts, wss:// scheme, stores): values.sche
 {{- if not (has $gwHost $cp.clusterGateway.tls.dnsNames) }}
 {{- fail (printf "openchoreo-control-plane.clusterGateway.tls.dnsNames must contain %s (server cert SAN for agents)" $gwHost) }}
 {{- end }}
-{{- $obsEnabled := dig "observability" "enabled" false .Values.openchoreo }}
+{{- $obsEnabled := .Values.openchoreo.observability.enabled }}
 {{- if ne (toString $obsEnabled) (toString $cp.backstage.features.observability.enabled) }}
 {{- fail (printf "openchoreo-control-plane.backstage.features.observability.enabled (%v) must equal openchoreo.observability.enabled (%v)" $cp.backstage.features.observability.enabled $obsEnabled) }}
 {{- end }}

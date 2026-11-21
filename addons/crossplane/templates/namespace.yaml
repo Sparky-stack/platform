@@ -1,6 +1,4 @@
-{{- /* crossplane-system enforces Pod Security restricted: core, RBAC manager and every Function/Provider pod (they run
-under DeploymentRuntimeConfig "restricted"). Argo CD creates the namespace (CreateNamespace=true); this object only adds
-the labels. */ -}}
+{{- /* Pod Security labels on crossplane-system; Argo CD creates the namespace (CreateNamespace=true). */ -}}
 {{- if .Values.namespace.podSecurity }}
 apiVersion: v1
 kind: Namespace

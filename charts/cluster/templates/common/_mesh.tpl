@@ -1,6 +1,6 @@
 {{- /* Shared helpers for mesh-*.yaml (mesh.group, mesh.rootKey, mesh.readerUser, mesh.labels); renders no resources. */ -}}
 {{- define "mesh.group" -}}
-{{- ((.Values.mesh | default dict).group | default "") -}}
+{{- .Values.mesh.group -}}
 {{- end }}
 {{- define "mesh.rootKey" -}}mesh-root-{{ include "mesh.group" . }}.pem{{- end }}
 {{- define "mesh.readerUser" -}}platform:istio-reader{{- end }}

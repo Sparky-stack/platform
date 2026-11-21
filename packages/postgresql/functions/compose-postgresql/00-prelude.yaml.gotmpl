@@ -3,8 +3,6 @@ file): the cluster's facts, the backend check, the developer's spec with the XRD
 derived from them, per backend. Object files (<backend>-<object>.yaml.gotmpl) only read these. Everything here runs on
 every backend: keep it side-effect free (no `fail` outside the backend check). */}}
 {{- $facts := index (.context | default dict) "apiextensions.crossplane.io/environment" | default dict }}
-{{- /* Shared preamble (read by every file below): the XR's spec with the XRD defaults as fallbacks,
-the cloud-side identifier and the deletion behaviour. $facts is the EnvironmentConfig data. */}}
 {{- $xr := .observed.composite.resource }}
 {{- $spec := $xr.spec | default dict }}
 {{- $name := $xr.metadata.name }}
