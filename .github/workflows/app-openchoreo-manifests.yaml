@@ -1,0 +1,59 @@
+name: openchoreo-manifests
+
+# Validates an app repo's OpenChoreo manifests (deploy/openchoreo) against the CRD schemas of the OpenChoreo version
+# this platform runs (ci/schemas, regenerated from the vendored charts: hack/tests/test_project_templates.sh fails when
+# they drift) plus the repo invariants OpenChoreo only reports after Argo CD synced (ci/scripts/openchoreo/
+# validate-manifests.py). Every app-<stack>.yaml calls it, so app repos carry no validation code. Skipped when the
+# directory does not exist.
+#
+# Required caller permissions:
+#   contents: read
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: "OpenChoreo manifests directory ('' skips)"
+        type: string
+        default: 'deploy/openchoreo'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: OpenChoreo manifests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch platform ci/ (same commit as this workflow)
+        id: ci
+        env:
+          CI_REPO: ${{ job.workflow_repository }}
+          CI_SHA: ${{ job.workflow_sha }}
+          DIR: ${{ inputs.directory }}
+        run: |
+          if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then echo "no OpenChoreo manifests at '${DIR}', skipping"; exit 0; fi
+          d="$RUNNER_TEMP/koorikla-ci"
+          rm -rf "$d" && git init -q "$d"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
+          git -C "$d" checkout -q FETCH_HEAD
+          echo "dir=$d/ci" >> "$GITHUB_OUTPUT"
+
+      - name: Set up uv
+        if: steps.ci.outputs.dir != ''
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Validate
+        if: steps.ci.outputs.dir != ''
+        env:
+          CI_DIR: ${{ steps.ci.outputs.dir }}
+          DIR: ${{ inputs.directory }}
+        run: uv run --no-project --with pyyaml==6.0.4 --with jsonschema==4.26.0 python3 "$CI_DIR/scripts/openchoreo/validate-manifests.py" "$DIR"

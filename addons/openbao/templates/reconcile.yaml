@@ -1,18 +1,10 @@
 {{- /*
-Mesh reconcile on mgmt: files/mesh-reconcile.sh as an Argo CD Sync hook Job (wave 1, every sync) and as a CronJob
-(reconcile.schedule: new/removed members, drift). It applies the mesh PKI from installation.yaml groups and the fleet
-members (group CAs, per-member PKI role, identity entity, JWT auth); OpenBao has no CRDs and self-init runs only once.
-Why POSIX sh + the bao CLI of the OpenBao image (~150 lines): OpenTofu/Terraform needs a state backend and an admin
-credential on mgmt; the young OpenBao config operators have no release and no stable PKI + JWT auth CRDs yet.
-Identities (projected tokens, audience reconcile.audience, 10 minutes, exchanged for 15-minute OpenBao tokens). No root
-token, and the reconcile authors no ACL policy (all static, written once by self-initialisation):
-  Job (Sync hook) ServiceAccount reconcile.bootstrapServiceAccount: logs in twice. Role platform-mesh-bootstrap creates
-                  missing group CAs (internal keys; signing the intermediate is CA-equivalent, so this identity never
-                  runs on a schedule), then role platform-mesh-config enrols the members.
-  CronJob         ServiceAccount reconcile.serviceAccount: role platform-mesh-config only (jwt mounts mesh-*, PKI roles
-                  with pinned flags, identity entities mesh-*). It cannot generate, import, export or sign with a CA key
-                  and cannot write a policy (negative tests: hack/tests/openbao_integration.sh).
-Both are CA-administration identities nonetheless: protect namespace openbao (who may create pods there may use them).
+Mesh reconcile on mgmt: files/mesh-reconcile.sh as a Sync hook Job (wave 1) and a CronJob (drift, new members).
+OpenBao has no CRDs and self-init runs once, so a script applies group CAs, member PKI roles, entities and JWT auth.
+  Job (Sync hook)  bootstrapServiceAccount: role platform-mesh-bootstrap (group CAs; CA-equivalent, so never on a
+                   schedule), then platform-mesh-config
+  CronJob          serviceAccount: role platform-mesh-config only (no key, no signing, no policy writes)
+Both administer the CA: protect namespace openbao (who may create pods there may use them).
 */ -}}
 {{- $r := .Values.reconcile }}
 {{- $groups := include "openbao-addon.groups" . | fromJsonArray }}

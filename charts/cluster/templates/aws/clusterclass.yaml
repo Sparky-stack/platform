@@ -1,11 +1,7 @@
 {{- /*
-UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only); kept as a reference for real infrastructure.
-The developer-facing platform does not depend on it (docs/portability.md).
-k3s on CAPA (AWS). Rendered when capi.providers.aws. UNTESTED (no credentials): rendered + schema-checked only.
-Node identity: plain Ubuntu AMI, k3s installed at boot. kubelet runs with --cloud-provider=external, k3s' embedded CCM is
-off, node name = EC2 private DNS name (what the AWS CCM expects). The AWS cloud-controller-manager (addons/aws-ccm,
-Argo CD, catalog providers: [aws]) initialises the nodes: providerID aws:///<az>/<instance-id>, addresses, removes the
-uninitialized taint, and provides Service type LoadBalancer.
+UNTESTED EXAMPLE (rendered and schema-checked only; docs/portability.md, docs/providers.md).
+k3s on CAPA (AWS), when capi.providers.aws. kubelet --cloud-provider=external, node name = EC2 private DNS name:
+addons/aws-ccm initialises the nodes and provides LoadBalancers.
 */ -}}
 
 {{- define "k3s-aws.cluster" -}}

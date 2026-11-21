@@ -1,13 +1,12 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* Per-cluster OpenChoreo agent PKI on mgmt (cert-manager self-signed root, CA cert, CA issuer, client cert). */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
-{{- $name := include "openchoreo.name" . }}
-{{- $ns := include "openchoreo.fleetNamespace" . }}
+{{- $name := .Values.name }}
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: {{ $name }}-agent-selfsigned
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
 spec:
@@ -17,7 +16,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ $name }}-agent-ca
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
   annotations:
@@ -42,7 +41,7 @@ apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: {{ $name }}-agent-ca
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
   annotations:
@@ -55,7 +54,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ $name }}-agent-tls
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
   annotations:

@@ -266,7 +266,7 @@ Talking points:
 - Push-to-deploy without inbound traffic: locally a poll (GitHub App token, read-only, one build per commit), in cloud
   installations a signed GitHub webhook into the same trigger.
 - Kyverno checks signature + SBOM + vuln attestations and a digest reference at admission; the GitHub path
-  (keyless, SLSA provenance too) stays available per Component (`IMAGE_BUILDER=github-actions` in hello-world).
+  (keyless, SLSA provenance too) stays available to any app repo (app-<stack>.yaml, used by the templates/ golden paths).
 - The signing key never leaves mgmt; workload clusters get only `cosign.pub`.
 
 Fallback: if the build is slow, show the last run's tasks (`kubectl get workflowrun -n default <name> -o yaml`,

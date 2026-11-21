@@ -1,12 +1,8 @@
-# One chart for everything Cluster API, rendered in two scopes (templates/<provider>/ + templates/common/):
-#   scope: fleet   -> once per installation on mgmt, by catalog entry `cluster-fleet` (charts/platform values.yaml):
-#                     provider installs + credentials, ClusterClasses, namespace fleet. Values: installation.yaml
-#                     (layered by the addon ApplicationSet) + the "scope: fleet" section below.
-#   scope: cluster -> once per workload cluster, by Application cluster-<name> (charts/platform appset-fleet.yaml):
-#                     CAPI Cluster, Argo CD registration, OpenChoreo, mesh, ClusterResourceSets. Values, merged in order:
-#                     installations/<inst>/installation.yaml, then installations/<inst>/clusters/<name>.yaml.
-# Folders: templates/<provider>/ (docker, aws, hetzner, gcp-gke, byo) hold what only that provider needs;
-# templates/common/ holds what every cluster gets (and the CAPI core/k3s providers).
+# Everything Cluster API, rendered in two scopes:
+#   fleet   -> once on mgmt (catalog entry cluster-fleet): providers, credentials, ClusterClasses, namespace fleet.
+#   cluster -> once per workload cluster (Application cluster-<name>, values installation.yaml + clusters/<name>.yaml):
+#              CAPI Cluster, Argo CD registration, OpenChoreo, mesh, ClusterResourceSets.
+# templates/<provider>/ holds what only that provider needs, templates/common/ what every cluster gets.
 
 # -- `cluster` (one workload cluster) or `fleet` (providers + ClusterClasses, once on mgmt).
 scope: cluster
@@ -15,36 +11,24 @@ scope: cluster
 # -- Cluster identity (`ClusterDataPlane` name and `planeID`).
 name: ""                      # required; == Argo cluster name == ClusterDataPlane name == planeID
 # -- Cluster provider (`docker`, `aws`, `hetzner`, `gcp-gke`, `byo`) selecting `ClusterClass` (`k3s-docker`, `k3s-aws`, `k3s-hetzner`, `gke-managed`).
-provider: docker              # docker | aws | hetzner -> ClusterClass k3s-<provider> in namespace fleet
-                              # byo -> no CAPI object: an existing cluster, kubeconfig from platform store key byo-<name>
-                              #   (templates/byo/access.yaml; no kubernetesVersion/controlPlane/workers/providerSpec;
-                              #   docs/providers.md "Bring your own cluster (byo)")
-                              # gcp-gke -> ClusterClass gke-managed (managed GKE control plane via CAPG, needs
-                              #   capi.providers.gcp; docs/providers.md "GKE")
+provider: docker              # byo: existing cluster, kubeconfig from store key byo-<name>; gcp-gke: managed GKE via
+                              # CAPG (docs/providers.md)
 region: local
 environment: development      # development | staging | production (never prod; docs/conventions.md)
 # -- k3s version (or GKE `vX.Y.Z` version on `gcp-gke`).
 kubernetesVersion: ""         # k3s version, e.g. v1.35.4+k3s1 (gcp-gke: GKE version vX.Y.Z, e.g. v1.35.1)
 # -- `cilium` or `flannel` (fixed at cluster creation; derives `addons.platform.koorikla.io/cilium`); `gke` only on `gcp-gke`.
-cni: cilium                   # cilium | flannel - pod network, fixed at birth (switching = rebuild; docs/networking.md).
-                              # gcp-gke: gke only (GKE's VPC-native networking; CAPG cannot request Dataplane V2).
-                              # -> ClusterClass variable cni, label platform.koorikla.io/cni, and
-                              #    addons.platform.koorikla.io/cilium (do not set addons.cilium yourself)
+cni: cilium                   # switching = rebuild (docs/networking.md); gcp-gke: CAPG cannot request Dataplane V2
 controlPlane:
-  # replicas: 1               # k3s servers = embedded etcd voters: odd only (1, 3, 5), default 1; production on aws/hetzner >= 3.
-                              # 1 = disposable: every control plane rollout ends with a 2 -> 1 etcd member removal that
-                              # can lose quorum (docs/providers.md "Control plane size and rollouts")
+  # replicas: 1               # etcd voters: odd only; 1 is disposable (rollouts end with a 2 -> 1 member removal;
+                              # docs/providers.md "Control plane size and rollouts")
   # -- Server instance type (`controlPlane.replicas` is odd, `>= 3` for cloud production; none on `gcp-gke`).
-  machineType: ""             # provider-specific instance type (aws: t3.large, hetzner: cpx31); unused on docker
-                              # gcp-gke: no controlPlane at all (Google runs it; setting either key fails the render)
+  machineType: ""             # e.g. aws t3.large, hetzner cpx31; unused on docker
 # -- Node pools (`[{name, replicas, machineType, failureDomain}]`; GKE: MachinePools).
-workers: []                   # [{name, replicas, machineType, failureDomain}] (gcp-gke: GKE node pools, >= 1; failureDomain
-                              #  = the pool's zone, replicas = nodes per zone)
+workers: []                   # gcp-gke: failureDomain = the pool's zone, replicas = nodes per zone
 # -- Extra `ClusterClass` provider variables passed as-is.
-providerSpec: {}              # extra ClusterClass variables, passed as-is (docs/providers.md):
-                              #   docker: kindImage | aws: ami (required), sshKeyName | hetzner: sshKey, image, networkZone
-                              #   gcp-gke: project (required), network, releaseChannel
-                              # `region` comes from the key above; machine types from controlPlane/workers[].machineType
+providerSpec: {}              # docker: kindImage | aws: ami (required), sshKeyName | hetzner: sshKey, image, networkZone
+                              # gcp-gke: project (required), network, releaseChannel (docs/providers.md)
 openchoreo:
   dataPlane:
     # -- Registers the `ClusterDataPlane` and binds `openchoreo.dataPlane.{gatewayHost,gatewayPort,environments}`.
@@ -54,18 +38,13 @@ openchoreo:
     environments: []          # OpenChoreo Environments bound to this cluster's ClusterDataPlane
 mesh:
   # -- Opt-in Istio ambient multicluster mesh membership.
-  group: ""                   # opt-in cluster-to-cluster connectivity (Istio ambient multicluster, docs/multicluster.md).
-                              # Set -> labels mesh.platform.koorikla.io/{group,network} (meshID = group, network = name)
-                              # and addons.platform.koorikla.io/{istio-eastwest,istio-csr}: "true" (do not set them);
-                              # mgmt publishes this cluster's OpenBao auth inputs, trust payload and remote secret
-                              # (templates/common/mesh-*.yaml). Needs mgmt.addons.openbao: true, the group in mesh.groups and
-                              # mesh.ca (installation.yaml).
+  group: ""                   # docs/multicluster.md; needs mgmt.addons.openbao, the group in mesh.groups and mesh.ca
   groups: []                  # from installation.yaml: the installation's mesh groups (one root CA each in OpenBao)
   ca: {}                      # from installation.yaml: {host, port} where members reach OpenBao
 # -- Git revision pin (`platform.koorikla.io/addons-revision`).
-addonsRevision: HEAD          # -> annotation platform.koorikla.io/addons-revision
+addonsRevision: HEAD
 # -- Per-cluster addon overrides (`addons.platform.koorikla.io/<addon>`).
-addons: {}                    # <addon>: true|false -> label (and ClusterDataPlane annotation) addons.platform.koorikla.io/<addon>
+addons: {}                    # <addon>: true|false (cilium follows cni: do not set it)
 
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
@@ -78,25 +57,20 @@ capi:
     aws: false
     hetzner: false
     gcp: false
-  # GCP (CAPG) installation facts (docs/providers.md "GKE"). Workload Identity Federation only, no key file: the CAPG
-  # manager presents a projected token of its ServiceAccount (issuer = the mgmt cluster's) to Google STS and
-  # impersonates serviceAccount.
+  # GCP (CAPG): Workload Identity Federation only, no key file (docs/providers.md "GKE").
   gcp:
     # -- WIF pool provider (`capi.gcp.{workloadIdentityProvider,serviceAccount}`) that CAPG impersonates.
     workloadIdentityProvider: ""   # projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
     serviceAccount: ""             # <name>@<project>.iam.gserviceaccount.com
-# Falco escalation identity (templates/common/falco-escalation-crs.yaml): this cluster's own webhook URL + token, derived on
-# mgmt from the platform store key and delivered into namespace falco by a ClusterResourceSet. Skipped when the
-# cluster file sets addons.falco: false.
+# Falco escalation identity: this cluster's own webhook URL + token, delivered by a ClusterResourceSet
+# (templates/common/falco-escalation-crs.yaml; skipped with addons.falco: false).
 falcoEscalation:
   enabled: true
   remoteKey: falco-webhook     # platform store key: url (base, e.g. http://events.<host>:8080/falco), token
   namespace: falco             # == addon falco's namespace (charts/platform catalog)
 
-# Kyverno verification of Harbor-built images on this cluster (templates/common/image-verification-crs.yaml): built on mgmt,
-# applied by a ClusterResourceSet into Kyverno's namespace, read by addon kyverno-policies (platformKey.cluster) and
-# addon kyverno (values/role-workload.yaml: Harbor CA). registry.type harbor only; skipped when the cluster file sets
-# addons.kyverno: false. Only PUBLIC material and a pull-only robot: never the private signing key.
+# Kyverno verification of Harbor-built images (templates/common/image-verification-crs.yaml; registry.type harbor
+# only, skipped with addons.kyverno: false). Only PUBLIC material and a pull-only robot: never the private signing key.
 imageVerification:
   enabled: true
   namespace: kyverno                       # == addon kyverno's namespace (charts/platform catalog)
@@ -111,17 +85,14 @@ secrets:
   workloadSeed:
     keys: [openchoreo-observability]   # local backend only: copied from mgmt `platform` into each workload cluster
                                        # (never falco-webhook: clusters get only their own token, falcoEscalation)
-  # Node registry auth: k3s registries.yaml on every node, from platform store key `key` (username, token).
-  # templates/common/capi-registries.yaml + ClusterClass variable registryAuth. Disable for public-images-only installations.
+  # k3s registries.yaml auth on every node from store key `key` (username, token); off for public-images-only installs.
   nodeRegistryAuth:
     enabled: true
     registry: ghcr.io
     key: platform-ghcr
 
-# Image registry of the installation (installation.yaml `registry`; docs/build-plane.md). type harbor + host: nodes
-# trust the registry CA, authenticate as Harbor robot `nodeRegistry.robot` and (mirror.enabled) pull docker.io, ghcr.io,
-# ... through Harbor proxy-cache projects with upstream fallback. type external: none of that (plain upstream pulls,
-# auth via secrets.nodeRegistryAuth only).
+# Image registry (docs/build-plane.md). harbor: nodes trust its CA, pull as robot nodeRegistry.robot and (mirror)
+# through its proxy-cache projects. external: plain upstream pulls.
 registry:
   type: external
   host: ""                    # e.g. harbor.openchoreo.localhost:9443
@@ -129,8 +100,7 @@ registry:
   mirror:
     enabled: false
   nodeHostAlias: ""           # docker provider only: container whose IP the registry name resolves to on CAPD nodes
-  # -- Docker provider only: host pull-through caches (hack/registry-cache.sh, docs/dev-environment.md). Each upstream
-  # is mirrored to http://platform-cache-<upstream, dots as dashes>:5000 on network kind instead of Harbor.
+  # -- Docker provider only: host pull-through caches http://platform-cache-<upstream, dots as dashes>:5000 (hack/registry-cache.sh).
   hostCache:
     enabled: false
     mirrors: []               # [{upstream: docker.io, remote: https://registry-1.docker.io}, ...]
@@ -142,18 +112,9 @@ nodeRegistry:                 # Harbor node pulls (platform-side names, rarely c
   caSecret: harbor-ca-bundle  # ca.crt = registry CA public cert
   caFile: /etc/rancher/k3s/registry-ca.crt   # == ClusterClass registryCA file path
 
-# --- scope: fleet (provider installs + ClusterClasses; templates/<provider>/{provider,credentials,clusterclass}.yaml) ---
-# Versions: everything is built on CAPI core 1.13 (go.mod sigs.k8s.io/cluster-api). Core 1.13 implements the v1beta2
-# contract and still accepts v1beta1-contract providers (clusterctl GetCompatibleVersions): cluster-api-k3s v0.5.0 and
-# CAPH v1.1.12 and CAPG v1.13.1 declare v1beta1 in metadata.yaml, CAPD/CAPA v1beta2.
-# The k3s ClusterClasses install k3s with the cluster-api-k3s bootstrap + control plane provider; the k3s version is the
-# Cluster's topology.version. Per-cluster knobs are ClusterClass variables, set by scope cluster from the fleet file.
-# --- leader election ----------------------------------------------------------------------------------------------
-# Lease timings of the provider managers that have the flags (leaseFlags: true below; cluster-api-k3s v0.5.0 and CAPH
-# v1.1.12 only have --enable-leader-election / --leader-elect). Upstream defaults 15s/10s/2s: under clean-bootstrap
-# load the mgmt API server answered too slowly, capi-controller-manager lost its lease and exited, and its webhook was
-# gone while Argo CD applied Cluster/dev1 (#192). Same headroom as mgmt's own k3s controllers (bootstrap/k3d-mgmt.yaml,
-# #94). Cost: a crashed single-replica manager is replaced on a new lease after <= 60s instead of 15s.
+# --- scope: fleet ---------------------------------------------------------------------------------------------------
+# All providers run on CAPI core 1.13, which still accepts v1beta1-contract providers (k3s, CAPH, CAPG).
+# Lease timings for managers with leaseFlags: true. Upstream 15s/10s/2s lost the lease under bootstrap load (#192).
 leaderElection:
   leaseDuration: 60s
   renewDeadline: 40s
@@ -162,9 +123,8 @@ leaderElection:
 core:
   # -- `v1.13.8` with `core.featureGates.ClusterTopology: true` (`ClusterClass` managed topologies).
   version: v1.13.8
-  # ClusterTopology (ClusterClass + managed topologies) is an alpha gate, default false in core 1.13: must be on.
-  # ClusterResourceSet is NOT listed on purpose: it is GA in core 1.13, its controller always runs and the gate no
-  # longer exists - an unknown gate in --feature-gates makes the manager exit at startup.
+  # ClusterTopology is alpha (off by default) and must be on. Never list ClusterResourceSet: the gate is gone in 1.13
+  # and an unknown gate makes the manager exit.
   featureGates:
     ClusterTopology: true
   leaseFlags: true
@@ -172,17 +132,13 @@ core:
 k3s:
   # -- `v0.5.0` from `cluster-api-k3s` releases (`k3s.releaseURL`).
   version: v0.5.0
-  # "k3s" is not in clusterctl's built-in provider list -> the operator needs the release asset URL.
+  # k3s is not a clusterctl built-in provider, so the operator needs the release URL.
   releaseURL: https://github.com/k3s-io/cluster-api-k3s/releases
-  # Ingress is kgateway (OpenChoreo); k3s' bundled traefik is never wanted.
   # -- Disables `traefik` (and `servicelb` on cloud via `cloudDisableComponents`) and tunes CAPD lease renewal (`dockerLeaderElectionArgs`).
   disableComponents: [traefik]
-  # Cloud classes also drop klipper servicelb: the cloud CCM (addons/aws-ccm, addons/hcloud-ccm) provides LoadBalancers.
+  # Cloud: the cloud CCM provides LoadBalancers instead of klipper servicelb.
   cloudDisableComponents: [traefik, servicelb]
-  # CAPD only: leader election of the embedded kube-controller-manager and kube-scheduler. k3s exits when a renewal
-  # misses its deadline, and on a local host under I/O pressure etcd fsyncs/reads take 5-8 s (#82: prod1 restarted 20x
-  # in 10 h). Upstream 15s/10s/2s; 60s/40s/10s rides out such stalls. Cloud classes keep the upstream failover times.
-  # bootstrap/k3d-mgmt.yaml passes the same values to the mgmt k3s.
+  # CAPD only: k3s exits when a lease renewal misses its deadline, and local etcd stalls 5-8 s under I/O load (#82).
   dockerLeaderElectionArgs:
     - leader-elect-lease-duration=60s
     - leader-elect-renew-deadline=40s
@@ -194,63 +150,50 @@ docker:
   featureGates:
     ClusterTopology: true    # CAPD shares core's gate set; matches the upstream quickstart (CLUSTER_TOPOLOGY=true)
   leaseFlags: true
-  # Node OS only - k3s itself is installed at boot (curl get.k3s.io, version = topology.version). kindest/node is a
-  # systemd-in-docker image CAPD knows how to bootstrap; its bundled kubeadm/containerd stay unused.
-  # Fully qualified, pinned by multi-arch index digest (amd64, arm64; docs/conventions.md invariant 9). CAPD hands
-  # customImage to the container runtime as is; k3s (topology.version) runs on top.
+  # Node OS only (systemd-in-docker); k3s is installed at boot. Its bundled kubeadm/containerd stay unused.
   # -- `kindest/node` container image pinned by multi-arch index digest.
   kindImage: docker.io/kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
 
 aws:
-  # -- CAPA `v2.13.1` (`configSecret`, `credentialsFromStore`) .
+  # -- CAPA `v2.13.1` (`configSecret`, `credentialsFromStore`).
   version: v2.13.1
-  # Secret (ns capa-system) holding CAPA's clusterctl variables. AWS_B64ENCODED_CREDENTIALS has no default in
-  # CAPA's components, so the secret must exist before the provider installs (the operator retries until it does).
+  # Secret (ns capa-system) with CAPA's clusterctl variables; must exist before CAPA installs (no default).
   configSecret: capa-variables
-  # true: ExternalSecret from ClusterSecretStore/platform key `capi-aws` (property AWS_B64ENCODED_CREDENTIALS,
-  #       `clusterawsadm bootstrap credentials encode-as-profile`).
-  # false: empty credentials, CAPA uses its pod identity (IRSA / EKS Pod Identity on an AWS mgmt cluster).
-  #        Untested (#26).
+  # true: from store key capi-aws (AWS_B64ENCODED_CREDENTIALS); false: CAPA's pod identity (IRSA, untested #26).
   credentialsFromStore: true
-  # CAPA feature gates are CAPA's own (EKS, MachinePool, ...); ClusterTopology is not one of them - do not add it.
+  # CAPA's own gates (EKS, MachinePool, ...); ClusterTopology is not one of them.
   featureGates: {}
   leaseFlags: true
   # -- EC2 defaults (`aws.{controlPlaneMachineType,workerMachineType,iamInstanceProfiles}`).
   controlPlaneMachineType: t3.large
   workerMachineType: t3.large
-  # Created once per account by `clusterawsadm bootstrap iam create-cloudformation-stack` (policies include what the
-  # AWS cloud-controller-manager needs on control-plane nodes).
+  # Created once per account by `clusterawsadm bootstrap iam create-cloudformation-stack`.
   iamInstanceProfiles:
     controlPlane: control-plane.cluster-api-provider-aws.sigs.k8s.io
     nodes: nodes.cluster-api-provider-aws.sigs.k8s.io
 
 hetzner:
   version: v1.1.12
-  # CAPH takes no provider-level credentials: every HetznerCluster names its token secret (hetznerSecretRef). That
-  # secret (`hetzner` in ns fleet) is rendered by templates/hetzner/clusterclass.yaml. CAPH has no --feature-gates flag.
+  # No provider-level credentials: each HetznerCluster names its token secret (hetznerSecretRef).
   # -- Hetzner Cloud machine, LB, and secret defaults (`hetzner.{controlPlaneMachineType,workerMachineType,image,networkZone,loadBalancerType,secretName}`).
   controlPlaneMachineType: cpx31
   workerMachineType: cpx31
   image: ubuntu-24.04
   networkZone: eu-central
   loadBalancerType: lb11
-  # Secret in ns fleet read by CAPH (HetznerCluster.spec.hetznerSecretRef); CAPH copies it into every workload
-  # cluster as kube-system/hcloud (keys token, network) for the hcloud cloud-controller-manager.
+  # Secret in ns fleet; CAPH copies it into each workload cluster as kube-system/hcloud for the hcloud CCM.
   secretName: hetzner
 
 gcp:
   # -- CAPG `v1.13.1`, manager `image` pinned by digest, `GKE` + `MachinePool` `featureGates`.
   version: v1.13.1   # contract v1beta1 (metadata.yaml: 1.13 -> v1beta1), built on CAPI core 1.13
-  # The operator swaps the manager image of CAPG's components for this pin (multi-arch index: amd64, arm64, arm,
-  # ppc64le, s390x). Bump version and image together (renovate.json, hack/image-audit.sh).
+  # Replaces CAPG's manager image; bump version and image together.
   image: registry.k8s.io/cluster-api-gcp/cluster-api-gcp-controller:v1.13.1@sha256:4432fe0b984a99810f139029a62f16dd23eeeb8f0a31037f8c5c5ef89ddfcba5
-  # Secret (ns capg-system) holding CAPG's clusterctl variable GCP_B64ENCODED_CREDENTIALS: an external_account (WIF)
-  # credential config built from capi.gcp above - identifiers and a token file path, no key material (credentials.yaml).
+  # Secret (ns capg-system): WIF credential config built from capi.gcp, no key material (credentials.yaml).
   configSecret: capg-variables
-  # Path of the projected ServiceAccount token the credential config points at (templates/gcp-gke/credentials.yaml patches it in).
+  # Projected ServiceAccount token the credential config points at.
   tokenPath: /var/run/secrets/tokens/gcp
-  # GKE: the GCPManaged* controllers (off by default). MachinePool: GKE node pools are MachinePools (CAPG's own gate;
-  # core's MachinePool gate is set too while gcp is on, templates/common/capi-core.yaml).
+  # GKE: the GCPManaged* controllers. MachinePool: GKE node pools are MachinePools.
   featureGates:
     GKE: true
     MachinePool: true
