@@ -66,7 +66,7 @@ selects or reads those labels; no template names a cluster.
 |---|---|
 | `mesh.platform.koorikla.io/group: <group>` | catalog `clusterLabelParameters` → addon mesh `global.meshID`; CRS selector of the peers' remote secrets |
 | `mesh.platform.koorikla.io/network: <name>` | addon mesh `global.network` (ztunnel `NETWORK`); east-west Gateway label |
-| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE`; charts/cluster still sets `addons.platform.koorikla.io/istio-eastwest` (only the `eastwest` example selects on it) |
+| (the group label, via the ApplicationSet's `values/mesh-<member\|none>.yaml`) | addon mesh layers `values/mesh-member.yaml`: istio-csr + Vault Issuer, east-west gateway + reader RBAC, istiod CA off, `AMBIENT_ENABLE_MULTI_NETWORK` / `AMBIENT_ENABLE_BAGGAGE` |
 
 `global.multiCluster.clusterName` = cluster name on **every** cluster (catalog `clusterNameParameters`), so istiod and
 ztunnel always agree on the cluster ID. Clusters outside the mesh keep network and meshID empty: ztunnel and istiod
@@ -420,7 +420,7 @@ Upstream's `istio-reader-clusterrole-istio-system` (istiod chart) grants cluster
 `configmaps`, create/delete on MCS `serviceexports` and create on `tokenreviews`/`subjectaccessreviews`. Bound to the
 reader user, every peer could read this cluster's istio-csr and istiod serving keys, the OpenChoreo agent identity and
 every tenant Secret. So the reader is bound to the platform's own roles instead (addon `mesh`
-`templates/reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
+`templates/eastwest-reader-rbac.yaml`), derived from what istiod 1.32.0 actually reads on a remote cluster:
 
 | istiod 1.32.0 source | Remote reads | Granted |
 |---|---|---|

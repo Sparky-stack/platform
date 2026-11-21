@@ -353,7 +353,7 @@ apps waiting out a 5 min retry backoff after their missing CRD/webhook had appea
 5.3 then 10.3 min; keda/cloudnative-pg/crossplane on dev1 at 25.3 then 30.3 min), and dev1's addons idling ~8 min in
 a comparison error because Argo CD registered dev1 before its API served and only retried on the 300 s resync.
 
-What keeps it short now:
+What keeps it short now (#266: about 15 min warm, once the caches hold the images; a first boot stays at 20-30 min):
 - **Host pull-through caches** (`hack/registry-cache.sh`): one `registry` container per upstream in
   `installation.yaml` `registry.hostCache.mirrors` (`platform-cache-<upstream, dots as dashes>`, network `kind`, named
   volume). They belong to no k3d cluster, so `task down` keeps them and a rebuild pulls from local disk. `task up`

@@ -19,15 +19,17 @@ STEP CHECK                                          RESULT       DETAIL
 1    Argo CD apps Synced/Healthy                    PASS         44/44 Synced/Healthy
 2    CAPI clusters Provisioned                      PASS         dev1 Provisioned/Available
 ...
-4    in-cluster build succeeded                     PENDING #17  no build WorkflowRun in namespace default (workflow plane: ClusterWorkflowPlane default)
+4    in-cluster build succeeded                     PASS         latest build <run> (<time>): succeeded
 ...
 5    promotion-gate WorkflowRuns present            FAIL         no promotion-gate WorkflowRun in default (runs expire 1h after completion; promote to start one)
 ...
 9    PostgreSQL claim API                           PASS         XRD postgresqls.platform.koorikla.io Established on: dev1
-9    hello-world database claim Ready               PENDING      hello-world declares no postgresql Resource (app repo deploy/openchoreo, docs/data-services.md)
+9    hello-world database claim Ready               PASS         development: PostgreSQL <xr> Ready on dev1, hello-world reads Secret <xr>-app (binding <rrb>)
 
-23 PASS, 1 FAIL, 3 PENDING
+<n> PASS, 1 FAIL, <n> PENDING
 ```
+
+The shape of the output (placeholders in `<>`); counts depend on the stack and the time of day.
 
 | Result | Meaning | Before the demo |
 |---|---|---|
@@ -101,13 +103,13 @@ Also prepare:
 | # | Step | Minutes | Status |
 |---|---|---|---|
 | 1 | Clean bootstrap | 3 | live |
-| 2 | Add a cluster by adding a file | 4 | live; other providers render-only (EKS/GKE/AKS/Talos pending #87-#90) |
+| 2 | Add a cluster by adding a file | 4 | live; AWS, Hetzner and GKE are untested, render-only examples; EKS, AKS and Talos are not planned (#88-#90) |
 | 3 | Developer self-service | 3 | console and the six golden-path templates live; running one needs a GitHub org (#109) |
-| 4 | Build and supply chain | 5 | signature + live deny live; in-cluster build pending #17 |
-| 5 | Deploy and promote | 5 | development/staging live; production pending #54 |
+| 4 | Build and supply chain | 5 | live: in-cluster build (#17), signature, live deny |
+| 5 | Deploy and promote | 5 | live, production through the promotion gate (#54); the weekend freeze holds production PENDING |
 | 6 | Observe | 3 | logs/metrics/traces live; alert-rule trait `observability-alert-rule` allowed on the component types |
 | 7 | Runtime security | 3 | live |
-| 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1; #19); per-tenant stores pending #96 |
+| 8 | Zero trust | 2 | live (OpenBao mesh CA on mgmt, istio-csr on dev1; #19); app secrets from each project's own OpenBao mount (#96, #250) |
 | 9 | App with a database | 2 | live on dev1 (CloudNativePG); RDS / Cloud SQL / Flexible Server render-only (#107) |
 | 10 | PR preview environment | 4 | live (#168); the build takes ~6 min, so open the PR before the demo |
 
@@ -116,7 +118,7 @@ Also prepare:
 Show: one command builds the platform from zero; Argo CD converges mgmt and the fleet.
 
 ```bash
-task up            # recorded beforehand: ~25 min; show the recording or the end of the log
+task up            # recorded beforehand: ~15 min with warm registry caches (first boot 20-30 min); show the recording or the end of the log
 task status        # CAPI clusters, Argo CD apps, ClusterDataPlanes
 ```
 
@@ -154,8 +156,8 @@ Talking points:
   (docs/providers.md "Adding a cluster").
 - CNI is fixed at birth: `dev1` runs Cilium, `prod1` (multicluster profile) flannel; the label picks the addon set
   (docs/networking.md "CNI is fixed when the cluster is created").
-- The same contract renders for AWS (CAPA) and Hetzner (CAPH) today; EKS, GKE, AKS and Talos/vSphere ClusterClasses are
-  **pending #87, #88, #89, #90**.
+- The same contract renders for AWS (CAPA), Hetzner (CAPH) and GKE (CAPG) as untested examples; EKS, AKS and
+  Talos/vSphere are not planned (#88, #89, #90: no cloud accounts in this lab).
 
 Fallback: if a cluster is still provisioning, show the file, `kubectl get clusters -n fleet` and the rendered output.
 Never create or delete a cluster live (a new CAPD cluster needs ~10 min and RAM the laptop may not have).
@@ -295,8 +297,8 @@ Talking points:
 - The automated gate checks pipeline order, readiness, a smoke test, the observer and the freeze window, then opens
   the production PR with a commit status; a human release manager merges it.
 
-Fallback / pending: production serving hello-world needs a passing gate run that promotes a digest release:
-**pending #54** (and the gate's GitHub App, #10). Show the gate WorkflowRun in the console (Workflows ->
+Fallback: production serving hello-world needs a passing gate run that promotes a digest release (proven live in
+#54, with the gate's GitHub App from #10); in a freeze window it stays PENDING until the window ends. Show the gate WorkflowRun in the console (Workflows ->
 promotion-gate), its PR if one exists, and the production ReleaseBinding condition (denied tag-only image) as proof
 that production refuses what is not verified.
 
@@ -420,8 +422,8 @@ kubectl --context k3d-platform-mgmt get resourcereleasebindings -n default      
 kubectl --kubeconfig dev1.kubeconfig get postgresqls -A                          # in the dp-default-demo-development-* cell
 ```
 
-`task demo:check` row "hello-world database claim Ready" proves the whole chain (PENDING until hello-world declares
-the Resource).
+`task demo:check` row "hello-world database claim Ready" proves the whole chain (hello-world declares it in
+`deploy/openchoreo/orders-db.yaml`).
 
 Talking points: the same XR becomes RDS / Aurora, Cloud SQL or Azure Flexible Server on those providers (rendered and
 tested offline, live accounts pending #107); production XRs must set HA and backups.

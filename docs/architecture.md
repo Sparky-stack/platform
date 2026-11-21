@@ -13,31 +13,12 @@ Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagram
 
 ## Topology
 
-```mermaid
-flowchart LR
-  git[(github: platform, app repos)]
-  subgraph mgmt["mgmt (k3d locally; any conformant k8s in prod)"]
-    argo["Argo CD + ApplicationSets"]
-    capi["CAPI operator: core, k3s, docker | aws | hetzner | gcp"]
-    eso["ESO + ClusterSecretStore 'platform'"]
-    cm[cert-manager]
-    occp["OpenChoreo control plane + cluster-gateway"]
-  end
-  subgraph wl["workload cluster <name> (CAPI, k3s)"]
-    agent["OpenChoreo cluster-agent"]
-    gw["kgateway (app ingress)"]
-    weso["ESO + ClusterSecretStore 'default'"]
-    apps["app workloads"]
-  end
-  git --> argo
-  argo -->|"charts/cluster"| capi -->|"creates"| wl
-  argo -->|"addons via cluster secret (push)"| wl
-  cm -->|"per-cluster agent CA + client cert"| eso
-  eso -->|"ClusterResourceSet payload"| capi
-  capi -->|"CRS: agent cert + gateway CA"| agent
-  agent -->|"outbound wss mTLS"| occp
-  occp -->|"releases via agent"| apps
-```
+<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images" width="100%">
+
+The numbered steps are listed in [diagrams/README.md](diagrams/README.md#steps). Not drawn:
+External Secrets Operator (credentials, below), cert-manager (agent certificates, [Trust between OpenChoreo
+planes](#trust-between-openchoreo-planes)) and the OpenChoreo workflow and observability planes, which run on mgmt
+next to the control plane ([build-plane.md](build-plane.md), [observability.md](observability.md)).
 
 ## Decisions
 
@@ -134,10 +115,12 @@ Every ExternalSecret on mgmt references `ClusterSecretStore/platform`. Its backe
 | `aws` | AWS Secrets Manager (IRSA / Pod Identity) |
 | `vault` | Vault / OpenBao (Hetzner and other clouds without a native secret manager) |
 
-Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice. Every
-tenant can read through `default`, so platform credentials never live behind it: the only one on workload clusters,
-the external-dns Cloudflare token, has its own `ClusterSecretStore/dns` (namespace `external-dns` only, separate
-backend location and identity; [dns.md](dns.md#credentials)).
+Workload clusters get `ClusterSecretStore/default` (OpenChoreo `secretStoreRef`) with the same backend choice; it
+refuses tenant (cell) namespaces while `secrets.tenantStores.enabled`. App secrets come from OpenBao instead: each cell
+namespace gets `SecretStore openbao-tenant`, which reads only that project's mount, and apps point at a key with an
+OpenChoreo `SecretReference` ([openchoreo.md](openchoreo.md#application-secrets-developer-view)). The external-dns
+Cloudflare token has its own `ClusterSecretStore/dns` (namespace `external-dns` only, separate backend location and
+identity; [dns.md](dns.md#credentials)).
 Key names are flat (`platform-github`, `capi-aws`, …; [conventions.md](conventions.md#secret-keys)) so they map onto
 every backend. `platform` holds every platform credential, so its `spec.conditions` admit only the mgmt namespaces
 that consume it (addon secret-stores `platformStore.namespaces`), while `workflows-*` run namespaces use the
@@ -163,11 +146,19 @@ app repo, in AppProject `tenant-<project>` restricted to that repo and to OpenCh
 is one file in the platform repo; deploying and promoting are commits in the app repo
 ([openchoreo.md](openchoreo.md#tenants), [promotion.md](promotion.md)).
 
+### Platform APIs: Crossplane Configuration packages, next to the app
+Databases and other platform APIs are Crossplane v2 XRs on the workload cluster that runs the app (opt-in per cluster).
+Each API (XRD + Composition) ships as a digest-pinned Configuration package built from `packages/<name>/` (signed in CI;
+in-cluster verification is off until Crossplane reads Sigstore bundles, #247);
+per-cluster facts reach it through an `EnvironmentConfig`, so one package serves every provider. Developers ask through
+OpenChoreo (resource type `postgresql`), never through Crossplane directly ([crossplane.md](crossplane.md),
+[data-services.md](data-services.md)).
+
 ### Builds in the cluster, not in a CI provider
 Components name a ClusterWorkflow; the OpenChoreo workflow plane on mgmt builds, scans, signs and commits the new image
-ref to the app repo, and Argo CD deploys it. GitHub Actions ([`ci/`](https://github.com/koorikla/platform/tree/main/ci)) run the
-same scripts as an optional path. This keeps CI providers thin and the build path identical on every installation
-([build-plane.md](build-plane.md)).
+ref to the app repo, and Argo CD deploys it. The reusable GitHub Actions workflows (`.github/workflows/app-*.yaml`,
+scripts in [`ci/`](../ci/README.md)) run the same scripts as an optional path. This keeps CI providers thin and the
+build path identical on every installation ([build-plane.md](build-plane.md)).
 
 ### Repos
 | Repo | Owner | Contents |
@@ -175,5 +166,5 @@ same scripts as an optional path. This keeps CI providers thin and the build pat
 | `koorikla/platform` | platform team | bootstrap, charts, addons, installations (fleet, tenants), OpenChoreo platform config |
 | `koorikla/hello-world` | app team | code, Dockerfile, CI, `deploy/openchoreo/` |
 
-All three are public. Private forks work with repo credentials from `platform-github` (ESO -> Argo CD `repo-creds`);
+Both are public. Private forks work with repo credentials from `platform-github` (ESO -> Argo CD `repo-creds`);
 nodes pull private GHCR images with `platform-ghcr` ([forking.md](forking.md#3-credentials)).

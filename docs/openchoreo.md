@@ -427,5 +427,5 @@ recovers. On a fresh bootstrap the same backoff kept development down ~17 min af
 plane's agent therefore starts only once the CRDs of its opt-in addons exist (`capabilityGate` in addon
 openchoreo-data-plane, [data services](data-services.md#only-on-data-planes-that-run-the-operator)).
 
-Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/openchoreo-*`):
+Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/common/openchoreo-*`):
 [#52](https://github.com/koorikla/platform/issues/52).
