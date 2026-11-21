@@ -21,7 +21,7 @@ Every platform `ClusterComponentType`, `ClusterTrait`, `ClusterResourceType` and
 | mgmt | `charts/cluster` (per cluster) | fleet (+ cluster-scoped, org ns) | agent CA + client cert, CRS, `ClusterDataPlane <name>`, `Environment`s |
 | mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
 | workload | `openchoreo-data-plane` | openchoreo-data-plane | cluster-agent + Gateway `gateway-default` (app ingress) |
-| workload | `reloader` | reloader | Stakater Reloader (scoped to `openchoreo-data-plane`): rolls `cluster-agent` on cert / gateway CA renewal |
+| workload | `reloader` | reloader | Stakater Reloader (cluster-wide watch, writes fenced to cells + `openchoreo-data-plane` by VAP `reloader-rollout-only`): rolls `cluster-agent` on cert / gateway CA renewal and app Deployments when their OpenBao-backed Secret rotates (#268) |
 | mgmt | `reloader` | reloader | the same addon with `values/role-mgmt.yaml`: scoped to `openchoreo-control-plane`, restarts Backstage when one of its ConfigMaps (`backstage-extra-config` etc.) changes ([project-templates.md](project-templates.md#backstage-wiring)) |
 | mgmt + workload (docker) | `coredns-local` | kube-system | resolves `*.openchoreo.localhost` (mgmt: to the control-plane Gateway; workload: to mgmt) |
 
@@ -126,7 +126,7 @@ mgmt, ns openchoreo-control-plane (chart)                                       
   `cluster-agent-selfsigned-unused`. `caSecretName` is empty: no CA Secret is ever needed on a data plane.
 - **Rotation.** cert-manager renews the client cert 30 days before expiry; ESO (≤1h) and the CRS (`Reconcile`) update
   `cluster-agent-tls`. Because the 1.3.3 agent reads its client cert and gateway CA once at start, addon `reloader`
-  (scoped to `openchoreo-data-plane`, `reloadStrategy: annotations` so Argo CD sees no drift) watches both objects and
+  (may roll workloads only in `openchoreo-data-plane` and tenant cells, `reloadStrategy: annotations` so Argo CD sees no drift) watches both objects and
   rolls `deploy/cluster-agent-dataplane` automatically on change; the same applies to the gateway CA (10y).
 - The upstream cluster-gateway has cluster-wide `get/list secrets` (to read every plane's client CA): it can read
   `fleet/<name>-agent-ca` including the CA key. It runs on mgmt, so this does not widen the workload-cluster boundary.
@@ -220,9 +220,10 @@ Worked example: hello-world `GREETING_SECRET` (`deploy/openchoreo/greeting-secre
 4. **What the platform renders**: in each cell namespace an `ExternalSecret` (`refreshInterval: 15s`, set by the
    component type, which ignores `SecretReference.spec.refreshInterval`) on that namespace's `SecretStore
    openbao-tenant`, and the Deployment takes the Secret via `envFrom`. `task demo:check` row `app-secret` asserts it.
-5. **Rotate**: write a new version (step 1). The Kubernetes Secret follows within ~15 s, but env vars and files
-   (mounted with `subPath`) are read at container start: roll the pods
-   ([runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)).
+5. **Rotate**: write a new version (step 1). The Kubernetes Secret follows within ~15 s and Reloader rolls the pods of
+   every Deployment that references it (env vars and `subPath` files are read at container start), in every
+   environment and preview cell: the component types annotate the Deployment `secret.reloader.stakater.com/auto:
+   "true"` (#268, [runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)).
 
 Isolation: the store is fixed by the platform, a tenant `ExternalSecret`/`SecretStore` is rejected on the data plane
 (VAP, addon secret-stores) and cannot be synced from an app repo (tenant AppProject), and OpenBao answers a cell
