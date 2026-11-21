@@ -117,7 +117,8 @@ Declarative, no cluster names: the **data plane announces** what it runs, the **
   `capability-gate` (sync wave -1, before the agent Deployment) that runs `kubectl wait` until the CRD of every enabled
   `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`; `crossplane` ->
   `postgresqls.platform.koorikla.io`, the XRD of the Configuration package crossplane pulls after it is Healthy, ~20 min
-  after the agent on a fresh local bootstrap, #255), each switched on per cluster from its
+  after the agent on a fresh local bootstrap, #255; `telemetry` -> `podmonitors.monitoring.coreos.com` for ClusterTrait
+  `metrics`, on by default like the addon, #252), each switched on per cluster from its
   `addons.platform.koorikla.io/<addon>` label. Nothing reaches the cluster before the kinds of its traits and resource
   types exist. Without it,
   OpenChoreo 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on controller-runtime's

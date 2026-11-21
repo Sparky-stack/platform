@@ -40,3 +40,8 @@ Not upstream either: `platform/cluster-traits/resilience.yaml` (#251, docs/openc
 rendered by `templates/platform-types.yaml` (`resilience.enabled`). `templates/upstream-defaults.yaml` embeds it in
 the Deployment-based component types (`spec.traits`, instance `resilience`) and adds the `resilience` object to their
 `environmentConfigs`, so developers never attach it.
+
+Not upstream either: `platform/cluster-traits/metrics.yaml` (#252, docs/openchoreo.md "Application metrics"), rendered
+by `templates/platform-types.yaml` (`appMetrics.enabled`). Opt-in: `templates/upstream-defaults.yaml` adds it to the
+`allowedTraits` of the Deployment-based component types. Its PodMonitor comes from default-on addon telemetry
+(`platform.koorikla.io/uses-addons`): skipped where a data plane opts out, waited for by the agent's capability gate.
