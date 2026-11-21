@@ -167,7 +167,7 @@ def main():
         for no, line in enumerate(lines, 1):
             where = "%s:%d" % (rel, no)
             if MERMAID.match(line):
-                problems.append(MERMAID_MSG % where)
+                problems.append(MERMAID_MSG % ("%s:%d" % (rel_posix, no)))
             if line.lstrip().startswith(("```", "~~~")):
                 fence = not fence
                 continue

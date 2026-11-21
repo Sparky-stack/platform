@@ -74,6 +74,14 @@ def words(text):
     return " ".join(out)
 
 
+def rel(path):
+    """Repo-relative POSIX path; the path itself when on another drive (Windows temp dirs)."""
+    try:
+        return os.path.relpath(path, ROOT).replace(os.sep, "/")
+    except ValueError:
+        return path
+
+
 def owners(readme):
     base = os.path.dirname(readme)
     with open(readme, encoding="utf-8") as fh:
@@ -91,10 +99,10 @@ def main(argv):
     for n in names:
         docs = own.get(n)
         if not docs:
-            problems.append("%s: no owning doc in %s" % (n, os.path.relpath(readme, ROOT)))
+            problems.append("%s: no owning doc in %s" % (n, rel(readme)))
             continue
         text = " " + " ".join(words(open(d, encoding="utf-8").read()) for d in docs) + " "
-        rel = ", ".join(os.path.relpath(d, ROOT) for d in docs)
+        where = ", ".join(rel(d) for d in docs)
         has = lambda term: (" " + words(term)) in text  # noqa: E731
         for info in build.DIAGRAMS[n]().box_info.values():
             key = (n, info["title"])
@@ -102,11 +110,11 @@ def main(argv):
             named = any(has(t) for t in {info["title"], info["name"], *info["aka"]})
             if key in ALIASES or key in DIAGRAM_ONLY:
                 if named:
-                    problems.append('%s: "%s" is now named in %s: drop its stale entry' % (n, key[1], rel))
+                    problems.append('%s: "%s" is now named in %s: drop its stale entry' % (n, key[1], where))
                 elif key in ALIASES and not has(ALIASES[key]):
-                    problems.append('%s: box "%s" (doc term "%s") not in %s' % (n, key[1], ALIASES[key], rel))
+                    problems.append('%s: box "%s" (doc term "%s") not in %s' % (n, key[1], ALIASES[key], where))
             elif not named:
-                problems.append('%s: box "%s" not in %s (name it there, or add an entry here)' % (n, key[1], rel))
+                problems.append('%s: box "%s" not in %s (name it there, or add an entry here)' % (n, key[1], where))
     for key in sorted((set(ALIASES) | set(DIAGRAM_ONLY)) - seen):
         if key[0] in names:
             problems.append('%s: stale entry "%s": no such box' % key)
