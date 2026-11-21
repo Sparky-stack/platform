@@ -1,7 +1,4 @@
-# OpenChoreo Component: the developer-facing definition of ${{ values.name }}.
-#
-# No metadata.namespace on purpose: the platform's Argo CD Application sets the destination namespace (the OpenChoreo
-# org namespace). The Application exists once the platform PR the scaffolder opened is merged (tenant wiring).
+# The OpenChoreo Component: what ${{ values.name }} is (README "Files").
 apiVersion: openchoreo.dev/v1alpha1
 kind: Component
 metadata:
@@ -11,12 +8,15 @@ metadata:
     openchoreo.dev/description: ${{ values.description | dump }}
 spec:
   owner:
-    projectName: ${{ values.project }} # immutable; the Project comes from the platform's tenant file
+    projectName: ${{ values.project }}
   componentType:
-    # Upstream 1.3.3 default ClusterComponentType `service` (workloadType deployment). Immutable after creation.
     kind: ClusterComponentType
     name: deployment/service
-  # autoDeploy: every Workload change (CI bumps the image on push to main) cuts a ComponentRelease and points the first
-  # pipeline environment (development) at it. Staging and production move only through reviewed PRs that set
-  # spec.releaseName in release-bindings/<env>.yaml.
-  autoDeploy: true
+  autoDeploy: true # each new image goes to development; staging and production move by PR (release-bindings/)
+  traits:
+    - kind: ClusterTrait
+      name: health-probes # production requires the readiness probe
+      instanceName: probes
+      parameters:
+        readiness: { enabled: true, handler: { httpGet: { port: 8080, path: /healthz } }, periodSeconds: 5 }
+        liveness: { enabled: true, handler: { httpGet: { port: 8080, path: /healthz } }, periodSeconds: 10 }

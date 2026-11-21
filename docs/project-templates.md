@@ -28,9 +28,10 @@ Every generated service repository contains:
 
 - the app with unit tests, `GET /healthz` and `GET /version`, listening on `PORT` (8080);
 - a multi-arch `Dockerfile`: bases pinned by index digest, non-root runtime on distroless, tests in the build stage;
-- `.github/workflows/ci.yaml`: manifest validation, the app-* build (PRs build + scan; `main` pushes, signs and
-  attests), then `bump` pins `<image>:<sha>@sha256:<digest>` in the Workload, which OpenChoreo deploys to
-  `development`;
+- `.github/workflows/ci.yaml`: two reusable-workflow calls and no code: the app-* build (PRs build + scan; `main`
+  pushes, signs and attests; from the next ci release it also validates `deploy/openchoreo/` via
+  `app-openchoreo-manifests.yaml`), then `app-workload-bump.yaml` pins `<image>:<sha>@sha256:<digest>` in the
+  Workload, which OpenChoreo deploys to `development`. Generated repos carry no `hack/` scripts;
 - `deploy/openchoreo/`: `Component` (autoDeploy), `Workload`, `release-bindings/{development,staging,production}.yaml`
   ([openchoreo.md](openchoreo.md#app-repo-contract)); staging and production move by PR ([promotion.md](promotion.md));
 - `catalog-info.yaml`, `.github/CODEOWNERS`, `renovate.json` (bases, actions and the app-* workflow SHA), `SECURITY.md`,

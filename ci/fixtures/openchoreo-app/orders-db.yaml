@@ -1,0 +1,14 @@
+# A PostgreSQL database from the platform's ClusterResourceType postgresql (README "Database").
+apiVersion: openchoreo.dev/v1alpha1
+kind: Resource
+metadata:
+  name: orders-db
+spec:
+  owner:
+    projectName: demo
+  type:
+    kind: ClusterResourceType
+    name: postgresql
+  parameters:
+    database: orders # immutable
+    version: "17"
