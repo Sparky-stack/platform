@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to explicit namespaces (no `ClusterRole`). Rolls `openchoreo-data-plane` `cluster-agent-dataplane` on TLS renewal on workload clusters, and `openchoreo-control-plane` Backstage on `ConfigMap` changes on `mgmt`.
+Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), Workload clusters: rolls `openchoreo-data-plane` `cluster-agent-dataplane` on TLS renewal and app Deployments in tenant cells (incl. previews) when their OpenBao-backed Secret rotates (#268); it watches cluster-wide because cells have runtime names, and ValidatingAdmissionPolicy `reloader-rollout-only` (`templates/rollout-guard.yaml`) lets it change only the rollout annotation, only in cells and `rolloutGuard.platformNamespaces`. `mgmt`: scoped `Role` in `openchoreo-control-plane`, rolls Backstage on `ConfigMap` changes.
 
 ## Where it runs
 
@@ -29,13 +29,14 @@ Wrapper chart for Stakater Reloader (`2.2.20` / `v1.4.24`), scoped strictly to e
 | reloader.reloader.deployment.securityContext.seccompProfile.type | string | `"RuntimeDefault"` |  |
 | reloader.reloader.ignoreCronJobs | bool | `true` |  |
 | reloader.reloader.ignoreJobs | bool | `true` |  |
-| reloader.reloader.namespaces | list | `["openchoreo-data-plane"]` | Watched namespaces (`[openchoreo-control-plane]` in `values/role-mgmt.yaml` with `autoReloadAll`, `resourceLabelSelector` and `ignoreSecrets: true`). |
 | reloader.reloader.readOnlyRootFileSystem | bool | `true` |  |
 | reloader.reloader.reloadStrategy | string | `"annotations"` |  |
-| reloader.reloader.watchGlobally | bool | `false` | Scoped Role + RoleBinding per watched namespace (enforced `false` by `values.schema.json`; no `ClusterRole`). |
+| reloader.reloader.watchGlobally | bool | `true` | Workload: cluster-wide watch (tenant cells have runtime names); writes fenced by templates/rollout-guard.yaml. mgmt (`values/role-mgmt.yaml`): `false` + `namespaces: [openchoreo-control-plane]`, scoped Role. |
+| rolloutGuard | object | `{"platformNamespaces":["openchoreo-data-plane"]}` | Namespaces (besides tenant cells, label `openchoreo.dev/project`) where Reloader may roll annotated workloads. |
 
 ## Day-2 notes
 
+- App secret rotation (pods roll within the ExternalSecret refresh, 15 s): [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao).
 - Agent certificate rotation and reload checks: [certificates and secrets](../../docs/runbooks/certificates-and-secrets.md#3-openchoreo-agent-certificates) and [incidents](../../docs/runbooks/incidents.md#data-plane-agent-disconnected).
 
 ## Links
