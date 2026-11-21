@@ -10,7 +10,10 @@ the docs of the repositories they become; hack/tests/test_project_templates.sh r
   - `task <name>` in code spans and code blocks names a Taskfile task (`make <name>` is rejected; use `task`);
   - never `--context koorikla` / `use-context koorikla`; `docs/runbooks/*.md` are linked from `docs/operations.md`,
     carry the standard headings, and pass `--context` or `--kubeconfig` on every `kubectl` block command;
-  - every `addons/*` and `charts/*` directory carries a `README.md` (<= 40 lines) with the standard headings.
+  - every `addons/*` and `charts/*` directory carries a `README.md` (<= 40 lines) with the standard headings;
+  - no Mermaid fence (```mermaid, ~~~mermaid, ```{mermaid}) in any checked *.md or `*.md.gotmpl` README template: one
+    diagram system (#270), generated SVGs from docs/diagrams/src/build.py (Mermaid does not render on GitHub mobile,
+    plain viewers or TechDocs). Here, not in a hack/tests script, so scoped PR CI catches it on a docs-only change.
 
 Usage: check-docs.py [ROOT]   (default: the repo root). Exits 1 and lists every problem.
 """
@@ -32,6 +35,8 @@ RUNBOOK_SECTIONS = ("when to use", "symptoms", "steps", "verify", "rollback", "r
 CHART_README = re.compile(r"^(?:addons|charts)/[^/]+/README\.md$")
 CHART_README_SECTIONS = ("purpose", "where it runs", "key values", "day-2 notes", "links")
 CHART_README_MAX_LINES = 40
+MERMAID = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*\{?\s*mermaid\b", re.I)
+MERMAID_MSG = "%s: Mermaid fence; draw it in docs/diagrams/src/build.py and embed the SVG with <img>"
 
 
 def md_files():
@@ -46,6 +51,20 @@ def md_files():
         for f in sorted(files):
             if f.endswith(".md"):
                 yield os.path.join(d, f)
+
+
+def gotmpl_files():
+    """README templates (helm-docs) of our charts and packages; vendored */charts/<dep>/ are skipped."""
+    for top in ("addons", "charts", "packages"):
+        for d, dirs, files in os.walk(os.path.join(ROOT, top)):
+            parts = os.path.relpath(d, ROOT).split(os.sep)
+            if len(parts) >= 3 and parts[2] == "charts":
+                dirs[:] = []
+                continue
+            dirs.sort()
+            for f in sorted(files):
+                if f.endswith(".md.gotmpl"):
+                    yield os.path.join(d, f)
 
 
 def slug(heading):
@@ -110,6 +129,11 @@ def main():
                     readme = os.path.join(edir, "README.md")
                     if not os.path.isfile(readme):
                         problems.append("%s: missing README.md" % os.path.relpath(readme, ROOT).replace("\\", "/"))
+    for path in gotmpl_files():
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for no, line in enumerate(fh.read().split("\n"), 1):
+                if MERMAID.match(line):
+                    problems.append(MERMAID_MSG % ("%s:%d" % (os.path.relpath(path, ROOT).replace("\\", "/"), no)))
     for path in md_files():
         rel = os.path.relpath(path, ROOT)
         rel_posix = rel.replace("\\", "/")
@@ -142,6 +166,8 @@ def main():
         fence = False
         for no, line in enumerate(lines, 1):
             where = "%s:%d" % (rel, no)
+            if MERMAID.match(line):
+                problems.append(MERMAID_MSG % where)
             if line.lstrip().startswith(("```", "~~~")):
                 fence = not fence
                 continue
