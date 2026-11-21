@@ -42,7 +42,7 @@ clusterAgentDataServices:
   serviceAccount: cluster-agent-dataplane   # == the upstream agent Deployment's ServiceAccount (checked by the test)
   rules:
     - { apiGroup: keda.sh, resources: [scaledobjects] }
-    - { apiGroup: platform.koorikla.io, resources: [postgresqls] }
+    - { apiGroup: platform.koorikla.io, resources: [postgresqls, mysqls] }   # mysqls: ClusterResourceType mysql (#256)
     - { apiGroup: monitoring.coreos.com, resources: [podmonitors] }   # ClusterTrait metrics (#252, addon telemetry)
 
 # Capability gate (templates/capability-gate.yaml, #246): the cluster agent is the data plane's only door to OpenChoreo,
@@ -66,6 +66,11 @@ capabilityGate:
       # after it is Healthy, so this wait also covers the package pull; a failed package keeps the agent waiting here.
       enabled: "false"
       crds: [postgresqls.platform.koorikla.io]   # ClusterResourceType postgresql
+    moco:
+      # Label addons.platform.koorikla.io/moco: addon moco (MySQLCluster CRD) and, with it, the MySQL API that addon
+      # crossplane installs on the same label (XRD from the platform-mysql Configuration package, #256).
+      enabled: "false"
+      crds: [mysqlclusters.moco.cybozu.com, mysqls.platform.koorikla.io]   # ClusterResourceType mysql
     telemetry:
       # Default-on addon (label addons.platform.koorikla.io/telemetry is "false" only where a fleet file opts out). The
       # PodMonitor CRD comes from its kube-prometheus-stack, in a separate Argo CD Application that may sync after this

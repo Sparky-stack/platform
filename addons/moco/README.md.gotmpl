@@ -1,0 +1,16 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for MOCO (`0.28.0` / `0.38.0`) on workload clusters: the in-cluster backend of the platform MySQL API (`packages/mysql`, Composition backend `moco`). Reconciles `MySQLCluster`s across all namespaces under Pod Security `restricted` and owns the digest-pinned mysqld image catalog (`mysqlImageCatalog`).
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [workload]`, all providers (`namespace: moco-system`, `serverSideDiff: true`).
+- **Catalog label:** `addons.platform.koorikla.io/moco` (`default: false`, opt-in with `"true"` per cluster via `addons.moco: true`); the same label enables the MySQL API in addon crossplane.
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- The upstream Deployment `moco-controller` runs 0 replicas by design; the controller is `moco-controller-restricted` (values.yaml header).
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [Data services: MySQL as a service](../../docs/data-services.md#mysql-as-a-service)
+{{- end -}}

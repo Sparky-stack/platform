@@ -104,7 +104,7 @@ tests:
         documentIndex: 0
       - contains:
           path: rules
-          content: { apiGroups: [platform.koorikla.io], resources: [postgresqls], verbs: [get, list, watch, create, update, patch, delete] }
+          content: { apiGroups: [platform.koorikla.io], resources: [postgresqls, mysqls], verbs: [get, list, watch, create, update, patch, delete] }
         documentIndex: 0
       - equal:
           path: subjects
@@ -145,6 +145,22 @@ tests:
           path: spec.template.spec.containers[0].command
           value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/postgresqls.platform.koorikla.io, crd/scaledobjects.keda.sh]
 
+  - it: "capability gate (#256): addon moco waits for the MOCO CRD and the MySQL XRD crossplane installs on the same label"
+    template: templates/capability-gate.yaml
+    set:
+      capabilityGate.addons.moco.enabled: "true"
+    documentSelector: { path: kind, value: Job }
+    asserts:
+      - equal: { path: 'spec.template.spec.initContainers[0].name', value: wait-for-moco-crds }
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: [kubectl, wait, --for=create, --timeout=30m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io]
+      # both features (#256 + #252): moco does not replace the default-on telemetry wait
+      - equal: { path: 'spec.template.spec.initContainers[1].name', value: wait-for-telemetry-crds }
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [kubectl, wait, --for=condition=Established, --timeout=5m, crd/mysqlclusters.moco.cybozu.com, crd/mysqls.platform.koorikla.io, crd/podmonitors.monitoring.coreos.com]
+
   - it: "capability gate (#252): by default the agent waits for addon telemetry's PodMonitor CRD (ClusterTrait metrics)"
     template: templates/capability-gate.yaml
     documentSelector: { path: kind, value: Job }
@@ -154,7 +170,7 @@ tests:
           path: spec.template.spec.initContainers[0].command
           value: [kubectl, wait, --for=create, --timeout=30m, crd/podmonitors.monitoring.coreos.com]
 
-  - it: "capability gate: nothing rendered on a cluster without keda, crossplane and telemetry (the agent starts at once)"
+  - it: "capability gate: nothing rendered on a cluster without keda, crossplane, moco and telemetry (the agent starts at once)"
     template: templates/capability-gate.yaml
     set:
       capabilityGate.addons.telemetry.enabled: "false"

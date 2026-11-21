@@ -184,6 +184,23 @@ postgresql:
     delegatedSubnetId: ""
     privateDnsZoneId: ""
 
+# --- MySQL as a service (docs/data-services.md "MySQL as a service", #256) ------------------------------------------
+# Opt-in with addon moco: the catalog sets mysql.enabled from the cluster label addons.platform.koorikla.io/moco (charts/
+# platform clusterLabelParameters), so `addons: { moco: true }` installs the operator AND this API, and the capability
+# gate of openchoreo-data-plane waits for both. Backend moco only: the cloud Compositions of packages/mysql are layout
+# (never applied); a cloud backend here is a follow-up with its providers, MRAP entries and facts.
+mysql:
+  # -- `"true"` installs the MySQL API (Configuration platform-mysql + EnvironmentConfig + embedded Function); a string because the ApplicationSet passes cluster labels as strings (helm set-string).
+  enabled: "false"
+  backend: moco
+  # mysqlImages fact: addons/moco values.yaml mysqlImageCatalog (catalog valuesFromAddons: [moco]), not restated here.
+  # The MySQL API package (packages/mysql) and its embedded function, published by the same package-mysql CI run;
+  # bump both together (the Configuration's dependsOn pins the function digest). Renovate bumps them. The first pin is
+  # the package-mysql build of commit a239626 (#256, before its release); the next release mysql-vX.Y.Z replaces it.
+  configuration: ghcr.io/koorikla/platform/mysql:a239626@sha256:0082fd0f27ad3ad9ff0b8e5aa3d036d9ccf08cf3023bb93ae3133e8ddf50cea6
+  function:
+    koorikla-platform-mysqlcompose-mysql: ghcr.io/koorikla/platform/mysql_compose-mysql:a239626@sha256:09cee6e26d7b275f3689077c9009f38b8fe8c752eb51d9f225c4be1827c0c0d2
+
 # --- Admission (Kyverno ValidatingPolicy, CRDs from addon kyverno) ----------------------------------------------------
 policy:
   enabled: true
@@ -191,8 +208,8 @@ policy:
   # outside these namespaces, unless a ServiceAccount of one of exemptServiceAccountNamespaces makes the request
   # (Crossplane composing the XR, providers updating their resources, the CNPG operator creating Backups, kube-system
   # controllers such as the garbage collector).
-  exemptNamespaces: [crossplane-system, cnpg-system]
-  exemptServiceAccountNamespaces: [crossplane-system, cnpg-system, kube-system]
+  exemptNamespaces: [crossplane-system, cnpg-system, moco-system]
+  exemptServiceAccountNamespaces: [crossplane-system, cnpg-system, moco-system, kube-system]
   # PostgreSQL XRs in OpenChoreo cells of these environments must set highAvailability: true and backup.enabled: true.
   production:
     environments: [production]

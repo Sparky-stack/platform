@@ -113,6 +113,7 @@ addons:
     clusterLabelParameters:
       capabilityGate.addons.keda.enabled:       { label: addons.platform.koorikla.io/keda,       default: "false" }
       capabilityGate.addons.crossplane.enabled: { label: addons.platform.koorikla.io/crossplane, default: "false" }
+      capabilityGate.addons.moco.enabled:       { label: addons.platform.koorikla.io/moco,       default: "false" }
       capabilityGate.addons.telemetry.enabled:  { label: addons.platform.koorikla.io/telemetry,  default: "true" }    # default-on addon
   # PriorityClasses only: the one client-side-diff addon. value/preemptionPolicy are immutable, server-side diff's dry
   # run would reject a change and block the Application; client-side, Force=true,Replace=true recreates them (#281).
@@ -168,8 +169,9 @@ addons:
   openbao:                  { namespace: openbao,                  roles: [mgmt],           default: false }
   # Admission policy (docs/networking.md "Kyverno"): engine first, policies retry until its CRDs exist.
   kyverno:                  { namespace: kyverno,                  roles: [mgmt, workload], default: true }
-  # valuesFromAddons: production cells admit exactly the digest-pinned CloudNativePG images of its values (#327).
-  kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true, valuesFromAddons: [cloudnative-pg] }
+  # valuesFromAddons: production cells admit exactly the digest-pinned CloudNativePG (#327) and MOCO (#256) images of
+  # their values.
+  kyverno-policies:         { namespace: kyverno,                  roles: [mgmt, workload], default: true, valuesFromAddons: [cloudnative-pg, moco] }
   # Build plane (docs/build-plane.md): in-cluster builds, and Harbor for registry.type harbor (the examples set
   # mgmt.addons.harbor "false"); externalURL follows registry.host.
   openchoreo-workflow-plane: { namespace: openchoreo-workflow-plane, roles: [mgmt], default: true, compareOptions: [IncludeMutationWebhook=true] }
@@ -182,4 +184,14 @@ addons:
   cloudnative-pg:           { namespace: cnpg-system,              roles: [workload],       default: false, serverSideDiff: true }
   # PostgreSQL as a service: Crossplane v2 + the PostgreSQL XRD; the cluster's provider label picks the Composition
   # (cnpg needs cloudnative-pg on the same cluster).
-  crossplane:               { namespace: crossplane-system,        roles: [workload],       default: false, serverSideDiff: true }
+  # MOCO: the in-cluster MySQL backend (#256). Its label also turns on the MySQL API in crossplane (below).
+  moco:                     { namespace: moco-system,              roles: [workload],       default: false, serverSideDiff: true }
+  # MySQL as a service (#256): mysql.enabled follows the moco opt-in; the mysqld image catalog comes from addons/moco.
+  crossplane:
+    namespace: crossplane-system
+    roles: [workload]
+    default: false
+    serverSideDiff: true
+    valuesFromAddons: [moco]
+    clusterLabelParameters:
+      mysql.enabled: { label: addons.platform.koorikla.io/moco, default: "false" }

@@ -14,5 +14,5 @@ spec:
   forProvider:
     project: {{ $facts.project }}
     instanceRef: { name: {{ $name }} }
-    passwordSecretRef: { name: {{ $name }}-mysql, key: password }
+    passwordSecretRef: { name: {{ $name }}-app, key: password }
 {{- end }}

@@ -11,6 +11,7 @@ templates:
   - templates/podmonitor.yaml
   - templates/environment-config.yaml
   - templates/configuration.yaml
+  - templates/mysql.yaml
   - templates/policies.yaml
   - templates/validate.yaml
   - charts/crossplane/templates/deployment.yaml
@@ -324,7 +325,7 @@ tests:
       - contains: { path: 'spec.matchConstraints.resourceRules[2].apiGroups', content: rds.aws.m.upbound.io }
       - equal:
           path: 'spec.matchConditions[1].expression'
-          value: '!["system:serviceaccount:crossplane-system:","system:serviceaccount:cnpg-system:","system:serviceaccount:kube-system:"].exists(p, request.userInfo.username.startsWith(p))'
+          value: '!["system:serviceaccount:crossplane-system:","system:serviceaccount:cnpg-system:","system:serviceaccount:moco-system:","system:serviceaccount:kube-system:"].exists(p, request.userInfo.username.startsWith(p))'
 
   - it: production PostgreSQL must be HA and backed up (Deny by default)
     template: templates/policies.yaml
@@ -376,3 +377,71 @@ tests:
     set: { policy.enabled: false }
     asserts:
       - hasDocuments: { count: 0 }
+
+  # --- MySQL as a service (#256): only with addon moco (mysql.enabled from label addons.platform.koorikla.io/moco) -------
+  - it: MySQL - nothing without the moco opt-in (default)
+    template: templates/mysql.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: MySQL - Configuration + embedded Function pinned tag@digest, facts with the moco image catalog, compose RBAC
+    template: templates/mysql.yaml
+    set: &mysqlOn
+      mysql.enabled: "true"
+      mysql.configuration: ghcr.io/koorikla/platform/mysql:v9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      mysql.function: { koorikla-platform-mysqlcompose-mysql: "ghcr.io/koorikla/platform/mysql_compose-mysql:v9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+      mysqlImageCatalog: { "8.4": "r/mysql:8.4@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    asserts:
+      - hasDocuments: { count: 4 }
+      - equal: { path: spec.package, value: "ghcr.io/koorikla/platform/mysql:v9.9.9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+        documentIndex: 0
+      - equal: { path: spec.skipDependencyResolution, value: true }
+        documentIndex: 0
+      - equal: { path: metadata.name, value: koorikla-platform-mysqlcompose-mysql }
+        documentIndex: 1
+      - equal: { path: spec.runtimeConfigRef.name, value: restricted }
+        documentIndex: 1
+      - equal: { path: data, value: { backend: moco, cluster: sample, environment: development, mysqlImages: { "8.4": "r/mysql:8.4@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } }
+        documentIndex: 2
+      - contains: { path: rules, content: { apiGroups: [moco.cybozu.com], resources: [mysqlclusters], verbs: [get, list, watch, create, update, patch, delete] } }
+        documentIndex: 3
+
+  - it: MySQL - the shipped catalog pins are placeholders-free tag@digest (values.yaml)
+    template: templates/mysql.yaml
+    set: { mysql.enabled: "true", mysqlImageCatalog: { "8.4": "r/mysql:8.4@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+    asserts:
+      - matchRegex: { path: spec.package, pattern: '^ghcr\.io/koorikla/platform/mysql:[a-z0-9.]+@sha256:[0-9a-f]{64}$' }
+        documentIndex: 0
+      - matchRegex: { path: spec.package, pattern: '^ghcr\.io/koorikla/platform/mysql_compose-mysql:[a-z0-9.]+@sha256:[0-9a-f]{64}$' }
+        documentIndex: 1
+
+  - it: MySQL - a package without digest fails the render
+    template: templates/mysql.yaml
+    set: { mysql.enabled: "true", mysql.configuration: "ghcr.io/koorikla/platform/mysql:main", mysqlImageCatalog: { "8.4": "r/mysql:8.4@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+    asserts:
+      - failedTemplate: { errorPattern: 'package "ghcr.io/koorikla/platform/mysql:main" is not pinned' }
+
+  - it: MySQL - without addons/moco values (no image catalog) or with a tag-only image the render fails
+    template: templates/mysql.yaml
+    set: { <<: *mysqlOn, mysqlImageCatalog: { "8.4": "r/mysql:8.4" } }
+    asserts:
+      - failedTemplate: { errorPattern: 'image "r/mysql:8.4" for 8.4 .* is not pinned by digest' }
+
+  - it: MySQL - only the moco backend is enabled (cloud Compositions are layout)
+    template: templates/mysql.yaml
+    set: { <<: *mysqlOn, mysql.backend: aws-rds }
+    asserts:
+      - failedTemplate: { errorPattern: 'mysql.backend "aws-rds": only moco is enabled' }
+
+  - it: MySQL - tenants get MOCO only through the XR; production MySQL must be HA
+    template: templates/policies.yaml
+    set: *mysqlOn
+    asserts:
+      - equal: { path: 'spec.matchConstraints.resourceRules[0].resources', value: [mysqlclusters, backuppolicies] }
+        documentSelector: { path: metadata.name, value: mysql-only-through-the-platform-api }
+      - contains: { path: 'spec.matchConditions', content: { name: outside-platform-namespaces, expression: '!(request.namespace in ["crossplane-system","cnpg-system","moco-system"])' } }
+        documentSelector: { path: metadata.name, value: mysql-only-through-the-platform-api }
+      - equal: { path: 'spec.validations[0].expression', value: 'has(object.spec.highAvailability) && object.spec.highAvailability == true' }
+        documentSelector: { path: metadata.name, value: mysql-production-ha }
+      - equal: { path: 'spec.validationActions', value: [Deny] }
+        documentSelector: { path: metadata.name, value: mysql-production-ha }

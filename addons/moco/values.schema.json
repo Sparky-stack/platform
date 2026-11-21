@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon moco (platform keys only; upstream subchart keys stay open)",
+  "type": "object",
+  "required": ["namespace", "controller", "moco", "mysqlImageCatalog"],
+  "properties": {
+    "cluster": { "type": "object", "description": "Injected by the ApplicationSet: this cluster's facts." },
+    "namespace": {
+      "type": "object",
+      "properties": {
+        "podSecurity": { "type": "string", "enum": ["", "restricted", "baseline", "privileged"] },
+        "ambient": { "type": "boolean" }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "required": ["replicas", "resources"],
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "object" }
+      }
+    },
+    "moco": {
+      "type": "object",
+      "required": ["replicaCount", "image"],
+      "properties": {
+        "replicaCount": { "const": 0, "description": "templates/controller.yaml runs the controller (Pod Security restricted)." }
+      }
+    },
+    "mysqlImageCatalog": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$" },
+      "description": "mysqld image per MySQL version, digest-pinned."
+    }
+  }
+}

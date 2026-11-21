@@ -1,0 +1,78 @@
+# Platform ClusterResourceType mysql (#256, docs/data-services.md "MySQL as a service"): renders the platform's MySQL
+# API (platform.koorikla.io/v1alpha1 MySQL, a namespaced Crossplane v2 XR of addon crossplane, package packages/mysql)
+# into the cell namespace. Never a raw MOCO MySQLCluster: Kyverno denies those to everyone but the platform. The
+# connection Secret <name>-app (host, port, dbname, username, password, uri - the keys of the PostgreSQL API) is written
+# on the data plane by ESO; only its name and keys reach the control plane.
+# Only on data planes that run addons crossplane AND moco (moco's label also installs the MySQL API there): checked by
+# the mgmt admission policy platform-data-plane-capabilities (addon kyverno-policies) on ResourceReleaseBindings.
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterResourceType
+metadata:
+  name: mysql
+  annotations:
+    openchoreo.dev/display-name: MySQL
+    openchoreo.dev/description: >-
+      MySQL through the platform API (Crossplane MySQL XR): MOCO in-cluster (MySQL 8.4, semi-sync replication for HA).
+      Needs a data plane that runs addons crossplane and moco.
+    # Addons the data plane must run (== ClusterDataPlane annotations addons.platform.koorikla.io/<addon>: "true").
+    platform.koorikla.io/requires-addons: crossplane,moco
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties:
+        version:
+          type: string
+          enum: ["8.4"]
+          default: "8.4"
+          description: MySQL LTS version. Upgrades only.
+        database:
+          type: string
+          default: app
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: Database to create; the app user has the same name. Immutable.
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        size: { type: string, enum: [S, M, L], default: S, description: "Compute of each mysqld instance." }
+        storageGiB: { type: integer, minimum: 10, maximum: 16384, default: 10, description: "Storage per instance in GiB; can grow, never shrink." }
+        highAvailability: { type: boolean, default: false, description: "3 instances with semi-sync replication and automatic failover. Required in production (admission policy)." }
+        deletionPolicy: { type: string, enum: [Retain, Delete], default: Retain, description: "Cloud backends only (layout)." }
+  # Removing the binding leaves the XR (and its data) on the data plane; set retainPolicy: Delete on the
+  # ResourceReleaseBinding of throwaway environments.
+  retainPolicy: Retain
+  outputs:
+    - name: host
+      value: ${applied.mysql.status.endpoint}
+    - name: port
+      value: ${string(applied.mysql.status.port)}
+    - name: database
+      value: ${parameters.database}
+    - name: username
+      secretKeyRef: { name: "${metadata.name}-app", key: username }
+    - name: password
+      secretKeyRef: { name: "${metadata.name}-app", key: password }
+    - name: uri
+      secretKeyRef: { name: "${metadata.name}-app", key: uri }
+  resources:
+    - id: mysql
+      # Readiness is the XR's Ready condition (MySQLCluster Healthy, connection Secret written).
+      readyWhen: >-
+        ${has(applied.mysql.status.conditions)
+        && applied.mysql.status.conditions.exists(c, c.type == "Ready" && c.status == "True")}
+      template:
+        apiVersion: platform.koorikla.io/v1alpha1
+        kind: MySQL
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          version: ${parameters.version}
+          database: ${parameters.database}
+          size: ${environmentConfigs.size}
+          storageGiB: ${environmentConfigs.storageGiB}
+          highAvailability: ${environmentConfigs.highAvailability}
+          deletionPolicy: ${environmentConfigs.deletionPolicy}

@@ -51,6 +51,10 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | crossplane.securityContextRBACManager.runAsUser | int | `65532` |  |
 | crossplane.securityContextRBACManager.seccompProfile.type | string | `"RuntimeDefault"` |  |
 | monitoring.podMonitor | bool | `true` |  |
+| mysql.backend | string | `"moco"` |  |
+| mysql.configuration | string | `"ghcr.io/koorikla/platform/mysql:a239626@sha256:0082fd0f27ad3ad9ff0b8e5aa3d036d9ccf08cf3023bb93ae3133e8ddf50cea6"` |  |
+| mysql.enabled | string | `"false"` | `"true"` installs the MySQL API (Configuration platform-mysql + EnvironmentConfig + embedded Function); a string because the ApplicationSet passes cluster labels as strings (helm set-string). |
+| mysql.function.koorikla-platform-mysqlcompose-mysql | string | `"ghcr.io/koorikla/platform/mysql_compose-mysql:a239626@sha256:09cee6e26d7b275f3689077c9009f38b8fe8c752eb51d9f225c4be1827c0c0d2"` |  |
 | namespace.podSecurity | string | `"restricted"` |  |
 | packages.configuration | string | `"ghcr.io/koorikla/platform/postgresql:v0.2.0@sha256:478419ad87ba4e90756b6826638c6977bfda3d23ecdee48b5fa0bca539ba5be1"` | The PostgreSQL API package (packages/postgresql), release tag vX.Y.Z (release-please postgresql-vX.Y.Z) @digest (a Configuration has one manifest, no index); never the moving `main` tag. The promotion point: per-environment pins go in installations/<inst>/addons/crossplane/env-<env>.yaml. Renovate bumps it. |
 | packages.functions.function-auto-ready | string | `"xpkg.crossplane.io/crossplane-contrib/function-auto-ready:v0.7.3@sha256:cce8799e19a8f25fb84e1f8dd8855021fdbe8cd7a12a5c22a0c0c345476ae9fe"` |  |
@@ -79,9 +83,11 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptNamespaces[1] | string | `"cnpg-system"` |  |
+| policy.exemptNamespaces[2] | string | `"moco-system"` |  |
 | policy.exemptServiceAccountNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptServiceAccountNamespaces[1] | string | `"cnpg-system"` |  |
-| policy.exemptServiceAccountNamespaces[2] | string | `"kube-system"` |  |
+| policy.exemptServiceAccountNamespaces[2] | string | `"moco-system"` |  |
+| policy.exemptServiceAccountNamespaces[3] | string | `"kube-system"` |  |
 | policy.production.action | string | `"Deny"` | `Deny` on cloud (`Audit` in `values/provider-docker.yaml`) for non-HA or unbacked `production` instances. |
 | policy.production.environments[0] | string | `"production"` |  |
 | postgresql.aws.identity.roleArn | string | `""` |  |

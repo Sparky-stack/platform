@@ -1,4 +1,4 @@
-# Data services: PostgreSQL, Kafka, event-driven autoscaling
+# Data services: PostgreSQL, MySQL, Kafka, event-driven autoscaling
 
 Three operators for workloads on workload clusters, **off by default** everywhere: a cluster runs them only after it
 opts in, so local docker environments stay lean (no Application is generated for a cluster that does not opt in).
@@ -317,6 +317,33 @@ the `Cluster` and goes with the XR either way: keep backups on.
 **Packaging, Pod Security, tests, upgrades:** [crossplane.md](crossplane.md) (Configuration package, EnvironmentConfig,
 pinned Functions / Providers under PSS `restricted`, offline render tests, the one-off `compositionRef` patch when
 upgrading from the Helm-templated API). Live checks: [#107](https://github.com/koorikla/platform/issues/107).
+
+## MySQL as a service
+
+The platform's MySQL API (`platform.koorikla.io/v1alpha1 MySQL`, package [`packages/mysql`](../packages/mysql/README.md),
+#256) with one in-cluster backend, [MOCO](https://github.com/cybozu-go/moco) (addon [`moco`](../addons/moco/README.md)).
+The cloud Compositions of the package are layout and are not installed.
+
+- **Opt in:** cluster file `addons: { crossplane: true, moco: true }`. The one label `addons.platform.koorikla.io/moco`
+  installs the operator, makes addon crossplane install the Configuration `platform-mysql` (pinned `tag@sha256` with its
+  embedded Function) and the EnvironmentConfig `platform-mysql` (facts: backend `moco`, the mysqld image catalog of addon
+  moco), makes the capability gate wait for `mysqlclusters.moco.cybozu.com` + `mysqls.platform.koorikla.io`, and
+  announces the capability that ClusterResourceType `mysql` (`requires-addons: crossplane,moco`) needs.
+- **Developer view:** a Resource of type `mysql` (parameters `version` 8.4, `database`; per environment `size`,
+  `storageGiB`, `highAvailability`). Outputs: `host`, `port`, `database` as values, `username` / `password` / `uri` as
+  `secretKeyRef`s to `<name>-app` - the same Secret name and keys (`host`, `port`, `dbname`, `username`, `password`,
+  `uri`) as PostgreSQL. The password comes from an ESO `Password` generator; an init Job creates database + user.
+- **Production:** `highAvailability: true` (3 mysqld, semi-sync GTID replication) is required (Kyverno
+  `mysql-production-ha`; Audit on docker). No backups yet: MOCO's BackupPolicy jobs cannot meet Pod Security
+  restricted (upstream cybozu-go/moco#949).
+- **Security:** tenants cannot create `MySQLCluster` / `BackupPolicy` (Kyverno `mysql-only-through-the-platform-api`).
+  MySQL pods meet Pod Security restricted (pod seccomp + `overwriteContainers` dropping capabilities on agent,
+  copy-moco-init, moco-init; slow-log off). Production cells admit exactly the mysqld catalog image(s) and the
+  moco-agent image of addon moco (`openchoreo-trusted-registries-enforce`). The controller
+  (`moco-system/sa/moco-controller-manager`, ambient) is a platform peer of the cell AuthorizationPolicy: it dials the
+  agent (gRPC 9080) and mysqld (3306).
+- **Footprint:** the operator is one pod requesting 100m / 20Mi (upstream defaults, limit 256Mi here); each MySQL XR
+  adds 1 (or 3) mysqld pods (size S: 512Mi request). Locally `dev1` runs the operator and the API, no MySQL XR.
 
 ## PostgreSQL (CloudNativePG)
 

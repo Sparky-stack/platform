@@ -19,7 +19,7 @@ tests:
     set:
       appMetrics.enabled: false
     asserts:
-      - hasDocuments: { count: 3 }
+      - hasDocuments: { count: 4 }   # ClusterResourceTypes mysql (#256) + postgresql, ClusterTraits keda-scaler + resilience
       - notEqual: { path: metadata.name, value: metrics }
 
   - it: the PodMonitor scrapes the declared metrics port of the component's pods, bounded per scrape

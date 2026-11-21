@@ -1,7 +1,9 @@
 # mysql: Crossplane Configuration package
 
-**Status: layout** (#241) - not installed on any cluster, not live-tested. The `moco` backend renders offline in CI;
-the cloud backends are skeletons that render but were never applied. Enable + live proof: follow-up issue (PR body).
+**Status: `moco` enabled** (#256) - addon crossplane installs this package (pinned `tag@sha256` + its embedded Function)
+on every cluster with addon moco (label `addons.platform.koorikla.io/moco`); ClusterResourceType `mysql` lives in
+`addons/openchoreo-platform/files/platform/cluster-resource-types/mysql.yaml`. The cloud backends are skeletons that
+render but were never applied (layout).
 
 The platform's MySQL API (`platform.koorikla.io/v1alpha1 MySQL`, namespaced XR), same layout as
 [`packages/postgresql`](../postgresql/README.md) and [docs/crossplane.md](../../docs/crossplane.md): XRD + one
@@ -23,8 +25,8 @@ builds the project and adds the embedded function (package-derived name) for the
 | `database` | `app` | database and app user name, immutable |
 | `deletionPolicy` | `Retain` | cloud: keep the database when the XR goes |
 
-Connection Secret `<name>-mysql` (`status.secretName`) in the XR's namespace, same keys on every backend:
-`host`, `port`, `database`, `username`, `password`, `uri` (`mysql://user:pass@host:3306/db`, `?tls=true` in cloud).
+Connection Secret `<name>-app` (`status.secretName`) in the XR's namespace - the name and keys of the PostgreSQL API -
+same keys on every backend: `host`, `port`, `dbname`, `username`, `password`, `uri` (`mysql://user:pass@host:3306/db`, `?tls=true` in cloud).
 The password is generated in-cluster (ESO Password generator) or by RDS (Secrets Manager); it never passes through
 the Crossplane pipeline.
 
@@ -32,7 +34,7 @@ the Crossplane pipeline.
 
 | `backend` | Composes | Facts |
 |---|---|---|
-| `moco` | MOCO `MySQLCluster`, ESO `Password` + `ExternalSecret`, a `Job` creating database + user | `mysqlImage` |
+| `moco` | MOCO `MySQLCluster` (Pod Security restricted, slow-log off), ESO `Password` + `ExternalSecret`, a `Job` creating database + user | `mysqlImages` (version -> image, from addon moco `mysqlImageCatalog`) |
 | `aws-rds` | `rds.aws.m.upbound.io Instance` (engine mysql, managed master password) + ESO from Secrets Manager | `region`, `dbSubnetGroupName`, `securityGroupIds` |
 | `gcp-cloudsql` | `sql.gcp.m.upbound.io DatabaseInstance` (MYSQL_8_4, private IP), `Database`, `User` | `project`, `region`, `network` |
 | `azure-flexible` | `dbformysql.azure.m.upbound.io FlexibleServer` + `FlexibleDatabase` | `resourceGroupName`, `location`, `delegatedSubnetId`, `privateDnsZoneId` |
@@ -51,15 +53,16 @@ Sample facts per backend: `tests/render/environment/`.
 - Also considered: Oracle MySQL Operator (InnoDB Cluster + Router, heavier, no user CRD), Percona Operator for MySQL
   (PXC/Galera, 3 nodes + proxy), mariadb-operator (declarative users, but MariaDB is not MySQL 8.4).
 
-## VERIFY (before enabling)
+## Verified / still open
 
-- MOCO: Secret `moco-<name>` key `ADMIN_PASSWORD`, primary Service `moco-<name>-primary`, `Healthy` condition, image
-  digest pin and cosign signature; PSS `restricted` for mysqld pods; aggregated RBAC for `MySQLCluster`/`Job`.
-- Cloud skeletons: field names against the provider CRDs (`crossplane resource validate` once rendered with observed
-  state), networking and IAM, Retain/deletion protection, backups, TLS enforcement.
-- OpenChoreo: `openchoreo/cluster-resource-type.yaml` is not deployed (see its header); file mounts for rotating
-  credentials in OpenChoreo 1.3.
-- Kyverno only-through-XR (deny raw `MySQLCluster` to tenants) and production HA rule: with the enable issue.
+- MOCO (checked against v0.38.0 source + chart 0.28.0): Secret `moco-<name>` key `ADMIN_PASSWORD`, primary Service
+  `moco-<name>-primary`, `Healthy` condition; images pinned by digest in addon moco; MySQL pods meet Pod Security
+  `restricted` (pod seccomp, `overwriteContainers` securityContext for agent / copy-moco-init / moco-init); aggregated
+  RBAC `crossplane:compose-mysql` for `MySQLCluster` / `Job` / ESO kinds. Upstream images carry no cosign signature:
+  production cells admit them as exact digests (addon kyverno-policies).
+- Kyverno: `mysql-only-through-the-platform-api` and `mysql-production-ha` (addon crossplane templates/policies.yaml).
+- Open: backups (MOCO BackupPolicy jobs are not restricted-compatible, cybozu-go/moco#949); cloud skeletons (field names
+  against provider CRDs, networking/IAM, deletion protection, TLS); file mounts for rotating credentials in OpenChoreo.
 
 ## Release and developer loop
 

@@ -1,7 +1,12 @@
-{{- /* moco: a MOCO MySQLCluster in the XR's namespace (operator addon: follow-up); 3 instances with semi-sync GTID replication for HA. Ready once MOCO reports Healthy. VERIFY: Healthy condition, image pin. */}}
+{{- /* moco: a MOCO MySQLCluster in the XR's namespace (operator: addon moco); 3 instances with semi-sync GTID replication
+for HA. Ready once MOCO reports Healthy. Pod Security restricted (cell namespaces): pod-level seccomp + non-root, and
+every container MOCO adds (agent, copy-moco-init, moco-init) drops all capabilities through overwriteContainers (an
+overwrite replaces MOCO's default securityContext, so the user it would set is restated). The slow-log sidecar is off:
+production cells admit only the mysqld + moco-agent images (addon kyverno-policies). */}}
 {{- if eq $backend "moco" }}
 ---
 {{- $res := get (dict "S" (dict "cpu" "250m" "memory" "512Mi" "limit" "1Gi") "M" (dict "cpu" "1" "memory" "2Gi" "limit" "4Gi") "L" (dict "cpu" "2" "memory" "8Gi" "limit" "8Gi")) $size }}
+{{- $restricted := dict "runAsNonRoot" true "runAsUser" 10000 "runAsGroup" 10000 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")) }}
 apiVersion: moco.cybozu.com/v1beta2
 kind: MySQLCluster
 metadata:
@@ -11,14 +16,25 @@ metadata:
     gotemplating.fn.crossplane.io/ready: {{ ternary "True" "False" $mocoHealthy | quote }}
 spec:
   replicas: {{ ternary 3 1 $ha }}
+  disableSlowQueryLogContainer: true
   podTemplate:
     metadata:
       labels:
         platform.koorikla.io/mysql: {{ $name }}
+    overwriteContainers:
+      {{- range list "agent" "copy-moco-init" "moco-init" }}
+      - name: {{ . }}
+        securityContext: {{ toJson $restricted }}
+      {{- end }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: mysqld
-          image: {{ $facts.mysqlImage }}
+          image: {{ $mysqlImage }}
+          securityContext: {{ toJson $restricted }}
           resources:
             requests: { cpu: {{ $res.cpu | quote }}, memory: {{ $res.memory }} }
             limits: { memory: {{ $res.limit }} }
