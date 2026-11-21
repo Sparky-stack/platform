@@ -33,9 +33,9 @@ task up
 ```
 EOF
 cp -R "$fx" "$TMP/good"
-out=$(py "$ROOT/hack/check-docs.py" "$TMP/good" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "clean fixture passes"
-assert_match "$out" "docs check OK" "clean fixture reports OK"
+capture py "$ROOT/hack/check-docs.py" "$TMP/good"
+assert_eq "$RC" 0 "clean fixture passes"
+assert_match "$OUT" "docs check OK" "clean fixture reports OK"
 
 cat >> "$fx/README.md" <<'EOF'
 [missing](docs/nope.md) [anchor](docs/target.md#nope) <img src="docs/img.png">
@@ -50,20 +50,22 @@ mkdir -p "$fx/templates/t/skeleton"
 cat > "$fx/templates/t/skeleton/README.md" <<'EOF'
 `hack/in-the-new-repo.sh` [rel](docs/in-the-new-repo.md)
 EOF
-out=$(py "$ROOT/hack/check-docs.py" "$fx" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "broken fixture fails"
-assert_match "$out" "link target docs/nope.md does not exist" "missing link target"
-assert_match "$out" "no heading #nope" "missing anchor"
-assert_match "$out" "link target docs/img.png does not exist" "missing <img src>"
-assert_match "$out" "path hack/gone.sh does not exist" "missing repo path in a code span"
-assert_match "$out" 'has no section "No Such Section"' "missing section reference"
-assert_match "$out" "docs/absent.md does not exist" "missing bare docs/ reference"
-assert_match "$out" 'task nope. is not a Taskfile task' "unknown task"
-assert_match "$out" 'make up. is not supported \(use .task.\)' "make target rejected with task hint"
-assert_match "$out" 'task missing-in-block. is not a Taskfile task' "unknown task in a code block"
-assert_eq "$(grep -c 'charts/dep' <<<"$out" || true)" 0 "vendored chart docs are skipped"
-assert_eq "$(grep -c 'templates/t/skeleton' <<<"$out" || true)" 0 "project-template skeleton docs are skipped"
-assert_eq "$(grep -c 'FAIL' <<<"$out")" 9 "exactly the planted problems"
+capture py "$ROOT/hack/check-docs.py" "$fx"
+assert_eq "$RC" 1 "broken fixture fails"
+assert_matches "$OUT" <<'CASES'
+missing link target | link target docs/nope.md does not exist
+missing anchor | no heading #nope
+missing <img src> | link target docs/img.png does not exist
+missing repo path in a code span | path hack/gone.sh does not exist
+missing section reference | has no section "No Such Section"
+missing bare docs/ reference | docs/absent.md does not exist
+unknown task | task nope. is not a Taskfile task
+make target rejected with task hint | make up. is not supported \(use .task.\)
+unknown task in a code block | task missing-in-block. is not a Taskfile task
+CASES
+assert_eq "$(grep -c 'charts/dep' <<<"$OUT" || true)" 0 "vendored chart docs are skipped"
+assert_eq "$(grep -c 'templates/t/skeleton' <<<"$OUT" || true)" 0 "project-template skeleton docs are skipped"
+assert_eq "$(grep -c 'FAIL' <<<"$OUT")" 9 "exactly the planted problems"
 
 cp -R "$TMP/good" "$TMP/ops"
 mkdir -p "$TMP/ops/docs/runbooks"
@@ -81,8 +83,8 @@ kubectl --context k3d-platform-mgmt get nodes
 ## Related links
 - [Operations](../operations.md)
 EOF
-out=$(py "$ROOT/hack/check-docs.py" "$TMP/ops" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "clean runbook fixture passes ($out)"
+capture py "$ROOT/hack/check-docs.py" "$TMP/ops"
+assert_eq "$RC" 0 "clean runbook fixture passes ($OUT)"
 
 cat > "$TMP/ops/docs/runbooks/orphan.md" <<'EOF'
 # Orphan
@@ -96,12 +98,14 @@ kubectl --context koorikla get nodes
 ## Verify
 ## Related links
 EOF
-out=$(py "$ROOT/hack/check-docs.py" "$TMP/ops" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "broken runbook fixture fails"
-assert_match "$out" 'runbook missing section "rollback"' "missing runbook section"
-assert_match "$out" 'must pass --context or --kubeconfig' "bare kubectl in runbook"
-assert_match "$out" 'forbidden kube context .koorikla.' "homelab context rejected"
-assert_match "$out" 'runbook docs/runbooks/orphan.md is not linked' "unindexed runbook rejected"
+capture py "$ROOT/hack/check-docs.py" "$TMP/ops"
+assert_eq "$RC" 1 "broken runbook fixture fails"
+assert_matches "$OUT" <<'CASES'
+missing runbook section | runbook missing section "rollback"
+bare kubectl in runbook | must pass --context or --kubeconfig
+homelab context rejected | forbidden kube context .koorikla.
+unindexed runbook rejected | runbook docs/runbooks/orphan.md is not linked
+CASES
 
 cp -R "$TMP/good" "$TMP/readmes"
 mkdir -p "$TMP/readmes/charts/no-readme" "$TMP/readmes/addons/incomplete" "$TMP/readmes/addons/toolong" "$TMP/readmes/addons/stale"
@@ -131,25 +135,27 @@ EOF
 printf '# -- Documented knob missing from README.md.
 knob: true
 ' > "$TMP/readmes/addons/stale/values.yaml"
-out=$(py "$ROOT/hack/check-docs.py" "$TMP/readmes" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "missing, malformed or stale chart/addon READMEs fail"
-assert_match "$out" "charts/no-readme/README.md: missing README.md" "missing chart README rejected"
-assert_eq "$(grep -c addons/deleted <<<"$out")" 0 "dir without Chart.yaml (cached charts/ of a deleted addon) ignored"
-assert_match "$out" 'README missing section "day-2 notes"' "missing addon README section rejected"
-assert_match "$out" "README is 42 lines \(max 40\)" "overlong addon README rejected (table lines ignored)"
-assert_match "$out" "addons/stale/README.md: stale README.md" "stale chart README rejected"
+capture py "$ROOT/hack/check-docs.py" "$TMP/readmes"
+assert_eq "$RC" 1 "missing, malformed or stale chart/addon READMEs fail"
+assert_match "$OUT" "charts/no-readme/README.md: missing README.md" "missing chart README rejected"
+assert_eq "$(grep -c addons/deleted <<<"$OUT")" 0 "dir without Chart.yaml (cached charts/ of a deleted addon) ignored"
+assert_matches "$OUT" <<'CASES'
+missing addon README section rejected | README missing section "day-2 notes"
+overlong addon README rejected (table lines ignored) | README is 42 lines \(max 40\)
+stale chart README rejected | addons/stale/README.md: stale README.md
+CASES
 
 # Mermaid (#355): the rule is in check-docs (always run by scoped PR CI), so a fence alone fails a docs-only change.
 # Fence variants and vendored-dep skipping: hack/tests/test_no_mermaid.sh.
 cp -R "$TMP/good" "$TMP/mermaid"
 # shellcheck disable=SC2016  # literal Markdown backticks
 printf '# M\n```mermaid\ngraph LR\n```\n' > "$TMP/mermaid/docs/m.md"
-out=$(py "$ROOT/hack/check-docs.py" "$TMP/mermaid" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "a Mermaid fence in a doc fails check-docs"
-assert_match "$out" "docs/m.md:2: Mermaid fence; draw it in docs/diagrams/src/build.py" "Mermaid fence reported with line and fix"
-assert_eq "$(grep -c 'FAIL' <<<"$out")" 1 "only the Mermaid fence fails"
+capture py "$ROOT/hack/check-docs.py" "$TMP/mermaid"
+assert_eq "$RC" 1 "a Mermaid fence in a doc fails check-docs"
+assert_match "$OUT" "docs/m.md:2: Mermaid fence; draw it in docs/diagrams/src/build.py" "Mermaid fence reported with line and fix"
+assert_eq "$(grep -c 'FAIL' <<<"$OUT")" 1 "only the Mermaid fence fails"
 
-out=$(py "$ROOT/hack/check-docs.py" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "repo docs resolve ($out)"
+capture py "$ROOT/hack/check-docs.py"
+assert_eq "$RC" 0 "repo docs resolve ($OUT)"
 
 finish

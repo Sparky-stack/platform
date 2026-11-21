@@ -19,32 +19,32 @@ readme() { printf '| Diagram | One idea | Owning doc |\n|---|---|---|\n| [archit
 # 1. a box the owning doc does not name fails (drift): architecture.md without "Cluster API"
 sed 's/Cluster API//g' "$ROOT/docs/architecture.md" > "$fx/arch.md"
 readme arch.md
-out=$(py "$C" --readme "$fx/README.md" architecture 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "a box missing from its owning doc fails"
-assert_match "$out" 'architecture: box "Cluster API" not in .*arch.md' "the missing box and the doc are named"
-assert_eq "$(grep -c 'FAIL' <<<"$out")" 1 "only the dropped label fails"
+capture py "$C" --readme "$fx/README.md" architecture
+assert_eq "$RC" 1 "a box missing from its owning doc fails"
+assert_match "$OUT" 'architecture: box "Cluster API" not in .*arch.md' "the missing box and the doc are named"
+assert_eq "$(grep -c 'FAIL' <<<"$OUT")" 1 "only the dropped label fails"
 
 # 2. an alias whose doc term is gone fails; an alias whose title the doc now names is stale
 sed 's/[Oo]pen[Bb][Aa][Oo]//g' "$ROOT/docs/architecture.md" > "$fx/arch.md"
-out=$(py "$C" --readme "$fx/README.md" architecture 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "an alias term missing from the doc fails"
-assert_match "$out" 'box "Shared services" \(doc term "OpenBao"\) not in' "missing alias term reported"
+capture py "$C" --readme "$fx/README.md" architecture
+assert_eq "$RC" 1 "an alias term missing from the doc fails"
+assert_match "$OUT" 'box "Shared services" \(doc term "OpenBao"\) not in' "missing alias term reported"
 { cat "$ROOT/docs/architecture.md"; echo "Shared services: registry, sign-in, OpenBao."; } > "$fx/arch.md"
-out=$(py "$C" --readme "$fx/README.md" architecture 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "a no longer needed alias fails"
-assert_match "$out" '"Shared services" is now named in .*drop its stale entry' "stale alias reported"
+capture py "$C" --readme "$fx/README.md" architecture
+assert_eq "$RC" 1 "a no longer needed alias fails"
+assert_match "$OUT" '"Shared services" is now named in .*drop its stale entry' "stale alias reported"
 
 # 3. a diagram without an owning doc fails; matching ignores case, backticks and plurals
-out=$(py "$C" --readme "$fx/README.md" backup 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "a diagram without an owning doc fails"
-assert_match "$out" "backup: no owning doc" "missing owner reported"
+capture py "$C" --readme "$fx/README.md" backup
+assert_eq "$RC" 1 "a diagram without an owning doc fails"
+assert_match "$OUT" "backup: no owning doc" "missing owner reported"
 { sed 's/Cluster API//g' "$ROOT/docs/architecture.md"; printf '%s\n' "The \`cluster apis\` build clusters."; } > "$fx/arch.md"
-out=$(py "$C" --readme "$fx/README.md" architecture 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "case, backticks and plural are ignored ($out)"
+capture py "$C" --readme "$fx/README.md" architecture
+assert_eq "$RC" 0 "case, backticks and plural are ignored ($OUT)"
 
 # 4. the real repo; the owning-doc list above matches docs/diagrams/README.md
-out=$(py "$C" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "every diagram box is named in its owning doc ($out)"
+capture py "$C"
+assert_eq "$RC" 0 "every diagram box is named in its owning doc ($OUT)"
 want=$(py - "$ROOT" <<'EOF'
 import importlib.util, os, sys
 spec = importlib.util.spec_from_file_location("c", os.path.join(sys.argv[1], "hack", "check-diagram-labels.py"))

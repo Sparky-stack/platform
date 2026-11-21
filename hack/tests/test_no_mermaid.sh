@@ -32,10 +32,12 @@ printf '  ````mermaid\n````\n' > "$fx/packages/p/README.md"
 printf '# r\n```mermaid\n```\n' > "$fx/README.md"
 printf '# n\n```mermaid\n```\n' > "$fx/hack/notes.md"
 out=$(mermaid_fences "$fx")
-assert_match "$out" "docs/runbooks/x.md:3" "a \`\`\`mermaid fence in a nested doc is reported with its line"
-assert_match "$out" "addons/a/README.md:1" "a ~~~ Mermaid fence (any case) in an addon README is reported"
-assert_match "$out" "charts/c/README.md.gotmpl:1" "a \`\`\`{mermaid} fence in a chart README template is reported"
-assert_match "$out" "packages/p/README.md:1" "an indented, longer fence in a package README is reported"
+assert_matches "$out" <<'CASES'
+a ```mermaid fence in a nested doc is reported with its line | docs/runbooks/x.md:3
+a ~~~ Mermaid fence (any case) in an addon README is reported | addons/a/README.md:1
+a ```{mermaid} fence in a chart README template is reported | charts/c/README.md.gotmpl:1
+an indented, longer fence in a package README is reported | packages/p/README.md:1
+CASES
 assert_eq "$(grep -cx 'README.md:2' <<<"$out" || true)" 1 "a fence in the root README is reported"
 assert_match "$out" "hack/notes.md:2" "a fence in any other checked Markdown file (hack/) is reported"
 n=$(grep -c . <<<"$out")

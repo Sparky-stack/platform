@@ -81,10 +81,12 @@ bad=$(check_config "$TMP/bad.toml" "$ROOT")
 assert_match "$bad" "pre-commit-hooks: rev 'v6.0.0' is not a full commit SHA" "negative: tag rev rejected"
 assert_match "$bad" "gitleaks: rev 'a1b2c3d' is not a full commit SHA" "negative: short SHA rejected"
 assert_eq "$(grep -c 'actionlint' <<<"$bad" || true)" "0" "full SHA rev accepted"
-assert_match "$bad" "py: language 'python'" "negative: managed language rejected"
-assert_match "$bad" "py: additional_dependencies set" "negative: additional_dependencies rejected"
-assert_match "$bad" "curl: curl is not a mise.toml tool" "negative: tool outside mise.toml rejected"
-assert_match "$bad" "gone: script \['hack/nope.sh'\] not in the repo" "negative: missing script rejected"
+assert_matches "$bad" <<'CASES'
+negative: managed language rejected | py: language 'python'
+negative: additional_dependencies rejected | py: additional_dependencies set
+negative: tool outside mise.toml rejected | curl: curl is not a mise.toml tool
+negative: missing script rejected | gone: script \['hack/nope.sh'\] not in the repo
+CASES
 
 # Same shellcheck flags as hack/lint.sh (task lint)
 # shellcheck disable=SC2016  # $sf is literal text in hack/lint.sh

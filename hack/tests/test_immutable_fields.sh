@@ -51,26 +51,16 @@ violations() {
     if [[ "$kind" == PersistentVolumeClaim && ( "$sync" == *",Replace=true,"* || "$sync" == *",Force=true,"* ) ]]; then
       echo "$addon: PersistentVolumeClaim/$name must never be replaced (data loss): drop Replace/Force"
     fi
-  done < <(yq -N 'select(.kind != null) | (.metadata.annotations // {}) as $a
-    | ($a["argocd.argoproj.io/hook"] // "") as $ah | ($a["helm.sh/hook"] // "") as $hh
-    | [.kind, .metadata.name, ($a["argocd.argoproj.io/sync-options"] // ""),
-       (if (($ah != "" and $ah != "Skip") or ($ah == "" and $hh != "" and $hh != "crd-install" and ($hh | test("^test") | not)))
-        then "yes" else "no" end)] | join("	")' "$f" | tr -d '\r')
-}
-
-# addon_of <render file name>: the longest addon name the file name starts with
-addon_of() {
-  local base best="" a
-  base=$(basename "$1" .yaml); base=${base#addon-}
-  for a in addons/*/; do a=$(basename "$a"); [[ "$base" == "$a"-* && ${#a} -gt ${#best} ]] && best=$a; done
-  echo "$best"
+  done < <(yq -N "select(.kind != null)
+    | [.kind, .metadata.name, (.metadata.annotations[\"argocd.argoproj.io/sync-options\"] // \"\"),
+       (if ($ARGO_HOOK_YQ) then \"yes\" else \"no\" end)] | join(\"\t\")" "$f" | tr -d '\r')
 }
 
 n=0
 if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
   for r in "$RENDERED_DIR"/addon-*.yaml; do
     [[ -f "$r" ]] || continue
-    a=$(addon_of "$r"); [[ -n "$a" ]] || continue
+    a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
     n=$((n + 1))
     assert_eq "$(violations "$a" "$r" "$(opts_of "$a")")" "" "$(basename "$r" .yaml): immutable fields cannot deadlock the sync"
   done

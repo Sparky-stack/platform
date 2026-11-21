@@ -10,8 +10,8 @@ dirs=()
 for d in charts/* addons/*; do
   if [[ -f "$d/Chart.yaml" ]] && grep -q '^dependencies:' "$d/Chart.yaml"; then dirs+=("$d"); fi
 done
-out=$(py hack/lib/chartlock.py "${dirs[@]}" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc:$out" "0:" "every Chart.lock in sync with its Chart.yaml (${#dirs[@]} charts)"
+capture py hack/lib/chartlock.py "${dirs[@]}"
+assert_eq "$RC:$OUT" "0:" "every Chart.lock in sync with its Chart.yaml (${#dirs[@]} charts)"
 
 # Negative: a Chart.yaml edit after the lock (the PR #5 regression: a condition added) is caught, and so is a missing
 # lock; restoring the field brings it back in sync.
@@ -32,9 +32,9 @@ cp -R addons/external-dns "$TMP/tree/addons/"; mkdir -p "$TMP/tree/addons/extern
 yq -i 'del(.dependencies[0].condition)' "$TMP/tree/addons/external-dns/Chart.yaml"
 # A no-op helm on PATH: if deps.sh skipped the check it would "succeed" offline instead of failing.
 mkdir -p "$TMP/bin"; printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/bin/helm"; chmod +x "$TMP/bin/helm"
-out=$(PATH="$TMP/bin:$PATH" bash "$TMP/tree/hack/deps.sh" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" "1" "deps.sh fails on a stale lock even with a warm charts/ cache"
-assert_match "$out" 'deps: Chart.lock out of sync' "deps.sh names the stale lock"
+capture env PATH="$TMP/bin:$PATH" bash "$TMP/tree/hack/deps.sh"
+assert_eq "$RC" "1" "deps.sh fails on a stale lock even with a warm charts/ cache"
+assert_match "$OUT" 'deps: Chart.lock out of sync' "deps.sh names the stale lock"
 
 # Pinned dependency digests (Chart.yaml annotation platform.koorikla.io/dependency-digests, checked by
 # `chartlock.py --tarballs`): the mesh addon's Istio charts come from OCI and are pinned by tarball sha256.
@@ -45,8 +45,8 @@ assert_eq "$(yq '[.dependencies[] | select(.name != "cert-manager-istio-csr") | 
 retired=$(grep -lE 'istio-release\.storage\.googleapis\.com|gcr\.io/istio-release|registry\.istio\.io' \
   charts/*/Chart.yaml charts/*/Chart.lock addons/*/Chart.yaml addons/*/Chart.lock 2>/dev/null || true)
 assert_eq "$retired" "" "no chart uses an Istio source retired on 2026-12-16"
-out=$(py hack/lib/chartlock.py --tarballs "${dirs[@]}" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc:$out" "0:" "every vendored tarball matches its pinned digest"
+capture py hack/lib/chartlock.py --tarballs "${dirs[@]}"
+assert_eq "$RC:$OUT" "0:" "every vendored tarball matches its pinned digest"
 
 # Scratch pinned chart: the mesh addon's Chart.yaml/lock (valid lock digest; annotations are not part of it) with pins
 # of dummy tarballs, so the checks below need neither network nor the real charts.
@@ -99,10 +99,9 @@ case "$1 $2" in
 esac
 FAKE
 chmod +x "$TMP/bin/helm"; : > "$FAKE_LOG"
-out=$(HELM_REPOSITORY_CONFIG="$TMP/user-repos.yaml" PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh" 2>&1) \
-  && rc=0 || rc=$?
+capture env HELM_REPOSITORY_CONFIG="$TMP/user-repos.yaml" PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh"
 log=$(cat "$FAKE_LOG")
-assert_eq "$rc" "0" "deps.sh builds with a stale repository in the user's helm config ($out)"
+assert_eq "$RC" "0" "deps.sh builds with a stale repository in the user's helm config ($OUT)"
 assert_match "$log" "(^|"$'\n'")repo add r[0-9a-f]{10} $edns_url --force-update " "deps.sh registers the needed repository"
 assert_eq "$(grep -c -e 'user-repos.yaml' -e '^repo update' "$FAKE_LOG" || true)" "0" \
   "helm never sees the user's repository config, and no repo update refreshes everything"
@@ -110,8 +109,8 @@ assert_match "$log" 'dependency build --skip-refresh addons/mesh' "a tampered ca
 assert_eq "$(py hack/lib/chartlock.py --tarballs "$TMP/t2/addons/mesh"; echo $?)" "0" \
   "rebuilt tarballs match their pins"
 printf 'tampered\n' > "$TMP/fake/cni-1.32.0.tgz"; rm -rf "$TMP/t2/addons/mesh/charts"
-out=$(PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh" 2>&1) && rc=0 || rc=$?; echo "DBG $out" >&2; ls "$TMP/t2/addons/mesh/charts" >&2
-assert_eq "$rc" "1" "deps.sh fails when a download differs from its pin"
-assert_match "$out" 'differ from their pinned digests' "deps.sh names the digest mismatch"
+capture env PATH="$TMP/bin:$PATH" bash "$TMP/t2/hack/deps.sh"
+assert_eq "$RC" "1" "deps.sh fails when a download differs from its pin"
+assert_match "$OUT" 'differ from their pinned digests' "deps.sh names the digest mismatch"
 
 finish

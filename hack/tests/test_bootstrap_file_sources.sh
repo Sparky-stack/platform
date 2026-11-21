@@ -17,14 +17,10 @@ jsonl() {
 }
 
 check() {   # check <label> <fleet-scope.jsonl> <cluster.jsonl> <expect: pass|fail>
-  local label=$1 cc=$2 cl=$3 expect=$4 out rc=0
-  out=$(py "$ROOT/hack/tests/bootstrap_file_sources.py" "$cc" "$cl" 2>&1) || rc=$?
-  if [[ "$expect" == pass && $rc -eq 0 ]] || [[ "$expect" == fail && $rc -ne 0 ]]; then
-    PASS=$((PASS + 1))
-  else
-    FAIL=$((FAIL + 1))
-    printf '  FAIL: %s (expected %s, exit %s)\n%s\n' "$label" "$expect" "$rc" "$out" >&2
-  fi
+  local label=$1 cc=$2 cl=$3 expect=$4 verdict=pass
+  capture py "$ROOT/hack/tests/bootstrap_file_sources.py" "$cc" "$cl"
+  (( RC == 0 )) || verdict=fail
+  assert_eq "$verdict" "$expect" "$label (exit $RC: $OUT)"
 }
 
 refs_total=0
