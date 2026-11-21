@@ -1,0 +1,57 @@
+{{- /* Rollout guard (#268). On workload clusters Reloader watches cluster-wide (tenant cells have runtime names, see
+values.yaml), so the upstream ClusterRole lets it update every Deployment/StatefulSet/DaemonSet. This policy narrows
+what Reloader may actually WRITE to what it exists for:
+  1. only in tenant cells (namespace labels openchoreo.dev/project + openchoreo.dev/environment, set by OpenChoreo on
+     every cell incl. previews) and rolloutGuard.platformNamespaces;
+  2. an update (RBAC grants no create/delete) may change only the pod-template annotation reloader.stakater.com/last-reloaded-from
+     (the rollout trigger of reloadStrategy annotations): image, env, service account, replicas etc. stay as they were.
+Tests: tests/reloader_test.yaml (render) and hack/tests/test_reloader_admission.sh (CEL, kyverno CLI). */ -}}
+{{- if .Values.reloader.reloader.watchGlobally }}
+{{- $trigger := "reloader.stakater.com/last-reloaded-from" }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: reloader-rollout-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [deployments, statefulsets, daemonsets]
+  matchConditions:
+    - name: reloader
+      expression: request.userInfo.username == 'system:serviceaccount:{{ .Release.Namespace }}:{{ .Values.reloader.fullnameOverride }}'
+  variables:
+    - name: oldAnnotations
+      expression: "request.operation == 'UPDATE' ? oldObject.spec.template.metadata.?annotations.orValue({}) : {}"
+    - name: newAnnotations
+      expression: "request.operation == 'UPDATE' ? object.spec.template.metadata.?annotations.orValue({}) : {}"
+  validations:
+    - expression: >-
+        request.namespace in {{ toJson .Values.rolloutGuard.platformNamespaces | replace "\"" "'" }}
+        || (namespaceObject.metadata.?labels[?'openchoreo.dev/project'].hasValue()
+            && namespaceObject.metadata.?labels[?'openchoreo.dev/environment'].hasValue())
+      messageExpression: >-
+        'Reloader may roll workloads only in tenant cells and {{ join ", " .Values.rolloutGuard.platformNamespaces }}, not in ' + request.namespace
+      reason: Forbidden
+    - expression: >-
+        request.operation != 'UPDATE'
+        || (object.spec.template.spec == oldObject.spec.template.spec
+            && object.spec.template.metadata.?labels == oldObject.spec.template.metadata.?labels
+            && object.spec.all(k, k == 'template' || (k in oldObject.spec && object.spec[k] == oldObject.spec[k]))
+            && oldObject.spec.all(k, k in object.spec)
+            && variables.newAnnotations.all(k, k == '{{ $trigger }}' || variables.oldAnnotations[?k] == optional.of(variables.newAnnotations[k]))
+            && variables.oldAnnotations.all(k, k == '{{ $trigger }}' || k in variables.newAnnotations))
+      message: Reloader may change only the pod-template annotation {{ $trigger }} (the rollout trigger)
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: reloader-rollout-only
+spec:
+  policyName: reloader-rollout-only
+  validationActions: [Deny]
+{{- end }}

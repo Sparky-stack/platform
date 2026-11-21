@@ -12,18 +12,17 @@
           "description": "Reloader settings.",
           "properties": {
             "watchGlobally": {
-              "const": false,
-              "description": "Must stay false: no ClusterRole that reads every Secret."
+              "type": "boolean",
+              "description": "true on workload clusters (cluster-wide watch, writes fenced by templates/rollout-guard.yaml); false = scoped Role per `namespaces` entry (mgmt)."
             },
             "namespaces": {
               "type": "array",
-              "minItems": 1,
               "items": {
                 "type": "string",
                 "description": "Watched namespace.",
                 "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
               },
-              "description": "Namespaces watched with a scoped Role each (non-empty)."
+              "description": "Namespaces watched with a scoped Role each (non-empty when watchGlobally is false, empty otherwise: templates/validate.yaml)."
             },
             "reloadStrategy": {
               "const": "annotations",
@@ -111,7 +110,6 @@
           },
           "required": [
             "watchGlobally",
-            "namespaces",
             "reloadStrategy",
             "readOnlyRootFileSystem",
             "deployment"
@@ -121,6 +119,24 @@
       "required": [
         "reloader"
       ]
+    },
+    "rolloutGuard": {
+      "type": "object",
+      "description": "Where Reloader may roll workloads besides tenant cells (templates/rollout-guard.yaml).",
+      "properties": {
+        "platformNamespaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "description": "Platform namespaces with Reloader-annotated workloads."
+        }
+      },
+      "required": [
+        "platformNamespaces"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
