@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Argo CD Applications held OutOfSync by an active deny sync window (docs/promotion.md#freeze-windows).
+"""Argo CD Applications held OutOfSync by an active deny sync window (docs/promotion.md#5-freeze-window-optional).
 
 Usage: syncwindow.py <applications.json> <appprojects.json> [now]
   inputs: `kubectl get applications.argoproj.io|appprojects.argoproj.io -n argocd -o json`; now: ISO 8601
