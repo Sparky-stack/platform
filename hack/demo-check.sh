@@ -53,10 +53,10 @@ KCDIR=$(mktemp -d)
 trap 'rm -rf "$KCDIR"' EXIT
 
 # Known-unmerged features: a FAILing check with an entry here reports PENDING #<issue>. Delete the entry when the issue
-# closes (tracking: #98).
+# closes (tracking: #98). None open today: production (#54, closed) is PENDING only for its live reasons, reported by the
+# checks themselves (freeze window: frozen_env; not promoted since a clean bootstrap: unpromoted_release), else FAIL.
 pending_issue() {
   case "$1" in
-    http-production|gate-latest) echo 54 ;;   # production rollout waits for a passing promotion gate
     *) return 1 ;;
   esac
 }

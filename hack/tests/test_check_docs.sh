@@ -139,6 +139,16 @@ assert_match "$out" 'README missing section "day-2 notes"' "missing addon README
 assert_match "$out" "README is 42 lines \(max 40\)" "overlong addon README rejected (table lines ignored)"
 assert_match "$out" "addons/stale/README.md: stale README.md" "stale chart README rejected"
 
+# Mermaid (#355): the rule is in check-docs (always run by scoped PR CI), so a fence alone fails a docs-only change.
+# Fence variants and vendored-dep skipping: hack/tests/test_no_mermaid.sh.
+cp -R "$TMP/good" "$TMP/mermaid"
+# shellcheck disable=SC2016  # literal Markdown backticks
+printf '# M\n```mermaid\ngraph LR\n```\n' > "$TMP/mermaid/docs/m.md"
+out=$(py "$ROOT/hack/check-docs.py" "$TMP/mermaid" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a Mermaid fence in a doc fails check-docs"
+assert_match "$out" "docs/m.md:2: Mermaid fence; draw it in docs/diagrams/src/build.py" "Mermaid fence reported with line and fix"
+assert_eq "$(grep -c 'FAIL' <<<"$out")" 1 "only the Mermaid fence fails"
+
 out=$(py "$ROOT/hack/check-docs.py" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 0 "repo docs resolve ($out)"
 
