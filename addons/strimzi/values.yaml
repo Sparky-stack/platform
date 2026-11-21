@@ -56,6 +56,11 @@ strimzi-kafka-operator:
   extraEnvs:
     - name: STRIMZI_POD_SECURITY_PROVIDER_CLASS
       value: restricted
+    # No operator-generated NetworkPolicies (#210): they open only the Kafka ports, but Istio ambient tunnels every mesh
+    # connection to the pod's 15008 (HBONE), so brokers and clients in a cell could not talk. Addon kyverno-policies
+    # generates platform-strimzi into every ambient cell instead (templates/cell-mesh.yaml, docs/data-services.md).
+    - name: STRIMZI_NETWORK_POLICY_GENERATION
+      value: "false"
   resources:                        # platform: upstream requests 200m/384Mi (JVM: memory stays at upstream)
     requests: { cpu: 50m, memory: 384Mi }
     limits: { cpu: 1000m, memory: 384Mi }

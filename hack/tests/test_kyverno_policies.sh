@@ -269,7 +269,7 @@ dpct="$addon/tests/kyverno/data-plane-capabilities"
 cmt="$addon/tests/kyverno/cell-mesh"
 (
   helm template kyverno-policies "$addon" --namespace kyverno -s templates/cell-mesh.yaml > "$TMP/cm.yaml"
-  for p in openchoreo-cell-hbone openchoreo-cell-mtls openchoreo-cell-authz; do
+  for p in openchoreo-cell-hbone openchoreo-cell-strimzi openchoreo-cell-mtls openchoreo-cell-authz; do
     yq "select(.kind == \"GeneratingPolicy\" and .metadata.name == \"$p\")" "$TMP/cm.yaml" > "$TMP/cm-$p.yaml"
     "$KYVERNO" apply "$TMP/cm-$p.yaml" --resource "$cmt/namespaces.yaml" > "$TMP/cm-$p.out" 2>&1 || true
   done
@@ -421,6 +421,7 @@ assert_eq "$(grep -c 'kind:' "$TMP/dpc-workload.yaml" || true)" 0 "data-plane ca
 
 # cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
 for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy' \
+  openchoreo-cell-strimzi:3:'development production legacy' \
   openchoreo-cell-authz:3:'development production legacy'; do
   p=${c%%:*}; rest=${c#*:}; n=${rest%%:*}; want=${rest#*:}
   out=$(cat "$TMP/cm-$p.out")
@@ -446,6 +447,12 @@ for line in sys.stdin:
 ' < "$TMP/cm-np.json" | tr -d '\r' | tr '\n' ' ')
 want='169.254.7.127/32,fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128|any|0'
 assert_eq "${probes% }" "$want $want $want" "cell mesh: every HBONE NetworkPolicy admits kubelet probes from ambient's SNAT source only"
+# #210: the Strimzi NetworkPolicy generated into cells is a valid NetworkPolicy (Kyverno fails the generate otherwise)
+sed -n '/^apiVersion: networking.k8s.io/,/^---$/p' "$TMP/cm-openchoreo-cell-strimzi.out" |
+  yq 'select(.kind == "NetworkPolicy" and .metadata.namespace == "dp-default-demo-development-1234abcd")' > "$TMP/cm-strimzi-np.yaml"
+assert_eq "$(yq '.spec.podSelector.matchExpressions[0].key' "$TMP/cm-strimzi-np.yaml")" strimzi.io/cluster \
+  "cell mesh: platform-strimzi selects the Strimzi pods of the cell"
+assert_eq "$(kc_valid "$TMP/cm-strimzi-np.yaml")" yes "cell mesh: the generated platform-strimzi validates as a NetworkPolicy"
 # PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
 modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
 assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"

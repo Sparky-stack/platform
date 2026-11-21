@@ -273,4 +273,53 @@ if [[ "$(yq '.ambientEnrollment.enabled and .ambientEnrollment.mtls.strict' "$RO
   done
 fi
 
+# 5. Strimzi in ambient cells (#210): ambient tunnels every mesh connection to the pod's 15008 (HBONE), so every
+# NetworkPolicy that selects Kafka pods in a cell must admit 15008 from the cell, the operator and KEDA. The operator's
+# own per-listener policies (rendered nowhere, created at runtime) open only Kafka ports, so they must stay off; the
+# platform ones (addon kyverno-policies, generated into cells) are replayed here with NetworkPolicy semantics.
+if [[ "$(yq '.ambientEnrollment.enabled' "$ROOT/addons/kyverno-policies/values.yaml")" == true ]]; then
+  render_standalone_addon strimzi "$TMP/sz.yaml"
+  render_standalone_addon keda "$TMP/sz-keda.yaml"
+  helm template kyverno-policies "$ROOT/addons/kyverno-policies" --namespace kyverno > "$TMP/sz-kp.yaml"
+  op='select(.kind == "Deployment" and .metadata.name == "strimzi-cluster-operator")'
+  assert_eq "$(yq "$op | .spec.template.spec.containers[0].env[] | select(.name == \"STRIMZI_NETWORK_POLICY_GENERATION\") | .value" "$TMP/sz.yaml")" \
+    false "strimzi: the operator generates no NetworkPolicies (they open only Kafka ports, never HBONE 15008)"
+  # every NetworkPolicy the addons ship or generate, as JSON lines
+  { yq -o=json -I=0 'select(.kind == "NetworkPolicy")' "$TMP/sz.yaml" "$TMP/sz-kp.yaml"
+    yq 'select(.kind == "GeneratingPolicy") | .spec.generate[].template.value' "$TMP/sz-kp.yaml" |
+      yq -o=json -I=0 'select(.kind == "NetworkPolicy")'; } > "$TMP/sz-np.json"
+  # peers: a cell pod, and the operator pods as the addons render them (args, not process substitution: Windows jq)
+  opp=$(yq -o=json -I=0 "$op | {\"ns\": .metadata.namespace, \"labels\": .spec.template.metadata.labels}" "$TMP/sz.yaml")
+  kdp=$(yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.name == "keda-operator") | {"ns": .metadata.namespace, "labels": .spec.template.metadata.labels}' "$TMP/sz-keda.yaml")
+  got=$(python3 - "$TMP/sz-np.json" "$opp" "$kdp" <<'PY'
+import json, sys
+def sel(s, labels):  # LabelSelector semantics (In/NotIn/Exists/DoesNotExist)
+    if any(labels.get(k) != v for k, v in (s.get("matchLabels") or {}).items()): return False
+    for e in s.get("matchExpressions") or []:
+        k, op, vs = e["key"], e["operator"], e.get("values", [])
+        if not {"In": k in labels and labels[k] in vs, "NotIn": labels.get(k) not in vs,
+                "Exists": k in labels, "DoesNotExist": k not in labels}[op]: return False
+    return True
+kafka = {"strimzi.io/cluster": "events", "strimzi.io/kind": "Kafka", "strimzi.io/name": "events-kafka"}
+peers = [{"name": "cell", "ns": "", "labels": {"app": "orders"}},
+         dict(json.loads(sys.argv[2]), name="strimzi-operator"), dict(json.loads(sys.argv[3]), name="keda-operator")]
+out = []
+for line in open(sys.argv[1]):
+    np = json.loads(line); spec = np["spec"]
+    if "Ingress" not in spec.get("policyTypes", ["Ingress"]) or not sel(spec["podSelector"], kafka): continue
+    for p in peers:  # "" = the cell itself (a policy's own namespace)
+        ok = any((not r.get("ports") or any(x.get("port") == 15008 for x in r["ports"])) and any(
+            sel(f.get("podSelector", {}), p["labels"]) and (
+                sel(f["namespaceSelector"], {"kubernetes.io/metadata.name": p["ns"] or "cell"}) if "namespaceSelector" in f
+                else not p["ns"]) for f in r.get("from", [])) for r in spec.get("ingress", []))
+        out.append(f'{np["metadata"]["name"]}:{p["name"]}:{"ok" if ok else "DROPPED"}')
+print(" ".join(out))
+PY
+)
+  got=$(tr -d '\r' <<<"$got")   # Windows python
+  assert_match "$got" '^[a-z]' "strimzi: at least one platform NetworkPolicy selects Kafka pods in cells"
+  assert_eq "$(tr ' ' '\n' <<<"$got" | grep -v ':ok$' || true)" "" \
+    "strimzi: every NetworkPolicy selecting Kafka pods admits HBONE 15008 from the cell, the operator and KEDA ($got)"
+fi
+
 finish
