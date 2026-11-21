@@ -1,29 +1,6 @@
 {{- /*
-Least-privilege RBAC of OpenChoreo's workflow-plane cluster-agent (#33, docs/build-plane.md "Cluster-agent RBAC").
-The agent is a plain HTTP tunnel: the control plane's controllers and openchoreo-api send Kubernetes API requests
-through cluster-gateway and the agent replays them with ITS ServiceAccount token (OpenChoreo 1.3.3,
-internal/cluster-agent/router.go). Its RBAC is therefore the control plane's reach into mgmt. The upstream ClusterRole
-(openchoreo-workflow-plane.clusterAgent.rbac.create, off here) grants `*` on secrets, pods, namespaces, deployments,
-ClusterSecretStores, roles/rolebindings, ... cluster-wide. What 1.3.3 actually sends to a workflow plane:
-  WorkflowRun controller (internal/controller/workflowrun)
-    ensurePrerequisites   CREATE Namespace workflows-<org ns> (AlreadyExists is fine, but RBAC is checked first),
-                          ServiceAccount workflow-sa, Role workflow-sa-role (workflowtaskresults create/patch) and
-                          RoleBinding workflow-sa-role-binding in it
-    run resources         GET then CREATE or UPDATE of the rendered Argo Workflow and of every ClusterWorkflow
-                          `resources` entry (ExternalSecrets; GithubAccessToken generators: Role build-github-tokens of
-                          addon openchoreo-platform), GET of the Workflow for status, GET + DELETE on finalize
-  openchoreo-api (internal/openchoreo-api/services/workflowrun)
-    run logs and tasks    GET Workflow, LIST Pods (by workflow label), pods/log through the gateway
-Rendered here:
-  ClusterRole + ClusterRoleBinding <agent>-namespaces  namespaces get + create only (create cannot be limited by name)
-  ValidatingAdmissionPolicy <agent>-namespaces         ...so the agent may create only namespaces named
-                                                       <runNamespacePrefix>*; any other name is denied
-  Role + RoleBinding <agent>-runs                      everything else, namespaced to workflows-<org ns>
-Not granted (unused by the platform; OpenChoreo features that need them fail with Forbidden instead of running with
-cluster-admin): Secrets of any kind (git secrets / secret management through openchoreo-api: builds get credentials from
-ESO and per-run GitHub App tokens), PushSecrets, SecretStores, ClusterSecretStores, workloads outside the run
-namespaces, RBAC escalate/bind/update. The agent can create the run Role/RoleBinding only because it holds every
-permission they grant (workflowtaskresults create/patch): no escalate, no bind.
+Least-privilege RBAC of the workflow-plane cluster-agent, which replays the control plane's API calls with its own token:
+exactly what OpenChoreo 1.3.3 sends, nothing else (docs/build-plane.md "Security posture of build pods").
 */ -}}
 {{- $r := .Values.clusterAgentRBAC }}
 {{- if $r.enabled }}
