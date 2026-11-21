@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1011" viewBox="0 0 960 1011" role="img" aria-label="Infra lane · addons, clusters and platform charts"><title>Infra lane · addons, clusters and platform charts</title><style>.s{font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,'Liberation Sans',sans-serif}.m{font-family:'JetBrains Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}.fx{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:4 10;opacity:0;animation:fxdash .9s linear infinite,fxseq 9.10s linear infinite both}@keyframes fxdash{to{stroke-dashoffset:-14}}@keyframes fxseq{0%{opacity:0}3%{opacity:1}29.0%{opacity:1}34.0%{opacity:0}100%{opacity:0}}@media (prefers-reduced-motion:reduce){.fx{animation:none;opacity:0}}</style><defs><marker id="ahfbbf24" markerWidth="13" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L13,5 L0,10 z" fill="#fbbf24"/></marker><marker id="asfbbf24" markerWidth="13" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M13,0 L0,5 L13,10 z" fill="#fbbf24"/></marker></defs><rect width="960" height="1011" rx="16" fill="#0b1120"/><rect x="8" y="8" width="944" height="995" rx="12" fill="none" stroke="#8b9ab0" stroke-opacity=".8"/>
+<path d="M 160.0 248.0 L 160.0 328.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 160.0 408.0 L 160.0 488.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 276.0 368.0 L 320.0 368.0 L 320.0 208.0 L 364.0 208.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 480.0 248.0 L 480.0 328.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 480.0 408.0 L 480.0 488.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path d="M 596.0 368.0 L 684.0 368.0" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linejoin="round" marker-end="url(#ahfbbf24)"/>
+<path class="fx" d="M 160.0 248.0 L 160.0 328.0" stroke="#fde5a7" style="animation-delay:0s,0.00s"/>
+<path class="fx" d="M 160.0 408.0 L 160.0 488.0" stroke="#fde5a7" style="animation-delay:0s,1.10s"/>
+<path class="fx" d="M 276.0 368.0 L 320.0 368.0 L 320.0 208.0 L 364.0 208.0" stroke="#fde5a7" style="animation-delay:0s,2.20s"/>
+<path class="fx" d="M 480.0 248.0 L 480.0 328.0" stroke="#fde5a7" style="animation-delay:0s,3.30s"/>
+<path class="fx" d="M 480.0 408.0 L 480.0 488.0" stroke="#fde5a7" style="animation-delay:0s,4.40s"/>
+<path class="fx" d="M 596.0 368.0 L 684.0 368.0" stroke="#fde5a7" style="animation-delay:0s,5.50s"/>
+<rect x="44" y="168" width="232" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="160.0" y="194.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Pull request</text>
+<text class="s" x="160.0" y="214.4" font-size="13" fill="#dde5ef" text-anchor="middle">Renovate or a person:</text>
+<text class="s" x="160.0" y="232.4" font-size="13" fill="#dde5ef" text-anchor="middle">a pin, values, a cluster</text>
+<rect x="44" y="328" width="232" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="160.0" y="354.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">CI</text>
+<text class="s" x="160.0" y="374.4" font-size="13" fill="#dde5ef" text-anchor="middle">lints, renders, tests</text>
+<text class="s" x="160.0" y="392.4" font-size="13" fill="#dde5ef" text-anchor="middle">every changed chart</text>
+<rect x="44" y="488" width="232" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="160.0" y="514.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Upstream charts</text>
+<text class="s" x="160.0" y="534.4" font-size="13" fill="#dde5ef" text-anchor="middle">their own registries,</text>
+<text class="s" x="160.0" y="552.4" font-size="13" fill="#dde5ef" text-anchor="middle">pinned by version</text>
+<rect x="364" y="168" width="232" height="80" rx="8" fill="#262e3e" stroke="#94a3b8" stroke-width="1.5"/>
+<text class="s" x="480.0" y="194.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Main branch</text>
+<text class="s" x="480.0" y="214.4" font-size="13" fill="#dde5ef" text-anchor="middle">chart pins, addon</text>
+<text class="s" x="480.0" y="232.4" font-size="13" fill="#dde5ef" text-anchor="middle">catalog, fleet files</text>
+<rect x="364" y="328" width="232" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="480.0" y="354.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
+<text class="s" x="480.0" y="374.4" font-size="13" fill="#dde5ef" text-anchor="middle">installs by</text>
+<text class="s" x="480.0" y="392.4" font-size="13" fill="#dde5ef" text-anchor="middle">cluster label</text>
+<rect x="364" y="488" width="232" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
+<text class="s" x="480.0" y="514.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Cluster API</text>
+<text class="s" x="480.0" y="534.4" font-size="13" fill="#dde5ef" text-anchor="middle">creates and</text>
+<text class="s" x="480.0" y="552.4" font-size="13" fill="#dde5ef" text-anchor="middle">upgrades clusters</text>
+<rect x="684" y="328" width="232" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="800.0" y="354.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Addons</text>
+<text class="s" x="800.0" y="374.4" font-size="13" fill="#dde5ef" text-anchor="middle">network, mesh, policy,</text>
+<text class="s" x="800.0" y="392.4" font-size="13" fill="#dde5ef" text-anchor="middle">operators</text>
+<rect x="684" y="488" width="232" height="80" rx="8" fill="#173248" stroke="#38bdf8" stroke-width="1.5"/>
+<text class="s" x="823.0" y="514.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Kyverno</text>
+<text class="s" x="823.0" y="534.4" font-size="13" fill="#dde5ef" text-anchor="middle">checks pod settings;</text>
+<text class="s" x="823.0" y="552.4" font-size="13" fill="#dde5ef" text-anchor="middle">images pinned by digest</text>
+<text class="s" x="28.0" y="46.0" font-size="24" fill="#f8fafc" font-weight="700">Infra lane · addons, clusters and platform charts</text>
+<text class="s" x="28.0" y="72.0" font-size="14" fill="#aab6c8">Upstream charts are pinned in git and tested by CI; Argo CD installs them on every matching cluster and Cluster API builds the clusters.</text>
+<text class="s" x="28.0" y="91.0" font-size="14" fill="#aab6c8">Signatures stop at the image layer for now.</text>
+<text class="s" x="44.0" y="134.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">BUILD AND SIGN</text>
+<text class="s" x="364.0" y="134.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">DECLARE AND SYNC</text>
+<text class="s" x="684.0" y="134.0" font-size="13" fill="#dde5ef" font-weight="700" letter-spacing="1.0">RUN AND ADMIT</text>
+<circle cx="710.0" cy="528.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="710.0" y="532.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<circle cx="160.0" cy="288.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="160.0" y="292.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<circle cx="160.0" cy="448.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="160.0" y="452.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<circle cx="320.0" cy="288.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="320.0" y="292.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<circle cx="480.0" cy="288.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="480.0" y="292.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<circle cx="480.0" cy="448.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="480.0" y="452.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<circle cx="630.0" cy="368.0" r="12" fill="#fbbf24" stroke="#0b1120" stroke-width="2"/>
+<text class="s" x="630.0" y="372.6" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<line x1="28" y1="590" x2="932" y2="590" stroke="#7c8aa0" stroke-width="1.2"/>
+<circle cx="40" cy="613.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="618" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="62.0" y="618.0" font-size="13.5" fill="#dde5ef">A pull request to the platform repo, from Renovate (a new upstream release) or a person, changes a chart pin, addon values or a fleet file</text>
+<text class="s" x="62.0" y="637.0" font-size="13.5" fill="#dde5ef">and runs ci.yaml, scoped to what changed</text>
+<circle cx="40" cy="660.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="665" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">2</text>
+<text class="s" x="62.0" y="665.0" font-size="13.5" fill="#dde5ef">CI fetches the pinned upstream charts (versions in Chart.yaml and Chart.lock, sha256 pins for the mesh) and lints, renders and unit-tests</text>
+<text class="s" x="62.0" y="684.0" font-size="13.5" fill="#dde5ef">every changed chart</text>
+<circle cx="40" cy="707.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="712" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">3</text>
+<text class="s" x="62.0" y="712.0" font-size="13.5" fill="#dde5ef">CI must pass before a maintainer merges: main then declares the versions, in the addon charts, the ApplicationSets and the installation</text>
+<text class="s" x="62.0" y="731.0" font-size="13.5" fill="#dde5ef">values</text>
+<circle cx="40" cy="754.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="759" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">4</text>
+<text class="s" x="62.0" y="759.0" font-size="13.5" fill="#dde5ef">Main branch is read by Argo CD: dev clusters follow main, prod clusters a verified commit</text>
+<circle cx="40" cy="782.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="787" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">5</text>
+<text class="s" x="62.0" y="787.0" font-size="13.5" fill="#dde5ef">Argo CD renders each fleet file into a cluster for Cluster API, which creates and upgrades its k3s nodes</text>
+<circle cx="40" cy="810.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="815" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">6</text>
+<text class="s" x="62.0" y="815.0" font-size="13.5" fill="#dde5ef">Argo CD installs the addons on every cluster whose labels match, in a fixed order</text>
+<circle cx="40" cy="838.5" r="11" fill="#fbbf24"/>
+<text class="s" x="40" y="843" font-size="13" font-weight="700" fill="#0b1120" text-anchor="middle">7</text>
+<text class="s" x="62.0" y="843.0" font-size="13.5" fill="#dde5ef">Kyverno admits the addon pods with safe settings only; their images are pinned by digest in git (a test checks it), not signature-verified:</text>
+<text class="s" x="62.0" y="862.0" font-size="13.5" fill="#dde5ef">Argo CD cannot verify Helm or OCI chart signatures</text>
+<text class="s" x="28.0" y="894.0" font-size="13.5" fill="#aab6c8">Planned: verify upstream chart signatures in the Renovate pull request and mirror the charts into an internal registry, once upstreams sign</text>
+<text class="s" x="28.0" y="913.0" font-size="13.5" fill="#aab6c8">them (few do today). release-please tags each platform release.</text>
+<rect x="28" y="949" width="20" height="13" rx="3" fill="#15363f" stroke="#2dd4bf" stroke-width="1.4"/>
+<text class="s" x="58.0" y="959.0" font-size="13" fill="#aab6c8">runs on the management cluster</text>
+<rect x="283.60519999999997" y="949" width="20" height="13" rx="3" fill="#173248" stroke="#38bdf8" stroke-width="1.4"/>
+<text class="s" x="313.6" y="959.0" font-size="13" fill="#aab6c8">runs on the workload cluster</text>
+<rect x="513.9241" y="949" width="20" height="13" rx="3" fill="#262e3e" stroke="#94a3b8" stroke-width="1.4"/>
+<text class="s" x="543.9" y="959.0" font-size="13" fill="#aab6c8">outside the clusters</text>
+<path d="M 26 981 L 70 981" stroke="#fbbf24" stroke-width="2.4" marker-end="url(#ahfbbf24)"/>
+<circle cx="42" cy="981" r="9" fill="#fbbf24" stroke="#0b1120" stroke-width="1.5"/>
+<text class="s" x="42" y="985.5" font-size="12" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="80.0" y="985.0" font-size="13" fill="#aab6c8">numbered step: the change moves along the arrow</text>
+<rect x="416.97326000000004" y="971" width="26" height="20" rx="4" fill="none" stroke="#dde5ef" stroke-width="1.2"/><circle cx="426.97326000000004" cy="981" r="7" fill="#fbbf24"/><text class="s" x="426.97326000000004" y="985.2" font-size="11" font-weight="700" fill="#0b1120" text-anchor="middle">1</text>
+<text class="s" x="449.0" y="985.0" font-size="13" fill="#aab6c8">step at a component</text>
+</svg>
