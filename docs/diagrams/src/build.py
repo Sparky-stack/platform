@@ -56,10 +56,12 @@ def architecture() -> Diagram:
     d.box(c[0], 108, w, 52, "external", "Git", ["platform + app repos"])
     d.zone(28, Z1, 904, Z1b - Z1, "management cluster", "mgmt", label_at="tr")
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps engine"])
-    d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry,", "secrets, sign-in"], context=True)
+    d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry, sign-in,", "OpenBao secrets"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
-    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "k3s workload clusters", "workload", label_at="tr")
+    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "workload clusters", "workload", label_at="tr")
+    d.box(c[0], R3, w, H, "workload", "Data services", ["Crossplane databases,", "CloudNativePG"], status="optin",
+          context=True)
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
     d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
     d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
@@ -85,7 +87,7 @@ def architecture() -> Diagram:
     d.key("Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
           "Argo CD turns each fleet file into a cluster for Cluster API to build",
           "Argo CD hands each app's release to OpenChoreo",
-          "Cluster API creates each workload cluster's k3s nodes on docker, AWS or Hetzner",
+          "Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE",
           "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
           "The cluster-agent dials out to OpenChoreo and pulls the app releases",
           "The agent submits the apps to the cluster",

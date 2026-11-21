@@ -64,7 +64,7 @@ The numbered flow of each diagram, word for word.
 1. Argo CD reads Git: fleet files, the addon catalog, teams and app repos
 2. Argo CD turns each fleet file into a cluster for Cluster API to build
 3. Argo CD hands each app's release to OpenChoreo
-4. Cluster API creates each workload cluster's k3s nodes on docker, AWS or Hetzner
+4. Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE
 5. Argo CD installs the addons and the cluster-agent on every cluster whose labels match
 6. The cluster-agent dials out to OpenChoreo and pulls the app releases
 7. The agent submits the apps to the cluster
