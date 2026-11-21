@@ -2,9 +2,10 @@
 
 > Synthesis knowledge base for agents and maintainers. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-21 | Total pages: 27
+> Last updated: 2026-11-21 | Total pages: 28
 
 ## Decisions
+- [argocd-agent Managed Mode Waits for Upstream 1.0](decisions/argocd-agent-managed-mode-waits-for-upstream.md) — Spike #20: managed mode works with our ApplicationSets (destination.name), but stays push mode until argocd-agent 1.0 and an invariant-3 decision; CAPI keeps the kubeconfig anyway.
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
 - [Fold koorikla/ci into Platform Repo and Pin Tooling with mise](decisions/fold-ci-into-platform-and-mise-toolchain.md) — Consolidate `koorikla/ci` workflows/scripts/toolbox into `koorikla/platform` (#213) and pin all CLI tools in `mise.toml`.
 - [Helm, Crossplane, and OpenChoreo Building Blocks — No Kustomize or Flux](decisions/building-blocks-helm-crossplane-openchoreo.md) — Use Helm wrapper charts, Crossplane v2 Compositions, and OpenChoreo CRs pushed by Argo CD on `mgmt`; never Flux or Kustomize.

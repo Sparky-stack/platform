@@ -1,0 +1,19 @@
+# Spoke-side RBAC for the resource proxy (Argo UI tree, live manifests, logs, Deployment restart action). The agent's
+# default ClusterRole covers only Argo CD's own kinds, so without this the hub UI gets PermissionDenied. No pods/exec.
+# Spike shortcut: read on "*" includes Secrets; a real addon enumerates the API groups/kinds and leaves Secrets out.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-agent-resource-proxy
+rules:
+  - { apiGroups: ["*"], resources: ["*"], verbs: [get, list, watch] }
+  - { apiGroups: [""], resources: [pods/log], verbs: [get] }
+  - { apiGroups: [apps], resources: [deployments, statefulsets, daemonsets], verbs: [patch] }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-agent-resource-proxy
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: argocd-agent-resource-proxy }
+subjects:
+  - { kind: ServiceAccount, name: argocd-agent-agent, namespace: argocd }
