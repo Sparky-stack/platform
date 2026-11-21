@@ -1,4 +1,3 @@
-{{- define "byo.secretKey" -}}byo-{{ .Values.name }}{{- end }}
 {{- define "byo.store" -}}byo-{{ .Values.name }}{{- end }}
 {{- define "byo.pushSecret" -}}
 apiVersion: external-secrets.io/v1alpha1

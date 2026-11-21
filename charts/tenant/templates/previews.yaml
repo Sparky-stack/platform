@@ -8,7 +8,7 @@ merged PR drops out of the generator, so its Application and Environment are del
 Only values that cannot inject anything reach the template: number, head_sha, labels and the Component name (pinned
 to the app name by the selector). Branch names and titles are never rendered.
 */ -}}
-{{- $pv := .Values.previews | default dict }}
+{{- $pv := .Values.previews }}
 {{- /* Only GitHub repositories have a pull request generator here; other apps of the tenant simply get no previews. */ -}}
 {{- $gh := list }}
 {{- range $app := include "tenant.apps" . | fromYamlArray }}
@@ -17,7 +17,7 @@ to the app name by the selector). Branch names and titles are never rendered.
 {{- end }}
 {{- /* The pull request generator authenticates with the platform GitHub App's token (addon secret-stores renders it
 only with secrets.githubGateApp.enabled): without the App no ApplicationSet, which would only report errors (#192). */ -}}
-{{- $gate := dig "githubGateApp" "enabled" false (.Values.secrets | default dict) }}
+{{- $gate := dig "githubGateApp" "enabled" false .Values.secrets }}
 {{- if and $pv.enabled $gh $gate }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
