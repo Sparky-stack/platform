@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "priority-classes addon values",
+  "type": "object",
+  "properties": {
+    "priorityClasses": {
+      "type": "object",
+      "description": "Application PriorityClasses used by ClusterTrait resilience.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "description": "One PriorityClass.",
+        "properties": {
+          "value": {
+            "type": "integer",
+            "description": "Priority value."
+          },
+          "preemptionPolicy": {
+            "enum": [
+              "Never",
+              "PreemptLowerPriority"
+            ],
+            "description": "Never: app classes order the queue only and never evict platform pods."
+          },
+          "description": {
+            "type": "string",
+            "description": "PriorityClass description."
+          }
+        },
+        "required": [
+          "value",
+          "preemptionPolicy"
+        ]
+      }
+    }
+  },
+  "required": [
+    "priorityClasses"
+  ]
+}

@@ -1,8 +1,13 @@
 {{- /* PriorityClasses for OpenChoreo components (#251, #276, docs/openchoreo.md "Resilience defaults"). ClusterTrait
 resilience (addon openchoreo-platform) sets app-production on production pods and app-standard everywhere else. Both set
 preemptionPolicy: Never so app priority only orders the pending scheduling queue (production ahead of non-production)
-and never evicts running pods — protecting platform controllers that run at default priority 0 on workload clusters. A
-pod naming a missing class is rejected, hence they ship with the data plane. */ -}}
+and never evicts running pods, protecting platform controllers that run at default priority 0 on workload clusters.
+
+value and preemptionPolicy are immutable (#281). This addon is the only one whose Application diffs client-side
+(charts/platform compareOptions ServerSideDiff=false): with server-side diff the apiserver's dry-run apply rejects the
+changed field, the Application goes ComparisonError and no sync ever starts. Client-side, the change shows OutOfSync and
+Force=true,Replace=true makes Argo CD delete and recreate the class. Running pods keep their resolved priority; a pod
+created in the moment the class is absent is rejected and its controller retries. hack/tests/test_immutable_fields.sh. */ -}}
 {{- range $name, $pc := .Values.priorityClasses }}
 ---
 apiVersion: scheduling.k8s.io/v1
@@ -10,8 +15,6 @@ kind: PriorityClass
 metadata:
   name: {{ $name }}
   annotations:
-    # value and preemptionPolicy are immutable: a change must delete + recreate the class. Running pods keep their
-    # resolved priority; new pods are rejected only for the moment the class is absent (Argo retries them).
     argocd.argoproj.io/sync-options: Force=true,Replace=true
 value: {{ $pc.value }}
 preemptionPolicy: {{ $pc.preemptionPolicy }}

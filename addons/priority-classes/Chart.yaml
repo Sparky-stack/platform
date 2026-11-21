@@ -1,0 +1,5 @@
+apiVersion: v2
+name: priority-classes
+description: Application PriorityClasses (app-production, app-standard) that ClusterTrait resilience assigns on workload clusters
+type: application
+version: 0.1.0
