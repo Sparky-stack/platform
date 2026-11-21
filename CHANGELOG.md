@@ -2,6 +2,21 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.8.0](https://github.com/koorikla/platform/compare/v0.7.0...v0.8.0) (2026-11-21)
+
+
+### Features
+
+* **crossplane:** Project tooling contract for every API package, crossplane-api golden path, verified inner loop ([#240](https://github.com/koorikla/platform/issues/240)) ([#362](https://github.com/koorikla/platform/issues/362)) ([3c4222a](https://github.com/koorikla/platform/commit/3c4222a7d9f731334dfaef087ac903b65db4b415))
+* **mysql:** enable the MySQL API end to end with the MOCO operator addon (Fixes [#256](https://github.com/koorikla/platform/issues/256)) ([#363](https://github.com/koorikla/platform/issues/363)) ([aecd0bf](https://github.com/koorikla/platform/commit/aecd0bfab559559459ffb4b9d9d90fcbd103af76))
+* **openchoreo:** opt-in app metrics ClusterTrait + app config files ([#252](https://github.com/koorikla/platform/issues/252)) ([#361](https://github.com/koorikla/platform/issues/361)) ([ef8c848](https://github.com/koorikla/platform/commit/ef8c8488f111f7204ef93a4e2452a08baa35c173))
+
+
+### Bug Fixes
+
+* **argocd:** immutable-field changes no longer deadlock server-side diff ([#281](https://github.com/koorikla/platform/issues/281)) ([#359](https://github.com/koorikla/platform/issues/359)) ([c8f6ca6](https://github.com/koorikla/platform/commit/c8f6ca63c383fcdc4e27c105b4e33749ca2c574d))
+* **strimzi:** keep HBONE 15008 reachable for Kafka pods in Istio ambient cells ([#210](https://github.com/koorikla/platform/issues/210)) ([#357](https://github.com/koorikla/platform/issues/357)) ([59be6f0](https://github.com/koorikla/platform/commit/59be6f053323ce11c35bf9dded30cbbefe1d534e))
+
 ## [0.7.0](https://github.com/koorikla/platform/compare/v0.6.0...v0.7.0) (2026-11-20)
 
 
