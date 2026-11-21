@@ -1,7 +1,7 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* OpenChoreo control-plane registration on mgmt: ClusterDataPlane <name> and bound Environment resources. */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
-{{- $name := include "openchoreo.name" . }}
+{{- $name := .Values.name }}
 {{- $dp := .Values.openchoreo.dataPlane }}
 {{- $orgNs := (.Values.openchoreo.orgNamespace | default "default") }}
 apiVersion: openchoreo.dev/v1alpha1
@@ -13,8 +13,9 @@ metadata:
   annotations:
     openchoreo.dev/display-name: {{ $name | quote }}
     openchoreo.dev/description: {{ printf "%s cluster %s (%s)" (.Values.provider | default "docker") $name (.Values.region | default "local") | quote }}
-    {{- include "openchoreo.crAnnotations" . | nindent 4 }}
-    {{- range $addon, $on := (.Values.addons | default dict) }}
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    {{- range $addon, $on := .Values.addons }}
     addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
     {{- end }}
 spec:
@@ -23,11 +24,11 @@ spec:
     clientCA:
       secretKeyRef:
         name: {{ $name }}-agent-ca
-        namespace: {{ include "openchoreo.fleetNamespace" . }}
+        namespace: fleet
         key: ca.crt
   secretStoreRef:
     name: default
-  {{- if dig "observability" "enabled" false (.Values.openchoreo | default dict) }}
+  {{- if dig "observability" "enabled" false .Values.openchoreo }}
   observabilityPlaneRef:
     kind: ClusterObservabilityPlane
     name: {{ dig "observability" "planeName" "default" .Values.openchoreo }}
@@ -54,7 +55,8 @@ metadata:
   annotations:
     openchoreo.dev/display-name: {{ $env | title | quote }}
     openchoreo.dev/description: {{ printf "%s on cluster %s" ($env | title) $name | quote }}
-    {{- include "openchoreo.environmentAnnotations" $ | nindent 4 }}
+    argocd.argoproj.io/sync-wave: "9"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   dataPlaneRef:
     kind: ClusterDataPlane

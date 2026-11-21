@@ -79,7 +79,10 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | packages.runtimeConfig.resources.limits.memory | string | `"512Mi"` |  |
 | packages.runtimeConfig.resources.requests.cpu | string | `"10m"` |  |
 | packages.runtimeConfig.resources.requests.memory | string | `"64Mi"` |  |
-| packages.signatureVerification | object | `{"enabled":false,"issuer":"https://token.actions.githubusercontent.com","prefix":"ghcr.io/koorikla/platform/","subjectRegExp":"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"}` | enable-signature-verification in crossplane.args). Identity: the reusable workflow that signs on main / tags. Off until Crossplane verifies Sigstore bundles (#247); packages are still keyless-signed with provenance in CI. |
+| packages.signatureVerification.enabled | bool | `false` |  |
+| packages.signatureVerification.issuer | string | `"https://token.actions.githubusercontent.com"` |  |
+| packages.signatureVerification.prefix | string | `"ghcr.io/koorikla/platform/"` |  |
+| packages.signatureVerification.subjectRegExp | string | `"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"` |  |
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptNamespaces[1] | string | `"cnpg-system"` |  |
@@ -126,6 +129,8 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 ## Day-2 notes
 
 - Values are checked by `values.schema.json` (backend enums, `aws.identity.source`, every package pinned `<repo>:<tag>@sha256:<digest>`; `helm` prints the failing path). Facts each backend needs (aws/gcp/azure ids, a backend for `cluster.provider`) are checked in `templates/validate.yaml`.
+- Crossplane v2 installs its own CRDs from its init container: the platform objects here carry `SkipDryRunOnMissingResource` and sync wave 1 (wave 2 for the ProviderConfigs, whose CRDs come with the providers).
+- Only the managed resources the active Composition composes are activated (`crossplane.provider.defaultActivations: []` plus `templates/activation-policy.yaml`), which keeps provider CRD count and memory low.
 - Backing up composed CloudNativePG databases and upgrading Crossplane: [backup and restore](../../docs/runbooks/backup-restore.md#6-cloudnativepg-cloudnative-pg) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
 
 ## Links

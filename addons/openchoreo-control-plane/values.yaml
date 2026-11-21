@@ -1,29 +1,18 @@
 # OpenChoreo 1.3.3 control plane on mgmt. Values = upstream install/k3d/multi-cluster/values-cp.yaml @ v1.3.3, except
-# lines marked "platform:". Needs (mgmt addons): cert-manager, external-secrets (+ ClusterSecretStores `platform` and
-# `mgmt-openchoreo`), gateway-api-crds, kgateway (GatewayClass `kgateway`), thunder (IdP), coredns-local (pods resolve
-# *.openchoreo.localhost to the Gateway below). Until those exist, the Application's retries cover the ordering.
-#
-# Endpoints (k3d publishes host 8080/8443 -> mgmt nodes -> klipper hostPorts of Service gateway-default):
-#   http://openchoreo.localhost:8080          console (Backstage)
-#   http://api.openchoreo.localhost:8080      openchoreo-api
-#   http://thunder.openchoreo.localhost:8080  ThunderID (route from addon thunder)
-#   cluster-gateway.openchoreo.localhost:8443 agent websocket, TLS passthrough (SNI) -> cluster-gateway; the server cert
-#                                             (Certificate cluster-gateway-tls) carries that SAN, signed by the
-#                                             chart's CA Secret cluster-gateway-ca (see templates/gateway-ca-crs.yaml).
-# Hostnames are literals here (subchart values cannot be templated); templates/validate.yaml fails the render when they
-# drift from installation.yaml openchoreo.controlPlane.{host,clusterGatewayURL}. Other installations override them in
-# installations/<inst>/addons/openchoreo-control-plane/values.yaml.
+# lines marked "platform:". Needs (mgmt addons): cert-manager, external-secrets (ClusterSecretStores `platform`,
+# `mgmt-openchoreo`), gateway-api-crds, kgateway, thunder (IdP), coredns-local; Argo CD retries cover the ordering.
+# Local endpoints: console openchoreo.localhost:8080, api.<host>:8080, thunder.<host>:8080, agent websocket
+# cluster-gateway.<host>:8443 (TLS passthrough). Hostnames are literals (subchart values cannot be templated):
+# templates/validate.yaml fails the render when they drift from installation.yaml openchoreo.controlPlane.
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
 openchoreo:
-  # -- Org namespace (`default`), console/API hostnames (`controlPlane.host`), and agent WebSocket endpoint (`controlPlane.clusterGatewayURL`).
-  orgNamespace: default
   controlPlane:
+    # -- Console/API hostnames (`host`) and agent WebSocket endpoint (`clusterGatewayURL`).
     host: openchoreo.localhost
     clusterGatewayURL: wss://cluster-gateway.openchoreo.localhost:8443/ws
   observability:
     enabled: true             # == backstage.features.observability.enabled below (validated)
-    httpPort: 11080
 
 # Secret backstage-secrets (templates/backstage-secrets.yaml) from ClusterSecretStore `platform`, key `openchoreo`
 # (properties backstage-client-secret == Thunder's Backstage client secret, backstage-backend-secret).
@@ -32,12 +21,8 @@ backstageSecrets:
   store: platform
   remoteKey: openchoreo
 
-# Golden-path project templates (docs/project-templates.md). Repository creation and the platform PR authenticate as the
-# platform write GitHub App (ClusterSecretStore `platform`, key `platform-github-app`, docs/forking.md credentials (c)).
-# Off by default (the key is optional in `task secrets`): templates are listed and their forms work, the publish step
-# fails. Switching on needs this flag (renders ExternalSecret backstage-github-app, templates/backstage-github-app.yaml)
-# AND the subchart's GitHub integration + env, both shown in docs/project-templates.md "Repository creation";
-# templates/validate.yaml fails the render when only one side is set.
+# Golden-path repository creation as the platform write GitHub App (docs/project-templates.md "Repository creation").
+# Switching on needs this flag AND the subchart's GitHub integration + env; templates/validate.yaml checks both.
 scaffolder:
   githubApp:
     enabled: false
@@ -45,12 +30,8 @@ scaffolder:
     remoteKey: platform-github-app
     secretName: backstage-github-app
 
-# Console cost views (#207). The portal shows Cost Insights (sidebar page, Overview card on projects and components)
-# and the project's Cost Analysis tab whenever observability is on, and each call fails while the FinOps module is
-# off: the observer has no finops-adapter to ask ("Failed to retrieve data from the FinOps adapter", HTTP 500) and
-# the FinOps agent URL is unset ("FinOps service is not configured"). openchoreo-ui 1.3.3 has no feature flag for
-# them, so templates/backstage-cost-views.yaml writes app-config.cost-views.yaml (loaded after the extra config) with
-# app.extensions = `appExtensions` plus, while `costViews.enabled` is false, the three cost extensions switched off.
+# Console cost views fail (HTTP 500) while the FinOps module is off, and openchoreo-ui 1.3.3 has no flag for them:
+# templates/backstage-cost-views.yaml switches the extensions off instead.
 costViews:
   # -- Show the console's cost views. Set by the catalog from the mgmt cluster label `addons.platform.koorikla.io/finops-opencost` (`installation.yaml` `mgmt.addons.finops-opencost`); a string from the ApplicationSet.
   enabled: "false"
@@ -98,9 +79,7 @@ appExtensions:
   - entity-card:gitlab/people: false
   - entity-card:gitlab/languages: false
 
-# Shared CAPI ClusterResourceSet payload `fleet/openchoreo-gateway-ca` (templates/gateway-ca-crs.yaml): ConfigMap
-# openchoreo-data-plane/cluster-gateway-ca with the gateway CA's PUBLIC certificate, read through ClusterSecretStore
-# `mgmt-openchoreo` (read-only on this namespace). Every workload cluster's CRS (charts/cluster) lists it.
+# ClusterResourceSet payload with the gateway CA's PUBLIC cert for every workload cluster's agent (charts/cluster).
 gatewayCA:
   # -- Exports `cluster-gateway-ca` (`gatewayCA.{enabled,store,namespace,sourceSecret}`) via `ClusterSecretStore/mgmt-openchoreo` to `fleet` for workload agent trust.
   enabled: true
@@ -126,19 +105,15 @@ openchoreo-control-plane:
           bootstrap:   # authz bootstrap Job (kubectl apply of the default roles and mappings)
             image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
             # platform: upstream's 10 default role bindings verbatim except developer-binding (below) and
-            # mcp-tryout-client-binding (client_id
-            # service_mcp_client, Thunder script 57), which binds to ClusterAuthzRole mcp-service
-            # (templates/mcp-service-role.yaml: read-only + workflowrun:create) instead of admin (docs/ai-agents.md).
-            # Keeping the binding name updates an existing cluster's mcp-tryout-client-binding in place on sync.
+            # mcp-tryout-client-binding, bound to ClusterAuthzRole mcp-service instead of admin (docs/ai-agents.md).
             mappings:
               - name: admin-binding
                 kind: ClusterAuthzRoleBinding
                 roleMappings: [{ roleRef: { name: admin, kind: ClusterAuthzRole } }]
                 entitlement: { claim: groups, value: admins }
                 effect: allow
-              # platform (#335): group developers gets org-wide READ-ONLY roles instead of `developer` (upstream:
-              # write access to every project). Write access is per project: charts/tenant developer-authz.yaml binds
-              # `developer` to each tenant's developerGroups, scoped to that project.
+              # platform: developers get org-wide READ-ONLY roles; write access is per project (charts/tenant
+              # developer-authz.yaml binds `developer` to each tenant's developerGroups).
               - name: developer-binding
                 kind: ClusterAuthzRoleBinding
                 roleMappings:
@@ -203,28 +178,22 @@ openchoreo-control-plane:
         - openchoreo.localhost
     features:
       workflows:
-        # platform: Build tab, WorkflowRuns + logs (workflow plane on mgmt, docs/build-plane.md). Set per installation by
-        # the catalog from installation.yaml openchoreo.workflowPlane.enabled.
+        # platform: Build tab, WorkflowRuns + logs (docs/build-plane.md).
         # -- Wired from `installation.yaml` via `installationParameters` (alongside `features.observability.enabled`).
         enabled: true
       observability:
-        # platform: Metrics/Traces/Runtime Logs tabs + RuntimeHealthCard. Backstage asks openchoreo-api for the
-        # environment's ClusterObservabilityPlane observerURL (addon openchoreo-observability-plane); no URL here.
+        # platform: Metrics/Traces/Logs tabs (observer URL comes from the ClusterObservabilityPlane).
         # Must equal installation.yaml openchoreo.observability.enabled (templates/validate.yaml).
         enabled: true
-    # platform: extra Backstage config (ConfigMap app-config.extra.yaml, loaded last). Backstage REPLACES arrays from
-    # earlier config files, so catalog.locations repeats the image's list (openchoreo-ui v1.3.3 /app/app-config.yaml:
-    # org groups + the 14 OpenChoreo wizards) and appends the golden-path templates of this repo
-    # (templates/catalog-info.yaml, a Location; hack/tests/test_project_templates.sh). A chart bump re-checks the list.
-    # Forks: point the url target at their own repo (docs/forking.md).
+    # platform: Backstage REPLACES arrays from earlier config files, so catalog.locations repeats the image's list
+    # (openchoreo-ui v1.3.3) before this repo's golden-path templates; a chart bump re-checks it (docs/forking.md).
     appConfig:
       catalog:
         rules:
           # Backstage defaults + Resource: catalog:register adds each new repo's catalog-info.yaml (kind Resource)
           - allow: [API, Component, Location, Resource]
-          # golden-path templates: only from this repo's templates/catalog-info.yaml. Backstage checks entities a
-          # Location emits against that Location's ORIGIN (this config target), not the template.yaml URL (#59:
-          # a templates/*/template.yaml pattern rejected all six as "not of an allowed kind for that location").
+          # golden-path templates: only from this repo's catalog-info.yaml. Backstage checks a Location's entities
+          # against the Location's ORIGIN (this target), not the template.yaml URL.
           - allow: [Template]
             locations:
               - type: url
@@ -277,7 +246,7 @@ openchoreo-control-plane:
             rules: [{ allow: [Template] }]
           - type: url
             target: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
-    # platform: app-config.cost-views.yaml (templates/backstage-cost-views.yaml, #207), loaded after app-config.extra.yaml
+    # platform: app-config.cost-views.yaml (templates/backstage-cost-views.yaml), loaded after app-config.extra.yaml
     extraArgs: ["--config", "app-config.cost-views.yaml"]
     extraVolumes:
       - name: cost-views-config

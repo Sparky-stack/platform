@@ -27,8 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../common/lib.sh"
 
 require_cmd uv
-out="$(out_dir)"
-case "${out}" in /*) ;; *) out="$(pwd)/${out}" ;; esac
+out="$(abs_out_dir)"
 cd "${WORKDIR:-.}"
 [[ -f pyproject.toml ]] || die "pyproject.toml not found in ${WORKDIR:-.}"
 [[ -f uv.lock ]] || die "uv.lock not found in ${WORKDIR:-.} (run \`uv lock\` and commit it)"
@@ -61,11 +60,11 @@ if is_true "${RUN_LINT:-true}"; then
   "$@" format --check --diff .
 fi
 
-tc="${RUN_TYPECHECK:-auto}"
-if [[ "${tc}" == "auto" ]]; then
-  if locked mypy; then tc=true; else tc=false; fi
+run_typecheck="${RUN_TYPECHECK:-auto}"
+if [[ "${run_typecheck}" == "auto" ]]; then
+  if locked mypy; then run_typecheck=true; else run_typecheck=false; fi
 fi
-if is_true "${tc}"; then
+if is_true "${run_typecheck}"; then
   log "mypy"
   uv run --frozen --no-sync mypy .
 fi

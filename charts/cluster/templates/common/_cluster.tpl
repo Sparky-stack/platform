@@ -13,24 +13,18 @@ platform.koorikla.io/region: {{ .Values.region | quote }}
 platform.koorikla.io/environment: {{ .Values.environment | quote }}
 platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
 platform.koorikla.io/cni: {{ .Values.cni | quote }}
-{{- $meshGroup := ((.Values.mesh | default dict).group | default "") }}
-{{- with $meshGroup }}
+{{- with .Values.mesh.group }}
 mesh.platform.koorikla.io/group: {{ . | quote }}
 mesh.platform.koorikla.io/network: {{ $.Values.name | quote }}
 {{- end }}
 {{- $cilium := and (eq .Values.cni "cilium") (ne (include "capi.byo" .) "true") }}
-{{- range $addon, $on := merge (dict "cilium" $cilium) (.Values.addons | default dict) }}
+{{- range $addon, $on := merge (dict "cilium" $cilium) .Values.addons }}
 addons.platform.koorikla.io/{{ $addon }}: {{ $on | toString | quote }}
 {{- end }}
 {{- end }}
 
 {{- define "capi.registry.harbor" -}}
-{{- $r := .Values.registry | default dict -}}
-{{- and (eq (toString $r.type) "harbor") (ne (toString ($r.host | default "")) "") | toString -}}
-{{- end }}
-
-{{- define "capi.annotations" -}}
-platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
+{{- and (eq (toString .Values.registry.type) "harbor") (ne (toString .Values.registry.host) "") | toString -}}
 {{- end }}
 
 {{- define "capi.variables" -}}
@@ -53,7 +47,7 @@ platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD"
 {{- $_ := set $vars "controlPlaneMachineType" . -}}
 {{- end -}}
 {{- end -}}
-{{- $_ := mergeOverwrite $vars (.Values.providerSpec | default dict) -}}
+{{- $_ := mergeOverwrite $vars .Values.providerSpec -}}
 {{- range $k := keys $vars | sortAlpha }}
 - name: {{ $k }}
   value: {{ index $vars $k | toJson }}

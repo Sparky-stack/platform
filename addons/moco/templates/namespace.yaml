@@ -1,3 +1,2 @@
-{{- /* Labels on the operator namespace (namespace.podSecurity, namespace.ambient; see values.yaml). MySQL pods live in
-the app namespaces. Template: charts/lib/templates/_operator-namespace.tpl. */ -}}
+{{- /* Labels on the operator namespace (namespace.podSecurity, namespace.ambient): charts/lib _operator-namespace.tpl. */ -}}
 {{- include "koorikla-lib.operatorNamespace" . }}

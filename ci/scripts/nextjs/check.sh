@@ -44,6 +44,14 @@ run_script() {
   "${pm}" run "$1"
 }
 
+# pm_exec BIN ARGS... - run a locally installed binary.
+pm_exec() {
+  case "${pm}" in
+    npm) npx --no-install "$@" ;;
+    *) "${pm}" exec "$@" ;;
+  esac
+}
+
 log "install (${pm})"
 case "${pm}" in
   npm)
@@ -77,10 +85,7 @@ if is_true "${RUN_TYPECHECK:-true}"; then
     run_script "${TYPECHECK_SCRIPT:-typecheck}"
   elif [[ -f tsconfig.json ]]; then
     log "tsc --noEmit"
-    case "${pm}" in
-      npm) npx --no-install tsc --noEmit ;;
-      *) "${pm}" exec tsc --noEmit ;;
-    esac
+    pm_exec tsc --noEmit
   fi
 fi
 
@@ -97,10 +102,7 @@ if is_true "${RUN_BUILD:-true}"; then
     run_script "${BUILD_SCRIPT:-build}"
   else
     log "next build"
-    case "${pm}" in
-      npm) npx --no-install next build ;;
-      *) "${pm}" exec next build ;;
-    esac
+    pm_exec next build
   fi
 fi
 

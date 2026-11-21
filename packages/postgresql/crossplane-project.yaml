@@ -1,8 +1,5 @@
-# Crossplane Project of the PostgreSQL API (README.md, docs/crossplane.md). `crossplane project build` turns it into
-# the Configuration package ghcr.io/koorikla/platform/postgresql. Dependencies (`crossplane dependency add`): the three
-# Functions of the Composition and the Providers whose managed resources it composes (schemas). Clusters install the
-# package with skipDependencyResolution and pin the same packages by digest in addons/crossplane: keep the version floors
-# in step with addons/crossplane/values.yaml.
+# Crossplane Project of the postgresql API: `crossplane project build` makes ghcr.io/koorikla/platform/postgresql (docs/crossplane.md).
+# Keep the dependency floors in step with the digests addons/crossplane pins.
 apiVersion: dev.crossplane.io/v1alpha1
 kind: Project
 metadata:
