@@ -15,9 +15,9 @@ assert_eq "$(units README.md)" "README.md" "root README read by contract tests -
 assert_eq "$(units docs/diagrams/x.svg)" "docs/diagrams" "docs/diagrams/** -> docs/diagrams unit"
 assert_eq "$(units ci/fixtures/go/main.go .github/workflows/app-go.yaml)" "ci" "ci stack"
 assert_eq "$(units templates/go/template.yaml)" "templates" "backstage templates"
-assert_eq "$(units addons/mesh/values.yaml docs/networking.md addons/mesh/README.md)" "addons/mesh" "docs ride along"
-assert_eq "$(units docs/networking.md)" "docs" "a doc no test reads -> docs-only"
-assert_eq "$(units docs/networking.md wiki/index.md AGENTS.md addons/README.md)" "docs" "docs-only"
+assert_eq "$(units addons/mesh/values.yaml docs/dns.md addons/mesh/README.md)" "addons/mesh" "docs ride along"
+assert_eq "$(units docs/dns.md)" "docs" "a doc no test reads -> docs-only"
+assert_eq "$(units docs/dns.md wiki/index.md AGENTS.md addons/README.md)" "docs" "docs-only"
 assert_eq "$(units charts/README.md installations/local/README.md)" "docs" "READMEs outside charts are docs"
 
 for p in hack/test.sh hack/README.md bootstrap/README.md bootstrap/bootstrap.sh charts/platform/values.yaml charts/cluster/values.yaml \
