@@ -25,7 +25,7 @@ The one Cluster API chart (`addons/capi-operator` only installs the upstream ope
 | aws.iamInstanceProfiles.controlPlane | string | `"control-plane.cluster-api-provider-aws.sigs.k8s.io"` |  |
 | aws.iamInstanceProfiles.nodes | string | `"nodes.cluster-api-provider-aws.sigs.k8s.io"` |  |
 | aws.leaseFlags | bool | `true` |  |
-| aws.version | string | `"v2.13.1"` | CAPA `v2.13.1` (`configSecret`, `credentialsFromStore`) . |
+| aws.version | string | `"v2.13.1"` | CAPA `v2.13.1` (`configSecret`, `credentialsFromStore`). |
 | aws.workerMachineType | string | `"t3.large"` |  |
 | capi.gcp.serviceAccount | string | `""` |  |
 | capi.gcp.workloadIdentityProvider | string | `""` | WIF pool provider (`capi.gcp.{workloadIdentityProvider,serviceAccount}`) that CAPG impersonates. |
@@ -97,7 +97,7 @@ The one Cluster API chart (`addons/capi-operator` only installs the upstream ope
 | providerSpec | object | `{}` | Extra `ClusterClass` provider variables passed as-is. |
 | region | string | `"local"` |  |
 | registry.host | string | `""` |  |
-| registry.hostCache | object | `{"enabled":false,"mirrors":[]}` | Docker provider only: host pull-through caches (hack/registry-cache.sh, docs/dev-environment.md). Each upstream is mirrored to http://platform-cache-<upstream, dots as dashes>:5000 on network kind instead of Harbor. |
+| registry.hostCache | object | `{"enabled":false,"mirrors":[]}` | Docker provider only: host pull-through caches http://platform-cache-<upstream, dots as dashes>:5000 (hack/registry-cache.sh). |
 | registry.mirror.enabled | bool | `false` |  |
 | registry.nodeHostAlias | string | `""` |  |
 | registry.proxyCache | list | `[]` |  |
