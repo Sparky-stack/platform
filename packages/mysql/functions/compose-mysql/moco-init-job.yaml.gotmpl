@@ -1,4 +1,4 @@
-{{- /* moco has no database/user CRD: this Job creates both with idempotent SQL as moco-admin (operator Secret moco-<name>), retrying until the cluster answers. VERIFY: Secret key ADMIN_PASSWORD. */}}
+{{- /* moco has no database/user CRD: this Job creates both with idempotent SQL as moco-admin (operator Secret moco-<name>, key ADMIN_PASSWORD), retrying until the cluster answers. Pod Security restricted. */}}
 {{- if eq $backend "moco" }}
 ---
 apiVersion: batch/v1
@@ -13,14 +13,14 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
-      securityContext: { runAsNonRoot: true, runAsUser: 10000, seccompProfile: { type: RuntimeDefault } }
+      securityContext: { runAsNonRoot: true, runAsUser: 10000, runAsGroup: 10000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: init
-          image: {{ $facts.mysqlImage }}
+          image: {{ $mysqlImage }}
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
           env:
             - { name: MYSQL_PWD, valueFrom: { secretKeyRef: { name: moco-{{ $name }}, key: ADMIN_PASSWORD } } }
-            - { name: APP_PASSWORD, valueFrom: { secretKeyRef: { name: {{ $name }}-mysql, key: password } } }
+            - { name: APP_PASSWORD, valueFrom: { secretKeyRef: { name: {{ $name }}-app, key: password } } }
           command:
             - sh
             - -ec

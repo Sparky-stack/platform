@@ -12,7 +12,7 @@ spec:
       name: orders-db-mysql-init
     - apiVersion: external-secrets.io/v1
       kind: ExternalSecret
-      name: orders-db-mysql
+      name: orders-db-app
     - apiVersion: generators.external-secrets.io/v1alpha1
       kind: Password
       name: orders-db-mysql-password
@@ -37,7 +37,7 @@ status:
     type: Ready
   endpoint: moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc
   port: 3306
-  secretName: orders-db-mysql
+  secretName: orders-db-app
 ---
 apiVersion: moco.cybozu.com/v1beta2
 kind: MySQLCluster
@@ -56,13 +56,42 @@ metadata:
     name: orders-db
     uid: ad1149c7-8aae-5944-aff4-fbcef5a2e33b
 spec:
+  disableSlowQueryLogContainer: true
   podTemplate:
     metadata:
       labels:
         platform.koorikla.io/mysql: orders-db
+    overwriteContainers:
+    - name: agent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        runAsGroup: 10000
+        runAsNonRoot: true
+        runAsUser: 10000
+    - name: copy-moco-init
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        runAsGroup: 10000
+        runAsNonRoot: true
+        runAsUser: 10000
+    - name: moco-init
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        runAsGroup: 10000
+        runAsNonRoot: true
+        runAsUser: 10000
     spec:
       containers:
-      - image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+      - image: ghcr.io/cybozu-go/moco/mysql:8.4.10.1@sha256:bdb88ae2023dcba0218bf900c7f39117c7a6e4101de6b5c8f62774c1d897b68a
         name: mysqld
         resources:
           limits:
@@ -70,6 +99,19 @@ spec:
           requests:
             cpu: 250m
             memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsGroup: 10000
+          runAsNonRoot: true
+          runAsUser: 10000
+      securityContext:
+        fsGroup: 10000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
   replicas: 1
   volumeClaimTemplates:
   - metadata:
@@ -88,7 +130,7 @@ metadata:
     crossplane.io/composition-resource-name: connection-secret
   labels:
     crossplane.io/composite: orders-db
-  name: orders-db-mysql
+  name: orders-db-app
   namespace: dp-default-shop-development-1a2b3c4d
   ownerReferences:
   - apiVersion: platform.koorikla.io/v1alpha1
@@ -107,10 +149,10 @@ spec:
   refreshPolicy: CreatedOnce
   target:
     creationPolicy: Owner
-    name: orders-db-mysql
+    name: orders-db-app
     template:
       data:
-        database: app
+        dbname: app
         host: moco-orders-db-primary.dp-default-shop-development-1a2b3c4d.svc
         password: '{{ .password }}'
         port: "3306"
@@ -157,8 +199,8 @@ spec:
           valueFrom:
             secretKeyRef:
               key: password
-              name: orders-db-mysql
-        image: ghcr.io/cybozu-go/moco/mysql:8.4.10
+              name: orders-db-app
+        image: ghcr.io/cybozu-go/moco/mysql:8.4.10.1@sha256:bdb88ae2023dcba0218bf900c7f39117c7a6e4101de6b5c8f62774c1d897b68a
         name: init
         securityContext:
           allowPrivilegeEscalation: false
@@ -167,6 +209,7 @@ spec:
             - ALL
       restartPolicy: OnFailure
       securityContext:
+        runAsGroup: 10000
         runAsNonRoot: true
         runAsUser: 10000
         seccompProfile:

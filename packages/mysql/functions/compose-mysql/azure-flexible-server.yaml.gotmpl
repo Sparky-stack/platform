@@ -20,7 +20,7 @@ spec:
     delegatedSubnetId: {{ $facts.delegatedSubnetId }}
     privateDnsZoneId: {{ $facts.privateDnsZoneId }}
     administratorLogin: {{ $db }}
-    administratorPasswordSecretRef: { name: {{ $name }}-mysql, key: password }
+    administratorPasswordSecretRef: { name: {{ $name }}-app, key: password }
     {{- if $ha }}
     highAvailability: { mode: ZoneRedundant }
     {{- end }}
