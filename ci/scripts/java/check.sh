@@ -27,8 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../common/lib.sh"
 
 require_cmd java
-out="$(out_dir)"
-case "${out}" in /*) ;; *) out="$(pwd)/${out}" ;; esac
+out="$(abs_out_dir)"
 
 meta="$(mktemp -d "${TMPDIR:-/tmp}/java-detect.XXXXXX")"
 CI_OUT_DIR="${meta}" GITHUB_OUTPUT="" bash "${SCRIPT_DIR}/detect.sh"
@@ -45,6 +44,12 @@ case "${cmd}" in
   *) require_cmd "${cmd}" ;;
 esac
 java -version 2>&1 | head -1 >&2
+
+# Coverage needs the tests to run.
+measure_coverage=false
+if is_true "${COVERAGE:-true}" && is_true "${RUN_TESTS:-true}"; then
+  measure_coverage=true
+fi
 
 # mvnw verifies the pinned .zip distribution only when `unzip` exists (else it
 # downloads the .tar.gz and the checksum fails). JDK images ship no unzip:
@@ -77,18 +82,18 @@ fi
 
 case "${tool}" in
   maven)
-    jv="${JACOCO_VERSION:-0.8.16}"
-    cv="${CYCLONEDX_MAVEN_VERSION:-2.9.3}"
+    jacoco="org.jacoco:jacoco-maven-plugin:${JACOCO_VERSION:-0.8.16}"
+    cyclonedx="org.cyclonedx:cyclonedx-maven-plugin:${CYCLONEDX_MAVEN_VERSION:-2.9.3}"
     set -- -B -ntp -e
-    if is_true "${COVERAGE:-true}" && is_true "${RUN_TESTS:-true}"; then
-      set -- "$@" "org.jacoco:jacoco-maven-plugin:${jv}:prepare-agent"
+    if [[ "${measure_coverage}" == "true" ]]; then
+      set -- "$@" "${jacoco}:prepare-agent"
     fi
     set -- "$@" verify
-    if is_true "${COVERAGE:-true}" && is_true "${RUN_TESTS:-true}"; then
-      set -- "$@" "org.jacoco:jacoco-maven-plugin:${jv}:report"
+    if [[ "${measure_coverage}" == "true" ]]; then
+      set -- "$@" "${jacoco}:report"
     fi
     if is_true "${SBOM:-true}"; then
-      set -- "$@" "org.cyclonedx:cyclonedx-maven-plugin:${cv}:makeAggregateBom" \
+      set -- "$@" "${cyclonedx}:makeAggregateBom" \
         -DoutputFormat=json -DoutputName=bom -DprojectType=application -Dcyclonedx.skipNotDeployed=false
     fi
     if ! is_true "${RUN_TESTS:-true}"; then
@@ -105,7 +110,7 @@ case "${tool}" in
     if ! is_true "${RUN_TESTS:-true}"; then
       set -- "$@" -x test
     fi
-    if is_true "${COVERAGE:-true}" && is_true "${RUN_TESTS:-true}"; then
+    if [[ "${measure_coverage}" == "true" ]]; then
       if has_task jacocoTestReport; then
         set -- "$@" jacocoTestReport
       else
@@ -128,7 +133,7 @@ log "${cmd} $* ${BUILD_ARGS:-}"
 "${cmd}" "$@" ${BUILD_ARGS:-}
 
 # Coverage: sum the report-level LINE counters of every JaCoCo XML report.
-if is_true "${COVERAGE:-true}" && is_true "${RUN_TESTS:-true}"; then
+if [[ "${measure_coverage}" == "true" ]]; then
   reports="$(find . \( -path '*/site/jacoco/jacoco.xml' -o -name 'jacocoTestReport.xml' \) -not -path '*/node_modules/*' 2>/dev/null || true)"
   if [[ -n "${reports}" ]]; then
     pct="$(printf '%s\n' "${reports}" | while IFS= read -r f; do

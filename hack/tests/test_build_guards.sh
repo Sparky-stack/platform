@@ -129,10 +129,12 @@ out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/no
   GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; git_access https://github.com/koorikla/x; echo REACHED' 2>&1 || true)
 assert_eq "$([[ "$out" == *REACHED* ]] && echo reached || echo stopped):$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" \
   "stopped:none" "no git token: the run stops, no anonymous clone"
-assert_match "$out" 'no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created' "no git token: says which Secret"
-assert_match "$out" 'GitHub App must be installed on this repository' "no git token: says what to fix"
-assert_match "$out" 'kubectl -n workflows-default describe externalsecret run-1-git' "no git token: points at the ExternalSecret"
-assert_match "$out" 'logs deploy/external-secrets \| grep run-1-git' "no git token: points at GitHub's answer (ESO log)"
+assert_matches "$out" <<'CASES'
+no git token: says which Secret | no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created
+no git token: says what to fix | GitHub App must be installed on this repository
+no git token: points at the ExternalSecret | kubectl -n workflows-default describe externalsecret run-1-git
+no git token: points at GitHub's answer (ESO log) | logs deploy/external-secrets \| grep run-1-git
+CASES
 
 # --- gitops: only a real Workload under deploy/openchoreo/ is rewritten -------------------------------------------
 GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')

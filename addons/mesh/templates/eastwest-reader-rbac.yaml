@@ -1,27 +1,9 @@
 {{- /*
-Peers' istiods discover this cluster's endpoints as user platform:istio-reader: a 7-day client cert that mgmt's
-cert-manager issues from this cluster's k3s client CA (charts/cluster mesh-remote-secret.yaml) and ships to the peers
-as their istio-remote-secret-<this cluster>. No ServiceAccount token is minted, so nothing long-lived exists to leak.
-
-The user is bound to ClusterRole platform-istio-reader, NOT to the istiod chart's istio-reader-clusterrole-istio-system:
-upstream's role also grants cluster-wide get/list/watch on secrets and configmaps, create/delete on MCS serviceexports
-and create on tokenreviews/subjectaccessreviews. With it every peer could read every Secret of this cluster (the
-OpenChoreo agent identity, istiod's serving key, every tenant Secret). What a peer istiod 1.32 (ambient multi-primary, multi-network) reads from a remote
-cluster, per the 1.32.0 source (docs/multicluster.md "Reader RBAC"):
-  pkg/kube/multicluster/cluster.go          namespaces, pods, services, nodes, endpointslices, gateways (Gateway API)
-  serviceregistry/kube/controller           the same + endpoints, MCS serviceimports, CRDs (delayed informers)
-  PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY workloadentries (default on)
-  remote mesh watcher (multicluster.go)     ConfigMap istio-system/istio only (trust domain), field selector by name
-  credentials controller                    Secrets (list/watch, cluster-wide; istiod's field selector skips helm
-                                            releases and SA tokens, RBAC cannot) - data only used for gateways served by a remote istiod
-                                            (primary-remote), but istiod 1.32.0 WAITS for this informer before it
-                                            serves the peer: forbidden -> the peer times out after
-                                            PILOT_REMOTE_CLUSTER_TIMEOUT (30s) and is left out of the mesh.
-                                            The opt-out PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false SIGSEGVs
-                                            1.32.0 (fixed on master, istio/istio#62295; no release yet).
-                                            Not granted by default; reader.remoteCredentialsSecrets (below) is the
-                                            explicit, separate grant (docs/multicluster.md "Reader RBAC").
-  tokenreviews/SARs/serviceexports          primary-remote proxy auth / ENABLE_MCS_AUTO_EXPORT (off): not used.
+Peers' istiods discover this cluster's endpoints as user platform:istio-reader (7-day client cert issued on mgmt, no
+ServiceAccount token). Bound to ClusterRole platform-istio-reader with only the discovery reads istiod 1.32 needs,
+NOT upstream's istio-reader-clusterrole-istio-system, which lets every peer read every Secret of this cluster.
+istiod 1.32.0 also waits for a cluster-wide Secret informer before it serves a peer; that grant is separate and
+explicit (reader.remoteCredentialsSecrets). Per-resource rationale: docs/multicluster.md "Reader RBAC".
 */ -}}
 {{- if and .Values.mesh.eastwest.enabled .Values.reader.enabled }}
 {{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}

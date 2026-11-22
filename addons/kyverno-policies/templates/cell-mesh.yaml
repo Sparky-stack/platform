@@ -1,39 +1,14 @@
 {{- /*
-Mesh policy of ambient-enrolled OpenChoreo cell namespaces (docs/networking.md "Strict mTLS in cell namespaces", #53).
-The data-plane gateway is in the mesh (addon openchoreo-data-plane: gateway pod label istio.io/dataplane-mode=ambient),
-so ingress reaches component pods as HBONE mTLS, and cells can refuse plaintext.
-
-  GeneratingPolicy openchoreo-cell-hbone    NetworkPolicy platform-mesh-hbone in every enrolled cell: HBONE (tcp 15008)
-                                            to component pods from the same peers OpenChoreo's per-component policy
-                                            admits (same namespace, openchoreo.dev/system-component pods). Ambient
-                                            tunnels every mesh connection to the destination pod's 15008, and
-                                            OpenChoreo's policy only opens the endpoint ports, so without this the
-                                            gateway (and pod-to-pod traffic within a cell) is dropped by the CNI.
-                                            Peers, not ports: inside the tunnel the endpoint port is no longer checked
-                                            by the CNI, the peer set stays the same (staging never reaches production).
-                                            Plus kubelet probes, which ambient SNATs to 169.254.7.127 (IPv6
-                                            fd16:9254:7127:1337:ffff:ffff:ffff:ffff): without it they are dropped too.
-  GeneratingPolicy openchoreo-cell-strimzi NetworkPolicy platform-strimzi in every enrolled cell (#210): Kafka pods
-                                            (strimzi.io/cluster) admit the cell's pods, system components and
-                                            <strimzi.peers> (operator, KEDA) on any port, so HBONE 15008 too, and probes.
-                                            Replaces the Strimzi operator's own per-listener policies, which open only
-                                            Kafka ports (dropping HBONE); addon strimzi turns their generation off.
-  GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication `default` in every enrolled cell: mtls STRICT, so ztunnel
-                                            rejects plaintext from clients outside the mesh (kubelet probes are exempt);
-                                            PERMISSIVE while the namespace carries <mtls.optOutLabel>=permissive (set per
-                                            environment through ProjectReleaseBinding namespaceLabels). The opt-out is a
-                                            mode, not a selector: Kyverno never deletes a synchronized object when its
-                                            trigger stops matching, but it does re-render it on every trigger update.
-  GeneratingPolicy openchoreo-cell-authz    AuthorizationPolicy platform-cell-peers in every enrolled cell (#324): STRICT
-                                            proves the caller is *a* mesh workload, this decides *which*. ALLOW (so
-                                            deny-by-default for every pod in the cell, databases included) only for the
-                                            cell's own workloads (source namespace == the cell) and the platform identities
-                                            in <mtls.platformPeers> (gateway, telemetry agent, data-service operators).
-                                            A workload of another cell, same cluster or another mesh member, is refused by
-                                            ztunnel. Opted-out (permissive) cells allow everything: plaintext has no
-                                            identity to check. Kubelet probes bypass ztunnel, so no rule needed for them.
-All: kept in sync (an edited or deleted object is restored), existing cells included (generateExisting). Cells
-created with istio.io/dataplane-mode=none get none of them.
+Mesh policy of ambient-enrolled cell namespaces (docs/networking.md "Strict mTLS in cell namespaces"). Generated
+and kept in sync (generateExisting) in every enrolled cell; cells with istio.io/dataplane-mode=none get none of them:
+  GeneratingPolicy openchoreo-cell-hbone    NetworkPolicy platform-mesh-hbone: HBONE 15008 from OpenChoreo's peers,
+                                            plus kubelet probes after istio-cni's SNAT
+  GeneratingPolicy openchoreo-cell-strimzi  NetworkPolicy platform-strimzi: Kafka pods admit the cell, system
+                                            components and strimzi.peers on any port (#210)
+  GeneratingPolicy openchoreo-cell-mtls     PeerAuthentication default: STRICT, PERMISSIVE with <mtls.optOutLabel>
+  GeneratingPolicy openchoreo-cell-authz    AuthorizationPolicy platform-cell-peers: only the cell's own workloads and
+                                            mtls.platformPeers (#324)
+The opt-out switches content, never the selector: Kyverno keeps a synchronized object whose trigger stops matching.
 */ -}}
 {{- $ae := .Values.ambientEnrollment }}
 {{- if $ae.enabled }}

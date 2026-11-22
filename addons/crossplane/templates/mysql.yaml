@@ -1,8 +1,5 @@
-{{- /* The MySQL API (packages/mysql, #256), only where the cluster runs addon moco (mysql.enabled from label
-addons.platform.koorikla.io/moco). Same shape as PostgreSQL: the Configuration package pinned tag@digest without
-dependency resolution, its embedded Function pinned under the restricted runtime, the EnvironmentConfig platform-mysql
-with this cluster's facts, and the RBAC Crossplane core needs for the plain kinds the moco Composition composes.
-Admission policies: templates/policies.yaml. */ -}}
+{{- /* The MySQL API (packages/mysql) where the cluster runs addon moco, shaped like the PostgreSQL one: package, embedded
+Function, EnvironmentConfig and compose RBAC. Admission policies: templates/policies.yaml. */ -}}
 {{- $m := .Values.mysql }}
 {{- if eq (toString $m.enabled) "true" }}
 {{- if ne $m.backend "moco" }}{{ fail (printf "mysql.backend %q: only moco is enabled (cloud Compositions of packages/mysql are layout, #256)" $m.backend) }}{{ end }}
