@@ -68,7 +68,7 @@ stack's OpenChoreo cut. What happens per environment ([#200](https://github.com/
 | Environment | After the bootstrap | Manual steps |
 |---|---|---|
 | development | Auto-build finds the pinned digest missing in Harbor and rebuilds the Workload's commit (WorkflowRun `hello-world-<sha[:12]>-<digest[:8]>`, docs/build-plane.md "Auto-build" step 5); the hand-off commits the new digest, `autoDeploy` rolls it out. Serves about 10 minutes after the workflow plane is up, usually before `task up` reports every app Healthy. | none |
-| development, the app secret | OpenBao starts empty. CronJob `openbao-tenants/demo-demo-secrets` (every 5 minutes, `demoSecrets` in `installations/local/tenants/demo.yaml`) writes `kv-tenant-demo/hello-world` property `greeting` as `demo-writer` once the tenant mount exists: a generated `demo-only-<hex>` value, never in git, never overwritten. The ExternalSecret picks it up on its next retry (ESO backs off after failures, up to ~17 minutes; `kubectl annotate externalsecret <name> force-sync=$(date +%s)` in the cell namespace skips the wait) and the pod starts. | none |
+| development, the app secret | OpenBao starts empty. PushSecret `openbao-tenants/demo-seed-hello-world` (ESO, `demoSecrets` in `installations/local/tenants/demo.yaml`) writes `kv-tenant-demo/hello-world` property `greeting` as `demo-writer` once the tenant mount exists: a value from ESO's Password generator (`demo-only-<hex>`), never in git, never overwritten (`updatePolicy: IfNotExists`). The ExternalSecret picks it up on its next retry (ESO backs off after failures, up to ~17 minutes; `kubectl annotate externalsecret <name> force-sync=$(date +%s)` in the cell namespace skips the wait) and the pod starts. | none |
 | staging, production | The pinned release does not exist in this stack (binding `ComponentReleaseNotFound`). `task demo:check` shows them PENDING `not promoted in this stack yet`. | one promotion, the demo's step 5 |
 | production, in a freeze | Between Fri 16:00 and Mon 08:00 Europe/Tallinn the weekend freeze (docs/promotion.md "Freeze window") denies syncs of `demo-hello-world-production`: OutOfSync/Missing, no production ReleaseBinding. `task demo:check` shows step 1 and the production checks of step 5 (HTTP 200, promotion-gate runs, PDB/spread/priority) PENDING `frozen by sync window "freeze weekend: ..." until <end>`; any other OutOfSync app still FAILs. | none; production syncs when the window ends |
 
@@ -379,11 +379,12 @@ Talking points:
 
 Fallback: if `task demo:check` does not show "OpenBao-issued mesh certificates" as PASS (e.g. right after a restart
 of OpenBao or istiod), show ambient enrollment, the ClusterSecretStores and the design in docs/architecture.md; do not
-debug the CA live. If row "hello-world reads GREETING_SECRET from OpenBao" fails, the demo value was not written yet: the seed CronJob
-writes it within 5 minutes of the tenant mount existing (check `kubectl --context k3d-platform-mgmt -n openbao-tenants
-logs job/<latest demo-demo-secrets-*>`: `seeded=[hello-world/greeting]` or `kept=[...]`). Not waiting: `kubectl
---context k3d-platform-mgmt -n openbao-tenants create job --from=cronjob/demo-demo-secrets demo-seed-now` (same
-identity, same idempotent script; docs/multicluster.md "Tenant secrets (OpenBao)", "Demo values").
+debug the CA live. If row "hello-world reads GREETING_SECRET from OpenBao" fails, the demo value was not written yet: PushSecret
+`demo-seed-hello-world` writes it as soon as the tenant mount and writer alias exist (check `kubectl --context
+k3d-platform-mgmt -n openbao-tenants get secretstore,pushsecret`: both Ready, message `PushSecret synced successfully.
+Existing secrets in providers unchanged.`). ESO backs off after failures (up to ~17 minutes). Not waiting: `kubectl
+--context k3d-platform-mgmt -n openbao-tenants annotate pushsecret demo-seed-hello-world force-sync=$(date +%s)
+--overwrite` (same identity, never overwrites; docs/multicluster.md "Tenant secrets (OpenBao)", "Demo values").
 
 ## 9. App with a database
 

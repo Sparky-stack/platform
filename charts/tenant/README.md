@@ -18,7 +18,7 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | argocd.server | string | `"https://kubernetes.default.svc"` |  |
 | defaults.path | string | `"deploy/openchoreo"` |  |
 | defaults.revision | string | `"main"` |  |
-| demoSecrets | list | `[]` | DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `CronJob/<project>-demo-secrets` with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)). |
+| demoSecrets | list | `[]` | DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `PushSecret/<project>-seed-<key>` (ESO `Password` generator, `updatePolicy: IfNotExists`) with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. One entry per key (a lowercase DNS label). Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)). |
 | deploymentPipeline.environments | list | `["development","staging","production"]` | Environments (`development`, `staging`, `production`) provisioned via `ProjectReleaseBinding`. |
 | deploymentPipeline.name | string | `"default"` |  |
 | description | string | `""` |  |
@@ -67,15 +67,8 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | tenantSecrets.demoSeed.addr | string | `"https://openbao-active.openbao.svc:8200"` |  |
 | tenantSecrets.demoSeed.audience | string | `"openbao"` |  |
 | tenantSecrets.demoSeed.caSecret | string | `"openbao-ca"` |  |
-| tenantSecrets.demoSeed.image.registry | string | `"quay.io"` |  |
-| tenantSecrets.demoSeed.image.repository | string | `"openbao/openbao"` |  |
-| tenantSecrets.demoSeed.image.tag | string | `"2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"` |  |
 | tenantSecrets.demoSeed.loginRole | string | `"tenant-writer"` |  |
-| tenantSecrets.demoSeed.resources.limits.cpu | string | `"200m"` |  |
-| tenantSecrets.demoSeed.resources.limits.memory | string | `"64Mi"` |  |
-| tenantSecrets.demoSeed.resources.requests.cpu | string | `"10m"` |  |
-| tenantSecrets.demoSeed.resources.requests.memory | string | `"32Mi"` |  |
-| tenantSecrets.demoSeed.schedule | string | `"*/5 * * * *"` |  |
+| tenantSecrets.demoSeed.refreshInterval | string | `"5m"` |  |
 | tenantSecrets.label | string | `"openbao.platform.koorikla.io/tenant"` |  |
 | tenantSecrets.namespace | string | `"openbao-tenants"` |  |
 
