@@ -56,6 +56,10 @@
                 "type": "string"
               }
             },
+            "issuer": {
+              "description": "OIDC issuer of the keyless certificates (GitHub Actions).",
+              "type": "string"
+            },
             "workflow": {
               "description": "Reusable workflow URL without a ref (the ref is workflowRef); required while github.enabled.",
               "type": "string",
@@ -72,25 +76,41 @@
                 "type": "string"
               }
             },
-            "repositories": {
-              "description": "GitHub repositories (owner/name) whose builds are trusted.",
+            "trustedSources": {
+              "description": "The builds production trusts: one attestor per entry (and per transition commit, name suffixed -<sha7>); names unique (templates/validate.yaml).",
               "type": "array",
               "items": {
-                "type": "string"
-              }
-            },
-            "refs": {
-              "description": "Git refs whose builds are trusted (e.g. refs/heads/main).",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "triggers": {
-              "description": "Workflow trigger events whose builds are trusted (e.g. push).",
-              "type": "array",
-              "items": {
-                "type": "string"
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "repository",
+                  "ref",
+                  "trigger"
+                ],
+                "properties": {
+                  "name": {
+                    "description": "Attestor name chosen by a human: a DNS label of at most 60 characters.",
+                    "type": "string",
+                    "maxLength": 60,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                  },
+                  "repository": {
+                    "description": "GitHub repository (owner/name): certificate extension githubWorkflowRepository.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref": {
+                    "description": "Git ref of the build (e.g. refs/heads/main): certificate extension githubWorkflowRef.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "trigger": {
+                    "description": "Workflow trigger event (e.g. push): certificate extension githubWorkflowTrigger.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
               }
             },
             "attestations": {
@@ -99,8 +119,13 @@
               "items": {
                 "type": "string"
               }
+            },
+            "rekorURL": {
+              "description": "Rekor transparency log the keyless signatures are checked against.",
+              "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "platformKey": {
           "description": "Platform-key source: images the workflow plane pushed to <registry.host>/<registry.appsProject>/.",

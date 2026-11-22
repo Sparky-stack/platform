@@ -56,11 +56,22 @@ tests:
     asserts:
       - isNull: { path: spec.traits }
 
-  - it: resilience.enabled false removes trait and embedding
+  - it: resilience.enabled is no switch any more, the trait still renders
     set:
       resilience.enabled: false
       dataServices.enabled: false
+      appMetrics.enabled: false
+    template: templates/platform-types.yaml
+    asserts:
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: resilience }
+
+  - it: resilience.enabled is no switch any more, the component types still embed the trait
+    set:
+      resilience.enabled: false
     template: templates/upstream-defaults.yaml
     documentSelector: { path: metadata.name, value: service }
     asserts:
-      - isNull: { path: spec.traits }
+      - contains:
+          path: spec.traits
+          content: { kind: ClusterTrait, name: resilience, instanceName: resilience, environmentConfigs: { replicas: "${environmentConfigs.replicas}", zoneSpread: "${environmentConfigs.resilience.zoneSpread}", nodePool: "${environmentConfigs.resilience.nodePool}", terminationGracePeriodSeconds: "${environmentConfigs.resilience.terminationGracePeriodSeconds}", preStopSleepSeconds: "${environmentConfigs.resilience.preStopSleepSeconds}" } }

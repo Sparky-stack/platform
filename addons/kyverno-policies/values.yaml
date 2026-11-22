@@ -112,7 +112,7 @@ imageVerification:
   cellNamespaceSelector:
     matchLabels:
       openchoreo.dev/managed-by: renderedrelease-controller
-  # Keyless images of the reusable workflow app-container.yaml. Anyone can call it, so every allowed
+  # Keyless images of the reusable workflow app-container.yaml. Anyone can call it, so every trusted source
   # (repository, ref, trigger) is one attestor (docs/supply-chain.md); all three attestations are required.
   github:
     enabled: true
@@ -125,10 +125,16 @@ imageVerification:
     # Previous pin, kept until every production image is rebuilt at workflowRef (at most one; docs/supply-chain.md
     # "Moving the workflow pin"). Each costs a failed verification per check, so keep the window short.
     transitionWorkflowRefs: []
-    repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
-    refs: [refs/heads/main]                # extension githubWorkflowRef
-    # extension githubWorkflowTrigger: only builds of merged code (pull_request_target may build untrusted PR code).
-    triggers: [push]
+    # The builds production trusts, one record per (repository, ref, trigger), tried in this order. Each becomes the
+    # attestor `name` (DNS label, at most 60 characters, unique; a transition copy is its first 52 characters plus
+    # -<sha7>). repository, ref and trigger are the certificate extensions githubWorkflowRepository,
+    # githubWorkflowRef and githubWorkflowTrigger. trigger push: only builds of merged code (pull_request_target
+    # may build untrusted PR code). An installation overlay adds its app repos (docs/supply-chain.md).
+    trustedSources:
+      - name: gh-koorikla-hello-world-heads-main
+        repository: koorikla/hello-world
+        ref: refs/heads/main
+        trigger: push
     rekorURL: https://rekor.sigstore.dev
     attestations: [sbom, provenance, vuln] # names from `attestationTypes`
   # In-cluster builds under <registry.host>/<registry.appsProject>/, signed with the platform cosign key (public key

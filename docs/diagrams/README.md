@@ -70,10 +70,12 @@ The numbered flow of each diagram, word for word.
 2. Argo CD turns each fleet file into a cluster for Cluster API to build
 3. Argo CD hands each app's release to OpenChoreo
 4. Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE
-5. Argo CD installs the addons and the cluster-agent on every cluster whose labels match
+5. Argo CD installs the addons and the cluster-agent on every cluster whose labels match (Crossplane and the operators only where a cluster opts in)
 6. The cluster-agent dials out to OpenChoreo and pulls the app releases
 7. The agent submits the apps to the cluster
 8. Kyverno, one of the addons, admits only apps with signed images and safe settings before they start
+9. The agent applies each app's resource claims (e.g. a database) for Crossplane on the same cluster
+10. Crossplane composes each claim for the cluster's backend: in-cluster for an operator (CloudNativePG for PostgreSQL, MOCO for MySQL), or in the cloud, where its providers call the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server)
 
 ### Security ([security.svg](security.svg))
 

@@ -1,6 +1,6 @@
 # Platform ClusterTrait resilience (#251, docs/openchoreo.md "Resilience defaults"): production-grade pod scheduling and
-# shutdown for every Deployment-based component. Developers never attach it: templates/upstream-defaults.yaml embeds it
-# in the service / web-application / worker component types and binds its environmentConfigs to the component type's
+# shutdown for every Deployment-based component. Developers never attach it: the service / web-application / worker
+# files in files/cluster-component-types/ embed it and bind its environmentConfigs to the component type's
 # (replicas, resilience.*), so the defaults below apply in every environment unless a ReleaseBinding overrides them.
 #
 #   everywhere           topologySpreadConstraints over nodes and zones (maxSkew 1, best effort), preStop sleep +
