@@ -76,7 +76,57 @@ else
   cat "${tmp}/w2.yaml"
 fi
 
-# 5. git-push-change.sh: commits only when changed, PUSH=false never pushes.
+# 5. comments survive the yq edit, every other line stays as it was, and only spec.source.commit is a commit.
+cat >"${tmp}/w3.orig.yaml" <<'EOF'
+# Workload of app x: CI bumps spec.container.image and spec.source.commit.
+apiVersion: openchoreo.dev/v1alpha1
+kind: Workload
+metadata:
+  name: x # trailing comment
+  annotations:
+    commit: keep-me # not the source commit
+spec:
+  source:
+    # the commit the image was built from
+    commit: "0000000"
+  container:
+    # bumped by CI; do not edit
+    image: old
+    args: ["--port", "8080"]
+EOF
+cp "${tmp}/w3.orig.yaml" "${tmp}/w3.yaml"
+CI_OUT_DIR="${tmp}/out3" WORKLOAD_FILE="${tmp}/w3.yaml" IMAGE="r/x:t1@sha256:${d64}" COMMIT="abc1234" bump
+if grep -q "^    image: r/x:t1@sha256:${d64}\$" "${tmp}/w3.yaml" &&
+  grep -q '^    commit: "abc1234"$' "${tmp}/w3.yaml" &&
+  grep -q '^    commit: keep-me # not the source commit$' "${tmp}/w3.yaml" &&
+  [[ "$(grep -cvxFf "${tmp}/w3.orig.yaml" "${tmp}/w3.yaml")" == 2 ]] &&
+  [[ "$(wc -l <"${tmp}/w3.yaml")" == "$(wc -l <"${tmp}/w3.orig.yaml")" ]] &&
+  [[ "$(cat "${tmp}/out3/changed")" == true ]]; then
+  ok "keeps comments and unrelated lines"
+else
+  fail "keeps comments and unrelated lines"
+  diff "${tmp}/w3.orig.yaml" "${tmp}/w3.yaml" || true
+fi
+
+# 6. no spec.source: only the image moves (with a warning).
+printf 'spec:\n  container:\n    image: old\n' >"${tmp}/w4.yaml"
+WORKLOAD_FILE="${tmp}/w4.yaml" IMAGE="r/x:t@sha256:${d64}" COMMIT="abc1234" bump
+if grep -q "^    image: r/x:t@sha256:${d64}\$" "${tmp}/w4.yaml" && ! grep -q 'commit' "${tmp}/w4.yaml"; then
+  ok "no spec.source: bumps the image only"
+else
+  fail "no spec.source: bumps the image only"
+  cat "${tmp}/w4.yaml"
+fi
+
+# 7. no spec.container.image: refuses, even when other image: keys exist.
+printf 'metadata:\n  image: keep-me\nspec:\n  owner: {}\n' >"${tmp}/w5.yaml"
+if WORKLOAD_FILE="${tmp}/w5.yaml" IMAGE="r/x:t@sha256:${d64}" bump; then
+  fail "refuses a Workload without spec.container.image"
+else
+  ok "refuses a Workload without spec.container.image"
+fi
+
+# 8. git-push-change.sh: commits only when changed, PUSH=false never pushes.
 repo="${tmp}/repo"
 git init -q "${repo}"
 cp "${FIXTURE}" "${repo}/w.yaml"
