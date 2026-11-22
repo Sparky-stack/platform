@@ -9,7 +9,8 @@ metadata:
     openchoreo.dev/description: "A component that runs to completion on a schedule"
 spec:
   workloadType: cronjob
-  # Platform: build with the platform's ClusterWorkflows (== values.yaml buildWorkflows.stacks).
+  # Platform: the platform's build ClusterWorkflows (== values.yaml buildWorkflows.stacks, guarded by
+  # templates/upstream-defaults.yaml) instead of upstream's buildpacks/podman ones, which are not installed.
   allowedWorkflows:
     - kind: ClusterWorkflow
       name: go

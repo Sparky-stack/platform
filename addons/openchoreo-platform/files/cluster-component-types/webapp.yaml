@@ -9,7 +9,8 @@ metadata:
     openchoreo.dev/description: "A long-running component that serves web requests and exposes at least one HTTP endpoint"
 spec:
   workloadType: deployment
-  # Platform: build with the platform's ClusterWorkflows (== values.yaml buildWorkflows.stacks).
+  # Platform: the platform's build ClusterWorkflows (== values.yaml buildWorkflows.stacks, guarded by
+  # templates/upstream-defaults.yaml) instead of upstream's buildpacks/podman ones, which are not installed.
   allowedWorkflows:
     - kind: ClusterWorkflow
       name: go
@@ -30,7 +31,8 @@ spec:
       name: observability-alert-rule
     - kind: ClusterTrait
       name: persistent-volume-claim
-    # Platform: keda-scaler and metrics (files/platform/cluster-traits/).
+    # Platform: keda-scaler and metrics added (files/platform/cluster-traits/); upstream's vertical-pod-autoscaler
+    # removed (not installed: it needs the VPA CRDs on data planes).
     - kind: ClusterTrait
       name: keda-scaler
     - kind: ClusterTrait
