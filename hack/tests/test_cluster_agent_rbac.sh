@@ -77,8 +77,9 @@ for inst in "${sets[@]}"; do
       $1 == "GRANT" && $2 == s {
         ng = split($3, gs, ","); nr = split($4, rs, ","); nv = split($5, vs, ",")
         for (i = 1; i <= ng; i++) for (j = 1; j <= nr; j++) for (k = 1; k <= nv; k++)
-          if (gs[i] == g && rs[j] == r && vs[k] == v) { print "yes"; exit }
-      }')
+          if (gs[i] == g && rs[j] == r && vs[k] == v) hit = 1
+      }
+      END { if (hit) print "yes" }')
     assert_eq "$hit" yes "$inst: agent may $verb ${group/#-/core}/$res ($scope)"
   done
 done

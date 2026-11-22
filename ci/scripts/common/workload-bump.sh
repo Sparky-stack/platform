@@ -48,7 +48,7 @@ tmp="$(mktemp "${TMPDIR:-/tmp}/workload.XXXXXX")"
 trap 'rm -f "${tmp}"' EXIT
 cp "${file}" "${tmp}"
 
-# The same two yq paths as the in-cluster GitOps step (addons/openchoreo-workflow-plane koorikla-build.yaml).
+# The same two yq paths as the in-cluster koorikla-build GitOps step (scripts/workflow/gitops.sh).
 [[ "$(yq '.spec.container | has("image")' "${tmp}")" == true ]] || die "no image: key found in ${file}"
 IMAGE="${image}" yq -i '.spec.container.image = strenv(IMAGE)' "${tmp}"
 if [[ -n "${commit}" ]]; then

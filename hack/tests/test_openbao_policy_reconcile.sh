@@ -92,7 +92,7 @@ assert_match "$out" 'files/policies/mesh-admin.hcl: the policy reconciler may on
 # the role writes == the self-init pins (allowed_parameters): a value drift here is a 403 for every run
 cfg=$(helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
   -s charts/openbao/templates/server-config-configmap.yaml | yq '.data["extraconfig-from-values.hcl"]')
-pins() { printf '%s\n' "$cfg" | awk -v p="path \"auth/kubernetes/role/$1\" {" 'index($0, p) {f=1} f && /allowed_parameters/ {print; exit}'; }
+pins() { printf '%s\n' "$cfg" | awk -v p="path \"auth/kubernetes/role/$1\" {" 'index($0, p) {f=1} f && /allowed_parameters/ && !n++ {print}'; }
 for r in tenant-config tenant-writer; do
   line=$(pins "$r")
   assert_match "$line" 'allowed_parameters' "self-init pins the parameters of role $r"
@@ -105,7 +105,7 @@ for r in tenant-config tenant-writer; do
 done
 V=addons/openbao/values.yaml
 assert_eq "$(yq .tenantSecrets.loginRole $V)" tenant-config "tenant-reconcile logs in with the role the policy reconciler writes"
-role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k {sub(/.*= /, ""); print; exit}'; }
+role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k && !n++ {sub(/.*= /, ""); print}'; }
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" bound_service_account_names)" "[\"$(yq .policyReconciler.serviceAccount $V)\"]" "self-init: policyReconciler.loginRole bound to policyReconciler.serviceAccount only"
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" bound_service_account_namespaces)" '["openbao"]' "self-init: ... in namespace openbao"
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" token_policies)" "[\"$(yq .policyReconciler.loginRole $V)\"]" "self-init: ... with its own policy only"

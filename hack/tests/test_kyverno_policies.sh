@@ -329,7 +329,7 @@ done
 # previews: stamp = now + 48h (unix seconds, within the test's clock window)
 out=$(cat "$TMP/pv-stamp.out")
 assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: platform-preview-expiry mutates a new preview Environment"
-stamp=$(printf '%s\n' "$out" | sed -n 's/.*platform.koorikla.io\/expires-at: "\([0-9]*\)".*/\1/p' | head -1)
+stamp=$(sed -n 's/.*platform.koorikla.io\/expires-at: "\([0-9]*\)".*/\1/p' <<<"$out" | sed -n 1p)
 now=$(cat "$TMP/pv-stamp.time")
 assert_eq "$([[ -n "$stamp" ]] && (( stamp > now + 172800 - 120 && stamp <= now + 172800 )) && echo yes || echo "no ($stamp vs $now)")" yes \
   "previews: expires-at = creation + 48h"

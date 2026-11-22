@@ -58,7 +58,7 @@ for p in crossplane-project.yaml apis/api/definition.yaml apis/api/composition.y
   .github/CODEOWNERS .github/workflows/ci.yaml renovate.json SECURITY.md README.md; do
   assert_eq "$([[ -e "$R/$p" ]] && echo yes)" yes "$T: has $p (crossplane project init layout + golden-path files)"
 done
-assert_eq "$(find "$R" -path '*/deploy/*' -o -name 'Dockerfile' | head -n1)" "" "$T: no OpenChoreo deploy/ or Dockerfile"
+assert_eq "$(find "$R" -path '*/deploy/*' -o -name 'Dockerfile' | sed -n 1p)" "" "$T: no OpenChoreo deploy/ or Dockerfile"
 pf=$R/crossplane-project.yaml; xrd=$R/apis/api/definition.yaml; comp=$R/apis/api/composition.yaml; ex=$R/examples/example.yaml
 assert_eq "$(yq -r '.apiVersion + " " + .kind + " " + .metadata.name + " " + .spec.repository' "$pf")" "dev.crossplane.io/v1alpha1 Project sample-api ghcr.io/koorikla/sample-api" "$T: Project sample-api, repository = what CI pushes (owner lowercased)"
 assert_eq "$(yq -r '.spec.description' "$pf")" 'Sample "quoted" API: golden path' "$T: description survives quoting"

@@ -32,7 +32,7 @@ tools_table() {
 
 # pinned <tool>: version from the [tools] table of mise.toml ("" if absent).
 pinned() {
-  tools_table | awk -v t="$1" '$1 == t { print $2; exit }'
+  tools_table | awk -v t="$1" '$1 == t && !n++ { print $2 }'
 }
 
 # version_cmd <tool>: command printing the tool's version.
@@ -65,7 +65,7 @@ version_of() {
     read -r -a cmd <<< "$(version_cmd "$1")"
     out=$("${cmd[@]}" 2>/dev/null) || return 1
   fi
-  out=$(printf '%s\n' "$out" | tr -d '\r' | grep -m1 -E '[0-9]+\.[0-9]+' || true)
+  out=$(grep -m1 -E '[0-9]+\.[0-9]+' <<<"${out//$'\r'/}" || true)
   [[ -n "$out" ]] || return 1
   printf '%s\n' "$out"
 }

@@ -128,7 +128,7 @@ assert_match "$(wr pki-mesh-local-root/root/sign-intermediate)" 'max_path_length
 assert_eq "$(wr identity/entity/name/mesh-dev1 | tr '\n' ' ')" "metadata=cluster=dev1 metadata=group=local " "dev1 entity: cluster=dev1, group=local, no policies"
 assert_eq "$(wr identity/entity/name/mesh-prod1 | tr '\n' ' ')" "metadata=cluster=prod1 metadata=group=prod " "prod1 entity: its own group"
 assert_match "$(grep -n '' "$S/calls" | grep -E 'identity/entity-alias name=system:serviceaccount:istio-system:istio-csr-openbao canonical_id=id-mesh-dev1 mount_accessor=auth_jwt_mesh-dev1' | cut -d: -f1)" '^[0-9]+$' "dev1 alias: the member ServiceAccount on auth/mesh-dev1 -> entity mesh-dev1"
-alias_line=$(grep -n 'entity-alias.*mesh-dev1' "$S/calls" | cut -d: -f1); role_line=$(grep -n 'auth/mesh-dev1/role/' "$S/calls" | head -1 | cut -d: -f1)
+alias_line=$(grep -n 'entity-alias.*mesh-dev1' "$S/calls" | cut -d: -f1); role_line=$(grep -m1 -n 'auth/mesh-dev1/role/' "$S/calls" | cut -d: -f1)
 assert_eq "$(( alias_line < role_line ))" 1 "dev1: alias bound before the login role exists (no auto-created entity)"
 # PKI role: SPIFFE IDs of the trust domain + the two serving names, short TTLs
 role=$(cat "$S/roles/pki-mesh-local-int_roles_dev1")
@@ -250,8 +250,8 @@ rm -f "$IN"/*
 V=addons/openbao/values.yaml
 cfg=$(helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
   --set 'mesh.groups={local}' -s charts/openbao/templates/server-config-configmap.yaml | yq '.data["extraconfig-from-values.hcl"]')
-role_sas() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" '$0 ~ "path *= \"" p "\"" {f=1} f && /bound_service_account_names/ {sub(/.*= /, ""); print; exit}'; }
-role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k {sub(/.*= /, ""); print; exit}'; }
+role_sas() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" '$0 ~ "path *= \"" p "\"" {f=1} f && /bound_service_account_names/ && !n++ {sub(/.*= /, ""); print}'; }
+role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k && !n++ {sub(/.*= /, ""); print}'; }
 assert_eq "$(role_sas "$(yq .reconcile.loginRole $V)")" "[\"$(yq .reconcile.serviceAccount $V)\", \"$(yq .reconcile.bootstrapServiceAccount $V)\"]" "self-init: reconcile.loginRole is bound to the CronJob and Job ServiceAccounts"
 assert_eq "$(role_sas "$(yq .reconcile.bootstrapLoginRole $V)")" "[\"$(yq .reconcile.bootstrapServiceAccount $V)\"]" "self-init: reconcile.bootstrapLoginRole is bound to the Job ServiceAccount only"
 assert_eq "$(role_sas mesh-ca-read)" "[\"$(yq .caPublic.pkiReader $V)\"]" "self-init: mesh-ca-read is bound to caPublic.pkiReader"

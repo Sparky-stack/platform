@@ -51,11 +51,13 @@ arch_exception() {
 #     SIDECAR_IMAGE): those pods are created by the operator, not rendered;
 #   - Crossplane package references (spec.package of Function / Provider / Configuration): OCI images Crossplane pulls
 #     and runs as pods.
+# CustomResourceDefinitions are dropped first: schemas run nothing, and they are most of the bytes (kyverno: 98%), so
+# every pass below walks only the objects.
 extract_images() {
   local f b keys='.. | select(tag == "!!map") | to_entries[] | select((.key | tag) == "!!str")
     | select(.key | test("(?i)image$")) | .value | select(tag == "!!str")'
   f=$(mktemp)
-  cat > "$f"
+  yq 'select(.kind != "CustomResourceDefinition")' > "$f" 2>/dev/null || true
   {
     yq -N "$keys" "$f" 2>/dev/null || true
     if grep -q 'ConfigMap' "$f"; then
