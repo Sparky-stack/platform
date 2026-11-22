@@ -12,7 +12,10 @@ PR opened/pushed ──> ApplicationSet previews-<project> (Argo CD, mgmt; pull 
                             ├─ Environment pr-<n>-<component>        on the preview data plane (dev1 locally)
                             ├─ ProjectReleaseBinding <project>-pr-<n>-<component>  -> cell namespace (labelled preview)
                             └─ ReleaseBinding <component>-pr-<n>     -> ComponentRelease <component>-pr-<n>-<sha12>
-auto-build pass (every minute locally) ──> WorkflowRun <component>-pr<n>-<sha12>: build + scan + sign the PR head,
+auto-build pass (every minute locally) ──> tenant at previews.maxPerTenant? label the PR preview-waiting (the
+                                            Application renders nothing) + status failure; label removed when a
+                                            slot frees
+                                       ──> WorkflowRun <component>-pr<n>-<sha12>: build + scan + sign the PR head,
                                             push to Harbor, no GitOps commit
                                        ──> ComponentRelease <component>-pr-<n>-<sha12> = the Component's latest release
                                             with the PR image (owned by the Environment)
@@ -70,9 +73,19 @@ component. The installation switch is `installation.yaml` `previews`:
 | `enabled` | `true` | renders the ApplicationSets, the token, the Kyverno policies and the preview pass |
 | `dataPlane` | `dev1` | ClusterDataPlane of the development tier every preview lands on |
 | `ttl` | `48h` | lifetime from the Environment's creation (hours/minutes) |
-| `maxPerTenant` | `2` | concurrent previews per tenant (RAM-bound locally) |
+| `maxPerTenant` | `2` | concurrent previews per tenant (RAM-bound locally): the one number the auto-build pass and Kyverno both enforce |
 | `requeueAfterSeconds` | `120` | pull request poll |
 | `expiredLabel` | `preview-expired` | PR label that ends a preview |
+| `waitingLabel` | `preview-waiting` | PR label the auto-build pass sets while the tenant is at `maxPerTenant` (never set it by hand) |
+| `skipBots` | `true` | pull requests whose author login ends in `[bot]` (Dependabot, Renovate) get no preview... |
+| `botLabel` | `preview` | ...unless they carry this label |
+
+**Bot pull requests** (`skipBots`): a pull request opened by a bot account (GitHub login ending in `[bot]`, e.g.
+`dependabot[bot]`, `renovate[bot]`) gets no preview, so a batch of dependency bumps never fills the tenant's cap. Its
+Application renders nothing (the ApplicationSet tests the generator's `author`) and the pass posts a non-blocking
+`openchoreo/preview` status `success` "No preview for bot pull requests ...: add label preview for one". Add the label
+`preview` to such a PR to get a preview anyway (it then counts against the cap like any other); remove it to drop the
+preview again. `skipBots: false` previews bot pull requests like any other.
 
 ## Lifecycle and limits
 
@@ -94,9 +107,18 @@ component. The installation switch is `installation.yaml` `previews`:
   `ttl` without one), e.g. when GitHub was unreachable or an Application was orphaned. Kyverno never reports
   `ready` for DeletingPolicies (only `lastExecutionTime`), so `addons/argo-cd` overrides Argo CD's built-in health
   check for them in `argocd-cm`: Healthy unless Kyverno reports a failed condition.
-- **Per-tenant cap**: ValidatingPolicy `platform-preview-cap` denies a tenant's preview Environment beyond
-  `maxPerTenant`. The Application retries without a limit (every 5 minutes at most), so the next PR's preview starts
-  when a slot frees up; the commit status shows the denial meanwhile.
+- **Per-tenant cap** (#385): `maxPerTenant` is one installation.yaml key read by both the auto-build pass and
+  ValidatingPolicy `platform-preview-cap`, counted the same way (the tenant's preview Environments that are not being
+  deleted). Before a PR's Environment exists, the pass checks the tenant's free slots. When the tenant is full it
+  labels the PR `preview-waiting` and posts commit status `openchoreo/preview` = `failure`: "preview cap N reached for
+  tenant X: close a PR or wait for expiry (this preview then starts by itself)". The label makes the PR's Application
+  render nothing, so it is Synced with no resources instead of retrying a denied sync. When a slot frees (a PR closes,
+  a preview expires), the next pass removes the label from the oldest waiting PR (status back to pending) and Argo CD
+  creates the preview with the next pull request poll (`requeueAfterSeconds`). A PR that already got its slot keeps
+  it: a younger PR never takes it, an older waiting PR doesn't either. The Kyverno policy stays as the backstop: a
+  brand-new PR's Application tries to create its Environment before the pass has seen the PR, so for those first
+  minutes Kyverno denies it and Argo CD retries. With the webhook trigger a pass sees only the pushed repository's
+  PRs; the previews CronWorkflow sees all of them every `autoBuild.previews.schedule`.
 - **Per-preview quota**: GeneratingPolicy `platform-preview-guardrails` puts a ResourceQuota and a LimitRange
   (`addons/kyverno-policies/values.yaml` `previewGuards`) into every preview cell namespace. `requests.storage` (15Gi)
   fits the smallest volume ClusterResourceType `postgresql` allows (its `storageGiB` minimum, 10) next to the app; a
@@ -130,7 +152,8 @@ component. The installation switch is `installation.yaml` `previews`:
 ## GitHub App permissions
 
 The platform App (`promotion-gate-github`, the promotion gate's) already has what previews need: Pull requests
-read/write (generator, PR lookup, the expiry label) and Commit statuses read/write (the URL). Each consumer gets its own
+read/write (generator, PR lookup, the expiry and waiting labels) and Commit statuses read/write (the URL and the cap
+message). Each consumer gets its own
 installation token restricted to its share. GitHub Deployments are not used: they would need the extra permission
 Deployments read/write on the App.
 
@@ -156,7 +179,13 @@ kubectl --context k3d-platform-mgmt -n workflows-default get workflows -l workfl
 
 - No Application for an open PR: the ApplicationSet's status (`ParametersGenerated`); is the annotation on the
   Component manifest on the app's revision, directly under the app path?
-- Status `Waiting for environment`: the Application's sync message, usually the per-tenant cap.
+- Status `preview cap N reached for tenant X`: the tenant runs `maxPerTenant` previews; the PR carries
+  `preview-waiting` and its Application is Synced with no resources. Close a PR, or wait for a preview to expire. List
+  the tenant's previews with the `environments` command above (`-l platform.koorikla.io/tenant=<project>`). Don't
+  remove the label by hand: the next pass sets it again while the tenant is full.
+- Status `Waiting for environment`: the Application's sync message (a slot is free, Argo CD has not created the
+  Environment yet: up to one pull request poll).
+- Status `No preview for bot pull requests`: `skipBots`; add the label `preview` to the PR.
 - Status `Build ... failed`: the WorkflowRun in the console (Workflows), as for `main` builds.
 - Status stays `Deploying` and the ReleaseBinding says `ResourceDependenciesPending`: the preview's
   ResourceReleaseBinding (`status.conditions`); a quota denial of the database pod or PVC shows in the cell namespace's

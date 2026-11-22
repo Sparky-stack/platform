@@ -15,6 +15,9 @@ set:
     dataPlane: dev1
     requeueAfterSeconds: 120
     expiredLabel: preview-expired
+    waitingLabel: preview-waiting
+    skipBots: true
+    botLabel: preview
   secrets.githubGateApp.enabled: true   # platform GitHub App seeded (charts/platform values.yaml, #192)
 tests:
   - it: renders nothing while previews are off (the default)
@@ -73,6 +76,8 @@ tests:
             commit: "{{ .head_sha }}"
             repository: "{{ .values.repository }}"
             expired: '{{ has "preview-expired" .labels }}'
+            waiting: '{{ has "preview-waiting" .labels }}'
+            bot: '{{ and (hasSuffix "[bot]" .author) (not (has "preview" .labels)) }}'
             openchoreo: { orgNamespace: default }
             previews: { dataPlane: dev1 }
 
@@ -105,6 +110,23 @@ tests:
         - { name: x, repoURL: https://gitlab.com/acme/x.git }
     asserts:
       - hasDocuments: { count: 0 }
+
+  - it: "skipBots false: bot pull requests render their preview like any other (#385)"
+    set: { previews.skipBots: false }
+    asserts:
+      - equal: { path: spec.template.spec.source.helm.valuesObject.bot, value: "false" }
+
+  - it: refuses a waiting label that could break the template expression
+    set:
+      previews.waitingLabel: 'x" .labels }}{{ "'
+    asserts:
+      - failedTemplate: { errorPattern: "at '/previews/waitingLabel': .* does not match pattern" }
+
+  - it: refuses a bot label that could break the template expression
+    set:
+      previews.botLabel: 'x" .labels }}{{ "'
+    asserts:
+      - failedTemplate: { errorPattern: "at '/previews/botLabel': .* does not match pattern" }
 
   - it: refuses an expiry label that could break the template expression
     set:

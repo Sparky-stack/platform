@@ -125,7 +125,11 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | openchoreo.orgNamespace | string | `"default"` |  |
 | openchoreo.workflowPlane.autoBuild | string | `"poll"` |  |
 | openchoreo.workflowPlane.enabled | bool | `true` |  |
+| previews.botLabel | string | `"preview"` |  |
 | previews.enabled | bool | `false` |  |
+| previews.maxPerTenant | int | `2` |  |
+| previews.skipBots | bool | `true` |  |
+| previews.waitingLabel | string | `"preview-waiting"` |  |
 | promotion.freezeWindows[0].end | string | `"Mon 08:00"` |  |
 | promotion.freezeWindows[0].environments[0] | string | `"production"` |  |
 | promotion.freezeWindows[0].name | string | `"weekend"` |  |

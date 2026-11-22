@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "preview chart values",
-  "description": "Identity of one PR preview, from the pull request generator. Empty identity is allowed by the schema (standalone lint, expired previews); templates/validate.yaml requires it unless expired.",
+  "description": "Identity of one PR preview, from the pull request generator. Empty identity is allowed by the schema (standalone lint, previews that are off); templates/validate.yaml requires it unless expired, waiting or bot.",
   "type": "object",
   "properties": {
     "project": {
@@ -49,6 +49,32 @@
         false
       ],
       "description": "\"true\" when the PR carries the expiry label: renders nothing, Argo CD prunes."
+    },
+    "waiting": {
+      "type": [
+        "string",
+        "boolean"
+      ],
+      "enum": [
+        "true",
+        "false",
+        true,
+        false
+      ],
+      "description": "\"true\" when the PR carries the waiting label (tenant at its preview cap): renders nothing."
+    },
+    "bot": {
+      "type": [
+        "string",
+        "boolean"
+      ],
+      "enum": [
+        "true",
+        "false",
+        true,
+        false
+      ],
+      "description": "\"true\" for a bot PR without the bot opt-in label: renders nothing."
     },
     "openchoreo": {
       "type": "object",
