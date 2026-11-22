@@ -2,14 +2,16 @@
 # Point an OpenChoreo Workload at a new image: rewrite spec.container.image
 # to <repo>:<tag>@sha256:<digest> (production admission accepts only digest
 # references; the tag keeps it readable) and spec.source.commit to the built
-# commit. Comments and the rest of the file are left untouched (line-based
-# edit, no YAML round-trip). Commit/push is done by git-push-change.sh.
+# commit, with yq. Comments survive; the rest of the file keeps its content,
+# in yq's layout (2-space indent, no blank lines), exactly like the in-cluster
+# GitOps step. Commit/push is done by git-push-change.sh.
 #
 # Env in:
 #   WORKLOAD_FILE  default deploy/openchoreo/workload.yaml
 #   IMAGE          <repo>:<tag> or <repo>:<tag>@sha256:<digest>   (required)
 #   DIGEST         sha256:<64 hex>, appended to IMAGE when IMAGE has no digest
-#   COMMIT         optional source commit SHA written to the first `commit:` key
+#   COMMIT         optional source commit SHA, written to spec.source.commit
+#                  when the Workload has spec.source
 # Outputs:
 #   image    the full reference written
 #   changed  true when the file changed
@@ -20,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
 require_env IMAGE
-require_cmd awk cmp mktemp
+require_cmd yq cmp mktemp
 
 file="${WORKLOAD_FILE:-deploy/openchoreo/workload.yaml}"
 [[ -f "${file}" ]] || die "workload file ${file} not found"
@@ -44,43 +46,18 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/workload.XXXXXX")"
 trap 'rm -f "${tmp}"' EXIT
+cp "${file}" "${tmp}"
 
-# image: the first `image:` key nested under a `container:` mapping (falls back
-# to the first `image:` key anywhere). commit: the first `commit:` key.
-rc=0
-awk -v img="${image}" -v commit="${commit}" '
-  function indent(s) { match(s, /^[ ]*/); return RLENGTH }
-  { lines[NR] = $0 }
-  END {
-    target = 0; in_container = 0
-    for (i = 1; i <= NR; i++) {
-      l = lines[i]
-      if (l ~ /^[ ]*container:[ ]*(#.*)?$/) { in_container = 1; container_indent = indent(l); continue }
-      if (!in_container || l ~ /^[ ]*(#.*)?$/) continue
-      if (indent(l) <= container_indent) { in_container = 0; continue }
-      if (l ~ /^[ ]*image:/) { target = i; break }
-    }
-    if (!target) for (i = 1; i <= NR; i++) if (lines[i] ~ /^[ ]*image:/) { target = i; break }
-    if (!target) exit 3
-    done_commit = 0
-    for (i = 1; i <= NR; i++) {
-      l = lines[i]
-      if (i == target) {
-        match(l, /^[ ]*image:/); l = substr(l, 1, RLENGTH) " " img
-      } else if (commit != "" && !done_commit && l ~ /^[ ]*commit:/) {
-        match(l, /^[ ]*commit:/); l = substr(l, 1, RLENGTH) " \"" commit "\""; done_commit = 1
-      }
-      print l
-    }
-    if (commit != "" && !done_commit) exit 4
-  }' "${file}" >"${tmp}" || rc=$?
-
-case "${rc}" in
-  0) ;;
-  3) die "no image: key found in ${file}" ;;
-  4) warn "COMMIT set but no commit: key in ${file}; only the image was bumped" ;;
-  *) die "awk failed (${rc}) editing ${file}" ;;
-esac
+# The same two yq paths as the in-cluster GitOps step (addons/openchoreo-workflow-plane koorikla-build.yaml).
+[[ "$(yq '.spec.container | has("image")' "${tmp}")" == true ]] || die "no image: key found in ${file}"
+IMAGE="${image}" yq -i '.spec.container.image = strenv(IMAGE)' "${tmp}"
+if [[ -n "${commit}" ]]; then
+  if [[ "$(yq '.spec | has("source")' "${tmp}")" == true ]]; then
+    COMMIT="${commit}" yq -i '.spec.source.commit = strenv(COMMIT)' "${tmp}"
+  else
+    warn "COMMIT set but no commit: key in ${file}; only the image was bumped"
+  fi
+fi
 
 changed=false
 if ! cmp -s "${tmp}" "${file}"; then

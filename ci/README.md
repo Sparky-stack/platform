@@ -219,14 +219,17 @@ pushed and commits it back (`chore(deploy): bump <name> image to <sha> [skip ci]
 
 - `spec.container.image` becomes `<repo>:<short sha>@sha256:<index digest>` (production admission
   only accepts digest references; the tag keeps it readable), `spec.source.commit` the built commit.
-  The edit is line-based (`scripts/common/workload-bump.sh`, bash + awk): comments survive.
+  `scripts/common/workload-bump.sh` sets the same two yq paths as the in-cluster GitOps step
+  (`spec.source.commit` only when `spec.source` exists). Comments survive; yq writes its own layout
+  (2-space indent, no blank lines), so a file in another layout is reformatted on its first bump.
 - It is a separate reusable workflow so only that job holds `contents: write`; the stack
   workflows keep their read-only permission set (a nested job asking for more than the caller
   grants fails the whole run at startup).
 - Push-triggered callers should `paths-ignore: ['deploy/**']`; branch protection must let the
   job token push. `validate_command` runs a schema check before committing; `push: false` is a
   dry run (used by the selftest).
-- In-cluster builds use the same two scripts (`workload-bump.sh`, `git-push-change.sh`).
+- In-cluster builds do the same yq edit in the `koorikla-build` GitOps step
+  (`addons/openchoreo-workflow-plane`) and commit through the GitHub contents API; they do not run these scripts.
 
 ## Registry: GHCR now, Harbor later
 
@@ -313,13 +316,29 @@ Reusable workflows call siblings with `uses: $/.github/workflows/…` and fetch 
 `job.workflow_sha`, so a caller pinned to a SHA gets one consistent set of workflows and scripts.
 Actions in the workflows are pinned by commit SHA with the release as a comment.
 
+## Tool versions
+
+Every tool app CI runs has one declared version that Renovate updates ([`renovate.json`](../renovate.json));
+nothing installs "latest" or compiles a tool at run time. [`tests/tool-pins.test.sh`](tests/tool-pins.test.sh)
+enforces it.
+
+| Tool | Declared in | Notes |
+|---|---|---|
+| trivy, syft, cosign, crane, helm, yq, crossplane CLI | `ARG *_VERSION` in [`toolbox/Dockerfile`](toolbox/Dockerfile) | `# renovate:` line above each ARG |
+| Trivy in GitHub Actions | `version:` of every `aquasecurity/setup-trivy` step | equals the toolbox `TRIVY_VERSION` (Renovate group `trivy`) |
+| cargo-nextest, cargo-deny, cargo-audit | `tool:` of `taiki-e/install-action` in `app-rust.yaml` | prebuilt, checksummed; `fallback: none`, so a version the pinned action does not know fails instead of compiling. `rust/check.sh` never installs them |
+| brakeman, bundler-audit | `Gemfile.lock` when the app bundles them, else [`scripts/ruby/gem-versions.env`](scripts/ruby/gem-versions.env) | `ruby/check.sh` runs `gem install --version <declared>` |
+| osv-scanner | `OSV_SCANNER_VERSION` in `scripts/common/osv-scan.sh` | downloaded only when missing, checksum verified |
+| actionlint, shellcheck (repo lint) | [`mise.toml`](../mise.toml) | `ci.yaml` lints every workflow change |
+
 ## Self-tests
 
 [`ci-selftest.yaml`](../.github/workflows/ci-selftest.yaml) runs every workflow against
 [`fixtures/`](fixtures) on PRs, `workflow_dispatch`, and pushes to `main` touching
-`app-*.yaml`, `ci-selftest.yaml`, `ci/fixtures/**`, `ci/scripts/**` or `ci/tests/**`: actionlint + shellcheck, a bash 3.2
-syntax check of every script plus script unit tests ([`tests/scripts/`](tests/scripts)), the image-phase interface
-check ([`tests/app-workflow-interfaces.test.sh`](tests/app-workflow-interfaces.test.sh)), Go
+`app-*.yaml`, `ci-selftest.yaml`, `ci/fixtures/**`, `ci/scripts/**` or `ci/tests/**`: shellcheck (actionlint runs in
+`ci.yaml`), a bash 3.2 syntax check of every script plus script unit tests ([`tests/scripts/`](tests/scripts)), the
+image-phase interface check ([`tests/app-workflow-interfaces.test.sh`](tests/app-workflow-interfaces.test.sh)), the
+tool-pin contract ([`tests/tool-pins.test.sh`](tests/tool-pins.test.sh)), Go
 module, uv project (WSGI on waitress), pnpm Fastify/TypeScript API, dependency-free Rust HTTP
 service (cargo-deny with deny.toml), Quarkus REST service (Maven; JVM and native images), Spring
 Boot service (Gradle, Kotlin DSL), Next.js app, mix project (credo + mix_audit, no Phoenix so

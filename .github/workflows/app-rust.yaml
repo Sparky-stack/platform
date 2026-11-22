@@ -121,10 +121,13 @@ jobs:
         with:
           workspaces: ${{ inputs.working_directory }} -> target
 
+      # Renovate bumps these versions together with the action (renovate.json). fallback: none: a version the
+      # pinned action does not list fails instead of being compiled from source.
       - name: Install cargo-nextest, cargo-deny, cargo-audit (prebuilt, checksummed)
         uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
-          tool: cargo-nextest,cargo-deny,cargo-audit
+          tool: cargo-nextest@0.9.152,cargo-deny@0.20.2,cargo-audit@0.23.0
+          fallback: none
 
       - name: fmt, clippy, test, cargo-deny, cargo-audit
         env:
@@ -135,12 +138,12 @@ jobs:
           TEST_ARGS: ${{ inputs.test_args }}
           RUN_DENY: ${{ inputs.run_deny }}
           RUN_AUDIT: ${{ inputs.run_audit }}
-          INSTALL_TOOLS: 'false'
         run: bash "$CI_SCRIPTS/rust/check.sh"
 
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
+          version: v0.76.2   # = TRIVY_VERSION in ci/toolbox/Dockerfile
           cache: true
 
       - name: Trivy fs scan of lockfiles
