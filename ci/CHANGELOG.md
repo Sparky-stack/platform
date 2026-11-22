@@ -3,6 +3,13 @@
 `ci-vX.Y.Z` releases of `ci/` and the `app-*` reusable workflows, maintained by release-please
 ([docs/releases.md](../docs/releases.md)).
 
+## [1.2.1](https://github.com/koorikla/platform/compare/ci-v1.2.0...ci-v1.2.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **hack:** no early-exit readers under pipefail ([#403](https://github.com/koorikla/platform/issues/403)); test_image_pins 6x faster; bootstrap cosign uses TOOLBOX_IMAGE ([#408](https://github.com/koorikla/platform/issues/408)) ([61d399d](https://github.com/koorikla/platform/commit/61d399d7fd8ffaf6d05edf510862403f17197702))
+
 ## [1.2.0](https://github.com/koorikla/platform/compare/ci-v1.1.1...ci-v1.2.0) (2026-11-22)
 
 
