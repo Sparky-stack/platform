@@ -141,7 +141,9 @@ for dir in addons/* $(yq '.addons[] | select(.path) | .path' "$ADDONS_CATALOG" |
   if [[ $# -eq 0 || " $* " == *" $dir "* ]]; then dirs+=("$dir"); fi
 done
 rc=0
-printf '%s\n' ${dirs[@]+"${dirs[@]}"} | xargs -P "${JOBS:-$(cpu_count)}" -n 1 bash hack/render.sh --addon || rc=$?
-for dir in ${dirs[@]+"${dirs[@]}"}; do cat "$WORK/$(basename "$dir").log"; done
+if (( ${#dirs[@]} > 0 )); then   # GNU xargs would run the worker once on empty input
+  printf '%s\n' "${dirs[@]}" | xargs -P "${JOBS:-$(cpu_count)}" -n 1 bash hack/render.sh --addon || rc=$?
+  for dir in "${dirs[@]}"; do cat "$WORK/$(basename "$dir").log"; done
+fi
 echo "  rendered $(find "$OUT" -name '*.yaml' | wc -l | tr -d ' ') manifests into $OUT"
 exit "$rc"

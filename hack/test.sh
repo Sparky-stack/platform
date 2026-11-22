@@ -105,7 +105,9 @@ by_last_duration() {   # "<kind> <path>" lines -> slowest (last run) first, unkn
 }
 start=$SECONDS
 echo "==> ${#suites[@]} suites, $JOBS at a time"
-printf '%s\n' ${suites[@]+"${suites[@]}"} | by_last_duration | xargs -n 2 -P "$JOBS" bash hack/lib/run-suite.sh "$TMP/logs"
+if (( ${#suites[@]} > 0 )); then   # GNU xargs would run the worker once on empty input
+  printf '%s\n' "${suites[@]}" | by_last_duration | xargs -n 2 -P "$JOBS" bash hack/lib/run-suite.sh "$TMP/logs"
+fi
 printf '%s\t%s\t0\n' "$((SECONDS - start))" "suites (wall, $JOBS at a time)" >> "$TMP/logs/phases.tsv"
 
 # 5. Timing table (slowest first) and result.

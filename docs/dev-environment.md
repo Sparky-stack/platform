@@ -184,10 +184,10 @@ first) shows where the time goes. The usual loop:
 
 | Command | Runs | Typical time |
 |---|---|---|
-| `task test:changed` | what your branch touched (committed or not), as PR CI | TIMING_CHANGED |
+| `task test:changed` | what your branch touched (committed or not), as PR CI | 1-2.5 min for one addon (20 / 4 CPUs) |
 | `bash hack/tests/test_<x>.sh` | one contract suite; it builds chart deps and renders what it needs itself | seconds to ~1 min |
 | `helm unittest addons/<a>` | one chart's unit tests (after `hack/deps.sh`) | seconds |
-| `task test` | everything except the package builds | TIMING_FULL |
+| `task test` | everything except the package builds | 2-3 min (20 / 4 CPUs) |
 | `TEST_FULL=1 task test` | everything, plus the `crossplane project build` of every package (Linux, network) | + ~2 min |
 
 `JOBS=1` serializes the suites (debugging); `CHARTS="addons/x"` limits lint/render/unittest to charts,
