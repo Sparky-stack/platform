@@ -8,11 +8,10 @@ tests:
     template: templates/platform-types.yaml
     set:
       dataServices.enabled: false
-      resilience.enabled: false
     asserts:
-      - hasDocuments: { count: 1 }
-      - equal: { path: metadata.name, value: metrics }
+      - hasDocuments: { count: 2 }   # metrics + resilience (always rendered)
       - equal: { path: 'metadata.annotations["platform.koorikla.io/uses-addons"]', value: telemetry }
+        documentSelector: { path: metadata.name, value: metrics }
 
   - it: appMetrics.enabled false removes it and leaves the other platform types alone
     template: templates/platform-types.yaml
@@ -58,13 +57,13 @@ tests:
           path: spec.allowedTraits
           content: { kind: ClusterTrait, name: metrics }
 
-  - it: not allowed anywhere with appMetrics.enabled false
+  - it: the allowed trait is written in the component type files, appMetrics.enabled does not edit them
     template: templates/upstream-defaults.yaml
     set:
       appMetrics.enabled: false
     documentSelector: { path: spec.workloadType, value: deployment, matchMany: true }
     asserts:
-      - notContains:
+      - contains:
           path: spec.allowedTraits
           content: { kind: ClusterTrait, name: metrics }
 

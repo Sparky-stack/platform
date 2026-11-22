@@ -6,31 +6,30 @@ tests:
   - it: renders keda-scaler, postgresql and mysql (#256), cluster-scoped, skipped in dry-run while the CRDs are missing
     template: templates/platform-types.yaml
     set:
-      resilience.enabled: false   # tests/resilience_test.yaml
       appMetrics.enabled: false   # tests/app_config_metrics_test.yaml
     asserts:
-      - hasDocuments: { count: 3 }
+      - hasDocuments: { count: 4 }   # + ClusterTrait resilience, always rendered
       - isNull: { path: metadata.namespace }
       - equal:
           path: metadata.annotations["argocd.argoproj.io/sync-options"]
           value: SkipDryRunOnMissingResource=true
 
-  - it: renders nothing with dataServices.enabled false
+  - it: renders only resilience (always on) with dataServices.enabled false
     template: templates/platform-types.yaml
     set:
       dataServices.enabled: false
-      resilience.enabled: false
       appMetrics.enabled: false
     asserts:
-      - hasDocuments: { count: 0 }
+      - hasDocuments: { count: 1 }
+      - equal: { path: metadata.name, value: resilience }
 
-  - it: without dataServices the component types do not offer keda-scaler
+  - it: the allowed trait is written in the component type files, dataServices.enabled does not edit them
     template: templates/upstream-defaults.yaml
     documentSelector: { path: metadata.name, value: service }
     set:
       dataServices.enabled: false
     asserts:
-      - notContains:
+      - contains:
           path: spec.allowedTraits
           content: { kind: ClusterTrait, name: keda-scaler }
 

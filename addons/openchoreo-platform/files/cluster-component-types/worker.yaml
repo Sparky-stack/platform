@@ -1,3 +1,6 @@
+# Platform-owned ClusterComponentType, derived from openchoreo/openchoreo@v1.3.3
+# samples/getting-started/component-types/worker.yaml. Platform changes are marked "# Platform:"; the list and the
+# upgrade recipe are in files/README.md.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterComponentType
 metadata:
@@ -6,6 +9,18 @@ metadata:
     openchoreo.dev/description: "A long-running background or event-driven component with no endpoints"
 spec:
   workloadType: deployment
+  # Platform: build with the platform's ClusterWorkflows (== values.yaml buildWorkflows.stacks).
+  allowedWorkflows:
+    - kind: ClusterWorkflow
+      name: go
+    - kind: ClusterWorkflow
+      name: nextjs
+    - kind: ClusterWorkflow
+      name: elixir
+    - kind: ClusterWorkflow
+      name: ruby
+    - kind: ClusterWorkflow
+      name: dockerfile
   allowedTraits:
     - kind: ClusterTrait
       name: health-probes
@@ -15,6 +30,11 @@ spec:
       name: observability-alert-rule
     - kind: ClusterTrait
       name: persistent-volume-claim
+    # Platform: keda-scaler and metrics (files/platform/cluster-traits/).
+    - kind: ClusterTrait
+      name: keda-scaler
+    - kind: ClusterTrait
+      name: metrics
   validations:
     - rule: "${size(workload.endpoints) == 0}"
       message: "Worker components must not have endpoints. Use 'deployment/service' for components with endpoints."
@@ -54,6 +74,37 @@ spec:
             - Always
             - IfNotPresent
             - Never
+        # Platform: knobs of the embedded resilience trait (docs/openchoreo.md "Resilience defaults").
+        resilience:
+          type: object
+          default: {}
+          properties:
+            zoneSpread:
+              type: string
+              enum: [ScheduleAnyway, DoNotSchedule]
+              default: ScheduleAnyway
+            nodePool:
+              type: string
+              default: ""
+            terminationGracePeriodSeconds:
+              type: integer
+              default: 30
+              minimum: 1
+            preStopSleepSeconds:
+              type: integer
+              default: 5
+              minimum: 0
+  # Platform: resilience defaults embedded, so developers attach nothing (files/platform/cluster-traits/resilience.yaml).
+  traits:
+    - kind: ClusterTrait
+      name: resilience
+      instanceName: resilience
+      environmentConfigs:
+        replicas: ${environmentConfigs.replicas}
+        zoneSpread: ${environmentConfigs.resilience.zoneSpread}
+        nodePool: ${environmentConfigs.resilience.nodePool}
+        terminationGracePeriodSeconds: ${environmentConfigs.resilience.terminationGracePeriodSeconds}
+        preStopSleepSeconds: ${environmentConfigs.resilience.preStopSleepSeconds}
   resources:
     - id: deployment
       template:
@@ -63,6 +114,9 @@ spec:
           name: ${metadata.name}
           namespace: ${metadata.namespace}
           labels: ${metadata.labels}
+          # Platform: Stakater Reloader (addon reloader) rolls the pods when a Secret they reference rotates.
+          annotations:
+            secret.reloader.stakater.com/auto: "true"
         spec:
           replicas: ${environmentConfigs.replicas}
           selector:

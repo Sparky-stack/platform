@@ -110,16 +110,6 @@
         "environments"
       ]
     },
-    "upstreamDefaults": {
-      "type": "object",
-      "description": "Upstream default OpenChoreo objects.",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Render the upstream defaults."
-        }
-      }
-    },
     "dataServices": {
       "type": "object",
       "description": "Data-service ClusterResourceTypes/Traits.",
@@ -130,23 +120,13 @@
         }
       }
     },
-    "resilience": {
-      "type": "object",
-      "description": "ClusterTrait resilience.",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Render it."
-        }
-      }
-    },
     "appMetrics": {
       "type": "object",
       "description": "ClusterTrait metrics (opt-in app metrics scraping).",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Render it and allow it on the Deployment component types."
+          "description": "Render it (the Deployment component types always allow it)."
         }
       }
     },
