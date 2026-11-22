@@ -7,6 +7,12 @@ signed **Configuration packages** built from `packages/<name>/`; per-cluster fac
 **EnvironmentConfig**. PostgreSQL (`packages/postgresql`, [data-services.md](data-services.md#postgresql-as-a-service))
 is the first; APIs that are not data services follow the same pattern.
 
+Crossplane itself runs nothing but control loops. A claim ends up in one of two places, chosen by the cluster's
+EnvironmentConfig: in the cluster, where the Composition renders objects for an operator addon (CloudNativePG, MOCO)
+and no provider runs, or outside it, where the cloud providers create managed resources through the cloud APIs (RDS
+or Aurora, Cloud SQL, Azure Flexible Server and their subnet group, security group or KMS key). The providers use the
+cluster's workload identity; no package composes IAM roles or per-app cloud identities yet.
+
 | Piece | Where | Owns |
 |---|---|---|
 | Crossplane core, RBAC manager, namespace (PSS `restricted`), PodMonitor | `addons/crossplane` (upstream chart) | the control loop |
