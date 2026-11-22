@@ -28,6 +28,7 @@ for i in 1 2 3 4 5; do
   git clone -q --depth 1 --branch "$GITOPS_BRANCH" -- "$REPO" /tmp/gitops
   cd /tmp/gitops
   # Only an OpenChoreo Workload under deploy/openchoreo/ is ever rewritten (no symlink out of it).
+  # shellcheck disable=SC2015 # die exits, so this is if-then-else
   [ -f "$WORKLOAD_PATH" ] && [ ! -L "$WORKLOAD_PATH" ] && [ ! -L deploy ] && [ ! -L deploy/openchoreo ] \
     || die "$WORKLOAD_PATH not found (or a symlink on its path) in $REPO@$GITOPS_BRANCH"
   case "$(realpath -e "$WORKLOAD_PATH")" in
