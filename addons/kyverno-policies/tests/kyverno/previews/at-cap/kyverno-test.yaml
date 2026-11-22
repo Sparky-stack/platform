@@ -1,0 +1,21 @@
+# Tenant demo already runs 2 previews: a 3rd is denied, naming tenant and cap.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: previews-at-cap
+policies: [../policies.yaml]
+resources: [../environment-new.yaml]
+clusterResources: [cluster.yaml]
+results:
+  - policy: platform-preview-cap
+    kind: Environment
+    resources: [default/pr-9-hello-world]
+    result: fail
+checks:
+  - match:
+      resource: {metadata: {name: pr-9-hello-world}}
+      policy: {metadata: {name: platform-preview-cap}}
+    assert:
+      message: >-
+        tenant demo already runs 2 preview environment(s), the cap is 2: close a pull request or wait for a preview
+        to expire

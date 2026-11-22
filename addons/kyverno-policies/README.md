@@ -46,11 +46,12 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | imageVerification.github.enabled | bool | `true` |  |
 | imageVerification.github.issuer | string | `"https://token.actions.githubusercontent.com"` |  |
 | imageVerification.github.prefixes[0] | string | `"ghcr.io/koorikla/"` |  |
-| imageVerification.github.refs[0] | string | `"refs/heads/main"` |  |
 | imageVerification.github.rekorURL | string | `"https://rekor.sigstore.dev"` |  |
-| imageVerification.github.repositories[0] | string | `"koorikla/hello-world"` |  |
 | imageVerification.github.transitionWorkflowRefs | list | `[]` |  |
-| imageVerification.github.triggers[0] | string | `"push"` |  |
+| imageVerification.github.trustedSources[0].name | string | `"gh-koorikla-hello-world-heads-main"` |  |
+| imageVerification.github.trustedSources[0].ref | string | `"refs/heads/main"` |  |
+| imageVerification.github.trustedSources[0].repository | string | `"koorikla/hello-world"` |  |
+| imageVerification.github.trustedSources[0].trigger | string | `"push"` |  |
 | imageVerification.github.workflow | string | `"https://github.com/koorikla/platform/.github/workflows/app-container.yaml"` |  |
 | imageVerification.github.workflowRef | string | `"3311f541a8eab72a2649b6f1eda4fe05efa3142e"` |  |
 | imageVerification.platformKey.attestations[0] | string | `"sbom"` |  |

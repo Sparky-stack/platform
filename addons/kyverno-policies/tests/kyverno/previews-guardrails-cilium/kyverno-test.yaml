@@ -1,0 +1,20 @@
+# Offline: guardrails of PR preview cell namespaces with cni cilium (templates/previews.yaml, #331). Run by
+# hack/tests/test_kyverno_policies.sh, which renders the policies into policies.yaml here (helm-values.yaml). As in
+# previews-guardrails (same namespaces), plus the CiliumNetworkPolicy platform-preview-database-apiserver: kube-apiserver
+# egress of the CNPG pods (the script checks its selectors and validates it against the Cilium CRD schema).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: previews-guardrails-cilium
+policies: [policies.yaml]
+resources: [../previews-guardrails/namespaces.yaml]
+results:
+  - policy: platform-preview-guardrails
+    kind: Namespace
+    resources: [dp-default-demo-pr-9-hello-world-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: platform-preview-guardrails
+    kind: Namespace
+    resources: [dp-default-demo-staging-1234abcd, not-a-cell]
+    result: skip

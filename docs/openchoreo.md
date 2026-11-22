@@ -16,7 +16,7 @@ Every platform `ClusterComponentType`, `ClusterTrait`, `ClusterResourceType` and
 | mgmt + workload | `kgateway` | catalog ns | kgateway v2.3.1 controller + `gateway.kgateway.dev` CRDs, GatewayClass `kgateway` |
 | mgmt | `thunder` | thunder | ThunderID 1.0.1: OIDC IdP for console, API, CLI |
 | mgmt | `openchoreo-control-plane` | openchoreo-control-plane | controller-manager, openchoreo-api, Backstage console, cluster-gateway, event-forwarder, Gateway `gateway-default`; Secret `backstage-secrets`; CRS payload `fleet/openchoreo-gateway-ca` |
-| mgmt | `openchoreo-platform` | default | org namespace label, `DeploymentPipeline default`, upstream ClusterComponentTypes / ClusterTraits / ClusterProjectType, build ClusterWorkflows |
+| mgmt | `openchoreo-platform` | default | org namespace label, `DeploymentPipeline default`, platform-owned ClusterComponentTypes, upstream ClusterTraits / ClusterProjectType, build ClusterWorkflows |
 | mgmt | `openchoreo-workflow-plane` | openchoreo-workflow-plane | Argo Workflows + cluster-agent, `ClusterWorkflowPlane default`, build ClusterWorkflowTemplates ([build-plane.md](build-plane.md)) |
 | mgmt | `charts/cluster` (per cluster) | fleet (+ cluster-scoped, org ns) | agent CA + client cert, CRS, `ClusterDataPlane <name>`, `Environment`s |
 | mgmt | `charts/tenant` (per tenant) | argocd, org ns | AppProject `tenant-<project>`, `Project`, `ProjectReleaseBinding`s, app Applications |
@@ -373,6 +373,20 @@ whitelist for that reason.
 Secrets: declare an OpenChoreo `SecretReference` (key inside the project's OpenBao mount) and reference it from
 `workload.yaml` (`env[].valueFrom.secretKeyRef`); never commit values. Step by step:
 [Application secrets](#application-secrets-developer-view).
+
+## Component types
+
+The four ClusterComponentTypes (`deployment/service`, `deployment/web-application`, `deployment/worker`,
+`cronjob/scheduled-task`) are platform-owned files in `addons/openchoreo-platform/files/cluster-component-types/`. They
+are derived from upstream's v1.3.3 `samples/getting-started`, the starting point OpenChoreo gives platform engineers.
+The platform changes are written into the files and marked `# Platform:`: the build workflows, the allowed traits
+`keda-scaler` and `metrics`, the embedded `resilience` trait and the Reloader annotation. So the file in Git is what
+`kubectl get clustercomponenttype <name> -o yaml` shows. The one render-time edit is `secrets.tenantStores.enabled`
+(installations/local): component ExternalSecrets then use the cell's own SecretStore. The table of changes:
+[files/README.md](../addons/openchoreo-platform/files/README.md).
+
+Upgrading OpenChoreo: diff upstream's sample old -> new and apply it to each platform file. Resolve the hunks that touch
+a `# Platform:` block by hand (3-line recipe in files/README.md).
 
 ## Resilience defaults
 

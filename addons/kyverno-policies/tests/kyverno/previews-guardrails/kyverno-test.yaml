@@ -1,0 +1,20 @@
+# Offline: guardrails of PR preview cell namespaces (templates/previews.yaml on data planes, #168, #331). Run by
+# hack/tests/test_kyverno_policies.sh, which renders the policies into policies.yaml here (helm-values.yaml). Only the
+# preview cell namespace gets the ResourceQuota, LimitRange and NetworkPolicy platform-preview-isolation of
+# generated.yaml, and no CiliumNetworkPolicy without cni cilium (an object missing from generated.yaml fails the test).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: previews-guardrails
+policies: [policies.yaml]
+resources: [namespaces.yaml]
+results:
+  - policy: platform-preview-guardrails
+    kind: Namespace
+    resources: [dp-default-demo-pr-9-hello-world-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: platform-preview-guardrails
+    kind: Namespace
+    resources: [dp-default-demo-staging-1234abcd, not-a-cell]
+    result: skip

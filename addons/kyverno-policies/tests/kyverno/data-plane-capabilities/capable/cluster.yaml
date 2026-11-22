@@ -1,9 +1,17 @@
-# resource.List context: Resource orders-db (ClusterResourceType postgresql, requires crossplane), Resource cache
-# (ClusterResourceType valkey, no requirement), environment development on ClusterDataPlane dev1 (crossplane: absent).
+# Cluster state (resource.List / resource.Get): Resource orders-db (ClusterResourceType postgresql, requires crossplane), Resource cache
+# (ClusterResourceType valkey, no requirement), environment development on ClusterDataPlane dev1 (crossplane: true).
 apiVersion: cli.kyverno.io/v1alpha1
-kind: Context
-metadata: {name: incapable}
+kind: ClusterResource
+metadata: {name: capable}
 spec:
+  # CRDs from addons/openchoreo-control-plane, written to ../crds/ by hack/tests/test_kyverno_policies.sh: the REST
+  # mapping for the policy's lookups.
+  crds:
+    - ../crds/resourcereleasebindings.openchoreo.dev.yaml
+    - ../crds/resources.openchoreo.dev.yaml
+    - ../crds/clusterresourcetypes.openchoreo.dev.yaml
+    - ../crds/environments.openchoreo.dev.yaml
+    - ../crds/clusterdataplanes.openchoreo.dev.yaml
   resources:
     - apiVersion: openchoreo.dev/v1alpha1
       kind: Resource
@@ -27,5 +35,5 @@ spec:
       spec: {dataPlaneRef: {kind: ClusterDataPlane, name: dev1}}
     - apiVersion: openchoreo.dev/v1alpha1
       kind: ClusterDataPlane
-      metadata: {name: dev1, annotations: {addons.platform.koorikla.io/keda: "true"}}
+      metadata: {name: dev1, annotations: {addons.platform.koorikla.io/keda: "true", addons.platform.koorikla.io/crossplane: "true"}}
       spec: {planeID: dev1}

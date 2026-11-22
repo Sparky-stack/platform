@@ -1,15 +1,14 @@
-# resource.List context: tenant demo already runs 2 previews (cap 2); acme's preview and development do not count.
+# Cluster state (resource.List): tenant demo runs 1 preview (cap 2).
 apiVersion: cli.kyverno.io/v1alpha1
-kind: Context
-metadata: {name: two-running}
+kind: ClusterResource
+metadata: {name: one-running}
 spec:
+  # CRD from addons/openchoreo-control-plane, written to ../crds/ by hack/tests/test_kyverno_policies.sh.
+  crds: [../crds/environments.openchoreo.dev.yaml]
   resources:
     - apiVersion: openchoreo.dev/v1alpha1
       kind: Environment
       metadata: {name: pr-1-hello-world, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}}
-    - apiVersion: openchoreo.dev/v1alpha1
-      kind: Environment
-      metadata: {name: pr-2-hello-world, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: demo}}
     - apiVersion: openchoreo.dev/v1alpha1
       kind: Environment
       metadata: {name: pr-3-other, namespace: default, labels: {platform.koorikla.io/preview: "true", platform.koorikla.io/tenant: acme}}

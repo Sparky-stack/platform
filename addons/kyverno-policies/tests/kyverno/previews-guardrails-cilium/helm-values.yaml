@@ -1,0 +1,5 @@
+# PR previews on a data plane with Cilium: adds the database API egress policy.
+previews:
+  enabled: true
+cluster:
+  cni: cilium

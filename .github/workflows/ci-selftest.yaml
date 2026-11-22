@@ -37,7 +37,9 @@ permissions:
 
 jobs:
   lint:
-    name: actionlint + shellcheck
+    # actionlint: ci.yaml lints every workflow change with the mise-pinned binary (prek hook on scoped PRs,
+    # task lint on full runs).
+    name: shellcheck + script tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -52,7 +54,8 @@ jobs:
           find ci/scripts ci/tests -name '*.sh' -print0 | xargs -0 shellcheck -x -S style
       - name: bash 3.2 (macOS /bin/bash) syntax check + script unit tests
         run: |
-          docker run --rm -v "$PWD:/w" -w /w \
+          # workload-bump.sh needs mikefarah yq (preinstalled on the runner, a static binary).
+          docker run --rm -v "$PWD:/w" -w /w -v "$(command -v yq):/usr/local/bin/yq:ro" \
             docker.io/library/bash:3.2@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719 \
             sh -euc 'apk add -q --no-cache git >/dev/null
               bash --version | head -1
@@ -63,6 +66,8 @@ jobs:
         run: uv run --no-project --with pyyaml==6.0.4 --with jsonschema==4.26.0 python3 ci/tests/openchoreo-validate-manifests.test.py
       - name: app-<stack>.yaml image phase mirrors app-container.yaml
         run: bash ci/tests/app-workflow-interfaces.test.sh
+      - name: tools are pinned and declared (no run-time latest installs)
+        run: bash ci/tests/tool-pins.test.sh
       - name: release-please tags single-component grouped releases (#313)
         run: |
           # The release-please version the pinned action bundles (its package-lock.json at that SHA).
@@ -72,10 +77,6 @@ jobs:
           export RELEASE_PLEASE_VERSION
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/rp" "release-please@$RELEASE_PLEASE_VERSION" >/dev/null
           NODE_PATH="$RUNNER_TEMP/rp/node_modules" node ci/tests/release-please-tagging.test.js
-      - name: actionlint
-        run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
-          ./actionlint -color
 
   go:
     uses: ./.github/workflows/app-go.yaml

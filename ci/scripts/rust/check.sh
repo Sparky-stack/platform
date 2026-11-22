@@ -13,8 +13,9 @@
 #   TEST_ARGS      extra test arguments (default --workspace --all-features --locked)
 #   RUN_DENY       default true (cargo-deny; licenses only checked with a deny.toml)
 #   RUN_AUDIT      default true (cargo-audit)
-#   INSTALL_TOOLS  default true: `cargo install --locked` missing cargo-deny /
-#                  cargo-audit (slow; CI preinstalls prebuilt binaries)
+# Tools: cargo-deny and cargo-audit must be on PATH (cargo-nextest is used when
+# present). Nothing is installed or compiled at run time: app-rust.yaml installs
+# the prebuilt, checksummed binaries at the versions it pins.
 # Files out: target/ (build cache)
 set -euo pipefail
 
@@ -41,17 +42,10 @@ else
 fi
 log "$(cargo --version); $(rustc --version)"
 
-# ensure_tool BIN CRATE - true when BIN is available (installing it if allowed).
-ensure_tool() {
-  if command -v "$1" >/dev/null 2>&1; then
-    return 0
-  fi
-  if is_true "${INSTALL_TOOLS:-true}"; then
-    log "cargo install --locked $2"
-    cargo install --locked "$2"
-    return 0
-  fi
-  return 1
+# require_tool BIN - fail unless BIN is on PATH (see "Tools" above).
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 ||
+    die "$1 not installed (install the prebuilt version pinned in .github/workflows/app-rust.yaml)"
 }
 
 if is_true "${RUN_FMT:-true}"; then
@@ -97,7 +91,7 @@ if is_true "${RUN_TEST:-true}"; then
 fi
 
 if is_true "${RUN_DENY:-true}"; then
-  ensure_tool cargo-deny cargo-deny || die "cargo-deny not installed (INSTALL_TOOLS=false)"
+  require_tool cargo-deny
   if [[ -f deny.toml || -f .cargo/deny.toml ]]; then
     log "cargo deny check (advisories bans licenses sources)"
     cargo deny --locked check
@@ -108,7 +102,7 @@ if is_true "${RUN_DENY:-true}"; then
 fi
 
 if is_true "${RUN_AUDIT:-true}"; then
-  ensure_tool cargo-audit cargo-audit || die "cargo-audit not installed (INSTALL_TOOLS=false)"
+  require_tool cargo-audit
   log "cargo audit"
   cargo audit
 fi

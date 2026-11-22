@@ -10,12 +10,16 @@
 #   RUN_BRAKEMAN    default auto: true when rails is in Gemfile.lock
 #   BRAKEMAN_ARGS   default "--no-pager --quiet" (fails on warnings)
 #   RUN_AUDIT       default true (bundler-audit; installed if not bundled)
+# brakeman / bundler-audit: from the bundle when Gemfile.lock pins them, else
+# installed at the version in gem-versions.env (never an unpinned latest).
 # Files out: none
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../common/lib.sh
 source "${SCRIPT_DIR}/../common/lib.sh"
+# shellcheck source=gem-versions.env
+source "${SCRIPT_DIR}/gem-versions.env"
 
 require_cmd ruby bundle
 cd "${WORKDIR:-.}"
@@ -63,7 +67,7 @@ if is_true "${brakeman}"; then
     # shellcheck disable=SC2086
     bundle exec brakeman ${brakeman_args}
   else
-    gem install --no-document brakeman
+    gem install --no-document --version "${BRAKEMAN_VERSION}" brakeman
     # shellcheck disable=SC2086
     brakeman ${brakeman_args}
   fi
@@ -77,7 +81,7 @@ if is_true "${RUN_AUDIT:-true}"; then
   if locked bundler-audit; then
     bundle exec bundle-audit check --update
   else
-    gem install --no-document bundler-audit
+    gem install --no-document --version "${BUNDLER_AUDIT_VERSION}" bundler-audit
     bundle-audit check --update
   fi
 fi

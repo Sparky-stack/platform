@@ -93,7 +93,7 @@ Field reference (generated): [reference/README.md](reference/README.md).
 
 | Point | Used today | Where |
 |---|---|---|
-| ClusterComponentType | yes: upstream `service`, `web-application`, `worker`, `scheduled-task`, with the platform's build workflows and traits added at render time | `addons/openchoreo-platform/files/cluster-component-types/`, `addons/openchoreo-platform/templates/upstream-defaults.yaml` |
+| ClusterComponentType | yes: platform-owned `service`, `web-application`, `worker`, `scheduled-task`, derived from upstream's samples with the platform's build workflows, traits and Reloader opt-in written in (upgrade recipe in the folder's README) | `addons/openchoreo-platform/files/cluster-component-types/` ([files/README.md](../addons/openchoreo-platform/files/README.md)) |
 | ClusterTrait | yes: upstream `health-probes`, `horizontal-pod-autoscaler`, `persistent-volume-claim`, `observability-alert-rule`; platform `keda-scaler` (attach it) and `resilience` (embedded in every Deployment type, never attached) | `addons/openchoreo-platform/files/cluster-traits/`, `addons/openchoreo-platform/files/platform/cluster-traits/` |
 | ClusterResourceType | yes: `postgresql` (renders the Crossplane PostgreSQL XR). The other packages carry theirs in `packages/<api>/openchoreo/`, not deployed | `addons/openchoreo-platform/files/platform/cluster-resource-types/postgresql.yaml` |
 | ClusterWorkflow (OpenChoreo) | yes: one build workflow per stack, `helm-chart`, `promotion-gate` | `addons/openchoreo-platform/templates/build-workflows.yaml`, `addons/openchoreo-platform/templates/helm-chart-workflow.yaml`, `addons/openchoreo-platform/templates/promotion-gate.yaml` |

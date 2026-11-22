@@ -1,6 +1,7 @@
 {{- /* Cross-field rules of this chart (renders nothing). Single-field formats, enums and ranges: values.schema.json,
 except the workflow pin and commit count, whose messages say why (tags and branches are mutable).
-Attestor and policy names are derived in templates/image-verification.yaml and checked there, next to the naming. */ -}}
+Trusted-source names: format and length in values.schema.json, uniqueness here. Transition attestor and policy names
+are derived in templates/image-verification.yaml and checked there, next to the naming. */ -}}
 {{- $iv := .Values.imageVerification }}
 {{- if $iv.enabled }}
 {{- if $iv.github.enabled }}
@@ -12,7 +13,11 @@ Attestor and policy names are derived in templates/image-verification.yaml and c
 {{- end }}
 {{- if gt (len $wfRefs) 2 }}{{ fail (printf "imageVerification.github: workflowRef + transitionWorkflowRefs trust %d workflow commits, at most 2 (the current pin and the previous one while app repos move)" (len $wfRefs)) }}{{ end }}
 {{- if has (toString $iv.github.workflowRef) (($iv.github.transitionWorkflowRefs | default list) | toStrings) }}{{ fail "imageVerification.github.transitionWorkflowRefs must not repeat workflowRef" }}{{ end }}
-{{- if not (and $iv.github.repositories $iv.github.refs $iv.github.triggers) }}{{ fail "imageVerification.github: repositories, refs and triggers must not be empty" }}{{ end }}
+{{- if not $iv.github.trustedSources }}{{ fail "imageVerification.github.trustedSources must not be empty" }}{{ end }}
+{{- $names := list }}{{ range $iv.github.trustedSources }}{{ $names = append $names .name }}{{ end }}
+{{- range $i, $n := $names }}
+{{- if has $n (slice $names 0 $i) }}{{ fail (printf "imageVerification.github.trustedSources: name %q is listed more than once (each name is one attestor)" $n) }}{{ end }}
+{{- end }}
 {{- range ($iv.github.attestations | default list) }}{{ if not (hasKey $iv.attestationTypes .) }}{{ fail (printf "imageVerification: unknown attestation %q (attestationTypes)" .) }}{{ end }}{{ end }}
 {{- end }}
 {{- /* Same trust decision as image-verification.yaml: inline publicKey, or the cluster-delivered key with registry.type harbor. */ -}}
