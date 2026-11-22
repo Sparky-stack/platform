@@ -76,12 +76,11 @@ for agents in "rca" "finops" "rca,finops"; do
   check "$TMP/th.yaml" "agents [$agents]"
 done
 # The renders hack/test.sh made per installation (overlays may add bootstrap scripts).
-if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
-  for r in "$RENDERED_DIR"/addon-thunder-*.yaml; do
-    [[ -f "$r" ]] || continue
-    check "$r" "$(basename "$r" .yaml)"
-  done
-fi
+need_renders
+for r in "$RENDERED_DIR"/addon-thunder-*.yaml; do
+  [[ -f "$r" ]] || continue
+  check "$r" "$(basename "$r" .yaml)"
+done
 
 # Negative (mutation): the PR #5 placeholders - a comment-only and an empty file - are caught.
 files "$TMP/th-default.yaml" "$TMP/neg"

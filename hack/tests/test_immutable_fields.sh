@@ -4,7 +4,7 @@
 # whole Application goes ComparisonError/Unknown and no sync ever starts - so a per-resource
 # `argocd.argoproj.io/sync-options: Force=true,Replace=true` alone never runs (#279 -> #281). Argo CD 3.6 has no
 # per-resource compare option (controller/state.go shouldUseServerSideDiff reads the Application only). Contract, for
-# every addon render (hack/test.sh RENDERED_DIR, else standalone renders made here):
+# every addon render (RENDERED_DIR: hack/test.sh's, or hack/render.sh's when run on its own):
 #   1. a PriorityClass/StorageClass (whole spec immutable, nothing references its uid) carries sync-options
 #      Force=true,Replace=true (kubectl replace --force = delete + create on change);
 #   2. ... and its addon sets compareOptions ServerSideDiff=false (charts/platform values.yaml), so the client-side diff
@@ -57,21 +57,13 @@ violations() {
 }
 
 n=0
-if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
-  for r in "$RENDERED_DIR"/addon-*.yaml; do
-    [[ -f "$r" ]] || continue
-    a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
-    n=$((n + 1))
-    assert_eq "$(violations "$a" "$r" "$(opts_of "$a")")" "" "$(basename "$r" .yaml): immutable fields cannot deadlock the sync"
-  done
-else
-  for d in addons/*/; do
-    a=$(basename "$d")
-    render_standalone_addon "$a" "$TMP/addon-$a.yaml" 2>/dev/null || { echo "  (skip $a: no standalone render)"; continue; }
-    n=$((n + 1))
-    assert_eq "$(violations "$a" "$TMP/addon-$a.yaml" "$(opts_of "$a")")" "" "addons/$a (standalone): immutable fields cannot deadlock the sync"
-  done
-fi
+need_renders
+for r in "$RENDERED_DIR"/addon-*.yaml; do
+  [[ -f "$r" ]] || continue
+  a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
+  n=$((n + 1))
+  assert_eq "$(violations "$a" "$r" "$(opts_of "$a")")" "" "$(basename "$r" .yaml): immutable fields cannot deadlock the sync"
+done
 echo "  checked $n addon renders"
 
 # Self-check: the platform still renders the PriorityClasses (a moved template must not silently empty this test).

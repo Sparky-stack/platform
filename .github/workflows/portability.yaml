@@ -79,6 +79,8 @@ jobs:
 
       - name: task test
         run: task test
+        env:
+          TEST_FULL: "1"   # also the slow builds PR CI leaves to the per-area workflows (crossplane project build, Linux)
 
   devcontainer:
     name: devcontainer (${{ matrix.os }})

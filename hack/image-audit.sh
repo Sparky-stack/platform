@@ -143,7 +143,7 @@ INV="$TMP/inventory.tsv"   # <image>\t<source>
 add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 
 # runs_on <provider> <providers list>: an empty list (catalog `providers`) means every provider.
-runs_on() { [[ -z "$2" ]] || printf '%s\n' "$2" | grep -qx "$1"; }
+runs_on() { [[ -z "$2" ]] || grep -qx "$1" <<<"$2"; }
 
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
@@ -212,12 +212,12 @@ for dir in addons/*; do
   roles=$(yq ".addons[\"$addon\"].roles[]?" "$CATALOG" | tr -d '\r')
   [[ -n "$roles" ]] || roles=$'mgmt\nworkload'
   provs=$(yq ".addons[\"$addon\"].providers[]?" "$CATALOG" | tr -d '\r')
-  if printf '%s\n' "$roles" | grep -qx mgmt; then
+  if grep -qx mgmt <<<"$roles"; then
     if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" && runs_on "$m_prov" "$provs"; then
       render "$addon" mgmt "$m_name" "$m_prov" "$m_env" "$m_reg" "$m_cni" "$MGMT_SERVER"
     fi
   fi
-  if printf '%s\n' "$roles" | grep -qx workload; then
+  if grep -qx workload <<<"$roles"; then
     for cf in "$INST_DIR"/clusters/*.yaml; do
       [[ -f "$cf" ]] || continue
       c_prov=$(yq '.provider // "docker"' "$cf")

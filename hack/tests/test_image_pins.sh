@@ -7,7 +7,7 @@
 # Not covered (runtime, not rendered here): k3s system images, CAPI provider release manifests, k3d helpers, the CAPD
 # load balancer, proxies controllers create at runtime (kgateway envoy, Istio waypoints come from rendered config).
 # Exceptions: PIN_EXCEPTIONS only, image (exact, or a glob with `*`) + source; one that matches nothing fails (remove it).
-# With RENDERED_DIR (hack/test.sh) also: no label value carries a tag@digest (charts that copy image.tag into
+# Also, on every render (RENDERED_DIR): no label value carries a tag@digest (charts that copy image.tag into
 # app.kubernetes.io/version; the API server rejects it, kubeconform does not check label syntax).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -42,10 +42,8 @@ for bad in "busybox:1.37.0" "busybox@$D" "curlimages/curl@$D" "docker.io/curlima
   if pinned "$bad"; then assert_eq accepted rejected "pattern rejects $bad"; else assert_eq ok ok "pattern rejects $bad"; fi
 done
 
-# Inventory: one hack/image-audit.sh run per installation, in parallel (read-only; dependencies built once here).
-if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
-  ( cd "$ROOT" && ./hack/deps.sh >/dev/null )
-fi
+# Inventory: one hack/image-audit.sh run per installation, in parallel (read-only), reusing the renders.
+need_renders
 pids=()
 for inst_dir in "$ROOT"/installations/*; do
   [[ -f "$inst_dir/installation.yaml" ]] || continue
@@ -89,18 +87,14 @@ for e in "${PIN_EXCEPTIONS[@]}"; do
   fi
 done
 
-# Label values never carry a digest (only with the renders of hack/test.sh).
-if [[ -n "${RENDERED_DIR:-}" && -d "$RENDERED_DIR" ]]; then
-  labels=""
-  for f in "$RENDERED_DIR"/*.yaml; do
-    if [[ ! -s "$f" ]] || ! grep -q 'labels:' "$f" || ! grep -q '@' "$f"; then continue; fi
-    l=$(yq -N '.. | select(tag == "!!map" and has("labels")) | .labels | select(tag == "!!map") | to_entries[]
-      | select((.value | tag) == "!!str") | select(.value | test("@")) | .key + "=" + .value' "$f" 2>/dev/null || true)
-    if [[ -n "$l" ]]; then labels="$labels$(basename "$f"): $l"$'\n'; fi
-  done
-  assert_eq "$labels" "" "no label value contains a tag@digest (rendered manifests of hack/test.sh)"
-else
-  echo "  SKIP label check (needs RENDERED_DIR: run through hack/test.sh)"
-fi
+# Label values never carry a digest.
+labels=""
+for f in "$RENDERED_DIR"/*.yaml; do
+  if [[ ! -s "$f" ]] || ! grep -q 'labels:' "$f" || ! grep -q '@' "$f"; then continue; fi
+  l=$(yq -N '.. | select(tag == "!!map" and has("labels")) | .labels | select(tag == "!!map") | to_entries[]
+    | select((.value | tag) == "!!str") | select(.value | test("@")) | .key + "=" + .value' "$f" 2>/dev/null || true)
+  if [[ -n "$l" ]]; then labels="$labels$(basename "$f"): $l"$'\n'; fi
+done
+assert_eq "$labels" "" "no label value contains a tag@digest (rendered manifests)"
 
 finish
