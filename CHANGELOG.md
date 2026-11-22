@@ -2,6 +2,19 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.9.0](https://github.com/koorikla/platform/compare/v0.8.0...v0.9.0) (2026-11-22)
+
+
+### Features
+
+* **ci:** app manifest validation in the platform's stack workflows; code-free templates ([#366](https://github.com/koorikla/platform/issues/366)) ([561de3b](https://github.com/koorikla/platform/commit/561de3b45e0e4332c724658e9abf4a4e516e497f))
+* **ci:** koorikla-build step scripts in ci/scripts/workflow, tested directly ([#393](https://github.com/koorikla/platform/issues/393)) ([#396](https://github.com/koorikla/platform/issues/396)) ([dbf92f6](https://github.com/koorikla/platform/commit/dbf92f6f3cc69b77092b61656d822fbc5d891269))
+
+
+### Performance Improvements
+
+* **test:** task test 579s -&gt; 97s, one-addon PR 610s -&gt; 71s; identical assertions ([#399](https://github.com/koorikla/platform/issues/399)) ([ad1f233](https://github.com/koorikla/platform/commit/ad1f2330d7baeaf608da88e6737245c870095c99))
+
 ## [0.8.0](https://github.com/koorikla/platform/compare/v0.7.0...v0.8.0) (2026-11-21)
 
 
