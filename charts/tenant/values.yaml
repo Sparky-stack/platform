@@ -9,7 +9,7 @@ description: ""
 # name == Component name: gated bindings are admitted only from Application <project>-<component>-<env>.
 # -- Tenant applications (`[{name, repoURL, path, revision, promotionGates}]`; `name` must equal the app repo's `Component` name).
 apps: []
-# -- DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `CronJob/<project>-demo-secrets` with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
+# -- DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `PushSecret/<project>-seed-<key>` (ESO `Password` generator, `updatePolicy: IfNotExists`) with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. One entry per key (a lowercase DNS label). Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
 demoSecrets: []             # installations/local/tenants/demo.yaml only
 # -- Groups (JWT claim `groups`) that develop this project: OpenChoreo role `developer` scoped to this project only, binding writes in `promotion.gatedEnvironments` excluded (`templates/developer-authz.yaml`). Empty = `[<project>-developers]`. Members also need group `developers` for the org-wide read-only views (component types, environments).
 developerGroups: []
@@ -114,11 +114,4 @@ tenantSecrets:
     caSecret: openbao-ca                             # addon openbao tenant-secrets.yaml: public CA only (ESO)
     audience: openbao                                # == addon openbao reconcile.audience (role tenant-writer)
     loginRole: tenant-writer
-    schedule: "*/5 * * * *"                          # retries until tenant-reconcile bound the writer alias
-    image:                                           # == addon openbao openbao.server.image (bao CLI)
-      registry: quay.io
-      repository: openbao/openbao
-      tag: "2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"
-    resources:
-      requests: { cpu: 10m, memory: 32Mi }
-      limits: { cpu: 200m, memory: 64Mi }
+    refreshInterval: 5m                              # PushSecret re-check; failures retry with ESO's backoff

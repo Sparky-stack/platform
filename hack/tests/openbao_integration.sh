@@ -434,6 +434,10 @@ bao_in 'export BAO_TOKEN=$(bao write -field=token auth/userpass/login/tenantcfg 
 twr() { bao_in "export BAO_TOKEN=\$($UP/$1 password=@/w/it-pw); bao $2 2>&1" | grep -m1 -oE 'Code: [0-9]+|Success|Key|=====' | head -n1 | sed 's/Code: //'; }
 assert_eq "$(twr demowriter 'kv put kv-tenant-demo/db password=demo-value')" "=====" "demo writer writes its own secret"
 assert_eq "$(twr otherwriter 'kv put kv-tenant-other/db password=other-value')" "=====" "other writer writes its own secret"
+assert_eq "$(twr demowriter 'kv metadata put -custom-metadata=managed-by=external-secrets kv-tenant-demo/db')" Success \
+  "demo writer marks its own key (ESO PushSecret custom_metadata, charts/tenant demo-secrets.yaml)"
+assert_eq "$(twr demowriter 'kv metadata put -custom-metadata=managed-by=external-secrets kv-tenant-other/db')" 403 \
+  "negative: demo writer cannot change other's metadata"
 assert_eq "$(twr demowriter 'kv put kv-tenant-other/db password=pwn')" 403 "negative: demo writer cannot write other's mount"
 assert_eq "$(twr demowriter 'kv get kv-tenant-other/db')" 403 "negative: demo writer cannot read other's mount"
 # readers: ServiceAccount tokens of the tenant namespaces on c1 (key sa1), audience of the chart
