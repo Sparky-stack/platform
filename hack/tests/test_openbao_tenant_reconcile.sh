@@ -135,8 +135,8 @@ assert_eq "$(printf '%s' "$role" | yq -p json -r '[.role_type, .user_claim, .bou
 assert_eq "$(yq -p json -o json -I0 '.bound_claims' < "$S/roles/auth_tenants-dev1_role_rogue")" '{"sub":["system:serviceaccount:dp-default-rogue-development-12345678:openbao-tenant"]}' "rogue role: never the namespace it contests"
 assert_match "$(cat "$TMP/out")" "namespace $D2 is claimed by several tenants: bound to none" "contested namespace reported"
 assert_eq "$(grep -c "$D2" "$S/aliases" || true)" 0 "contested namespace: no alias for anybody"
-alias_line=$(grep -n "entity-alias name=system:serviceaccount:$D3:openbao-tenant canonical_id=id-tenant-demo.dev1.$D3 mount_accessor=acc_tenants-dev1" "$S/calls" | head -1 | cut -d: -f1)
-role_line=$(grep -n 'write auth/tenants-dev1/role/demo' "$S/calls" | head -1 | cut -d: -f1)
+alias_line=$(grep -m1 -n "entity-alias name=system:serviceaccount:$D3:openbao-tenant canonical_id=id-tenant-demo.dev1.$D3 mount_accessor=acc_tenants-dev1" "$S/calls" | cut -d: -f1)
+role_line=$(grep -m1 -n 'write auth/tenants-dev1/role/demo' "$S/calls" | cut -d: -f1)
 assert_eq "$(( ${alias_line:-999} < ${role_line:-0} ))" 1 "dev1: demo's aliases bound (to entity tenant-demo.dev1.<ns>) before its role exists"
 assert_eq "$(wr "identity/entity/name/tenant-demo.dev1.$D1" | tr '\n' ' ')" "metadata=tenant=demo " "namespace entity: metadata tenant=demo only (what tenant-read keys on)"
 assert_eq "$(awk -v a=acc_tenants-dev1 '$2 == a && $3 ~ /^id-tenant-demo/' "$S/aliasmap" | wc -l | tr -d ' ')" 2 "two demo namespaces on one mount: two aliases, one entity each (OpenBao: one alias per entity and mount)"

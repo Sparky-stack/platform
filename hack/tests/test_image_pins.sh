@@ -87,11 +87,17 @@ for e in "${PIN_EXCEPTIONS[@]}"; do
   fi
 done
 
-# Label values never carry a digest.
-labels=""
+# Label values never carry a digest. Identical renders (an addon on several clusters) are read once; CRDs only for
+# their own metadata.labels (a `labels` key in a CRD schema is a property definition, and the schemas are most of the
+# bytes).
+labels="" seen=" "
 for f in "$RENDERED_DIR"/*.yaml; do
   if [[ ! -s "$f" ]] || ! grep -q 'labels:' "$f" || ! grep -q '@' "$f"; then continue; fi
-  l=$(yq -N '.. | select(tag == "!!map" and has("labels")) | .labels | select(tag == "!!map") | to_entries[]
+  sum=$(cksum < "$f"); sum=${sum// /:}
+  [[ "$seen" == *" $sum "* ]] && continue
+  seen="$seen$sum "
+  l=$(yq -N '((select(.kind == "CustomResourceDefinition") | .metadata), (select(.kind != "CustomResourceDefinition") | ..))
+    | select(tag == "!!map" and has("labels")) | .labels | select(tag == "!!map") | to_entries[]
     | select((.value | tag) == "!!str") | select(.value | test("@")) | .key + "=" + .value' "$f" 2>/dev/null || true)
   if [[ -n "$l" ]]; then labels="$labels$(basename "$f"): $l"$'\n'; fi
 done

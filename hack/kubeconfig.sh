@@ -29,7 +29,7 @@ if [[ -z "$mode" ]]; then
 fi
 
 if [[ "$mode" == published ]]; then
-  port=$(docker port "$CLUSTER-lb" 6443/tcp | head -n1 | sed 's/.*://')
+  port=$(docker port "$CLUSTER-lb" 6443/tcp | sed -n '1s/.*://p')
   [[ -n "$port" ]] || { echo "container $CLUSTER-lb publishes no 6443/tcp port" >&2; exit 1; }
   SERVER="https://127.0.0.1:$port" yq -i '.clusters[0].cluster.server = strenv(SERVER)' "$OUT"
   server="https://127.0.0.1:$port"

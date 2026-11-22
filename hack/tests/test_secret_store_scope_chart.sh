@@ -28,7 +28,7 @@ check_consumers() {   # check_consumers <label> <allowed namespaces> <render>...
     case "$what" in
       ClusterExternalSecret/*|PushSecret/*) assert_eq "$what" "an ExternalSecret" "$label: $what reads store platform (not covered by namespace conditions)" ;;
     esac
-    if grep -qx -- "$ns" <<<"$ok"; then   # not printf | grep -q: an early grep exit fails printf (pipefail)
+    if grep -qx -- "$ns" <<<"$ok"; then   # a here-string, not a pipe: an early grep exit fails printf (pipefail)
       assert_eq ok ok "$label: $ns $what allowed"
     else
       assert_eq "$ns not allowed" "$ns allowed" "$label: $what reads store platform from $ns: add it to addons/secret-stores platformStore.namespaces"
@@ -82,7 +82,7 @@ for inst in $(ss_labels | grep -vx standalone); do
     done <<EOF
 $(es_reading dns "${files[@]}")
 EOF
-    assert_eq "$(es_reading default "${files[@]}" | awk '$3 ~ /(^|,)external-dns-/' | head -1)" "" \
+    assert_eq "$(es_reading default "${files[@]}" | awk '$3 ~ /(^|,)external-dns-/' | sed -n 1p)" "" \
       "$inst/$c: no external-dns credential through the tenant store default"
   done
 done
