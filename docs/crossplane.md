@@ -137,7 +137,8 @@ What to know:
   installs the published, digest-pinned package through `addons/crossplane`, never the working tree.
 - CI (`.github/workflows/package-<name>.yaml` -> `app-crossplane-configuration.yaml`) runs the same `crossplane
   project build|push`, then signs and attests both packages. `hack/tests/test_crossplane_packages.sh` checks the layout
-  and CI wiring of every package and builds each one (`XP_PACKAGE_BUILD=0` skips the build).
+  and CI wiring of every package; it also builds each one when a package or its build changed (`task test:changed`
+  and scoped PR CI), in the nightly portability run (`TEST_FULL=1`), or with `XP_PACKAGE_BUILD=1`.
 
 ## APIs and their status
 

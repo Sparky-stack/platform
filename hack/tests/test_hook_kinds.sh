@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # No real config as an Argo CD hook (#221). Argo CD never diffs hooks: a changed hook alone never makes the app
 # OutOfSync (and self-heal never repairs one), so ExternalSecret thunder-bootstrap kept its old spec after #218.
-# Contract, for every addon render (hack/test.sh RENDERED_DIR, else standalone renders of every addon made here):
+# Contract, for every addon render (RENDERED_DIR: hack/test.sh's, or hack/render.sh's when run on its own):
 #   1. a non-Job object that Argo CD runs as a hook (argocd.argoproj.io/hook other than Skip, or a helm.sh/hook other
 #      than crd-install/test*) is listed in hack/tests/hook_allowlist.yaml for its addon, with a reason;
 #   2. a hook ConfigMap/Secret/ExternalSecret has a key <kind>.<name> in a NORMAL ConfigMap labelled
@@ -37,23 +37,13 @@ violations() {
 
 : > "$TMP/seen"; : > "$TMP/rendered"
 n=0
-if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
-  for r in "$RENDERED_DIR"/addon-*.yaml; do
-    [[ -f "$r" ]] || continue
-    a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
-    n=$((n + 1)); echo "$a" >> "$TMP/rendered"
-    assert_eq "$(violations "$a" "$r")" "" "$(basename "$r" .yaml): no unlisted hook, every hook config has a change detector"
-  done
-else
-  echo "  (no RENDERED_DIR: standalone renders of every addon)"
-  for d in addons/*/; do
-    a=$(basename "$d")
-    ns=$(yq ".addons[\"$a\"].namespace // \"$a\"" charts/platform/values.yaml)
-    helm template "$a" "$d" --namespace "$ns" > "$TMP/addon-$a-standalone.yaml" 2>/dev/null || { echo "  (skip $a: no standalone render)"; continue; }
-    n=$((n + 1)); echo "$a" >> "$TMP/rendered"
-    assert_eq "$(violations "$a" "$TMP/addon-$a-standalone.yaml")" "" "addons/$a (standalone): no unlisted hook, every hook config has a change detector"
-  done
-fi
+need_renders
+for r in "$RENDERED_DIR"/addon-*.yaml; do
+  [[ -f "$r" ]] || continue
+  a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
+  n=$((n + 1)); echo "$a" >> "$TMP/rendered"
+  assert_eq "$(violations "$a" "$r")" "" "$(basename "$r" .yaml): no unlisted hook, every hook config has a change detector"
+done
 echo "  checked $n addon renders"
 
 # 3. No stale or reason-less allowlist entries.

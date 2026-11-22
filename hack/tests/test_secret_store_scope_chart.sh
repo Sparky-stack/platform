@@ -9,10 +9,7 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
-  echo "  SKIP: needs the renders from hack/test.sh (RENDERED_DIR)"
-  exit 0
-fi
+need_renders
 cd "$ROOT"
 # shellcheck source=../lib/portable.sh
 source hack/lib/portable.sh
@@ -31,7 +28,7 @@ check_consumers() {   # check_consumers <label> <allowed namespaces> <render>...
     case "$what" in
       ClusterExternalSecret/*|PushSecret/*) assert_eq "$what" "an ExternalSecret" "$label: $what reads store platform (not covered by namespace conditions)" ;;
     esac
-    if printf '%s\n' "$ok" | grep -qx -- "$ns"; then
+    if grep -qx -- "$ns" <<<"$ok"; then   # not printf | grep -q: an early grep exit fails printf (pipefail)
       assert_eq ok ok "$label: $ns $what allowed"
     else
       assert_eq "$ns not allowed" "$ns allowed" "$label: $what reads store platform from $ns: add it to addons/secret-stores platformStore.namespaces"

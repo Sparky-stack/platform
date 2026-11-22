@@ -11,6 +11,12 @@ trap 'rm -rf "$TMP"' EXIT
 PASS=0
 FAIL=0
 
+# Chart dependencies (hack/deps.sh: a no-op when present), unless hack/test.sh built them for this run (DEPS_READY).
+if [[ -z "${DEPS_READY:-}" ]]; then
+  (cd "$ROOT" && ./hack/deps.sh >&2)
+  export DEPS_READY=1
+fi
+
 assert_eq() {
   local actual="$1" expected="$2" msg="$3"
   if [[ "$actual" == "$expected" ]]; then
@@ -118,6 +124,17 @@ kc_valid() {
 }
 
 # --- renders: reuse hack/test.sh's (RENDERED_DIR) when present ------------------------------------------------------
+
+# need_renders: RENDERED_DIR = the renders of this hack/test.sh run (only the changed charts' in a scoped run); a suite
+# run on its own renders every chart first, with the same hack/render.sh, so it never reads an old render or skips.
+need_renders() {
+  if [[ -z "${RENDERED_DIR:-}" || ! -d "$RENDERED_DIR" ]]; then
+    echo "  (no RENDERED_DIR from hack/test.sh: rendering every chart, hack/render.sh)"
+    RENDERED_DIR=$(mktemp -d "$TMP/renders.XXXXXX")
+    bash "$ROOT/hack/render.sh" "$RENDERED_DIR" > "$RENDERED_DIR.log" 2>&1 || { cat "$RENDERED_DIR.log" >&2; exit 1; }
+  fi
+  export RENDERED_DIR
+}
 
 # yq expression, true for an object Argo CD runs as a hook: argocd.argoproj.io/hook other than Skip, or a helm.sh/hook
 # other than crd-install/test*.

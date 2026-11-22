@@ -10,10 +10,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 # scoped-ci full-if: ^(platformStore|workflowStore):|^kind: (ClusterWorkflowPlane|ClusterWorkflow|Workflow) *$|only store dns
-if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
-  echo "  SKIP: needs the renders from hack/test.sh (RENDERED_DIR)"
-  exit 0
-fi
+need_renders
 cd "$ROOT"
 # shellcheck source=../lib/portable.sh
 source hack/lib/portable.sh

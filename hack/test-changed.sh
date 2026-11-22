@@ -20,6 +20,10 @@ fi
 
 units=$(printf '%s\n' "$changed" | bash hack/changed-units.sh)
 echo "==> changed since $BASE: ${units//$'\n'/ }"
+# `crossplane project build` of every package (hack/tests/test_crossplane_packages.sh, minutes) only when a package or
+# its build changed (hack/changed-units.sh --package-build).
+XP_PACKAGE_BUILD=${XP_PACKAGE_BUILD:-$(printf '%s\n' "$changed" | bash hack/changed-units.sh --package-build)}
+export XP_PACKAGE_BUILD
 if [[ "$units" == full ]]; then
   exec bash hack/test.sh
 fi
@@ -34,14 +38,16 @@ for u in $units; do
 done
 # shellcheck disable=SC2086  # units are space-free paths
 for t in $(bash hack/changed-units.sh --tests $units); do
-  # A test that needs every render (e.g. store allowlist == all consumers) says when a scoped run must go full:
-  # `# scoped-ci full-if: <ERE>`, matched against the changed charts' files. Otherwise the full runs on main cover it.
+  # A test that needs every render (e.g. store allowlist == all consumers) says when a scoped run needs them all:
+  # `# scoped-ci full-if: <ERE>`, matched against the changed charts' files: then every chart renders (RENDER_ALL),
+  # still with only the changed charts' lint/unittest and the related tests. Otherwise the full runs on main cover it.
   full_if=$(sed -n 's/^# scoped-ci full-if: //p' "$t")
   if [[ -n "$full_if" ]]; then
     # shellcheck disable=SC2086  # chart dirs are space-free paths
     if [[ -n "$charts" ]] && grep -rEqs --exclude-dir=charts "$full_if" $charts; then
-      echo "==> $t needs every render and a changed chart matches /$full_if/: full suite"
-      exec bash hack/test.sh
+      echo "==> $t needs every render and a changed chart matches /$full_if/: rendering every chart"
+      export RENDER_ALL=1
+      tests="$tests $t"
     fi
     continue
   fi
@@ -53,7 +59,5 @@ if [[ -n "$charts" ]]; then
   CHARTS="${charts# }" TESTS="${tests# }" exec bash hack/test.sh
 fi
 # No chart changed (packages/, ci/, templates/ only): their own workflows build them; run the related contract tests.
-failed=0
-for t in $tests; do bash "$t" || failed=$((failed + 1)); done
-echo "$failed contract test(s) failed"
-(( failed == 0 ))
+[[ -n "$tests" ]] || exit 0
+TESTS="${tests# }" exec bash hack/test.sh

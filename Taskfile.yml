@@ -126,7 +126,7 @@ tasks:
       - actionlint
 
   test:
-    desc: "Full offline validation: helm template x installations, kubeconform, helm unittest, contract tests"
+    desc: "Full offline validation: render x installations, kubeconform, helm unittest, contract tests in parallel (TEST_FULL=1 adds package builds)"
     cmds:
       - task: tools:plugins
       - '"{{.BASH}}" hack/test.sh'
