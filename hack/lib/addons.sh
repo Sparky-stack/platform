@@ -21,14 +21,22 @@ addon_installation_params() {
   done < <(yq -r ".addons[\"$addon\"].installationParameters // {} | keys | .[]" "$ADDONS_CATALOG" | tr -d '\r')
 }
 
-# addon_label_tpl <string> [<labels file>] -> <string> with the cluster-label goTemplates Argo CD evaluates per cluster
-# resolved against a YAML map of the cluster's labels (missing file / label = empty). The three forms charts/platform
-# renders: {{ index .metadata.labels "K" }}, catalog clusterLabelParameters
-# ({{ $v := index .metadata.labels "K" }}{{ if $v }}{{ $v }}{{ else }}D{{ end }}) and label-selected value files
-# ({{ if index .metadata.labels "K" }}A{{ else }}B{{ end }}).
+# addon_cluster_labels <cluster render> <out file>: the cluster's labels as a YAML map, from the Argo CD cluster
+# secret's template (== the CAPI Cluster's labels; the only copy for provider byo). Empty file when there are none.
+addon_cluster_labels() {
+  yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels | del(.["argocd.argoproj.io/secret-type"])' \
+    "$1" > "$2" 2>/dev/null || : > "$2"
+}
+
+# addon_label <label> [<labels file>] -> the label's value ("" when the file or label is missing).
 addon_label() {
   if [[ -n "${2:-}" && -s "$2" ]]; then K="$1" yq -r '.[strenv(K)] // ""' "$2" | tr -d '\r'; fi
 }
+
+# addon_label_tpl <string> [<labels file>] -> <string> with the cluster-label goTemplates Argo CD evaluates per cluster
+# resolved against the labels file. The three forms charts/platform renders: {{ index .metadata.labels "K" }},
+# catalog clusterLabelParameters ({{ $v := index .metadata.labels "K" }}{{ if $v }}{{ $v }}{{ else }}D{{ end }}) and
+# label-selected value files ({{ if index .metadata.labels "K" }}A{{ else }}B{{ end }}).
 addon_label_tpl() {
   local s=$1 labels=${2:-} v
   local re1='[{][{] [$]v := index [.]metadata[.]labels "([^"]+)" [}][}][{][{] if [$]v [}][}][{][{] [$]v [}][}][{][{] else [}][}]([^{]*)[{][{] end [}][}]'
@@ -104,14 +112,10 @@ addon_values_object() {
 }
 
 # addon_helm_args <addon> <inst dir> <platform render> <role> <name> <provider> <environment> <region> <cni> <server>
-#   [<labels file>] -> `helm template` arguments, one per line, in ApplicationSet precedence, all taken from the addon's ApplicationSet in
-#    the charts/platform render (Argo parity):
-#    valueFiles (valuesFromAddons, chart, role, provider, cni, label-selected files, installationValueFiles, installation overlays) < valuesObject
-#    (charts/platform values + installation.yaml, then cluster.*) < parameters (as rendered; the per-cluster goTemplate
-#    expressions - cluster name label, server parts, fleet list, other cluster labels from <labels file> - resolved
-#    for this cluster; forceString -> --set-string).
-# The release name is addon_release_name. <inst dir> locates the overlay files; the valuesObject file is written next to
-# <platform render> (the caller's temp dir).
+#   [<labels file>] -> `helm template` arguments, one per line, taken from the addon's rendered ApplicationSet, in its
+#   precedence: valueFiles (valuesFromAddons, chart, role, provider, cni, label-selected, installationValueFiles,
+#   installation overlays) < valuesObject, then cluster.* < parameters (per-cluster goTemplates resolved for this
+#   cluster; forceString -> --set-string). The valuesObject file is written next to <platform render>.
 addon_helm_args() {
   local addon=$1 inst_dir=$2 render=$3 role=$4 name=$5 prov=$6 env=$7 region=$8 cni=$9 server=${10} labels=${11:-}
   local dir vf p v fs part fleet vo="$3.values-$1.yaml"
@@ -124,10 +128,7 @@ addon_helm_args() {
   files+=("$dir/values.yaml" "$dir/values/role-$role.yaml" "$dir/values/provider-$prov.yaml" "$dir/values/cni-$cni.yaml")
   while IFS= read -r vf; do
     if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
-  done < <(addon_label_valuefiles "$render" "$addon" "$labels")
-  while IFS= read -r vf; do
-    if [[ -n "$vf" ]]; then files+=("$dir/$vf"); fi
-  done < <(addon_installation_valuefiles "$render" "$addon")
+  done < <(addon_label_valuefiles "$render" "$addon" "$labels"; addon_installation_valuefiles "$render" "$addon")
   files+=("$inst_dir/addons/$addon/values.yaml" "$inst_dir/addons/$addon/env-$env.yaml" "$inst_dir/addons/$addon/cluster-$name.yaml")
   for vf in "${files[@]}"; do
     if [[ -f "$vf" ]]; then printf '%s\n' --values "$vf"; fi   # ignoreMissingValueFiles: true

@@ -71,26 +71,26 @@ if is_true "${RUN_TEST:-true}"; then
   if [[ "${runner}" == "auto" ]]; then
     if cargo nextest --version >/dev/null 2>&1; then runner=nextest; else runner=cargo; fi
   fi
-  targs="${TEST_ARGS:---workspace --all-features --locked}"
+  test_args="${TEST_ARGS:---workspace --all-features --locked}"
   case "${runner}" in
     nextest)
-      log "cargo nextest run ${targs}"
+      log "cargo nextest run ${test_args}"
       # shellcheck disable=SC2086
-      cargo nextest run ${targs} --no-tests=warn
+      cargo nextest run ${test_args} --no-tests=warn
       # nextest does not run doctests; only library targets have them.
       meta="$(cargo metadata --no-deps --format-version 1 --locked)"
       case "${meta}" in
         *'"doctest":true'*)
           log "cargo test --doc"
           # shellcheck disable=SC2086
-          cargo test --doc ${targs}
+          cargo test --doc ${test_args}
           ;;
       esac
       ;;
     cargo)
-      log "cargo test ${targs}"
+      log "cargo test ${test_args}"
       # shellcheck disable=SC2086
-      cargo test ${targs}
+      cargo test ${test_args}
       ;;
     *) die "unknown TEST_RUNNER ${runner}" ;;
   esac

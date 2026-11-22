@@ -1,7 +1,5 @@
-{{- /* The PostgreSQL API (XRD postgresqls.platform.koorikla.io + Composition "postgresql") as a signed Crossplane
-Configuration package, built from packages/postgresql. Pinned tag@digest: bumping packages.configuration is the
-promotion. skipDependencyResolution: the Functions and Providers it needs are declared in templates/packages.yaml,
-pinned by digest and with the PSS-restricted runtime configs; the resolver would install floating tags without them. */ -}}
+{{- /* The PostgreSQL API package (packages/postgresql), pinned tag@digest. skipDependencyResolution: templates/packages.yaml
+pins its Functions and Providers under the restricted runtime; the resolver would install floating tags. */ -}}
 apiVersion: pkg.crossplane.io/v1
 kind: Configuration
 metadata:

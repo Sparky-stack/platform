@@ -26,7 +26,8 @@ require_cmd mix
 cd "${WORKDIR:-.}"
 export MIX_ENV="${MIX_ENV:-test}"
 
-has_dep() {
+# locked DEP - true when DEP is in mix.lock.
+locked() {
   [[ -f mix.lock ]] && grep -q "\"$1\": {" mix.lock
 }
 
@@ -42,7 +43,7 @@ if is_true "${RUN_FORMAT:-true}"; then
 fi
 
 if is_true "${RUN_CREDO:-true}"; then
-  if has_dep credo; then
+  if locked credo; then
     log "mix credo ${CREDO_ARGS:---strict}"
     # shellcheck disable=SC2086
     mix credo ${CREDO_ARGS:---strict}
@@ -58,7 +59,7 @@ if is_true "${RUN_TEST:-true}"; then
 fi
 
 if is_true "${RUN_SOBELOW:-true}"; then
-  if has_dep sobelow; then
+  if locked sobelow; then
     log "mix sobelow ${SOBELOW_ARGS:---exit low --skip}"
     # shellcheck disable=SC2086
     mix sobelow ${SOBELOW_ARGS:---exit low --skip}
@@ -71,7 +72,7 @@ fi
 if is_true "${RUN_AUDIT:-true}"; then
   log "mix hex.audit (retired packages)"
   mix hex.audit
-  if has_dep mix_audit; then
+  if locked mix_audit; then
     log "mix deps.audit (security advisories)"
     mix deps.audit
   else

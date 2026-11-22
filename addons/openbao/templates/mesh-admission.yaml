@@ -1,21 +1,11 @@
 {{- /*
-ValidatingAdmissionPolicies on mgmt for the remote-secret reader certs (docs/multicluster.md "Admission guards"): they
-admit exactly what charts/cluster renders for the <name>-client-ca Issuers (charts/cluster mesh-remote-secret.yaml) and
-nothing else.
-Why: cert-manager's internal approver approves every CertificateRequest and a CA issuer signs whatever it is asked.
-These Issuers wrap a workload cluster's CAPI k3s client CA, whose API server accepts anything they sign for client auth
-(O=system:masters = cluster-admin, system:node:*, sub-CAs).
-  platform-mesh-reader-certificates    Certificates for *-client-ca: CN=<readerUser>, no subject/SANs, not a CA,
-                                       client auth + digital signature only, duration <= readerMaxDuration, in fleet
-  platform-mesh-certificaterequests    CertificateRequests for *-client-ca: created by cert-manager's controller only
-                                       (so they come from an admitted Certificate; CEL cannot parse the CSR itself),
-                                       same isCA/usages/duration limits
-  platform-mesh-issuers                a <name>-cca Secret may back only Issuer fleet/<name>-client-ca (else a
-                                       self-made issuer would bypass the checks above)
-  platform-openbao-fleet-reads         in this namespace, store mgmt-fleet may only be used to find the members' public
-                                       OpenBao inputs by label (fleet also holds kubeconfigs and k3s client CA keys)
-The mesh CA itself is not a cert-manager issuer on mgmt: it lives in OpenBao (keys never exported) and is reachable only
-through per-member JWT auth and per-member policies (files/mesh-reconcile.sh).
+ValidatingAdmissionPolicies for the remote-secret reader certs (docs/multicluster.md "Admission guards"): the
+<name>-client-ca Issuers wrap a workload cluster's k3s client CA, and cert-manager approves and signs anything (e.g.
+O=system:masters). Admit exactly what charts/cluster mesh-remote-secret.yaml renders:
+  platform-mesh-reader-certificates    Certificates: CN=<readerUser>, client auth only, not a CA, <= readerMaxDuration
+  platform-mesh-certificaterequests    CertificateRequests: created by cert-manager's controller only, same limits
+  platform-mesh-issuers                a <name>-cca Secret backs only Issuer fleet/<name>-client-ca
+  platform-openbao-fleet-reads         store mgmt-fleet only finds the members' public OpenBao inputs by label
 */ -}}
 {{- $a := .Values.admission }}
 {{- if $a.enabled }}

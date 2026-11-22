@@ -41,6 +41,21 @@ assert_match() {
   fi
 }
 
+# assert_matches <text> <<'CASES': one "<message> | <regex>" per line (split at the first " | "); each regex must
+# match <text>. Blank lines and lines starting with # are skipped.
+assert_matches() {
+  local text=$1 line
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    assert_match "$text" "${line#* | }" "${line%% | *}"
+  done
+}
+
+# capture <cmd> [args...]: run the command, set OUT (stdout+stderr) and RC without tripping set -e.
+capture() {
+  if OUT=$("$@" 2>&1); then RC=0; else RC=$?; fi
+}
+
 finish() {
   echo "  $PASS passed, $FAIL failed"
   (( FAIL == 0 ))
@@ -103,6 +118,24 @@ kc_valid() {
 }
 
 # --- renders: reuse hack/test.sh's (RENDERED_DIR) when present ------------------------------------------------------
+
+# yq expression, true for an object Argo CD runs as a hook: argocd.argoproj.io/hook other than Skip, or a helm.sh/hook
+# other than crd-install/test*.
+# shellcheck disable=SC2016  # yq variables, not shell
+ARGO_HOOK_YQ='(.metadata.annotations // {}) as $a | ($a["argocd.argoproj.io/hook"] // "") as $ah | ($a["helm.sh/hook"] // "") as $hh
+  | (($ah != "" and $ah != "Skip") or ($ah == "" and $hh != "" and $hh != "crd-install" and ($hh | test("^test") | not)))'
+
+# addon_of_render <render file>: the longest addon name the file name addon-<addon>-... starts with (kyverno vs
+# kyverno-policies); empty when none.
+addon_of_render() {
+  local base best="" addon
+  base=$(basename "$1" .yaml); base=${base#addon-}
+  for addon in "$ROOT"/addons/*/; do
+    addon=$(basename "$addon")
+    [[ "$base" == "$addon"-* && ${#addon} -gt ${#best} ]] && best=$addon
+  done
+  echo "$best"
+}
 
 # render_platform <inst> <out>: reuse RENDERED_DIR/platform-<inst>.yaml if present, else helm template charts/platform.
 render_platform() {

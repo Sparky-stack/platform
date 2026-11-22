@@ -11,7 +11,7 @@ openchoreo-platform: OpenChoreo resolves deny per entitlement value, so a deny o
 {{- $p := include "tenant.project" . }}
 {{- $ns := .Values.openchoreo.orgNamespace }}
 {{- $gated := list }}
-{{- range .Values.promotion.gatedEnvironments | default list }}{{ $gated = append $gated (printf "%s/%s" $ns .) }}{{ end }}
+{{- range .Values.promotion.gatedEnvironments }}{{ $gated = append $gated (printf "%s/%s" $ns .) }}{{ end }}
 {{- range $group := include "tenant.developerGroups" . | fromYamlArray }}
 ---
 apiVersion: openchoreo.dev/v1alpha1

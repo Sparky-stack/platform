@@ -26,9 +26,8 @@ assert_eq "$(python3 "$G" manifest --org o --public-url https://host.example:844
   "https://host.example:8443/ghapp/callback" "redirect follows --public-url"
 
 # Negative: clear-text redirect off loopback is refused.
-if python3 "$G" manifest --org o --public-url http://host.example >/dev/null 2>&1; then
-  FAIL=$((FAIL + 1)); echo "  FAIL: http public URL off loopback accepted" >&2
-else PASS=$((PASS + 1)); fi
+capture python3 "$G" manifest --org o --public-url http://host.example
+assert_eq "$([[ $RC -ne 0 ]] && echo refused)" refused "http public URL off loopback refused"
 
 # Callback: wrong state -> 400 before any GitHub call; page served at / and /ghapp/.
 port_free() { ! (exec 3<>"/dev/tcp/127.0.0.1/8765") 2>/dev/null; }

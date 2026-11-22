@@ -1,16 +1,9 @@
 {{- /*
-BuildKit registry mirrors for the build runs (#38). ConfigMap buildkitd-config in the run namespace workflows-<org ns>
-(templates/run-namespace.yaml): a buildkitd.toml that sends each upstream of
-installation.yaml registry.proxyCache to its Harbor proxy-cache project first, the same projects node containerd pulls
-through (charts/cluster capi-registries.yaml). BuildKit maps `<upstream>/<repo>` to `<registry.host>/<project>/<repo>`
-(mirror with a path), so Dockerfile FROM lines keep their upstream names and digests; when Harbor fails it falls back to
-the upstream registry (its own host entry after the mirrors). The build step of koorikla-build mounts this ConfigMap
-(optional: no mirrors, direct pulls) and adds the Harbor CA entry when it is missing; its docker config (the run's
-registry credentials, robot$builder: pull on every proxy-cache project) authenticates the mirror pulls.
-Only for registry.type harbor: external registries have no proxy cache. Host/upstream/project names: templates/validate.yaml.
+BuildKit registry mirrors: each registry.proxyCache upstream pulls through its Harbor proxy-cache project first, then
+falls back to upstream. Only for registry.type harbor (docs/build-plane.md "Build pulls: BuildKit mirrors").
 */ -}}
 {{- $m := .Values.buildkitMirrors }}
-{{- $reg := .Values.registry | default dict }}
+{{- $reg := .Values.registry }}
 {{- if and $m.enabled (eq (toString $reg.type) "harbor") $reg.proxyCache }}
 {{- $host := $reg.host }}
 apiVersion: v1

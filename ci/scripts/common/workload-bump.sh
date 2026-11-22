@@ -49,15 +49,15 @@ trap 'rm -f "${tmp}"' EXIT
 # to the first `image:` key anywhere). commit: the first `commit:` key.
 rc=0
 awk -v img="${image}" -v commit="${commit}" '
-  function ind(s) { match(s, /^[ ]*/); return RLENGTH }
+  function indent(s) { match(s, /^[ ]*/); return RLENGTH }
   { lines[NR] = $0 }
   END {
-    target = 0; in_c = 0
+    target = 0; in_container = 0
     for (i = 1; i <= NR; i++) {
       l = lines[i]
-      if (l ~ /^[ ]*container:[ ]*(#.*)?$/) { in_c = 1; c_ind = ind(l); continue }
-      if (!in_c || l ~ /^[ ]*(#.*)?$/) continue
-      if (ind(l) <= c_ind) { in_c = 0; continue }
+      if (l ~ /^[ ]*container:[ ]*(#.*)?$/) { in_container = 1; container_indent = indent(l); continue }
+      if (!in_container || l ~ /^[ ]*(#.*)?$/) continue
+      if (indent(l) <= container_indent) { in_container = 0; continue }
       if (l ~ /^[ ]*image:/) { target = i; break }
     }
     if (!target) for (i = 1; i <= NR; i++) if (lines[i] ~ /^[ ]*image:/) { target = i; break }
