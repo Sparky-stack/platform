@@ -96,9 +96,8 @@ rules:
     resources: {{ .resources | toJson }}
     verbs: [get, list, watch]
   {{- end }}
-{{- /* MySQL (#256, only with mysql.enabled): MOCO objects only through the platform.koorikla.io MySQL XR, and production
-MySQL is highly available (the MySQL API has no backup field yet: MOCO BackupPolicy jobs cannot meet Pod Security
-restricted, upstream cybozu-go/moco#949). Same exemptions as PostgreSQL. */ -}}
+{{- /* MySQL, with mysql.enabled: same rules minus backup (MOCO BackupPolicy jobs cannot meet Pod Security restricted,
+cybozu-go/moco#949). */ -}}
 {{- if eq (toString .Values.mysql.enabled) "true" }}
 {{- $myRaw := list (dict "apiGroups" (list "moco.cybozu.com") "resources" (list "mysqlclusters" "backuppolicies")) }}
 {{- $myXr := dict "apiGroups" (list "platform.koorikla.io") "resources" (list "mysqls") }}

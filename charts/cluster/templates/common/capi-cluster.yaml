@@ -10,7 +10,7 @@ metadata:
   labels:
     {{- include "capi.labels" . | nindent 4 }}
   annotations:
-    {{- include "capi.annotations" . | nindent 4 }}
+    platform.koorikla.io/addons-revision: {{ .Values.addonsRevision | default "HEAD" | quote }}
 spec:
   {{- if not $gke }}
   clusterNetwork:

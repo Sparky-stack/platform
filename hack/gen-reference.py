@@ -81,14 +81,27 @@ def type_of(p):
     return t or "any"
 
 
+def first_key(p, keys):
+    """Value of the first of keys present in p, else None."""
+    return next((p[k] for k in keys if k in p), None)
+
+
+def range_unit(p):
+    if "minimum" in p or "maximum" in p:
+        return ""
+    return " items" if p.get("type") == "array" else " chars"
+
+
 def limits(p):
     out = []
     if "enum" in p:
         out.append("One of " + ", ".join(code(e) for e in p["enum"]) + ".")
-    lo, hi = p.get("minimum", p.get("minLength", p.get("minItems"))), p.get("maximum", p.get("maxLength", p.get("maxItems")))
+    lo = first_key(p, ("minimum", "minLength", "minItems"))
+    hi = first_key(p, ("maximum", "maxLength", "maxItems"))
     if lo is not None or hi is not None:
-        unit = "" if "minimum" in p or "maximum" in p else (" items" if p.get("type") == "array" else " chars")
-        out.append(f"Range {'' if lo is None else lo}..{'' if hi is None else hi}{unit}.")
+        lo_text = "" if lo is None else lo
+        hi_text = "" if hi is None else hi
+        out.append(f"Range {lo_text}..{hi_text}{range_unit(p)}.")
     if "pattern" in p:
         out.append("Pattern " + code(p["pattern"]) + ".")
     if p.get("x-kubernetes-validations"):
@@ -122,24 +135,44 @@ def page(title, src, intro, sections):
     return f"# {title}\n\n{HEADER.format(src=src)}\n{intro}\n\n{toc}\n\n{body}"
 
 
+def list_dir(rel):
+    """Sorted entries of the repo directory rel ([] when it does not exist)."""
+    path = os.path.join(ROOT, rel)
+    return sorted(os.listdir(path)) if os.path.isdir(path) else []
+
+
+def package_status(readme):
+    """The "**Status: ...**" of a package README, else None."""
+    if not os.path.isfile(os.path.join(ROOT, readme)):
+        return None
+    m = re.search(r"\*\*Status: ([^*]+)\*\*", read(readme))
+    return m.group(1).strip() if m else None
+
+
+def xrd_version_section(spec, version, rel, readme, status):
+    schema = version.get("schema", {}).get("openAPIV3Schema", {}).get("properties", {})
+    kind = spec["names"]["kind"]
+    status_note = f" (status: {status})" if status else ""
+    text = (f"`apiVersion: {spec['group']}/{version['name']}`, `kind: {kind}`, scope "
+            f"{spec.get('scope', 'Namespaced')}. Source: [{rel}](../../{rel}), package "
+            f"[README](../../{readme}){status_note}.\n\n"
+            "### spec\n\n" + table(schema.get("spec")) + "\n### status\n\n" + table(schema.get("status")))
+    return (f"{kind} {version['name']}", text)
+
+
 def crossplane_page():
     sections = []
-    for pkg in sorted(os.listdir(os.path.join(ROOT, "packages"))):
+    for pkg in list_dir("packages"):
         apis = f"packages/{pkg}/apis"  # "/" not os.path.join: the path is printed into the page (Windows: "\\")
-        for api in sorted(os.listdir(os.path.join(ROOT, apis))) if os.path.isdir(os.path.join(ROOT, apis)) else []:
+        readme = f"packages/{pkg}/README.md"
+        for api in list_dir(apis):
             rel = f"{apis}/{api}/definition.yaml"
             if not os.path.isfile(os.path.join(ROOT, rel)):
                 continue
             for xrd in yaml_docs(read(rel)):
-                spec, readme = xrd["spec"], f"packages/{pkg}/README.md"
-                status = re.search(r"\*\*Status: ([^*]+)\*\*", read(readme)) if os.path.isfile(os.path.join(ROOT, readme)) else None
-                for v in spec.get("versions", []):
-                    schema = v.get("schema", {}).get("openAPIV3Schema", {}).get("properties", {})
-                    text = (f"`apiVersion: {spec['group']}/{v['name']}`, `kind: {spec['names']['kind']}`, scope "
-                            f"{spec.get('scope', 'Namespaced')}. Source: [{rel}](../../{rel}), package "
-                            f"[README](../../{readme})" + (f" (status: {status.group(1).strip()})" if status else "") +
-                            ".\n\n### spec\n\n" + table(schema.get("spec")) + "\n### status\n\n" + table(schema.get("status")))
-                    sections.append((f"{spec['names']['kind']} {v['name']}", text))
+                status = package_status(readme)
+                for version in xrd["spec"].get("versions", []):
+                    sections.append(xrd_version_section(xrd["spec"], version, rel, readme, status))
     return page("Crossplane platform APIs", "packages/*/apis/*/definition.yaml",
                 "Every platform API XRD (developer-facing contract: one namespaced XR, the cluster picks the backend). "
                 "How they are built and installed: [crossplane.md](../crossplane.md); usage: "
@@ -155,9 +188,9 @@ def openchoreo_objects():
             # The last Source line names the file (templates that embed files/*.yaml add their own).
             src = re.findall(r"(?m)^# Source: openchoreo-platform/(\S+)", chunk)
             objs.append((f"{CHART}/{src[-1]}" if src else CHART, yaml_docs(chunk)[0], True))
-    for pkg in sorted(os.listdir(os.path.join(ROOT, "packages"))):
+    for pkg in list_dir("packages"):
         d = f"packages/{pkg}/openchoreo"
-        for f in sorted(os.listdir(os.path.join(ROOT, d))) if os.path.isdir(os.path.join(ROOT, d)) else []:
+        for f in list_dir(d):
             objs += [(f"{d}/{f}", o, False) for o in yaml_docs(read(f"{d}/{f}"))]
     return objs
 
@@ -181,10 +214,16 @@ def openchoreo_section(src, o, deployed):
         if key in spec:
             text += f"\n### {key}\n\n" + table(spec[key].get("openAPIV3Schema"))
     if spec.get("outputs"):
-        text += "\n### outputs\n\n| Output | Delivered as |\n|---|---|\n" + "".join(
-            f"| `{x['name']}` | {'secretKeyRef ' + code(x['secretKeyRef'].get('key', '')) if 'secretKeyRef' in x else 'value'} |\n"
-            for x in spec["outputs"])
+        text += "\n### outputs\n\n| Output | Delivered as |\n|---|---|\n"
+        for x in spec["outputs"]:
+            text += f"| `{x['name']}` | {delivered_as(x)} |\n"
     return text
+
+
+def delivered_as(output):
+    if "secretKeyRef" in output:
+        return "secretKeyRef " + code(output["secretKeyRef"].get("key", ""))
+    return "value"
 
 
 def generate():

@@ -1,6 +1,5 @@
-{{- /* Functions and the backend's providers, pinned by digest, under DeploymentRuntimeConfigs that meet Pod Security
-restricted. Crossplane's default runtime has runAsNonRoot and a read-only root filesystem but neither a seccomp profile
-nor a capability drop, so a package pod without these configs would be rejected in crossplane-system. */ -}}
+{{- /* Functions and the backend's providers, pinned by digest. Crossplane's default package runtime lacks seccomp and a
+capability drop, so every package runs under a DeploymentRuntimeConfig that meets Pod Security restricted. */ -}}
 {{- $rc := .Values.packages.runtimeConfig }}
 {{- $backend := include "crossplane.pgBackend" . }}
 {{- $cloud := include "crossplane.pgCloud" . }}
@@ -63,8 +62,7 @@ spec:
     name: {{ $rc.name }}
 {{- end }}
 {{- if $cloud }}
-{{- /* One ServiceAccount name for every member of the family, so the cloud identity binding (IRSA trust, Pod Identity
-association, GKE / Entra federation) targets one stable subject: crossplane-system/provider-<cloud>. */}}
+{{- /* One ServiceAccount for the whole family: the cloud identity binding targets crossplane-system/provider-<cloud>. */}}
 {{- $sa := dict "name" (printf "provider-%s" $cloud) }}
 {{- $labels := dict }}
 {{- if eq $cloud "aws" }}

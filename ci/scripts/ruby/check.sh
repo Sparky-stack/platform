@@ -20,12 +20,13 @@ source "${SCRIPT_DIR}/../common/lib.sh"
 require_cmd ruby bundle
 cd "${WORKDIR:-.}"
 
-in_lock() {
+# locked GEM - true when GEM is in Gemfile.lock.
+locked() {
   [[ -f Gemfile.lock ]] && grep -Eq "^    $1 \(" Gemfile.lock
 }
 
 if is_true "${RUN_RUBOCOP:-true}"; then
-  if in_lock rubocop; then
+  if locked rubocop; then
     log "rubocop"
     bundle exec rubocop --format progress
   else
@@ -35,9 +36,9 @@ fi
 
 cmd="${TEST_COMMAND:-auto}"
 if [[ "${cmd}" == "auto" ]]; then
-  if [[ -d spec ]] && in_lock rspec-core; then
+  if [[ -d spec ]] && locked rspec-core; then
     cmd="bundle exec rspec"
-  elif [[ -x bin/rails ]] && in_lock rails; then
+  elif [[ -x bin/rails ]] && locked rails; then
     cmd="bin/rails test"
   elif [[ -f Rakefile ]]; then
     cmd="bundle exec rake test"
@@ -53,17 +54,18 @@ fi
 
 brakeman="${RUN_BRAKEMAN:-auto}"
 if [[ "${brakeman}" == "auto" ]]; then
-  if in_lock rails || in_lock railties; then brakeman=true; else brakeman=false; fi
+  if locked rails || locked railties; then brakeman=true; else brakeman=false; fi
 fi
 if is_true "${brakeman}"; then
-  log "brakeman ${BRAKEMAN_ARGS:---no-pager --quiet}"
-  if in_lock brakeman; then
+  brakeman_args="${BRAKEMAN_ARGS:---no-pager --quiet}"
+  log "brakeman ${brakeman_args}"
+  if locked brakeman; then
     # shellcheck disable=SC2086
-    bundle exec brakeman ${BRAKEMAN_ARGS:---no-pager --quiet}
+    bundle exec brakeman ${brakeman_args}
   else
     gem install --no-document brakeman
     # shellcheck disable=SC2086
-    brakeman ${BRAKEMAN_ARGS:---no-pager --quiet}
+    brakeman ${brakeman_args}
   fi
 else
   log "not a Rails app; skipping brakeman"
@@ -72,7 +74,7 @@ fi
 
 if is_true "${RUN_AUDIT:-true}"; then
   log "bundler-audit check --update"
-  if in_lock bundler-audit; then
+  if locked bundler-audit; then
     bundle exec bundle-audit check --update
   else
     gem install --no-document bundler-audit

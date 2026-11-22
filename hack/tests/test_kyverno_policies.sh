@@ -411,9 +411,11 @@ assert_eq "$(kc_valid "$TMP/pv-cnp.yaml")" yes "previews (cilium): the generated
 
 # openbao preview descriptors: exactly the preview binding in the org namespace, tenant = its project (not a label)
 out=$(cat "$TMP/ob-previews.out")
-assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "openbao previews: only the pr-<n> preview binding in the org namespace"
-assert_match "$out" 'name: demo-openbao-tenant-pr-33-hello-world' "openbao previews: descriptor <project>-openbao-tenant-<environment>"
-assert_match "$out" 'namespace: openbao-tenants' "openbao previews: descriptor in the inputs namespace"
+assert_matches "$out" <<'CASES'
+openbao previews: only the pr-<n> preview binding in the org namespace | pass: 1, fail: 0, warn: 0, error: 0
+openbao previews: descriptor <project>-openbao-tenant-<environment> | name: demo-openbao-tenant-pr-33-hello-world
+openbao previews: descriptor in the inputs namespace | namespace: openbao-tenants
+CASES
 assert_match "$out" "tenant: $(printf demo | base64)" "openbao previews: tenant = spec.owner.projectName (demo), never the tenant label"
 assert_match "$out" "environment: $(printf pr-33-hello-world | base64)" "openbao previews: environment = spec.environment"
 assert_match "$out" 'openbao.platform.koorikla.io/tenant: "true"' "openbao previews: descriptor label (found by tenant-clients)"

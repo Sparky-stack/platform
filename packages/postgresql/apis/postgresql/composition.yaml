@@ -1,15 +1,6 @@
-# The one Composition of the PostgreSQL API, the same on every cluster (pipeline mode):
-#   1. function-environment-configs loads the cluster's facts, EnvironmentConfig platform-postgresql (written by the
-#      addons/crossplane chart; required), into the pipeline context.
-#   2. compose-postgresql, the Project's embedded function (functions/compose-postgresql/: function-go-templating with
-#      the templates baked in, one <backend>-<object>.yaml.gotmpl per composed object, like a Helm chart's templates/). Only the
-#      files of $facts.backend (cnpg | aws-rds | gcp-cloudsql | azure-flexible) render; an unknown or missing backend
-#      fails the render with a fatal result (00-prelude.yaml.gotmpl).
-#   3. function-auto-ready derives the XR's readiness.
-# The templates read only $xr (developer input) and $facts (cluster facts, no developer input).
-# functionRef koorikla-platform-postgresqlcompose-postgresql: the Function name Crossplane derives from the embedded
-# function's package ghcr.io/koorikla/platform/postgresql_compose-postgresql (`crossplane function generate` wrote it;
-# addons/crossplane installs the Function under the same name).
+# The one Composition of the postgresql API (docs/crossplane.md): environment (EnvironmentConfig platform-postgresql facts) ->
+# compose-postgresql (embedded go-templating, functions/compose-postgresql/, one file per object) -> ready.
+# Backends: cnpg | aws-rds | gcp-cloudsql | azure-flexible.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:

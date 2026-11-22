@@ -120,10 +120,12 @@ cat > "$TMP/bad.jsonl" <<'EOF'
 {"apiVersion":"openchoreo.dev/v1alpha1","kind":"ClusterResourceType","metadata":{"name":"rawpg","annotations":{"platform.koorikla.io/requires-addons":"cert-manager, nosuch"}},"spec":{"resources":[{"id":"c","template":{"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster"}}]}}
 EOF
 out=$(check "$TMP/bad.jsonl" "$TMP/dp.jsonl")
-assert_match "$out" 'VIOLATION: ClusterTrait unchecked requires keda but no preRenderValidation checks' "a trait without its annotation check is reported"
-assert_match "$out" 'VIOLATION: ClusterResourceType rawpg renders raw Cluster \(postgresql.cnpg.io/v1\)' "a raw CNPG Cluster is reported"
-assert_match "$out" 'VIOLATION: ClusterResourceType rawpg requires addon cert-manager, which is on by default' "a default-on requirement is reported"
-assert_match "$out" 'VIOLATION: ClusterResourceType rawpg requires addon nosuch, which is not in the catalog' "an unknown addon is reported"
+assert_matches "$out" <<'CASES'
+a trait without its annotation check is reported | VIOLATION: ClusterTrait unchecked requires keda but no preRenderValidation checks
+a raw CNPG Cluster is reported | VIOLATION: ClusterResourceType rawpg renders raw Cluster \(postgresql.cnpg.io/v1\)
+a default-on requirement is reported | VIOLATION: ClusterResourceType rawpg requires addon cert-manager, which is on by default
+an unknown addon is reported | VIOLATION: ClusterResourceType rawpg requires addon nosuch, which is not in the catalog
+CASES
 assert_match "$out" 'VIOLATION: ClusterResourceType rawpg renders Cluster \(postgresql.cnpg.io/v1\) but the data-plane agent' \
   "a kind the agent may not apply is reported"
 

@@ -1,19 +1,8 @@
 {{- /*
-Data-plane capabilities of OpenChoreo resource types (mgmt, values/role-mgmt.yaml; #70, docs/data-services.md).
-
-A (Cluster)ResourceType that needs an operator on the data plane names the addons in its annotation
-platform.koorikla.io/requires-addons (comma-separated, e.g. `crossplane` on ClusterResourceType postgresql of addon
-openchoreo-platform). The ClusterDataPlane (or DataPlane) of every environment carries the fleet file's opt-ins as
-annotations addons.platform.koorikla.io/<addon>: "true" (charts/cluster). This policy denies a ResourceReleaseBinding
-(create, or a spec change) whose Resource's type requires an addon the environment's data plane does not run, so
-binding a database to an environment without Crossplane fails at git sync with a message instead of as an apply error
-on the data plane ("no matches for kind PostgreSQL").
-
-Why admission and not OpenChoreo: 1.3.3 gives ResourceTypes neither validations nor dataplane.annotations (traits get
-both: keda-scaler checks the same annotation in a preRenderValidation). No cluster names anywhere: the requirement lives
-on the type, the capability on the data plane, both declarative.
-Bindings whose Resource does not exist (yet) are denied too (nothing to check against); Argo CD retries the sync, and
-an app repo orders them with sync waves (docs/data-services.md).
+Data-plane capabilities of resource types (mgmt; docs/data-services.md, #70). Denies a ResourceReleaseBinding whose
+(Cluster)ResourceType names, in platform.koorikla.io/requires-addons, an addon the environment's data plane does not
+announce (annotation addons.platform.koorikla.io/<addon>: "true", charts/cluster). OpenChoreo 1.3.3 has no
+ResourceType validations, so this fails at git sync instead of as an apply error on the data plane.
 */ -}}
 {{- if .Values.dataPlaneCapabilities.enabled }}
 apiVersion: policies.kyverno.io/v1
