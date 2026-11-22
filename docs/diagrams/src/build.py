@@ -47,18 +47,18 @@ ARCH_STEPS = (
     "Argo CD turns each fleet file into a cluster for Cluster API to build",
     "Argo CD hands each app's release to OpenChoreo",
     "Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE",
-    "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
+    "Argo CD installs the addons and the cluster-agent on every cluster whose labels match (Crossplane and the "
+    "operators only where a cluster opts in)",
     "The cluster-agent dials out to OpenChoreo and pulls the app releases",
     "The agent submits the apps to the cluster",
     "Kyverno, one of the addons, admits only apps with signed images and safe settings before they start",
-    "Apps claim a database through an OpenChoreo resource binding; the claim goes to Crossplane on the same cluster",
-    "Crossplane composes the claim into objects for an in-cluster operator where there is no managed database: "
-    "CloudNativePG for PostgreSQL, MOCO for MySQL",
-    "Crossplane's cloud providers create it outside the cluster instead on cloud installations: RDS or Aurora, "
-    "Cloud SQL or Azure Flexible Server",
+    "The agent applies each app's resource claims (e.g. a database) for Crossplane on the same cluster",
+    "Crossplane composes each claim for the cluster's backend: in-cluster for an operator (CloudNativePG for "
+    "PostgreSQL, MOCO for MySQL), or in the cloud, where its providers call the cloud APIs (RDS or Aurora, Cloud SQL, "
+    "Azure Flexible Server)",
 )
-ARCH_NOTE = ("Steps 10 and 11 are alternatives: each cluster's facts pick one backend. The providers sign in with the "
-             "cluster's workload identity; per-app cloud identities (IAM roles) are not composed yet.")
+ARCH_NOTE = ("The cluster's facts pick one backend per API. The providers sign in with the cluster's workload "
+             "identity; per-app cloud identities (IAM roles) are not composed yet.")
 
 
 def architecture() -> Diagram:
@@ -72,7 +72,7 @@ def architecture() -> Diagram:
     Z2 = Z1b + 64
     CH = Z1b + 22                               # channel between the clusters: badges 4, 5, 6
     R3 = Z2 + 48
-    R4 = R3 + PITCH                             # second workload row: Crossplane and the operators it feeds
+    R4 = R3 + PITCH                             # second workload row: the operators and Crossplane
     Z2b = R4 + H + 24
     R5 = Z2b + 56                               # outside the clusters: the cloud APIs
     d.box(c[0], 108, w, 52, "external", "Git", ["platform + app repos"])
@@ -84,12 +84,11 @@ def architecture() -> Diagram:
     # the first column of the workload zone stays empty: step 4 points at the cluster (its label), not at a box
     d.zone(28, Z2, 904, Z2b - Z2, "workload clusters", "workload")
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
-    d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
-    d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
-    d.box(c[1], R4, w, H, "workload", "Operators", ["CloudNativePG", "and MOCO"],
-          status="optin")
-    d.box(c[2], R4, w, H, "workload", "Crossplane", ["turns app claims", "into resources"], status="optin")
-    d.box(c[2], R5, w, H, "external", "Cloud APIs", ["RDS, Cloud SQL,", "Azure databases"])
+    d.box(c[2], R3, w, H, "workload", "Apps", ["your teams'", "services"])
+    d.box(c[3], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
+    d.box(c[2], R4, w, H, "workload", "Operators", ["CloudNativePG and", "MOCO addons"], status="optin")
+    d.box(c[3], R4, w, H, "workload", "Crossplane", ["addon: turns claims", "into resources"], status="optin")
+    d.box(c[3], R5, w, H, "external", "Cloud APIs", ["RDS, Cloud SQL,", "Azure databases"])
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, 160)], step=1, badge=(xa, R1 - 32))
     d.arrow([(xa, R1 + H), (xa, R2)], step=2)
@@ -98,21 +97,22 @@ def architecture() -> Diagram:
     d.arrow([(xa, R2 + H), (xa, Z2)], step=4, badge=(xa, CH))          # creates the cluster itself: the zone
     x5 = c[1] + w / 2
     d.arrow([(c[0] + w, R1 + 56), (x5, R1 + 56), (x5, R3)], step=5, badge=(x5, CH))
-    yb = Z2 + 24                                # step 5 also installs the cluster-agent
-    d.arrow([(x5, yb), (c[2] + 40, yb), (c[2] + 40, R3)], step=5, badge=False)
+    yb = Z2 + 24                                # step 5 also installs the cluster-agent (over the Apps box)
+    d.arrow([(x5, yb), (c[3] + 30, yb), (c[3] + 30, R3)], step=5, badge=False)
     d.junction(x5, yb)
-    x6 = c[2] + w / 2 + 40
-    d.arrow([(x6, R3), (x6, R2 + H)], step=6, badge=(x6, CH), label="dials out", label_pos=(x6 + 20, CH + 5),
-            label_anchor="start")
-    d.arrow([(c[2] + w, ymid(R3)), (c[3], ymid(R3))], step=7, badge_at=0.4)
-    yk = R3 + H + 36                            # step 8: Kyverno (an addon) admits the apps
-    d.arrow([(c[1] + w / 2, R3 + H), (c[1] + w / 2, yk), (c[3] + w / 2, yk), (c[3] + w / 2, R3 + H)], step=8,
-            badge=(c[3] + 24, yk))                    # disc 8 right of disc 7: admission follows the submit
-    x9 = c[3] + w - 40                          # step 9: the app's claim goes down and left to Crossplane
-    d.arrow([(x9, R3 + H), (x9, ymid(R4)), (c[2] + w, ymid(R4))], step=9, badge=(x9, R3 + H + 60))
-    d.arrow([(c[2], ymid(R4)), (c[1] + w, ymid(R4))], step=10, badge=(c[2] - 34, ymid(R4)))
-    xc = c[2] + w / 2
-    d.arrow([(xc, R4 + H), (xc, R5)], step=11, badge=(xc, Z2b + 18))
+    x6 = c[3] + w - 56                          # right of step 5's drop, so the two never cross
+    d.arrow([(x6, R3), (x6, R2 + H)], step=6, badge=(x6, CH), label="dials out", label_pos=(x6 - 20, CH + 5),
+            label_anchor="end")
+    y7, y8 = R3 + 18, R3 + H - 18               # 7 enters Apps high from the right, 8 low from the left
+    d.arrow([(c[3], y7), (c[2] + w, y7)], step=7, badge=(c[3] - 34, y7))
+    d.arrow([(c[1] + w, y8), (c[2], y8)], step=8, badge=(c[1] + w + 34, y8))
+    x9 = c[3] + w / 2
+    d.arrow([(x9, R3 + H), (x9, R4)], step=9, badge=(x9, R3 + H + 34))
+    yc, xj = ymid(R4), c[3] - 40                # step 10 forks in the gutter: in-cluster (left) or cloud (down)
+    d.arrow([(c[3], yc), (c[2] + w, yc)], step=10, badge=False, label="in-cluster", label_pos=(xj, yc - 12))
+    d.arrow([(xj, yc), (xj, ymid(R5)), (c[3], ymid(R5))], step=10, badge=(xj, Z2b + 18), label="or cloud",
+            label_pos=(xj - 10, Z2b + 52), label_anchor="end")
+    d.junction(xj, yc)
     d.require("Git", "Argo CD", "Cluster API", "OpenChoreo", "cluster-agent", "Apps", "Addons", "Shared services",
               "Crossplane", "Operators", "Cloud APIs")
     d.key(*ARCH_STEPS)

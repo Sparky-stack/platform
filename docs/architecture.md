@@ -13,7 +13,7 @@ Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagram
 
 ## Topology
 
-<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images; an app's database claim goes to Crossplane on the same workload cluster, which composes it for an in-cluster operator (CloudNativePG, MOCO) or, through its cloud providers, creates it with the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server)" width="100%">
+<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images; the cluster-agent applies each app's resource claims (e.g. a database) for Crossplane on the same workload cluster, which composes each one for an in-cluster operator (CloudNativePG, MOCO) or, through its cloud providers, creates it with the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server)" width="100%">
 
 The numbered steps are listed in [diagrams/README.md](diagrams/README.md#steps). Not drawn:
 External Secrets Operator (credentials, below), cert-manager (agent certificates, [Trust between OpenChoreo
@@ -150,9 +150,10 @@ is one file in the platform repo; deploying and promoting are commits in the app
 
 ### Platform APIs: Crossplane on each workload cluster, next to the app
 Crossplane v2 is a control plane on each workload cluster that opts in, not on mgmt and not a data service itself.
-Apps claim a resource through OpenChoreo (resource type `postgresql`), the cluster-agent applies the claim
-(a namespaced XR) in the app's cell namespace, and the cluster's Composition decides what fulfils it (steps 9-11 of
-the diagram):
+It is an addon like the operators it feeds (`addons: { crossplane: true }`).
+Apps claim a resource through OpenChoreo (resource type `postgresql` or `mysql`), the cluster-agent applies the
+claim (a namespaced XR rendered from the ResourceReleaseBinding) in the app's cell namespace, and the cluster's
+Composition decides what fulfils it (steps 9 and 10 of the diagram, either in-cluster or cloud):
 
 - **In the cluster:** the Composition renders objects for an operator addon, CloudNativePG for PostgreSQL or MOCO for
   MySQL, and the operator runs the database next to the app. No Crossplane provider is involved (local docker,
