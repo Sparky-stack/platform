@@ -10,9 +10,9 @@ source "$ROOT/hack/lib/portable.sh"
 B="$ROOT/docs/diagrams/src/build.py"
 
 # 1. committed SVGs are up to date and clean
-out=$(py "$B" --check 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "build.py --check: committed SVGs up to date, 0 issues ($out)"
-n=$(grep -c 'issues: 0' <<<"$out" || true)
+capture py "$B" --check
+assert_eq "$RC" 0 "build.py --check: committed SVGs up to date, 0 issues ($OUT)"
+n=$(grep -c 'issues: 0' <<<"$OUT" || true)
 want=$(find "$ROOT/docs/diagrams" -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')   # every committed SVG is generated
 assert_eq "$n" "$want" "all $want committed diagrams generated, each with 0 issues"
 
@@ -25,7 +25,7 @@ for f in "$TMP"/a/*.svg; do
 done
 
 # 3. independent of check(): every box text fits inside its box (8 px padding), from the generator's layout data
-out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+OUT=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 import build
@@ -41,10 +41,10 @@ for name, fn in build.DIAGRAMS.items():
 print("\n".join(bad) or "OK")
 EOF
 )
-assert_eq "$out" OK "no text overflows its box, <= 12 boxes"
+assert_eq "$OUT" OK "no text overflows its box, <= 12 boxes"
 
 # 4. negative cases: the checker reports planted defects
-out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+OUT=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from svglib import Diagram
@@ -63,15 +63,17 @@ for i in d.check():
     print(i)
 EOF
 )
-assert_match "$out" "text overflows its box" "overflowing text is reported"
-assert_match "$out" "15 boxes > 12" "more than 12 boxes is reported"
-assert_match "$out" "flow arrow a0 has no badge" "numbered arrow without its badge is reported"
-assert_match "$out" "key step 3 has no badge" "key entry without a badge is reported"
-assert_match "$out" "text below 13 px" "type floor is enforced"
-assert_match "$out" "step 2 has 2 badges" "a step number drawn twice is reported"
+assert_matches "$OUT" <<'CASES'
+overflowing text is reported | text overflows its box
+more than 12 boxes is reported | 15 boxes > 12
+numbered arrow without its badge is reported | flow arrow a0 has no badge
+key entry without a badge is reported | key step 3 has no badge
+type floor is enforced | text below 13 px
+a step number drawn twice is reported | step 2 has 2 badges
+CASES
 
 # 5. v3 reading rules: planted defects of the classes the visual review found
-out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+OUT=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from svglib import Diagram
@@ -93,21 +95,23 @@ for i in d.check():
     print(i)
 EOF
 )
-assert_match "$out" "step 2 reads before step 1" "steps out of reading order are reported"
-assert_match "$out" "box 'Gamma' is not on the numbered flow" "a box neither on the flow nor marked context is reported"
-assert_match "$out" "duplicate component box: 'beta'" "duplicate component boxes are reported"
-assert_match "$out" "box title not capitalised: 'beta'" "lower-case box titles are reported"
-assert_match "$out" "step 1 dials out, but arrow" "a dial-out arrow that does not leave its cluster is reported"
-assert_match "$out" "step 2: the text's actor is 'Beta' but the arrow starts at Alpha" "an arrow not starting at the step's actor is reported"
-assert_match "$out" "jargon in a box detail line" "jargon in box detail lines is reported"
-assert_match "$out" "placeholder or issue reference on the canvas" "placeholders on the canvas are reported"
-assert_match "$out" "has a cramped bend" "cramped Z-bends are reported"
-assert_match "$out" "runs along the border of zone" "arrows hugging a zone border are reported"
-assert_match "$out" "badge 3 is closer than 6 px to text 'note text'" "badge clearance from text is enforced"
-assert_match "$out" "text contrast .* 'dim note'" "low text contrast is reported"
+assert_matches "$OUT" <<'CASES'
+steps out of reading order are reported | step 2 reads before step 1
+a box neither on the flow nor marked context is reported | box 'Gamma' is not on the numbered flow
+duplicate component boxes are reported | duplicate component box: 'beta'
+lower-case box titles are reported | box title not capitalised: 'beta'
+a dial-out arrow that does not leave its cluster is reported | step 1 dials out, but arrow
+an arrow not starting at the step's actor is reported | step 2: the text's actor is 'Beta' but the arrow starts at Alpha
+jargon in box detail lines is reported | jargon in a box detail line
+placeholders on the canvas are reported | placeholder or issue reference on the canvas
+cramped Z-bends are reported | has a cramped bend
+arrows hugging a zone border are reported | runs along the border of zone
+badge clearance from text is enforced | badge 3 is closer than 6 px to text 'note text'
+low text contrast is reported | text contrast .* 'dim note'
+CASES
 
 # 6. stages: one step must not reach two gated stages at once, and stages are reached in order
-out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+OUT=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from svglib import Diagram
@@ -130,12 +134,14 @@ for i in d.check():
     print(i)
 EOF
 )
-assert_match "$out" "step 2 reaches stages 'Staging' and 'Production' at once" "a fork into two gated stages is reported"
-assert_match "$out" "stage 'Dev' is reached in step 1, before stage 'Canary' is done" "stages reached out of order are reported"
-assert_match "$out" "stage 'Nowhere' is not a box" "an unknown stage is reported"
+assert_matches "$OUT" <<'CASES'
+a fork into two gated stages is reported | step 2 reaches stages 'Staging' and 'Production' at once
+stages reached out of order are reported | stage 'Dev' is reached in step 1, before stage 'Canary' is done
+an unknown stage is reported | stage 'Nowhere' is not a box
+CASES
 
 # 7. reading order: consecutive steps of the same actor may radiate in any direction (check, then open a PR)
-out=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
+OUT=$(py - "$ROOT/docs/diagrams/src" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 from svglib import Diagram
@@ -151,28 +157,30 @@ for i in d.check():
     print(i)
 EOF
 )
-n=$(grep -c "step 2 reads before step 1" <<<"$out" || true)
+n=$(grep -c "step 2 reads before step 1" <<<"$OUT" || true)
 assert_eq "$n" 0 "the same actor's next step may sit anywhere around it"
-n=$(grep -c "step 3 reads before step 2" <<<"$out" || true)
+n=$(grep -c "step 3 reads before step 2" <<<"$OUT" || true)
 assert_eq "$n" 1 "another actor's step still has to read after it"
 
 # 8. sdlc swimlanes: the legend explains the change-flow arrows and the MANUAL chip, and the workload legend names
 #    the local profile (one workload cluster, a namespace per environment)
 svg=$(cat "$ROOT/docs/diagrams/sdlc.svg")
-assert_match "$svg" "the change moves along the arrow" "sdlc legend: arrows follow the change"
-assert_match "$svg" ">MANUAL</text>.*a person merges a pull request" "sdlc legend explains the MANUAL chip"
-assert_match "$svg" "local default: one, with a namespace per environment" "sdlc legend names the local profile"
+assert_matches "$svg" <<'CASES'
+sdlc legend: arrows follow the change | the change moves along the arrow
+sdlc legend explains the MANUAL chip | >MANUAL</text>.*a person merges a pull request
+sdlc legend names the local profile | local default: one, with a namespace per environment
+CASES
 
 # stale SVG and README steps drift are reported by --check
 mkdir -p "$TMP/stale"
 cp "$ROOT"/docs/diagrams/*.svg "$TMP/stale/"
 printf '<!-- hand edit -->\n' >> "$TMP/stale/network.svg"
-out=$(py "$B" --check --out "$TMP/stale" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "a hand-edited SVG fails --check"
-assert_match "$out" "network.svg is not up to date" "stale SVG is named"
+capture py "$B" --check --out "$TMP/stale"
+assert_eq "$RC" 1 "a hand-edited SVG fails --check"
+assert_match "$OUT" "network.svg is not up to date" "stale SVG is named"
 sed 's/^1\. Argo CD reads Git/1. Argo CD pulls Git/' "$ROOT/docs/diagrams/README.md" > "$TMP/README.md"
-out=$(py "$B" --check --readme "$TMP/README.md" architecture 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 1 "README step drift fails --check"
-assert_match "$out" "steps differ from docs/diagrams/README.md" "step drift is named"
+capture py "$B" --check --readme "$TMP/README.md" architecture
+assert_eq "$RC" 1 "README step drift fails --check"
+assert_match "$OUT" "steps differ from docs/diagrams/README.md" "step drift is named"
 
 finish

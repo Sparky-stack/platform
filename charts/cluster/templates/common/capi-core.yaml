@@ -4,7 +4,7 @@ provider (clusterctl layout). Sync waves: namespaces -2, credentials -1 (templat
 providers 0; the operator orders the installs itself (core first) and retries until configSecrets exist.
 */ -}}
 {{- if eq .Values.scope "fleet" }}
-{{- $p := .Values.capi.providers | default dict }}
+{{- $p := .Values.capi.providers }}
 {{- /* GKE node pools are MachinePools: core's MachinePool gate (default true in core 1.13) is stated explicitly while
 CAPG is on, so a listed featureGates map never drops it. */ -}}
 {{- $core := deepCopy .Values.core }}

@@ -1,20 +1,15 @@
-# Kyverno policies on every cluster (catalog: namespace kyverno, roles [mgmt, workload], default true). The engine is
-# addons/kyverno; until its CRDs exist this app's sync fails and Argo CD retries. docs/networking.md "Kyverno".
-#
-#   kyverno-policies (upstream)          Pod Security Standards baseline as CEL ValidatingPolicies, Audit only
-#                                        (PolicyReports, nothing is blocked), platform namespaces excluded.
-#   templates/ambient-enrollment.yaml    cell namespaces get istio.io/dataplane-mode=ambient        (workload)
-#   templates/cell-mesh.yaml             HBONE NetworkPolicy, STRICT PeerAuthentication and an      (workload)
-#                                        AuthorizationPolicy (own cell + platformPeers only) per cell
-#   templates/image-verification.yaml    supply-chain gate: signatures, attestations, registries    (workload)
-#   templates/workload-resilience.yaml   replicas, probes, requests; Deny in production             (workload)
-#   templates/previews.yaml              PR previews: expiry/cap/TTL (mgmt), cell guardrails        (workload)
-#   templates/workflow-image-digests.yaml  digest-only images in workflows-* run namespaces         (mgmt)
-#   templates/data-plane-capabilities.yaml  bindings only to data planes running the needed addons  (mgmt)
-# The role column is set by values/role-mgmt.yaml; each section below documents its template.
+# Kyverno policies on every cluster (docs/networking.md "Kyverno"); the engine is addons/kyverno.
+# One template per concern; values/role-mgmt.yaml switches between the mgmt and workload sets:
+#   kyverno-policies (upstream)             Pod Security Standards baseline, Audit only
+#   templates/ambient-enrollment.yaml       cell namespaces join Istio ambient                 (workload)
+#   templates/cell-mesh.yaml                HBONE, strict mTLS and peer authz per cell          (workload)
+#   templates/image-verification.yaml       supply-chain gate                                   (workload)
+#   templates/workload-resilience.yaml      replicas, probes, requests                          (workload)
+#   templates/previews.yaml                 PR preview guards                          (mgmt + workload)
+#   templates/workflow-image-digests.yaml   digest-only images in workflows-*                   (mgmt)
+#   templates/data-plane-capabilities.yaml  bindings only to capable data planes                (mgmt)
 
-# Never touched by any policy here. Same list as addons/kyverno (webhook namespaceSelector) - keep in sync
-# (hack/tests/test_gitops_contracts.sh checks it).
+# Never touched by any policy here. Same list as addons/kyverno (hack/tests/test_gitops_contracts.sh checks it).
 platformNamespaces: &platformNamespaces
   - kube-system
   - kube-public
@@ -58,11 +53,8 @@ kyverno-policies:
     # The ValidatingPolicy CRD comes from addons/kyverno; don't fail the dry run before it exists.
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 
-# Istio ambient enrollment of the namespaces OpenChoreo creates on data planes (one cell namespace per
-# project x environment, e.g. dp-default-demo-development-ad621210). OpenChoreo's renderedrelease controller labels
-# them; the selector below uses only labels every ClusterProjectType's namespace carries (not the resource id).
-# A namespace that already has istio.io/dataplane-mode (e.g. "none", set per environment through
-# ProjectReleaseBinding.spec.environmentConfigs.namespaceLabels) is left alone - that is the opt-out.
+# Cell namespaces (one per project x environment) join Istio ambient; one that already has istio.io/dataplane-mode
+# (e.g. "none" via ProjectReleaseBinding namespaceLabels) is left alone - that is the opt-out.
 ambientEnrollment:
   # -- `true` on workload clusters (`false` on `mgmt`), enrolling `renderedrelease-controller` namespaces into Istio ambient.
   enabled: true
@@ -72,11 +64,7 @@ ambientEnrollment:
     matchExpressions:
       - { key: openchoreo.dev/project, operator: Exists }
       - { key: openchoreo.dev/environment, operator: Exists }
-  # Mesh policy of enrolled cells (templates/cell-mesh.yaml, #53). Always: NetworkPolicy platform-mesh-hbone (HBONE
-  # tcp 15008 from the peers OpenChoreo admits, kubelet probes from ambient's SNAT source 169.254.7.127). mtls.strict: PeerAuthentication `default` STRICT, so plaintext from
-  # outside the mesh is refused. Needs the data-plane gateway and every in-cluster client of cell pods in the mesh
-  # (hack/tests/test_mesh_contracts.sh checks the gateway and the platform clients). A cell keeps PERMISSIVE with
-  # the namespace label <optOutLabel>=permissive (ProjectReleaseBinding namespaceLabels).
+  # Every in-cluster client of cell pods must be in the mesh (hack/tests/test_mesh_contracts.sh checks it).
   mtls:
     # -- Every enrolled cell gets NetworkPolicy `platform-mesh-hbone` and a `STRICT` `PeerAuthentication`, or `PERMISSIVE` where `<optOutLabel>=permissive` ([strict mTLS in cell namespaces](../../docs/networking.md#strict-mtls-in-cell-namespaces)).
     strict: true
@@ -89,9 +77,7 @@ ambientEnrollment:
       - cluster.local/ns/moco-system/sa/moco-controller-manager     # MOCO operator -> moco-agent gRPC + mysqld (#256)
       - cluster.local/ns/keda/sa/keda-operator                      # KEDA scalers polling in-cell endpoints
       - cluster.local/ns/strimzi/sa/strimzi-cluster-operator        # Strimzi operator -> Kafka brokers in cells
-  # Kafka (Strimzi) pods in enrolled cells (templates/cell-mesh.yaml openchoreo-cell-strimzi, #210). Addon strimzi runs
-  # the operator with STRIMZI_NETWORK_POLICY_GENERATION=false: its per-listener policies open only Kafka ports, and
-  # ambient carries every mesh connection on 15008. Peers outside the cell (cell pods and system components always).
+  # Replaces Strimzi's own per-listener policies (off in addon strimzi), which open only Kafka ports, not HBONE (#210).
   strimzi:
     # -- Every enrolled cell gets NetworkPolicy `platform-strimzi`: pods with `strimzi.io/cluster` admit the cell's pods, `openchoreo.dev/system-component` pods and `peers` on any port (HBONE `15008` included) plus kubelet probes.
     enabled: true
@@ -99,26 +85,12 @@ ambientEnrollment:
       - { namespace: strimzi, podLabels: { strimzi.io/kind: cluster-operator } }  # cluster operator: admin client, rolls
       - { namespace: keda, podLabels: { app: keda-operator } }                    # KEDA kafka scaler: consumer lag
 
-# Link-local SNAT source CIDRs istio-cni uses for kubelet health probes into ambient-enrolled pods (admitted by
-# NetworkPolicy platform-mesh-hbone in templates/cell-mesh.yaml). Must match addons/mesh/values.yaml
-# ambient.probeSourceCIDRs (enforced by hack/tests/test_mesh_probe_cidrs.sh, #287).
+# Source of kubelet probes after istio-cni's SNAT. Must match addons/mesh ambient.probeSourceCIDRs
+# (hack/tests/test_mesh_probe_cidrs.sh).
 mesh:
   probeSourceCIDRs: [169.254.7.127/32, "fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128"]
 
-# --- Supply-chain gate per environment (docs/promotion.md "Policy gate", docs/supply-chain.md) -----------------------
-# templates/image-verification.yaml renders, for every distinct action in `environments` / `defaultAction`,
-#   ImageValidatingPolicy  openchoreo-verify-images-<audit|enforce>   cosign signatures of trusted images
-#   ImageValidatingPolicy  openchoreo-attest-<name>-<audit|enforce>   one per required attestation (sbom, provenance,
-#                                                                     vuln): one check per policy, so they run in parallel
-#   ValidatingPolicy       openchoreo-trusted-registries-<audit|enforce>  every container image comes from a trusted
-#                                                                     registry (otherwise an unsigned docker.io image
-#                                                                     would simply not be matched by the image policy)
-# scoped to OpenChoreo cell namespaces by their label openchoreo.dev/environment. Platform namespaces are excluded like
-# every policy here. Pods (all container kinds, kubectl debug through pods/ephemeralcontainers) and their controllers
-# (Deployment, StatefulSet, CronJob, ... via Kyverno autogen) are checked, so a denied Deployment shows up as an apply
-# failure on the RenderedRelease. No digest mutation (it would fight OpenChoreo's agent re-applying the rendered
-# Deployment): where requireDigest is on (production) the Workload must already carry image@sha256 (app-container.yaml output
-# image_digest_ref); elsewhere tag references are only reported.
+# --- Supply-chain gate per environment (templates/image-verification.yaml, docs/supply-chain.md) ----------------------
 imageVerification:
   # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures.
   enabled: true
@@ -130,113 +102,77 @@ imageVerification:
   # Action for cell namespaces of every environment NOT listed above (a new environment is never unchecked):
   # Audit | Deny | "" (unlisted environments are not checked).
   defaultAction: Audit
-  # failurePolicy per action: enforce fails closed (Kyverno down = no new production pods, rollouts pause; platform
-  # namespaces are never affected), audit never blocks.
+  # Enforce fails closed (Kyverno down = production rollouts pause), audit never blocks.
   failurePolicy:
     Audit: Ignore
     Deny: Fail
-  # Webhook timeout of every image policy, max 30. A keyless verification takes ~5 s (TUF refresh + registry referrers)
-  # unless Kyverno has it cached (per digest, addons/kyverno imageVerifyCache*); each check is its own policy, so a cold
-  # admission is one verification plus the serialized TUF refreshes (~5-10 s), not the sum (~20 s, #128, #136).
+  # Webhook timeout of every image policy (max 30): a cold keyless verification takes ~5-10 s (#136).
   timeoutSeconds: 30
   # Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
   cellNamespaceSelector:
     matchLabels:
       openchoreo.dev/managed-by: renderedrelease-controller
-  # Images built by GitHub Actions through the shared reusable workflow app-container.yaml (this repo, .github/workflows): Sigstore keyless
-  # (cosign v3 bundle format, verified by Kyverno 1.20). The certificate subject is the REUSABLE workflow, which
-  # anyone can call (koorikla/platform is public): the GitHub workflow extensions pin the calling repository, ref and trigger,
-  # so every allowed (repository, ref, trigger) becomes one attestor (Kyverno matches extensions exactly, no regex),
-  # tried in order: an image matching the n-th attestor pays n-1 failed verifications per check and admission.
-  # app-container.yaml also attaches signed SPDX SBOM, SLSA provenance and vulnerability-scan attestations: all required.
+  # Keyless images of the reusable workflow app-container.yaml. Anyone can call it, so every allowed
+  # (repository, ref, trigger) is one attestor (docs/supply-chain.md); all three attestations are required.
   github:
     enabled: true
     prefixes: ["ghcr.io/koorikla/"]        # image reference prefixes this source covers
     issuer: https://token.actions.githubusercontent.com
-    # Certificate subject = <workflow>@<workflowRef>: the reusable workflow at one exact commit. App repos call app-<stack>.yaml
-    # by commit SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`); its nested container.yaml call keeps that
-    # ref, so the signing certificate names the SHA. A tag or branch is mutable (whoever moves `v1` changes what is
-    # trusted): rendering fails unless workflowRef is a 40-hex commit SHA. Renovate bumps it with the app repos' pins
-    # (renovate.json: tag ci-v1 of koorikla/platform, the comment below is the tracked tag).
+    # Subject = <workflow>@<workflowRef>; a tag is mutable, so workflowRef must be a 40-hex commit SHA (Renovate
+    # tracks the tag in the trailing comment).
     workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml
     workflowRef: "3311f541a8eab72a2649b6f1eda4fe05efa3142e" # ci-v1.0.0
-    # Moving the pin without breaking admission: images already running were signed at the previous commit. Keep that
-    # commit here (40-hex, at most one: workflowRef + this list <= 2) until every allowed repository's production image
-    # is rebuilt at workflowRef, then empty it (docs/supply-chain.md "Moving the workflow pin"). Not tracked by Renovate.
-    # Attestors are tried current pin first: an image still at this commit pays one failed (uncached) verification per
-    # check on every admission, so keep the window short.
+    # Previous pin, kept until every production image is rebuilt at workflowRef (at most one; docs/supply-chain.md
+    # "Moving the workflow pin"). Each costs a failed verification per check, so keep the window short.
     transitionWorkflowRefs: []
     repositories: [koorikla/hello-world]   # extension githubWorkflowRepository; installation overlay adds app repos
     refs: [refs/heads/main]                # extension githubWorkflowRef
-    # extension githubWorkflowTrigger: only builds of merged code. pull_request_target / workflow_run run on the main
-    # ref too but may build untrusted PR code; workflow_dispatch builds are not admitted where this is enforced.
+    # extension githubWorkflowTrigger: only builds of merged code (pull_request_target may build untrusted PR code).
     triggers: [push]
     rekorURL: https://rekor.sigstore.dev
     attestations: [sbom, provenance, vuln] # names from `attestationTypes`
-  # Images built in-cluster by the OpenChoreo workflow plane and pushed to the installation registry's apps project:
-  # prefix <registry.host>/<registry.appsProject>/ (installation.yaml `registry`, passed to every addon), signed with the
-  # platform's cosign key (private key stays in the build plane; only the PUBLIC key is configured here, it is not a
-  # secret). Keyless needs an OIDC issuer Fulcio trusts (public cluster issuer / workload identity): follow-up.
-  # Without publicKey the registry is NOT trusted: its images fail the trusted-registries policy (denied in production,
-  # reported elsewhere) instead of skipping signature verification.
+  # In-cluster builds under <registry.host>/<registry.appsProject>/, signed with the platform cosign key (public key
+  # only). Without a key the registry is not trusted at all (docs/supply-chain.md "Wiring the key").
   platformKey:
     enabled: true
     publicKey: ""                          # PEM: cosign.pub of store key cosign-platform, inline (stable or KMS-backed
                                            # installations: installations/<inst>/addons/kyverno-policies/values.yaml)
-    # Without publicKey and with registry.type harbor: the key, the registry CA and pull credentials come from mgmt per
-    # workload cluster (charts/cluster templates/common/image-verification-crs.yaml, a ClusterResourceSet) into Kyverno's
-    # namespace; the policy reads the key at admission (CEL resource.Get). Locally a fresh key per mgmt bootstrap, so no
-    # committed key could match. A missing ConfigMap fails the check (denied where Deny), never skips it.
-    # docs/supply-chain.md "Wiring the key".
+    # Without publicKey (registry.type harbor) the key comes per workload cluster from charts/cluster
+    # image-verification-crs.yaml; a missing ConfigMap fails the check, never skips it.
     cluster:
       namespace: kyverno                   # == charts/cluster imageVerification.namespace (addon kyverno's namespace)
       configMap: platform-image-verification   # == charts/cluster imageVerification.configMap; key cosign.pub
       pullSecret: platform-registry        # == charts/cluster imageVerification.pullSecret (credentials.secrets)
     rekor: false                           # in-cluster signing without a transparency log (cosign --tlog-upload=false)
-    # The workflow plane attests the Trivy scan (vuln) and the syft SBOM with predicate https://spdx.dev/Document/v2.3
-    # (attestationTypes.sbom, same as the GitHub path), both with the platform key. Provenance is BuildKit's unsigned
-    # SLSA attestation manifest, not a platform-key attestation: not required.
+    # Provenance is BuildKit's unsigned SLSA manifest, so it is not required here.
     attestations: [sbom, vuln]
   attestationTypes:                        # in-toto predicate types (as listed by `cosign verify` on koorikla images)
     sbom: https://spdx.dev/Document/v2.3
     provenance: https://slsa.dev/provenance/v1
     vuln: https://cosign.sigstore.dev/attestation/vuln/v1
-  # Image references must carry a digest (current practice: images pinned by digest). Per action: production (Deny)
-  # denies tag-only references, development/staging only report them. app-container.yaml outputs image_digest_ref; app repos'
-  # Workload bump must write it (docs/supply-chain.md "Digest references").
+  # Tag-only image references: denied by enforce, reported by audit (docs/supply-chain.md "Digest references").
   requireDigest:
     Audit: false
     Deny: true
-  # Every container image in a checked cell namespace must match a trusted prefix: github.prefixes, the platform
-  # registry prefix (only with platformKey.publicKey) plus these extra ones. Otherwise an unsigned docker.io image
-  # would simply not be matched by the signature policy.
-  # CloudNativePG operand images are admitted as whole digest references, not prefixes: the operator + imageCatalog
-  # pins of addons/cloudnative-pg/values.yaml (#327) and the moco-agent + mysqlImageCatalog pins of addons/moco/values.yaml
-  # (#256), which the catalog entry (valuesFromAddons) passes in.
+  # Trusted prefixes besides github.prefixes and the platform registry (CloudNativePG / MOCO operand images are
+  # trusted by digest through the catalog's sharedValueFiles).
   extraTrustedPrefixes: []
 
-# --- Digest-only images in workflow run namespaces (#36, docs/supply-chain.md "Digest references") ---------------------
-# templates/workflow-image-digests.yaml: ValidatingPolicy platform-workflow-image-digests (Deny) - every Pod image in
-# <namespacePrefix>* (OpenChoreo's workflows-<org ns>: builds, gates, auto-build) is image@sha256:<digest>, including
-# Component checks.image overrides. No exceptions: every image the platform runs there is digest-pinned.
+# --- Digest-only images in workflow run namespaces (templates/workflow-image-digests.yaml) ----------------------------
 workflowImageDigests:
   # -- On `mgmt` only, denies Pods in `workflows-*` whose images are not `image@sha256:<digest>` (`ValidatingPolicy/platform-workflow-image-digests`, [build plane](../../docs/build-plane.md#security-posture-of-build-pods)).
   enabled: false                     # values/role-mgmt.yaml: the workflow plane runs on mgmt (catalog roles [mgmt])
   namespacePrefix: workflows-
   failurePolicy: Fail                # Kyverno down: new run pods wait (only workflows-*), never admitted unchecked
 
-# --- PR preview environments (installation.yaml `previews`, docs/preview-environments.md) ------------------------------
-# templates/previews.yaml. `previews` comes from installation.yaml (enabled, ttl, maxPerTenant); these are defaults.
+# --- PR preview environments (templates/previews.yaml); installation.yaml `previews` overrides these defaults -------
 previews:
   # -- PR previews (`previews` and `previewGuards`): expiry stamp, per-tenant cap and TTL `DeletingPolicy` on `mgmt` Environments; quota, limits and egress isolation in preview cell namespaces ([preview environments](../../docs/preview-environments.md)).
   enabled: false
   ttl: 48h
   maxPerTenant: 2
 
-# --- Data-plane capabilities of OpenChoreo resource types (#70, docs/data-services.md) ---------------------------------
-# templates/data-plane-capabilities.yaml: ValidatingPolicy platform-data-plane-capabilities (Deny) on mgmt - a
-# ResourceReleaseBinding only to an environment whose data plane runs the addons its type names in
-# platform.koorikla.io/requires-addons.
+# --- Data-plane capabilities of resource types (templates/data-plane-capabilities.yaml) -------------------------------
 dataPlaneCapabilities:
   # -- On `mgmt` only, denies a `ResourceReleaseBinding` whose (Cluster)ResourceType names an addon in `platform.koorikla.io/requires-addons` that the environment's data plane does not announce (`ValidatingPolicy/platform-data-plane-capabilities`, [data services](../../docs/data-services.md#only-on-data-planes-that-run-the-operator)).
   enabled: false                     # values/role-mgmt.yaml: the OpenChoreo control plane runs on mgmt
@@ -246,10 +182,8 @@ previewGuards:
   namespaces: true                   # data planes: quota, limits, isolation of preview cell namespaces
   schedule: "*/5 * * * *"            # DeletingPolicy run (cron)
   ttlGrace: 1h                       # delete this long after expires-at: the auto-build pass expires the PR first
-  # Per preview cell namespace: sized for one or two small services (ClusterComponentType defaults 100m / 256Mi) and
-  # the preview's own database (#331). requests.storage = the smallest volume ClusterResourceType postgresql allows
-  # (environmentConfigs storageGiB minimum, addon openchoreo-platform; the only place that number lives) + 5Gi for
-  # the app; hack/tests/test_kyverno_policies.sh fails when the type's minimum outgrows it.
+  # One or two small services plus the preview's database (#331). requests.storage >= postgresql's minimum volume + 5Gi
+  # (hack/tests/test_kyverno_policies.sh).
   quota:
     pods: "10"
     requests.cpu: "1"
@@ -265,15 +199,12 @@ previewGuards:
     defaultRequest: { cpu: 50m, memory: 64Mi }
     max: { memory: 1Gi }
 
-# Installation image registry (installation.yaml `registry`, passed to every addon by the addon ApplicationSet; this is
-# the standalone default). host: image reference host[:port]; appsProject: project in-cluster builds push to.
+# installation.yaml `registry` (injected by the ApplicationSet; standalone default). appsProject: where builds push.
 registry:
   host: ""
   appsProject: apps
 
-# --- Workload resilience (templates/workload-resilience.yaml, #251, docs/openchoreo.md "Resilience defaults") ----------
-# Deployments >= 2 replicas, readiness probes, cpu/memory requests; HPAs >= 2. Deny in enforcedEnvironments, Audit in
-# every other cell namespace (policy reports).
+# --- Workload resilience (templates/workload-resilience.yaml) ----------------------------------------------------------
 workloadResilience:
   # -- Workload clusters only (mgmt has no OpenChoreo cell namespaces); values/role-mgmt.yaml turns it off.
   enabled: true

@@ -3,7 +3,7 @@
 Per-cluster Falco escalation identity (docs/observability.md "Falco response"): derives sha256("<name>:<token>") on
 mgmt so the shared store token never leaves mgmt. Delivered via ClusterResourceSet (or PushSecret on byo).
 */ -}}
-{{- if and .Values.falcoEscalation.enabled (ne (toString (dig "falco" "" (.Values.addons | default dict))) "false") }}
+{{- if and .Values.falcoEscalation.enabled (ne (toString (dig "falco" "" .Values.addons)) "false") }}
 {{- $name := .Values.name }}
 {{- $ns := .Values.falcoEscalation.namespace }}
 {{- $byo := eq (toString .Values.provider) "byo" }}

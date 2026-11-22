@@ -11,12 +11,12 @@ values.schema.json (Helm validates it before any template runs). One row per rul
 {{- $cp := $v.controlPlane | default dict -}}
 {{- $cpSet := or (not (kindIs "invalid" $cp.replicas)) (not (empty $cp.machineType)) -}}
 {{- $replicas := kindIs "invalid" $cp.replicas | ternary 1 $cp.replicas -}}
-{{- $addons := $v.addons | default dict -}}
-{{- $mesh := $v.mesh | default dict -}}
-{{- $mg := $mesh.group | default "" -}}
-{{- $providers := ($v.capi | default dict).providers | default dict -}}
+{{- $addons := $v.addons -}}
+{{- $mesh := $v.mesh -}}
+{{- $mg := $mesh.group -}}
+{{- $providers := $v.capi.providers -}}
 {{- $pkey := eq (toString $v.provider) "gcp-gke" | ternary "gcp" (toString $v.provider) -}}
-{{- $dp := ($v.openchoreo | default dict).dataPlane | default dict -}}
+{{- $dp := $v.openchoreo.dataPlane -}}
 {{- $checks = list
   (list (and $byo $cpSet) (printf "cluster %s: controlPlane does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
   (list (and $byo (not (empty $v.kubernetesVersion))) (printf "cluster %s: kubernetesVersion does not apply to provider byo (the cluster exists; its owner manages it): drop it" $v.name))
@@ -29,16 +29,16 @@ values.schema.json (Helm validates it before any template runs). One row per rul
   (list (and $byo (not (empty $mg))) (printf "cluster %s: mesh.group is not available on provider byo yet (#174): drop mesh.group" $v.name))
   (list (and (not (empty $mg)) (eq (toString (index $addons "mesh")) "false")) (printf "cluster %s: mesh.group needs the mesh addon (addons.mesh is false)" $v.name))
   (list (and (not (empty $mg)) (not (index (($v.mgmt | default dict).addons | default dict) "openbao"))) (printf "cluster %s: mesh.group needs the mesh CA on mgmt: set mgmt.addons.openbao: true in installation.yaml" $v.name))
-  (list (and (not (empty $mg)) (not (has $mg ($mesh.groups | default list)))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
-  (list (and (not (empty $mg)) (not (($mesh.ca | default dict).host))) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))
+  (list (and (not (empty $mg)) (not (has $mg $mesh.groups))) (printf "cluster %s: mesh.group %q is not in installation.yaml mesh.groups (one root CA per group in OpenBao)" $v.name $mg))
+  (list (and (not (empty $mg)) (not $mesh.ca.host)) (printf "cluster %s: mesh.group needs installation.yaml mesh.ca.host / mesh.ca.port (where members reach OpenBao)" $v.name))
   (list (and $gke $cpSet) (printf "cluster %s: controlPlane.replicas / controlPlane.machineType do not apply to gcp-gke (managed GKE control plane): drop controlPlane" $v.name))
   (list (and $k3s (ne (toString $v.provider) "docker") (eq (toString $v.environment) "production") (lt (int $replicas) 3)) (printf "cluster %s: production on %s needs controlPlane.replicas >= 3 - a single-server rollout ends with an unsafe 2 -> 1 etcd member removal (docs/providers.md)" $v.name $v.provider))
   (list (and $dp.enabled (not $dp.gatewayHost)) "openchoreo.dataPlane.gatewayHost is required when the data plane is enabled")
 -}}
 {{- end -}}
 {{- if eq $v.scope "fleet" -}}
-{{- $p := $v.capi.providers | default dict -}}
-{{- $wif := $v.capi.gcp | default dict -}}
+{{- $p := $v.capi.providers -}}
+{{- $wif := $v.capi.gcp -}}
 {{- $checks = list
   (list (not (or $p.docker $p.aws $p.hetzner $p.gcp)) "capi.providers: enable at least one infrastructure provider (docker, aws, hetzner, gcp)")
   (list (and $p.gcp (not $wif.workloadIdentityProvider)) "capi.gcp.workloadIdentityProvider must be projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider> (installation.yaml; docs/providers.md \"GKE\")")

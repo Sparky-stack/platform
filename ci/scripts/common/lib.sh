@@ -63,6 +63,14 @@ out_dir() {
   printf '%s' "$d"
 }
 
+# abs_out_dir - out_dir as an absolute path (stays valid after a `cd`).
+abs_out_dir() {
+  local d
+  d="$(out_dir)"
+  case "$d" in /*) ;; *) d="$(pwd)/${d}" ;; esac
+  printf '%s' "$d"
+}
+
 # emit_output KEY VALUE - write KEY to GITHUB_OUTPUT (if set) and to
 # $CI_OUT_DIR/KEY (if CI_OUT_DIR is set). Single-line values only.
 emit_output() {

@@ -55,11 +55,11 @@ assert_eq "$(printf '%s\n' "$v" | cut -d: -f1 | sort | tr '\n' ' ')" "INVALID ad
 # helm lint per installation: <label> <helm lint args...>
 lint() {
   local label=$1 out rc; shift
-  out=$(helm lint "$@" 2>&1) && rc=0 || rc=$?
-  assert_eq "$rc" 0 "helm lint $label"
+  capture helm lint "$@"
+  assert_eq "$RC" 0 "helm lint $label"
   [[ -z "${VALUES_SCHEMA_VERBOSE:-}" ]] || echo "  linted $label"
   linted+=" ${label%% *} "
-  [[ $rc == 0 ]] || printf '%s\n' "$out" | grep -E 'ERROR|Error|at ' | head -5 >&2
+  [[ $RC == 0 ]] || printf '%s\n' "$OUT" | grep -E 'ERROR|Error|at ' | head -5 >&2
 }
 on() { [[ "$1" == true ]] || { [[ "$1" != false ]] && [[ "$2" != false ]]; }; }   # on <label toggle> <catalog default>
 # lint_addon <chart dir> <inst dir> <platform render>: addon_helm_args (the ApplicationSet's layering) for mgmt when the

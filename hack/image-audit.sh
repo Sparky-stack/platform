@@ -16,13 +16,9 @@
 set -euo pipefail
 
 # --- deliberate multi-arch exceptions -------------------------------------------------------------------------------
-# AGENTS.md: new images must publish linux/amd64 AND linux/arm64. These are the only accepted exceptions, each visible
-# in review, documented (docs/build-plane.md "Images and architectures") and expiring. One entry per image:
+# The only accepted single-arch images (docs/build-plane.md "Images and architectures"), one entry per image:
 #   <repository:tag prefix>|<expires YYYY-MM-DD>|<why, and when to remove it>
-# An entry covers an image only while it matches the prefix (a version bump drops it: the bumped image must be
-# multi-arch or get a reviewed entry of its own) and the date has not passed (then the audit fails as EXPIRED).
-# Harbor 2.15 publishes linux/amd64 only; 2.16 adds arm64 as separate -arm64 tags. Remove this block at the Harbor
-# 2.16 bump (switch to the arm64-capable images or a manifest list) - accepted in PR #2 (workflow plane, Harbor).
+# A version bump stops matching the prefix and a passed date fails the audit as EXPIRED: both force a new review.
 ARCH_EXCEPTIONS=(
   "docker.io/goharbor/harbor-core:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
   "docker.io/goharbor/harbor-db:v2.15.|2027-03-31|Harbor 2.15 amd64-only; remove at Harbor 2.16 (-arm64 tags)"
@@ -82,12 +78,9 @@ extract_images() {
   rm -f "$f"
 }
 
-# istio_proxy_image <rendered manifest>: the proxy image istiod puts into the Deployments it generates (east-west
-# gateway, waypoints). It is in no manifest: resolved from the istio-sidecar-injector values like the Istio charts do,
-# global.proxy.image verbatim when it contains "/" (a full, digest-pinned reference), else
-# global.hub/proxy.image:tag[-variant] (e.g. docker.io/istio/proxyv2:1.32.0-distroless). Prints nothing without an
-# injector. Composed in bash on purpose: yq if/then/else needs yq >= 4.54, and a shell whose PATH still holds an older
-# global yq (mise activated outside the repo) failed here with a bare "lexer: invalid input text". Errors name the file.
+# istio_proxy_image <rendered manifest>: the proxy image istiod injects into the gateways/waypoints it generates, from
+# the istio-sidecar-injector values: global.proxy.image if it contains "/", else hub/image:tag[-variant]. Prints
+# nothing without an injector. Composed in bash, not yq if/then/else: that needs yq >= 4.54.
 istio_proxy_image() {
   local rf=$1 inj fields hub image tag variant
   grep -q 'istio-sidecar-injector' "$rf" || return 0
@@ -149,6 +142,8 @@ INV="$TMP/inventory.tsv"   # <image>\t<source>
 
 add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 
+# runs_on <provider> <providers list>: an empty list (catalog `providers`) means every provider.
+runs_on() { [[ -z "$2" ]] || printf '%s\n' "$2" | grep -qx "$1"; }
 
 SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
 MGMT_SERVER=https://kubernetes.default.svc
@@ -176,7 +171,6 @@ render() {
   if [[ -n "$img" ]]; then add "$img" "addon $addon ($name): istiod-generated gateways/waypoints"; fi
 }
 
-
 if [[ -z "${RENDERED_DIR:-}" || ! -d "${RENDERED_DIR:-}" ]]; then
   echo "==> Building chart dependencies" >&2
   ./hack/deps.sh >&2
@@ -190,6 +184,7 @@ else
   helm template platform charts/platform --namespace argocd --values "$INST_FILE" > "$PLATFORM_RENDER"
 fi
 dns_prov=$(yq '.dns.provider // "none"' "$INST_FILE")
+capd_enabled=$(yq '.capi.providers.docker != false' "$INST_FILE")
 m_prov=$(yq '.mgmt.provider // "docker"' "$INST_FILE")
 m_name=$(yq '.mgmt.name // "mgmt"' "$INST_FILE")
 m_env=$(yq '.mgmt.environment // "mgmt"' "$INST_FILE")
@@ -204,9 +199,7 @@ for cf in "$INST_DIR"/clusters/*.yaml; do
     helm template "cluster-$c_name" charts/cluster --namespace fleet --values "$INST_FILE" --values "$cf" \
       > "$TMP/cluster-$c_name.yaml" 2>/dev/null || : > "$TMP/cluster-$c_name.yaml"
   fi
-  # labels of the Argo CD cluster secret (== the CAPI Cluster's; the only copy for provider byo)
-  yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels | del(.["argocd.argoproj.io/secret-type"])' \
-    "$TMP/cluster-$c_name.yaml" > "$TMP/labels-$c_name.yaml" 2>/dev/null || : > "$TMP/labels-$c_name.yaml"
+  addon_cluster_labels "$TMP/cluster-$c_name.yaml" "$TMP/labels-$c_name.yaml"
 done
 for dir in addons/*; do
   [[ -f "$dir/Chart.yaml" ]] || continue
@@ -220,8 +213,7 @@ for dir in addons/*; do
   [[ -n "$roles" ]] || roles=$'mgmt\nworkload'
   provs=$(yq ".addons[\"$addon\"].providers[]?" "$CATALOG" | tr -d '\r')
   if printf '%s\n' "$roles" | grep -qx mgmt; then
-    if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" \
-      && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$m_prov"; }; then
+    if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" && runs_on "$m_prov" "$provs"; then
       render "$addon" mgmt "$m_name" "$m_prov" "$m_env" "$m_reg" "$m_cni" "$MGMT_SERVER"
     fi
   fi
@@ -232,7 +224,7 @@ for dir in addons/*; do
       c_name=$(yq '.name' "$cf")
       toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$TMP/labels-$c_name.yaml" 2>/dev/null || true)
       [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
-      if enabled "$addon" "$toggle" && { [[ -z "$provs" ]] || printf '%s\n' "$provs" | grep -qx "$c_prov"; }; then
+      if enabled "$addon" "$toggle" && runs_on "$c_prov" "$provs"; then
         render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
           "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER" "$TMP/labels-$c_name.yaml"
       fi
@@ -247,7 +239,7 @@ if [[ "$INST" == local ]]; then
   add "$k3d_img" "k3d mgmt node (bootstrap/k3d-mgmt.yaml)"
   k3s_versions=$(printf '%s' "${k3d_img%@*}" | sed -E 's/.*:(v[0-9.]+)-(k3s[0-9]+)$/\1+\2/')
 fi
-if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
+if [[ "$capd_enabled" == true ]]; then
   add "$(yq '.docker.kindImage' charts/cluster/values.yaml)" "CAPD node (charts/cluster docker.kindImage)"
 fi
 if [[ "$(yq '.capi.providers.gcp' "$INST_FILE")" == "true" ]]; then
@@ -262,7 +254,7 @@ if (( ! RENDERED )); then
     add "ghcr.io/k3d-io/k3d-proxy:$k3d_ver" "k3d serverlb (k3d $k3d_ver)"
     add "ghcr.io/k3d-io/k3d-tools:$k3d_ver" "k3d tools (k3d $k3d_ver)"
   fi
-  if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
+  if [[ "$capd_enabled" == true ]]; then
     # CAPD built-in load balancer default; seen live with CAPI v1.13.8 (docker ps). Re-check on CAPI bumps.
     add "kindest/haproxy:v20230606-42a2262b" "CAPD load balancer (CAPD default)"
   fi
@@ -284,7 +276,7 @@ if (( ! RENDERED )); then
     fetch "https://github.com/k3s-io/cluster-api-k3s/releases/download/$K3S_PROV_VER/control-plane-components.yaml"
   } > "$TMP/providers.yaml"
   extract_images < "$TMP/providers.yaml" | while IFS= read -r img; do add "$img" "CAPI provider controller"; done
-  if [[ "$(yq '.capi.providers.docker' "$INST_FILE")" != "false" ]]; then
+  if [[ "$capd_enabled" == true ]]; then
     fetch "https://github.com/kubernetes-sigs/cluster-api/releases/download/$CAPI_VER/infrastructure-components-development.yaml" \
       | extract_images | while IFS= read -r img; do add "$img" "CAPD controller"; done
   fi
