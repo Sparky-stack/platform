@@ -1,0 +1,3 @@
+# PR previews on a data plane (the default role).
+previews:
+  enabled: true

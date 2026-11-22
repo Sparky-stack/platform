@@ -37,6 +37,10 @@
 #                              type with platform.koorikla.io/requires-addons passes only to a data plane annotated with
 #                              that addon (absent or "false" is denied, with the addon named); types without a requirement
 #                              pass anywhere; a binding of a missing Resource is denied
+#   tests/kyverno/previews     offline (#168, templates/previews.yaml, mgmt): the per-tenant preview cap (at-cap, below-cap)
+#   tests/kyverno/previews-guardrails, previews-guardrails-cilium
+#                              offline (#168, #331, data planes): only preview cell namespaces get quota, limits, isolation
+#                              (and the database API egress policy with cni cilium)
 #   tests/kyverno/cell-mesh    offline (#53, templates/cell-mesh.yaml): ambient cells get the HBONE NetworkPolicy (with the
 #                              kubelet probe source 169.254.7.127) and a STRICT PeerAuthentication (PERMISSIVE when opted out); cells with dataplane-mode none,
 #                              non-cells and platform namespaces get neither. #324: AuthorizationPolicy platform-cell-peers,
@@ -46,8 +50,9 @@
 #   tests/kyverno/signatures-transition
 #                              online: during a pin move (transitionWorkflowRefs) images at either commit pass every
 #                              check through the ||-chained attestors (#136); KYVERNO_ONLINE=1 only
-# A suite's helm-values.yaml (optional) is passed to helm template. The kyverno CLI comes from mise.toml; skips only
-# when it is missing (KYVERNO=/path/to/kyverno overrides).
+# A suite's helm-values.yaml (optional) is passed to helm template; its ClusterResource fixtures (cluster.yaml) name the
+# OpenChoreo CRDs they need as crds/<CRD name>.yaml. Shell checks below only what kyverno test cannot express (each says
+# why). The kyverno CLI comes from mise.toml; skips only when it is missing (KYVERNO=/path/to/kyverno overrides).
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
@@ -131,17 +136,33 @@ fb=$(yq -r '.moco.fluentbit.image | .repository + ":" + .tag' "$moco" | tr -d '\
   cnpg_pod prod-moco-agent-tag-only "${ag%@*}" "$my"
   cnpg_pod prod-moco-slow-log "$ag" "$my" "$ag" "$fb"
 } > "$TMP/kyverno/registries/resources-moco.yaml"
-suites=(registries platform-key workflow-digests workload-resilience)
+cp_chart="$ROOT/addons/openchoreo-control-plane"
+[[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
+helm show crds "$cp_chart" > "$TMP/oc-crds.yaml"
+suites=(registries platform-key workflow-digests workload-resilience previews previews-guardrails previews-guardrails-cilium
+  data-plane-capabilities cell-mesh)
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] && suites+=(signatures signatures-transition)
 for s in "${suites[@]}"; do
   (
+    d="$TMP/kyverno/$s"
     hv=()
-    [[ -f "$addon/tests/kyverno/$s/helm-values.yaml" ]] && hv=(-f "$addon/tests/kyverno/$s/helm-values.yaml")
-    tpl=templates/image-verification.yaml
-    [[ "$s" == workflow-digests ]] && tpl=templates/workflow-image-digests.yaml
-    [[ "$s" == workload-resilience ]] && tpl=templates/workload-resilience.yaml
-    helm template kyverno-policies "$addon" --namespace kyverno -s "$tpl" ${from[@]+"${from[@]}"} -f "$addon/values.yaml" \
-      ${hv[@]+"${hv[@]}"} > "$TMP/kyverno/$s/policies.yaml"
+    [[ -f "$d/helm-values.yaml" ]] && hv=(-f "$d/helm-values.yaml")
+    # The template a suite tests; policies that live on mgmt also take values/role-mgmt.yaml.
+    case $s in
+      workflow-digests) tpl=(-s templates/workflow-image-digests.yaml) ;;
+      workload-resilience) tpl=(-s templates/workload-resilience.yaml) ;;
+      previews) tpl=(-s templates/previews.yaml -f "$addon/values/role-mgmt.yaml") ;;
+      previews-guardrails*) tpl=(-s templates/previews.yaml) ;;
+      data-plane-capabilities) tpl=(-s templates/data-plane-capabilities.yaml -f "$addon/values/role-mgmt.yaml") ;;
+      cell-mesh) tpl=(-s templates/cell-mesh.yaml) ;;
+      *) tpl=(-s templates/image-verification.yaml) ;;
+    esac
+    helm template kyverno-policies "$addon" --namespace kyverno ${from[@]+"${from[@]}"} -f "$addon/values.yaml" "${tpl[@]}" \
+      ${hv[@]+"${hv[@]}"} | yq 'select(.apiVersion == "policies.kyverno.io/v1")' > "$d/policies.yaml"
+    mkdir -p "$d/crds"
+    while IFS= read -r crd; do
+      yq "select(.metadata.name == \"$crd\")" "$TMP/oc-crds.yaml" > "$d/crds/$crd.yaml"
+    done < <(find "$d" -name cluster.yaml -exec yq -r '.spec.crds[]' {} + | sed 's|.*/||; s|\.yaml$||' | tr -d '\r' | sort -u)
     rc=0
     "$KYVERNO" test "$TMP/kyverno/$s" > "$TMP/kyverno-$s.out" 2>&1 || rc=$?
     echo "$rc" > "$TMP/kyverno-$s.rc"
@@ -150,8 +171,6 @@ done
 
 # Native VAP: promotion to gated environments only through git (Argo CD)
 ocp="$ROOT/addons/openchoreo-platform"
-cp_chart="$ROOT/addons/openchoreo-control-plane"
-[[ -d "$cp_chart/charts" ]] || helm dependency build "$cp_chart" >/dev/null
 (
   helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev" or .metadata.name == "resourcereleasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
   helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
@@ -236,57 +255,25 @@ xp="$ROOT/addons/crossplane"
       --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" > "$TMP/xp-$res-$who.out" 2>&1 || true
   done
 ) &
-# PR previews (templates/previews.yaml, #168): on mgmt the expiry stamp, the per-tenant cap (resource.List context) and
-# the TTL DeletingPolicy on Environments; on data planes the guardrails generated into preview cell namespaces.
+# PR previews on mgmt (templates/previews.yaml, #168): the expiry stamp and the TTL DeletingPolicy stay here because
+# both are relative to the current time (kyverno test fixtures are static); the cap is suite tests/kyverno/previews.
 pvt="$addon/tests/kyverno/previews"
 (
-  helm show crds "$cp_chart" | yq 'select(.metadata.name == "environments.openchoreo.dev")' > "$TMP/env-crd.yaml"
+  yq 'select(.metadata.name == "environments.openchoreo.dev")' "$TMP/oc-crds.yaml" > "$TMP/env-crd.yaml"
   helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
     -f "$addon/values/role-mgmt.yaml" > "$TMP/pv-mgmt.yaml"
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
-    > "$TMP/pv-workload.yaml"
-  for k in MutatingPolicy ValidatingPolicy DeletingPolicy; do
+  for k in MutatingPolicy DeletingPolicy; do
     yq "select(.kind == \"$k\")" "$TMP/pv-mgmt.yaml" > "$TMP/pv-$k.yaml"
   done
-  yq 'select(.kind == "GeneratingPolicy")' "$TMP/pv-workload.yaml" > "$TMP/pv-GeneratingPolicy.yaml"
   sed "s/@IN_GRACE@/$(( $(date +%s) - 600 ))/" "$pvt/environments-ttl.yaml" > "$TMP/pv-environments-ttl.yaml"
   crd=(--crd-paths "$TMP/env-crd.yaml")
   "$KYVERNO" apply "$TMP/pv-MutatingPolicy.yaml" --resource "$pvt/environment-new.yaml" "${crd[@]}" > "$TMP/pv-stamp.out" 2>&1 || true
   date +%s > "$TMP/pv-stamp.time"
-  for c in at-cap below-cap; do
-    "$KYVERNO" apply "$TMP/pv-ValidatingPolicy.yaml" --resource "$pvt/environment-new.yaml" \
-      --context-file "$pvt/context-$c.yaml" "${crd[@]}" > "$TMP/pv-cap-$c.out" 2>&1 || true
-  done
   "$KYVERNO" apply "$TMP/pv-DeletingPolicy.yaml" --resource "$TMP/pv-environments-ttl.yaml" "${crd[@]}" > "$TMP/pv-ttl.out" 2>&1 || true
-  "$KYVERNO" apply "$TMP/pv-GeneratingPolicy.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails.out" 2>&1 || true
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/previews.yaml --set previews.enabled=true \
-    --set cluster.cni=cilium | yq 'select(.kind == "GeneratingPolicy")' > "$TMP/pv-GeneratingPolicy-cilium.yaml"
-  "$KYVERNO" apply "$TMP/pv-GeneratingPolicy-cilium.yaml" --resource "$pvt/namespaces.yaml" > "$TMP/pv-guardrails-cilium.out" 2>&1 || true
 ) &
-# Data-plane capabilities of resource types (templates/data-plane-capabilities.yaml, #70): resource.List context.
-dpct="$addon/tests/kyverno/data-plane-capabilities"
-(
-  helm show crds "$cp_chart" | yq 'select(.metadata.name | test("^(resourcereleasebindings|resources|clusterresourcetypes|environments|clusterdataplanes)\\.openchoreo\\.dev$"))' > "$TMP/rrb-crd.yaml"
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/data-plane-capabilities.yaml \
-    -f "$addon/values/role-mgmt.yaml" | yq 'select(.kind == "ValidatingPolicy")' > "$TMP/dpc.yaml"
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/data-plane-capabilities.yaml \
-    > "$TMP/dpc-workload.yaml" 2>&1 || true
-  for c in capable incapable opted-out; do
-    for b in bindings binding-cache binding-orphan; do
-      "$KYVERNO" apply "$TMP/dpc.yaml" --resource "$dpct/$b.yaml" --context-file "$dpct/context-$c.yaml" \
-        --crd-paths "$TMP/rrb-crd.yaml" > "$TMP/dpc-$c-$b.out" 2>&1 || true
-    done
-  done
-) &
-# Mesh policy of ambient cells (templates/cell-mesh.yaml, #53): HBONE NetworkPolicy and STRICT PeerAuthentication.
-cmt="$addon/tests/kyverno/cell-mesh"
-(
-  helm template kyverno-policies "$addon" --namespace kyverno -s templates/cell-mesh.yaml > "$TMP/cm.yaml"
-  for p in openchoreo-cell-hbone openchoreo-cell-strimzi openchoreo-cell-mtls openchoreo-cell-authz; do
-    yq "select(.kind == \"GeneratingPolicy\" and .metadata.name == \"$p\")" "$TMP/cm.yaml" > "$TMP/cm-$p.yaml"
-    "$KYVERNO" apply "$TMP/cm-$p.yaml" --resource "$cmt/namespaces.yaml" > "$TMP/cm-$p.out" 2>&1 || true
-  done
-) &
+# A render check, not a policy verdict: data-plane capabilities are not rendered on workload clusters.
+helm template kyverno-policies "$addon" --namespace kyverno -s templates/data-plane-capabilities.yaml \
+  > "$TMP/dpc-workload.yaml" 2>&1 || true
 wait
 
 for s in "${suites[@]}"; do
@@ -346,20 +333,11 @@ stamp=$(printf '%s\n' "$out" | sed -n 's/.*platform.koorikla.io\/expires-at: "\(
 now=$(cat "$TMP/pv-stamp.time")
 assert_eq "$([[ -n "$stamp" ]] && (( stamp > now + 172800 - 120 && stamp <= now + 172800 )) && echo yes || echo "no ($stamp vs $now)")" yes \
   "previews: expires-at = creation + 48h"
-assert_match "$(cat "$TMP/pv-cap-at-cap.out")" 'pass: 0, fail: 1, warn: 0, error: 0' "previews: a 3rd preview of tenant demo is denied (cap 2)"
-assert_match "$(cat "$TMP/pv-cap-at-cap.out")" 'tenant demo already runs 2 preview environment\(s\), the cap is 2' "previews: the cap denial names tenant and cap"
-assert_match "$(cat "$TMP/pv-cap-below-cap.out")" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: the 2nd preview passes; other tenants' previews and development do not count"
 out=$(cat "$TMP/pv-ttl.out")
 assert_match "$out" 'pass: 2, fail: 3, warn: 0, error: 0' "previews: platform-preview-ttl deletes 2 of 5 Environments"
 for keep in pr-2-fresh pr-4-in-grace development; do
   assert_match "$out" "resource default/Environment/$keep failed" "previews: TTL keeps $keep"
 done
-out=$(cat "$TMP/pv-guardrails.out")
-assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews: guardrails match only the preview cell namespace"
-for k in 'kind: ResourceQuota' 'kind: LimitRange' 'name: platform-preview-isolation'; do
-  assert_match "$out" "$k" "previews: preview cell namespace gets $k"
-done
-assert_eq "$(grep -c 'kind: CiliumNetworkPolicy' <<<"$out" || true)" 0 "previews: no CiliumNetworkPolicy without cni cilium"
 # #331: the preview's own database. Quota: the smallest postgresql volume the ClusterResourceType allows must fit next
 # to the app (the type's minimum is the one source; a smaller quota denies the CNPG PVC).
 crt_min=$(yq -r '.spec.environmentConfigs.openAPIV3Schema.properties.storageGiB.minimum' \
@@ -369,13 +347,11 @@ assert_match "$crt_min" '^[0-9]+$' "previews: ClusterResourceType postgresql dec
 assert_match "$quota" '^[0-9]+Gi$' "previews: the storage quota is in Gi ($quota)"
 assert_eq "$([[ ${quota%Gi} -ge $((crt_min + 5)) ]] && echo fits)" fits \
   "previews: storage quota $quota >= postgresql minimum ${crt_min}Gi + 5Gi app volumes"
-# API egress (Cilium never matches ipBlocks against the API server): generated only with cni cilium, and its selectors
-# match exactly CNPG instance / job pods - never an app pod, even one that copies CNPG labels.
-out=$(cat "$TMP/pv-guardrails-cilium.out")
-assert_match "$out" 'pass: 1, fail: 0, warn: 0, error: 0' "previews (cilium): guardrails match only the preview cell namespace"
-assert_match "$out" 'name: platform-preview-database-apiserver' "previews (cilium): the preview cell gets the database API egress policy"
-cnp=$(yq 'select(.kind == "GeneratingPolicy") | .spec.generate[0].template.value' "$TMP/pv-GeneratingPolicy-cilium.yaml" \
-  | yq -o=json 'select(.kind == "CiliumNetworkPolicy")')
+# API egress (Cilium never matches ipBlocks against the API server): generated only with cni cilium (suite
+# previews-guardrails-cilium proves the generated objects equal its generated.yaml). Label selectors are semantics
+# kyverno test does not evaluate: they match exactly CNPG instance / job pods - never an app pod, even one that copies
+# CNPG labels.
+cnp=$(yq -o=json 'select(.kind == "CiliumNetworkPolicy")' "$addon/tests/kyverno/previews-guardrails-cilium/generated.yaml")
 sel=$(py - "$cnp" <<'PY'
 import json, sys
 cnp = json.loads(sys.argv[1])
@@ -406,7 +382,7 @@ assert_eq "$sel" "instance initdb" "previews (cilium): kube-apiserver egress onl
 # when the API server rejects it, and kubeconform never sees objects embedded in a policy (#331 live: spec.specs).
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 [[ -s "$SCHEMAS_DIR/cilium.io/ciliumnetworkpolicy_v2.json" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" "$ROOT/hack/schemas.sh" >/dev/null
-yq -P '.metadata.namespace = "dp-x"' <<<"$cnp" > "$TMP/pv-cnp.yaml"
+yq -P '.' <<<"$cnp" > "$TMP/pv-cnp.yaml"
 assert_eq "$(kc_valid "$TMP/pv-cnp.yaml")" yes "previews (cilium): the generated CiliumNetworkPolicy validates against the Cilium CRD schema"
 
 # openbao preview descriptors: exactly the preview binding in the org namespace, tenant = its project (not a label)
@@ -420,36 +396,15 @@ assert_match "$out" "tenant: $(printf demo | base64)" "openbao previews: tenant 
 assert_match "$out" "environment: $(printf pr-33-hello-world | base64)" "openbao previews: environment = spec.environment"
 assert_match "$out" 'openbao.platform.koorikla.io/tenant: "true"' "openbao previews: descriptor label (found by tenant-clients)"
 
-# data-plane capabilities: context:binding:expected
-pass='pass: 1, fail: 0, warn: 0, error: 0'; fail='pass: 0, fail: 1, warn: 0, error: 0'
-for c in capable:bindings:"$pass" incapable:bindings:"$fail" opted-out:bindings:"$fail" \
-  capable:binding-cache:"$pass" incapable:binding-cache:"$pass" capable:binding-orphan:"$fail"; do
-  ctx=${c%%:*}; rest=${c#*:}; b=${rest%%:*}; want=${rest#*:}
-  assert_match "$(cat "$TMP/dpc-$ctx-$b.out")" "$want" "data-plane capabilities: $b.yaml with data plane $ctx -> $want"
-done
-assert_match "$(cat "$TMP/dpc-incapable-bindings.out")" \
-  'ClusterResourceType postgresql needs addon\(s\) crossplane on the data plane of environment development, but ClusterDataPlane dev1 does not run crossplane' \
-  "data-plane capabilities: the denial names type, addon, environment and data plane"
-assert_match "$(cat "$TMP/dpc-capable-binding-orphan.out")" 'Resource ghost does not exist in namespace default' \
-  "data-plane capabilities: a binding of a missing Resource is denied"
 assert_eq "$(grep -c 'kind:' "$TMP/dpc-workload.yaml" || true)" 0 "data-plane capabilities: not rendered on workload clusters"
 
-# cell mesh: policy:expected count:namespaces that must match (tests/kyverno/cell-mesh/namespaces.yaml lists why)
-for c in openchoreo-cell-hbone:3:'development production legacy' openchoreo-cell-mtls:3:'development production legacy' \
-  openchoreo-cell-strimzi:3:'development production legacy' \
-  openchoreo-cell-authz:3:'development production legacy'; do
-  p=${c%%:*}; rest=${c#*:}; n=${rest%%:*}; want=${rest#*:}
-  out=$(cat "$TMP/cm-$p.out")
-  assert_match "$out" "pass: $n, fail: 0, warn: 0, error: 0" "cell mesh: $p generates into $n of 6 namespaces"
-  got=$(printf '%s\n' "$out" | sed -n "s|^policy $p applied to /Namespace/dp-default-demo-\([a-z]*\)-1234abcd:.*|\1|p" | tr '\n' ' ')
-  assert_eq "${got% }" "$want" "cell mesh: $p matches exactly the cells: $want"
-done
-assert_match "$(cat "$TMP/cm-openchoreo-cell-hbone.out")" 'port: 15008' "cell mesh: HBONE NetworkPolicy opens tcp 15008"
+# cell mesh: suite tests/kyverno/cell-mesh proves which namespaces get what and that the generated objects equal its
+# generated.yaml. The checks below interpret those objects, which kyverno test does not do.
+cmg="$addon/tests/kyverno/cell-mesh/generated.yaml"
 # Kubelet probes (ambient SNATs them to a link-local source that Cilium treats as world): every generated policy has
 # one rule admitting exactly the probe sources (any port), and no ipBlock rule opens 15008. Shape per policy:
 #   <probe source CIDRs>|<ports of that rule>|<rules that combine 15008 with an ipBlock>
-sed -n '/^apiVersion: networking.k8s.io/,/^---$/p' "$TMP/cm-openchoreo-cell-hbone.out" |
-  yq -o=json -I=0 'select(.kind == "NetworkPolicy")' > "$TMP/cm-np.json"
+yq -o=json -I=0 'select(.kind == "NetworkPolicy" and .metadata.name == "platform-mesh-hbone")' "$cmg" > "$TMP/cm-np.json"
 probes=$(python3 -c '
 import json, sys
 for line in sys.stdin:
@@ -462,20 +417,15 @@ for line in sys.stdin:
 ' < "$TMP/cm-np.json" | tr -d '\r' | tr '\n' ' ')
 want='169.254.7.127/32,fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128|any|0'
 assert_eq "${probes% }" "$want $want $want" "cell mesh: every HBONE NetworkPolicy admits kubelet probes from ambient's SNAT source only"
-# #210: the Strimzi NetworkPolicy generated into cells is a valid NetworkPolicy (Kyverno fails the generate otherwise)
-sed -n '/^apiVersion: networking.k8s.io/,/^---$/p' "$TMP/cm-openchoreo-cell-strimzi.out" |
-  yq 'select(.kind == "NetworkPolicy" and .metadata.namespace == "dp-default-demo-development-1234abcd")' > "$TMP/cm-strimzi-np.yaml"
-assert_eq "$(yq '.spec.podSelector.matchExpressions[0].key' "$TMP/cm-strimzi-np.yaml")" strimzi.io/cluster \
-  "cell mesh: platform-strimzi selects the Strimzi pods of the cell"
+# #210: the Strimzi NetworkPolicy generated into cells is a valid NetworkPolicy (Kyverno fails the generate otherwise;
+# kyverno test does not validate generated objects against their schema)
+yq 'select(.kind == "NetworkPolicy" and .metadata.name == "platform-strimzi" and
+  .metadata.namespace == "dp-default-demo-development-1234abcd")' "$cmg" > "$TMP/cm-strimzi-np.yaml"
 assert_eq "$(kc_valid "$TMP/cm-strimzi-np.yaml")" yes "cell mesh: the generated platform-strimzi validates as a NetworkPolicy"
-# PeerAuthentication mode per cell, in output order: STRICT unless opted out with platform.koorikla.io/mtls=permissive
-modes=$(sed -n 's/^ *mode: \([A-Z]*\)$/\1/p' "$TMP/cm-openchoreo-cell-mtls.out" | tr '\n' ' ')
-assert_eq "${modes% }" "STRICT STRICT PERMISSIVE" "cell mesh: PeerAuthentication STRICT in development/production, PERMISSIVE in the opted-out cell"
 # #324: who gets into a cell. The generated AuthorizationPolicies replayed with Istio's L4 ALLOW semantics (ztunnel: a
 # request passes when any rule matches; namespaces/principals need a peer identity, so plaintext never matches). No
 # policy at all (before #324) admits every case below, so the "refused" lines are the negative security test.
-sed -n '/^apiVersion: security.istio.io/,/^---$/p' "$TMP/cm-openchoreo-cell-authz.out" |
-  yq -o=json -I=0 'select(.kind == "AuthorizationPolicy")' > "$TMP/cm-ap.json"
+yq -o=json -I=0 'select(.kind == "AuthorizationPolicy")' "$cmg" > "$TMP/cm-ap.json"
 dev=dp-default-demo-development-1234abcd; prod=dp-default-demo-production-1234abcd; legacy=dp-default-demo-legacy-1234abcd
 authz=$(python3 - "$TMP/cm-ap.json" "$dev:$dev/sa/default" "$dev:$dev/sa/r-orders-db" \
   "$dev:openchoreo-data-plane/sa/gateway-default" "$dev:telemetry/sa/openchoreo-prometheus-agent" "$dev:cnpg-system/sa/cnpg" \

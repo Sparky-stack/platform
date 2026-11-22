@@ -122,7 +122,7 @@ Each failure mode below has its own Steps, Verify and Rollback.
   ```
   Fix the underlying cause (never weaken `production` to `Audit`):
   - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (the app-* workflows output `image_digest_ref`) and cut a new `ComponentRelease`.
-  - **Repository or `workflowRef` mismatch**: add `owner/repo` to `imageVerification.github.repositories` in `installations/<inst>/addons/kyverno-policies/values.yaml` or align `workflowRef` with koorikla/platform tag `ci-v1`.
+  - **Repository or `workflowRef` mismatch**: add a trusted source for `owner/repo` (ref, trigger) to `imageVerification.github.trustedSources` in `installations/<inst>/addons/kyverno-policies/values.yaml` ([supply-chain.md](../supply-chain.md#trusted-sources)) or align `workflowRef` with koorikla/platform tag `ci-v1`.
   - **Harbor `apps/` image fails the platform-key check**: with no inline `publicKey`, the key comes from mgmt in ConfigMap `kyverno/platform-image-verification`. Check it exists on the cluster and that `ClusterResourceSet/<cluster>-image-verification` in `fleet` on mgmt is applied ([supply-chain.md](../supply-chain.md#wiring-the-key)).
   - **Webhook timeout (`context deadline exceeded`)**: a check of a digest not yet in Kyverno's verification cache takes ~5-10 s ([supply-chain.md "Admission latency"](../supply-chain.md#admission-latency)); much slower means the cluster's egress to `ghcr.io` / `tuf-repo-cdn.sigstore.dev` is degraded. The rollout retries; successful checks are cached per digest.
   - **Kyverno webhook down (`failurePolicy: Fail`)**: running production pods stay up and platform namespaces are excluded; restore `deploy/kyverno-admission-controller` in `kyverno`.

@@ -278,7 +278,9 @@ tests:
     set:
       imageVerification.github.workflowRef: 0123456789abcdef0123456789abcdef01234567
       imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
-      imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+        - { name: gh-koorikla-other-heads-main, repository: koorikla/other, ref: refs/heads/main, trigger: push }
     asserts:
       - lengthEqual: { path: spec.attestors, count: 4 }
       - equal: { path: "spec.attestors[0].name", value: gh-koorikla-hello-world-heads-main }
@@ -395,13 +397,16 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: one attestor per allowed (repository, ref); the platform key only when a public key is set
+  - it: one attestor per trusted source, in list order; the platform key only when a public key is set
     template: templates/image-verification.yaml
     documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
       registry: { host: "harbor.openchoreo.localhost:9443", appsProject: apps }
-      imageVerification.github.repositories: [koorikla/hello-world, koorikla/other]
-      imageVerification.github.refs: [refs/heads/main, refs/tags/v1]
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+        - { name: gh-koorikla-hello-world-tags-v1, repository: koorikla/hello-world, ref: refs/tags/v1, trigger: push }
+        - { name: gh-koorikla-other-heads-main, repository: koorikla/other, ref: refs/heads/main, trigger: push }
+        - { name: gh-koorikla-other-tags-v1, repository: koorikla/other, ref: refs/tags/v1, trigger: push }
       imageVerification.github.transitionWorkflowRefs: []
       imageVerification.platformKey.publicKey: |
         -----BEGIN PUBLIC KEY-----
@@ -410,21 +415,104 @@ tests:
     asserts:
       - lengthEqual: { path: spec.attestors, count: 5 }
       - equal: { path: "spec.attestors[3].name", value: gh-koorikla-other-tags-v1 }
+      - equal:
+          path: spec.attestors[3].cosign.keyless.additionalExtensions
+          value: { githubWorkflowRepository: koorikla/other, githubWorkflowRef: refs/tags/v1, githubWorkflowTrigger: push }
       - equal: { path: "spec.attestors[4].name", value: platform-key }
       - equal: { path: "spec.attestors[4].cosign.ctlog", value: { insecureIgnoreTlog: true, insecureIgnoreSCT: true } }
       - contains: { path: spec.matchImageReferences, content: { glob: "harbor.openchoreo.localhost:9443/apps/*" } }
       - lengthEqual: { path: spec.matchImageReferences, count: 2 }
 
-  - it: one attestor per trigger when several triggers are allowed
+  - it: another trigger of the same repository and ref is its own trusted source
     template: templates/image-verification.yaml
     documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
     set:
-      imageVerification.github.triggers: [push, workflow_dispatch]
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+        - name: gh-koorikla-hello-world-heads-main-workflow-dispatch
+          repository: koorikla/hello-world
+          ref: refs/heads/main
+          trigger: workflow_dispatch
       imageVerification.github.transitionWorkflowRefs: []
     asserts:
       - lengthEqual: { path: spec.attestors, count: 2 }
       - equal: { path: "spec.attestors[1].name", value: gh-koorikla-hello-world-heads-main-workflow-dispatch }
       - equal: { path: "spec.attestors[1].cosign.keyless.additionalExtensions.githubWorkflowTrigger", value: workflow_dispatch }
+
+  - it: a transition copy keeps the first 52 characters of a 60-character name plus -<sha7>
+    template: templates/image-verification.yaml
+    documentSelector: { path: metadata.name, value: openchoreo-verify-images-enforce }
+    set:
+      imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-a-very-long-repository-name-for-tests-heads-main, repository: koorikla/a-very-long-repository-name-for-tests, ref: refs/heads/main, trigger: push }
+    asserts:
+      - equal: { path: "spec.attestors[0].name", value: gh-koorikla-a-very-long-repository-name-for-tests-heads-main }
+      - equal: { path: "spec.attestors[1].name", value: gh-koorikla-a-very-long-repository-name-for-tests-he-fedcba9 }
+
+  - it: transition copies of two names that share their first 52 characters collide and are refused
+    template: templates/image-verification.yaml
+    set:
+      imageVerification.github.transitionWorkflowRefs: [fedcba9876543210fedcba9876543210fedcba98]
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-a-very-long-repository-name-for-tests-heads-main, repository: koorikla/a-very-long-repository-name-for-tests, ref: refs/heads/main, trigger: push }
+        - { name: gh-koorikla-a-very-long-repository-name-for-tests-heads-next, repository: koorikla/a-very-long-repository-name-for-tests, ref: refs/heads/next, trigger: push }
+    asserts:
+      - failedTemplate:
+          errorPattern: 'imageVerification.github: attestor names collide after truncation to 60 characters: '
+
+  - it: a trusted-source name longer than 60 characters is refused (values.schema.json)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-a-very-long-repository-name-for-tests-heads-mainx, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/imageVerification/github/trustedSources/0/name': maxLength: got 61, want 60"
+
+  - it: a trusted-source name that is not a DNS label is refused (values.schema.json)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.trustedSources:
+        - { name: gh_koorikla_hello-world, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/imageVerification/github/trustedSources/0/name': 'gh_koorikla_hello-world' does not match pattern"
+
+  - it: a trusted-source name listed twice is refused (templates/validate.yaml)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push }
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/other, ref: refs/heads/main, trigger: push }
+    asserts:
+      - failedTemplate:
+          errorMessage: 'imageVerification.github.trustedSources: name "gh-koorikla-hello-world-heads-main" is listed more than once (each name is one attestor)'
+
+  - it: a trusted source names its repository, ref and trigger (values.schema.json)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.trustedSources:
+        - { name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main }
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/imageVerification/github/trustedSources/0': missing property 'trigger'"
+
+  - it: the GitHub source needs at least one trusted source
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.trustedSources: []
+    asserts:
+      - failedTemplate:
+          errorMessage: imageVerification.github.trustedSources must not be empty
+
+  - it: the old repositories x refs x triggers keys are refused, so a stale overlay fails loudly (values.schema.json)
+    template: templates/validate.yaml
+    set:
+      imageVerification.github.repositories: [koorikla/hello-world]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/imageVerification/github': additional properties 'repositories' not allowed"
 
   - it: the platform registry is NOT trusted without a public key (unsigned in-cluster images are denied in production)
     template: templates/image-verification.yaml

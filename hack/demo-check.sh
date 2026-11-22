@@ -405,8 +405,8 @@ c_cosign() {
   issuer=$(yq '.imageVerification.github.issuer' "$KYVERNO_VALUES")
   workflow=$(yq '.imageVerification.github.workflow' "$KYVERNO_VALUES")
   wref=$(yq '.imageVerification.github.workflowRef' "$KYVERNO_VALUES")
-  ref=$(yq '.imageVerification.github.refs[0]' "$KYVERNO_VALUES")
-  trig=$(yq '.imageVerification.github.triggers[0]' "$KYVERNO_VALUES")
+  ref=$(yq '.imageVerification.github.trustedSources[0].ref' "$KYVERNO_VALUES")
+  trig=$(yq '.imageVerification.github.trustedSources[0].trigger' "$KYVERNO_VALUES")
   if ! err=$(cosign verify --timeout 60s \
       --certificate-oidc-issuer "$issuer" --certificate-identity "$workflow@$wref" \
       --certificate-github-workflow-repository "$repo" --certificate-github-workflow-ref "$ref" \

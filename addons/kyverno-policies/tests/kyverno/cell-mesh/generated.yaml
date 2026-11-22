@@ -1,0 +1,295 @@
+# What the GeneratingPolicies of templates/cell-mesh.yaml create in the ambient cells of namespaces.yaml; kyverno test
+# compares each generated object with its entry here (kyverno apply policies.yaml --resource namespaces.yaml prints them).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-mesh-hbone
+  namespace: dp-default-demo-development-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: openchoreo.dev/component
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-strimzi
+  namespace: dp-default-demo-development-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: strimzi
+          podSelector:
+            matchLabels:
+              strimzi.io/kind: cluster-operator
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+          podSelector:
+            matchLabels:
+              app: keda-operator
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: strimzi.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  labels: {}
+  name: default
+  namespace: dp-default-demo-development-1234abcd
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  labels: {}
+  name: platform-cell-peers
+  namespace: dp-default-demo-development-1234abcd
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - dp-default-demo-development-1234abcd
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/openchoreo-data-plane/sa/gateway-default
+              - cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent
+              - cluster.local/ns/cnpg-system/sa/cnpg
+              - cluster.local/ns/moco-system/sa/moco-controller-manager
+              - cluster.local/ns/keda/sa/keda-operator
+              - cluster.local/ns/strimzi/sa/strimzi-cluster-operator
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-mesh-hbone
+  namespace: dp-default-demo-production-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: openchoreo.dev/component
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-strimzi
+  namespace: dp-default-demo-production-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: strimzi
+          podSelector:
+            matchLabels:
+              strimzi.io/kind: cluster-operator
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+          podSelector:
+            matchLabels:
+              app: keda-operator
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: strimzi.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  labels: {}
+  name: default
+  namespace: dp-default-demo-production-1234abcd
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  labels: {}
+  name: platform-cell-peers
+  namespace: dp-default-demo-production-1234abcd
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - dp-default-demo-production-1234abcd
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/openchoreo-data-plane/sa/gateway-default
+              - cluster.local/ns/telemetry/sa/openchoreo-prometheus-agent
+              - cluster.local/ns/cnpg-system/sa/cnpg
+              - cluster.local/ns/moco-system/sa/moco-controller-manager
+              - cluster.local/ns/keda/sa/keda-operator
+              - cluster.local/ns/strimzi/sa/strimzi-cluster-operator
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-mesh-hbone
+  namespace: dp-default-demo-legacy-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+      ports:
+        - port: 15008
+          protocol: TCP
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: openchoreo.dev/component
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels: {}
+  name: platform-strimzi
+  namespace: dp-default-demo-legacy-1234abcd
+spec:
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: openchoreo.dev/system-component
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: strimzi
+          podSelector:
+            matchLabels:
+              strimzi.io/kind: cluster-operator
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+          podSelector:
+            matchLabels:
+              app: keda-operator
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+        - ipBlock:
+            cidr: fd16:9254:7127:1337:ffff:ffff:ffff:ffff/128
+  podSelector:
+    matchExpressions:
+      - key: strimzi.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  labels: {}
+  name: default
+  namespace: dp-default-demo-legacy-1234abcd
+spec:
+  mtls:
+    mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  labels: {}
+  name: platform-cell-peers
+  namespace: dp-default-demo-legacy-1234abcd
+spec:
+  action: ALLOW
+  rules:
+    - {}

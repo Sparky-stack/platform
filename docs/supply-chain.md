@@ -32,22 +32,21 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     (github-actions digest pinning) to the same commit;
   - **moving the pin**: running production images were signed at the previous commit, so a bare bump of
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
-    until each allowed repository's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
-    per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (suffix
-    `-<sha7>` for the transition commit) and the validations accept any of them, current-pin attestors first: images
+    until each trusted source's production image is rebuilt at the new one. Kyverno 1.20 verifies one identity
+    per attestor ("multiple identities are not supported"), so each trusted commit renders its own attestors (the
+    source's name for `workflowRef`, its first 52 characters plus `-<sha7>` for the transition commit) and the validations accept any of them, current-pin attestors first: images
     already rebuilt cost nothing extra, images still at the old commit pay one failed verification per check on every
     admission (failures are not cached, see "Admission latency"). Keep the window short.
     Steps: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
     their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
     `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
     ([#128](https://github.com/koorikla/platform/issues/128));
-  - **plus** the certificate extensions `githubWorkflowRepository` (from `github.repositories`),
-    `githubWorkflowRef` (from `github.refs`) and `githubWorkflowTrigger` (from `github.triggers`, default `push`).
-    The subject alone would accept any repository on GitHub calling the public reusable workflow; the trigger pin
-    keeps out `pull_request_target` / `workflow_run` runs, which carry the main ref but may build untrusted PR code.
-    Kyverno matches extensions exactly, so every allowed (repository, ref, trigger) renders its own attestor, and the
-    validation accepts any of them (tried in order, so an image of the n-th repository pays n-1 failed verifications
-    per check and admission: keep the list short).
+  - **plus** the certificate extensions `githubWorkflowRepository`, `githubWorkflowRef` and `githubWorkflowTrigger`,
+    one record per trusted source in `github.trustedSources` (below). The subject alone would accept any repository on
+    GitHub calling the public reusable workflow; the trigger pin (`push`) keeps out `pull_request_target` /
+    `workflow_run` runs, which carry the main ref but may build untrusted PR code. Kyverno matches extensions exactly,
+    so every trusted source renders its own attestor, and the validation accepts any of them (tried in list order, so
+    an image of the n-th source pays n-1 failed verifications per check and admission: keep the list short).
   - Required signed attestations from the same identity: `https://spdx.dev/Document/v2.3` (SBOM),
     `https://slsa.dev/provenance/v1` (provenance), `https://cosign.sigstore.dev/attestation/vuln/v1` (scan).
   - Transparency log: Rekor (`github.rekorURL`).
@@ -96,8 +95,38 @@ Evidence (Kyverno CLI v1.20.0 against the real image
   - an unknown predicate type is rejected and the error lists the types found.
 - Kyverno 1.20 verifies the cosign v3 Sigstore bundle format.
 
-Add an app repo: append its `owner/repo` to `imageVerification.github.repositories` in
-`installations/<inst>/addons/kyverno-policies/values.yaml` (a tenant file alone does not trust its images).
+### Trusted sources
+
+`imageVerification.github.trustedSources` lists who production trusts, one readable record per build source. The
+`name` is the attestor name, chosen by a human: a DNS label of at most 60 characters (`values.schema.json`), unique
+(`templates/validate.yaml`). The chart default trusts hello-world:
+
+```yaml
+imageVerification:
+  github:
+    trustedSources:
+      - name: gh-koorikla-hello-world-heads-main
+        repository: koorikla/hello-world   # githubWorkflowRepository
+        ref: refs/heads/main               # githubWorkflowRef
+        trigger: push                      # githubWorkflowTrigger
+```
+
+Only the workflow commit stays computed: each record renders one attestor for `workflowRef` and one per
+`transitionWorkflowRefs` commit (pin move above), so the Renovate-tracked SHA stays a single line.
+
+Add an app repo: create `installations/<inst>/addons/kyverno-policies/values.yaml` (or extend it) with the full list.
+Helm replaces lists, so repeat the default entry if the installation still runs hello-world:
+
+```yaml
+imageVerification:
+  github:
+    trustedSources:
+      - {name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push}
+      - {name: gh-acme-orders-heads-main, repository: acme/orders, ref: refs/heads/main, trigger: push}
+```
+
+A tenant file alone does not trust its images. The schema rejects unknown keys in the `github` block, so an overlay
+with the old `repositories` / `refs` / `triggers` keys fails to render instead of trusting nothing.
 
 ### Admission latency
 

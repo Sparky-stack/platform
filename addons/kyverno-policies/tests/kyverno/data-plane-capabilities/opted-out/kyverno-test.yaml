@@ -1,0 +1,13 @@
+# Data plane dev1 announces crossplane: "false": the postgresql binding is denied.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: data-plane-capabilities-opted-out
+policies: [../policies.yaml]
+resources: [../bindings.yaml]
+clusterResources: [cluster.yaml]
+results:
+  - policy: platform-data-plane-capabilities
+    kind: ResourceReleaseBinding
+    resources: [default/orders-db-development]
+    result: fail

@@ -1,0 +1,26 @@
+# Data plane dev1 does not announce crossplane: the postgresql binding is denied, naming type, addon, environment and
+# data plane; the valkey binding (no requirement) passes.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: data-plane-capabilities-incapable
+policies: [../policies.yaml]
+resources: [../bindings.yaml, ../binding-cache.yaml]
+clusterResources: [cluster.yaml]
+results:
+  - policy: platform-data-plane-capabilities
+    kind: ResourceReleaseBinding
+    resources: [default/orders-db-development]
+    result: fail
+  - policy: platform-data-plane-capabilities
+    kind: ResourceReleaseBinding
+    resources: [default/cache-development]
+    result: pass
+checks:
+  - match:
+      resource: {metadata: {name: orders-db-development}}
+    assert:
+      message: >-
+        ResourceReleaseBinding orders-db-development: ClusterResourceType postgresql needs addon(s) crossplane on the
+        data plane of environment development, but ClusterDataPlane dev1 does not run crossplane (fleet file
+        addons.<addon>: true sets annotation addons.platform.koorikla.io/<addon>; docs/data-services.md).

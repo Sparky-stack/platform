@@ -1,0 +1,50 @@
+# Offline: mesh policy of ambient cells (templates/cell-mesh.yaml, #53, #210, #324). Run by
+# hack/tests/test_kyverno_policies.sh, which renders the policies into policies.yaml here. Every policy generates into
+# exactly the three ambient cells of namespaces.yaml (development, production, legacy = opted out of STRICT mTLS) and
+# skips the dataplane-mode none cell, a non-cell and a platform namespace. generated.yaml holds the expected objects:
+# the HBONE NetworkPolicy (tcp 15008 plus the kubelet probe sources), platform-strimzi, the PeerAuthentication (STRICT,
+# PERMISSIVE in legacy) and AuthorizationPolicy platform-cell-peers. The script replays Istio's ALLOW semantics and the
+# probe rule on generated.yaml and validates it against the CRD schemas (kyverno test compares, it does not interpret).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: cell-mesh
+policies: [policies.yaml]
+resources: [namespaces.yaml]
+results:
+  - policy: openchoreo-cell-hbone
+    kind: Namespace
+    resources: [dp-default-demo-development-1234abcd, dp-default-demo-production-1234abcd, dp-default-demo-legacy-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: openchoreo-cell-hbone
+    kind: Namespace
+    resources: [dp-default-demo-nomesh-1234abcd, not-a-cell, telemetry]
+    result: skip
+  - policy: openchoreo-cell-strimzi
+    kind: Namespace
+    resources: [dp-default-demo-development-1234abcd, dp-default-demo-production-1234abcd, dp-default-demo-legacy-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: openchoreo-cell-strimzi
+    kind: Namespace
+    resources: [dp-default-demo-nomesh-1234abcd, not-a-cell, telemetry]
+    result: skip
+  - policy: openchoreo-cell-mtls
+    kind: Namespace
+    resources: [dp-default-demo-development-1234abcd, dp-default-demo-production-1234abcd, dp-default-demo-legacy-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: openchoreo-cell-mtls
+    kind: Namespace
+    resources: [dp-default-demo-nomesh-1234abcd, not-a-cell, telemetry]
+    result: skip
+  - policy: openchoreo-cell-authz
+    kind: Namespace
+    resources: [dp-default-demo-development-1234abcd, dp-default-demo-production-1234abcd, dp-default-demo-legacy-1234abcd]
+    generatedResource: generated.yaml
+    result: pass
+  - policy: openchoreo-cell-authz
+    kind: Namespace
+    resources: [dp-default-demo-nomesh-1234abcd, not-a-cell, telemetry]
+    result: skip
