@@ -391,7 +391,6 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: { drop: [ALL] }
             seccompProfile: { type: RuntimeDefault }
-            appArmorProfile: { type: RuntimeDefault }
           volumeMounts:
             - { name: ci, mountPath: /ci }
       container:

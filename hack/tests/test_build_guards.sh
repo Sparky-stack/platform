@@ -81,6 +81,10 @@ stage() {
   printf 'system roots\n' > "$root/etc/ssl/certs/ca-certificates.crt"
 }
 
+# A pod that asks for an AppArmor profile is rejected on nodes without AppArmor (e.g. k3d on Arch): only Unconfined.
+assert_eq "$(yq -N '.. | select(has("appArmorProfile")) | .appArmorProfile.type | select(. != "Unconfined")' "$TMP/cwt.yaml" | sort -u)" "" \
+  "workflow templates request no AppArmor profile other than Unconfined"
+
 # --- guards.sh: repository allowlist and scoped credentials ---------------------------------------------------------
 GUARDS="$WF/guards.sh"
 assert_eq "$(grep -c 'GIT_ASKPASS=' "$TMP/plane.yaml" || true)" 0 "no global GIT_ASKPASS anywhere"
