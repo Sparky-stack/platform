@@ -13,6 +13,7 @@ Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<co
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| bot | string | `"false"` | `"true"` when a bot (author login ending in `[bot]`) opened the PR and it lacks `previews.botLabel` (installation.yaml `previews.skipBots`); renders nothing. |
 | branch | string | `""` |  |
 | commit | string | `""` |  |
 | component | string | `""` |  |
@@ -22,6 +23,7 @@ Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<co
 | project | string | `""` | OpenChoreo `Project` (from the pull request generator alongside `component`, `pullRequest`, `commit`, `repository`, `branch`; malformed values fail the render). |
 | pullRequest | string | `""` |  |
 | repository | string | `""` |  |
+| waiting | string | `"false"` | `"true"` when the PR carries `previews.waitingLabel`: the tenant is at its preview cap, the auto-build pass holds this PR (failed commit status) and removes the label when a slot frees (#385); renders nothing meanwhile. |
 
 ## Day-2 notes
 

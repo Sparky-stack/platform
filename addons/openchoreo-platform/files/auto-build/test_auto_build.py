@@ -497,11 +497,14 @@ def opted_in(opt=True, **kw):
     return c
 
 
-def environment(name="pr-7-hello-world", expires=None, created="2026-11-17T11:00:00Z"):
-    labels = {ab.PREVIEW_LABEL: "true"}
+def environment(name="pr-7-hello-world", expires=None, created="2026-11-17T11:00:00Z", tenant="demo", deleting=False):
+    labels = {ab.PREVIEW_LABEL: "true", ab.TENANT_LABEL: tenant}
     if expires is not None:
         labels[ab.EXPIRES_LABEL] = str(expires)
-    return {"metadata": {"name": name, "uid": "env-uid", "labels": labels, "creationTimestamp": created}}
+    env = {"metadata": {"name": name, "uid": "env-uid", "labels": labels, "creationTimestamp": created}}
+    if deleting:
+        env["metadata"]["deletionTimestamp"] = "2026-11-17T11:59:00Z"
+    return env
 
 
 BASE_RELEASE = {"metadata": {"name": "hello-world-77ff9dc697"},
@@ -512,9 +515,9 @@ BASE_RELEASE = {"metadata": {"name": "hello-world-77ff9dc697"},
 PR_IMAGE = "harbor/apps/demo/hello-world:bbbbbbb@sha256:" + "2" * 64
 
 
-def pull(sha=SHA_B, state="open", head_repo=SLUG, labels=()):
+def pull(sha=SHA_B, state="open", head_repo=SLUG, labels=(), author="koorik"):
     return {"state": state, "head": {"sha": sha, "ref": "feat/x", "repo": {"full_name": head_repo} if head_repo else None},
-            "labels": [{"name": n} for n in labels]}
+            "labels": [{"name": n} for n in labels], "user": {"login": author}}
 
 
 def run_obj(name, done=False, ok=True):
@@ -553,6 +556,7 @@ class FakePreviewApi(FakeApi):
         self.workflows = workflows or {}
         self.statuses = []
         self.labels_added = []
+        self.labels_removed = []
         self.releases = []
         self.pokes = []
 
@@ -582,6 +586,12 @@ class FakePreviewApi(FakeApi):
 
     def add_label(self, slug, number, label):
         self.labels_added.append((slug, number, label))
+
+    def remove_label(self, slug, number, label):
+        self.labels_removed.append((slug, number, label))
+
+    def preview_environments(self):
+        return [o for (r, _), o in sorted(self.objects.items()) if r == "environments" and o]
 
     def poke_binding(self, name, release):
         self.pokes.append((name, release))
@@ -822,6 +832,128 @@ class PreviewReconcile(unittest.TestCase):
         api = self.api()
         previews(api, repository="koorikla/other")
         self.assertEqual(api.created, [])
+
+
+class PreviewCap(unittest.TestCase):
+    """#385: a PR beyond the tenant's cap waits as a PR label (its Application renders nothing) with a failed
+    commit status, instead of an Application whose Environment Kyverno denies on every retry."""
+
+    def api(self, prs=("7", "8", "9"), running=(), waiting=()):
+        """prs: open PRs of hello-world (tenant demo), head SHA = the number repeated; running: those with a live
+        preview Environment; waiting: those labelled preview-waiting."""
+        objs = {("componentreleases", "hello-world-77ff9dc697"): BASE_RELEASE}
+        for n in running:
+            objs[("environments", "pr-%s-hello-world" % n)] = environment(
+                name="pr-%s-hello-world" % n, expires=int(NOW.timestamp()) + 3600)
+        apps = [preview_app(number=n, sha=n * 40) for n in prs]
+        pulls = dict((n, pull(sha=n * 40, labels=["preview-waiting"] if n in waiting else [])) for n in prs)
+        return FakePreviewApi(apps, [opted_in()], pulls, objs)
+
+    def status_of(self, api, n):
+        """(state, description) of the last commit status of PR n, or None."""
+        mine = [(st[1], st[2]) for st in api.statuses if st[0] == n * 40]
+        return mine[-1] if mine else None
+
+    def test_pr_beyond_the_cap_is_held_with_a_failed_status_naming_cap_and_tenant(self):
+        api = self.api(running=("7", "8"))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_added, [(SLUG, "9", "preview-waiting")])
+        state, desc = self.status_of(api, "9")
+        self.assertEqual(state, "failure")
+        self.assertIn("preview cap 2 reached for tenant demo", desc)
+        self.assertIn("close a PR or wait for expiry", desc)
+        self.assertLessEqual(len(desc), 140)
+        self.assertNotIn("hello-world-pr9-" + "9" * 12, [r["metadata"]["name"] for r in api.created])
+
+    def test_held_pr_is_not_labelled_twice_and_the_status_is_posted_once(self):
+        api = self.api(running=("7", "8"), waiting=("9",))
+        state = {}
+        previews(api, state, cap=2)
+        previews(api, state, cap=2)
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(api.labels_removed, [])
+        self.assertEqual(len([st for st in api.statuses if st[0] == "9" * 40]), 1)
+        self.assertEqual(self.status_of(api, "9")[0], "failure")
+
+    def test_freed_slot_releases_the_held_pr_so_the_next_pass_creates_it(self):
+        api = self.api(prs=("7", "9"), running=("7",), waiting=("9",))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.status_of(api, "9")[0], "pending")
+
+    def test_terminating_environment_frees_its_slot_like_the_kyverno_policy(self):
+        api = self.api(prs=("7", "9"), running=("7",), waiting=("9",))
+        api.objects[("environments", "pr-8-hello-world")] = environment(name="pr-8-hello-world", deleting=True)
+        previews(api, cap=2)
+        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
+
+    def test_one_free_slot_goes_to_one_pr_oldest_first(self):
+        api = self.api(running=("7",), waiting=("8", "9"))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_removed, [(SLUG, "8", "preview-waiting")])
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.status_of(api, "9")[0], "failure")
+
+    def test_released_pr_keeps_its_slot_until_its_environment_exists(self):
+        # PR 9 was released last pass (label gone, Environment not created yet): an older PR that still waits does
+        # not overtake it, so nothing goes over the cap
+        api = self.api(running=("7",), waiting=("8",))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_removed, [])
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.status_of(api, "9")[0], "pending")
+        self.assertEqual(self.status_of(api, "8")[0], "failure")
+
+    def test_preview_that_got_its_environment_keeps_it_even_when_labelled(self):
+        # labelled by an earlier pass, but Kyverno admitted its Environment before Argo CD saw the label
+        api = self.api(prs=("7", "9"), running=("7", "9"), waiting=("9",))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
+        self.assertEqual(api.labels_added, [])
+
+    def test_other_tenants_do_not_count(self):
+        api = self.api(prs=("7", "9"), running=("7",))
+        api.objects[("environments", "pr-1-other")] = environment(name="pr-1-other", tenant="other")
+        previews(api, cap=2)
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.status_of(api, "9")[0], "pending")
+
+    def test_no_cap_configured_leaves_admission_to_kyverno(self):
+        api = self.api(running=("7", "8"))
+        previews(api)
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.status_of(api, "9")[0], "pending")
+
+
+class PreviewBots(unittest.TestCase):
+    def api(self, labels=(), author="dependabot[bot]"):
+        objs = {("componentreleases", "hello-world-77ff9dc697"): BASE_RELEASE}
+        return FakePreviewApi([preview_app()], [opted_in()], {"7": pull(labels=labels, author=author)}, objs)
+
+    def test_bot_pr_gets_no_preview_and_a_non_blocking_status(self):
+        api = self.api()
+        previews(api, cap=2)
+        self.assertEqual(api.created, [])
+        self.assertEqual(api.labels_added, [])
+        self.assertEqual(api.statuses[-1][1], "success")
+        self.assertIn("label preview", api.statuses[-1][2])
+
+    def test_bot_pr_labelled_preview_gets_one(self):
+        api = self.api(labels=["preview"])
+        previews(api, cap=2)
+        self.assertEqual(api.statuses[-1][1], "pending")
+        self.assertNotIn("bot", api.statuses[-1][2])
+
+    def test_switch_off_previews_bot_prs_like_any_other(self):
+        api = self.api()
+        previews(api, cap=2, skip_bots=False)
+        self.assertEqual(api.statuses[-1][1], "pending")
+
+    def test_human_login_containing_bot_is_not_a_bot(self):
+        api = self.api(author="robotnik")
+        previews(api, cap=2)
+        self.assertEqual(api.statuses[-1][1], "pending")
 
 
 DB_RELEASE = {"metadata": {"name": "hello-world-pr-7-bbbbbbbbbbbb"},

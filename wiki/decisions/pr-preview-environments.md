@@ -1,7 +1,7 @@
 ---
 title: PR Preview Environments Design
 created: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-22
 type: decision
 tags: [openchoreo, argocd, mesh]
 confidence: high
@@ -20,6 +20,8 @@ OpenChoreo 1.3.3 allows only one active `ReleaseBinding` per component per `Envi
 ## Alternatives rejected
 - **Multiple `ReleaseBinding`s in the shared `development` Environment:** Rejected by OpenChoreo 1.3.3 admission/controller invariants.
 - **Bypassing OpenChoreo with raw Deployment/HTTPRoute preview charts:** Would skip cell NetworkPolicies, ambient mTLS, and secret-store isolation.
+
+- Per-tenant cap (#385): an admission denial (Kyverno `platform-preview-cap`) alone leaves the Application retrying forever with nothing on the PR. The auto-build pass counts the same `previews.maxPerTenant` first and holds extra PRs via a PR label (`preview-waiting`) that makes the generated Application render nothing, plus commit status failure; it removes the label when a slot frees. Desired state, not retries, carries "wait". Bot PRs (`[bot]` author) render nothing unless labelled `preview` (`previews.skipBots`).
 
 ## Consequences
 - Kyverno's `reports-controller` needs RBAC to read OpenChoreo `Environment` objects so the preview `MutatingPolicy` reports `Ready` (PR #176), and Argo CD needs a custom health check for `DeletingPolicy` ([Argo DeletingPolicy health](../gotchas/argocd-custom-health-deletingpolicy-and-crs.md)).

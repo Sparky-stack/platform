@@ -1,6 +1,6 @@
 {{- /* Cross-field checks of the preview identity (formats are in values.schema.json, which allows "" for standalone lint
-and expired previews): required unless expired, and the route host label fits one DNS label. */ -}}
-{{- if ne (toString .Values.expired) "true" -}}
+and previews that are off): required unless off (preview.on), and the route host label fits one DNS label. */ -}}
+{{- if eq (include "preview.on" .) "true" -}}
 {{- $c := required "component is required" .Values.component -}}
 {{- $_ := required "project is required" .Values.project -}}
 {{- if not (toString .Values.pullRequest) -}}{{- fail "pullRequest \"\" must be a pull request number" -}}{{- end -}}

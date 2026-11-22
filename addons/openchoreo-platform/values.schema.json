@@ -821,6 +821,27 @@
         "enabled": {
           "type": "boolean",
           "description": "Render preview RBAC and passes."
+        },
+        "maxPerTenant": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Concurrent previews per tenant (== Kyverno platform-preview-cap)."
+        },
+        "waitingLabel": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+          "description": "PR label holding a preview beyond the cap."
+        },
+        "skipBots": {
+          "type": "boolean",
+          "description": "No previews for PRs by [bot] authors unless labelled botLabel."
+        },
+        "botLabel": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+          "description": "PR label that gives a bot PR a preview."
         }
       }
     },
