@@ -117,16 +117,18 @@ tests:
           path: 'spec.templates[?(@.name == "build")].container.volumeMounts'
           content: { name: registry-ca, mountPath: /registry-ca, readOnly: true }
 
-  - it: buildkitd.toml starts from the mirror config and adds the CA entry only for a registry it does not cover
+  # build.sh starts buildkitd.toml from the mirror config and adds the CA entry only for a registry it does not cover:
+  # hack/tests/test_workflow_scripts.sh runs it. Here: the step gets build.sh, and nothing but the scripts reach /ci.
+  - it: the build step runs build.sh from /ci, copied there by a toolbox init container that mounts only /ci
     template: templates/cluster-workflow-templates.yaml
     documentSelector: { path: metadata.name, value: koorikla-build }
     asserts:
-      - matchRegex:
-          path: 'spec.templates[?(@.name == "build")].container.args[0]'
-          pattern: 'if \[ -f /buildkitd/buildkitd\.toml \]; then\n\s+cat /buildkitd/buildkitd\.toml > "\$cfg"'
-      - matchRegex:
-          path: 'spec.templates[?(@.name == "build")].container.args[0]'
-          pattern: 'grep -qF "\[registry\.\\"\$REGISTRY_HOST\\"\]" "\$cfg" \|\| printf .* >> "\$cfg"'
-      - matchRegex:
-          path: 'spec.templates[?(@.name == "build")].container.args[0]'
-          pattern: 'cfg="\$HOME/\.config/buildkit/buildkitd\.toml"'
+      - equal:
+          path: 'spec.templates[?(@.name == "build")].container.command'
+          value: [sh, /ci/scripts/workflow/build.sh]
+      - equal:
+          path: 'spec.templates[?(@.name == "build")].initContainers[0].command'
+          value: [cp, -R, /opt/koorikla-ci/scripts, /ci/scripts]
+      - equal:
+          path: 'spec.templates[?(@.name == "build")].initContainers[0].volumeMounts'
+          value: [{ name: ci, mountPath: /ci }]

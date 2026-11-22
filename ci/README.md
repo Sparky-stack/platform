@@ -5,6 +5,7 @@ What lives here and who runs it:
 | Path | What | Run by |
 |---|---|---|
 | [`scripts/<stack>/`](scripts), [`scripts/common/`](scripts/common) | build, test, scan, sign, attest scripts (env in, files out) | OpenChoreo ClusterWorkflows ([`addons/openchoreo-workflow-plane`](../addons/openchoreo-workflow-plane)) and the reusable workflows [`.github/workflows/app-*.yaml`](../.github/workflows/) |
+| [`scripts/workflow/`](scripts/workflow) | one script per step of the in-cluster ClusterWorkflowTemplates `koorikla-build` / `koorikla-helm-chart` (`guards.sh`: repository allowlist, scoped git credentials) | those templates, from the toolbox image ([docs/build-plane.md](../docs/build-plane.md#step-scripts-ciscriptsworkflow)) |
 | [`toolbox/`](toolbox) | `ghcr.io/koorikla/platform/ci-toolbox` image: the scripts plus trivy, syft, cosign, ... | built by [`ci-toolbox.yaml`](../.github/workflows/ci-toolbox.yaml) |
 | [`fixtures/`](fixtures), [`tests/`](tests) | one tiny project per stack, script unit tests | [`ci-selftest.yaml`](../.github/workflows/ci-selftest.yaml) |
 | [`templates/`](templates) | caller workflows, Dependabot configs, Dockerfiles | copied into app repos |
@@ -228,8 +229,9 @@ pushed and commits it back (`chore(deploy): bump <name> image to <sha> [skip ci]
 - Push-triggered callers should `paths-ignore: ['deploy/**']`; branch protection must let the
   job token push. `validate_command` runs a schema check before committing; `push: false` is a
   dry run (used by the selftest).
-- In-cluster builds do the same yq edit in the `koorikla-build` GitOps step
-  (`addons/openchoreo-workflow-plane`) and commit through the GitHub contents API; they do not run these scripts.
+- In-cluster builds do the same yq edit in [`scripts/workflow/gitops.sh`](scripts/workflow/gitops.sh) (the
+  `koorikla-build` GitOps step) and commit through the GitHub contents API; they do not run `workload-bump.sh` or
+  `git-push-change.sh`.
 
 ## Registry: GHCR now, Harbor later
 
@@ -243,7 +245,10 @@ pulling clusters credentials.
 
 ## Running in-cluster (OpenChoreo workflow plane)
 
-Each step is "run a script in the toolbox with these env vars, read files from
+The platform's own templates (`koorikla-build`, `koorikla-helm-chart`) run one
+[`scripts/workflow/<step>.sh`](scripts/workflow) per step:
+[docs/build-plane.md](../docs/build-plane.md#step-scripts-ciscriptsworkflow). The recipe below is the generic one for
+another workflow engine. Each step is "run a script in the toolbox with these env vars, read files from
 `$CI_OUT_DIR`". Typical pipeline for a service image:
 
 | Step | Image | Command | Key env in | Files out (`$CI_OUT_DIR`) |
@@ -301,6 +306,7 @@ Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.
 | `common/workload-bump.sh` | OpenChoreo Workload image `<repo>:<tag>@sha256:…` + source commit |
 | `common/git-push-change.sh` | commit paths if changed, push with rebase/retry |
 | `common/generate-check.sh` | code generation must leave a clean tree |
+| `workflow/*.sh` | the in-cluster template steps (checkout, check, build, scan, sbom, sign, gitops, helm package); Linux pod images only (GNU userland; `build.sh` is POSIX sh for BuildKit) |
 | `go/check.sh`, `python/check.sh`, `node/{detect,setup-pm,check}.sh`, `nextjs/{detect,check}.sh`, `rust/check.sh`, `java/{detect,check}.sh`, `elixir/check.sh`, `ruby/check.sh`, `helm/{check,package-push,registry-meta}.sh` | stack checks |
 | `crossplane/{install-cli,package-name,validate-render,xpkg-build,xpkg-push,provider-xpkg}.sh` | Crossplane CLI, validation/render tests, packaging |
 

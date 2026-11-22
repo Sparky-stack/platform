@@ -9,6 +9,11 @@
 #   autoDeploy releases it to the first environment). Git stays the source of truth: nothing writes Workloads into the
 #   cluster.
 #
+# Template = data, scripts = versioned files: every step runs one script from ci/scripts/workflow/ (shipped in the
+# toolbox image, values TOOLBOX_IMAGE, at /opt/koorikla-ci/scripts). This file holds only the DAG, parameters, env,
+# volumes, security context and resources. Steps in another image (check: the stack toolchain; build: BuildKit) run a
+# copy that an init container puts on the pod's /ci volume. docs/build-plane.md explains the pipeline.
+#
 # Rendered verbatim by addons/openchoreo-workflow-plane (templates/cluster-workflow-templates.yaml) except the
 # @@...@@ image placeholders. Argo expressions ({{...}}) are untouched by Helm because the file is never templated.
 # Every pod: non-root (65532), RuntimeDefault seccomp, no privilege escalation, all capabilities dropped (Pod Security
@@ -175,103 +180,27 @@ spec:
                 - { name: short-sha, value: "{{tasks.checkout.outputs.parameters.short-sha}}" }
 
     # --- source ------------------------------------------------------------------------------------------------------
-    # Shallow fetch of the requested commit (or branch head) with the run's git credentials (credential helper scoped
-    # to the allowed repository prefixes, see BUILD_GUARDS; never in the URL or the logs). Loop guard: a commit that only touches the GitOps directory (the
-    # hand-off commit of a previous run, or a manual promotion) is not rebuilt - relevant once autoBuild webhooks are on,
-    # because OpenChoreo's webhook matcher treats appPath "." as "every change".
+    # checkout.sh: shallow fetch of the requested commit (or branch head) and the loop guard (a commit that only touches
+    # the GitOps directory is not rebuilt). Build guards (guards.sh, sourced by checkout.sh and gitops.sh): the run's git
+    # token only ever reaches GIT_ALLOWED_PREFIXES (rendered by addon openchoreo-platform from installation.githubOrg;
+    # the ClusterWorkflow schema checks the same pattern first, this is the second line), refs and paths are checked
+    # against option injection and traversal, and a missing token Secret fails the run with the reason.
     - name: checkout
       retryStrategy:
         limit: "3"
         retryPolicy: OnError
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            eval "$BUILD_GUARDS"
-            check_ref "$BRANCH"; check_ref "$COMMIT"
-            git_access "$REPO"
-            rm -rf /work/source && mkdir -p /work/source /work/out /work/home && cd /work/source
-            git init -q . && git remote add origin "$REPO"
-            ref="${COMMIT:-$BRANCH}"
-            echo ">> fetching $REPO $ref"
-            git fetch -q --depth 2 origin "$ref"
-            git -c advice.detachedHead=false checkout -q FETCH_HEAD
-            sha=$(git rev-parse HEAD)
-            skip=false
-            changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
-            gitops_dir=$(dirname "$WORKLOAD_PATH")
-            if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv "^${gitops_dir}/"; then
-              skip=true
-              echo ">> $sha only changes ${gitops_dir}/ (GitOps hand-off or promotion): nothing to build"
-            fi
-            printf '%s' "$sha" > /tmp/commit-sha
-            printf '%s' "${sha:0:7}" > /tmp/short-sha
-            printf '%s' "$skip" > /tmp/skip
-            echo ">> $(git log -1 --format='%h %an: %s')"
+        command: [bash, /opt/koorikla-ci/scripts/workflow/checkout.sh]
         env:
-          - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
-          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
+          - &repo-env { name: REPO, value: "{{workflow.parameters.git-repo}}" }
+          - &allowed-prefixes-env { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
           - { name: BRANCH, value: "{{workflow.parameters.branch}}" }
           - { name: COMMIT, value: "{{workflow.parameters.commit}}" }
           - { name: WORKLOAD_PATH, value: "{{workflow.parameters.workload-path}}" }
           - { name: HOME, value: /tmp }
           - &git-secret-env { name: GIT_SECRET, value: "{{workflow.parameters.git-secret}}" }
           - &run-namespace-env { name: RUN_NAMESPACE, value: "{{workflow.namespace}}" }
-          # Build guards, sourced by checkout and gitops (eval "$BUILD_GUARDS"). The run's git token only ever reaches
-          # the installation's allowed repository prefixes (GIT_ALLOWED_PREFIXES, rendered by addon openchoreo-platform
-          # from installation.githubOrg; the ClusterWorkflow schema enforces the same pattern on repository.url, this
-          # is the second line): the URL is checked first, git config comes only from the environment (no system or
-          # global gitconfig, https only), and the credential helper is registered per prefix, so git never answers a
-          # 401 from any other host or owner. Ref and path parameters are checked against option injection and
-          # traversal. The token is a GitHub App installation token for this one repository (ESO generator <run>-git):
-          # git_access fails the run with the reason when it is missing, instead of an anonymous clone.
-          - &build-guards
-            name: BUILD_GUARDS
-            value: |
-              die() { echo ">> $*" >&2; exit 1; }
-              # bash [[ =~ ]] matches the whole value (grep would accept any single matching line of a multi-line one)
-              re_name='^[A-Za-z0-9][A-Za-z0-9._-]*$'
-              re_ref='^[A-Za-z0-9_][A-Za-z0-9._/-]*$'
-              re_workload='^deploy/openchoreo/[A-Za-z0-9][A-Za-z0-9._-]*\.yaml$'
-              check_repo() {
-                local p rest
-                for p in $GIT_ALLOWED_PREFIXES; do
-                  rest=${1#"$p"}
-                  if [[ "$rest" != "$1" && "$rest" =~ $re_name ]]; then return 0; fi
-                done
-                die "repository '$1' is not under an allowed prefix (${GIT_ALLOWED_PREFIXES:-none})"
-              }
-              check_ref() {
-                [[ -z "$1" || "$1" =~ $re_ref ]] || die "invalid git ref '$1'"
-              }
-              check_workload_path() {
-                [[ "$1" =~ $re_workload ]] || die "gitops.workloadPath must be deploy/openchoreo/<name>.yaml (got '$1')"
-              }
-              git_access() {
-                local n=0 p helper="${TMPDIR:-/tmp}/git-credential" dir="${GIT_SECRET_DIR:-/secrets/git}"
-                check_repo "$1"
-                unset GIT_ASKPASS SSH_ASKPASS
-                export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
-                cfg() { export "GIT_CONFIG_KEY_$n=$1" "GIT_CONFIG_VALUE_$n=$2"; n=$((n + 1)); }
-                cfg protocol.allow never
-                cfg protocol.https.allow always
-                cfg credential.useHttpPath true
-                # ESO writes the Secret right after the run starts; the kubelet refreshes the mounted volume.
-                local waited=0
-                while [ ! -s "$dir/password" ] && [ "$waited" -lt "${GIT_SECRET_WAIT:-120}" ]; do sleep 5; waited=$((waited + 5)); done
-                [ -s "$dir/password" ] || die "no GitHub token for $1: Secret ${GIT_SECRET:-<run>-git} was not created." \
-                  "The platform GitHub App must be installed on this repository with Contents: Read and write" \
-                  "(GitHub: Settings > Applications > the App > Configure > Repository access). Status:" \
-                  "kubectl -n ${RUN_NAMESPACE:-workflows-<org ns>} describe externalsecret ${GIT_SECRET:-<run>-git};" \
-                  "GitHub's answer (e.g. 422 not accessible to the installation): kubectl -n external-secrets logs" \
-                  "deploy/external-secrets | grep ${GIT_SECRET:-<run>-git}"
-                printf '#!/bin/sh\n[ "$1" = get ] || exit 0\necho "username=$(cat %s/username)"\necho "password=$(cat %s/password)"\n' \
-                  "$dir" "$dir" > "$helper"
-                chmod 0700 "$helper"
-                for p in $GIT_ALLOWED_PREFIXES; do cfg "credential.${p}.helper" "$helper"; done
-                export GIT_CONFIG_COUNT=$n
-              }
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { cpu: "1", memory: 512Mi }
@@ -292,8 +221,9 @@ spec:
           - { name: skip, valueFrom: { path: /tmp/skip } }
 
     # --- stack checks: ci/scripts/<stack>/check.sh in the official toolchain image ------------------------
-    # The toolbox (init container) copies the scripts and turns check-env (JSON object of the script's env flags) into
-    # an env file: toolchain images carry neither the scripts nor jq. Caches live on the run's volume.
+    # check-init.sh (init container, toolbox) copies the scripts and turns check-env (JSON object of the script's env
+    # flags) into an env file: toolchain images carry neither the scripts nor jq. check.sh runs the stack check from that
+    # copy. Caches live on the run's volume.
     - name: check
       # Infrastructure retry: a step whose pod was killed under it (a k3s/node restart ends every container with exit
       # 255 "Unknown", as happened mid-bootstrap when etcd stalled and k3s lost its leader lease) or that hit an Argo
@@ -307,11 +237,7 @@ spec:
       initContainers: &check-init
         - name: scripts
           image: "@@TOOLBOX_IMAGE@@"
-          command: [bash, -euo, pipefail, -c]
-          args:
-            - |
-              cp -R "$CI_SCRIPTS" /ci/scripts
-              printf '%s' "$CHECK_ENV" | jq -r 'to_entries[] | "export \(.key)=\(.value | tostring | @sh)"' > /ci/env.sh
+          command: [bash, /opt/koorikla-ci/scripts/workflow/check-init.sh]
           env:
             - { name: CHECK_ENV, value: "{{workflow.parameters.check-env}}" }
           resources:
@@ -321,15 +247,7 @@ spec:
       container:
         # never empty: Argo validates every referenced template's image at submission, even when `when` skips the task
         image: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : '@@TOOLBOX_IMAGE@@'}}"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            . /ci/env.sh
-            export WORKDIR="/work/source/${APP_PATH#./}"
-            cd "$WORKDIR"
-            if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
-            echo ">> ci/scripts/${STACK}/check.sh"
-            bash "/ci/scripts/${STACK}/check.sh"
+        command: [bash, /ci/scripts/workflow/check.sh]
         env:
           - { name: STACK, value: "{{workflow.parameters.stack}}" }
           - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
@@ -367,15 +285,7 @@ spec:
       container:
         # never empty: Argo validates every referenced template's image at submission, even when `when` skips the task
         image: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : '@@TOOLBOX_IMAGE@@'}}"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            . /ci/env.sh
-            export WORKDIR="/work/source/${APP_PATH#./}"
-            cd "$WORKDIR"
-            if [ -n "$CHECK_SETUP" ]; then echo ">> setup: $CHECK_SETUP"; bash -euo pipefail -c "$CHECK_SETUP"; fi
-            echo ">> ci/scripts/${STACK}/check.sh"
-            bash "/ci/scripts/${STACK}/check.sh"
+        command: [bash, /ci/scripts/workflow/check.sh]
         env:
           - { name: STACK, value: "{{workflow.parameters.stack}}" }
           - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
@@ -426,12 +336,7 @@ spec:
       retryStrategy: *infra-retry
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            export SCAN_PATH="/work/source/${APP_PATH#./}"
-            if [ -n "$IGNORE_REL" ] && [ -f "/work/source/$IGNORE_REL" ]; then export IGNORE_FILE="/work/source/$IGNORE_REL"; fi
-            scan-fs.sh
+        command: [bash, /opt/koorikla-ci/scripts/workflow/scan-fs.sh]
         env: &scan-env
           - { name: APP_PATH, value: "{{workflow.parameters.app-path}}" }
           - { name: IGNORE_REL, value: "{{workflow.parameters.trivy-ignore-file}}" }
@@ -473,67 +378,25 @@ spec:
           type: Unconfined
         appArmorProfile:
           type: Unconfined
+      # The BuildKit image carries no ci/scripts: the toolbox copies them to the pod's /ci volume. This init container
+      # mounts only that volume (no registry credentials, no tenant check-env) and keeps the restricted profile.
+      initContainers:
+        - name: scripts
+          image: "@@TOOLBOX_IMAGE@@"
+          command: [cp, -R, /opt/koorikla-ci/scripts, /ci/scripts]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+            seccompProfile: { type: RuntimeDefault }
+            appArmorProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: ci, mountPath: /ci }
       container:
         image: "@@BUILDKIT_IMAGE@@"
-        command: [sh, -euc]
-        args:
-          - |
-            mkdir -p "$HOME/.config/buildkit" "$HOME/.docker"
-            cp /registry-auth/config.json "$HOME/.docker/config.json"
-            cfg="$HOME/.config/buildkit/buildkitd.toml"
-            : > "$cfg"
-            if [ -f /registry-ca/ca.crt ]; then
-              # Base images through the Harbor proxy caches (ConfigMap buildkitd-config, addon openchoreo-workflow-plane
-              # values buildkitMirrors, #38): registry mirrors that need the Harbor CA, so only together with it.
-              if [ -f /buildkitd/buildkitd.toml ]; then
-                cat /buildkitd/buildkitd.toml > "$cfg"
-                echo ">> registry mirrors (BuildKit falls back to the upstream when a mirror fails):"
-                awk -F'"' '/^\[registry\./ { h = $2 } /^ *mirrors = / { print "   " h " -> " $2 }' "$cfg"
-              fi
-              grep -qF "[registry.\"$REGISTRY_HOST\"]" "$cfg" || printf '[registry."%s"]\n  ca = ["/registry-ca/ca.crt"]\n' "$REGISTRY_HOST" >> "$cfg"
-              # buildkitd.toml covers buildkitd's registry requests only: buildctl fetches the registry's bearer token
-              # itself (session auth provider) with Go's system roots, so it must trust the CA too ("failed to fetch
-              # oauth token: ... x509: certificate signed by unknown authority" otherwise).
-              cat /etc/ssl/certs/ca-certificates.crt /registry-ca/ca.crt > "$HOME/ca.pem"
-              export SSL_CERT_FILE="$HOME/ca.pem"
-            fi
-            ctx="/work/source/${DOCKER_CONTEXT#./}"
-            df="/work/source/${DOCKERFILE_PATH#./}"
-            [ -f "$df" ] || { echo ">> Dockerfile not found: $DOCKERFILE_PATH"; exit 1; }
-            # The context and Dockerfile must resolve inside the checkout: this pod also mounts the registry push
-            # credentials, which a ../ or a symlinked context root would otherwise hand to COPY.
-            for p in "$ctx" "$(dirname "$df")"; do
-              case "$(realpath "$p")/" in /work/source/*) ;; *) echo ">> $p resolves outside the repository"; exit 1 ;; esac
-            done
-            set -- --opt "build-arg:VERSION=$SHORT_SHA"
-            # build-args: JSON [{"name":..,"value":..}] -> --opt build-arg:NAME=VALUE (no jq in this image)
-            printf '%s' "$BUILD_ARGS" | tr -d '\n' | sed -e 's/^\[//' -e 's/\]$//' -e 's/},[[:space:]]*{/}\n{/g' > /tmp/args
-            while IFS= read -r a; do
-              [ -n "$a" ] || continue
-              n=$(printf '%s' "$a" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-              v=$(printf '%s' "$a" | sed -n 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-              [ -n "$n" ] && set -- "$@" --opt "build-arg:$n=$v"
-            done < /tmp/args
-            if [ "$BUILD_CACHE" = true ]; then
-              set -- "$@" --export-cache "type=registry,ref=$IMAGE_REPO:buildcache,mode=max,image-manifest=true,oci-mediatypes=true" \
-                          --import-cache "type=registry,ref=$IMAGE_REPO:buildcache"
-            fi
-            echo ">> building $IMAGE_REPO:$SHORT_SHA for $PLATFORMS"
-            buildctl-daemonless.sh build \
-              --frontend dockerfile.v0 \
-              --local context="$ctx" \
-              --local dockerfile="$(dirname "$df")" \
-              --opt filename="$(basename "$df")" \
-              --opt platform="$PLATFORMS" \
-              --opt attest:provenance=mode=min \
-              "$@" \
-              --output "type=image,name=$IMAGE_REPO:$SHORT_SHA,push=true,oci-mediatypes=true" \
-              --metadata-file /tmp/metadata.json
-            digest=$(sed -n 's/.*"containerimage.digest"[[:space:]]*:[[:space:]]*"\(sha256:[0-9a-f]*\)".*/\1/p' /tmp/metadata.json | head -1)
-            [ -n "$digest" ] || { echo ">> no digest in build metadata"; cat /tmp/metadata.json; exit 1; }
-            printf '%s@%s' "$IMAGE_REPO" "$digest" > /tmp/digest-ref
-            printf '%s:%s@%s' "$IMAGE_REPO" "$SHORT_SHA" "$digest" > /tmp/image
-            echo ">> pushed $(cat /tmp/image)"
+        command: [sh, /ci/scripts/workflow/build.sh]   # POSIX sh: the BuildKit image has neither bash nor jq
         env:
           # overlayfs explicitly: "auto" picks the native snapshotter in this pod (seen on k3d, btrfs node disk), which copies
           # the whole parent tree for every layer and step - a hello-world build took >15 min instead of ~1. Rootless
@@ -566,8 +429,10 @@ spec:
           - { name: registry-ca, mountPath: /registry-ca, readOnly: true }
           - { name: buildkitd-config, mountPath: /buildkitd, readOnly: true }
           - { name: buildkitd, mountPath: /home/user/.local/share/buildkit }
+          - { name: ci, mountPath: /ci, readOnly: true }
       volumes:
         - { name: buildkitd, emptyDir: {} }
+        - { name: ci, emptyDir: {} }
         # registry mirrors to the Harbor proxy caches (addon openchoreo-workflow-plane templates/buildkitd-config.yaml);
         # absent with an external registry: direct pulls
         - name: buildkitd-config
@@ -578,7 +443,7 @@ spec:
           - { name: image, valueFrom: { path: /tmp/image } }
 
     # --- supply chain: ci/scripts common scripts in the toolbox -----------------------------------------------------
-    # Registry trust: Go tools (trivy, syft, cosign, crane) read SSL_CERT_FILE; the registry CA is appended to the
+    # Registry trust (lib.sh registry_trust): Go tools (trivy, syft, cosign, crane) read SSL_CERT_FILE; the registry CA is appended to the
     # system bundle so public registries (Trivy DB, Sigstore) keep working. Registry auth: DOCKER_CONFIG.
     # HOME and TRIVY_CACHE_DIR live in the pod's own /tmp emptyDir, never on the run volume the tenant check step
     # writes (no planted tool config, no poisoned Trivy DB); scan-fs does the same.
@@ -589,14 +454,7 @@ spec:
           - name: digest-ref
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
-            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
-            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
-            if [ -n "$IGNORE_REL" ] && [ -f "/work/source/$IGNORE_REL" ]; then export IGNORE_FILE="/work/source/$IGNORE_REL"; fi
-            IMAGE_REF="$DIGEST_REF" IMAGE_SRC=remote scan-image.sh
+        command: [bash, /opt/koorikla-ci/scripts/workflow/scan-image.sh]
         env:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
@@ -625,13 +483,7 @@ spec:
           - name: digest-ref
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
-            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
-            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
-            IMAGE_REF="$DIGEST_REF" SOURCE=registry PLATFORM="${PLATFORMS%%,*}" sbom.sh
+        command: [bash, /opt/koorikla-ci/scripts/workflow/sbom.sh]
         env:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: PLATFORMS, value: "{{workflow.parameters.platforms}}" }
@@ -647,7 +499,8 @@ spec:
 
     # cosign with the platform key (ExternalSecret from the secret backend key cosign-platform; private key never in
     # git). Cloud installations set the ClusterWorkflow's cosign key ref to a KMS URI reached through workload identity
-    # instead of a key file. Signs the index and every platform manifest, attests the Trivy vuln report and the SBOM.
+    # instead of a key file. sign.sh signs the index and every platform manifest, attests the Trivy vuln report
+    # (VULN_PREDICATE) and the SBOM (SBOM_PREDICATE).
     - name: sign
       inputs:
         parameters:
@@ -661,34 +514,13 @@ spec:
         backoff: { duration: 10s, factor: "2", maxDuration: 5m }
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            cat /etc/ssl/certs/ca-certificates.crt > /tmp/ca.pem
-            if [ -f /registry-ca/ca.crt ]; then cat /registry-ca/ca.crt >> /tmp/ca.pem; fi
-            export SSL_CERT_FILE=/tmp/ca.pem DOCKER_CONFIG=/registry-auth
-            COSIGN_PASSWORD="$(cat /cosign/cosign.password 2>/dev/null || true)"
-            export COSIGN_PASSWORD
-            if [ "$TLOG_UPLOAD" != true ]; then
-              # Private by default (installation switch buildWorkflows.signing.transparencyLog): no public Rekor entry
-              # leaking repo names and digests. cosign v3 takes a signing config without a transparency log;
-              # ci/scripts sign-image.sh has no switch for it yet, so a shim on PATH adds it to sign/attest.
-              printf '{ "mediaType": "application/vnd.dev.sigstore.signingconfig.v0.2+json", "rekorTlogConfig": {}, "tsaConfig": {} }\n' > /tmp/signing-config.json
-              real=$(command -v cosign); mkdir -p /tmp/bin
-              printf '#!/bin/sh\ncase "$1" in sign|attest) c=$1; shift; exec %s "$c" --signing-config /tmp/signing-config.json "$@" ;; esac\nexec %s "$@"\n' \
-                "$real" "$real" > /tmp/bin/cosign
-              chmod 0755 /tmp/bin/cosign; export PATH="/tmp/bin:$PATH"
-            fi
-            IMAGE_DIGEST_REF="$DIGEST_REF" VULN_PREDICATE=/work/out/trivy-vuln.json sign-image.sh
-            # Predicate type https://spdx.dev/Document/v2.3 (syft writes SPDX 2.3), the type the app-container.yaml GitHub path attests:
-            # admission (addon kyverno-policies attestationTypes.sbom) checks one SBOM type for both build paths.
-            # (the cosign type shorthand spdxjson would record https://spdx.dev/Document)
-            echo ">> cosign attest --type https://spdx.dev/Document/v2.3 $DIGEST_REF"
-            cosign attest --yes --key "$COSIGN_KEY" --type https://spdx.dev/Document/v2.3 --predicate /work/out/sbom.spdx.json "$DIGEST_REF"
+        command: [bash, /opt/koorikla-ci/scripts/workflow/sign.sh]
         env:
           - { name: DIGEST_REF, value: "{{inputs.parameters.digest-ref}}" }
           - { name: COSIGN_KEY, value: /cosign/cosign.key }
           - { name: TLOG_UPLOAD, value: "{{workflow.parameters.tlog-upload}}" }
+          - { name: VULN_PREDICATE, value: /work/out/trivy-vuln.json }
+          - { name: SBOM_PREDICATE, value: /work/out/sbom.spdx.json }
           - { name: CI_OUT_DIR, value: /work/out }
           - { name: HOME, value: /tmp }
         resources:
@@ -705,7 +537,8 @@ spec:
         - { name: tmp, emptyDir: {} }
 
     # --- GitOps hand-off ---------------------------------------------------------------------------------------------
-    # Commit the signed image ref (tag + digest) and source commit into the app repo's Workload manifest. Argo CD
+    # gitops.sh (build guards again, see checkout): commit the signed image ref (tag + digest) and source commit into the
+    # app repo's Workload manifest (only a real Workload under deploy/openchoreo/, no symlink out of it). Argo CD
     # syncs it (Application <project>-<app>, charts/tenant); with autoDeploy the Component controller cuts a
     # ComponentRelease and binds the first pipeline environment. The commit goes through the GitHub contents API with
     # the run's App installation token, so GitHub authors, commits and signs it as the App's bot (no git identity, no
@@ -721,57 +554,10 @@ spec:
         retryPolicy: OnError
       container:
         image: "@@TOOLBOX_IMAGE@@"
-        command: [bash, -euo, pipefail, -c]
-        args:
-          - |
-            eval "$BUILD_GUARDS"
-            check_ref "$GITOPS_BRANCH"; check_workload_path "$WORKLOAD_PATH"
-            git_access "$REPO"
-            slug=${REPO#https://*/}; slug=${slug%.git}
-            [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "$REPO is not https://<host>/<owner>/<repo>"
-            [[ "$GITHUB_API_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._/-]*)?$ ]] || die "github-api-url must be https (got '$GITHUB_API_URL')"
-            umask 077
-            printf 'Authorization: Bearer %s\n' "$(cat "${GIT_SECRET_DIR:-/secrets/git}/password")" > /tmp/gh-auth
-            msg=$(printf 'chore(deploy): %s image %s [skip ci]\n\nOpenChoreo WorkflowRun %s (%s/%s/%s): %s' \
-              "$COMPONENT" "$SHORT_SHA" "$RUN" "$NAMESPACE" "$PROJECT" "$COMPONENT" "$IMAGE")
-            export IMAGE COMMIT_SHA
-            for i in 1 2 3 4 5; do
-              cd /tmp && rm -rf /tmp/gitops
-              git clone -q --depth 1 --branch "$GITOPS_BRANCH" -- "$REPO" /tmp/gitops
-              cd /tmp/gitops
-              # Only an OpenChoreo Workload under deploy/openchoreo/ is ever rewritten (no symlink out of it).
-              [ -f "$WORKLOAD_PATH" ] && [ ! -L "$WORKLOAD_PATH" ] && [ ! -L deploy ] && [ ! -L deploy/openchoreo ] \
-                || die "$WORKLOAD_PATH not found (or a symlink on its path) in $REPO@$GITOPS_BRANCH"
-              case "$(realpath -e "$WORKLOAD_PATH")" in
-                "$(realpath -e deploy/openchoreo)"/*) ;;
-                *) die "$WORKLOAD_PATH resolves outside deploy/openchoreo/" ;;
-              esac
-              [ "$(yq '.kind' "$WORKLOAD_PATH")" = Workload ] || die "$WORKLOAD_PATH is not an OpenChoreo Workload"
-              yq -i '.spec.container.image = strenv(IMAGE)' "$WORKLOAD_PATH"
-              if [ "$(yq '.spec | has("source")' "$WORKLOAD_PATH")" = true ]; then
-                yq -i '.spec.source.commit = strenv(COMMIT_SHA)' "$WORKLOAD_PATH"
-              fi
-              if git diff --quiet -- "$WORKLOAD_PATH"; then echo ">> $WORKLOAD_PATH already at $IMAGE"; exit 0; fi
-              jq -n --arg message "$msg" --arg branch "$GITOPS_BRANCH" --arg sha "$(git rev-parse "HEAD:$WORKLOAD_PATH")" \
-                --arg content "$(base64 -w0 "$WORKLOAD_PATH")" \
-                '{message: $message, content: $content, sha: $sha, branch: $branch}' > /tmp/body.json
-              code=$(curl -sS --proto =https -o /tmp/gh.json -w '%{http_code}' -X PUT -H @/tmp/gh-auth \
-                -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
-                --data-binary @/tmp/body.json "$GITHUB_API_URL/repos/$slug/contents/$WORKLOAD_PATH") || code=000
-              case "$code" in
-                200|201)
-                  echo ">> committed $(jq -r '.commit.sha' /tmp/gh.json) to $slug@$GITOPS_BRANCH as $(jq -r '.commit.author.name' /tmp/gh.json)"
-                  exit 0 ;;
-                409) echo ">> $GITOPS_BRANCH moved, re-reading (attempt $i)"; sleep $((i * 2)) ;;
-                *) die "GitHub contents API ($slug $WORKLOAD_PATH): HTTP $code $(jq -r '.message? // empty' /tmp/gh.json 2>/dev/null || true)." \
-                     "The platform GitHub App needs Contents: Read and write on $slug, and a bypass if $GITOPS_BRANCH is protected" ;;
-              esac
-            done
-            die "$GITOPS_BRANCH kept moving: gave up after 5 attempts"
+        command: [bash, /opt/koorikla-ci/scripts/workflow/gitops.sh]
         env:
-          - { name: REPO, value: "{{workflow.parameters.git-repo}}" }
-          - { name: GIT_ALLOWED_PREFIXES, value: "{{workflow.parameters.git-allowed-prefixes}}" }
-          - *build-guards
+          - *repo-env
+          - *allowed-prefixes-env
           - *git-secret-env
           - *run-namespace-env
           - { name: GITHUB_API_URL, value: "{{workflow.parameters.github-api-url}}" }

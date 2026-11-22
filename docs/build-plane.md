@@ -38,7 +38,7 @@ an Argo error, at most twice with backoff; a step that fails on its own exit cod
 
 One ClusterWorkflow per stack (`addons/openchoreo-platform/values.yaml` `buildWorkflows.stacks`), all running
 `koorikla-build` with the [`ci/`](../ci/) toolbox
-`ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22c…6858` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
+`ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44c…948e` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
 the GitOps commit, and the official toolchain image for the stack checks:
 
 | ClusterWorkflow | Checks (ci/scripts) | Toolchain image (default, override per Component) |
@@ -53,6 +53,40 @@ the GitOps commit, and the official toolchain image for the stack checks:
 All images are pinned by digest. Every step after `checkout` gates the next: a CRITICAL finding (Trivy, lockfiles or
 image, `ignore-unfixed` by default) stops the run before anything is signed or committed, so an unsigned image never
 reaches a Workload.
+
+### Step scripts (ci/scripts/workflow)
+
+`koorikla-build` and `koorikla-helm-chart` hold only data: the DAG, parameters, env, volumes, security context and
+resources. Each step runs one versioned script from [`ci/scripts/workflow/`](../ci/scripts/workflow). The script header
+lists its purpose, env in and outputs. The scripts ship in the toolbox image at `/opt/koorikla-ci/scripts`:
+
+| Step | Script | Image |
+|---|---|---|
+| `checkout` (both templates) | `checkout.sh` (sources `guards.sh`) | toolbox |
+| `check`, `check-with-postgres` | init container `check-init.sh` copies the scripts to `/ci`, then `check.sh` runs from that copy | toolbox, then the stack toolchain |
+| `scan-fs`, `scan-image`, `sbom` | `scan-fs.sh`, `scan-image.sh`, `sbom.sh` (wrappers around `ci/scripts/common/`) | toolbox |
+| `build` | `build.sh` (POSIX sh) from `/ci`, copied there by a toolbox init container that mounts only `/ci` | BuildKit |
+| `sign` (both templates) | `sign.sh`. Env: `VULN_PREDICATE` + `SBOM_PREDICATE` (koorikla-build), `RECURSIVE=false` (helm chart) | toolbox |
+| `gitops` | `gitops.sh` (sources `guards.sh`) | toolbox |
+| `package` (helm chart) | `helm-package.sh` | toolbox |
+
+- **The toolbox pin decides which scripts run** (`images.TOOLBOX_IMAGE`, addon openchoreo-workflow-plane). A change
+  under `ci/scripts/` takes two PRs: the first merges the scripts and `ci-toolbox.yaml` publishes
+  `ci-toolbox:<sha7>@sha256:…` from main; the second bumps the pin. Rollback: revert the pin bump.
+- **Tests run the scripts directly.** `hack/tests/test_build_guards.sh` covers the guards, `gitops.sh` and `sign.sh`.
+  It also checks that the rendered templates contain no `eval`, no inline `args` script and no env var holding code.
+  `hack/tests/test_workflow_scripts.sh` covers the checkout loop guard, check-env, build-args and the wrappers.
+- **Logs:** each step prints its `>> ...` lines (Backstage run logs, `argo logs`).
+- **build-args:** every `docker.buildArgs` entry reaches BuildKit as `--opt build-arg:NAME=VALUE`. Until #393 the inline
+  build step dropped the last entry: the parsed list had no final newline, so `while read` skipped it. A single
+  build-arg was never passed.
+
+Evaluated and rejected:
+
+- **Argo's native `git` input artifact** for checkout: ESO creates the run's token Secret after the pod starts,
+  artifacts load before that, and Argo has no per-prefix credential fence.
+- **Guards only in the ClusterWorkflow schema:** the schema is the first line. `guards.sh` is the deliberate second
+  line, which also holds when the template is reached without the ClusterWorkflow.
 
 ### Using it from a Component (app repo)
 
@@ -181,7 +215,7 @@ and `spec.source.commit` in `deploy/openchoreo/workload.yaml` with yq, and commi
 API (`PUT /repos/<owner>/<repo>/contents/<path>` with the blob `sha` as compare-and-swap; a 409 re-reads the branch and
 retries). GitHub authors, commits and signs that commit as the App's bot (`<app-slug>[bot]`, Verified). Only an
 OpenChoreo `Workload` at `deploy/openchoreo/<name>.yaml` is ever rewritten (schema pattern on `gitops.workloadPath`,
-plus a script check: no symlink on the path, `kind: Workload`). A protected build branch needs the App on the
+plus a check in `gitops.sh`: no symlink on the path, `kind: Workload`). A protected build branch needs the App on the
 branch-protection or ruleset bypass list (hello-world's `main` is unprotected). Argo CD (Application
 `<project>-<app>`) syncs; `autoDeploy` cuts the ComponentRelease and binds development; staging/production stay
 promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
@@ -218,9 +252,9 @@ platform). Narrow `platforms` per Component to build only the node's architectur
 
 - **Repository allowlist.** Builds clone from and push to only the installation's allowed repository prefixes
   (`buildWorkflows.git.allowedRepositoryPrefixes`, default `installation.githubOrg` + `/`, each `https://<host>/<owner>/`).
-  Three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name after a prefix); `BUILD_GUARDS`
-  in the checkout and gitops scripts (same check, git config only from the environment, `protocol.allow=never` except
-  https); and git's credential helper registered per prefix (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so
+  Three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name after a prefix);
+  `ci/scripts/workflow/guards.sh`, sourced by `checkout.sh` and `gitops.sh` (same check, git config only from the
+  environment, `protocol.allow=never` except https); and git's credential helper registered per prefix (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so
   the token never answers a 401 from another host or owner, redirects included. The token itself only works for the
   run's repository ([Git credentials](#git-credentials)). Branch, commit and path parameters
   have patterns against option injection (`--upload-pack=…`) and traversal; the build step refuses a context or

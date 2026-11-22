@@ -8,6 +8,7 @@
 #     the GitHub contents API as the App
 #   - sign.sh skips the public Rekor log unless the installation opts in (cosign v3 signing config)
 #   - run pods get no ServiceAccount token (only Argo's executor containers do)
+#   - the ClusterWorkflowTemplates only call these scripts: no eval, no inline args script, no env var holding code
 # shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
@@ -164,19 +165,42 @@ no git token: points at the ExternalSecret | kubectl -n workflows-default descri
 no git token: points at GitHub's answer (ESO log) | logs deploy/external-secrets \| grep run-1-git
 CASES
 
-# --- the inline templates, until #393 PR B switches them to these scripts -------------------------------------------
-# koorikla-build still carries the guards inline (env BUILD_GUARDS, eval'd by checkout and gitops). They must be
-# guards.sh's code line for line (comments aside), so the tests above cover what runs today.
-INLINE=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')
-assert_nonempty "$INLINE" "BUILD_GUARDS present in gitops"
-assert_eq "$(cwt koorikla-build '.spec.templates[] | select(.name == "checkout") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')" \
-  "$INLINE" "checkout and gitops share one BUILD_GUARDS"
-code() { grep -v '^[[:space:]]*#' | sed '/^[[:space:]]*$/d'; }
-assert_eq "$(printf '%s\n' "$INLINE" | code)" "$(code < "$GUARDS")" "inline BUILD_GUARDS == ci/scripts/workflow/guards.sh"
-for step in checkout gitops; do
-  sc=$(cwt koorikla-build ".spec.templates[] | select(.name == \"$step\") | .container.args[0]")
-  assert_match "$sc" 'eval "\$BUILD_GUARDS"' "inline $step evaluates BUILD_GUARDS"
-  assert_match "$sc" 'git_access "\$REPO"' "inline $step calls git_access before any git command"
+# --- the templates call these scripts: data only, no code in the YAML (#393) -----------------------------------------
+# Every step of koorikla-build and koorikla-helm-chart runs one versioned script from ci/scripts/workflow: the toolbox's
+# copy (/opt/koorikla-ci/scripts), or in the toolchain and BuildKit images the /ci copy an init container makes. No
+# `eval`, no inline `args:` script, no env var that holds code; the guards above are what runs.
+pods='.spec.templates[] | (.container, .initContainers[]?, .sidecars[]?) | select(. != null)'
+for t in koorikla-build koorikla-helm-chart; do
+  assert_eq "$(cwt "$t" '... comments=""' | grep -cw 'eval' || true)" 0 "$t: no eval"
+  # each lists the offenders (container / env var names): empty means none
+  assert_eq "$(cwt "$t" "$pods | select(has(\"args\")) | .name // \"main\"")" "" "$t: no container carries an args script"
+  assert_eq "$(cwt "$t" '.spec.templates[] | select(has("script")) | .name')" "" "$t: no Argo script template"
+  assert_eq "$(cwt "$t" "$pods | .env[]? | select(.value | test(\"\\n\")) | .name")" "" "$t: no env var holds code"
+done
+assert_eq "$(grep -c 'BUILD_GUARDS' "$TMP/plane.yaml" || true)" 0 "no BUILD_GUARDS env left"
+cmds() { cwt "$1" '.spec.templates[] | .name as $n | ((.initContainers[]? | $n + "/init " + (.command | join(" "))), (.container | select(. != null) | $n + " " + (.command | join(" "))))'; }
+O=/opt/koorikla-ci/scripts/workflow
+assert_eq "$(cmds koorikla-build)" "checkout bash $O/checkout.sh
+check/init bash $O/check-init.sh
+check bash /ci/scripts/workflow/check.sh
+check-with-postgres/init bash $O/check-init.sh
+check-with-postgres bash /ci/scripts/workflow/check.sh
+scan-fs bash $O/scan-fs.sh
+build/init cp -R /opt/koorikla-ci/scripts /ci/scripts
+build sh /ci/scripts/workflow/build.sh
+scan-image bash $O/scan-image.sh
+sbom bash $O/sbom.sh
+sign bash $O/sign.sh
+gitops bash $O/gitops.sh" "koorikla-build: every step runs its ci/scripts/workflow script (build: POSIX sh)"
+assert_eq "$(cmds koorikla-helm-chart)" "package bash $O/helm-package.sh
+sign bash $O/sign.sh" "koorikla-helm-chart: package and sign run their scripts"
+# each called script ships in the toolbox (ci/scripts is the toolbox's /opt/koorikla-ci/scripts and the /ci copy)
+for s in $( (cmds koorikla-build; cmds koorikla-helm-chart) | grep -o '/[a-z/-]*/workflow/[a-z-]*\.sh' | sort -u); do
+  assert_eq "$([[ -f "$ROOT/ci/scripts/workflow/${s##*/}" ]] && echo ships)" ships "$s ships as ci/scripts/workflow/${s##*/}"
+done
+for step in checkout gitops; do   # the guards' env: allowlist, Secret name and namespace for the operator messages
+  assert_eq "$(cwt koorikla-build ".spec.templates[] | select(.name == \"$step\") | [.container.env[].name | select(test(\"^(GIT_ALLOWED_PREFIXES|GIT_SECRET|RUN_NAMESPACE|REPO)$\"))] | sort | join(\" \")")" \
+    "GIT_ALLOWED_PREFIXES GIT_SECRET REPO RUN_NAMESPACE" "$step: guards.sh gets REPO, GIT_ALLOWED_PREFIXES, GIT_SECRET, RUN_NAMESPACE"
 done
 
 # --- gitops.sh: only a real Workload under deploy/openchoreo/ is rewritten, through the GitHub contents API (#34) -----
