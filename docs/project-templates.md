@@ -76,7 +76,7 @@ project build` on the generated repository).
 Merging the PR lets Argo CD sync the tenant: the app's Application syncs `deploy/openchoreo/`, and the first CI run on
 `main` bumps the Workload, so the service serves in `development`. Production admits only images signed by the
 app-container.yaml workflow for listed repositories: before the first production promotion the new repo goes into addon
-kyverno-policies `imageVerification.github.repositories` (installation overlay; the PR description says so,
+kyverno-policies `imageVerification.github.trustedSources` (installation overlay; the PR description says so,
 [#108](https://github.com/koorikla/platform/issues/108)). The skeletons pin the app-* workflows at the same commit Kyverno
 trusts (`imageVerification.github.workflowRef`; the test fails when they drift).
 
@@ -163,7 +163,7 @@ openchoreo-control-plane:
 
 `templates/validate.yaml` of the addon fails the render when only one side is set. Argo CD read access to the new
 repos (public repos need none; private ones need the read App (a) installed on the org), production admission
-(Kyverno `imageVerification.github.repositories`) and the promotion gate App (c2) on each new repo are separate steps;
+(Kyverno `imageVerification.github.trustedSources`) and the promotion gate App (c2) on each new repo are separate steps;
 the end-to-end run is tracked in [#109](https://github.com/koorikla/platform/issues/109).
 
 ## Adding a template

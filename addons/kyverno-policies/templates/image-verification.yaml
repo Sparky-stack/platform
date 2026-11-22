@@ -20,22 +20,17 @@ The defaultAction policy covers every environment without another action, so a n
 {{- $sources := list }}
 {{- $keyless := list }}
 {{- if $iv.github.enabled }}
-{{- /* Kyverno 1.20 verifies one identity per attestor, so each trusted workflow commit (workflowRef, then
-transitionWorkflowRefs) renders its own attestors; transition ones get the suffix -<sha7>. */ -}}
+{{- /* github.trustedSources is the explicit list of builds production trusts. Kyverno 1.20 verifies one identity per
+attestor, so each source renders one attestor per trusted workflow commit: workflowRef under the source's name,
+then each transitionWorkflowRefs commit with the suffix -<sha7>. Current pin first: validations try attestors in
+order and stop at the first that verifies. Names: values.schema.json (DNS label, <= 60) and templates/validate.yaml
+(unique). */ -}}
 {{- $wfRefs := list (toString ($iv.github.workflowRef | default "")) }}
 {{- range ($iv.github.transitionWorkflowRefs | default list) }}{{ $wfRefs = append $wfRefs (toString .) }}{{ end }}
-{{- $triggers := $iv.github.triggers | default list }}
-{{- /* Current pin first: validations try attestors in order and stop at the first that verifies. */ -}}
 {{- range $i, $wf := $wfRefs }}
-{{- range $repo := $iv.github.repositories }}
-{{- range $ref := $iv.github.refs }}
-{{- range $trigger := $triggers }}
-{{- $n := printf "gh-%s-%s" ($repo | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) ($ref | trimPrefix "refs/" | replace "/" "-" | replace "." "-" | replace "_" "-" | lower) }}
-{{- if gt (len $triggers) 1 }}{{ $n = printf "%s-%s" $n ($trigger | replace "_" "-" | lower) }}{{ end }}
-{{- $name := ternary ($n | trunc 60 | trimSuffix "-") (printf "%s-%s" ($n | trunc 52 | trimSuffix "-") (substr 0 7 $wf)) (eq $i 0) }}
-{{- $keyless = append $keyless (dict "name" $name "repo" $repo "ref" $ref "trigger" $trigger "subject" (printf "%s@%s" $iv.github.workflow $wf)) }}
-{{- end }}
-{{- end }}
+{{- range $src := $iv.github.trustedSources }}
+{{- $name := ternary $src.name (printf "%s-%s" ($src.name | trunc 52 | trimSuffix "-") (substr 0 7 $wf)) (eq $i 0) }}
+{{- $keyless = append $keyless (dict "name" $name "repo" $src.repository "ref" $src.ref "trigger" $src.trigger "subject" (printf "%s@%s" $iv.github.workflow $wf)) }}
 {{- end }}
 {{- end }}
 {{- $names := list }}{{ range $keyless }}{{ $names = append $names .name }}{{ end }}

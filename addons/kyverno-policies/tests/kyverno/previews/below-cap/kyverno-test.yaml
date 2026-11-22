@@ -1,0 +1,13 @@
+# Tenant demo runs 1 preview: the 2nd passes; other tenants' previews and development do not count.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: previews-below-cap
+policies: [../policies.yaml]
+resources: [../environment-new.yaml]
+clusterResources: [cluster.yaml]
+results:
+  - policy: platform-preview-cap
+    kind: Environment
+    resources: [default/pr-9-hello-world]
+    result: pass
