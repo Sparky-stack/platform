@@ -17,6 +17,7 @@ tests:
       - exists: { path: 'data["policy-reconcile.sh"]' }
       - matchRegex: { path: 'data["tenant-read.hcl"]', pattern: 'path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*" \{ capabilities = \["read"\] \}' }
       - matchRegex: { path: 'data["tenant-write.hcl"]', pattern: 'path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/data/\*" \{ capabilities = \["create", "update", "patch", "read", "delete"\] \}' }
+      - matchRegex: { path: 'data["tenant-write.hcl"]', pattern: 'path "kv-tenant-\{\{identity\.entity\.metadata\.tenant\}\}/metadata/\*" \{ capabilities = \["create", "update", "read", "list", "delete"\] \}' }
       - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "auth/tenants-\*" \{\s+capabilities\s+= \[[^]]*\]\s+allowed_parameters = \{ "\*" = \[\], "token_policies" = \["tenant-read"\] \}' }
       - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "sys/policies/\*" \{ capabilities = \["deny"\] \}' }
       - matchRegex: { path: 'data["tenant-config.hcl"]', pattern: 'path "kv-tenant-\*" \{ capabilities = \["deny"\] \}' }

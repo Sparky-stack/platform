@@ -7,8 +7,8 @@
 # (admission runs, nothing is stored), curl GETs and `cosign verify`. Workload-cluster kubeconfigs are written by
 # hack/kubeconfig.sh into a private temp dir and removed on exit; no secret value is printed.
 #
-# PENDING: nothing to check yet - a feature not merged (check returns 2, detail "#<issue> ...", or an entry in
-# pending_issue()), a production freeze window, or no promotion since a clean bootstrap. See docs/demo.md.
+# PENDING: nothing to check yet - a feature not merged (check returns 2, detail "#<issue> ..."), a production freeze
+# window, or no promotion since a clean bootstrap. See docs/demo.md.
 #
 # Environment (defaults in brackets):
 #   KUBE_CTX            mgmt kubectl context [k3d-platform-mgmt]
@@ -18,7 +18,6 @@
 #                       signed: the manifest of one build's attestations]
 #   DEMO_HTTP_MODE      direct | docker: how app URLs on CAPD node IPs are reached [direct on Linux, docker elsewhere:
 #                       only a native Linux host routes to container IPs (docs/dev-environment.md)]
-#   DEMO_STRICT=1       no PENDING for known-unmerged features
 #   DEMO_NOW            ISO 8601 time sync windows are evaluated at [now] (tests)
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
@@ -49,14 +48,6 @@ done
 KCDIR=$(mktemp -d)
 trap 'rm -rf "$KCDIR"' EXIT
 
-# pending_issue <check id> -> issue number: a FAILing check of a known-unmerged feature reports PENDING #<issue>.
-# One case line per open issue (tracking: #98); none open today.
-pending_issue() {
-  case "$1" in
-    *) return 1 ;;
-  esac
-}
-
 # ---- output ---------------------------------------------------------------------------------------------------------
 N_PASS=0; N_FAIL=0; N_PENDING=0
 
@@ -71,9 +62,10 @@ one_line() {
 }
 
 # check <step> <id> <title> <function> [args...]: the function prints a detail line and returns 0 (PASS), 1 (FAIL) or
-# 2 (PENDING; detail starts with "#<issue> "). Rows print as checks finish; the summary follows the table.
+# 2 (PENDING; detail starts with "#<issue> "). <id> only names the check in this file. Rows print as checks finish;
+# the summary follows the table.
 check() {
-  local step=$1 id=$2 title=$3 detail rc status issue
+  local step=$1 title=$3 detail rc status
   shift 3
   detail=$("$@" 2>&1); rc=$?
   detail=$(one_line "$detail")
@@ -83,8 +75,7 @@ check() {
        if [[ "$detail" =~ ^#([0-9]+)[[:space:]]*(.*)$ ]]; then
          status="PENDING #${BASH_REMATCH[1]}"; detail=${BASH_REMATCH[2]}
        fi ;;
-    *) status=FAIL
-       if [[ "${DEMO_STRICT:-0}" != 1 ]] && issue=$(pending_issue "$id"); then status="PENDING #$issue"; fi ;;
+    *) status=FAIL ;;
   esac
   case "$status" in
     PASS) N_PASS=$((N_PASS + 1)) ;;

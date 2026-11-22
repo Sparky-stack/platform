@@ -752,13 +752,15 @@ cmd_down() {
   k3d cluster delete platform-mgmt 2>/dev/null || true
 }
 
-# --- dispatch (hack/tests/lib.sh bootstrap_harness cuts the file here) ---------------------------------------------
-case "$CMD" in
-  up)      cmd_up ;;
-  secrets) cmd_secrets ;;
-  argocd)  cmd_argocd ;;
-  status)  cmd_status ;;
-  ui)      cmd_ui ;;
-  down)    cmd_down ;;
-  timings) cmd_timings ;;
-esac
+# --- dispatch: only when executed; sourced (hack/tests/lib.sh bootstrap_harness), the file only defines functions ----
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  case "$CMD" in
+    up)      cmd_up ;;
+    secrets) cmd_secrets ;;
+    argocd)  cmd_argocd ;;
+    status)  cmd_status ;;
+    ui)      cmd_ui ;;
+    down)    cmd_down ;;
+    timings) cmd_timings ;;
+  esac
+fi

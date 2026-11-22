@@ -10,6 +10,12 @@ Application <project>-<app> must never look like one. */ -}}
 {{- if hasSuffix (printf "-%s" $env) $a.name -}}{{- fail (printf "apps[%d].name %q must not end in -%s (gated environment: reserved for the gated Application)" $i $a.name $env) -}}{{- end -}}
 {{- end -}}
 {{- end -}}
+{{- /* One demoSecrets entry per key: each key is one PushSecret <project>-seed-<key> (templates/demo-secrets.yaml). */ -}}
+{{- $keys := dict -}}
+{{- range $i, $s := .Values.demoSecrets -}}
+{{- if hasKey $keys $s.key -}}{{- fail (printf "demoSecrets[%d]: key %q is listed twice (one entry per key: PushSecret <project>-seed-<key>)" $i $s.key) -}}{{- end -}}
+{{- $_ := set $keys $s.key true -}}
+{{- end -}}
 {{- range $w := .Values.promotion.freezeWindows -}}
 {{- if eq (include "tenant.minuteOfWeek" $w.start) (include "tenant.minuteOfWeek" $w.end) -}}
 {{- fail (printf "promotion.freezeWindows %q: start == end" ($w.name | default $w.start)) -}}
