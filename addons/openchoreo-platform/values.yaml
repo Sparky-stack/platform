@@ -22,25 +22,17 @@ deploymentPipeline:
   # -- `[development, staging, production]`.
   environments: [development, staging, production]
 
-# Upstream defaults from files/ (see files/README.md); set false to manage them elsewhere.
-upstreamDefaults:
-  enabled: true
-
 # Data-service types in files/platform/ (docs/data-services.md): ClusterTrait keda-scaler and the ClusterResourceTypes
-# of the Crossplane platform APIs (postgresql, mysql, ...).
+# of the Crossplane platform APIs (postgresql, mysql, ...). The Deployment component types (files/cluster-component-types/)
+# always allow keda-scaler; with false that entry names no trait.
 dataServices:
   # -- Platform types for the data-service addons (`files/platform/`); usable only where the data plane announces the addon (`platform.koorikla.io/requires-addons`).
   enabled: true
 
-# docs/openchoreo.md "Resilience defaults". Needs the PriorityClasses app-production/app-standard on the data planes
-# (addon priority-classes).
-resilience:
-  # -- Embed ClusterTrait `resilience` (topology spread, PodDisruptionBudget, preStop + grace period, PriorityClass) in the Deployment component types.
-  enabled: true
-
 # docs/openchoreo.md "Application metrics": opt-in PodMonitor for the component's metrics port (addon telemetry scrapes it).
+# The Deployment component types (files/cluster-component-types/) always allow it; with false that entry names no trait.
 appMetrics:
-  # -- Render ClusterTrait `metrics` and add it to the `allowedTraits` of the Deployment component types.
+  # -- Render ClusterTrait `metrics` (opt-in app metrics scraping).
   enabled: true
 
 # installation.yaml secrets: tenantStores.enabled points component ExternalSecrets at the cell's SecretStore
@@ -148,7 +140,7 @@ registry:
 
 # ClusterWorkflows (OpenChoreo, on the control plane) -> Argo ClusterWorkflowTemplate koorikla-build on the workflow plane
 # (addon openchoreo-workflow-plane). One component workflow per stack, same ci/scripts as the GitHub Actions
-# wrappers; the stack's ClusterComponentTypes list them in allowedWorkflows (templates/upstream-defaults.yaml).
+# wrappers; the stack's ClusterComponentTypes list them in allowedWorkflows (files/cluster-component-types/).
 buildWorkflows:
   # -- Language stack build workflows (`buildWorkflows.{stacks,platforms,secrets}`: `go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow (`helmChartWorkflow`).
   enabled: true

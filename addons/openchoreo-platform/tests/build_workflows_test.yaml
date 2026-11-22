@@ -248,7 +248,7 @@ tests:
 
   - it: component types allow exactly the build workflows
     template: templates/upstream-defaults.yaml
-    documentSelector: { path: metadata.name, value: service }
+    documentSelector: { path: kind, value: ClusterComponentType, matchMany: true }
     asserts:
       - equal:
           path: spec.allowedWorkflows
@@ -258,6 +258,15 @@ tests:
             - { kind: ClusterWorkflow, name: elixir }
             - { kind: ClusterWorkflow, name: ruby }
             - { kind: ClusterWorkflow, name: dockerfile }
+
+  - it: a stack the component type files do not list fails the render (allowedWorkflows is written in the files)
+    template: templates/upstream-defaults.yaml
+    set:
+      buildWorkflows.stacks:
+        - { name: go, displayName: Go, description: d, stack: go, checkImage: "docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9", checkSetup: "", checkEnv: {} }
+    asserts:
+      - failedTemplate:
+          errorPattern: "spec.allowedWorkflows must list the ClusterWorkflows of buildWorkflows.stacks, in order"
 
   - it: component types allow the observability-alert-rule trait and ship the ClusterTrait
     template: templates/upstream-defaults.yaml

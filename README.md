@@ -47,7 +47,8 @@ The full walkthrough with commands is [docs/demo.md](docs/demo.md) (about 30 min
 6. Query logs, traces, metrics and Hubble flows from `mgmt`.
 7. Detect container anomalies with Falco and respond with Falco Talon and Argo Events.
 8. Sidecarless mTLS with Istio ambient, admission policy with Kyverno.
-9. Provision PostgreSQL through one Crossplane API (CloudNativePG locally).
+9. Provision PostgreSQL through one Crossplane API on the workload cluster (CloudNativePG locally; the RDS, Cloud SQL
+   and Azure backends are untested examples).
 10. Get a PR preview environment.
 
 ## Diagrams

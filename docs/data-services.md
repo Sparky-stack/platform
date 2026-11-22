@@ -10,7 +10,7 @@ Catalog and labels: [conventions.md](conventions.md); addon mechanics: [architec
 | `strimzi` | strimzi | `strimzi-kafka-operator` 1.3.1 | Apache Kafka in KRaft mode (`Kafka`, `KafkaNodePool`, `KafkaTopic`, `KafkaUser`, Connect, MirrorMaker 2, Bridge); no ZooKeeper |
 | `moco` | moco-system | `moco` 0.28.0 | MySQL 8.4 clusters with semi-sync GTID replication, the in-cluster backend of the MySQL API ([below](#mysql-as-a-service)) |
 | `keda` | keda | `keda` 2.21.0 | event-driven autoscaling (`ScaledObject`, `ScaledJob`, `TriggerAuthentication`), scale to zero, external metrics API |
-| `crossplane` | crossplane-system | `crossplane` 2.4.3 (Crossplane v2) | PostgreSQL as a service: one `PostgreSQL` API, fulfilled per cluster by CloudNativePG, RDS / Aurora, Cloud SQL or Azure Flexible Server ([below](#postgresql-as-a-service)) |
+| `crossplane` | crossplane-system | `crossplane` 2.4.3 (Crossplane v2) | not an operator for one data service: the control plane behind the `PostgreSQL` and `MySQL` APIs. Its Compositions hand a claim to CloudNativePG or MOCO in the cluster, or have its cloud providers create RDS / Aurora, Cloud SQL or Azure Flexible Server ([below](#postgresql-as-a-service), [crossplane.md](crossplane.md)) |
 
 The operators: wrapper charts in `addons/<addon>/`, workload role only, CRDs from the chart applied server-side by Argo CD
 (the Kafka and CNPG `Cluster` CRDs exceed the client-side apply annotation limit), images multi-arch (amd64 + arm64)
