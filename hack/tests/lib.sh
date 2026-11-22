@@ -101,9 +101,10 @@ run_isolated() {
 #   run_isolated <name> "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL=<call> [VAR=val ...]
 bootstrap_harness() {
   R="$TMP/root"; BIN="$TMP/bin"
-  mkdir -p "$R/bootstrap" "$R/hack"
+  mkdir -p "$R/bootstrap" "$R/hack" "$R/addons/openchoreo-workflow-plane"
   cp -R "$ROOT/hack/lib" "$R/hack/"
   cp -R "$ROOT/installations" "$R/"
+  cp "$ROOT/addons/openchoreo-workflow-plane/values.yaml" "$R/addons/openchoreo-workflow-plane/"   # seed_cosign_secret
   # shellcheck disable=SC2016  # literal code for bs.sh
   printf 'source %q\nload_inst; eval "$HARNESS_CALL"\n' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
   fake_bin_yq "$BIN"

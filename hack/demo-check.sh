@@ -202,7 +202,7 @@ env_names() {
 
 production_env() {
   km get environments.openchoreo.dev -n "$NS" \
-    -o jsonpath='{range .items[?(@.spec.isProduction==true)]}{.metadata.name}{"\n"}{end}' 2>/dev/null | head -n1
+    -o jsonpath='{range .items[?(@.spec.isProduction==true)]}{.metadata.name}{"\n"}{end}' 2>/dev/null | sed -n 1p
 }
 
 env_dataplane() {
@@ -213,21 +213,21 @@ env_dataplane() {
 node_ip() {
   km get machines.cluster.x-k8s.io -n fleet -l "cluster.x-k8s.io/cluster-name=$1" \
     -o jsonpath='{range .items[*]}{range .status.addresses[?(@.type=="InternalIP")]}{.address}{"\n"}{end}{end}' \
-    2>/dev/null | head -n1
+    2>/dev/null | sed -n 1p
 }
 
 # latest_image: the image the demo component's Workload deploys (what CI built last).
 latest_image() {
   km get workloads.openchoreo.dev -n "$NS" \
     -o jsonpath='{range .items[*]}{.spec.owner.componentName}{" "}{.spec.container.image}{"\n"}{end}' 2>/dev/null \
-    | awk -v c="$COMP" '$1 == c && $2 != "" { print $2; exit }'
+    | awk -v c="$COMP" '$1 == c && $2 != "" && !n++ { print $2 }'
 }
 
 # cell_namespace <cluster> <env>: the OpenChoreo cell (dp-*) namespace of the env on that cluster.
 cell_namespace() {
   kw "$1" get namespaces \
     -l "openchoreo.dev/managed-by=renderedrelease-controller,openchoreo.dev/environment=$2,openchoreo.dev/namespace=$NS" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | head -n1
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | sed -n 1p
 }
 
 # dry_run_pod <cluster> <namespace> <image>: server-side dry-run of a minimal pod (admission only, nothing stored).
@@ -242,7 +242,7 @@ short_image() { printf '%s' "$1" | sed -E 's/@sha256:([0-9a-f]{12})[0-9a-f]+/@sh
 join_comma() { grep . | paste -sd, - | sed 's/,/, /g'; }
 
 # first_error <cosign output>: its first line mentioning an error, else its last line.
-first_error() { printf '%s\n' "$1" | grep -m1 -i 'error' || printf '%s' "$1" | tail -n1; }
+first_error() { grep -m1 -i 'error' <<<"$1" || tail -n1 <<<"$1"; }
 
 # release_bindings: "<component> <env> <release> <Ready reason>" for every ReleaseBinding of the org namespace.
 release_bindings() {
@@ -272,8 +272,8 @@ frozen_env() {
   local bindings why
   bindings=$(release_bindings) || return 1
   printf '%s\n' "$bindings" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e { f = 1 } END { exit !f }' && return 1
-  why=$(frozen_apps 2>/dev/null | awk -F '\t' -v s="-$COMP-$1" 'substr($1, length($1) - length(s) + 1) == s {
-    printf "%s frozen by sync window \"%s\" until %s", $1, $2, $3; exit }') || return 1
+  why=$(frozen_apps 2>/dev/null | awk -F '\t' -v s="-$COMP-$1" 'substr($1, length($1) - length(s) + 1) == s && !n++ {
+    printf "%s frozen by sync window \"%s\" until %s", $1, $2, $3 }') || return 1
   [[ -n "$why" ]] && echo "$why"
 }
 
@@ -323,7 +323,7 @@ c_render_providers() {
       [[ -f "$cf" ]] || continue
       name=$(yq '.name' "$cf")
       if out=$(helm template "cluster-$name" charts/cluster --namespace fleet --values "$inst_dir/installation.yaml" \
-          --values "$cf" 2>&1) && printf '%s\n' "$out" | grep -q '^kind: Cluster$'; then
+          --values "$cf" 2>&1) && grep -q '^kind: Cluster$' <<<"$out"; then
         ok="$ok${ok:+, }$inst/$name($(yq '.provider' "$cf"))"
       else
         bad="$bad${bad:+, }$inst/$name"
@@ -536,7 +536,7 @@ c_resilience() {
 unpromoted_release() {
   local out
   out=$(release_bindings) || return 0
-  printf '%s\n' "$out" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e && $4 == "ComponentReleaseNotFound" { print $3; exit }'
+  printf '%s\n' "$out" | awk -v c="$COMP" -v e="$1" '$1 == c && $2 == e && $4 == "ComponentReleaseNotFound" && !n++ { print $3 }'
 }
 
 # gate_not_run_yet: true (and says why) when no gate run is expected (the gate runs on promotion): nothing promoted
@@ -582,7 +582,7 @@ c_metrics_clusters() {
     || { echo "Prometheus of the observability plane not reachable (service proxy)"; return 1; }
   have=$(prom_label_values k8s_cluster_name "$json")
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
-    printf '%s\n' "$have" | grep -qx "$c" || missing="$missing${missing:+, }$c"
+    grep -qx -- "$c" <<<"$have" || missing="$missing${missing:+, }$c"
   done
   [[ -z "$missing" ]] || { echo "no series from: $missing"; return 1; }
   echo "series from: $(printf '%s\n' "$have" | join_comma)"
@@ -634,11 +634,11 @@ c_falco_cluster_name() {
 c_mesh_certs() {
   local apps members c iss crt ok="" bad="" skip=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
-  printf '%s\n' "$apps" | grep -q '^openbao-' || { echo "OpenBao addon not installed on mgmt"; return 1; }
+  grep -q '^openbao-' <<<"$apps" || { echo "OpenBao addon not installed on mgmt"; return 1; }
   members=$(km get clusters.cluster.x-k8s.io -n fleet -l mesh.platform.koorikla.io/group \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
-    printf '%s\n' "$members" | grep -qx "$c" || { skip="$skip${skip:+, }$c"; continue; }
+    grep -qx -- "$c" <<<"$members" || { skip="$skip${skip:+, }$c"; continue; }
     iss=$(kw "$c" get issuers.cert-manager.io -n istio-system openbao-mesh \
       -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{" "}{.spec.vault.server}' 2>/dev/null)
     crt=$(kw "$c" get certificates.cert-manager.io -n istio-system istiod \
@@ -672,7 +672,7 @@ c_secret_stores() {
 # ExternalSecret on SecretStore openbao-tenant keeps synced (docs/openchoreo.md "Secrets"). Only the value's length is read.
 c_app_secret() {
   local env dp ns name es len
-  env=$(env_names | head -n1)
+  env=$(env_names | sed -n 1p)
   dp=$(env_dataplane "$env")
   ns=$(cell_namespace "$dp" "$env")
   [[ -n "$ns" ]] || { echo "no cell namespace for environment '${env:-none}' on '${dp:-none}'"; return 1; }
@@ -697,7 +697,7 @@ c_postgres() {
   local apps c est ok="" bad=""
   apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
-    printf '%s\n' "$apps" | grep -qx "crossplane-$c" || continue
+    grep -qx -- "crossplane-$c" <<<"$apps" || continue
     est=$(kw "$c" get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io \
       -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' 2>/dev/null || true)
     if [[ "$est" == True ]]; then ok="$ok${ok:+, }$c"; else bad="$bad${bad:+, }$c(Established=${est:-missing})"; fi
@@ -718,9 +718,9 @@ c_db_claim() {
       == ClusterResourceType/postgresql ]] && { res=$ref; break; }
   done
   [[ -n "$res" ]] || { echo "$COMP declares no postgresql Resource (app repo deploy/openchoreo, docs/data-services.md)"; return 2; }
-  env=$(env_names | head -n1)
+  env=$(env_names | sed -n 1p)
   rrb=$(km get resourcereleasebindings.openchoreo.dev -n "$NS" -o jsonpath='{range .items[*]}{.spec.owner.resourceName}{" "}{.spec.environment}{" "}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{" "}{.status.outputs[?(@.name=="username")].secretKeyRef.name}{"\n"}{end}' \
-    2>/dev/null | awk -v r="$res" -v e="$env" '$1 == r && $2 == e { print $3, $4, $5; exit }')
+    2>/dev/null | awk -v r="$res" -v e="$env" '$1 == r && $2 == e && !n++ { print $3, $4, $5 }')
   [[ -n "$rrb" ]] || { echo "Resource $res has no ResourceReleaseBinding for environment '${env:-none}'"; return 1; }
   read -r rrb ready secret <<<"$rrb"
   [[ "$ready" == True && "$secret" == *-app ]] \
@@ -734,7 +734,7 @@ c_db_claim() {
   [[ "$ready" == True ]] || { echo "$dp/$ns: PostgreSQL $xr Ready=${ready:-missing}"; return 1; }
   refs=$(kw "$dp" -n "$ns" get deployments -l "openchoreo.dev/component=$COMP" \
     -o jsonpath='{range .items[*].spec.template.spec.containers[*].env[*]}{.valueFrom.secretKeyRef.name}{"\n"}{end}' 2>/dev/null)
-  printf '%s\n' "$refs" | grep -qx "$secret" \
+  grep -qx -- "$secret" <<<"$refs" \
     || { echo "$dp/$ns: $COMP's Deployment takes no env from Secret $secret"; return 1; }
   echo "$env: PostgreSQL $xr Ready on $dp, $COMP reads Secret $secret (binding $rrb)"
 }

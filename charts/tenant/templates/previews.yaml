@@ -4,9 +4,12 @@ ApplicationSet previews-<project> (mgmt, argocd; docs/preview-environments.md): 
                in the app repo only)
   pullRequest  the repo's open PRs (token of the platform GitHub App, minted by addon secret-stores)
 -> Application preview-<component>-pr-<n> rendering charts/preview at the PR head SHA (AppProject previews). A closed or
-merged PR drops out of the generator, so its Application and Environment are deleted.
+merged PR drops out of the generator, so its Application and Environment are deleted. The Application renders nothing
+while the PR is expired (expiredLabel), held by the per-tenant cap (waitingLabel, set by the auto-build pass, #385) or
+opened by a bot without botLabel (skipBots).
 Only values that cannot inject anything reach the template: number, head_sha, labels and the Component name (pinned
-to the app name by the selector). Branch names and titles are never rendered.
+to the app name by the selector). Branch names, titles and the author are never rendered (the author only feeds a
+true/false test).
 */ -}}
 {{- $pv := .Values.previews }}
 {{- /* Only GitHub repositories have a pull request generator here; other apps of the tenant simply get no previews. */ -}}
@@ -21,6 +24,8 @@ only with secrets.githubGateApp.enabled): without the App no ApplicationSet, whi
 {{- if and $pv.enabled $gh $gate }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
+{{- $waiting := required "previews.waitingLabel is required" $pv.waitingLabel }}
+{{- $botLabel := required "previews.botLabel is required" $pv.botLabel }}
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -88,6 +93,12 @@ spec:
             commit: {{ `'{{ .head_sha }}'` }}
             repository: {{ `'{{ .values.repository }}'` }}
             expired: {{ printf "'{{ has %q .labels }}'" $label }}
+            waiting: {{ printf "'{{ has %q .labels }}'" $waiting }}
+            {{- if $pv.skipBots }}
+            bot: {{ printf "'{{ and (hasSuffix \"[bot]\" .author) (not (has %q .labels)) }}'" $botLabel }}
+            {{- else }}
+            bot: "false"
+            {{- end }}
             openchoreo:
               orgNamespace: {{ .Values.openchoreo.orgNamespace }}
             previews:
@@ -101,8 +112,9 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=false
-        # Unlimited retries: a preview over the tenant cap (Kyverno denies the Environment) waits here and comes up
-        # within maxDuration once another preview of the tenant is gone.
+        # Unlimited retries heal first-boot races. A preview over the tenant cap does not wait here: the auto-build pass
+        # labels its PR waitingLabel (it renders nothing) and removes the label when a slot frees (#385); Kyverno
+        # platform-preview-cap only backstops the minutes before the pass and the generator see the PR.
         retry:
           limit: -1
           backoff:

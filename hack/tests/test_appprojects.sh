@@ -44,7 +44,7 @@ assert_eq "$plat_crw" "*" "platform AppProject allows all cluster-scoped kinds"
 # pruned object (foreground: an ApplicationSet until its Applications are gone) before the next wave. So:
 # 1. every AppProject an ApplicationSet uses is rendered by this chart, in a lower wave than every ApplicationSet;
 waves() { yq -N "select(.kind == \"$1\") | (.metadata.annotations[\"argocd.argoproj.io/sync-wave\"] // \"0\")" "$2" | sort -n; }
-proj_max=$(waves AppProject "$TMP/platform.yaml" | tail -1); appset_min=$(waves ApplicationSet "$TMP/platform.yaml" | head -1)
+proj_max=$(waves AppProject "$TMP/platform.yaml" | tail -1); appset_min=$(waves ApplicationSet "$TMP/platform.yaml" | sed -n 1p)
 assert_eq "$([[ $proj_max -lt $appset_min ]] && echo ok || echo "projects $proj_max >= appsets $appset_min")" ok \
   "every AppProject syncs before (and is pruned after) every ApplicationSet"
 for p in $(yq -N 'select(.kind == "ApplicationSet") | .spec.template.spec.project' "$TMP/platform.yaml" | sort -u); do

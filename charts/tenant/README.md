@@ -34,10 +34,13 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | previewOptIn.value | string | `"enabled"` |  |
 | previewProject | string | `"previews"` |  |
 | previewToken.secretName | string | `"preview-github-token"` |  |
+| previews.botLabel | string | `"preview"` |  |
 | previews.dataPlane | string | `"dev1"` |  |
 | previews.enabled | bool | `false` | Enables `ApplicationSet/previews-<project>` (`previews.*`, `previewOptIn`, `previewToken`: opted-in Components x open pull requests -> one `charts/preview` Application per PR; [preview environments](../../docs/preview-environments.md)). |
 | previews.expiredLabel | string | `"preview-expired"` |  |
 | previews.requeueAfterSeconds | int | `1800` |  |
+| previews.skipBots | bool | `true` |  |
+| previews.waitingLabel | string | `"preview-waiting"` |  |
 | project | string | `""` | OpenChoreo `Project` name (DNS-1123 label) and `AppProject/tenant-<project>` (alongside `description`). |
 | projectType.kind | string | `"ClusterProjectType"` |  |
 | projectType.name | string | `"default"` |  |

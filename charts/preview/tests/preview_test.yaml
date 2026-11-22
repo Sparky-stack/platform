@@ -82,6 +82,28 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
+  - it: renders nothing while the PR waits for a slot of the tenant's cap (#385)
+    template: templates/preview.yaml
+    set:
+      waiting: "true"
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: renders nothing for a bot PR without the opt-in label (#385)
+    template: templates/preview.yaml
+    set:
+      bot: "true"
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: a held preview needs no identity (the generator still renders it)
+    template: templates/validate.yaml
+    set:
+      waiting: "true"
+      commit: ""
+    asserts:
+      - notFailedTemplate: {}
+
   - it: rejects a commit that is not a full SHA
     template: templates/validate.yaml
     set:

@@ -40,7 +40,7 @@ violations() {
       | select(((.metadata.annotations["helm.sh/hook"] // "") == "" and (.metadata.annotations["argocd.argoproj.io/hook"] // "") == "")
                or (.metadata.annotations["helm.sh/hook-delete-policy"] // "") == "before-hook-creation"
                or (.metadata.annotations["argocd.argoproj.io/hook-delete-policy"] // "") == "BeforeHookCreation")
-      | .metadata.name' "$f" | tr -d '\r' | head -1)
+      | .metadata.name' "$f" | tr -d '\r' | sed -n 1p)
     if [[ -z "$vap" ]]; then
       echo "$key: no ValidatingAdmissionPolicy in the render denies its deletion (DELETE persistentvolumeclaims, namespace $ns, delete-protection matchCondition, surviving a failed sync)"
     elif [[ -z "$(P="$vap" yq -N 'select(.kind == "ValidatingAdmissionPolicyBinding" and .spec.policyName == strenv(P) and ([.spec.validationActions[]] | any_c(. == "Deny"))) | .metadata.name' "$f" | tr -d '\r')" ]]; then

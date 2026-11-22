@@ -176,7 +176,7 @@ previews:
   # -- PR previews (`previews` and `previewGuards`): expiry stamp, per-tenant cap and TTL `DeletingPolicy` on `mgmt` Environments; quota, limits and egress isolation in preview cell namespaces ([preview environments](../../docs/preview-environments.md)).
   enabled: false
   ttl: 48h
-  maxPerTenant: 2
+  maxPerTenant: 2                    # == addon openchoreo-platform previews.maxPerTenant (the pass holds PRs first)
 
 # --- Data-plane capabilities of resource types (templates/data-plane-capabilities.yaml) -------------------------------
 dataPlaneCapabilities:

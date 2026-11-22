@@ -166,7 +166,7 @@ bao_in() {   # bao_in <script>: run a shell snippet in a throwaway OpenBao CLI c
 wait_unsealed() {
   local i
   for i in $(seq 1 40); do
-    bao_in 'bao status -format=json' 2>/dev/null | grep -q '"sealed": false' && return 0
+    grep -q '"sealed": false' <<<"$(bao_in 'bao status -format=json' 2>/dev/null)" && return 0
     sleep 2
   done
   return 1
@@ -204,8 +204,9 @@ assert_match "$out" 'done: configured=\[c1 c2\] failed=\[c3\]' "CronJob mode: sa
 # --- least privilege: escalation probes with the reconcile identities' own tokens (PR #4 review) --------------------
 # 403 = refused by the ACL before the backend sees the request. Each must fail; any other answer is a finding.
 probe() { # probe <user> <bao args...>: prints 403, or the first error/success line
-  local u=$1; shift
-  bao_in "export BAO_TOKEN=\$($UP/$u password=@/w/it-pw); bao $* 2>&1" | grep -m1 -oE 'Code: [0-9]+|Success|Key|BEGIN' | sed 's/Code: //'
+  local u=$1 out; shift
+  out=$(bao_in "export BAO_TOKEN=\$($UP/$u password=@/w/it-pw); bao $* 2>&1")
+  grep -m1 -oE 'Code: [0-9]+|Success|Key|BEGIN' <<<"$out" | sed 's/Code: //'
 }
 # Batched (one container, one login per user): pr <expected> <label> <user> <bao args...>; probes_run asserts them all.
 P_EXP=(); P_LABEL=(); : > "$W/probes.sh"
@@ -314,7 +315,11 @@ assert_eq "$(sign 'pki-mesh-local-int/sign/c1 csr=@/w/td.csr uri_sans=spiffe://e
 assert_eq "$(sign 'pki-mesh-local-int/sign/c2 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" denied "negative: c2's role"
 assert_eq "$(sign 'pki-mesh-local-root/root/sign-intermediate csr=@/w/wl.csr')" denied "negative: the group root"
 # templated member policy: a role named c1 in group prod and a role pwn in group local exist; neither is c1's
-sign_code() { bao_in "export BAO_TOKEN=\$(bao write -field=token auth/mesh-c1/login role=istio-csr jwt=$good); bao write $1 2>&1" | grep -m1 -oE 'Code: [0-9]+|Key' | sed 's/Code: //'; }
+sign_code() {
+  local out
+  out=$(bao_in "export BAO_TOKEN=\$(bao write -field=token auth/mesh-c1/login role=istio-csr jwt=$good); bao write $1 2>&1")
+  grep -m1 -oE 'Code: [0-9]+|Key' <<<"$out" | sed 's/Code: //'
+}
 assert_eq "$(probe reconciler write pki-mesh-prod-int/roles/c1 "$ROLEOK" allowed_uri_sans=spiffe://cluster.local/ns/*/sa/*)" Key "setup: a role c1 in group prod"
 assert_eq "$(sign_code 'pki-mesh-prod-int/sign/c1 csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" 403 "negative: another group's intermediate, even with a role of its name (entity metadata group=local)"
 assert_eq "$(sign_code 'pki-mesh-local-int/sign/pwn csr=@/w/wl.csr uri_sans=spiffe://cluster.local/ns/eastwest-demo/sa/client')" 403 "negative: another role in its own group"
@@ -431,7 +436,11 @@ bao_in 'export BAO_TOKEN=$(bao write -field=token auth/userpass/login/tenantcfg 
   acc=$(bao auth list | awk "\$1 == \"userpass/\" {print \$3}")
   for t in demo other; do bao write identity/entity-alias name=${t}writer canonical_id=$(bao read -field=id identity/entity/name/tenant-$t) mount_accessor=$acc >/dev/null; done' 2>/dev/null \
   || bao_in 'export BAO_TOKEN=$(bao write -field=token auth/userpass/login/tenantcfg password=@/w/it-pw); bao read sys/auth' >&2
-twr() { bao_in "export BAO_TOKEN=\$($UP/$1 password=@/w/it-pw); bao $2 2>&1" | grep -m1 -oE 'Code: [0-9]+|Success|Key|=====' | head -n1 | sed 's/Code: //'; }
+twr() {
+  local out
+  out=$(bao_in "export BAO_TOKEN=\$($UP/$1 password=@/w/it-pw); bao $2 2>&1")
+  grep -m1 -oE 'Code: [0-9]+|Success|Key|=====' <<<"$out" | awk 'NR == 1 { sub("Code: ", ""); print }'
+}
 assert_eq "$(twr demowriter 'kv put kv-tenant-demo/db password=demo-value')" "=====" "demo writer writes its own secret"
 assert_eq "$(twr otherwriter 'kv put kv-tenant-other/db password=other-value')" "=====" "other writer writes its own secret"
 assert_eq "$(twr demowriter 'kv metadata put -custom-metadata=managed-by=external-secrets kv-tenant-demo/db')" Success \
@@ -444,7 +453,9 @@ assert_eq "$(twr demowriter 'kv get kv-tenant-other/db')" 403 "negative: demo wr
 TAUD=$(yq .tenantSecrets.audience addons/openbao/values.yaml); TSA=$(yq .tenantSecrets.readerServiceAccount addons/openbao/values.yaml)
 tok() { python3 "$W/jwt.py" jwt "${3:-$W/sa1.key}" "${4:-k1}" "system:serviceaccount:$1:${2:-$TSA}" "${5:-$TAUD}"; }
 tread() { # tread <role> <jwt> <bao args>: 403 / Key / denied (login refused)
-  bao_in "t=\$(bao write -field=token auth/tenants-c1/login role=$1 jwt=$2 2>/dev/null) || { echo denied; exit 0; }; BAO_TOKEN=\$t bao ${3:-token lookup} 2>&1" | grep -m1 -oE 'denied|Code: [0-9]+|Key|=====|password' | head -n1 | sed 's/Code: //'
+  local out
+  out=$(bao_in "t=\$(bao write -field=token auth/tenants-c1/login role=$1 jwt=$2 2>/dev/null) || { echo denied; exit 0; }; BAO_TOKEN=\$t bao ${3:-token lookup} 2>&1")
+  grep -m1 -oE 'denied|Code: [0-9]+|Key|=====|password' <<<"$out" | awk 'NR == 1 { sub("Code: ", ""); print }'
 }
 assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$DEV")) bao kv get -field=password kv-tenant-demo/db")" demo-value "demo's namespace reads demo's secret (ESO's path kv-tenant-demo/data/db)"
 assert_eq "$(bao_in "BAO_TOKEN=\$(bao write -field=token auth/tenants-c1/login role=demo jwt=$(tok "$PRD")) bao kv get -field=password kv-tenant-demo/db")" demo-value "demo's second namespace reads demo's secret too (one entity per namespace)"

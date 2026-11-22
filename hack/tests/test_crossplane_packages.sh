@@ -35,7 +35,7 @@ for p in $PACKAGES; do
   assert_eq "$(find "$d/apis" -name '*.yaml' | sort | tr '\n' ' ')" "$d/apis/$p/composition.yaml $d/apis/$p/definition.yaml " "$p: apis/$p/ holds one XRD and one Composition"
   assert_eq "$(yq -r '[.spec.pipeline[].functionRef.name] | join(" ")' "$d/apis/$p/composition.yaml")" \
     "function-environment-configs $fn function-auto-ready" "$p: pipeline environment -> embedded compose-$p -> auto-ready"
-  assert_nonempty "$(find "$d/functions/compose-$p" -name '*.gotmpl' 2>/dev/null | head -n1)" "$p: embedded function functions/compose-$p/ (crossplane function generate)"
+  assert_nonempty "$(find "$d/functions/compose-$p" -name '*.gotmpl' 2>/dev/null | sed -n 1p)" "$p: embedded function functions/compose-$p/ (crossplane function generate)"
   assert_eq "$(grep -cxE '_output/|schemas/|\.cache/' "$d/.gitignore" 2>/dev/null)" 3 "$p: _output/, schemas/, .cache/ gitignored"
   wf=.github/workflows/package-$p.yaml
   assert_eq "$(yq -r '.jobs.package.uses + " " + .jobs.package.with.package_root + " " + .jobs.package.with.registry' "$wf" 2>/dev/null)" \

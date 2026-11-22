@@ -47,7 +47,7 @@ run() {
   assert_eq "$(grep -c -- '--context fake' "$HLOG/calls" || true)" "$(grep -c '^kubectl' "$HLOG/calls" || true)" "$name: only the fake context"
 }
 # line <pattern> -> first line number in calls matching the ERE (0 if none)
-line() { local n; n=$(grep -nE -- "$1" "$HLOG/calls" | head -1 | cut -d: -f1); printf '%s' "${n:-0}"; }
+line() { local n; n=$(grep -m1 -nE -- "$1" "$HLOG/calls" | cut -d: -f1); printf '%s' "${n:-0}"; }
 count() { grep -cE -- "$1" "$HLOG/calls" || true; }
 
 SCALE_AC='-n argocd scale statefulset/argocd-application-controller --replicas=0'

@@ -116,9 +116,12 @@ previews:
   enabled: true
   dataPlane: dev1                              # ClusterDataPlane of the development tier
   ttl: 48h                                     # since the Environment was created (Go duration, hours)
-  maxPerTenant: 2                              # concurrent previews per tenant (RAM-bound locally)
+  maxPerTenant: 2                              # concurrent previews per tenant (RAM-bound locally); Kyverno + auto-build
   requeueAfterSeconds: 120                     # pull request poll (no GitHub webhook locally)
   expiredLabel: preview-expired                # remove it from the PR for a fresh preview
+  waitingLabel: preview-waiting                # set by the auto-build pass while the tenant is at maxPerTenant
+  skipBots: true                               # Dependabot/Renovate PRs: no preview unless labelled botLabel
+  botLabel: preview
 
 # Istio mesh (docs/multicluster.md): one CA per group, a trust boundary; `local` holds dev1 and prod1 on purpose (one laptop).
 # ca: where members reach OpenBao on mgmt; port == the k3d published port (bootstrap/k3d-mgmt.yaml).

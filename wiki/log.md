@@ -51,3 +51,6 @@
 
 ## [2026-11-21] create | Crossplane Project CLI paths (#240)
 - `gotchas/crossplane-project-cli-paths-and-function-names.md`: `--path` under apis/, embedded function name from spec.repository, auto-ready >=v0.0.0 floor.
+
+## [2026-11-22] update | Preview cap signal (#385)
+- `decisions/pr-preview-environments.md`: the pass holds PRs beyond the cap with label `preview-waiting` (Application renders nothing) + failed status; Kyverno cap is the backstop; bot PRs skip previews by default.

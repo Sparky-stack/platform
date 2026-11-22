@@ -269,9 +269,14 @@ autoBuild:
     argocdNamespace: argocd
     schedule: "*/2 * * * *"                    # trigger webhook only (poll runs previews every pollSchedule)
 
-# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel.
+# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel / maxPerTenant / waitingLabel / skipBots /
+# botLabel. Defaults == charts/tenant previews and addon kyverno-policies previews.maxPerTenant (contract test 17).
 previews:
   enabled: false
+  maxPerTenant: 2                  # == Kyverno platform-preview-cap: PRs beyond it wait with waitingLabel (#385)
+  waitingLabel: preview-waiting    # set/removed by the pass; the PR's Application renders nothing meanwhile
+  skipBots: true                   # PRs whose author login ends in [bot] (Dependabot, Renovate) get no preview...
+  botLabel: preview                # ...unless they carry this label
 
 # Generic (non-component) workflow: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
 helmChartWorkflow:

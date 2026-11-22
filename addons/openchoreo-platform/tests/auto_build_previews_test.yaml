@@ -23,8 +23,22 @@ tests:
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_OPT_IN_VALUE, value: enabled } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_EXPIRED_LABEL, value: preview-expired } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_TTL, value: 48h } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_MAX_PER_TENANT, value: "2" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_WAITING_LABEL, value: preview-waiting } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_SKIP_BOTS, value: "true" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_BOT_LABEL, value: preview } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_TOKEN_FILE, value: /var/run/secrets/auto-build-previews/token } }
       - contains: { path: spec.volumes, content: { name: previews-token, secret: { secretName: auto-build-previews-token, defaultMode: 288 } } }
+
+  - it: "installation.yaml previews: the cap, the waiting label and the bot switch reach the pass (#385)"
+    set:
+      previews: { enabled: true, maxPerTenant: 5, waitingLabel: queued, skipBots: false, botLabel: try-me }
+    documentSelector: { path: kind, value: WorkflowTemplate }
+    asserts:
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_MAX_PER_TENANT, value: "5" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_WAITING_LABEL, value: queued } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_SKIP_BOTS, value: "false" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_BOT_LABEL, value: try-me } }
 
   - it: a separate token for statuses and PR labels; the build token stays contents read
     asserts:
@@ -47,6 +61,9 @@ tests:
       - contains:
           path: rules
           content: { apiGroups: [openchoreo.dev], resources: [components, environments], verbs: [get] }
+      - contains:
+          path: rules
+          content: { apiGroups: [openchoreo.dev], resources: [environments], verbs: [list] }   # the cap (#385)
       - contains:
           path: rules
           content: { apiGroups: [openchoreo.dev], resources: [environments/finalizers], verbs: [update] }
