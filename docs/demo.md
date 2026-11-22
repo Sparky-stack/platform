@@ -52,8 +52,6 @@ How it works and what it never does:
 - Reads only: `kubectl get`, `kubectl get --raw` (Prometheus through the API server's service proxy), server-side
   dry-runs, curl GETs, `cosign verify`. Workload-cluster kubeconfigs come from `hack/kubeconfig.sh` into a temp dir that
   is removed on exit; no secret value is printed. Context `koorikla` is refused.
-- Known-unmerged features: a failing check listed in `pending_issue()` of `hack/demo-check.sh` shows PENDING #NN instead
-  of FAIL; delete the line when the issue closes. `DEMO_STRICT=1 task demo:check` shows them as FAIL.
 - Freeze windows: an Argo CD app OutOfSync only because an active deny sync window of its AppProject covers it is
   PENDING with the window and its end (`hack/lib/syncwindow.py`; `DEMO_NOW=<ISO 8601>` evaluates another time).
 - Variables: `KUBE_CTX`, `DEMO_NAMESPACE` (org namespace, `default`), `DEMO_COMPONENT` (`hello-world`),

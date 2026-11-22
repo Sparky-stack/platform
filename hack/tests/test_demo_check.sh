@@ -395,11 +395,6 @@ assert_match "$(detail_of 'hello-world reads GREETING_SECRET from OpenBao')" "Ex
 assert_match "$OUT" $'\n14 PASS, 18 FAIL, 0 PENDING$' "red: summary"
 assert_eq "$(printf '%s\n' "$OUT" | grep -c '#54' || true)" 0 "red: no row cites closed #54"
 
-run red-strict DEMO_STRICT=1
-assert_eq "$(result_of 'hello-world 200 in production')" FAIL "strict: production FAIL as without strict"
-assert_eq "$(result_of 'OpenBao-issued mesh certificates')" FAIL "strict: absent OpenBao addon FAILs (#19 closed)"
-assert_match "$OUT" $'\n14 PASS, 18 FAIL, 0 PENDING$' "strict: summary"
-
 # ---- fresh stack (#200) ---------------------------------------------------------------------------------------------
 # A clean bootstrap: development serves (auto-build rebuilt the Workload's commit); staging/production pin release names
 # of the previous stack -> PENDING with the reason, not FAIL. Any other non-200 still FAILs.
