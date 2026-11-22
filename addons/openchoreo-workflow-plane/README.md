@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Workflows, the workflow `cluster-agent`, `ClusterWorkflowPlane/default`, rootless BuildKit `ClusterWorkflowTemplate`s, and strict egress `NetworkPolicy` rules for workflow runs.
+Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Workflows, the workflow `cluster-agent`, `ClusterWorkflowPlane/default`, rootless BuildKit `ClusterWorkflowTemplate`s (`koorikla-build`, `koorikla-helm-chart`: each step runs a versioned `ci/scripts/workflow` script from the toolbox image `images.TOOLBOX_IMAGE`, see [build plane](../../docs/build-plane.md#step-scripts-ciscriptsworkflow)), and strict egress `NetworkPolicy` rules for workflow runs.
 
 ## Where it runs
 
@@ -29,7 +29,7 @@ Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Wor
 | clusterWorkflowPlane.secretStore | string | `"workflows"` |  |
 | images.BUILDKIT_IMAGE | string | `"docker.io/moby/buildkit:v0.35.0-rootless@sha256:5987568f92dafbfb679879de59c1cd8d26597f5f6635c314e166164e2615870c"` |  |
 | images.POSTGRES_IMAGE | string | `"docker.io/library/postgres:17.12-alpine@sha256:34261f594522cf41dfcb76aefd42b9d201098b0e6b23c9c68733f169e4218b6f"` |  |
-| images.TOOLBOX_IMAGE | string | `"ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858"` |  |
+| images.TOOLBOX_IMAGE | string | `"ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44cc8e8df235cfa694b5f7480cce4ea0bd013478bf237782fd043b29184948e"` |  |
 | openchoreo-workflow-plane.argo-workflows.commonLabels."openchoreo.dev/plane" | string | `"workflowplane"` |  |
 | openchoreo-workflow-plane.argo-workflows.commonLabels."openchoreo.dev/plane-id" | string | `"default"` |  |
 | openchoreo-workflow-plane.argo-workflows.controller.image.tag | string | `"v4.0.8@sha256:7a156419f80285859fc8f859927b6cc249f0d128e161e080dc17fca8fcbbceb6"` |  |

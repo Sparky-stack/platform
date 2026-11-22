@@ -43,7 +43,7 @@ tests:
       - isKind: { of: ClusterWorkflowTemplate }
       - equal:
           path: 'spec.templates[?(@.name == "checkout")].container.image'
-          value: ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858
+          value: ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44cc8e8df235cfa694b5f7480cce4ea0bd013478bf237782fd043b29184948e
       - matchRegex:
           path: 'spec.templates[?(@.name == "build")].container.image'
           pattern: '^docker\.io/moby/buildkit:v[0-9.]+-rootless@sha256:[0-9a-f]{64}$'
@@ -62,16 +62,17 @@ tests:
       - equal: { path: 'spec.templates[?(@.name == "build")].securityContext.supplementalGroups', value: [65532] }
       - notExists: { path: 'spec.templates[?(@.name == "build")].securityContext.fsGroup' }
 
-  - it: BuildKit uses the overlayfs snapshotter and buildctl trusts the registry CA for the token fetch
+  # buildctl's registry-CA trust (SSL_CERT_FILE) lives in ci/scripts/workflow/build.sh: hack/tests/test_workflow_scripts.sh
+  - it: BuildKit uses the overlayfs snapshotter and runs build.sh (POSIX sh) from the toolbox copy on /ci
     template: templates/cluster-workflow-templates.yaml
     documentSelector: { path: metadata.name, value: koorikla-build }
     asserts:
       - contains:
           path: 'spec.templates[?(@.name == "build")].container.env'
           content: { name: BUILDKITD_FLAGS, value: --oci-worker-no-process-sandbox --oci-worker-snapshotter=overlayfs }
-      - matchRegex:
-          path: 'spec.templates[?(@.name == "build")].container.args[0]'
-          pattern: 'export SSL_CERT_FILE="\$HOME/ca\.pem"'
+      - equal:
+          path: 'spec.templates[?(@.name == "build")].container.command'
+          value: [sh, /ci/scripts/workflow/build.sh]
 
   - it: check images are never empty (Argo validates skipped tasks' images at submission), the toolbox is the fallback
     template: templates/cluster-workflow-templates.yaml
@@ -79,21 +80,34 @@ tests:
     asserts:
       - equal:
           path: 'spec.templates[?(@.name == "check")].container.image'
-          value: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : 'ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858'}}"
+          value: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : 'ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44cc8e8df235cfa694b5f7480cce4ea0bd013478bf237782fd043b29184948e'}}"
       - equal:
           path: 'spec.templates[?(@.name == "check-with-postgres")].container.image'
-          value: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : 'ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858'}}"
+          value: "{{=workflow.parameters['check-image'] != '' ? workflow.parameters['check-image'] : 'ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44cc8e8df235cfa694b5f7480cce4ea0bd013478bf237782fd043b29184948e'}}"
 
-  - it: the SBOM attestation uses the SPDX 2.3 predicate type admission checks (same as the GitHub build path)
+  # sign.sh attests the SBOM with predicate type https://spdx.dev/Document/v2.3 (the type admission checks, same as the
+  # GitHub build path): hack/tests/test_build_guards.sh. Here: koorikla-build hands it both predicates.
+  - it: koorikla-build sign attests the Trivy vuln report and the SBOM (sign.sh env)
     template: templates/cluster-workflow-templates.yaml
     documentSelector: { path: metadata.name, value: koorikla-build }
     asserts:
-      - matchRegex:
-          path: 'spec.templates[?(@.name == "sign")].container.args[0]'
-          pattern: 'cosign attest --yes --key "\$COSIGN_KEY" --type https://spdx\.dev/Document/v2\.3 --predicate'
-      - notMatchRegex:
-          path: 'spec.templates[?(@.name == "sign")].container.args[0]'
-          pattern: '--type spdxjson'
+      - contains:
+          path: 'spec.templates[?(@.name == "sign")].container.env'
+          content: { name: SBOM_PREDICATE, value: /work/out/sbom.spdx.json }
+      - contains:
+          path: 'spec.templates[?(@.name == "sign")].container.env'
+          content: { name: VULN_PREDICATE, value: /work/out/trivy-vuln.json }
+
+  - it: koorikla-helm-chart sign signs the chart digest only (sign.sh env), no attestations
+    template: templates/cluster-workflow-templates.yaml
+    documentSelector: { path: metadata.name, value: koorikla-helm-chart }
+    asserts:
+      - contains:
+          path: 'spec.templates[?(@.name == "sign")].container.env'
+          content: { name: RECURSIVE, value: "false" }
+      - notContains:
+          path: 'spec.templates[?(@.name == "sign")].container.env'
+          content: { name: SBOM_PREDICATE, value: /work/out/sbom.spdx.json }
 
   - it: every other step meets Pod Security restricted at the workflow level
     template: templates/cluster-workflow-templates.yaml

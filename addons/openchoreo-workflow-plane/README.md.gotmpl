@@ -1,5 +1,5 @@
 {{- define "chart.purpose" -}}
-Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Workflows, the workflow `cluster-agent`, `ClusterWorkflowPlane/default`, rootless BuildKit `ClusterWorkflowTemplate`s, and strict egress `NetworkPolicy` rules for workflow runs.
+Wrapper chart for `openchoreo-workflow-plane` (`1.3.3`) on `mgmt`. Runs Argo Workflows, the workflow `cluster-agent`, `ClusterWorkflowPlane/default`, rootless BuildKit `ClusterWorkflowTemplate`s (`koorikla-build`, `koorikla-helm-chart`: each step runs a versioned `ci/scripts/workflow` script from the toolbox image `images.TOOLBOX_IMAGE`, see [build plane](../../docs/build-plane.md#step-scripts-ciscriptsworkflow)), and strict egress `NetworkPolicy` rules for workflow runs.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
