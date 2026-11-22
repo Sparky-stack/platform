@@ -3,6 +3,19 @@
 `ci-vX.Y.Z` releases of `ci/` and the `app-*` reusable workflows, maintained by release-please
 ([docs/releases.md](../docs/releases.md)).
 
+## [1.2.0](https://github.com/koorikla/platform/compare/ci-v1.1.1...ci-v1.2.0) (2026-11-22)
+
+
+### Features
+
+* **ci:** app manifest validation in the platform's stack workflows; code-free templates ([#366](https://github.com/koorikla/platform/issues/366)) ([561de3b](https://github.com/koorikla/platform/commit/561de3b45e0e4332c724658e9abf4a4e516e497f))
+* **ci:** koorikla-build step scripts in ci/scripts/workflow, tested directly ([#393](https://github.com/koorikla/platform/issues/393)) ([#396](https://github.com/koorikla/platform/issues/396)) ([dbf92f6](https://github.com/koorikla/platform/commit/dbf92f6f3cc69b77092b61656d822fbc5d891269))
+
+
+### Bug Fixes
+
+* **ci:** bump puma to 8.0.4 in the ruby selftest fixture (GHSA-rhww-p99c-hgj9) ([#387](https://github.com/koorikla/platform/issues/387)) ([44a8b4d](https://github.com/koorikla/platform/commit/44a8b4d8eb4786d6e1c6a580ba45c3e88f2f1337))
+
 ## [1.1.1](https://github.com/koorikla/platform/compare/ci-v1.1.0...ci-v1.1.1) (2026-11-20)
 
 
