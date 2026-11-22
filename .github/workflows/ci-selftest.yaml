@@ -37,7 +37,9 @@ permissions:
 
 jobs:
   lint:
-    name: actionlint + shellcheck
+    # actionlint: ci.yaml lints every workflow change with the mise-pinned binary (prek hook on scoped PRs,
+    # task lint on full runs).
+    name: shellcheck + script tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -52,7 +54,8 @@ jobs:
           find ci/scripts ci/tests -name '*.sh' -print0 | xargs -0 shellcheck -x -S style
       - name: bash 3.2 (macOS /bin/bash) syntax check + script unit tests
         run: |
-          docker run --rm -v "$PWD:/w" -w /w \
+          # workload-bump.sh needs mikefarah yq (preinstalled on the runner, a static binary).
+          docker run --rm -v "$PWD:/w" -w /w -v "$(command -v yq):/usr/local/bin/yq:ro" \
             docker.io/library/bash:3.2@sha256:2556c2da19c32c1614d318645c73a7bf64d38be21cf69e98e3ca51f053983719 \
             sh -euc 'apk add -q --no-cache git >/dev/null
               bash --version | head -1
@@ -63,6 +66,8 @@ jobs:
         run: uv run --no-project --with pyyaml==6.0.4 --with jsonschema==4.26.0 python3 ci/tests/openchoreo-validate-manifests.test.py
       - name: app-<stack>.yaml image phase mirrors app-container.yaml
         run: bash ci/tests/app-workflow-interfaces.test.sh
+      - name: tools are pinned and declared (no run-time latest installs)
+        run: bash ci/tests/tool-pins.test.sh
       - name: release-please tags single-component grouped releases (#313)
         run: |
           # The release-please version the pinned action bundles (its package-lock.json at that SHA).
@@ -72,10 +77,6 @@ jobs:
           export RELEASE_PLEASE_VERSION
           npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/rp" "release-please@$RELEASE_PLEASE_VERSION" >/dev/null
           NODE_PATH="$RUNNER_TEMP/rp/node_modules" node ci/tests/release-please-tagging.test.js
-      - name: actionlint
-        run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
-          ./actionlint -color
 
   go:
     uses: ./.github/workflows/app-go.yaml
@@ -87,7 +88,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/go
       image_name: ci-selftest-go
 
@@ -101,7 +102,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/nextjs
       image_name: ci-selftest-nextjs
 
@@ -114,7 +115,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/elixir
       image_name: ci-selftest-elixir
       build_args: |
@@ -130,7 +131,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/ruby
       image_name: ci-selftest-ruby
       trivy_ignore_file: ci/fixtures/ruby/.trivyignore.yaml
@@ -143,7 +144,7 @@ jobs:
       id-token: write
       attestations: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       package_root: ci/fixtures/crossplane-configuration
       package_name: ci-selftest-crossplane-configuration
 
@@ -156,7 +157,7 @@ jobs:
       attestations: write
     with:
       chart_path: ci/fixtures/helm/ci-selftest-helm
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
 
   crossplane-provider:
     uses: ./.github/workflows/app-crossplane-provider.yaml
@@ -168,7 +169,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/crossplane-provider
       package_name: ci-selftest-crossplane-provider
 
@@ -182,7 +183,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/python
       image_name: ci-selftest-python
 
@@ -196,7 +197,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/node
       image_name: ci-selftest-node
       start_entry: dist/server.js
@@ -211,7 +212,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/rust
       image_name: ci-selftest-rust
 
@@ -225,7 +226,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/java-quarkus
       image_name: ci-selftest-java-quarkus
 
@@ -239,7 +240,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/java-quarkus
       image_name: ci-selftest-java-quarkus-native
       native: true
@@ -255,7 +256,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform   # owned by this repo (#254)
+      registry: ghcr.io/koorikla/platform
       working_directory: ci/fixtures/java-spring
       image_name: ci-selftest-java-spring
 

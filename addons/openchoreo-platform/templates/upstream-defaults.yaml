@@ -1,60 +1,22 @@
-{{- /* Upstream OpenChoreo 1.3.3 ClusterComponentTypes, ClusterTraits and ClusterProjectType from files/, copied
-verbatim (files/README.md) so an upstream bump stays a file copy; the platform edits below apply at render time. */ -}}
-{{- if .Values.upstreamDefaults.enabled }}
+{{- /* OpenChoreo ClusterComponentTypes, ClusterTraits and ClusterProjectType from files/ (files/README.md). The component
+types are platform-owned files with the platform changes written in, so the object in Git is the object applied. */ -}}
 {{- range $path, $_ := .Files.Glob "files/*/*.yaml" }}
 ---
 # Source: {{ $.Chart.Name }}/{{ $path }}
 {{- $obj := $.Files.Get $path | fromYaml }}
 {{- include "platform.skipDryRun" $obj }}
 {{- if eq $obj.kind "ClusterComponentType" }}
-{{- $deployment := eq (toString $obj.spec.workloadType) "deployment" }}
-{{- /* Build with the platform's per-stack ClusterWorkflows (templates/build-workflows.yaml). */ -}}
+{{- /* Guard: allowedWorkflows is written out in the files; it must name exactly the per-stack ClusterWorkflows of
+templates/build-workflows.yaml, so a stack added to buildWorkflows.stacks fails here until the files list it. */ -}}
 {{- if $.Values.buildWorkflows.enabled }}
 {{- $workflows := list }}
 {{- range $.Values.buildWorkflows.stacks }}{{ $workflows = append $workflows (dict "kind" "ClusterWorkflow" "name" .name) }}{{ end }}
-{{- $_ := set $obj.spec "allowedWorkflows" $workflows }}
-{{- end }}
-{{- /* Platform trait keda-scaler (files/platform/cluster-traits/keda-scaler.yaml). */ -}}
-{{- if and $.Values.dataServices.enabled $deployment }}
-{{- $_ := set $obj.spec "allowedTraits" (append (default list $obj.spec.allowedTraits) (dict "kind" "ClusterTrait" "name" "keda-scaler")) }}
-{{- end }}
-{{- /* Opt-in app metrics scraping (files/platform/cluster-traits/metrics.yaml). */ -}}
-{{- if and $.Values.appMetrics.enabled $deployment }}
-{{- $_ := set $obj.spec "allowedTraits" (append (default list $obj.spec.allowedTraits) (dict "kind" "ClusterTrait" "name" "metrics")) }}
-{{- end }}
-{{- /* Resilience defaults, embedded so developers attach nothing: knobs are environmentConfigs `resilience.*` of the
-component type (docs/openchoreo.md "Resilience defaults"). */ -}}
-{{- if and $.Values.resilience.enabled $deployment }}
-{{- $knobs := `
-zoneSpread: { type: string, enum: [ScheduleAnyway, DoNotSchedule], default: ScheduleAnyway }
-nodePool: { type: string, default: "" }
-terminationGracePeriodSeconds: { type: integer, default: 30, minimum: 1 }
-preStopSleepSeconds: { type: integer, default: 5, minimum: 0 }
-` | fromYaml }}
-{{- $_ := set $obj.spec.environmentConfigs.openAPIV3Schema.properties "resilience" (dict "type" "object" "default" dict "properties" $knobs) }}
-{{- $trait := `
-kind: ClusterTrait
-name: resilience
-instanceName: resilience
-environmentConfigs:
-  replicas: ${environmentConfigs.replicas}
-  zoneSpread: ${environmentConfigs.resilience.zoneSpread}
-  nodePool: ${environmentConfigs.resilience.nodePool}
-  terminationGracePeriodSeconds: ${environmentConfigs.resilience.terminationGracePeriodSeconds}
-  preStopSleepSeconds: ${environmentConfigs.resilience.preStopSleepSeconds}
-` | fromYaml }}
-{{- $_ := set $obj.spec "traits" (append (default list $obj.spec.traits) $trait) }}
-{{- end }}
-{{- /* Secret rotation: Stakater Reloader (addon reloader) rolls the Deployment when a Secret it references changes. */ -}}
-{{- if $deployment }}
-{{- range $r := $obj.spec.resources }}
-{{- if eq (toString $r.id) "deployment" }}
-{{- $_ := set $r.template.metadata "annotations" (merge (default dict $r.template.metadata.annotations) (dict "secret.reloader.stakater.com/auto" "true")) }}
+{{- if ne (toJson $workflows) (toJson $obj.spec.allowedWorkflows) }}
+{{- fail (printf "%s: spec.allowedWorkflows must list the ClusterWorkflows of buildWorkflows.stacks, in order: %s" $path (toJson $workflows)) }}
 {{- end }}
 {{- end }}
-{{- end }}
-{{- /* Per-tenant secret stores (secrets.tenantStores.enabled): SecretReference ExternalSecrets use the cell namespace's
-own SecretStore instead of the data plane's ClusterSecretStore (addon secret-stores). */ -}}
+{{- /* The one installation toggle (secrets.tenantStores.enabled, set by installations/local): component ExternalSecrets
+use the cell namespace's own SecretStore instead of the data plane's ClusterSecretStore (addon secret-stores). */ -}}
 {{- if $.Values.secrets.tenantStores.enabled }}
 {{- range $r := $obj.spec.resources }}
 {{- if and $r.template (eq (toString $r.template.kind) "ExternalSecret") }}
@@ -64,5 +26,4 @@ own SecretStore instead of the data plane's ClusterSecretStore (addon secret-sto
 {{- end }}
 {{- end }}
 {{ toYaml $obj }}
-{{- end }}
 {{- end }}

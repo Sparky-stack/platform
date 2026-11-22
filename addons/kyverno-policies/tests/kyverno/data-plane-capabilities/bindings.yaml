@@ -1,4 +1,4 @@
-# ResourceReleaseBindings checked against the contexts (hack/tests/test_kyverno_policies.sh).
+# ResourceReleaseBindings checked against the cluster states in capable/, incapable/ and opted-out/.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ResourceReleaseBinding
 metadata: {name: orders-db-development, namespace: default}

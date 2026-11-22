@@ -12,9 +12,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Update tools annotated with # renovate: datasource=... depName=... in CI workflows",
+      "description": "Update tools annotated with # renovate: datasource=... depName=... in CI workflows and ci/scripts version files (ci/scripts/ruby/gem-versions.env)",
       "managerFilePatterns": [
-        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/",
+        "/^ci/scripts/.+\\.env$/"
       ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\n\\s*[A-Z0-9_]+=(?<currentValue>[^\\s']+)"
@@ -44,6 +45,41 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "jdx/mise",
       "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "ci-toolbox tool versions (ci/toolbox/Dockerfile ARGs annotated with # renovate:)",
+      "managerFilePatterns": [
+        "/^ci/toolbox/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\s*\\nARG\\s+[A-Z0-9_]+=(?<currentValue>[^\\s]+)"
+      ],
+      "extractVersionTemplate": "^v?(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Trivy version of aquasecurity/setup-trivy in the app workflows; = ci-toolbox TRIVY_VERSION (group trivy, ci/tests/tool-pins.test.sh)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "aquasecurity/setup-trivy@[0-9a-f]{40}[^\\n]*\\n(?:\\s+[a-z_]+:[^\\n]*\\n)*?\\s+version:\\s*v(?<currentValue>[0-9.]+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "aquasecurity/trivy",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Rust CI tools installed by taiki-e/install-action in app-rust.yaml (tool: <crate>@<version>)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/app-rust\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>cargo-[a-z0-9-]+)@(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "datasourceTemplate": "crate"
     },
     {
       "customType": "regex",
@@ -121,14 +157,38 @@
   ],
   "packageRules": [
     {
+      "description": "Trivy: the ci-toolbox binary (TRIVY_VERSION) and setup-trivy's version: in the app workflows move in one PR (ci/tests/tool-pins.test.sh fails until they match)",
+      "matchPackageNames": [
+        "aquasecurity/trivy"
+      ],
+      "groupName": "trivy"
+    },
+    {
+      "description": "Rust CI tools and the action that installs them: taiki-e/install-action only installs versions its pinned manifests list (fallback: none), so the action moves with the tools",
+      "matchPackageNames": [
+        "taiki-e/install-action",
+        "cargo-nextest",
+        "cargo-deny",
+        "cargo-audit"
+      ],
+      "groupName": "rust ci tools",
+      "prBodyNotes": [
+        "The pinned `taiki-e/install-action` must list each new version in `manifests/<tool>.json`; otherwise the selftest `rust` job fails (fallback: none) and the PR waits for an action release."
+      ]
+    },
+    {
       "description": "A Crossplane Project's Configuration and its embedded function (<name>_compose-<name>) are published by the same CI run and the Configuration's dependsOn pins the function digest: bump both in one PR",
-      "matchPackageNames": ["/^ghcr\\.io/koorikla/platform/postgresql(_compose-postgresql)?$/"],
+      "matchPackageNames": [
+        "/^ghcr\\.io/koorikla/platform/postgresql(_compose-postgresql)?$/"
+      ],
       "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+$/",
       "groupName": "postgresql package"
     },
     {
       "description": "Same for the MySQL API package (#256): Configuration + embedded function in one PR, release tags only (replaces the first pre-release commit pin)",
-      "matchPackageNames": ["/^ghcr\\.io/koorikla/platform/mysql(_compose-mysql)?$/"],
+      "matchPackageNames": [
+        "/^ghcr\\.io/koorikla/platform/mysql(_compose-mysql)?$/"
+      ],
       "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+$/",
       "groupName": "mysql package"
     },

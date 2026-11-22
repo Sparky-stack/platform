@@ -13,7 +13,7 @@ Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagram
 
 ## Topology
 
-<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images" width="100%">
+<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images; the cluster-agent applies each app's resource claims (e.g. a database) for Crossplane on the same workload cluster, which composes each one for an in-cluster operator (CloudNativePG, MOCO) or, through its cloud providers, creates it with the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server)" width="100%">
 
 The numbered steps are listed in [diagrams/README.md](diagrams/README.md#steps). Not drawn:
 External Secrets Operator (credentials, below), cert-manager (agent certificates, [Trust between OpenChoreo
@@ -148,13 +148,27 @@ app repo, in AppProject `tenant-<project>` restricted to that repo and to OpenCh
 is one file in the platform repo; deploying and promoting are commits in the app repo
 ([openchoreo.md](openchoreo.md#tenants), [promotion.md](promotion.md)).
 
-### Platform APIs: Crossplane Configuration packages, next to the app
-Databases and other platform APIs are Crossplane v2 XRs on the workload cluster that runs the app (opt-in per cluster).
+### Platform APIs: Crossplane on each workload cluster, next to the app
+Crossplane v2 is a control plane on each workload cluster that opts in, not on mgmt and not a data service itself.
+It is an addon like the operators it feeds (`addons: { crossplane: true }`).
+Apps claim a resource through OpenChoreo (resource type `postgresql` or `mysql`), the cluster-agent applies the
+claim (a namespaced XR rendered from the ResourceReleaseBinding) in the app's cell namespace, and the cluster's
+Composition decides what fulfils it (steps 9 and 10 of the diagram, either in-cluster or cloud):
+
+- **In the cluster:** the Composition renders objects for an operator addon, CloudNativePG for PostgreSQL or MOCO for
+  MySQL, and the operator runs the database next to the app. No Crossplane provider is involved (local docker,
+  Hetzner).
+- **Outside the cluster:** on cloud installations the Composition renders managed resources that Crossplane's
+  providers (the upjet AWS, GCP and Azure families) create through the cloud APIs: RDS or Aurora, Cloud SQL or Azure
+  Flexible Server, with their supporting pieces (subnet group, security group, KMS key on AWS). These backends are
+  untested examples.
+
+The providers sign in with the cluster's own workload identity (IRSA or EKS Pod Identity, GKE Workload Identity, Azure
+Workload Identity), set up outside Crossplane. The packages do not compose IAM roles or per-app cloud identities yet.
 Each API (XRD + Composition) ships as a digest-pinned Configuration package built from `packages/<name>/` (signed in CI;
-in-cluster verification is off until Crossplane reads Sigstore bundles, #247);
-per-cluster facts reach it through an `EnvironmentConfig`, so one package serves every provider. Developers ask through
-OpenChoreo (resource type `postgresql`), never through Crossplane directly ([crossplane.md](crossplane.md),
-[data-services.md](data-services.md)).
+in-cluster verification is off until Crossplane reads Sigstore bundles, #247); per-cluster facts reach it through an
+`EnvironmentConfig`, so one package serves every provider. Developers ask through OpenChoreo, never through Crossplane
+directly ([crossplane.md](crossplane.md), [data-services.md](data-services.md)).
 
 ### Builds in the cluster, not in a CI provider
 Components name a ClusterWorkflow; the OpenChoreo workflow plane on mgmt builds, scans, signs and commits the new image

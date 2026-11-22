@@ -6,17 +6,26 @@
 #   docker run --rm -e IMAGE_REF=... ghcr.io/koorikla/platform/ci-toolbox@sha256:<digest> \
 #     scan-image.sh            # scripts/common/*.sh are on PATH
 #
-# Bump versions here; Dependabot does not track these ARGs.
+# Tool versions: Renovate bumps every ARG below from its "# renovate:" annotation
+# (renovate.json). TRIVY_VERSION moves with setup-trivy's version: in .github/workflows/app-*.yaml
+# (ci/tests/tool-pins.test.sh keeps them equal).
 ARG BASE_IMAGE=docker.io/library/debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 FROM ${BASE_IMAGE} AS fetch
 ARG TARGETARCH
+# renovate: datasource=github-releases depName=aquasecurity/trivy
 ARG TRIVY_VERSION=0.76.2
+# renovate: datasource=github-releases depName=anchore/syft
 ARG SYFT_VERSION=1.57.1
+# renovate: datasource=github-releases depName=sigstore/cosign
 ARG COSIGN_VERSION=3.1.4
+# renovate: datasource=github-releases depName=google/go-containerregistry
 ARG CRANE_VERSION=0.22.1
+# renovate: datasource=github-releases depName=helm/helm
 ARG HELM_VERSION=4.3.2
+# renovate: datasource=github-releases depName=mikefarah/yq
 ARG YQ_VERSION=4.54.3
+# renovate: datasource=github-releases depName=crossplane/crossplane
 ARG CROSSPLANE_VERSION=2.5.0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
