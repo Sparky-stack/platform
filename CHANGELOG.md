@@ -2,6 +2,20 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.10.0](https://github.com/koorikla/platform/compare/v0.9.0...v0.10.0) (2026-11-22)
+
+
+### Features
+
+* **tenant:** seed demo secrets with an ESO Password generator + PushSecret IfNotExists ([#392](https://github.com/koorikla/platform/issues/392)) ([#401](https://github.com/koorikla/platform/issues/401)) ([4eed714](https://github.com/koorikla/platform/commit/4eed714d6e858d776f6cb22aa4225d2a025f239d))
+
+
+### Bug Fixes
+
+* **hack:** no early-exit readers under pipefail ([#403](https://github.com/koorikla/platform/issues/403)); test_image_pins 6x faster; bootstrap cosign uses TOOLBOX_IMAGE ([#408](https://github.com/koorikla/platform/issues/408)) ([61d399d](https://github.com/koorikla/platform/commit/61d399d7fd8ffaf6d05edf510862403f17197702))
+* **previews:** hold PRs beyond the tenant cap with a failed status instead of a retrying Application; bot PRs skip previews ([#385](https://github.com/koorikla/platform/issues/385)) ([#406](https://github.com/koorikla/platform/issues/406)) ([a180433](https://github.com/koorikla/platform/commit/a180433bc15b3507a523ca2ab48818729e19e397))
+* **workflow-plane:** build init container requests no AppArmor profile ([#393](https://github.com/koorikla/platform/issues/393)) ([#405](https://github.com/koorikla/platform/issues/405)) ([aa35789](https://github.com/koorikla/platform/commit/aa357892abfed8c3deb5602a98e1030c85b147ba))
+
 ## [0.9.0](https://github.com/koorikla/platform/compare/v0.8.0...v0.9.0) (2026-11-22)
 
 
