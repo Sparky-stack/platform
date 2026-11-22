@@ -119,6 +119,7 @@ once, `task doctor` warns until you do) installs `pre-commit` and
 | check-yaml (`templates/` excluded: Go templates), check-toml, check-json | `*.yaml`, `*.toml`, `*.json` | syntax; check-toml also rejects duplicate keys in `mise.toml` |
 | gitleaks | staged files (index content) | secrets; false positives get a `gitleaks:allow` comment on the line, not a broad ignore |
 | shellcheck (`-x -P SCRIPTDIR`, as `task lint`), actionlint | `bootstrap/` `hack/` `.devcontainer/` `*.sh`, `.github/workflows/` | |
+| shellcheck-ci (`-x -S style`, as ci-selftest.yaml) | `ci/scripts/` `ci/tests/` `*.sh` | the shellcheck hooks check exactly the files and flags of the two CI shellcheck runs (`test_hooks_config.sh`) |
 | py-compile | `*.py` | Python syntax |
 | mise-tools-table | `mise.toml` | every `[tools]` entry parses for `task doctor` |
 | chart-lock | `Chart.yaml` / `Chart.lock` | lock digest in sync (`hack/lib/chartlock.py`; skipped with a note until it is on `main`) |
@@ -224,7 +225,8 @@ when a suite runs on its own (`hack/test.sh` builds them once and sets `DEPS_REA
 `charts/`). The same file holds the rest a new suite needs:
 `assert_eq`/`assert_match`/`assert_nonempty` + `finish` (the `N passed` line), `kc_valid` (kubeconform with the CRD
 schemas, as `hack/test.sh` runs it), and a fake-tool harness: `fake_bin_yq` + `run_isolated` run a script against fakes
-in `$BIN` with a scrubbed environment, `bootstrap_harness` lets a suite call single `bootstrap.sh` functions.
+in `$BIN` with a scrubbed environment, `bootstrap_harness` lets a suite call single `bootstrap.sh` functions: it sources
+the real `bootstrap/bootstrap.sh`, which runs its subcommand only when executed, not when sourced.
 `hack/deps.sh` rebuilds only charts whose `charts/` differs from their `Chart.lock` (missing or extra tarballs, or a
 tarball that differs from a digest pinned in the
 `Chart.yaml` annotation `platform.koorikla.io/dependency-digests`) and retries downloads. It registers the https repositories

@@ -2,7 +2,8 @@
 # Git hooks (prek.toml, hack/hooks.sh; docs/dev-environment.md "Git hooks"):
 #   - nothing is fetched or floating: every repo is builtin/local/meta or pinned to a full commit SHA, local hooks run
 #     as `system` (no hook environments, no additional_dependencies) and call only mise.toml tools or repo scripts
-#   - shellcheck runs with hack/lint.sh's flags; the rule checker itself rejects floating revs (negative fixtures)
+#   - the shellcheck hooks check exactly the files of the CI shellcheck runs (hack/lint.sh, ci-selftest.yaml) with their
+#     flags; the rule checker itself rejects floating revs (negative fixtures)
 #   - gitleaks hook: fails on a secret in staged content, ignores untracked files and `gitleaks:allow` lines
 #   - check-toml (prek builtin) rejects a duplicate key in mise.toml; chart-dirs mapping; commit-msg only warns
 set -euo pipefail
@@ -88,12 +89,39 @@ negative: tool outside mise.toml rejected | curl: curl is not a mise.toml tool
 negative: missing script rejected | gone: script \['hack/nope.sh'\] not in the repo
 CASES
 
-# Same shellcheck flags as hack/lint.sh (task lint)
+# The shellcheck hooks = the CI shellcheck runs: per run, one hook with the same flags whose `files` match exactly the
+# tracked *.sh files the run checks. hack/lint.sh: `shellcheck <flags> "$sf"` over `find <dirs> -type f -name '*.sh'`;
+# ci-selftest.yaml: `find <dirs> -name '*.sh' -print0 | xargs -0 shellcheck <flags>`.
 # shellcheck disable=SC2016  # $sf is literal text in hack/lint.sh
 lint_flags=$(sed -n 's/^ *shellcheck \(.*\) "\$sf"$/\1/p' "$ROOT/hack/lint.sh")
-hook_flags=$(sed -n 's/^entry = "shellcheck \(.*\)"$/\1/p' "$ROOT/prek.toml")
+lint_dirs=$(sed -n "s/^done < <(find \(.*\) -type f -name '\*\.sh' -print0)$/\1/p" "$ROOT/hack/lint.sh")
+ci_line=$(sed -n "s/^ *find \(.*\) -name '\*\.sh' -print0 | xargs -0 shellcheck \(.*\)$/\1|\2/p" \
+  "$ROOT/.github/workflows/ci-selftest.yaml")
 assert_nonempty "$lint_flags" "hack/lint.sh shellcheck flags found"
-assert_eq "$hook_flags" "$lint_flags" "prek shellcheck flags = hack/lint.sh"
+assert_nonempty "$lint_dirs" "hack/lint.sh shellcheck dirs found"
+assert_nonempty "$ci_line" "ci-selftest.yaml shellcheck run found"
+shellcheck_runs=$(printf '%s|%s\n%s\n' "$lint_dirs" "$lint_flags" "$ci_line")
+# check_shellcheck_hooks <prek.toml>: one line per CI run without an identical hook, nothing when they match.
+check_shellcheck_hooks() {
+  (cd "$ROOT" && git ls-files '*.sh') > "$TMP/sh-files"
+  py - "$1" "$TMP/sh-files" "$shellcheck_runs" <<'EOF'
+import re, shlex, sys, tomllib
+cfg = tomllib.load(open(sys.argv[1], "rb"))
+files = open(sys.argv[2]).read().split()
+hooks = [h for r in cfg["repos"] for h in r.get("hooks", []) if h.get("entry", "").startswith("shellcheck ")]
+for run in sys.argv[3].splitlines():
+    dirs, flags = run.split("|")
+    want = sorted(f for f in files if any(f.startswith(d + "/") for d in dirs.split()))
+    ok = [h["id"] for h in hooks if shlex.split(h["entry"])[1:] == shlex.split(flags)
+          and sorted(f for f in files if re.search(h.get("files", ""), f)) == want]
+    if not ok:
+        print(f"no shellcheck hook runs `shellcheck {flags}` on exactly the *.sh files in {dirs}")
+EOF
+}
+assert_eq "$(check_shellcheck_hooks "$ROOT/prek.toml")" "" "prek shellcheck hooks = CI shellcheck runs (files + flags)"
+sed "s#files = '^ci/(scripts|tests)/#files = '^ci/scripts/#" "$ROOT/prek.toml" > "$TMP/prek-no-ci-tests.toml"
+assert_match "$(check_shellcheck_hooks "$TMP/prek-no-ci-tests.toml")" "ci/scripts ci/tests" \
+  "negative: a shellcheck hook missing ci/tests is rejected"
 
 # chart-dirs: changed files -> chart dirs for CHARTS=... hack/test.sh
 dirs=$(cd "$ROOT" && bash hack/hooks.sh chart-dirs addons/cilium/values.yaml addons/cilium/templates/x.yaml \

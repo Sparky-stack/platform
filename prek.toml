@@ -81,13 +81,22 @@ entry = "bash hack/hooks.sh gitleaks"
 require_serial = true
 priority = "check"
 
-# Same files and flags as hack/lint.sh (task lint).
+# The two CI shellcheck runs, same files and flags (hack/tests/test_hooks_config.sh compares them): hack/lint.sh (task
+# lint) and ci-selftest.yaml "shellcheck + script tests" (ci/scripts, ci/tests).
 [[repos.hooks]]
 id = "shellcheck"
 name = "shellcheck"
 language = "system"
 entry = "shellcheck -x -P SCRIPTDIR"
 files = '^(bootstrap|hack|\.devcontainer)/.*\.sh$'
+priority = "check"
+
+[[repos.hooks]]
+id = "shellcheck-ci"
+name = "shellcheck (ci/scripts, ci/tests)"
+language = "system"
+entry = "shellcheck -x -S style"
+files = '^ci/(scripts|tests)/.*\.sh$'
 priority = "check"
 
 [[repos.hooks]]

@@ -94,17 +94,18 @@ run_isolated() {
   OUT=$(sed 's/\x1b\[[0-9;]*m//g' "$HLOG/out")
 }
 
-# bootstrap_harness: R=$TMP/root holds bootstrap/bs.sh = bootstrap/bootstrap.sh minus its command dispatcher plus a hook
-# that evals $HARNESS_CALL after load_inst, so a test calls single bootstrap functions; BIN=$TMP/bin starts with yq.
-# Run a function with: run_isolated <name> "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL=<call> [VAR=val ...]
+# bootstrap_harness: R=$TMP/root is a scratch repo root (hack/lib, installations); $R/bootstrap/bs.sh sources the real
+# bootstrap/bootstrap.sh (sourced, it runs no subcommand) and evals $HARNESS_CALL after load_inst, so a test calls single
+# bootstrap functions. bootstrap.sh cds to "$(dirname "$0")/.." = $R, so tests may edit $R/installations freely.
+# BIN=$TMP/bin starts with yq. Run a function with:
+#   run_isolated <name> "$R/bootstrap/bs.sh" KUBE_CTX=fake INST=local HARNESS_CALL=<call> [VAR=val ...]
 bootstrap_harness() {
   R="$TMP/root"; BIN="$TMP/bin"
   mkdir -p "$R/bootstrap" "$R/hack"
   cp -R "$ROOT/hack/lib" "$R/hack/"
   cp -R "$ROOT/installations" "$R/"
-  sed '/^case "\$CMD" in$/,$d' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
-  # shellcheck disable=SC2016  # literal code for the generated script
-  printf '%s\n' 'load_inst; eval "$HARNESS_CALL"' >> "$R/bootstrap/bs.sh"
+  # shellcheck disable=SC2016  # literal code for bs.sh
+  printf 'source %q\nload_inst; eval "$HARNESS_CALL"\n' "$ROOT/bootstrap/bootstrap.sh" > "$R/bootstrap/bs.sh"
   fake_bin_yq "$BIN"
 }
 
