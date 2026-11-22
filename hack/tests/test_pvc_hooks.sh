@@ -59,22 +59,19 @@ violations() {
   ' "$f" | tr -d '\r')
 }
 
-# 1. Every addon render: hack/test.sh's per-installation renders, else standalone renders made here.
+# 1. Every addon render (RENDERED_DIR: hack/test.sh's, or hack/render.sh's when run on its own).
 n=0
-if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
-  for r in "$RENDERED_DIR"/addon-*.yaml; do
-    [[ -f "$r" ]] || continue
-    n=$((n + 1))
-    assert_eq "$(violations "$r")" "" "$(basename "$r" .yaml): hook PVCs are hook-failed, annotated and delete-protected"
-  done
-else
-  echo "  (no RENDERED_DIR: standalone render of addon thunder only)"
-fi
+need_renders
+for r in "$RENDERED_DIR"/addon-*.yaml; do
+  [[ -f "$r" ]] || continue
+  n=$((n + 1))
+  assert_eq "$(violations "$r")" "" "$(basename "$r" .yaml): hook PVCs are hook-failed, annotated and delete-protected"
+done
 render_standalone_addon thunder "$TMP/thunder.yaml"
 assert_eq "$(violations "$TMP/thunder.yaml")" "" "addons/thunder (standalone): hook PVCs are hook-failed, annotated and delete-protected"
 assert_eq "$(yq -N 'select(.kind == "PersistentVolumeClaim") | .metadata.name' "$TMP/thunder.yaml" | tr -d '\r' | sort | tr '\n' ' ')" \
   "thunder-certs-pvc thunder-database-pvc thunder-secrets-pvc " "addon thunder still renders its three PVCs (the contract is not vacuous)"
-echo "  checked $n addon renders from hack/test.sh"
+echo "  checked $n addon renders"
 
 # 2. Negative: each way back to the outage is caught.
 neg() { # neg <label> <yq edit of the thunder render> <expected violation regex>

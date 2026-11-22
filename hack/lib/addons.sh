@@ -4,6 +4,7 @@
 # shellcheck shell=bash
 
 ADDONS_CATALOG=${ADDONS_CATALOG:-charts/platform/values.yaml}
+ADDONS_SAMPLE_SERVER=https://192.0.2.10:6443   # stands in for a workload cluster's CAPI API endpoint (TEST-NET-1)
 
 # addon_appset <platform render> <addon> -> the addon's ApplicationSet document (YAML) from a charts/platform render.
 addon_appset() {
@@ -85,6 +86,24 @@ addon_server_part() {
     host) printf '%s\n' "${rest%:*}" ;;
     port) if [[ "$rest" == *:* ]]; then printf '%s\n' "${rest##*:}"; else echo 443; fi ;;
   esac
+}
+
+# sample_param_args <addon>: helm args for a render outside any cluster (lint, standalone render): the catalog
+# clusterServerParameters (<helm param>: url|host|port) for ADDONS_SAMPLE_SERVER, and clusterLabelParameters
+# (<helm param>: {label, default}) at their defaults, as charts/platform/templates/appset-addons.yaml passes them.
+sample_param_args() {
+  local p part def
+  while IFS=$'\t' read -r p part; do
+    [[ -n "$p" ]] || continue
+    if [[ "$part" == port ]]; then
+      printf '%s\n' --set "${p}=$(addon_server_part "$ADDONS_SAMPLE_SERVER" port)"
+    else
+      printf '%s\n' --set-string "${p}=$(addon_server_part "$ADDONS_SAMPLE_SERVER" "$part")"
+    fi
+  done < <(yq -r ".addons[\"$1\"].clusterServerParameters // {} | to_entries[] | [.key, .value] | @tsv" "$ADDONS_CATALOG")
+  while IFS=$'\t' read -r p _ def; do
+    if [[ -n "$p" ]]; then printf '%s\n' --set-string "${p}=${def}"; fi
+  done < <(yq -r ".addons[\"$1\"].clusterLabelParameters // {} | to_entries[] | [.key, .value.label, (.value.default // \"\")] | @tsv" "$ADDONS_CATALOG" | tr -d '\r')
 }
 
 # addon_fleet_names <inst dir> -> "{<name>,...}": every platform cluster of the installation (mgmt + clusters/*.yaml),

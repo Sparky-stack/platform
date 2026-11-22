@@ -4,6 +4,10 @@
 #                                       charts/<c>, addons/<a>, packages/<p>, docs/<doc>, <doc>.md, ci, templates;
 #                                       `docs` when only untested docs changed; `full` when a shared input changed or a path is unknown.
 #   changed-units.sh --tests UNIT...    the hack/tests/test_*.sh contract tests related to those units.
+#   changed-units.sh --package-build    changed file paths (stdin) -> 1 when the `crossplane project build` of every
+#                                       package (hack/tests/test_crossplane_packages.sh XP_PACKAGE_BUILD) must run: a
+#                                       package or its shared build changed. Else 0: package-<p>.yaml builds each
+#                                       package on its own changes, the nightly run (TEST_FULL=1) builds them all.
 # When unsure, answer `full`: a wasted CI minute is cheaper than a broken main.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -44,6 +48,16 @@ related_tests() {
     done
   done
 }
+
+if [[ "${1:-}" == "--package-build" ]]; then
+  paths=$(tr -d '\r')
+  if grep -Eq '^(packages/|ci/scripts/crossplane/|\.github/workflows/(package-|app-crossplane-configuration\.yaml))' <<<"$paths"; then
+    echo 1
+  else
+    echo 0
+  fi
+  exit 0
+fi
 
 if [[ "${1:-}" == "--tests" ]]; then
   shift

@@ -201,7 +201,8 @@ printf 'apiVersion: cert-manager.io/v1\nkind: Issuer\nmetadata: { name: selfsign
 
 # What charts/cluster actually renders for every mesh member is admitted (Argo CD applies it).
 n=0
-for f in "${RENDERED_DIR:-/nonexistent}"/cluster-*.yaml; do
+need_renders
+for f in "$RENDERED_DIR"/cluster-*.yaml; do
   [[ -f "$f" ]] || continue
   grep -qE -- '-mesh-reader|-client-ca' "$f" || continue
   for c in $(yq -N 'select(.kind == "Certificate" and (.metadata.name | test("-mesh-reader$"))) | .metadata.name' "$f"); do
@@ -214,6 +215,6 @@ for f in "${RENDERED_DIR:-/nonexistent}"/cluster-*.yaml; do
   done
 done
 tally
-if [[ -n "${RENDERED_DIR:-}" ]]; then assert_match "$n" '^[1-9]' "rendered mesh Certificates found"; fi
+assert_match "$n" '^[1-9]' "rendered mesh Certificates found"
 
 finish

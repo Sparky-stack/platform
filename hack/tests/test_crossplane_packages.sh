@@ -6,9 +6,12 @@
 #     XRD + Composition whose pipeline calls the embedded function functions/compose-<p>/, generated dirs gitignored;
 #   - .github/workflows/package-<p>.yaml calls app-crossplane-configuration.yaml for packages/<p>, release-please
 #     component <p>;
-#   - XP_PACKAGE_BUILD=1 (default on Linux with the crossplane CLI on PATH, like the package CI; needs network): `crossplane
-#     project build` of a copy of each package yields the Configuration (XRD + Composition == source, the embedded
-#     function pinned by digest) and the function image for amd64 + arm64.
+#   - XP_PACKAGE_BUILD=1 (needs the crossplane CLI and network; ~6 min on a CI runner): `crossplane project build` of a
+#     copy of each package yields the Configuration (XRD + Composition == source, the embedded function pinned by
+#     digest) and the function image for amd64 + arm64. The package-<p> workflows build every package on its own
+#     changes, so this runs only where it adds something: hack/test-changed.sh sets it when packages/**,
+#     ci/scripts/crossplane/** or a package workflow changed, TEST_FULL=1 turns it on (Linux; the nightly portability
+#     run), XP_PACKAGE_BUILD=0/1 forces it.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=../lib/portable.sh
@@ -50,7 +53,9 @@ xpkg_package_yaml() {
   done
   return 1
 }
-if [[ "${XP_PACKAGE_BUILD:-$([[ "$(os_name)" == linux ]] && echo 1 || echo 0)}" == 1 ]] && command -v crossplane >/dev/null 2>&1; then
+full_default=0
+if [[ "${TEST_FULL:-0}" == 1 && "$(os_name)" == linux ]]; then full_default=1; fi
+if [[ "${XP_PACKAGE_BUILD:-$full_default}" == 1 ]] && command -v crossplane >/dev/null 2>&1; then
   pids=()
   for p in $PACKAGES; do   # copies: the build writes schemas/ into the project; one cache per build (no shared writes)
     mkdir -p "$TMP/src"; cp -R "packages/$p" "$TMP/src/$p"
@@ -77,7 +82,7 @@ if [[ "${XP_PACKAGE_BUILD:-$([[ "$(os_name)" == linux ]] && echo 1 || echo 0)}" 
       '^sha256:[0-9a-f]{64}$' "$p: Configuration depends on the embedded function by digest ($fn)"
   done
 else
-  echo "  SKIP crossplane project build (XP_PACKAGE_BUILD=1, default on Linux, and the crossplane CLI: mise.toml)"
+  echo "  SKIP crossplane project build (XP_PACKAGE_BUILD=1 or TEST_FULL=1 on Linux, and the crossplane CLI: mise.toml)"
 fi
 
 finish

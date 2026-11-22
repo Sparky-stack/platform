@@ -147,7 +147,7 @@ to units:
 | Changed | Unit | PR CI runs |
 |---|---|---|
 | `charts/<c>/**`, `addons/<a>/**`, `installations/*/addons/<a>/**` | that chart | hooks on changed files, check-docs, helm lint + template x installations + kubeconform + helm-unittest of that chart, related contract tests |
-| `packages/<p>/**` | `packages/<p>` | hooks, check-docs, related contract tests; the package's own workflow (path filter `packages/<p>/**`) renders and builds it |
+| `packages/<p>/**` | `packages/<p>` | hooks, check-docs, related contract tests incl. the `crossplane project build` of every package; the package's own workflow (path filter `packages/<p>/**`) renders, builds and pushes it |
 | `ci/**`, `.github/workflows/app-*.yaml` / `ci-selftest.yaml` | `ci` | hooks, check-docs, related contract tests; `ci-selftest` builds the fixtures |
 | `templates/**` | `templates` | hooks, check-docs, related contract tests; the `templates` workflow renders them |
 | `docs/<d>`, `docs/<dir>/**`, or root `<d>.md` read by a contract test | `docs/<d>` / `<d>.md` | hooks on changed files, check-docs, related contract tests (e.g. `docs/data-services.md` -> `test_data_services`, `docs/openchoreo.md` / `README.md` -> `test_set_repo`, `docs/diagrams/**` -> `test_diagrams`) |
@@ -161,14 +161,37 @@ know (when unsure: full). Push to `main`, `merge_group` and `workflow_dispatch` 
 "related" when it names the unit's path (including after a `/` prefix like `$W/` or `$ROOT/` for docs), or, for charts
 and addons, checks every chart (`addons/*`, `charts/*`, `$RENDERED_DIR`): `hack/changed-units.sh --tests addons/harbor`
 lists them. A test that needs every render carries
-`# scoped-ci full-if: <regex>`: the run goes full when a changed chart's files match, else the test waits for the full
-run (`merge_group`, `main`). Keep that regex narrow and split the per-chart part out: `test_secret_store_scope.sh`
-(stores, unused grants) goes full only for a chart that defines a store or workflow, while
+`# scoped-ci full-if: <regex>`: when a changed chart's files match, every chart renders (`RENDER_ALL=1`) and the test
+runs, still with only the changed charts' lint/unittest and the related tests; else the test waits for the full run
+(`merge_group`, `main`). Keep that regex narrow and split the per-chart part out: `test_secret_store_scope.sh`
+(stores, unused grants) needs every render only for a chart that defines a store or workflow, while
 `test_secret_store_scope_chart.sh` checks each rendered consumer in every scoped run, reading the store scope from
-`hack/tests/fixtures/secret-store-scope.txt` when `addons/secret-stores` was not rendered. Example: an
-`addons/cilium` PR renders 1 of 38 charts (plus `charts/platform` / `charts/cluster`) and runs 11 of 73 suites, about
-1.5 min instead of 4.5 min locally. `task test:changed` (`BASE=<ref>`) gives you the same scope locally, uncommitted
-files included; `task test` still runs everything. Fixtures: `hack/tests/test_changed_units.sh`.
+`hack/tests/fixtures/secret-store-scope.txt` when `addons/secret-stores` was not rendered. The `crossplane project
+build` of every package (`hack/tests/test_crossplane_packages.sh`, about 6 min on a runner) runs only when
+`hack/changed-units.sh --package-build` says a package or its shared build changed (`packages/**`,
+`ci/scripts/crossplane/**`, `package-*.yaml`, `app-crossplane-configuration.yaml`); the nightly portability run builds
+them with `TEST_FULL=1`. `task test:changed` (`BASE=<ref>`) gives you the same scope locally, uncommitted files
+included; `task test` still runs everything. Fixtures: `hack/tests/test_changed_units.sh`.
+
+## Running the tests fast
+
+`hack/test.sh` (`task test`) builds the chart dependencies (`hack/deps.sh`, a no-op when present), lints, renders every
+chart once ([`hack/render.sh`](../hack/render.sh), addons in parallel), validates the renders with one parallel
+kubeconform, then runs every `helm unittest` and contract suite side by side, `JOBS` at a time (default: CPU count),
+slowest first (durations of your last run, `~/.cache/koorikla-platform/test-times.tsv`). Each suite's output is printed
+in one piece when it ends (`==> <suite>: ok, 12s`), failures are listed by name at the end, and a timing table (slowest
+first) shows where the time goes. The usual loop:
+
+| Command | Runs | Typical time |
+|---|---|---|
+| `task test:changed` | what your branch touched (committed or not), as PR CI | 1-2.5 min for one addon (20 / 4 CPUs) |
+| `bash hack/tests/test_<x>.sh` | one contract suite; it builds chart deps and renders what it needs itself | seconds to ~1 min |
+| `helm unittest addons/<a>` | one chart's unit tests (after `hack/deps.sh`) | seconds |
+| `task test` | everything except the package builds | 2-3 min (20 / 4 CPUs) |
+| `TEST_FULL=1 task test` | everything, plus the `crossplane project build` of every package (Linux, network) | + ~2 min |
+
+`JOBS=1` serializes the suites (debugging); `CHARTS="addons/x"` limits lint/render/unittest to charts,
+`TESTS="hack/tests/test_x.sh ..."` picks contract suites, `XP_PACKAGE_BUILD=0|1` forces the package builds off or on.
 
 ## Portable bash rules
 
@@ -192,10 +215,13 @@ userlands; helpers live in [`hack/lib/portable.sh`](../hack/lib/portable.sh).
 
 `task lint` runs `bash -n` + shellcheck on every script; the macOS CI job runs the whole suite on `/bin/bash` 3.2.
 
-`hack/test.sh` renders every chart once (step 5) and exports that directory as `RENDERED_DIR` to the suites in
-`hack/tests/`. Suites take renders through `render_platform`, `render_cluster`, `render_standalone_addon` and
-`render_layered_addon` (`hack/tests/lib.sh`): the `hack/test.sh` render of this run when present, else a fresh
-`helm template` (a suite run on its own never reads an old render). The same file holds the rest a new suite needs:
+`hack/test.sh` renders every chart once (`hack/render.sh`) and exports that directory as `RENDERED_DIR` to the suites
+in `hack/tests/`. A suite that checks every render calls `need_renders` (`hack/tests/lib.sh`): run on its own it renders
+every chart first with the same `hack/render.sh`, so it never reads an old render and never skips. Single renders come
+from `render_platform`, `render_cluster`, `render_standalone_addon` and `render_layered_addon`: the `hack/test.sh`
+render of this run when present, else a fresh `helm template`. `hack/tests/lib.sh` also builds the chart dependencies
+when a suite runs on its own (`hack/test.sh` builds them once and sets `DEPS_READY`, so parallel suites never race on
+`charts/`). The same file holds the rest a new suite needs:
 `assert_eq`/`assert_match`/`assert_nonempty` + `finish` (the `N passed` line), `kc_valid` (kubeconform with the CRD
 schemas, as `hack/test.sh` runs it), and a fake-tool harness: `fake_bin_yq` + `run_isolated` run a script against fakes
 in `$BIN` with a scrubbed environment, `bootstrap_harness` lets a suite call single `bootstrap.sh` functions.

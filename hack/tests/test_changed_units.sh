@@ -29,6 +29,17 @@ assert_eq "$(printf '' | bash "$ROOT/hack/changed-units.sh")" "full" "no paths -
 assert_eq "$(bash "$ROOT/hack/changed-units.sh" addons/mesh/x charts/tenant/y | tr '\n' ' ')" "addons/mesh charts/tenant " \
   "paths as arguments"
 
+# The crossplane project build of every package runs only when a package or its shared build changed.
+xp() { printf '%s\n' "$@" | bash "$ROOT/hack/changed-units.sh" --package-build; }
+for p in packages/valkey/apis/valkey/composition.yaml ci/scripts/crossplane/validate-render.sh \
+  .github/workflows/package-mysql.yaml .github/workflows/app-crossplane-configuration.yaml; do
+  assert_eq "$(xp addons/mesh/values.yaml "$p")" 1 "package build: $p -> build every package"
+done
+for p in addons/openchoreo-platform/values.yaml addons/crossplane/values.yaml ci/scripts/go/build.sh \
+  .github/workflows/app-crossplane-provider.yaml hack/test.sh docs/crossplane.md; do
+  assert_eq "$(xp "$p")" 0 "package build: $p -> no package build"
+done
+
 # Related contract tests: named by path, word-bounded; charts/addons also get the every-chart tests.
 tests=" $(cd "$ROOT" && bash hack/changed-units.sh --tests addons/harbor | tr '\n' ' ')"
 assert_match "$tests" " hack/tests/test_harbor_config.sh " "addons/harbor -> test_harbor_config"
@@ -56,7 +67,8 @@ tests=" $(cd "$ROOT" && bash hack/changed-units.sh --tests packages/postgresql |
 assert_match "$tests" " hack/tests/test_data_services.sh " "packages/postgresql -> test_data_services (XRD examples)"
 
 # Secret store scope (#244): a chart with ExternalSecrets gets the per-chart check in a scoped run; only a chart that
-# defines a store or workflow takes the cross-chart test's full-if (hack/test-changed.sh greps the changed charts).
+# defines a store or workflow takes the cross-chart test's full-if (hack/test-changed.sh greps the changed charts and
+# then renders every chart, RENDER_ALL, with only the changed charts' lint/unittest and the related tests).
 tests=" $(cd "$ROOT" && bash hack/changed-units.sh --tests addons/telemetry | tr '\n' ' ')"
 assert_match "$tests" " hack/tests/test_secret_store_scope_chart.sh " "addons/telemetry -> per-chart secret store scope"
 assert_eq "$(sed -n 's/^# scoped-ci full-if: //p' "$ROOT/hack/tests/test_secret_store_scope_chart.sh")" "" \
@@ -68,7 +80,7 @@ for c in addons/telemetry addons/harbor addons/falco charts/tenant; do
 done
 for c in addons/secret-stores addons/openchoreo-workflow-plane addons/openchoreo-platform addons/external-dns; do
   assert_eq "$(grep -rEqs --exclude-dir=charts "$full_if" "$ROOT/$c" && echo full || echo scoped)" full \
-    "$c (defines a store, workflow plane, workflows or the dns guard) -> full"
+    "$c (defines a store, workflow plane, workflows or the dns guard) -> every chart renders (RENDER_ALL)"
 done
 
 finish
