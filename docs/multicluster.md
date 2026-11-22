@@ -362,16 +362,27 @@ K="kubectl --context k3d-platform-mgmt"
 
 **Demo values** (local installation only, zero-touch after `task down && task up`): a tenant file may list
 `demoSecrets: [{key, property}]` (here `installations/local/tenants/demo.yaml`: `hello-world`/`greeting`, the remoteRef
-of hello-world's `SecretReference`). charts/tenant then renders CronJob `openbao-tenants/<project>-demo-secrets`
-(`files/seed-demo-secrets.sh`, every 5 minutes, final sync wave) that logs in exactly like the command above, as
-`<project>-writer` with role `tenant-writer` (never root, only its own mount), and writes each missing property as a
-generated `demo-only-<24 hex>` value (in the pod, never in git or a log; new key with `cas=0`, a key without the
-property with a patch). An existing property is never overwritten, so a hand-written value or a rotation wins. It
-fails and retries until OpenBao and `tenant-reconcile` (mount + writer alias) exist, without holding any sync. OpenBao's
-CA reaches it as `openbao-tenants/openbao-ca` (ExternalSecret of addon openbao through `ClusterSecretStore
-mgmt-openbao`, public certificate only). Never list real secrets there. Test: `hack/tests/test_tenant_demo_secrets.sh`
-(every remoteRef of the vendored hello-world SecretReference is seeded; pins shared with addon openbao; idempotency
-against a fake CLI).
+of hello-world's `SecretReference`). charts/tenant then renders three ESO objects in `openbao-tenants`, all in the final
+sync wave (`templates/demo-secrets.yaml`):
+
+| Object | What it does |
+|---|---|
+| `SecretStore <project>-openbao-writer` | logs in like the command above: as `<project>-writer`, role `tenant-writer` (never root, only its own mount) |
+| `Password <project>-demo-value` | generates `demo-only-<24 hex>` inside ESO (never in git or a log) |
+| `PushSecret <project>-seed-<key>` | one per entry: writes the property only if it is missing (`updatePolicy: IfNotExists`, new keys with `cas=0`), never deletes it (`deletionPolicy: None`) |
+
+An existing value is never overwritten, so a hand-written value or a rotation wins; a key removed completely (`bao kv
+metadata delete`) is seeded again within `refreshInterval` (5 minutes). One entry per key (a lowercase DNS label: it names the PushSecret). ESO
+writes only into keys it created (it marks them with custom metadata `managed-by=external-secrets`, which policy
+`tenant-write` allows): a hand-written key that lacks the property is not patched, the PushSecret reports `secret not
+managed by external-secrets` instead. Until OpenBao and `tenant-reconcile` (mount + writer alias) exist, the store and
+the PushSecrets are not Ready and ESO retries (with backoff, up to ~17 minutes; `kubectl --context k3d-platform-mgmt -n
+openbao-tenants annotate pushsecret <name> force-sync=$(date +%s) --overwrite` retries now), without holding any sync.
+OpenBao's CA reaches the store as `openbao-tenants/openbao-ca` (ExternalSecret of addon openbao through
+`ClusterSecretStore mgmt-openbao`, public certificate only). Never list real secrets there. Tests:
+`hack/tests/test_tenant_demo_secrets.sh` (every remoteRef of the vendored hello-world SecretReference is seeded; pins
+shared with addon openbao; IfNotExists, deletionPolicy None, final wave; kubeconform against the ESO CRDs) and
+`charts/tenant/tests/demo_secrets_test.yaml`.
 
 The app consumes it with an OpenChoreo `SecretReference` (`remoteRef: {key: db, property: password}`) named in its
 Workload; developer steps, the hello-world `GREETING_SECRET` example and rotation:
