@@ -1,26 +1,34 @@
 # Data services: PostgreSQL, MySQL, Kafka, event-driven autoscaling
 
-Operators for workloads on workload clusters, **off by default** everywhere: a cluster runs them only after it
-opts in, so local docker environments stay lean (no Application is generated for a cluster that does not opt in).
-Catalog and labels: [conventions.md](conventions.md); addon mechanics: [architecture.md](architecture.md) "Addons".
+Operators for apps on workload clusters, **off by default**: a cluster runs one only after its fleet file opts in
+(no Application is generated otherwise), so local docker environments stay lean. Developers reach them through
+OpenChoreo types; Crossplane is the workload cluster's control plane behind the `PostgreSQL` and `MySQL` APIs. Catalog
+and labels: [conventions.md](conventions.md); addon mechanics: [architecture.md](architecture.md) "Addons".
+
+| Task | How |
+|---|---|
+| Turn an operator on for a cluster | `addons: { <addon>: true }` in `installations/<inst>/clusters/<name>.yaml` ([Opt in](#opt-in)) |
+| Give an app a PostgreSQL database | `Resource` of `ClusterResourceType postgresql` + a `ResourceReleaseBinding` per environment in the app repo ([PostgreSQL from OpenChoreo](#postgresql-from-openchoreo)) |
+| Autoscale a component | ClusterTrait `keda-scaler` ([KEDA and OpenChoreo workloads](#keda-and-openchoreo-workloads)) |
+| Data-plane agent stuck on a new cluster | `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers` names the missing CRD ([capability gate](#first-boot-the-capability-gate)) |
+| Check a database | `kubectl -n <ns> get postgresql <name>` (BACKEND, ENDPOINT, SECRET, READY); [Verify on a cluster](#verify-on-a-cluster) |
 
 | Addon (catalog) | Namespace | Upstream chart | What |
 |---|---|---|---|
 | `cloudnative-pg` | cnpg-system | `cloudnative-pg` 0.29.1 (operator 1.30.1) + optional `plugin-barman-cloud` 0.9.0 (v0.16.0) | PostgreSQL clusters (`Cluster`, `Pooler`, `ScheduledBackup`, `Database`); backups to object storage through the Barman Cloud plugin |
-| `strimzi` | strimzi | `strimzi-kafka-operator` 1.3.1 | Apache Kafka in KRaft mode (`Kafka`, `KafkaNodePool`, `KafkaTopic`, `KafkaUser`, Connect, MirrorMaker 2, Bridge); no ZooKeeper |
-| `moco` | moco-system | `moco` 0.28.0 | MySQL 8.4 clusters with semi-sync GTID replication, the in-cluster backend of the MySQL API ([below](#mysql-as-a-service)) |
+| `strimzi` | strimzi | `strimzi-kafka-operator` 1.3.1 | Kafka in KRaft mode (`Kafka`, `KafkaNodePool`, `KafkaTopic`, `KafkaUser`, Connect, MirrorMaker 2, Bridge); no ZooKeeper |
+| `moco` | moco-system | `moco` 0.28.0 | MySQL 8.4 clusters, semi-sync GTID replication; backend of the [MySQL API](#mysql-as-a-service) |
 | `keda` | keda | `keda` 2.21.0 | event-driven autoscaling (`ScaledObject`, `ScaledJob`, `TriggerAuthentication`), scale to zero, external metrics API |
-| `crossplane` | crossplane-system | `crossplane` 2.4.3 (Crossplane v2) | not an operator for one data service: the control plane behind the `PostgreSQL` and `MySQL` APIs. Its Compositions hand a claim to CloudNativePG or MOCO in the cluster, or have its cloud providers create RDS / Aurora, Cloud SQL or Azure Flexible Server ([below](#postgresql-as-a-service), [crossplane.md](crossplane.md)) |
+| `crossplane` | crossplane-system | `crossplane` 2.4.3 (v2) | the workload cluster's control plane for in-cluster and cloud resources: Compositions hand a claim to CloudNativePG or MOCO, or cloud providers create RDS / Aurora, Cloud SQL or Azure Flexible Server ([below](#postgresql-as-a-service), [crossplane.md](crossplane.md)) |
 
-The operators: wrapper charts in `addons/<addon>/`, workload role only, CRDs from the chart applied server-side by Argo CD
-(the Kafka and CNPG `Cluster` CRDs exceed the client-side apply annotation limit), images multi-arch (amd64 + arm64)
-pinned by digest, Pod Security `restricted` enforced on the operator namespace, operator metrics scraped by the
-Prometheus agent of addon `telemetry`.
+All are wrapper charts in `addons/<addon>/`, workload role only; Argo CD applies their CRDs server-side (the Kafka and
+CNPG `Cluster` CRDs exceed the client-side annotation limit). Images are multi-arch and digest-pinned, operator
+namespaces enforce Pod Security `restricted`, and addon `telemetry`'s Prometheus agent scrapes operator metrics.
 
 ## Opt in
 
-Per cluster, in its fleet file (the label `addons.platform.koorikla.io/<addon>: "true"` flows to the CAPI `Cluster` and
-the Argo CD cluster secret; the addon ApplicationSet selects on it):
+The fleet file's `addons` become the label `addons.platform.koorikla.io/<addon>: "true"` on the CAPI `Cluster` and the
+Argo CD cluster secret, which the addon ApplicationSet selects on:
 
 ```
 # installations/<inst>/clusters/<name>.yaml
@@ -30,129 +38,118 @@ addons:
   keda: true
 ```
 
-For a whole installation, set it in every cluster file that should run them. Values per installation / environment /
-cluster go into `installations/<inst>/addons/<addon>/{values,env-<env>,cluster-<name>}.yaml` (values only), e.g.
-`plugin-barman-cloud.enabled: true` for `cloudnative-pg`.
-
-Needs on the same cluster: `cert-manager` (KEDA serving certificates, Barman Cloud plugin) and `telemetry`
-(prometheus-operator CRDs for the ServiceMonitors/PodMonitors) - both default addons on workload clusters. A cluster
-without `telemetry` sets `monitoring.podMonitor: false` (strimzi), `cloudnative-pg.monitoring.podMonitorEnabled: false`
-and `keda.prometheus.{operator,metricServer,webhooks}.enabled: false`.
-
-Footprint (requests, operators only): CNPG 20m / 64Mi, Strimzi 50m / 384Mi (JVM), KEDA 50m / 160Mi (three pods).
-Every PostgreSQL / Kafka cluster you create comes on top.
-
-Turning an addon off removes its Application but no resources (the generated Applications carry no resources
-finalizer): operators, CRDs and the clusters they manage stay until removed deliberately. Even a cascading delete keeps
-the CloudNativePG CRDs (and with them every PostgreSQL cluster): they carry `helm.sh/resource-policy: keep`, which
-Argo CD honours (seen live).
+- Values per installation / environment / cluster: `installations/<inst>/addons/<addon>/{values,env-<env>,cluster-<name>}.yaml`
+  (values only), e.g. `plugin-barman-cloud.enabled: true` for `cloudnative-pg`.
+- Needs `cert-manager` (KEDA serving certs, Barman Cloud plugin) and `telemetry` (prometheus-operator CRDs), both
+  default on workload clusters. Without `telemetry` set `monitoring.podMonitor: false` (strimzi),
+  `cloudnative-pg.monitoring.podMonitorEnabled: false` and `keda.prometheus.{operator,metricServer,webhooks}.enabled: false`.
+- Footprint (requests, operators only): CNPG 20m / 64Mi, Strimzi 50m / 384Mi (JVM), KEDA 50m / 160Mi (three pods);
+  every PostgreSQL / Kafka cluster comes on top.
+- Turning an addon off removes its Application, not its resources (no resources finalizer): operators, CRDs and managed
+  clusters stay until removed deliberately. The CloudNativePG CRDs (and so every PostgreSQL cluster) survive even a
+  cascading delete: they carry `helm.sh/resource-policy: keep`, which Argo CD honours (seen live).
 
 ## Security and RBAC
 
-- **Pod Security.** The operator namespaces carry `pod-security.kubernetes.io/enforce: restricted`. Strimzi also makes
-  every operand it creates restricted (`STRIMZI_POD_SECURITY_PROVIDER_CLASS=restricted`); CNPG instance pods and KEDA
-  meet restricted upstream. `hack/tests/test_data_services.sh` checks every rendered pod template.
-- **Kyverno.** keda, strimzi and cnpg-system are *not* in the Kyverno exclusion lists (`addons/kyverno`,
-  `addons/kyverno-policies` `platformNamespaces`): the Pod Security policies report on them like on any workload.
-- **Watch scope.** All three watch every namespace, because OpenChoreo creates the cell namespaces
-  (`dp-<org>-<project>-<env>-<hash>`) at runtime. What that grants:
-  - CNPG: ClusterRole `cnpg` - its CRs plus the Pods (incl. `pods/exec`), PVCs, Services, Secrets, ConfigMaps, Jobs,
-    PDBs, Roles/RoleBindings, ServiceAccounts and PodMonitors it creates for each PostgreSQL cluster, in any namespace,
-    and its own webhook configurations (it patches their `caBundle`; the catalog entry uses ServerSideDiff).
-  - Strimzi: ClusterRoleBindings for `strimzi-cluster-operator-namespaced`, `-watched`, `-global` and the entity
-    operator / broker / client delegation roles - Pods, Services, Secrets, ConfigMaps, PVCs, NetworkPolicies, PDBs and
-    Roles/RoleBindings in any namespace. Narrow it with `watchAnyNamespace: false` + `watchNamespaces` in an overlay
-    when Kafka clusters live only in known namespaces.
-  - KEDA: reads `/scale` of every workload kind (`rbac.scaledRefKinds`), manages HPAs, reads Secrets referenced by
-    `TriggerAuthentication`s; the metrics apiserver gets `system:auth-delegator` and serves
-    `v1beta1.external.metrics.k8s.io` (one per cluster: nothing else may register it).
+- **Pod Security.** Operator namespaces enforce `restricted`; Strimzi also makes its operands restricted
+  (`STRIMZI_POD_SECURITY_PROVIDER_CLASS=restricted`); CNPG instance pods and KEDA meet it upstream.
+  `hack/tests/test_data_services.sh` checks every rendered pod template.
+- **Kyverno.** keda, strimzi and cnpg-system are *not* in the exclusion lists (`addons/kyverno`, `addons/kyverno-policies`
+  `platformNamespaces`): the Pod Security policies report on them like on any workload.
+- **Watch scope.** All three watch every namespace, because OpenChoreo creates cell namespaces
+  (`dp-<org>-<project>-<env>-<hash>`) at runtime:
+
+  | Operator | Grants, in any namespace |
+  |---|---|
+  | CNPG | ClusterRole `cnpg`: its CRs plus the Pods (incl. `pods/exec`), PVCs, Services, Secrets, ConfigMaps, Jobs, PDBs, Roles/RoleBindings, ServiceAccounts and PodMonitors it creates per PostgreSQL cluster; its own webhook configurations (it patches their `caBundle`; the catalog entry uses ServerSideDiff) |
+  | Strimzi | ClusterRoleBindings for `strimzi-cluster-operator-namespaced`, `-watched`, `-global` and the entity operator / broker / client delegation roles: Pods, Services, Secrets, ConfigMaps, PVCs, NetworkPolicies, PDBs, Roles/RoleBindings. Narrow with `watchAnyNamespace: false` + `watchNamespaces` in an overlay |
+  | KEDA | `/scale` of every workload kind (`rbac.scaledRefKinds`), HPAs, Secrets referenced by `TriggerAuthentication`s; the metrics apiserver gets `system:auth-delegator` and serves `v1beta1.external.metrics.k8s.io` (one per cluster: nothing else may register it) |
+
 - **Images.** Operators, CNPG's default PostgreSQL (`standard`, no in-tree barman) / PgBouncer images and the Strimzi
-  operand images it launches (topic/user operator, Bridge, Connect build tools) are pinned by digest. Strimzi picks the
-  broker image per `spec.kafka.version` from tags; pin it with `spec.kafka.image` (example below). Multi-arch check:
-  `task images:audit -- --opt-in` (renders opt-in addons too).
-- **Secrets.** No addon needs one. Database and Kafka user credentials are generated on the data plane by the
-  operators (`<cluster>-app` Secret, `KafkaUser` Secret) and never leave it; anything supplied from outside (e.g.
-  object-store keys where no workload identity exists) comes through ESO from ClusterSecretStore `default`.
+  operand images (topic/user operator, Bridge, Connect build tools) are digest-pinned. Strimzi picks the broker image
+  per `spec.kafka.version` from tags: pin it with `spec.kafka.image` (example below). Multi-arch check:
+  `task images:audit -- --opt-in`.
+- **Secrets.** No addon needs one. Operators generate database and Kafka user credentials on the data plane
+  (`<cluster>-app`, `KafkaUser` Secret) and they never leave it; external inputs (e.g. object-store keys without
+  workload identity) come through ESO from ClusterSecretStore `default`.
 
 ## Consuming them from OpenChoreo
 
-Apps reach workload clusters only through OpenChoreo (no Argo CD there), so developers use the operators through
-platform-owned OpenChoreo types (addon openchoreo-platform `files/platform/`, OpenChoreo 1.3.3 API):
+Apps reach workload clusters only through OpenChoreo (no Argo CD there), via platform-owned types (addon
+openchoreo-platform `files/platform/`, OpenChoreo 1.3.3 API):
 
 | Type | Renders into the cell namespace | Data plane needs |
 |---|---|---|
 | `ClusterTrait keda-scaler` | KEDA `ScaledObject` for the component's Deployment; removes `/spec/replicas` from it | `keda` |
-| `ClusterResourceType postgresql` | `platform.koorikla.io/v1alpha1 PostgreSQL` ([below](#postgresql-as-a-service)); never a raw CNPG `Cluster` | `crossplane` (+ `cloudnative-pg` where the backend is cnpg) |
+| `ClusterResourceType postgresql` | `platform.koorikla.io/v1alpha1 PostgreSQL`; never a raw CNPG `Cluster` | `crossplane` (+ `cloudnative-pg` for backend cnpg) |
+| `ClusterResourceType mysql` | `platform.koorikla.io/v1alpha1 MySQL` | `crossplane`, `moco` |
 
-Kafka has no type: the event bus as a service (Crossplane XR across Strimzi / MSK / Managed Kafka) is
-[#113](https://github.com/koorikla/platform/issues/113) / [#114](https://github.com/koorikla/platform/issues/114),
-and no local cluster runs Strimzi (host RAM). `keda-scaler` is in the `allowedTraits` of the Deployment-based component
-types (`service`, `web-application`, `worker`); `scheduled-task` (CronJob) does not get it. The data-plane cluster agent
-may apply and observe both kinds (addon openchoreo-data-plane `templates/cluster-agent-data-services.yaml`; upstream's
-ClusterRole knows neither).
+`keda-scaler` is allowed on `service`, `web-application` and `worker`, not on `scheduled-task` (CronJob). The cluster
+agent may apply these kinds (addon openchoreo-data-plane `templates/cluster-agent-data-services.yaml`; upstream's
+ClusterRole knows none of them). Kafka has no type: the event bus as a service (XR across Strimzi / MSK / Managed
+Kafka) is [#113](https://github.com/koorikla/platform/issues/113) / [#114](https://github.com/koorikla/platform/issues/114),
+and no local cluster runs Strimzi (host RAM).
 
 ### Only on data planes that run the operator
 
-Declarative, no cluster names: the **data plane announces** what it runs, the **type declares** what it needs.
+The data plane announces what it runs, the type declares what it needs; no cluster names anywhere.
 
-- The fleet file's `addons` reach the cluster's `ClusterDataPlane` as annotations `addons.platform.koorikla.io/<addon>:
-  "true"` (charts/cluster, same keys as the CAPI / Argo CD cluster labels the addon ApplicationSet selects on).
-- Each type lists its needs in `platform.koorikla.io/requires-addons` (`keda`, `crossplane`).
-- **Traits** check it themselves. OpenChoreo 1.3.3 exposes a data plane's annotations to component and trait CEL as
-  `dataplane.annotations` (`internal/pipeline/component/context/types.go` `DataPlaneData.Annotations`; carried over for
-  `ClusterDataPlane`s in `internal/controller/reference.go`), so `keda-scaler`'s first `preRenderValidation` fails the
-  ReleaseBinding of an environment whose data plane lacks `keda` with a message naming the fleet-file switch. An
-  environment can also turn the trait off (`traitEnvironmentConfigs.<instance>.enabled: false`).
+- The fleet file's `addons` reach the `ClusterDataPlane` as annotations `addons.platform.koorikla.io/<addon>: "true"`
+  (charts/cluster; same keys as the cluster labels). Each type lists its needs in `platform.koorikla.io/requires-addons`.
+- **Traits** check it in CEL: OpenChoreo 1.3.3 exposes `dataplane.annotations` to component and trait templates
+  (`DataPlaneData.Annotations`, also for `ClusterDataPlane`s). `keda-scaler`'s first `preRenderValidation` fails the
+  ReleaseBinding of an environment whose data plane lacks `keda`, naming the fleet-file switch. An environment can also
+  turn the trait off (`traitEnvironmentConfigs.<instance>.enabled: false`).
 - **Resource types** cannot: 1.3.3 gives `ResourceType`s no validations, and the resource pipeline's `dataplane.*` has
-  only `secretStore`, `gateway` and `observabilityPlaneRef` (`internal/pipeline/resource/types.go`). The Kyverno
-  `ValidatingPolicy` `platform-data-plane-capabilities` on mgmt (addon kyverno-policies) denies a
-  `ResourceReleaseBinding` whose Resource's type requires an addon the environment's data plane does not announce;
-  Argo CD shows the denial on the app's sync. A binding of a Resource that does not exist yet is denied too (apply the
-  Resource in an earlier sync wave; Argo CD retries).
-- Why not an environment allow list: 1.3.3's `Environment` has only `dataPlaneRef`, `isProduction` and `gateway`, and
-  `allowedTraits` is per component type, cluster-wide. A list of environment names per type would restate what the fleet
-  file already says about the cluster, and drift when an environment moves. The capability belongs to the data plane.
-- Backstop: on a data plane without the CRD the apply fails anyway (`no matches for kind`).
-- **First boot (#246):** the annotation is the fleet file's opt-in, true from cluster birth, while the addon itself
-  lands minutes later. So the data plane's cluster agent waits for it: addon openchoreo-data-plane renders a Sync hook
-  `capability-gate` (sync wave -1, before the agent Deployment) that runs `kubectl wait` until the CRD of every enabled
-  `capabilityGate.addons.<addon>` is Established (`keda` -> `scaledobjects.keda.sh`; `crossplane` ->
-  `postgresqls.platform.koorikla.io`, the XRD of the Configuration package crossplane pulls after it is Healthy, ~20 min
-  after the agent on a fresh local bootstrap, #255; `telemetry` -> `podmonitors.monitoring.coreos.com` for ClusterTrait
-  `metrics`, on by default like the addon, #252), each switched on per cluster from its
-  `addons.platform.koorikla.io/<addon>` label. Nothing reaches the cluster before the kinds of its traits and resource
-  types exist. Without it,
-  OpenChoreo 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on controller-runtime's
-  exponential backoff (capped at 1000 s, no watch on the data plane), so development served ~17 min after KEDA was
-  Healthy. `hack/tests/test_openchoreo_types.sh` fails when a ClusterTrait or ClusterResourceType renders an addon kind
-  the gate does not wait for under that addon. Stuck agent on a new cluster: the init container `wait-for-<addon>-crds`
-  in `kubectl -n openchoreo-data-plane get pod -l app.kubernetes.io/name=capability-gate` names the missing addon; each
-  wait times out after `capabilityGate.timeout` (30m) with the CRD name in
-  `kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers`, and Argo CD retries the sync. A failed
-  crossplane package (`kubectl get configuration.pkg`) keeps the agent waiting there, by design.
+  only `secretStore`, `gateway` and `observabilityPlaneRef`. So Kyverno `ValidatingPolicy`
+  `platform-data-plane-capabilities` on mgmt (addon kyverno-policies) denies a `ResourceReleaseBinding` whose type needs
+  an addon the environment's data plane does not announce, shown on the app's Argo CD sync. A binding of a Resource that
+  does not exist yet is denied too (apply the Resource in an earlier sync wave; Argo CD retries).
+- No environment allow list: 1.3.3's `Environment` has only `dataPlaneRef`, `isProduction` and `gateway`, `allowedTraits`
+  is per component type, and a per-type list of environments would restate the fleet file and drift when an
+  environment moves. Backstop: without the CRD the apply fails anyway (`no matches for kind`).
+
+#### First boot: the capability gate
+
+The annotation is true from cluster birth; the addon lands minutes later (#246). Addon openchoreo-data-plane therefore
+renders a Sync hook `capability-gate` (sync wave -1, before the agent Deployment) that `kubectl wait`s until the CRDs of
+every enabled `capabilityGate.addons.<addon>` (switched on per cluster from its label) are Established:
+
+| Addon | CRDs |
+|---|---|
+| `keda` | `scaledobjects.keda.sh` |
+| `crossplane` | `postgresqls.platform.koorikla.io`, the XRD of the Configuration package crossplane pulls once Healthy (~20 min after the agent on a fresh local bootstrap, #255) |
+| `moco` | `mysqlclusters.moco.cybozu.com`, `mysqls.platform.koorikla.io` |
+| `telemetry` | `podmonitors.monitoring.coreos.com` (ClusterTrait `metrics`; on by default like the addon, #252) |
+
+Without the gate, 1.3.3 applied the ScaledObject first and retried the failed `RenderedRelease` only on
+controller-runtime backoff (capped at 1000 s, no watch on the data plane): development served ~17 min after KEDA was
+Healthy. `hack/tests/test_openchoreo_types.sh` fails when a type renders an addon kind the gate does not wait for.
+
+Stuck agent: the init container `wait-for-<addon>-crds` of
+`kubectl -n openchoreo-data-plane get pod -l app.kubernetes.io/name=capability-gate` names the addon; each wait times out
+after `capabilityGate.timeout` (30m) with the CRD name in
+`kubectl -n openchoreo-data-plane logs job/capability-gate --all-containers`, and Argo CD retries. A failed crossplane
+package (`kubectl get configuration.pkg`) keeps the agent waiting, by design.
 
 ### Readiness and replicas
 
-- OpenChoreo's RenderedRelease health knows Deployments, StatefulSets, Pods and CronJobs; any other kind is healthy as
-  soon as it exists (`internal/controller/renderedrelease/controller_status.go`, `getUnknownResourceHealth`). The
-  `postgresql` type therefore sets `readyWhen` on the XR's `Ready` condition, and its `host` / `port` outputs read the
-  XR status (`applied.postgresql.status.endpoint` / `.port`), so `OutputsResolved` waits for the backend too. A
-  consumer's ReleaseBinding stays not synced (`ResourceDependenciesReady`) until the `ResourceReleaseBinding` is Ready:
-  the workload never starts without its database. A `ScaledObject` counts as healthy when present (KEDA's own `Ready`
-  condition is not consulted).
-- The cluster agent applies every rendered object with server-side apply, `ForceOwnership`, field manager
-  `renderedrelease-controller` (`internal/controller/renderedrelease/controller.go`). `keda-scaler` removes
-  `/spec/replicas` from the rendered Deployment (like upstream's `horizontal-pod-autoscaler` trait), so that manager no
-  longer owns the field; KEDA's HPA writes it through the scale subresource and later applies leave it alone. Argo CD
-  does not run on data planes, so nothing else fights over it.
+- RenderedRelease health knows Deployments, StatefulSets, Pods and CronJobs; any other kind is healthy once it exists
+  (`getUnknownResourceHealth`). So `postgresql` sets `readyWhen` on the XR's `Ready` condition and reads `host` /
+  `port` from its status (`applied.postgresql.status.endpoint` / `.port`), so `OutputsResolved` waits for the backend.
+  A consumer's ReleaseBinding stays not synced (`ResourceDependenciesReady`) until the `ResourceReleaseBinding` is
+  Ready: the workload never starts without its database. A `ScaledObject` is healthy when present (KEDA's `Ready` is
+  not consulted).
+- The agent server-side-applies every object with `ForceOwnership`, field manager `renderedrelease-controller`.
+  `keda-scaler` drops `/spec/replicas` from the Deployment (like upstream's `horizontal-pod-autoscaler` trait), so
+  KEDA's HPA owns the field through the scale subresource; no Argo CD on data planes fights over it.
 
 ## PostgreSQL as a service
 
 One developer-facing API, `platform.koorikla.io/v1alpha1` `PostgreSQL` (a namespaced Crossplane v2 composite resource,
-no claims), fulfilled by whatever the cluster has: **CloudNativePG** in-cluster where there is no managed database
+no claims). The cluster's provider decides the backend: **CloudNativePG** in-cluster where there is no managed database
 (local docker, Hetzner, Talos on vSphere), **Amazon RDS / Aurora** on AWS, **Cloud SQL** on GCP, **Azure Database for
-PostgreSQL Flexible Server** on Azure. Developers ask for "a Postgres"; the cluster's provider decides how. Design and
-owner decisions: [#91](https://github.com/koorikla/platform/issues/91).
+PostgreSQL Flexible Server** on Azure. Design and owner decisions: [#91](https://github.com/koorikla/platform/issues/91).
 
 ### Developer view
 
@@ -174,43 +171,34 @@ spec:
   deletionPolicy: Retain   # Retain | Delete (cloud backends; see below)
 ```
 
-Every field has a default: `spec: {}` gives PostgreSQL 17, size S, 10 GiB, one instance, no backups, database `app`.
-`engine: aurora` (aws-rds only, default `postgres`) picks Aurora PostgreSQL instead of an RDS instance; other backends
-ignore it.
+`spec: {}` gives PostgreSQL 17, size S, 10 GiB, one instance, no backups, database `app`. `engine: aurora` (aws-rds only,
+default `postgres`) picks Aurora instead of an RDS instance.
 
-What the app gets, on every backend: Secret **`<name>-app`** in the XR's namespace with the keys `host`, `port`,
-`dbname`, `username`, `password` and `uri` (`postgresql://...`; the cloud backends add `?sslmode=require`). CNPG's
-operator Secret has a few more (`jdbc-uri`, `pgpass`, ...); only the six are the contract. The XR reports it:
+The app gets Secret **`<name>-app`** in the XR's namespace with keys `host`, `port`, `dbname`, `username`, `password`
+and `uri` (`postgresql://...`; cloud backends add `?sslmode=require`). Only these six are the contract (CNPG adds
+`jdbc-uri`, `pgpass`, ...). Status: `status.backend`, `.endpoint`, `.port`, `.secretName` (on cloud backends once the
+database exists, minutes; bind env vars with `secretKeyRef`), `.backup` (`enabled`, `disabled`, or `unavailable` on a
+cluster without a backup target) and `Ready` (all composed resources ready).
 
-```
-kubectl -n demo get postgresql orders-db     # BACKEND, ENDPOINT, SECRET, READY
-```
-
-`status.backend`, `status.endpoint`, `status.port`, `status.secretName`, `status.backup` (`enabled`, `disabled`, or
-`unavailable` when asked for on a cluster without a backup target) and the `Ready` condition (all composed resources
-ready). On cloud backends `secretName` appears once the database exists (minutes); bind env vars with `secretKeyRef`.
-Apps on OpenChoreo get the XR through the resource type `postgresql` ([below](#postgresql-from-openchoreo)).
-
-Rules enforced at admission (Kyverno `ValidatingPolicy`, also emitted as native `ValidatingAdmissionPolicy`):
+Admission rules (Kyverno `ValidatingPolicy`, also emitted as native `ValidatingAdmissionPolicy`):
 
 - **Only through the XR.** Raw CNPG objects (`Cluster`, `Pooler`, `Database`, `Backup`, `ScheduledBackup`,
   `Publication`, `Subscription`, Barman `ObjectStore`) and the RDS / EC2 / KMS / Cloud SQL / Flexible Server managed
-  resources are denied outside `crossplane-system` and `cnpg-system` unless a ServiceAccount of `crossplane-system`,
-  `cnpg-system` or `kube-system` makes the request (Crossplane composing, providers, the CNPG operator, the garbage
-  collector). Lists: addon crossplane `policy.exemptNamespaces`, `policy.exemptServiceAccountNamespaces`.
-- **Production is HA and backed up.** XRs in OpenChoreo cells labelled `openchoreo.dev/environment: production` must
-  set `highAvailability: true` and `backup.enabled: true` (Deny; Audit on local docker clusters, which have neither an
-  object store nor more than one node).
+  resources are denied outside `crossplane-system` and `cnpg-system`, unless a ServiceAccount of `crossplane-system`,
+  `cnpg-system` or `kube-system` asks (Crossplane, providers, the CNPG operator, the garbage collector). Lists: addon
+  crossplane `policy.exemptNamespaces`, `policy.exemptServiceAccountNamespaces`.
+- **Production is HA and backed up.** XRs in cells labelled `openchoreo.dev/environment: production` must set
+  `highAvailability: true` and `backup.enabled: true` (Deny; Audit on local docker clusters, which have neither an
+  object store nor a second node).
 - **Production cells admit the pinned images.** `openchoreo-trusted-registries-enforce` (addon kyverno-policies) admits
   exactly the operator image and the `imageCatalog` images of `addons/cloudnative-pg/values.yaml` by digest (#327).
-  Bump them there only; an installation override of these pins is denied in production until kyverno-policies reads it.
+  Bump them there only; an installation override is denied in production until kyverno-policies reads it.
 
 ### PostgreSQL from OpenChoreo
 
-Apps on OpenChoreo do not write the XR: they declare a `Resource` of `ClusterResourceType postgresql` in their app repo
-(`deploy/openchoreo/`, synced by the tenant's Argo CD Application), bind it per environment and wire its outputs into
-the Workload. OpenChoreo renders the XR into the environment's cell namespace (name `<resource>-<env>-<hash>`), so the
-connection Secret `<that name>-app` sits next to the workload.
+Apps declare a `Resource` of `ClusterResourceType postgresql` in `deploy/openchoreo/` (synced by the tenant's Argo CD
+Application), bind it per environment and wire its outputs into the Workload. OpenChoreo renders the XR into the cell
+namespace as `<resource>-<env>-<hash>`, so Secret `<that name>-app` sits next to the workload.
 
 ```yaml
 apiVersion: openchoreo.dev/v1alpha1
@@ -245,34 +233,26 @@ spec:
         envBindings: { host: PGHOST, port: PGPORT, database: PGDATABASE, username: PGUSER, password: PGPASSWORD, uri: DATABASE_URL }
 ```
 
-`host`, `port` and `database` arrive as plain env values (from the XR status), `username`, `password` and `uri` as
-`secretKeyRef`s to `<name>-app`: the credentials never leave the data plane. OpenChoreo 1.3.3 has no auto-deploy for
-Resources: a binding stays `ResourceReleaseNotSet` until `resourceRelease` names a release, and the release name is a
-hash of the type's spec and the parameters that changes with every platform change to the type. So no hash goes into
-Git: the annotation `platform.koorikla.io/resource-release: latest` lets the platform keep the pin on the Resource's
-latest release ([promotion.md](promotion.md#resources-no-hand-computed-release)); production pins it in Git. PR
-previews get their own instance automatically ([preview-environments.md](preview-environments.md)). Every environment the component is promoted to needs
-its own binding (the Workload's dependency is shared): ReleaseBindings there wait for it. Production bindings belong in
-`release-bindings/production.yaml` (gated Application, reviewed pull request, docs/promotion.md) and must ask for
-`highAvailability: true` and `backup: { enabled: true }` (policy above).
+- `host`, `port`, `database` arrive as plain values (XR status); `username`, `password`, `uri` as `secretKeyRef`s to
+  `<name>-app`: credentials never leave the data plane.
+- **No hash in Git.** 1.3.3 has no auto-deploy for Resources: a binding stays `ResourceReleaseNotSet` until
+  `resourceRelease` names a release, whose name hashes the type spec and parameters and changes with every platform
+  change to the type. The `resource-release: latest` annotation lets the platform keep the pin on the latest release
+  ([promotion.md](promotion.md#resources-no-hand-computed-release)); production pins it in Git.
+- **One binding per environment** the component reaches (the Workload's dependency is shared; ReleaseBindings wait for
+  it). Production bindings go in `release-bindings/production.yaml` (gated Application, reviewed PR, docs/promotion.md)
+  with `highAvailability: true` and `backup: { enabled: true }`.
+- PR previews get their own instance automatically ([preview-environments.md](preview-environments.md)).
 
 ### Operator view
 
-Opt in per cluster (fleet file); CNPG clusters also need the operator:
+Opt in per cluster: `addons: { crossplane: true }`, plus `cloudnative-pg: true` where the backend is cnpg.
 
-```
-# installations/<inst>/clusters/<name>.yaml
-addons:
-  crossplane: true
-  cloudnative-pg: true      # only where the backend is cnpg
-```
-
-**Backend selection, no developer input.** The addon ApplicationSet passes the cluster's provider label
-(`platform.koorikla.io/provider`, from the fleet file `provider`) as `cluster.provider`; addon crossplane maps it
-(`postgresql.backendByProvider`) to a backend, writes it with the cluster's facts into `EnvironmentConfig
-platform-postgresql`, and installs only the provider family members that backend composes. The API itself (XRD + one
-Composition `postgresql`) is the Configuration package `packages/postgresql`, the same on every cluster; how packages,
-facts, pinning and signature verification work: [crossplane.md](crossplane.md).
+**Backend selection.** The addon ApplicationSet passes the provider label (`platform.koorikla.io/provider`, from the
+fleet file `provider`) as `cluster.provider`; addon crossplane maps it (`postgresql.backendByProvider`) to a backend,
+writes it with the cluster's facts into `EnvironmentConfig platform-postgresql`, and installs only the providers that
+backend composes. The API (XRD + Composition `postgresql`) is Configuration package `packages/postgresql`, the same on
+every cluster ([crossplane.md](crossplane.md): packages, facts, pinning, signature verification).
 
 | Provider fact | Backend | Crossplane providers (xpkg.crossplane.io/crossplane-contrib, pinned by digest) |
 |---|---|---|
@@ -281,74 +261,65 @@ facts, pinning and signature verification work: [crossplane.md](crossplane.md).
 | `gcp-gke` | `gcp-cloudsql` | `provider-family-gcp`, `provider-gcp-sql` |
 | `azure-aks` | `azure-flexible` | `provider-family-azure`, `provider-azure-dbforpostgresql` |
 
-A provider missing from the map fails the render. `postgresql.backend` forces a backend for one cluster (e.g. cnpg on a
-cloud cluster). A `ManagedResourceActivationPolicy` activates only the managed resources the Composition composes
-(`provider.defaultActivations` is empty), so each provider installs a handful of CRDs, not its whole family.
-
-What each backend creates:
+An unmapped provider fails the render; `postgresql.backend` forces one for a cluster (e.g. cnpg on a cloud cluster). A
+`ManagedResourceActivationPolicy` activates only the composed managed resources (`provider.defaultActivations` is
+empty), so each provider installs a handful of CRDs.
 
 | Backend | Composed | Connection Secret | HA | Backup |
 |---|---|---|---|---|
 | cnpg | `Cluster` (image from ClusterImageCatalog `postgresql-standard` of addon cloudnative-pg by major), `PodMonitor` | the operator's `<name>-app` | 3 instances | Barman Cloud `ObjectStore` + daily `ScheduledBackup` under `postgresql.cnpg.backup.destinationPath`/`<cluster>/<ns>/<name>` |
 | aws-rds | KMS `Key`, `SecurityGroup` + ingress 5432 from the node security group, `SubnetGroup`, RDS `Instance` (or Aurora `Cluster` + `ClusterInstance`s) | ExternalSecret from the RDS-managed master secret in Secrets Manager (`manageMasterUserPassword`), store `default` | Multi-AZ instance (Aurora: + reader in another AZ) | automated backups, `retentionDays` |
 | gcp-cloudsql | `DatabaseInstance` (private IP only, TLS required, IAM DB auth flag), `Database`, `User` | ExternalSecret with an ESO `Password` generator, once the private IP is known | `REGIONAL` | backups + PITR |
-| azure-flexible | `FlexibleServer` (delegated subnet, private DNS zone, no public access, Entra + password auth), `FlexibleServerDatabase` | ExternalSecret with an ESO `Password` generator (the server needs the password at creation) | zone-redundant | `retentionDays` (Azure keeps >= 7) |
+| azure-flexible | `FlexibleServer` (delegated subnet, private DNS zone, no public access, Entra + password auth), `FlexibleServerDatabase` | ExternalSecret with an ESO `Password` generator (needed at creation) | zone-redundant | `retentionDays` (Azure keeps >= 7) |
 
-Passwords never pass through Crossplane's function pipeline: CNPG and RDS generate them; on GCP / Azure ESO generates
-one into the connection Secret (generated once; deleting the Secret rotates it) and the provider reads it from there to
-set it on the user. Cloud identifiers are `pg-<namespace>-<name>-<hash of cluster/namespace/name>`. The cloud backends'
-`username` is the owner/master role; least-privilege per-app roles: [#107](https://github.com/koorikla/platform/issues/107).
-
-**Cluster facts** (values only, `installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`; a missing
-required fact fails the render): listed in [crossplane.md](crossplane.md#cluster-facts-environmentconfig). CNPG backups
-need `plugin-barman-cloud.enabled: true` in addon cloudnative-pg.
-
-**Credentials: workload identity only.** Each family's providers share ServiceAccount `crossplane-system/provider-<cloud>`
-(DeploymentRuntimeConfig `provider-<cloud>`): IRSA role annotation or an EKS Pod Identity association, GKE Workload
-Identity, Entra workload identity (`azure.workload.identity/use` + client id). `ClusterProviderConfig/default` uses that
-identity (`IRSA` / `PodIdentity`, `InjectedIdentity`, `OIDCTokenFile`); there is no static key anywhere. On AWS the
-identity of `ClusterSecretStore/default` must be allowed to read the RDS-managed secrets (`rds!*`); as the tenant store,
-every tenant on that cluster can then reference them.
-
-**Deletion.** `deletionPolicy: Retain` (default) gives the cloud resources `managementPolicies` without `Delete`
-(Crossplane v2 managed resources have no `deletionPolicy`) and turns on the cloud's deletion protection: deleting the XR
-leaves the database. `Delete` removes it (with a final snapshot when backups are on). CNPG data lives in PVCs owned by
-the `Cluster` and goes with the XR either way: keep backups on.
-
-**Packaging, Pod Security, tests, upgrades:** [crossplane.md](crossplane.md) (Configuration package, EnvironmentConfig,
-pinned Functions / Providers under PSS `restricted`, offline render tests, the one-off `compositionRef` patch when
-upgrading from the Helm-templated API). Live checks: [#107](https://github.com/koorikla/platform/issues/107).
+- **Passwords** never pass through Crossplane functions: CNPG and RDS generate them; on GCP / Azure ESO generates one
+  into the connection Secret (once; deleting the Secret rotates it) and the provider sets it from there. Cloud
+  identifiers: `pg-<namespace>-<name>-<hash of cluster/namespace/name>`. Cloud `username` is the owner/master role;
+  per-app least-privilege roles: [#107](https://github.com/koorikla/platform/issues/107).
+- **Cluster facts** (values only, `installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`; a missing one
+  fails the render): [crossplane.md](crossplane.md#cluster-facts-environmentconfig). CNPG backups also need
+  `plugin-barman-cloud.enabled: true` in addon cloudnative-pg.
+- **Credentials: workload identity only.** A family's providers share ServiceAccount `crossplane-system/provider-<cloud>`
+  (DeploymentRuntimeConfig `provider-<cloud>`): IRSA annotation or EKS Pod Identity, GKE Workload Identity, Entra
+  workload identity (`azure.workload.identity/use` + client id); `ClusterProviderConfig/default` uses it (`IRSA` /
+  `PodIdentity`, `InjectedIdentity`, `OIDCTokenFile`). No static key anywhere. On AWS `ClusterSecretStore/default`'s
+  identity must read the RDS-managed secrets (`rds!*`), which lets every tenant on that cluster reference them.
+- **Deletion.** `deletionPolicy: Retain` (default) gives the cloud resources `managementPolicies` without `Delete`
+  (Crossplane v2 managed resources have no `deletionPolicy`) and turns on the cloud's deletion protection: deleting the
+  XR keeps the database. `Delete` removes it (final snapshot when backups are on). CNPG data lives in PVCs owned by the
+  `Cluster` and goes with the XR either way: keep backups on.
+- Packaging, Pod Security of Functions / Providers (PSS `restricted`), offline render tests and the one-off
+  `compositionRef` patch when upgrading from the Helm-templated API: [crossplane.md](crossplane.md). Live checks:
+  [#107](https://github.com/koorikla/platform/issues/107).
 
 ## MySQL as a service
 
-The platform's MySQL API (`platform.koorikla.io/v1alpha1 MySQL`, package [`packages/mysql`](../packages/mysql/README.md))
-with one in-cluster backend, [MOCO](https://github.com/cybozu-go/moco) (addon [`moco`](../addons/moco/README.md)).
-The cloud Compositions of the package are layout and are not installed.
+API `platform.koorikla.io/v1alpha1 MySQL` (package [`packages/mysql`](../packages/mysql/README.md)), one backend:
+[MOCO](https://github.com/cybozu-go/moco) (addon [`moco`](../addons/moco/README.md)). The package's cloud Compositions
+are layout only, not installed.
 
-- **Opt in:** cluster file `addons: { crossplane: true, moco: true }`. The one label `addons.platform.koorikla.io/moco`
-  installs the operator, makes addon crossplane install the Configuration `platform-mysql` (pinned `tag@sha256` with its
-  embedded Function) and the EnvironmentConfig `platform-mysql` (facts: backend `moco`, the mysqld image catalog of addon
-  moco), makes the capability gate wait for `mysqlclusters.moco.cybozu.com` + `mysqls.platform.koorikla.io`, and
-  announces the capability that ClusterResourceType `mysql` (`requires-addons: crossplane,moco`) needs.
+- **Opt in:** `addons: { crossplane: true, moco: true }`. The label `addons.platform.koorikla.io/moco` installs the
+  operator, makes addon crossplane install Configuration `platform-mysql` (pinned `tag@sha256` with its embedded
+  Function) and EnvironmentConfig `platform-mysql` (backend `moco`, addon moco's mysqld image catalog), turns on the
+  capability gate's CRD wait, and announces what ClusterResourceType `mysql` (`requires-addons: crossplane,moco`) needs.
 - **Developer view:** a Resource of type `mysql` (parameters `version` 8.4, `database`; per environment `size`,
-  `storageGiB`, `highAvailability`). Outputs: `host`, `port`, `database` as values, `username` / `password` / `uri` as
-  `secretKeyRef`s to `<name>-app` - the same Secret name and keys (`host`, `port`, `dbname`, `username`, `password`,
-  `uri`) as PostgreSQL. The password comes from an ESO `Password` generator; an init Job creates database + user.
-- **Production:** `highAvailability: true` (3 mysqld, semi-sync GTID replication) is required (Kyverno
-  `mysql-production-ha`; Audit on docker). No backups yet: MOCO's BackupPolicy jobs cannot meet Pod Security
-  restricted (upstream cybozu-go/moco#949).
+  `storageGiB`, `highAvailability`). Outputs and Secret `<name>-app` match PostgreSQL (keys `host`, `port`, `dbname`,
+  `username`, `password`, `uri`). The password comes from an ESO `Password` generator; an init Job creates database +
+  user.
+- **Production:** `highAvailability: true` (3 mysqld, semi-sync GTID) is required (Kyverno `mysql-production-ha`; Audit
+  on docker). No backups yet: MOCO's BackupPolicy jobs cannot meet Pod Security restricted (cybozu-go/moco#949).
 - **Security:** tenants cannot create `MySQLCluster` / `BackupPolicy` (Kyverno `mysql-only-through-the-platform-api`).
-  MySQL pods meet Pod Security restricted (pod seccomp + `overwriteContainers` dropping capabilities on agent,
-  copy-moco-init, moco-init; slow-log off). Production cells admit exactly the mysqld catalog image(s) and the
-  moco-agent image of addon moco (`openchoreo-trusted-registries-enforce`). The controller
-  (`moco-system/sa/moco-controller-manager`, ambient) is a platform peer of the cell AuthorizationPolicy: it dials the
-  agent (gRPC 9080) and mysqld (3306).
-- **Footprint:** the operator is one pod requesting 100m / 20Mi (upstream defaults, limit 256Mi here); each MySQL XR
-  adds 1 (or 3) mysqld pods (size S: 512Mi request). Locally `dev1` runs the operator and the API, no MySQL XR.
+  MySQL pods meet restricted (pod seccomp + `overwriteContainers` dropping capabilities on agent, copy-moco-init,
+  moco-init; slow-log off). Production cells admit exactly addon moco's mysqld catalog image(s) and moco-agent image
+  (`openchoreo-trusted-registries-enforce`). The controller (`moco-system/sa/moco-controller-manager`, ambient) is a
+  platform peer of the cell AuthorizationPolicy: it dials the agent (gRPC 9080) and mysqld (3306).
+- **Footprint:** operator 100m / 20Mi (upstream defaults, limit 256Mi); each XR adds 1 (or 3) mysqld pods (size S:
+  512Mi request). Locally `dev1` runs the operator and the API, no MySQL XR.
 
 ## PostgreSQL (CloudNativePG)
 
-One instance (development); `instances: 3` gives a primary + two streaming replicas with automated failover.
+A raw CNPG `Cluster`, for platform namespaces and dev clusters (tenants go through the XR). `instances: 3` gives a
+primary + two streaming replicas with automated failover.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -370,8 +341,8 @@ spec:
 ```
 
 Services: `orders-db-rw` (primary), `orders-db-ro` (replicas), `orders-db-r` (any). Instance metrics (port `metrics`,
-9187, queries from ConfigMap `cnpg-default-monitoring`) need a PodMonitor per cluster (the operator's own
-`spec.monitoring.enablePodMonitor` is deprecated upstream):
+9187, queries from ConfigMap `cnpg-default-monitoring`) need a PodMonitor per cluster (`spec.monitoring.enablePodMonitor`
+is deprecated upstream):
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -389,13 +360,12 @@ spec:
 
 ### Backups
 
-Current upstream path: the **Barman Cloud plugin** (CNPG-I), not the deprecated in-tree `spec.backup.barmanObjectStore`.
-Switch it on per installation (`installations/<inst>/addons/cloudnative-pg/values.yaml`:
-`plugin-barman-cloud: { enabled: true }`); it runs next to the operator in cnpg-system with cert-manager certificates.
-Credentials come from **workload identity**, never static keys: the backup sidecar runs under the PostgreSQL cluster's
-ServiceAccount (same name as the `Cluster`), so bind that identity to a role that may write the bucket prefix - EKS
-Pod Identity association or IRSA (`spec.serviceAccountTemplate` annotation `eks.amazonaws.com/role-arn`), GKE Workload
-Identity, Azure Workload Identity.
+Use the **Barman Cloud plugin** (CNPG-I), not the deprecated in-tree `spec.backup.barmanObjectStore`. Enable it per
+installation (`installations/<inst>/addons/cloudnative-pg/values.yaml`: `plugin-barman-cloud: { enabled: true }`); it
+runs next to the operator with cert-manager certificates. The backup sidecar runs as the cluster's ServiceAccount (same
+name as the `Cluster`): bind that **workload identity** to a role that may write the bucket prefix (EKS Pod Identity or
+IRSA via `spec.serviceAccountTemplate` annotation `eks.amazonaws.com/role-arn`, GKE or Azure Workload Identity). No
+static keys.
 
 ```yaml
 apiVersion: barmancloud.cnpg.io/v1
@@ -446,16 +416,15 @@ spec:
     name: barman-cloud.cloudnative-pg.io
 ```
 
-Hetzner object storage has no workload identity: there the S3 key pair is the one exception, delivered by an
-ExternalSecret from ClusterSecretStore `default` and referenced from `s3Credentials.accessKeyId`/`secretAccessKey`.
-Local docker clusters keep no backups. Restores bootstrap a new `Cluster` with `bootstrap.recovery.source` pointing at
-an `externalClusters` entry that uses the same plugin and ObjectStore.
+Hetzner object storage has no workload identity: its S3 key pair is the one exception, from an ExternalSecret on
+ClusterSecretStore `default`, referenced from `s3Credentials.accessKeyId`/`secretAccessKey`. Local docker clusters keep
+no backups. Restore: a new `Cluster` with `bootstrap.recovery.source` pointing at an `externalClusters` entry using the
+same plugin and ObjectStore.
 
 ## Kafka (Strimzi)
 
-Strimzi 1.x runs Kafka in KRaft mode only: node pools carry the `controller` and/or `broker` roles, there is no
-ZooKeeper section, and the `kafka.strimzi.io/v1` API needs no feature annotations. Smallest useful cluster (one
-combined node, development):
+Strimzi 1.x is KRaft only: node pools carry `controller` and/or `broker` roles, no ZooKeeper section, and
+`kafka.strimzi.io/v1` needs no feature annotations. Smallest useful cluster (one combined node, development):
 
 ```yaml
 apiVersion: kafka.strimzi.io/v1
@@ -520,22 +489,17 @@ Production: separate `controller` (3) and `broker` (3+) pools, replication facto
 SCRAM listeners with `KafkaUser`s. Broker metrics: `spec.kafka.metricsConfig` (Strimzi metrics reporter or JMX
 exporter) plus a PodMonitor selecting `strimzi.io/cluster: <name>`.
 
-**NetworkPolicies (#210).** The operator runs with `STRIMZI_NETWORK_POLICY_GENERATION=false` (addon `strimzi`): its
-per-cluster policies open only the Kafka ports (replication 9091, controller 9090, listeners), but Istio ambient carries
-every mesh connection to the pod's HBONE port `15008/tcp`, so in a cell they drop broker <-> broker, client -> broker
-and operator -> broker traffic. Instead addon `kyverno-policies` generates NetworkPolicy `platform-strimzi` into every
-ambient cell (`openchoreo-cell-strimzi`, [networking.md](networking.md#strict-mtls-in-cell-namespaces)): pods with
-`strimzi.io/cluster` admit the cell's own pods, `openchoreo.dev/system-component` pods (Prometheus agent) and the
-Strimzi and KEDA operators on any port, plus kubelet probes. Inside the tunnel the CNI sees no Kafka port anyway; which
-mesh identity gets in is decided by `platform-cell-peers` (STRICT cells). A Kafka outside an ambient cell (a plain
-namespace such as `demo` above, or a cell with `istio.io/dataplane-mode=none`) gets no NetworkPolicy: write one, and
-include `15008/tcp` if the namespace is in the mesh. `hack/tests/test_mesh_contracts.sh` fails when the operator's
-generation is back on or a policy selecting Kafka pods would drop 15008 from the cell, the operator or KEDA.
+**NetworkPolicies (#210).** In an ambient cell the operator's own per-listener policies would drop HBONE (`15008/tcp`),
+so addon `strimzi` sets `STRIMZI_NETWORK_POLICY_GENERATION=false` and addon `kyverno-policies` generates
+`platform-strimzi` instead ([networking.md](networking.md#strict-mtls-in-cell-namespaces)). A Kafka outside an ambient
+cell (a plain namespace like `demo`, or a cell with `istio.io/dataplane-mode=none`) gets no policy: write one, including
+`15008/tcp` if the namespace is in the mesh. `hack/tests/test_mesh_contracts.sh` fails when the operator's generation is
+back on or a policy selecting Kafka pods would drop 15008 from the cell, the operator or KEDA.
 
 ## KEDA and OpenChoreo workloads
 
-A `ScaledObject` targets a Deployment; KEDA then owns an HPA `keda-hpa-<name>` and scales 0 <-> 1 itself. Outside
-OpenChoreo (platform namespaces, a dev cluster) write one directly:
+A `ScaledObject` targets a Deployment; KEDA owns an HPA `keda-hpa-<name>` and scales 0 <-> 1 itself. Outside OpenChoreo
+(platform namespaces, a dev cluster) write one directly:
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
@@ -557,17 +521,7 @@ spec:
         lagThreshold: "50"
 ```
 
-Ownership rules on OpenChoreo-rendered Deployments:
-
-- **Use the `keda-scaler` trait**, not a hand-written ScaledObject: app repos cannot sync KEDA objects (tenant
-  AppProject), and the trait also removes `spec.replicas` from the rendered Deployment. Without that, the component
-  types' `replicas: ${environmentConfigs.replicas}` would be re-applied by the cluster agent and reset what KEDA scaled
-  to ([above](#readiness-and-replicas)).
-- **One autoscaler per Deployment.** `keda-scaler` refuses to render next to the `horizontal-pod-autoscaler` trait (a
-  `postRenderValidation`); KEDA's admission webhook would reject the ScaledObject anyway.
-- **Triggers** are KEDA scalers as in the KEDA docs (`type`, `metadata` strings, optional `name`, `metricType`,
-  `authenticationRef`). `authenticationRef` names a `TriggerAuthentication` in the cell namespace; the platform offers
-  no `ClusterTriggerAuthentication` to tenants (it would hand them platform credentials).
+On OpenChoreo components use the trait:
 
 ```yaml
 # component.yaml (app repo)
@@ -591,21 +545,22 @@ spec:
     scaler: { minReplicas: 2, maxReplicas: 8 }   # or { enabled: false }
 ```
 
-The rendered ScaledObject is `<component>-<env>-<hash>-<instanceName>` next to the Deployment; KEDA owns an HPA
-`keda-hpa-<that name>`.
+It renders ScaledObject `<component>-<env>-<hash>-<instanceName>` next to the Deployment (HPA `keda-hpa-<that name>`).
 
-- **Istio ambient.** Cell namespaces are ambient-enrolled and refuse plaintext (`STRICT`,
-  [networking.md](networking.md#strict-mtls-in-cell-namespaces)), so the operator namespaces `keda`, `strimzi` and
-  `cnpg-system` are mesh clients too (namespace label `istio.io/dataplane-mode: ambient`, `namespace.ambient` in each
-  addon): the CNPG operator reaches instance pods (`:8000`), the Strimzi operator the brokers, KEDA its scaler
-  endpoints (Kafka bootstrap, Prometheus, an app's metrics URL) over HBONE mTLS. Verified live with CNPG; Strimzi and
-  KEDA follow the same path (VERIFY). The Prometheus agent pod is a mesh client too (#209), so a PostgreSQL cluster's
-  per-cluster PodMonitor (`:9187`) in a STRICT cell is scraped over HBONE mTLS
-  ([networking.md](networking.md#strict-mtls-in-cell-namespaces)). An app's metrics URL on a component pod is also behind OpenChoreo's per-component NetworkPolicy (same cell
-  and system components only). Pod CPU/memory targets are exact in ambient (no sidecar inflating the pod's usage).
-  The kube-apiserver -> KEDA metrics apiserver and admission webhook paths come from outside the mesh and stay
-  accepted (no `PeerAuthentication` in the operator namespaces). Scaled to zero, requests to the component fail until
-  KEDA scales it up (no HTTP activator; the KEDA HTTP add-on is not installed).
+- **Trait, not a hand-written ScaledObject:** app repos cannot sync KEDA objects (tenant AppProject), and only the
+  trait drops `spec.replicas`; otherwise the agent re-applies `replicas: ${environmentConfigs.replicas}` and resets
+  KEDA ([above](#readiness-and-replicas)).
+- **One autoscaler per Deployment:** `keda-scaler` refuses to render next to `horizontal-pod-autoscaler`
+  (`postRenderValidation`); KEDA's webhook would reject it anyway.
+- **Triggers** are KEDA scalers (`type`, `metadata` strings, optional `name`, `metricType`, `authenticationRef`).
+  `authenticationRef` names a `TriggerAuthentication` in the cell namespace; tenants get no
+  `ClusterTriggerAuthentication` (it would hand them platform credentials).
+- **Istio ambient.** The operator namespaces `keda`, `strimzi` and `cnpg-system` are mesh clients of the STRICT cells
+  ([networking.md](networking.md#strict-mtls-in-cell-namespaces)): KEDA reaches its scaler endpoints (Kafka bootstrap,
+  Prometheus, an app's metrics URL) over HBONE mTLS. Verified live with CNPG; Strimzi and KEDA follow the same path
+  (VERIFY). An app's metrics URL is also behind OpenChoreo's per-component NetworkPolicy (same cell and system
+  components only). CPU/memory targets are exact in ambient (no sidecar).
+- **Scaled to zero**, requests fail until KEDA scales up (no HTTP activator; the KEDA HTTP add-on is not installed).
 
 ## Verify on a cluster
 

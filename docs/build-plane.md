@@ -1,10 +1,19 @@
 # Build plane: OpenChoreo workflow plane + Harbor
 
-In-cluster builds are the **primary, CI-provider-agnostic build path**: a Component names a ClusterWorkflow, a
+In-cluster builds are the **primary, CI-provider-agnostic build path**. A Component names a ClusterWorkflow; a
 WorkflowRun (Backstage "Build", `occ`, or the platform's auto-build trigger on every push) runs it on the OpenChoreo
-workflow plane, the image lands in Harbor signed and scanned, and the new image ref is **committed to the app repo** so
-Argo CD deploys it. GitHub Actions ([`ci/`](../ci/) reusable workflows) remain an
-optional path that runs the same scripts. Teams choose per Component.
+workflow plane on mgmt; the image lands in Harbor signed and scanned; the new image ref is **committed to the app repo**
+and Argo CD deploys it. GitHub Actions ([`ci/`](../ci/) reusable workflows) stay an optional path that runs the same
+scripts; teams choose per Component.
+
+| Task | How |
+|---|---|
+| Build now | Backstage → component → **Build**, `occ`, or a `WorkflowRun` (example in [demo.md](demo.md) step 4) |
+| Watch auto-builds | `kubectl -n default get workflowrun -l platform.koorikla.io/trigger=auto-build`; [Operate](#auto-build-poll-or-webhook) |
+| Change a step script | two PRs: scripts, then the toolbox pin ([Step scripts](#step-scripts-ciscriptsworkflow)) |
+| Checkout fails `no GitHub token for <repo>` | install the GitHub App on that repo ([Git credentials](#git-credentials)) |
+| Verify an image | `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` ([Signing](#signing)) |
+| Trust Harbor's CA in a browser / docker | `kubectl -n harbor get secret harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' \| base64 -d` |
 
 ```
 WorkflowRun (Backstage / occ / auto-build)         mgmt
@@ -17,12 +26,10 @@ WorkflowRun (Backstage / occ / auto-build)         mgmt
           → ComponentRelease → ReleaseBinding development → data plane (unchanged delivery path, docs/openchoreo.md)
 ```
 
-Git stays the source of truth: no step writes a Workload into the cluster (upstream's samples PUT the Workload through
-the OpenChoreo API; here the Workload changes only by commit).
-
-Steps re-run a pod that was killed under them (a k3s/node restart ends every container with exit 255 "Unknown") or hit
-an Argo error, at most twice with backoff; a step that fails on its own exit code fails the run (`retryStrategy` in
-`koorikla-build` / `koorikla-helm-chart`). A failed run never reaches `gitops`, so nothing deployed changes.
+No step writes a Workload into the cluster; it changes only by commit. Steps retry at most twice with backoff when
+their pod was killed (a k3s/node restart ends containers with exit 255 "Unknown") or Argo errored; a step failing on its
+own exit code fails the run (`retryStrategy` in `koorikla-build` / `koorikla-helm-chart`) and never reaches `gitops`, so
+nothing deployed changes.
 
 ## What runs where
 
@@ -37,9 +44,9 @@ an Argo error, at most twice with backoff; a step that fails on its own exit cod
 ## Build ClusterWorkflows
 
 One ClusterWorkflow per stack (`addons/openchoreo-platform/values.yaml` `buildWorkflows.stacks`), all running
-`koorikla-build` with the [`ci/`](../ci/) toolbox
-`ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44c…948e` (multi-arch, cosign-signed) for checkout, scans, SBOM, signing and
-the GitOps commit, and the official toolchain image for the stack checks:
+`koorikla-build` with the [`ci/`](../ci/) toolbox `ghcr.io/koorikla/platform/ci-toolbox:dbf92f6@sha256:c44c…948e`
+(multi-arch, cosign-signed) for checkout, scans, SBOM, signing and the GitOps commit, and the official toolchain image
+for the checks:
 
 | ClusterWorkflow | Checks (ci/scripts) | Toolchain image (default, override per Component) |
 |---|---|---|
@@ -56,9 +63,9 @@ reaches a Workload.
 
 ### Step scripts (ci/scripts/workflow)
 
-`koorikla-build` and `koorikla-helm-chart` hold only data: the DAG, parameters, env, volumes, security context and
-resources. Each step runs one versioned script from [`ci/scripts/workflow/`](../ci/scripts/workflow). The script header
-lists its purpose, env in and outputs. The scripts ship in the toolbox image at `/opt/koorikla-ci/scripts`:
+`koorikla-build` and `koorikla-helm-chart` hold only data: DAG, parameters, env, volumes, security context, resources.
+Each step runs one versioned script from [`ci/scripts/workflow/`](../ci/scripts/workflow) (header: purpose, env in,
+outputs), shipped in the toolbox image at `/opt/koorikla-ci/scripts`:
 
 | Step | Script | Image |
 |---|---|---|
@@ -73,20 +80,15 @@ lists its purpose, env in and outputs. The scripts ship in the toolbox image at 
 - **The toolbox pin decides which scripts run** (`images.TOOLBOX_IMAGE`, addon openchoreo-workflow-plane). A change
   under `ci/scripts/` takes two PRs: the first merges the scripts and `ci-toolbox.yaml` publishes
   `ci-toolbox:<sha7>@sha256:…` from main; the second bumps the pin. Rollback: revert the pin bump.
-- **Tests run the scripts directly.** `hack/tests/test_build_guards.sh` covers the guards, `gitops.sh` and `sign.sh`.
-  It also checks that the rendered templates contain no `eval`, no inline `args` script and no env var holding code.
+- **Tests run the scripts directly.** `hack/tests/test_build_guards.sh` covers the guards, `gitops.sh` and `sign.sh`, and
+  checks that the rendered templates contain no `eval`, no inline `args` script and no env var holding code.
   `hack/tests/test_workflow_scripts.sh` covers the checkout loop guard, check-env, build-args and the wrappers.
-- **Logs:** each step prints its `>> ...` lines (Backstage run logs, `argo logs`).
-- **build-args:** every `docker.buildArgs` entry reaches BuildKit as `--opt build-arg:NAME=VALUE`. Until #393 the inline
-  build step dropped the last entry: the parsed list had no final newline, so `while read` skipped it. A single
-  build-arg was never passed.
-
-Evaluated and rejected:
-
-- **Argo's native `git` input artifact** for checkout: ESO creates the run's token Secret after the pod starts,
-  artifacts load before that, and Argo has no per-prefix credential fence.
-- **Guards only in the ClusterWorkflow schema:** the schema is the first line. `guards.sh` is the deliberate second
-  line, which also holds when the template is reached without the ClusterWorkflow.
+- **Logs:** each step prints `>> ...` lines (Backstage run logs, `argo logs`).
+- **build-args:** every `docker.buildArgs` entry reaches BuildKit as `--opt build-arg:NAME=VALUE`, the last one
+  included (#393).
+- Rejected: Argo's native `git` input artifact for checkout (ESO creates the run's token Secret after the pod starts,
+  artifacts load before that, and Argo has no per-prefix credential fence). `guards.sh` is a deliberate second line
+  behind the ClusterWorkflow schema, holding also when the template is reached without the ClusterWorkflow.
 
 ### Using it from a Component (app repo)
 
@@ -109,21 +111,18 @@ spec:
       # gitops: { workloadPath: deploy/openchoreo/workload.yaml }
 ```
 
-Trigger a build: Backstage → component → **Build** (WorkflowRun with live task status and logs), `occ`, a
-`WorkflowRun` object, or a push to the build branch when the Component sets `autoBuild: true` ("Auto-build" below).
-OpenChoreo's matcher treats appPath `.` as "every change", so the hand-off commit would re-trigger the build:
-`checkout` skips commits that only touch the GitOps directory (loop guard), the auto-build trigger does not even start
-a run for them, and the commit message carries `[skip ci]` for the GitHub Actions path. koorikla/hello-world builds
-only here; its GitHub Actions run PR checks (`app-go.yaml` with `build_container: false`). Building and signing on
-GitHub Actions stays available to any app through the app-<stack>.yaml workflows (templates/ use it).
+Loop guard: OpenChoreo's matcher treats appPath `.` as "every change", so `checkout` skips commits that only touch the
+GitOps directory, auto-build starts no run for them, and the hand-off commit carries `[skip ci]` for GitHub Actions. koorikla/hello-world builds only here; its GitHub Actions run PR checks (`app-go.yaml`
+with `build_container: false`). Building and signing on GitHub Actions stays available to any app through the
+app-<stack>.yaml workflows (templates/ use it).
 
 ### Auto-build (poll or webhook)
 
-`spec.autoBuild: true` (OpenChoreo's own flag) builds every new commit of the Component's build branch. OpenChoreo
-1.3.3 has no polling, only a webhook into openchoreo-api (`POST /api/v1alpha1/autobuild`, secret
-`openchoreo-control-plane/git-webhook-secrets`) whose runs get random names (a redelivered push builds twice), and a
-local k3d stack cannot receive webhooks at all. The platform therefore owns the trigger, selected per installation in
-`installation.yaml` `openchoreo.workflowPlane.autoBuild`:
+`spec.autoBuild: true` (OpenChoreo's own flag) builds every new commit of the Component's build branch. OpenChoreo 1.3.3
+has only a webhook into openchoreo-api (`POST /api/v1alpha1/autobuild`, secret
+`openchoreo-control-plane/git-webhook-secrets`), whose runs get random names (a redelivered push builds twice), and a
+local k3d stack cannot receive webhooks. So the platform owns the trigger, per installation in `installation.yaml`
+`openchoreo.workflowPlane.autoBuild`:
 
 | Trigger | Installations | Push → build |
 |---|---|---|
@@ -131,7 +130,7 @@ local k3d stack cannot receive webhooks at all. The platform therefore owns the 
 | `webhook` | aws-example, gcp-example, hetzner-example | GitHub App webhook → `https://events.<host>/github` (control-plane Gateway, TLS listener) → Argo Events EventSource `github` (checks `X-Hub-Signature-256` with store key `github-webhook`, never calls GitHub) → Sensor `auto-build` → a Workflow for the pushed repository; the CronWorkflow still runs every 30 min to catch missed deliveries |
 | `none` | - | Backstage / `occ` / `kubectl` only |
 
-Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org ns>` (addon openchoreo-platform,
+Both run Argo WorkflowTemplate `auto-build` in `workflows-<org ns>` (addon openchoreo-platform,
 `files/auto-build/auto_build.py`). One pass:
 
 1. Lists Components with `autoBuild: true` and reads repository URL, branch and commit parameter paths from their
@@ -140,59 +139,29 @@ Both triggers run the same Argo WorkflowTemplate `auto-build` in `workflows-<org
 2. Reads the branch head (`GET /repos/<owner>/<repo>/commits/<branch>`), conditionally with the cached ETag.
 3. Stops if WorkflowRun `<component>-<sha[:12]>` exists, or while an earlier auto-build run of the component is still
    running (no out-of-order image bumps; a run unfinished after 2 h no longer blocks).
-4. Reads `spec.source.commit` and `spec.container.image` from the Workload file at the head commit: when every change
-   since that commit is inside the GitOps directory (the hand-off commit itself, promotion merges), there is nothing to
-   build, as long as the image is still there (step 5).
-5. Registry check (`registry.type: harbor`): `HEAD /v2/<repo>/manifests/<digest>` of the pinned image in Harbor. When
-   Harbor answers 404 (a clean bootstrap: git pins a digest of the previous stack's Harbor; or a garbage-collected
-   artifact), it rebuilds the Workload's own `spec.source.commit` as WorkflowRun `<component>-<sha[:12]>-<digest[:8]>`.
-   Never the branch head: that is the GitOps-only hand-off commit the build's checkout skips. The hand-off then commits
-   the new digest and Argo CD rolls development out again, about 6 minutes after the first pass. An unknown answer
-   (Harbor still starting, any other status) never rebuilds; the next pass asks again. Images outside the platform
-   registry are not checked. A failed rebuild is retried as `<...>-r2`, then `-r3`, each 5 minutes after the previous
-   one failed (a k3s restart mid-bootstrap once killed hello-world's `check` pod and left development in
-   ImagePullBackOff). After the third failure the pass logs `rebuild ... FAILED 3 times` and exits non-zero once per head
-   (`kubectl -n workflows-default logs -l workflows.argoproj.io/cron-workflow=auto-build-poll`); state
-   `rebuild-failed` in `auto-build-state`. A failed build never changes what is deployed: only the GitOps hand-off after
-   `sign` does, so development keeps its last pinned image.
+4. Reads `spec.source.commit` and `spec.container.image` from the Workload file at the head: when every change since
+   that commit is inside the GitOps directory (the hand-off commit itself, promotion merges), there is nothing to build,
+   as long as the image still exists (step 5).
+5. Registry check (`registry.type: harbor`, platform registry images only): `HEAD /v2/<repo>/manifests/<digest>` of
+   the pinned image. On 404 (clean bootstrap: git pins the previous stack's digest; or a garbage-collected artifact) it
+   rebuilds the Workload's own `spec.source.commit`, never the GitOps-only head, as WorkflowRun
+   `<component>-<sha[:12]>-<digest[:8]>`; development rolls out again about 6 minutes after the first pass. Any other
+   answer (Harbor starting) never rebuilds; the next pass asks again. A failed rebuild retries as `<...>-r2`, then `-r3`,
+   5 minutes apart; after the third the pass logs `rebuild ... FAILED 3 times`, exits non-zero once per head
+   (`kubectl -n workflows-default logs -l workflows.argoproj.io/cron-workflow=auto-build-poll`) and records
+   `rebuild-failed` in `auto-build-state`. Development keeps its last pinned image meanwhile.
 6. Otherwise creates WorkflowRun `<component>-<sha[:12]>` (labels `openchoreo.dev/component`, `openchoreo.dev/project`,
    `platform.koorikla.io/trigger: auto-build`; annotation `platform.koorikla.io/commit`) from the Component's workflow
-   with `repository.revision.commit` set to the head. From there it is an ordinary build: hand-off commit, Argo CD,
-   `autoDeploy` to development.
+   with `repository.revision.commit` set to the head. From there it is an ordinary build.
 
-**Idempotent per commit.** The run name is derived from the SHA (a second create is `AlreadyExists`; a rebuild's from
-the SHA and the missing digest, so one rebuild per missing digest), and "already built" is read from git (step 4) plus
-the registry (step 5), never from cluster state such as WorkflowRuns or ComponentReleases. ConfigMap `auto-build-state` (ETags, last handled head per
-Component) is only a cache: restarts, a lost cache, garbage-collected runs (`ttlAfterCompletion`) and redelivered or
-replayed webhooks never build a commit twice. A webhook payload only selects the repository; the head always comes from
-GitHub, so a forged push can at most cause one extra reconcile.
-
-**Credentials.** ESO's `GithubAccessToken` generator mints an installation token of the platform's GitHub App (store
-key `autoBuild.github.key`, default `promotion-gate-github`, through the scoped store `workflows`) restricted to
-`contents: read`, re-minted every 30 min (GitHub expires it after 1 h). The pass mounts only that token; the App key
-stays in a Secret that only ESO reads. No PAT.
-
-**PR heads.** With `installation.yaml` `previews.enabled` the same pass also builds the head of every open pull request
-of an opted-in Component (WorkflowRun `<component>-pr<n>-<sha[:12]>`, label `platform.koorikla.io/trigger: preview`,
-`gitops.enabled: false`) for its preview environment: [preview-environments.md](preview-environments.md).
-
-**Resource pins.** Every pass (Kubernetes API only, also when GitHub paused it) moves `spec.resourceRelease` of each
-ResourceReleaseBinding annotated `platform.koorikla.io/resource-release: latest` to its Resource's latest release,
-except in gated environments: [promotion.md](promotion.md#resources-no-hand-computed-release).
-
-**Least privilege.** ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create`
-WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and
-Argo's task results. Registry: the pull-only robot `robot$nodes` (`autoBuild.registry`, the nodes' and Kyverno's) and
-the registry CA (store `mgmt-harbor`, name-scoped), never the builder robot. Network: the run namespace's default-deny
-policy (DNS, API server, the Harbor Gateway proxy, public 443), no ingress. Webhook
-mode: the Sensor may only create Workflows in the run namespace, and ValidatingAdmissionPolicy
-`argo-events-auto-build-workflows` pins them to WorkflowTemplate `auto-build` with only the `repository` argument.
-
-**Rate limits.** Per pass one conditional request per repository and branch (a 304 does not count against GitHub's
-limit), two more (Workload file, compare) only when the head moved, plus one manifest `HEAD` to Harbor per up-to-date
-Component; a pass pauses when fewer than `minRateRemaining`
-requests are left and creates at most `maxRunsPerPass` runs. Values: addon openchoreo-platform `autoBuild`, addon
-argo-events `autoBuildWebhook`.
+| | |
+|---|---|
+| Idempotent per commit | run names derive from the SHA (+ missing digest for rebuilds), so a second create is `AlreadyExists`. "Already built" comes from git (step 4) and the registry (step 5), never from cluster state; ConfigMap `auto-build-state` (ETags, last handled head per Component) is only a cache, so restarts, garbage-collected runs (`ttlAfterCompletion`) and replayed webhooks never build a commit twice. A webhook payload only selects the repository (the head comes from GitHub): a forged push causes at most one extra reconcile |
+| Credentials | ESO's `GithubAccessToken` generator mints an installation token of the platform's GitHub App (store key `autoBuild.github.key`, default `promotion-gate-github`, through the scoped store `workflows`) with `contents: read`, re-minted every 30 min (GitHub expires it after 1 h). The pass mounts only that token; the App key stays in a Secret only ESO reads. No PAT |
+| PR heads | with `installation.yaml` `previews.enabled` the pass also builds the head of every open pull request of an opted-in Component (WorkflowRun `<component>-pr<n>-<sha[:12]>`, label `platform.koorikla.io/trigger: preview`, `gitops.enabled: false`): [preview-environments.md](preview-environments.md) |
+| Resource pins | every pass (Kubernetes API only, also when GitHub paused it) moves `spec.resourceRelease` of each ResourceReleaseBinding annotated `platform.koorikla.io/resource-release: latest` to its Resource's latest release, except in gated environments: [promotion.md](promotion.md#resources-no-hand-computed-release) |
+| Least privilege | ServiceAccount `auto-build`: `list` Components, `get` (Cluster)Workflows, `get`/`list`/`create` WorkflowRuns in the org namespace; in the run namespace `create` ConfigMaps, `get`/`update` only `auto-build-state`, and Argo's task results. Registry: the pull-only robot `robot$nodes` (`autoBuild.registry`, the nodes' and Kyverno's) and the registry CA (store `mgmt-harbor`, name-scoped), never the builder robot. Network: the run namespace's default-deny policy (DNS, API server, the Harbor Gateway proxy, public 443), no ingress. Webhook mode: the Sensor may only create Workflows in the run namespace, and ValidatingAdmissionPolicy `argo-events-auto-build-workflows` pins them to WorkflowTemplate `auto-build` with only the `repository` argument |
+| Rate limits | per pass one conditional request per repository and branch (a 304 does not count against GitHub's limit), two more (Workload file, compare) only when the head moved, plus one manifest `HEAD` to Harbor per up-to-date Component; a pass pauses when fewer than `minRateRemaining` requests are left and creates at most `maxRunsPerPass` runs. Values: addon openchoreo-platform `autoBuild`, addon argo-events `autoBuildWebhook` |
 
 Operate:
 
@@ -203,86 +172,85 @@ kubectl -n workflows-default get cm auto-build-state -o jsonpath='{.data.state\.
 kubectl -n default get workflowrun -l platform.koorikla.io/trigger=auto-build
 ```
 
-Opt out per Component with `autoBuild: false`, per installation with `none`. Webhook setup (cloud): GitHub App
-settings → Webhook active, URL `https://events.<openchoreo.controlPlane.host>/github`, secret = store key
-`github-webhook` property `secret`, subscribe to Push. The webhook path renders and is tested offline; live
-verification: [#166](https://github.com/koorikla/platform/issues/166).
+Opt out per Component with `autoBuild: false`, per installation with `none`. Webhook setup (cloud): GitHub App settings
+→ Webhook active, URL `https://events.<openchoreo.controlPlane.host>/github`, secret = store key `github-webhook`
+property `secret`, subscribe to Push. The webhook path renders and is tested offline; live verification:
+[#166](https://github.com/koorikla/platform/issues/166).
 
 ### GitOps hand-off
 
 `gitops` clones the source repo at the built branch, sets `spec.container.image` (`<repo>:<short sha>@sha256:<digest>`)
 and `spec.source.commit` in `deploy/openchoreo/workload.yaml` with yq, and commits the file through the GitHub contents
 API (`PUT /repos/<owner>/<repo>/contents/<path>` with the blob `sha` as compare-and-swap; a 409 re-reads the branch and
-retries). GitHub authors, commits and signs that commit as the App's bot (`<app-slug>[bot]`, Verified). Only an
-OpenChoreo `Workload` at `deploy/openchoreo/<name>.yaml` is ever rewritten (schema pattern on `gitops.workloadPath`,
-plus a check in `gitops.sh`: no symlink on the path, `kind: Workload`). A protected build branch needs the App on the
-branch-protection or ruleset bypass list (hello-world's `main` is unprotected). Argo CD (Application
-`<project>-<app>`) syncs; `autoDeploy` cuts the ComponentRelease and binds development; staging/production stay
-promotion-by-PR (docs/openchoreo.md "How GitOps promotion works").
+retries). GitHub authors, commits and signs it as the App's bot (`<app-slug>[bot]`, Verified). Only an OpenChoreo
+`Workload` at `deploy/openchoreo/<name>.yaml` is ever rewritten (schema pattern on `gitops.workloadPath`, plus a check in
+`gitops.sh`: no symlink on the path, `kind: Workload`). A protected build branch needs the App on the branch-protection
+or ruleset bypass list (hello-world's `main` is unprotected). Argo CD (Application `<project>-<app>`) syncs;
+`autoDeploy` cuts the ComponentRelease and binds development; staging/production stay promotion-by-PR
+(docs/openchoreo.md "How GitOps promotion works").
 
 ### Git credentials
 
 No long-lived token. Every WorkflowRun renders an ESO `GithubAccessToken` generator `<run>-git` in `workflows-<org ns>`
-that mints an installation token of the platform GitHub App (store key `buildWorkflows.github.key`, default
+that mints a platform GitHub App installation token (store key `buildWorkflows.github.key`, default
 `promotion-gate-github`) for exactly one repository, the name of the run's `repository.url` (OpenChoreo CEL, `.git`
-removed), with `permissions` `contents: write` (runs with `gitops.enabled: false`, e.g. PR previews, and helm-chart
-builds: `contents: read`). ExternalSecret `<run>-git` turns
-it into the basic-auth Secret the checkout and gitops pods mount (`x-access-token`), re-minted every
-`tokenRefreshInterval` (30 min; GitHub expires tokens after 1 h); both are deleted with the WorkflowRun. A build can
-therefore neither read nor push to another repository, even one the App is installed on.
+removed), with `contents: write` (`contents: read` for runs with `gitops.enabled: false`, e.g. PR previews, and for
+helm-chart builds). ExternalSecret `<run>-git` turns it into the basic-auth Secret the checkout and gitops pods mount
+(`x-access-token`), re-minted every `tokenRefreshInterval` (30 min; GitHub expires tokens after 1 h); both are deleted
+with the WorkflowRun. A build can neither read nor push another repository, even one the App is installed on.
 
 The App's private key reaches only ESO: ExternalSecret `build-github-app` (template `build-github.yaml`) reads it
-through the scoped store `workflows`; no pod mounts it. OpenChoreo's workflow-plane agent applies the per-run
-generators, so it gets a Role for `githubaccesstokens` in the run namespace only. Requirements: the App has
-Contents: Read and write and is installed on the repository. If it is not, GitHub refuses the token, the Secret never
-appears, and checkout fails with `no GitHub token for <repo>: Secret <run>-git was not created ...`. The ExternalSecret
-only reports `could not get secret data from provider`; GitHub's answer (`422 ... not accessible to the parent
-installation`) is in the ESO controller log (`kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`). Fix: GitHub → Settings → Applications → the App →
-Configure → Repository access → add the repository.
+through the scoped store `workflows`; no pod mounts it. The workflow-plane agent applies the per-run generators, so it
+gets a Role for `githubaccesstokens` in the run namespace only.
+
+**Troubleshooting:** the App needs Contents: Read and write and must be installed on the repository. If it is not,
+GitHub refuses the token, the Secret never appears, and checkout fails with `no GitHub token for <repo>: Secret
+<run>-git was not created ...`. The ExternalSecret only says `could not get secret data from provider`; GitHub's answer
+(`422 ... not accessible to the parent installation`) is in the ESO controller log
+(`kubectl -n external-secrets logs deploy/external-secrets | grep <run>-git`). Fix: GitHub → Settings → Applications →
+the App → Configure → Repository access → add the repository.
 
 ### Multi-arch
 
 `platforms` defaults to `linux/amd64,linux/arm64`. Dockerfiles that cross-compile (`FROM --platform=$BUILDPLATFORM`,
 like hello-world's Go build) need no emulation. `RUN` steps of a foreign architecture need QEMU binfmt handlers on the
 build node's kernel (present on the dev host: an arm64 `RUN uname -m` printed `aarch64` in rootless BuildKit on the
-amd64 mgmt node; install with `tonistiigi/binfmt` where missing - it changes the host kernel, so it is not done by the
-platform). Narrow `platforms` per Component to build only the node's architecture.
+amd64 mgmt node). Install them with `tonistiigi/binfmt` where missing; it changes the host kernel, so the platform does
+not. Narrow `platforms` per Component to build only the node's architecture.
 
 ### Security posture of build pods
 
-- **Repository allowlist.** Builds clone from and push to only the installation's allowed repository prefixes
-  (`buildWorkflows.git.allowedRepositoryPrefixes`, default `installation.githubOrg` + `/`, each `https://<host>/<owner>/`).
-  Three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name after a prefix);
-  `ci/scripts/workflow/guards.sh`, sourced by `checkout.sh` and `gitops.sh` (same check, git config only from the
-  environment, `protocol.allow=never` except https); and git's credential helper registered per prefix (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so
-  the token never answers a 401 from another host or owner, redirects included. The token itself only works for the
-  run's repository ([Git credentials](#git-credentials)). Branch, commit and path parameters
-  have patterns against option injection (`--upload-pack=…`) and traversal; the build step refuses a context or
-  Dockerfile that resolves outside the checkout (that pod also mounts the registry push credentials).
-  `hack/tests/test_build_guards.sh` exercises all of it with real `git credential fill` (negative cases first).
-  Residual: any build may use any repo under an allowed owner (a tenant can rebuild another tenant's repo at an old
-  commit); per-repo GitHub App installation tokens close that ([#34](https://github.com/koorikla/platform/issues/34)).
-- Pod Security `restricted` for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
-  capabilities dropped, read-only root where the tool allows) **except `build`**: rootless BuildKit runs as uid 1000
+- **Repository allowlist.** Builds clone from and push to only the allowed prefixes
+  (`buildWorkflows.git.allowedRepositoryPrefixes`, default `installation.githubOrg` + `/`, each
+  `https://<host>/<owner>/`), in three layers: the ClusterWorkflow schema `pattern` on `repository.url` (one repo name
+  after a prefix); `ci/scripts/workflow/guards.sh`, sourced by `checkout.sh` and `gitops.sh` (same check, git config only
+  from the environment, `protocol.allow=never` except https); and git's credential helper registered per prefix
+  (`credential.<prefix>.helper`, no global `GIT_ASKPASS`), so the token never answers a 401 from another host or owner,
+  redirects included. The token itself only works for the run's repository ([Git credentials](#git-credentials)).
+  Branch, commit and path parameters have patterns against option injection (`--upload-pack=…`) and traversal; the
+  build step refuses a context or Dockerfile outside the checkout. `hack/tests/test_build_guards.sh` exercises it with
+  real `git credential fill`. Residual: a build may use any repo under an allowed owner (e.g. rebuild another tenant's
+  repo at an old commit), [#34](https://github.com/koorikla/platform/issues/34).
+- **Pod Security `restricted`** for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
+  capabilities dropped, read-only root where the tool allows) **except `build`**. Rootless BuildKit runs as uid 1000
   with no effective capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user namespaces
-  (rootlesskit), and privilege escalation with `SETUID`/`SETGID` kept in the bounding set (all others dropped):
+  (rootlesskit) and privilege escalation with `SETUID`/`SETGID` kept in the bounding set (all others dropped):
   rootlesskit maps the user namespace with `newuidmap`/`newgidmap`, which gain those two caps from file capabilities.
-  It reads the run volume through `supplementalGroups: [65532]`, not `fsGroup` (which would chown BuildKit's state
-  emptyDir to a gid the user namespace does not map). Snapshotter `overlayfs` (rootless overlay mounts, Linux >= 5.11):
-  `auto` picked the copying `native` snapshotter on the k3d node and a hello-world build took over 15 minutes. No
-  privileged container, no Docker daemon, no DinD. Kyverno's Pod Security policies (Audit) report that pod.
+  Its toolbox init container (`scripts`, mounts only `/ci`) keeps the restricted container settings. BuildKit reads the run volume through
+  `supplementalGroups: [65532]`, not `fsGroup` (which would chown BuildKit's state emptyDir to a gid the user namespace
+  does not map). Snapshotter `overlayfs` (rootless overlay mounts, Linux >= 5.11): `auto` picked the copying `native`
+  snapshotter on the k3d node and a hello-world build took over 15 minutes. No privileged container, Docker daemon or
+  DinD. Kyverno's Pod Security policies (Audit) report that pod.
 - **Digest-pinned images only** in `workflows-*` (addon kyverno-policies, ValidatingPolicy
   `platform-workflow-image-digests`, Deny, fail closed, mgmt; [#36](https://github.com/koorikla/platform/issues/36)):
-  every container, initContainer and ephemeral container image of a run pod must be `image@sha256:<digest>`. A tag is
-  mutable, and run pods sit next to the push credentials and the signing key. Every image the platform puts there is
-  already pinned (toolbox, BuildKit, PostgreSQL, the stack check images, Argo's executor), so there are no exceptions.
-  A developer's `checks.image` override by tag is rejected by the ClusterWorkflow schema (`pattern`) before the run
-  starts; a run that still reaches a tag-only pod fails that step with the Kyverno denial.
+  every container of a run pod (init and ephemeral included) must be `image@sha256:<digest>`, since run pods sit next to
+  the push credentials and the signing key. No exceptions are needed (toolbox, BuildKit, PostgreSQL, check images and
+  Argo's executor are pinned). A tag `checks.image` is rejected by the ClusterWorkflow schema before the run starts.
 - **Cluster-agent RBAC** (addon openchoreo-workflow-plane `clusterAgentRBAC`,
   [#33](https://github.com/koorikla/platform/issues/33)): the agent replays the control plane's API calls with its own
   ServiceAccount, so its RBAC is OpenChoreo's reach into mgmt. The upstream ClusterRole (`*` on secrets, namespaces,
   roles/rolebindings, ClusterSecretStores, workloads, cluster-wide) is off (`clusterAgent.rbac.create: false`). What
-  OpenChoreo 1.3.3 sends to a workflow plane, and what is granted for it:
+  OpenChoreo 1.3.3 sends to a workflow plane, and the grant:
 
   | Caller | Requests | Grant |
   | --- | --- | --- |
@@ -291,61 +259,57 @@ platform). Narrow `platforms` per Component to build only the node's architectur
   | openchoreo-api (Backstage run view) | GET Workflow, LIST Pods, `pods/log` | Role in the run namespace: pods, pods/log, events get/list/watch |
 
   Not granted: Secrets, SecretStores, ClusterSecretStores, PushSecrets, anything outside `workflows-<org ns>`. OpenChoreo
-  features that write Secrets through the agent (openchoreo-api git secrets and secret management on a workflow plane)
-  get Forbidden; builds use ESO and per-run GitHub App tokens instead. `hack/tests/test_cluster_agent_rbac.sh` fails on
-  any wildcard, escalation verb, store access, cluster-wide Secret grant or grant outside `workflows-*`.
-- **No ServiceAccount token in run containers**: both ClusterWorkflowTemplates (and the ClusterWorkflows' run
-  templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`, so only Argo's
-  init/wait containers can write `workflowtaskresults`. Tenant check code cannot rewrite another run's outputs (e.g. the
-  digest that `sign` signs). Argo mounts that executor token from the Secret `workflow-sa.service-account-token`, which
-  addon openchoreo-workflow-plane renders in the run namespace with the ServiceAccount (`runExecutorToken`; Kubernetes
-  no longer creates token Secrets and OpenChoreo creates only the ServiceAccount and its Role). Without it every run pod
-  hangs in `Init` (`FailedMount`).
-- **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon
-  also renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor
-  Gateway proxy pods (port 9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check
-  and `RUN` code cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services. Platform
-  workflows that must call OpenChoreo (the `promotion-gate` ClusterWorkflow, docs/promotion.md) opt in through the pod
-  label `runNetworkPolicy.platformWorkflows.podLabels`: NetworkPolicy `platform-workflows-openchoreo` adds egress to the
+  features that write Secrets through the agent (openchoreo-api git secrets, secret management on a workflow plane) get
+  Forbidden; builds use ESO and per-run GitHub App tokens. `hack/tests/test_cluster_agent_rbac.sh` fails on any
+  wildcard, escalation verb, store access, cluster-wide Secret grant or grant outside `workflows-*`.
+- **No ServiceAccount token in run containers.** Both ClusterWorkflowTemplates (and the ClusterWorkflows' run
+  templates) set `automountServiceAccountToken: false` + `executor.serviceAccountName: workflow-sa`: only Argo's
+  init/wait containers can write `workflowtaskresults`, so tenant check code cannot rewrite another run's outputs (e.g.
+  the digest `sign` signs). The executor token comes from Secret `workflow-sa.service-account-token`, rendered by addon
+  openchoreo-workflow-plane (`runExecutorToken`; neither Kubernetes nor OpenChoreo creates it); without it run pods hang
+  in `Init` (`FailedMount`).
+- **Default-deny network** for `workflows-<org ns>` (addon openchoreo-workflow-plane `runNetworkPolicy`; the addon also
+  renders the namespace so the policy exists before the first run): no ingress; egress only to DNS, the Harbor Gateway
+  proxy pods (9443), the API server (Argo's executor) and TCP 80/443 outside private ranges. Tenant check and `RUN` code
+  cannot reach argocd-repo-server, harbor-core over HTTP, webhooks or other mgmt Services. Platform workflows that must
+  call OpenChoreo (the `promotion-gate` ClusterWorkflow, docs/promotion.md) opt in through pod label
+  `runNetworkPolicy.platformWorkflows.podLabels`: NetworkPolicy `platform-workflows-openchoreo` adds egress to the
   control-plane Gateway (8080: API, Thunder) and the observability Gateway (`httpPort`). Build runs never carry it.
-- Supply-chain steps (`scan-fs`, `scan-image`, `sbom`, `sign`) run with `HOME=/tmp` and `TRIVY_CACHE_DIR=/tmp/trivy`
-  (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code cannot plant tool config
-  (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
-- Per-run Secrets are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` for each run (owned by the
-  run, deleted with it): git credentials, registry push credentials and the cosign key via `ClusterSecretStore/workflows`
-  (scoped to `workflows-*` and `workflowStore.keys`, never the full `platform` store), plus the registry CA (public,
-  via `ClusterSecretStore/mgmt-harbor`).
-- Signing: see "Signing" below.
+- **Clean tool state.** Supply-chain steps (`scan-fs`, `scan-image`, `sbom`, `sign`) run with `HOME=/tmp` and
+  `TRIVY_CACHE_DIR=/tmp/trivy` (per-pod emptyDir), not on the run volume the tenant `check` step writes, so tenant code
+  cannot plant tool config (`~/.docker`, `~/.sigstore`, Trivy DB). Cost: each scan step downloads the Trivy DB.
+- **Per-run Secrets** are ExternalSecrets the ClusterWorkflow renders into `workflows-<ns>` per run (owned by the run,
+  deleted with it): git credentials, registry push credentials and the cosign key via `ClusterSecretStore/workflows`
+  (scoped to `workflows-*` and `workflowStore.keys`, never the full `platform` store), plus the registry CA (public, via
+  `ClusterSecretStore/mgmt-harbor`).
 
 ### Signing
 
-Deliberate deviation from keyless: [conventions.md](conventions.md#current-practice-only) asks for keyless Sigstore
-signing. In-cluster builds use a **static platform key** instead: public Fulcio
-issues certificates only for OIDC issuers it trusts, and a local k3d (or private EKS/Hetzner) workload identity is not
-one of them. The GitHub Actions path stays keyless.
+In-cluster builds sign with a **static platform key**, a deliberate deviation from the keyless rule of
+[conventions.md](conventions.md#current-practice-only): public Fulcio issues certificates only for OIDC issuers it
+trusts, and a local k3d (or private EKS/Hetzner) workload identity is not one. The GitHub Actions path stays keyless.
 
 - Key pair `cosign-platform` (private key encrypted with `cosign.password`; only in the secret backend and the signing
-  pod; `task secrets` generates it once). Cloud installations should use a KMS key reached through workload identity
-  instead of a key file, so no key material sits in the secret backend
-  ([#37](https://github.com/koorikla/platform/issues/37)).
+  pod; `task secrets` generates it once). Cloud installations should use a KMS key through workload identity instead,
+  so no key material sits in the secret backend ([#37](https://github.com/koorikla/platform/issues/37)).
 - **No public transparency log by default**: `buildWorkflows.signing.transparencyLog: false` makes the sign steps use a
   cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest`; ci/scripts
-  `sign-image.sh` has no switch yet, [#37](https://github.com/koorikla/platform/issues/37)), so private repo names and digests never reach public Rekor and signing needs no
-  egress to Sigstore. Set it `true` per installation (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to
-  upload to public Rekor.
+  `sign-image.sh` has no switch yet, [#37](https://github.com/koorikla/platform/issues/37)), so private repo names and
+  digests never reach public Rekor and signing needs no egress to Sigstore. Set it `true` per installation
+  (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
-  vuln` / `--type https://spdx.dev/Document/v2.3`: the SBOM uses the predicate type of the ci/ GitHub path, so
-  admission checks one SBOM type for both). `cosign.pub`: `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
+  vuln` / `--type https://spdx.dev/Document/v2.3`: the SBOM uses the predicate type of the ci/ GitHub path, so admission
+  checks one SBOM type for both). `cosign.pub`:
+  `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`.
 - Admission: addon kyverno-policies trusts `<registry.host>/<registry.appsProject>/` (prefix from installation.yaml)
-  only with this `cosign.pub` (tlog ignored, `rekor: false`) and the signed SBOM + vuln attestations: inline
+  only with this `cosign.pub` (tlog ignored, `rekor: false`) and the signed SBOM + vuln attestations, inline
   (`imageVerification.platformKey.publicKey`) or, with Harbor, delivered from mgmt to each workload cluster's Kyverno
-  together with the Harbor CA and a pull-only robot (local default): [supply-chain.md](supply-chain.md#wiring-the-key).
+  with the Harbor CA and a pull-only robot (local default): [supply-chain.md](supply-chain.md#wiring-the-key).
 
 ## Registry: Harbor
 
-`installation.yaml`:
-
 ```yaml
+# installation.yaml
 registry:
   type: harbor                                # harbor | external
   host: harbor.openchoreo.localhost:9443
@@ -357,9 +321,9 @@ registry:
 ```
 
 `type: external` (aws/hetzner examples): builds push to `<external.repository>/<component>` with that key's
-credentials, nodes pull upstream, the `harbor` addon is disabled for mgmt.
+credentials, nodes pull upstream, and the `harbor` addon is disabled for mgmt.
 
-### Endpoint, TLS and trust
+### Endpoint
 
 One name everywhere, `https://harbor.openchoreo.localhost:9443` (Harbor's token realm is its externalURL, so every
 client must resolve that name itself):
@@ -368,30 +332,40 @@ client must resolve that name itself):
 |---|---|
 | browser / `docker login` on the host | 127.0.0.1:9443 → k3d serverlb → mgmt node → klipper hostPort of Gateway Service `harbor` |
 | mgmt pods (builds) | coredns-local rewrites the name to `harbor.harbor.svc.cluster.local` (Service port 9443) |
+| workload pods | coredns-local generic rule → serverlb |
 | CAPD nodes (containerd) | `/etc/hosts`: name → IP of `k3d-platform-mgmt-serverlb` on network `kind` (ClusterClass `registryHostAlias`, written before k3s starts) |
 
-TLS terminates at the Gateway with `harbor-tls` (SAN: the registry host only, the listener's hostname), issued by the
-**namespaced** `Issuer harbor/harbor-ca`: no `ClusterIssuer`, so nobody allowed to create cert-manager `Certificate`s
-elsewhere on mgmt can mint a cert the nodes trust for the registry host. The CA key stays in ns `harbor`. Its **public**
-certificate alone is copied by ESO (namespaced `SecretStore harbor-ca-source`, may `get` only Secret `harbor-ca`,
-property `tls.crt`) into Secret `harbor/harbor-ca-bundle`, which holds nothing but `ca.crt`, and published through
-`ClusterSecretStore mgmt-harbor`, whose ServiceAccount may `get` exactly that Secret (name-scoped RBAC) and which only
-namespaces `fleet` and `workflows-*` can use. Nodes get it as
-`/etc/rancher/k3s/registry-ca.crt` (`registries.yaml` `tls.ca_file`), build pods as `<run>-registry-ca`.
+### Ports and DNS (local)
+
+| Port (127.0.0.1) | k3d config | What |
+|---|---|---|
+| 9443 | `bootstrap/k3d-mgmt.yaml` | Harbor (Gateway `harbor`, TLS); CAPD nodes use the same port on the serverlb |
+
+Name: `harbor.openchoreo.localhost`, resolved as in the table above (browser: loopback). Trust the CA in a browser or
+docker: `kubectl -n harbor get secret harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' | base64 -d`.
+
+### TLS and the registry CA
+
+TLS terminates at the Gateway with `harbor-tls` (SAN: the registry host only), issued by the **namespaced** `Issuer
+harbor/harbor-ca` (no `ClusterIssuer`, so `Certificate` creators elsewhere on mgmt cannot mint a cert nodes trust; the
+CA key stays in ns `harbor`). ESO copies only the public certificate (`SecretStore harbor-ca-source`, may `get` only
+Secret `harbor-ca`, property `tls.crt`) into `harbor/harbor-ca-bundle` (just `ca.crt`), published through
+`ClusterSecretStore mgmt-harbor` (may `get` exactly that Secret; usable only from `fleet` and `workflows-*`). Nodes get
+it as `/etc/rancher/k3s/registry-ca.crt` (`registries.yaml` `tls.ca_file`), build pods as `<run>-registry-ca`.
 
 ### Pod Security
 
 Harbor is **not** a Kyverno-excluded platform namespace: its 2.15 workloads meet Pod Security baseline (no privileged
 container, host namespaces, hostPath, hostPort or added capabilities), so the Audit `ValidatingPolicies` report on
-`harbor` like on any workload and no `PolicyException` is needed (`hack/tests/test_gitops_contracts.sh` check 9 fails
-if a Harbor bump changes that).
+`harbor` like on any workload, with no `PolicyException` (`hack/tests/test_gitops_contracts.sh` check 9 fails if a Harbor
+bump changes that).
 
 ### Declarative configuration
 
-Harbor has no CRDs, and no maintained operator covers 2.15. `files/harbor-config.py` (stdlib Python, Harbor API v2.0)
-applies the desired state rendered from `addons/harbor/values.yaml` `config` as an Argo CD PostSync hook and an hourly
-CronJob: idempotent create/update, never delete. Chosen over Terraform/OpenTofu (state backend + provider credentials
-on mgmt for a handful of objects).
+Harbor has no CRDs and no maintained operator covers 2.15. `files/harbor-config.py` (stdlib Python, Harbor API v2.0)
+applies the desired state from `addons/harbor/values.yaml` `config` as an Argo CD PostSync hook and an hourly CronJob:
+idempotent create/update, never delete. Chosen over Terraform/OpenTofu (state backend + provider credentials on mgmt for
+a handful of objects).
 
 | Object | Desired state |
 |---|---|
@@ -403,9 +377,9 @@ on mgmt for a handful of objects).
 
 Content trust (`enable_content_trust_cosign` on `apps`) is **off** until it is confirmed that Harbor 2.15 counts cosign
 v3 Sigstore-bundle referrers as signatures; enabling it blocks every pull without one
-([#39](https://github.com/koorikla/platform/issues/39)). Every chart secret
-(core, jobservice, registry, CSRF, secretKey, htpasswd, DB password, admin password) comes from key `harbor`: the
-chart's own generated values re-roll on every Argo CD render (`helm template` has no `lookup`).
+([#39](https://github.com/koorikla/platform/issues/39)). Every chart secret (core, jobservice, registry, CSRF,
+secretKey, htpasswd, DB password, admin password) comes from key `harbor`: the chart's own generated values would
+re-roll on every Argo CD render (`helm template` has no `lookup`).
 
 ### Node pulls: mirrors with fallback
 
@@ -423,16 +397,16 @@ configs:
     tls: { ca_file: /etc/rancher/k3s/registry-ca.crt }
 ```
 
-containerd tries Harbor first and falls back to the upstream registry, so a Harbor outage slows pulls instead of
-breaking them. Bootstrap data is rendered once per Machine: changes reach new machines only, and a change to the
-ClusterClass patches rolls every machine of the class ([providers.md](providers.md#template-changes-roll-clusters)).
-Patch order matters: `cni-flannel` replaces the control plane's whole `files` list, so it runs before every patch that
-appends files (`registries.yaml`, the registry CA).
+containerd tries Harbor first and falls back to upstream, so a Harbor outage slows pulls instead of breaking them.
+Bootstrap data is rendered once per Machine: changes reach new machines only, and a change to the ClusterClass patches
+rolls every machine of the class ([providers.md](providers.md#template-changes-roll-clusters)). Patch order matters:
+`cni-flannel` replaces the control plane's whole `files` list, so it runs before every patch that appends files
+(`registries.yaml`, the registry CA).
 
 ### Build pulls: BuildKit mirrors
 
 Dockerfile `FROM` images (and `# syntax=` frontends) are pulled by BuildKit inside the `build` step, not by containerd,
-so the node mirrors do not cover them. Addon openchoreo-workflow-plane renders ConfigMap `buildkitd-config` in
+so node mirrors do not cover them. Addon openchoreo-workflow-plane renders ConfigMap `buildkitd-config` in
 `workflows-<org ns>` from the same `registry.proxyCache` list (`buildkitMirrors`, registry type `harbor` only):
 
 ```toml
@@ -442,37 +416,36 @@ so the node mirrors do not cover them. Addon openchoreo-workflow-plane renders C
   ca = ["/registry-ca/ca.crt"]                               # the run's <run>-registry-ca
 ```
 
-The `build` step mounts it (optional) as its `buildkitd.toml`. A mirror with a path maps `docker.io/library/golang` to
+The `build` step mounts it (optional) as `buildkitd.toml`. A mirror with a path maps `docker.io/library/golang` to
 `<host>/dockerhub/library/golang`, so `FROM` lines keep their upstream names and digests (a digest-pinned base resolves
 to the same digest through the proxy). The run's registry credentials (`robot$builder`, pull on every proxy-cache
-project) authenticate the mirror. BuildKit tries Harbor first and falls back to the upstream registry, like containerd.
-Cold and warm build timings: [#38](https://github.com/koorikla/platform/issues/38).
+project) authenticate the mirror; BuildKit falls back to upstream like containerd. Cold and warm build timings:
+[#38](https://github.com/koorikla/platform/issues/38).
 
 ### Images and architectures
 
-Harbor 2.15 publishes linux/amd64 images only (arm64 arrives as separate `-arm64` tags in 2.16, not as a manifest
-list). This is a **deliberate, expiring exception** to the multi-arch rule: the 8 Harbor images (`goharbor/harbor-core`,
+Harbor 2.15 publishes linux/amd64 images only (arm64 arrives as separate `-arm64` tags in 2.16, not as a manifest list).
+This is a **deliberate, expiring exception** to the multi-arch rule: the 8 Harbor images (`goharbor/harbor-core`,
 `harbor-db`, `harbor-jobservice`, `harbor-portal`, `harbor-registryctl`, `registry-photon`, `trivy-adapter-photon`,
 `valkey-photon`, tag prefix `v2.15.`) are listed in `hack/image-audit.sh` `ARCH_EXCEPTIONS` with an expiry
-(2027-03-31), so `task images:audit` stays green and reports them as `EXCEPTION`. A Harbor bump or the expiry date
-drops the exception and the audit fails again; the list goes away with Harbor 2.16
-([#27](https://github.com/koorikla/platform/issues/27)).
-`hack/tests/test_image_audit.sh` pins the list to exactly those images. On arm64 hosts use `registry.type: external`.
-Everything else added here (BuildKit, toolbox, Argo Workflows, cluster-agent, toolchains, Python, PostgreSQL) is
-multi-arch and pinned by digest.
+(2027-03-31), so `task images:audit` reports them as `EXCEPTION` and stays green. A Harbor bump or the expiry date drops
+the exception and the audit fails again; the list goes away with Harbor 2.16
+([#27](https://github.com/koorikla/platform/issues/27)). `hack/tests/test_image_audit.sh` pins the list to exactly those
+images. On arm64 hosts use `registry.type: external`. Everything else here (BuildKit, toolbox, Argo Workflows,
+cluster-agent, toolchains, Python, PostgreSQL) is multi-arch and pinned by digest.
 
-Digest pinning (every addon, not only the build plane): each image an addon renders is
+**Digest pinning (every addon, not only the build plane).** Each image an addon renders is
 `<registry host>/<path>:<tag>@sha256:<multi-arch index digest>`, set in the addon's `values.yaml` (`tag: <v>@sha256:…`,
-or the chart's own `digest` / `sha` field where `tag@digest` would break a label or a semver parse). The same holds for
-the CAPD node image (`charts/cluster` (scope fleet) `docker.kindImage`) and the k3d mgmt node (`bootstrap/k3d-mgmt.yaml`).
+or the chart's own `digest` / `sha` field where `tag@digest` would break a label or a semver parse); likewise the CAPD
+node image (`charts/cluster` (scope fleet) `docker.kindImage`) and the k3d mgmt node (`bootstrap/k3d-mgmt.yaml`).
 `hack/tests/test_image_pins.sh` renders every installation with opt-in addons (`hack/image-audit.sh --list --rendered
 --opt-in`) and fails on any image without a registry host or digest, and on a tag@digest leaking into a label. Its
 `PIN_EXCEPTIONS` (exact image or glob, commented, failing once unused) holds what a chart cannot render: the
 falcosidekick `helm test` pod, falco-talon 0.5.0 and Strimzi's per-Kafka-version broker map (pin brokers per Kafka CR,
-[data-services.md](data-services.md#kafka-strimzi)). Resolve a digest with `crane digest <image>:<tag>` (the index digest of a
-multi-arch image); a chart bump updates tag and digest together. Images created at runtime from upstream manifests
-(k3s system images, CAPI provider controllers, k3d helpers, the CAPD load balancer, the kgateway envoy proxy) are
-audited for architectures by `task images:audit` but not digest-pinned here.
+[data-services.md](data-services.md#kafka-strimzi)). Resolve a digest with `crane digest <image>:<tag>` (the index
+digest of a multi-arch image); a chart bump updates tag and digest together. Images created at runtime from upstream
+manifests (k3s system images, CAPI provider controllers, k3d helpers, the CAPD load balancer, the kgateway envoy proxy)
+are audited for architectures by `task images:audit` but not digest-pinned.
 
 ## Secrets (ClusterSecretStore `platform`)
 
@@ -480,28 +453,18 @@ audited for architectures by `task images:audit` but not digest-pinned here.
 |---|---|---|
 | `harbor` | `admin-password`, `secret-key` (16), `core-secret`, `csrf-key` (32), `jobservice-secret`, `registry-http-secret`, `registry-password`, `database-password`, `builder-secret`, `nodes-secret` | addon harbor; builds (`builder-secret`); nodes (`nodes-secret`) |
 | `cosign-platform` | `cosign.key` (encrypted), `cosign.pub`, `cosign.password` | build signing; admission policies trust `cosign.pub` |
-| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the platform GitHub App: per-run build tokens for one repository (clone + GitOps commit, [Git credentials](#git-credentials)), auto-build, promotion gate |
+| `promotion-gate-github` | `githubAppID`, `githubAppInstallationID`, `githubAppPrivateKey` | the platform GitHub App: per-run build tokens for one repository ([Git credentials](#git-credentials)), auto-build, promotion gate |
 | `platform-ghcr` | `username`, `token` | Harbor GHCR proxy cache + replication; external registry type |
 | `github-webhook` | `secret` | auto-build trigger `webhook` only: HMAC secret of the GitHub App webhook (addon argo-events) |
 
-`task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the
-toolbox image (Docker, no host install; password only through the environment, key files removed on any exit), and
-seeds `promotion-gate-github` from `GITHUB_GATE_APP_*` ([forking.md](forking.md#3-credentials) (c2)). Builds hold no
-git token of their own. Build and promotion-gate runs in `workflows-*` read their
-keys through `ClusterSecretStore/workflows` (`ClusterWorkflowPlane default` `secretStoreRef`), whose ServiceAccount
-`eso-workflows` has a name-scoped `get` Role in `platform-secrets` for `workflowStore.keys` only (`cosign-platform`,
-`harbor` or `registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`);
-`workflows-*` cannot use `ClusterSecretStore/platform`.
-
-## Ports and DNS (local)
-
-| Port (127.0.0.1) | k3d config | What |
-|---|---|---|
-| 9443 | `bootstrap/k3d-mgmt.yaml` | Harbor (Gateway `harbor`, TLS); CAPD nodes use the same port on the serverlb |
-
-Names: `harbor.openchoreo.localhost`
-(browser: loopback; mgmt pods: coredns-local; workload pods: coredns-local generic rule → serverlb; CAPD nodes:
-`/etc/hosts`). Trust the CA in a browser/docker: `kubectl -n harbor get secret harbor-ca-bundle -o jsonpath='{.data.ca\.crt}' | base64 -d`.
+`task secrets` seeds `harbor` (random, policy-conformant), generates `cosign-platform` once with cosign from the toolbox
+image (Docker, no host install; password only through the environment, key files removed on any exit), and seeds
+`promotion-gate-github` from `GITHUB_GATE_APP_*` ([forking.md](forking.md#3-credentials) (c2)). Builds hold no git
+token of their own. Build and promotion-gate runs in `workflows-*` read their keys through
+`ClusterSecretStore/workflows` (`ClusterWorkflowPlane default` `secretStoreRef`), whose ServiceAccount `eso-workflows`
+has a name-scoped `get` Role in `platform-secrets` for `workflowStore.keys` only (`cosign-platform`, `harbor` or
+`registry.external.credentialsKey`, `promotion-gate`, `promotion-gate-github`); `workflows-*` cannot use
+`ClusterSecretStore/platform`.
 
 ## Resource budget (requests, mgmt)
 
