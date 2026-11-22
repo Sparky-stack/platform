@@ -6,7 +6,7 @@
 {{- $_ := set $seen $a.name true -}}
 {{- /* The VAP openchoreo-gated-bindings-from-git trusts only Applications named <project>-<app>-<gated env>: a main
 Application <project>-<app> must never look like one. */ -}}
-{{- range $env := $.Values.promotion.gatedEnvironments | default list -}}
+{{- range $env := $.Values.promotion.gatedEnvironments -}}
 {{- if hasSuffix (printf "-%s" $env) $a.name -}}{{- fail (printf "apps[%d].name %q must not end in -%s (gated environment: reserved for the gated Application)" $i $a.name $env) -}}{{- end -}}
 {{- end -}}
 {{- end -}}
@@ -17,7 +17,7 @@ Application <project>-<app> must never look like one. */ -}}
 {{- end -}}
 {{- /* The restricted groups (developers) hold EVERY developer: as a tenant developer group they would give all of them
 write access to this project, which is what per-project authz (templates/developer-authz.yaml, #335) prevents. */ -}}
-{{- range $g := .Values.developerGroups | default list -}}
+{{- range $g := .Values.developerGroups -}}
 {{- if has $g ($.Values.promotion.restrictedGroups | default list) -}}
 {{- fail (printf "developerGroups: %q is an org-wide group (promotion.restrictedGroups); use a group of this project's developers" $g) -}}
 {{- end -}}

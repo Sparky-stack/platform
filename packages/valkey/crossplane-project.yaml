@@ -1,7 +1,5 @@
-# Crossplane Project of the valkey API (README.md, docs/crossplane.md). `crossplane project build` turns it into the
-# Configuration package ghcr.io/koorikla/platform/valkey. Dependencies: the three Functions of the Composition and the
-# Providers whose managed resources the cloud backends compose (schemas). Status: layout (not installed on any cluster);
-# when enabled, addons/crossplane pins the same packages by digest (keep the floors in step with its values.yaml).
+# Crossplane Project of the valkey API: `crossplane project build` makes ghcr.io/koorikla/platform/valkey (docs/crossplane.md).
+# Keep the dependency floors in step with the digests addons/crossplane pins.
 apiVersion: dev.crossplane.io/v1alpha1
 kind: Project
 metadata:

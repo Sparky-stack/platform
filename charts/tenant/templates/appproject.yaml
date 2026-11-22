@@ -36,7 +36,7 @@ spec:
     {{- end }}
   {{- /* Freeze windows (docs/promotion.md): deny syncs of the gated-environment Applications, manual syncs included. */}}
   {{- $windows := list }}
-  {{- range $w := .Values.promotion.freezeWindows | default list }}
+  {{- range $w := .Values.promotion.freezeWindows }}
   {{- $names := list }}
   {{- range $app := $apps }}
   {{- range $env := include "tenant.gatedEnvs" (list $app $) | fromYamlArray }}

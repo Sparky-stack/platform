@@ -1,8 +1,7 @@
 {{- if eq .Values.scope "cluster" }}
 {{- /* Delivers OpenChoreo agent TLS identity and gateway CA to the workload cluster via ClusterResourceSet or byo PushSecret. */ -}}
 {{- if .Values.openchoreo.dataPlane.enabled }}
-{{- $name := include "openchoreo.name" . }}
-{{- $ns := include "openchoreo.fleetNamespace" . }}
+{{- $name := .Values.name }}
 {{- if eq (toString .Values.provider) "byo" }}
 {{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-agent-tls" $name) "source" (printf "%s-agent-tls" $name)
       "namespace" "openchoreo-data-plane" "remoteName" "cluster-agent-tls" "labels" (dict "app.kubernetes.io/part-of" "openchoreo")) }}
@@ -11,7 +10,7 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: {{ $name }}-gateway-ca
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
 spec:
@@ -33,7 +32,7 @@ apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: {{ $name }}-openchoreo-agent
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
   annotations:
@@ -83,7 +82,7 @@ apiVersion: addons.cluster.x-k8s.io/v1beta2
 kind: ClusterResourceSet
 metadata:
   name: {{ $name }}-openchoreo-agent
-  namespace: {{ $ns }}
+  namespace: fleet
   labels:
     {{- include "openchoreo.labels" . | nindent 4 }}
   annotations:

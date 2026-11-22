@@ -13,17 +13,12 @@ source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 ALLOW=hack/tests/hook_allowlist.yaml
 
-# Effective Argo CD hook? (yq expression on an object)
-# shellcheck disable=SC2016  # yq variables, not shell
-IS_HOOK='(.metadata.annotations // {}) as $a | ($a["argocd.argoproj.io/hook"] // "") as $ah | ($a["helm.sh/hook"] // "") as $hh
-  | (($ah != "" and $ah != "Skip") or ($ah == "" and $hh != "" and $hh != "crd-install" and ($hh | test("^test") | not)))'
-
 # violations <addon> <render> -> one line per broken rule; also appends "<addon> <kind> <name>" of every hook to $TMP/seen
 violations() {
   local addon=$1 f=$2 kind name lk
   # shellcheck disable=SC2016  # yq variables, not shell
   local keys; keys=$(yq -N "select(.kind == \"ConfigMap\" and .metadata.labels[\"platform.koorikla.io/hook-inputs\"] == \"true\")
-    | select(($IS_HOOK) | not) | .data // {} | keys | .[]" "$f" | tr -d '\r')
+    | select(($ARGO_HOOK_YQ) | not) | .data // {} | keys | .[]" "$f" | tr -d '\r')
   while IFS=$'\t' read -r kind name; do
     [[ -n "$kind" ]] || continue
     echo "$addon $kind $name" >> "$TMP/seen"
@@ -37,15 +32,7 @@ violations() {
         grep -qxF "$lk.$name" <<< "$keys" ||
           echo "$addon: hook $kind/$name has no change detector (key $lk.$name in a normal ConfigMap labelled platform.koorikla.io/hook-inputs=true)" ;;
     esac
-  done < <(yq -N "select(.kind != null and .kind != \"Job\" and .kind != \"Pod\") | select($IS_HOOK) | [.kind, .metadata.name] | join(\"	\")" "$f" | tr -d '\r')
-}
-
-# addon_of <render file name>: the longest addon name the file name starts with (kyverno vs kyverno-policies)
-addon_of() {
-  local base best="" a
-  base=$(basename "$1" .yaml); base=${base#addon-}
-  for a in addons/*/; do a=$(basename "$a"); [[ "$base" == "$a"-* && ${#a} -gt ${#best} ]] && best=$a; done
-  echo "$best"
+  done < <(yq -N "select(.kind != null and .kind != \"Job\" and .kind != \"Pod\") | select($ARGO_HOOK_YQ) | [.kind, .metadata.name] | join(\"	\")" "$f" | tr -d '\r')
 }
 
 : > "$TMP/seen"; : > "$TMP/rendered"
@@ -53,7 +40,7 @@ n=0
 if [[ -n "${RENDERED_DIR:-}" && -d "${RENDERED_DIR:-}" ]]; then
   for r in "$RENDERED_DIR"/addon-*.yaml; do
     [[ -f "$r" ]] || continue
-    a=$(addon_of "$r"); [[ -n "$a" ]] || continue
+    a=$(addon_of_render "$r"); [[ -n "$a" ]] || continue
     n=$((n + 1)); echo "$a" >> "$TMP/rendered"
     assert_eq "$(violations "$a" "$r")" "" "$(basename "$r" .yaml): no unlisted hook, every hook config has a change detector"
   done

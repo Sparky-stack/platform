@@ -6,8 +6,7 @@
 # -- OpenChoreo `Project` name (DNS-1123 label) and `AppProject/tenant-<project>` (alongside `description`).
 project: ""                 # required
 description: ""
-# Gated bindings are admitted only from Application <project>-<component>-<env> (addon openchoreo-platform
-# promotion-git-only.yaml), hence name == Component name.
+# name == Component name: gated bindings are admitted only from Application <project>-<component>-<env>.
 # -- Tenant applications (`[{name, repoURL, path, revision, promotionGates}]`; `name` must equal the app repo's `Component` name).
 apps: []
 # -- DEMO ONLY: OpenBao values seeded into `kv-tenant-<project>` (`[{key, property}]`, the app's `SecretReference` `remoteRef`s) by `CronJob/<project>-demo-secrets` with the tenant's own writer identity; a missing property gets a generated `demo-only-<hex>` value, an existing one is never overwritten. Needs `secrets.tenantStores.enabled`; never list real secrets ([Tenant secrets](../../docs/multicluster.md#tenant-secrets-openbao)).
@@ -63,11 +62,9 @@ deploymentPipeline:
 projectType:
   kind: ClusterProjectType
   name: default
-# Project / ProjectReleaseBinding stay platform-owned (this chart); platform kinds (Environment, DeploymentPipeline,
-# *ComponentType, *Trait, planes, authz) are never allowed.
-# -- The only kinds (group openchoreo.dev, org namespace) an app repo may sync.
 # ClusterAuthzRole the developerGroups get in their own project (upstream default role of the OpenChoreo control plane).
 developerRole: developer
+# -- The only kinds (group openchoreo.dev, org namespace) an app repo may sync; Project, ProjectReleaseBinding and platform kinds stay platform-owned.
 developerKinds:
   - Component
   - Workload
@@ -78,14 +75,11 @@ developerKinds:
   - ResourceReleaseBinding   # binds a Resource to an environment; gated environments like ReleaseBindings
 # Promotion gates (docs/promotion.md); installation.yaml `promotion` overrides (shared with addon openchoreo-platform).
 promotion:
-  # Each gated environment's binding file syncs through its own Application <project>-<app>-<env> (excluded from the
-  # app's main Application), so the freeze windows below can stop exactly the production sync. Promotion there is a
-  # reviewed pull request (CODEOWNERS + required status `openchoreo/promotion-gate`); an app opts out with
-  # `promotionGates: false` in the tenant file.
+  # A gated environment's binding file syncs through its own Application <project>-<app>-<env>, so freeze windows
+  # stop exactly that sync. Apps opt out with `promotionGates: false`.
   # -- Environments with separate gated `Application`s, ABAC component-delete deny (`restrictedGroups`), and `freezeWindows`.
   gatedEnvironments: [production]
-  # Groups (JWT claim `groups`) that may not delete a gated app's Component through console / openchoreo-api / occ /
-  # MCP (the cascade would delete its gated bindings). Same list addon openchoreo-platform denies gated binding writes.
+  # Groups that may not delete a gated app's Component (the cascade would delete its gated bindings).
   restrictedGroups: [developers]
   componentDeleterRole: promotion-component-deleter   # ClusterAuthzRole of addon openchoreo-platform (component:delete)
   # Binding writes developerGroups may not do in gatedEnvironments (templates/developer-authz.yaml); == the actions of
@@ -94,8 +88,7 @@ promotion:
     projectreleasebinding:create, projectreleasebinding:update, projectreleasebinding:delete,
     resourcereleasebinding:create, resourcereleasebinding:update, resourcereleasebinding:delete]
   bindingFile: release-bindings/{environment}.yaml   # relative to the app path (app repo contract)
-  # Weekly windows -> Argo CD deny sync windows on the gated Applications (manual sync blocked too; break glass =
-  # change this list in git). PRs merged during a window sync when it ends.
+  # Weekly Argo CD deny windows on the gated Applications (manual sync too; break glass = change this list in git).
   freezeWindows:
     - name: weekend
       start: "Fri 16:00"

@@ -1,16 +1,8 @@
 {{- /*
-UNTESTED EXAMPLE: never booted in this lab (Docker + k3s/CAPD only); kept as a reference for real infrastructure.
-The developer-facing platform does not depend on it (docs/portability.md).
-k3s on CAPH (Hetzner Cloud). Rendered when capi.providers.hetzner. UNTESTED (no credentials): rendered + schema-checked.
-Node identity: kubelet --cloud-provider=external, k3s' embedded CCM off. The hcloud cloud-controller-manager
-(addons/hcloud-ccm, Argo CD, catalog providers: [hetzner]) matches Node name == server name (CAPH names servers after
-the Machine) and sets providerID hcloud://<server-id>, addresses, removes the uninitialized taint, provides LBs. It
-reads kube-system/hcloud, which CAPH itself writes into every workload cluster (reconcileWorkloadClusterSecrets:
-keys token, network, from hetznerSecretRef) - no extra secret plumbing.
-Pod network (variable cni): cilium (default) = Cilium VXLAN overlay + Cilium WireGuard (UDP 8472/51871); flannel =
-k3s flannel with the wireguard-native backend (UDP 51820). Both encrypt node-to-node traffic themselves and need no
-hcloud network routes, so the CCM route controller stays off (hcloud-ccm networking.enabled=false). CAPH creates no
-firewall, so no port rules are needed. Untested until the first Hetzner boot (#26).
+UNTESTED EXAMPLE (rendered and schema-checked only; docs/portability.md, docs/providers.md).
+k3s on CAPH (Hetzner Cloud), when capi.providers.hetzner. kubelet --cloud-provider=external: addons/hcloud-ccm
+initialises nodes from kube-system/hcloud, which CAPH writes into every workload cluster.
+Both CNIs encrypt node traffic themselves (Cilium WireGuard, flannel wireguard-native), so no hcloud routes or firewall.
 */ -}}
 
 {{- define "k3s-hetzner.cluster" -}}
