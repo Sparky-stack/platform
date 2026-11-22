@@ -74,6 +74,9 @@ The numbered flow of each diagram, word for word.
 6. The cluster-agent dials out to OpenChoreo and pulls the app releases
 7. The agent submits the apps to the cluster
 8. Kyverno, one of the addons, admits only apps with signed images and safe settings before they start
+9. Apps claim a database through an OpenChoreo resource binding; the claim goes to Crossplane on the same cluster
+10. Crossplane composes the claim into objects for an in-cluster operator where there is no managed database: CloudNativePG for PostgreSQL, MOCO for MySQL
+11. Crossplane's cloud providers create it outside the cluster instead on cloud installations: RDS or Aurora, Cloud SQL or Azure Flexible Server
 
 ### Security ([security.svg](security.svg))
 

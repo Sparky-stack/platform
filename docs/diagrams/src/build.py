@@ -42,10 +42,29 @@ def ymid(y, h=H):
 
 
 # ------------------------------------------------------------------------------------------ architecture
+ARCH_STEPS = (
+    "Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
+    "Argo CD turns each fleet file into a cluster for Cluster API to build",
+    "Argo CD hands each app's release to OpenChoreo",
+    "Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE",
+    "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
+    "The cluster-agent dials out to OpenChoreo and pulls the app releases",
+    "The agent submits the apps to the cluster",
+    "Kyverno, one of the addons, admits only apps with signed images and safe settings before they start",
+    "Apps claim a database through an OpenChoreo resource binding; the claim goes to Crossplane on the same cluster",
+    "Crossplane composes the claim into objects for an in-cluster operator where there is no managed database: "
+    "CloudNativePG for PostgreSQL, MOCO for MySQL",
+    "Crossplane's cloud providers create it outside the cluster instead on cloud installations: RDS or Aurora, "
+    "Cloud SQL or Azure Flexible Server",
+)
+ARCH_NOTE = ("Steps 10 and 11 are alternatives: each cluster's facts pick one backend. The providers sign in with the "
+             "cluster's workload identity; per-app cloud identities (IAM roles) are not composed yet.")
+
+
 def architecture() -> Diagram:
     d = Diagram("koorikla/platform · architecture",
                 "Argo CD reads everything from Git; the management cluster turns it into clusters, addons and app "
-                "releases, and the workload clusters run the apps.")
+                "releases. The workload clusters run the apps, and Crossplane on each one creates what the apps claim.")
     c, w = COLS4, CW4
     Z1, R1 = 200, 264
     R2 = R1 + H + 80
@@ -53,18 +72,24 @@ def architecture() -> Diagram:
     Z2 = Z1b + 64
     CH = Z1b + 22                               # channel between the clusters: badges 4, 5, 6
     R3 = Z2 + 48
+    R4 = R3 + PITCH                             # second workload row: Crossplane and the operators it feeds
+    Z2b = R4 + H + 24
+    R5 = Z2b + 56                               # outside the clusters: the cloud APIs
     d.box(c[0], 108, w, 52, "external", "Git", ["platform + app repos"])
     d.zone(28, Z1, 904, Z1b - Z1, "management cluster", "mgmt", label_at="tr")
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps engine"])
     d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry, sign-in,", "OpenBao secrets"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
-    d.zone(28, Z2, 904, R3 + H + 64 - Z2, "workload clusters", "workload", label_at="tr")
-    d.box(c[0], R3, w, H, "workload", "Data services", ["Crossplane databases,", "CloudNativePG"], status="optin",
-          context=True)
+    # the first column of the workload zone stays empty: step 4 points at the cluster (its label), not at a box
+    d.zone(28, Z2, 904, Z2b - Z2, "workload clusters", "workload")
     d.box(c[1], R3, w, H, "workload", "Addons", ["network, mesh,", "Kyverno policy"])
     d.box(c[2], R3, w, H, "workload", "cluster-agent", ["OpenChoreo's", "agent"], aka=("agent",))
     d.box(c[3], R3, w, H, "workload", "Apps", ["your teams'", "services"])
+    d.box(c[1], R4, w, H, "workload", "Operators", ["CloudNativePG", "and MOCO"],
+          status="optin")
+    d.box(c[2], R4, w, H, "workload", "Crossplane", ["turns app claims", "into resources"], status="optin")
+    d.box(c[2], R5, w, H, "external", "Cloud APIs", ["RDS, Cloud SQL,", "Azure databases"])
     xa = c[0] + w / 2
     d.arrow([(xa, R1), (xa, 160)], step=1, badge=(xa, R1 - 32))
     d.arrow([(xa, R1 + H), (xa, R2)], step=2)
@@ -83,15 +108,15 @@ def architecture() -> Diagram:
     yk = R3 + H + 36                            # step 8: Kyverno (an addon) admits the apps
     d.arrow([(c[1] + w / 2, R3 + H), (c[1] + w / 2, yk), (c[3] + w / 2, yk), (c[3] + w / 2, R3 + H)], step=8,
             badge=(c[3] + 24, yk))                    # disc 8 right of disc 7: admission follows the submit
-    d.require("Git", "Argo CD", "Cluster API", "OpenChoreo", "cluster-agent", "Apps", "Addons", "Shared services")
-    d.key("Argo CD reads Git: fleet files, the addon catalog, teams and app repos",
-          "Argo CD turns each fleet file into a cluster for Cluster API to build",
-          "Argo CD hands each app's release to OpenChoreo",
-          "Cluster API creates each workload cluster: k3s nodes on docker, AWS or Hetzner, or managed GKE",
-          "Argo CD installs the addons and the cluster-agent on every cluster whose labels match",
-          "The cluster-agent dials out to OpenChoreo and pulls the app releases",
-          "The agent submits the apps to the cluster",
-          "Kyverno, one of the addons, admits only apps with signed images and safe settings before they start")
+    x9 = c[3] + w - 40                          # step 9: the app's claim goes down and left to Crossplane
+    d.arrow([(x9, R3 + H), (x9, ymid(R4)), (c[2] + w, ymid(R4))], step=9, badge=(x9, R3 + H + 60))
+    d.arrow([(c[2], ymid(R4)), (c[1] + w, ymid(R4))], step=10, badge=(c[2] - 34, ymid(R4)))
+    xc = c[2] + w / 2
+    d.arrow([(xc, R4 + H), (xc, R5)], step=11, badge=(xc, Z2b + 18))
+    d.require("Git", "Argo CD", "Cluster API", "OpenChoreo", "cluster-agent", "Apps", "Addons", "Shared services",
+              "Crossplane", "Operators", "Cloud APIs")
+    d.key(*ARCH_STEPS)
+    d.note(ARCH_NOTE)
     return d
 
 
