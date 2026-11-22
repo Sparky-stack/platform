@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# In-cluster build guards (addons openchoreo-platform + openchoreo-workflow-plane), negative tests first:
+# In-cluster build guards (addons openchoreo-platform + openchoreo-workflow-plane, ci/scripts/workflow), negative tests
+# first:
 #   - the ClusterWorkflow schema patterns reject foreign hosts/owners, traversal and option injection
-#   - BUILD_GUARDS (koorikla-build checkout/gitops) refuses foreign repositories and hands the git token only to the
-#     allowed prefixes (real `git credential fill`), https only
-#   - gitops rewrites only a real OpenChoreo Workload under deploy/openchoreo/ (no symlink out, no other kind)
-#   - signing skips the public Rekor log unless the installation opts in (cosign v3 signing config)
+#   - guards.sh (sourced by checkout.sh and gitops.sh) refuses foreign repositories and hands the git token only to the
+#     allowed prefixes (real `git credential fill`), https only; operator messages word for word
+#   - gitops.sh rewrites only a real OpenChoreo Workload under deploy/openchoreo/ (no symlink out, no other kind), through
+#     the GitHub contents API as the App
+#   - sign.sh skips the public Rekor log unless the installation opts in (cosign v3 signing config)
 #   - run pods get no ServiceAccount token (only Argo's executor containers do)
 # shellcheck disable=SC2016  # literal shell code passed to bash -c / matched as text
 set -euo pipefail
@@ -62,28 +64,40 @@ url=$(cw helm-chart "$S.repository.properties.url.pattern")
 rejects "helm-chart url" "$url" https://attacker.example/x.git https://github.com/other/x
 rejects "helm-chart chart.path" "$(cw helm-chart "$S.chart.properties.path.pattern")" ../x /etc
 
-# --- BUILD_GUARDS: repository allowlist and scoped credentials ----------------------------------------------------
-GUARDS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')
-assert_nonempty "$GUARDS" "BUILD_GUARDS present in gitops"
-assert_eq "$(cwt koorikla-build '.spec.templates[] | select(.name == "checkout") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')" \
-  "$GUARDS" "checkout and gitops share one BUILD_GUARDS"
-for step in checkout gitops; do
-  sc=$(cwt koorikla-build ".spec.templates[] | select(.name == \"$step\") | .container.args[0]")
-  assert_match "$sc" 'eval "\$BUILD_GUARDS"' "$step evaluates BUILD_GUARDS"
-  assert_match "$sc" 'git_access "\$REPO"' "$step calls git_access before any git command"
-done
+# --- step scripts (ci/scripts/workflow) -----------------------------------------------------------------------------
+WF="$ROOT/ci/scripts/workflow"
+TMPP=$(cd "$TMP" && pwd -P)   # physical path: the scripts compare realpath results against their pod paths
+# stage <root>: copy ci/scripts/workflow to <root>/opt/scripts (the toolbox's copy), next to ci/scripts/common, with
+# its pod paths (/work/, /tmp/, /ci/, /cosign/, /registry-ca/, /etc/, ...) pointing under <root>. Paths without a trailing `/` (DOCKER_CONFIG=/registry-auth,
+# `cd /tmp`) stay as they are. The tests create the pod's mounts under <root>.
+stage() {
+  local root=$1 f
+  rm -rf "$root"; mkdir -p "$root/opt/scripts/workflow" "$root/tmp" "$root/work" "$root/etc/ssl/certs"
+  cp -R "$ROOT/ci/scripts/common" "$root/opt/scripts/common"
+  for f in "$WF"/*.sh; do
+    sed -E "s#/(work|tmp|ci|registry-auth|registry-ca|cosign|buildkitd|etc)/#$root/\1/#g" "$f" > "$root/opt/scripts/workflow/${f##*/}"
+  done
+  printf 'system roots\n' > "$root/etc/ssl/certs/ca-certificates.crt"
+}
+
+# --- guards.sh: repository allowlist and scoped credentials ---------------------------------------------------------
+GUARDS="$WF/guards.sh"
 assert_eq "$(grep -c 'GIT_ASKPASS=' "$TMP/plane.yaml" || true)" 0 "no global GIT_ASKPASS anywhere"
+for step in checkout gitops; do
+  assert_match "$(cat "$WF/$step.sh")" 'source "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)/guards.sh"' "$step.sh sources guards.sh"
+  assert_match "$(cat "$WF/$step.sh")" $'\ngit_access "\\$REPO"\n' "$step.sh calls git_access before any git command"
+done
 
 SEC="$TMP/git-secret"; mkdir -p "$SEC"; printf 'builder' > "$SEC/username"; printf 'TOKEN-FAKE-123' > "$SEC/password"
-# guard <cmd>: run cmd after BUILD_GUARDS in a clean environment (no user gitconfig); OUT = stdout+stderr, RC = rc
+ALLOWED="https://github.com/koorikla/ https://git.example.com/team/"
+# guard <cmd>: run cmd after sourcing guards.sh in a clean environment (no user gitconfig); OUT = stdout+stderr, RC = rc
 guard() {
-  if env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$SEC" \
-      GIT_ALLOWED_PREFIXES="https://github.com/koorikla/ https://git.example.com/team/" \
-      GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; '"$1" > "$TMP/guard.out" 2>&1; then RC=0; else RC=$?; fi
+  if env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$SEC" GIT_ALLOWED_PREFIXES="$ALLOWED" \
+      GUARDS="$GUARDS" bash -c 'set -euo pipefail; source "$GUARDS"; '"$1" > "$TMP/guard.out" 2>&1; then RC=0; else RC=$?; fi
   OUT=$(cat "$TMP/guard.out")
 }
 mkdir -p "$TMP/home"
-fill() { printf 'git_access %q; printf "url=%%s\\n\\n" %q | git credential fill 2>&1 || true' "$1" "$2"; }
+fill() { printf 'git_access %q; printf "url=%%s\\\\n\\\\n" %q | git credential fill 2>&1 || true' "$1" "$2"; }
 
 guard "$(fill https://github.com/koorikla/hello-world.git https://github.com/koorikla/hello-world.git)"; out=$OUT
 assert_match "$out" 'password=TOKEN-FAKE-123' "allowed repo: credential helper answers"
@@ -101,17 +115,23 @@ for bad in https://attacker.example/x.git https://github.com/other/x https://git
   assert_eq "$RC:$([[ "$out" == *REACHED* ]] && echo reached || echo stopped)" "1:stopped" "git_access refuses '$bad'"
   assert_match "$out" 'not under an allowed prefix' "git_access says why for '$bad'"
 done
+# the operator-facing messages, word for word
+guard 'git_access https://attacker.example/x.git'
+assert_eq "$OUT" ">> repository 'https://attacker.example/x.git' is not under an allowed prefix ($ALLOWED)" \
+  "foreign host: exact message"
 guard 'GIT_ALLOWED_PREFIXES=""; git_access https://github.com/koorikla/x; echo REACHED'; out=$OUT
-assert_eq "$RC" 1 "empty allowlist refuses everything"
+assert_eq "$RC:$out" "1:>> repository 'https://github.com/koorikla/x' is not under an allowed prefix (none)" \
+  "empty allowlist refuses everything"
 for ref in --upload-pack=touch -b "a b"; do
   guard "check_ref $(printf %q "$ref")"
-  assert_eq "$RC" 1 "check_ref refuses '$ref'"
+  assert_eq "$RC:$OUT" "1:>> invalid git ref '$ref'" "check_ref refuses '$ref' (exact message)"
 done
 guard 'check_ref main; check_ref ""; check_ref 0123abc'
 assert_eq "$RC" 0 "check_ref accepts main, empty, a sha"
 for wl in .github/workflows/ci.yaml deploy/openchoreo/../../x.yaml deploy/openchoreo/a/b.yaml; do
   guard "check_workload_path $(printf %q "$wl")"
-  assert_eq "$RC" 1 "check_workload_path refuses '$wl'"
+  assert_eq "$RC:$OUT" "1:>> gitops.workloadPath must be deploy/openchoreo/<name>.yaml (got '$wl')" \
+    "check_workload_path refuses '$wl' (exact message)"
 done
 guard 'check_workload_path deploy/openchoreo/workload.yaml'
 assert_eq "$RC" 0 "check_workload_path accepts deploy/openchoreo/workload.yaml"
@@ -121,14 +141,22 @@ guard "git_access https://github.com/koorikla/x; git ls-remote file://$TMP/bare.
 assert_eq "$([[ "$out" == *LISTED* ]] && echo listed || echo blocked)" blocked "protocol.allow never: file:// blocked"
 guard 'git_access https://github.com/koorikla/x; env | grep -c "^GIT_ASKPASS=" || true'; out=$OUT
 assert_eq "$out" 0 "git_access leaves no GIT_ASKPASS"
+guard 'git_access https://github.com/koorikla/x; echo "$GIT_CONFIG_NOSYSTEM $GIT_CONFIG_GLOBAL"'
+assert_eq "$OUT" "1 /dev/null" "git_access: no system or global gitconfig"
 # No token (the platform GitHub App is not installed on the repository, so ESO's generator never wrote <run>-git): the
 # run stops with the reason instead of an anonymous clone and a failing push at the end (#34).
 rm -f "$TMP/git-credential"
 out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/none" GIT_SECRET_WAIT=0 GIT_SECRET=run-1-git \
   RUN_NAMESPACE=workflows-default GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
-  GUARDS="$GUARDS" bash -c 'set -euo pipefail; eval "$GUARDS"; git_access https://github.com/koorikla/x; echo REACHED' 2>&1 || true)
+  GUARDS="$GUARDS" bash -c 'set -euo pipefail; source "$GUARDS"; git_access https://github.com/koorikla/x; echo REACHED' 2>&1 || true)
 assert_eq "$([[ "$out" == *REACHED* ]] && echo reached || echo stopped):$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" \
   "stopped:none" "no git token: the run stops, no anonymous clone"
+assert_eq "$out" ">> no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created.\
+ The platform GitHub App must be installed on this repository with Contents: Read and write\
+ (GitHub: Settings > Applications > the App > Configure > Repository access). Status:\
+ kubectl -n workflows-default describe externalsecret run-1-git;\
+ GitHub's answer (e.g. 422 not accessible to the installation): kubectl -n external-secrets logs\
+ deploy/external-secrets | grep run-1-git" "no git token: exact message (Secret, App permission hint, ExternalSecret, ESO log)"
 assert_matches "$out" <<'CASES'
 no git token: says which Secret | no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created
 no git token: says what to fix | GitHub App must be installed on this repository
@@ -136,12 +164,29 @@ no git token: points at the ExternalSecret | kubectl -n workflows-default descri
 no git token: points at GitHub's answer (ESO log) | logs deploy/external-secrets \| grep run-1-git
 CASES
 
-# --- gitops: only a real Workload under deploy/openchoreo/ is rewritten -------------------------------------------
-GITOPS=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
-CHECK=$(printf '%s\n' "$GITOPS" | awk '/Only an OpenChoreo Workload/{f=1} f{print} /is not an OpenChoreo Workload/{exit}')
-assert_match "$CHECK" 'realpath -e' "gitops workload check extracted"
-# The gitops step runs in the Linux toolbox (GNU coreutils); `realpath -e` does not exist on macOS/BSD. Off Linux,
-# put a GNU realpath first on PATH (brew coreutils: grealpath) or skip these runtime checks.
+# --- the inline templates, until #393 PR B switches them to these scripts -------------------------------------------
+# koorikla-build still carries the guards inline (env BUILD_GUARDS, eval'd by checkout and gitops). They must be
+# guards.sh's code line for line (comments aside), so the tests above cover what runs today.
+INLINE=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')
+assert_nonempty "$INLINE" "BUILD_GUARDS present in gitops"
+assert_eq "$(cwt koorikla-build '.spec.templates[] | select(.name == "checkout") | .container.env[] | select(.name == "BUILD_GUARDS") | .value')" \
+  "$INLINE" "checkout and gitops share one BUILD_GUARDS"
+code() { grep -v '^[[:space:]]*#' | sed '/^[[:space:]]*$/d'; }
+assert_eq "$(printf '%s\n' "$INLINE" | code)" "$(code < "$GUARDS")" "inline BUILD_GUARDS == ci/scripts/workflow/guards.sh"
+for step in checkout gitops; do
+  sc=$(cwt koorikla-build ".spec.templates[] | select(.name == \"$step\") | .container.args[0]")
+  assert_match "$sc" 'eval "\$BUILD_GUARDS"' "inline $step evaluates BUILD_GUARDS"
+  assert_match "$sc" 'git_access "\$REPO"' "inline $step calls git_access before any git command"
+done
+
+# --- gitops.sh: only a real Workload under deploy/openchoreo/ is rewritten, through the GitHub contents API (#34) -----
+# Runs gitops.sh with a fake `git clone` (a copy of a fixture repository, symlinks kept) and a fake `curl` that records
+# the request: one PUT to <api>/repos/<owner>/<repo>/contents/<workload> with the token only in a header file,
+# compare-and-swap on the file's blob sha, a 409 re-reads and retries, any other status stops with the reason.
+assert_eq "$(grep -c 'git push' "$WF/gitops.sh" || true)" 0 "gitops: no git push (the API commits as the App)"
+assert_eq "$(grep -c 'GIT_AUTHOR' "$WF/gitops.sh" || true)" 0 "gitops: no git identity of its own"
+# The step runs in the Linux toolbox (GNU coreutils); `realpath -e` does not exist on macOS/BSD. Off Linux, put a GNU
+# realpath first on PATH (brew coreutils: grealpath) or skip these runtime checks.
 WL_PATH=$PATH
 if ! realpath -e / >/dev/null 2>&1; then
   if command -v grealpath >/dev/null 2>&1; then
@@ -150,10 +195,6 @@ if ! realpath -e / >/dev/null 2>&1; then
     WL_SKIP=1
   fi
 fi
-wl_check() {   # wl_check <repo dir> <path> -> RC
-  if (cd "$1" && env -i PATH="$WL_PATH" WORKLOAD_PATH="$2" REPO=r GITOPS_BRANCH=b CHECK="$CHECK" GUARDS="$GUARDS" \
-      bash -c 'set -euo pipefail; eval "$GUARDS"; eval "$CHECK"' >/dev/null 2>&1); then RC=0; else RC=$?; fi
-}
 # symlink <target> <link>: a real symlink or nothing (rc 1). Git Bash's `ln -s` silently copies unless MSYS allows
 # native links (developer mode or admin): try that, and never let a copy stand in for a link in the refusal checks.
 symlink() {
@@ -162,90 +203,21 @@ symlink() {
   MSYS=winsymlinks:nativestrict ln -s "$1" "$2" 2>/dev/null && [[ -L "$2" ]] && return 0
   rm -rf "$2"; return 1
 }
-R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
-printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
-printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
-printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
-symlink ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml" && LINKS=1 || LINKS=""
-if [[ -n "${WL_SKIP:-}" ]]; then
-  echo "  SKIP gitops Workload runtime checks: no GNU realpath (brew install coreutils); production runs them on Linux"
-else
-  wl_check "$R" deploy/openchoreo/workload.yaml; assert_eq "$RC" 0 "gitops: Workload accepted"
-  wl_check "$R" deploy/openchoreo/deploy.yaml; assert_eq "$RC" 1 "gitops: another kind refused"
-  wl_check "$R" deploy/openchoreo/missing.yaml; assert_eq "$RC" 1 "gitops: missing file refused"
-  if [[ -n "$LINKS" ]]; then
-    wl_check "$R" deploy/openchoreo/link.yaml; assert_eq "$RC" 1 "gitops: symlinked file refused"
-  fi
-fi
-R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
-printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
-if symlink ../.github/workflows "$R2/deploy/openchoreo"; then
-  wl_check "$R2" deploy/openchoreo/ci.yaml; assert_eq "$RC" 1 "gitops: symlinked deploy/openchoreo directory refused"
-else
-  LINKS=""
-fi
-if [[ -z "$LINKS" ]]; then
-  [[ "$(os_name)" == windows ]] \
-    || { FAIL=$((FAIL + 1)); echo "  FAIL: cannot create symlinks on $(uname -s): the symlink refusals must run here" >&2; }
-  echo "  SKIP gitops symlink refusals: this Git Bash cannot create symlinks (enable Windows developer mode); Linux/macOS CI runs them"
-fi
-
-# --- build: context and Dockerfile must stay inside the checkout ---------------------------------------------------
-BUILD=$(cwt koorikla-build '.spec.templates[] | select(.name == "build") | .container.args[0]')
-assert_match "$BUILD" 'resolves outside the repository' "build refuses a context outside /work/source"
-
-# --- signing: no public Rekor upload unless the installation opts in ----------------------------------------------
-FAKE="$TMP/fakebin"; mkdir -p "$FAKE"
-printf '#!/bin/sh\necho "cosign $*"\n' > "$FAKE/cosign"; chmod +x "$FAKE/cosign"
-for t in koorikla-build koorikla-helm-chart; do
-  SIGN=$(cwt "$t" '.spec.templates[] | select(.name == "sign") | .container.args[0]')
-  SHIM=$(printf '%s\n' "$SIGN" | awk '/if \[ "\$TLOG_UPLOAD" != true \]/{f=1} f{print} f && /^fi$/{exit}')
-  assert_match "$SHIM" 'signing-config' "$t: sign has the transparency-log switch"
-  assert_eq "$(cwt "$t" '.spec.arguments.parameters[] | select(.name == "tlog-upload") | .value')" false "$t: tlog-upload defaults to false"
-  rm -rf "${TMP:?}/bin" "${TMP:?}/signing-config.json"
-  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=false SHIM="${SHIM//\/tmp\//$TMP/}" \
-    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1; cosign attest --yes --type vuln r@sha256:1; cosign verify r' 2>&1)
-  assert_match "$out" "cosign sign --signing-config $TMP/signing-config.json --yes --key k" "$t: sign gets the tlog-free signing config"
-  assert_match "$out" "cosign attest --signing-config $TMP/signing-config.json --yes --type vuln" "$t: attest gets it too"
-  assert_match "$out" "cosign verify r" "$t: other subcommands untouched"
-  assert_eq "$(yq -p json -o json -I0 '.' "$TMP/signing-config.json")" \
-    '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","rekorTlogConfig":{},"tsaConfig":{}}' "$t: signing config has no Rekor/TSA/Fulcio service"
-  out=$(cd "$TMP" && env -i PATH="$FAKE:/usr/bin:/bin" TLOG_UPLOAD=true SHIM="${SHIM//\/tmp\//$TMP/}" \
-    bash -c 'set -euo pipefail; eval "$SHIM"; cosign sign --yes --key k r@sha256:1' 2>&1)
-  assert_eq "$out" "cosign sign --yes --key k r@sha256:1" "$t: transparencyLog true: plain cosign (public Rekor)"
-done
-
-# --- every rendered step script parses (bash -n; build runs sh in the BuildKit image) ------------------------------
-for t in koorikla-build koorikla-helm-chart; do
-  for step in $(cwt "$t" '.spec.templates[] | select(.container.args) | .name'); do
-    cwt "$t" ".spec.templates[] | select(.name == \"$step\") | .container.args[0]" > "$TMP/step.sh"
-    sh_bin="bash"; [[ "$step" == build ]] && sh_bin="sh"
-    assert_eq "$("$sh_bin" -n "$TMP/step.sh" 2>&1 && echo ok)" ok "$t/$step script parses ($sh_bin -n)"
-  done
-done
-bash -n <(printf '%s\n' "$GUARDS") && assert_eq ok ok "BUILD_GUARDS parses"
-
-# --- gitops: the commit goes through the GitHub contents API as the App (#34) ---------------------------------------
-# Runs the rendered gitops script with a fake `git clone` (a local copy) and a fake `curl` that records the request:
-# one PUT to <api>/repos/<owner>/<repo>/contents/<workload> with the token only in a header file, compare-and-swap on
-# the file's blob sha, a 409 re-reads and retries, any other status stops with the reason. Linux toolbox tools
-# (GNU base64 -w0, realpath -e, LF-only jq output); skipped where they are missing and on Windows (Git Bash's jq
-# prints CRLF; the step only ever runs in the Linux toolbox, the Linux and arm CI jobs run these checks).
-GITOPS_SCRIPT=$(cwt koorikla-build '.spec.templates[] | select(.name == "gitops") | .container.args[0]')
-assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'git push' || true)" 0 "gitops: no git push (the API commits as the App)"
-assert_eq "$(printf '%s\n' "$GITOPS_SCRIPT" | grep -c 'GIT_AUTHOR' || true)" 0 "gitops: no git identity of its own"
-if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)" != windows ]]; then
-  REAL_GIT=$(command -v git)
-  GX="$TMP/gx"; GB="$TMP/gxbin"; SRC="$TMP/gxsrc"; mkdir -p "$GB"
-  rm -rf "$SRC"; mkdir -p "$SRC/deploy/openchoreo"
-  printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec:\n  container:\n    image: old\n  source:\n    commit: aaa\n' \
-    > "$SRC/deploy/openchoreo/workload.yaml"
-  (cd "$SRC" && "$REAL_GIT" init -q -b main . && "$REAL_GIT" add -A && \
-    "$REAL_GIT" -c user.name=t -c user.email=t@t commit -q -m init)
-  BLOB=$(cd "$SRC" && "$REAL_GIT" rev-parse HEAD:deploy/openchoreo/workload.yaml)
-  printf '#!/bin/bash\nif [ "$1" = clone ]; then cp -R "%s" "${@: -1}"; exit 0; fi\nexec "%s" "$@"\n' "$SRC" "$REAL_GIT" > "$GB/git"
-  # fake curl: record argv (one line per call), keep the body + auth header, answer with the next code of $CODES
-  cat > "$GB/curl" <<'FAKE'
+# One probe: can this shell create a symlink and copy it as one (the fake clone's `cp -R`; the link may dangle while
+# the copy runs)? Git Bash without Windows developer mode cannot: `ln -s` copies and `cp` fails on a link. Only the
+# symlink-refusal cases need links; they SKIP there with a count (and FAIL on Linux/macOS, where they must run).
+mkdir -p "$TMP/link-probe/a"
+if symlink missing "$TMP/link-probe/a/l" && MSYS=winsymlinks:nativestrict cp -R "$TMP/link-probe/a" "$TMP/link-probe/b" 2>/dev/null &&
+  [[ -L "$TMP/link-probe/b/l" ]]; then LINKS=1; else LINKS=""; fi
+REAL_GIT=$(command -v git)
+GX="$TMPP/gx"; GB="$TMP/gxbin"; mkdir -p "$GB"
+cat > "$GB/git" <<'FAKE'
+#!/bin/bash
+if [ "$1" = clone ]; then MSYS=winsymlinks:nativestrict cp -R "$GITOPS_SRC" "${@: -1}"; exit 0; fi
+exec "$REAL_GIT" "$@"
+FAKE
+# fake curl: record argv (one line per call), keep the body + auth header, answer with the next code of $CODES
+cat > "$GB/curl" <<'FAKE'
 #!/bin/bash
 n=$(( $(cat "$CALLS" 2>/dev/null | wc -l) + 1 )); printf '%s\n' "$*" >> "$CALLS"
 while [ $# -gt 1 ]; do
@@ -259,18 +231,62 @@ case "$code" in
 esac
 printf '%s' "$code"
 FAKE
-  chmod +x "$GB/git" "$GB/curl"
-  gitops() {   # gitops <codes> <image> [source commit] -> RC, OUT; calls in $GX.calls
-    rm -rf "$GX" "$GX.calls"*; mkdir -p "$GX"
-    if env -i PATH="$GB:$WL_PATH" HOME="$GX" TMPDIR="$GX" CALLS="$GX.calls" CODES="$1" GIT_SECRET_DIR="$SEC" \
-        REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
-        GITHUB_API_URL=https://api.github.com GITOPS_BRANCH=main WORKLOAD_PATH=deploy/openchoreo/workload.yaml \
-        IMAGE="$2" COMMIT_SHA="${3:-bbb}" SHORT_SHA=bbb COMPONENT=hello PROJECT=demo NAMESPACE=default RUN=run-1 \
-        GUARDS="$GUARDS" S="${GITOPS_SCRIPT//\/tmp/$GX}" \
-        bash -c 'set -euo pipefail; BUILD_GUARDS=$GUARDS; eval "$S"' > "$GX.out" 2>&1; then RC=0; else RC=$?; fi
-    OUT=$(cat "$GX.out")
-  }
-  gitops "201" new:1
+chmod +x "$GB/git" "$GB/curl"
+gitops() {   # gitops <source repo> <codes> <image> [source commit] [workload path] -> RC, OUT; curl calls in $GX.calls
+  rm -rf "$GX.calls"*; stage "$GX"
+  if env -i PATH="$GB:$WL_PATH" HOME="$GX" TMPDIR="$GX" REAL_GIT="$REAL_GIT" GITOPS_SRC="$1" CALLS="$GX.calls" CODES="$2" \
+      GIT_SECRET_DIR="$SEC" REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+      GITHUB_API_URL=https://api.github.com GITOPS_BRANCH=main WORKLOAD_PATH="${5:-deploy/openchoreo/workload.yaml}" \
+      IMAGE="$3" COMMIT_SHA="${4:-bbb}" SHORT_SHA=bbb COMPONENT=hello PROJECT=demo NAMESPACE=default RUN=run-1 \
+      bash "$GX/opt/scripts/workflow/gitops.sh" > "$GX.out" 2>&1; then RC=0; else RC=$?; fi
+  OUT=$(cat "$GX.out")
+}
+in_repo=" in https://github.com/koorikla/hello-world.git@main"
+fence_msg() { [[ "$1" == *"not found (or a symlink"* || "$1" == *"is not an OpenChoreo Workload"* || "$1" == *"resolves outside"* ]] && echo refused || echo passed; }
+R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
+printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
+printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
+printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
+if [[ -n "${WL_SKIP:-}" ]]; then
+  echo "  SKIP gitops Workload runtime checks: no GNU realpath (brew install coreutils); production runs them on Linux"
+else
+  gitops "$R" 201 new:1; assert_eq "$(fence_msg "$OUT")" passed "gitops: Workload accepted"
+  gitops "$R" 201 new:1 bbb deploy/openchoreo/deploy.yaml
+  assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/deploy.yaml is not an OpenChoreo Workload" "gitops: another kind refused (exact message)"
+  gitops "$R" 201 new:1 bbb deploy/openchoreo/missing.yaml
+  assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/missing.yaml not found (or a symlink on its path)$in_repo" "gitops: missing file refused"
+  # Symlink fixtures are separate repositories, so the cases above never copy a link.
+  if [[ -n "$LINKS" ]]; then
+    RL="$TMP/repo-link"; cp -R "$R" "$RL"
+    symlink ../../.github/workflows/ci.yaml "$RL/deploy/openchoreo/link.yaml" || LINKS=""
+    R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
+    printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
+    symlink ../.github/workflows "$R2/deploy/openchoreo" || LINKS=""
+  fi
+  if [[ -n "$LINKS" ]]; then
+    gitops "$RL" 201 new:1 bbb deploy/openchoreo/link.yaml
+    assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/link.yaml not found (or a symlink on its path)$in_repo" "gitops: symlinked file refused"
+    gitops "$R2" 201 new:1 bbb deploy/openchoreo/ci.yaml
+    assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/ci.yaml not found (or a symlink on its path)$in_repo" \
+      "gitops: symlinked deploy/openchoreo directory refused (exact message)"
+    assert_eq "$([[ -e "$GX.calls" ]] && echo called || echo none)" none "gitops: nothing sent for a refused Workload"
+  elif [[ "$(os_name)" == windows ]]; then
+    echo "  SKIP 3 gitops symlink-refusal assertions (symlinked Workload file, symlinked deploy/openchoreo, nothing sent):" \
+      "this Git Bash cannot create and copy symlinks (enable Windows developer mode); Linux/macOS CI runs them"
+  else
+    FAIL=$((FAIL + 1)); echo "  FAIL: cannot create and copy symlinks on $(uname -s): the gitops symlink refusals must run here" >&2
+  fi
+fi
+# The API path needs the Linux toolbox tools (GNU base64 -w0, realpath -e, LF-only jq output); skipped where they are
+# missing and on Windows (Git Bash's jq prints CRLF; the Linux and arm CI jobs run these checks).
+if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)" != windows ]]; then
+  SRC="$TMP/gxsrc"; mkdir -p "$SRC/deploy/openchoreo"
+  printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec:\n  container:\n    image: old\n  source:\n    commit: aaa\n' \
+    > "$SRC/deploy/openchoreo/workload.yaml"
+  (cd "$SRC" && "$REAL_GIT" init -q -b main . && "$REAL_GIT" add -A && \
+    "$REAL_GIT" -c user.name=t -c user.email=t@t commit -q -m init)
+  BLOB=$(cd "$SRC" && "$REAL_GIT" rev-parse HEAD:deploy/openchoreo/workload.yaml)
+  gitops "$SRC" "201" new:1
   assert_eq "$RC" 0 "gitops API: committed"
   assert_match "$OUT" 'committed c0ffee to koorikla/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
   assert_eq "$(wc -l < "$GX.calls" | tr -d ' ')" 1 "gitops API: one request"
@@ -282,20 +298,65 @@ FAKE
   assert_eq "$([[ "$call" == *TOKEN-FAKE-123* ]] && echo argv || echo header-file)" header-file "gitops API: token not in argv"
   assert_eq "$(cat "$GX.calls.auth")" "Authorization: Bearer TOKEN-FAKE-123" "gitops API: token in the auth header file"
   assert_eq "$(jq -r '[.branch, .sha] | join(" ")' "$GX.calls.body1")" "main $BLOB" "gitops API: branch + compare-and-swap blob sha"
-  assert_match "$(jq -r .message "$GX.calls.body1")" '^chore\(deploy\): hello image bbb \[skip ci\]' "gitops API: commit message"
+  assert_eq "$(jq -r .message "$GX.calls.body1")" "chore(deploy): hello image bbb [skip ci]
+
+OpenChoreo WorkflowRun run-1 (default/demo/hello): new:1" "gitops API: commit message, word for word"
   body=$(jq -r .content "$GX.calls.body1" | base64 -d)
   assert_eq "$(printf '%s\n' "$body" | yq -r '.spec.container.image + " " + .spec.source.commit')" "new:1 bbb" "gitops API: new image + source commit"
-  gitops "409 201" new:1
+  gitops "$SRC" "409 201" new:1
   assert_eq "$RC:$(wc -l < "$GX.calls" | tr -d ' ')" "0:2" "gitops API: 409 (branch moved) re-reads and retries"
-  gitops "403" new:1
+  assert_match "$OUT" '>> main moved, re-reading \(attempt 1\)' "gitops API: says the branch moved"
+  gitops "$SRC" "403" new:1
   assert_eq "$RC" 1 "gitops API: 403 fails the run"
-  assert_match "$OUT" 'HTTP 403 Resource not accessible by integration' "gitops API: shows GitHub's answer"
-  assert_match "$OUT" 'needs Contents: Read and write on koorikla/hello-world' "gitops API: says what to fix"
-  gitops "201" old aaa
+  assert_eq "$OUT" ">> GitHub contents API (koorikla/hello-world deploy/openchoreo/workload.yaml): HTTP 403 Resource not accessible\
+ by integration. The platform GitHub App needs Contents: Read and write on koorikla/hello-world, and a bypass if main is\
+ protected" "gitops API: GitHub's answer and the App permission hint, word for word"
+  gitops "$SRC" "201" old aaa
   assert_eq "$RC:$([[ -e "$GX.calls" ]] && echo called || echo none)" "0:none" "gitops API: unchanged Workload, no commit"
+  assert_match "$OUT" '>> deploy/openchoreo/workload.yaml already at old' "gitops API: says it is already there"
 else
   echo "  SKIP gitops API runtime checks: Linux toolbox tools only (GNU base64/realpath, LF jq output)"
 fi
+
+# --- sign.sh: no public Rekor upload unless the installation opts in ------------------------------------------------
+FAKE="$TMP/fakebin"; mkdir -p "$FAKE"
+printf '#!/bin/sh\necho "cosign $*"\necho "password: ${COSIGN_PASSWORD:-none}"\n' > "$FAKE/cosign"; chmod +x "$FAKE/cosign"
+SG="$TMPP/sign"
+sign() {   # sign <tlog-upload> [VAR=value...]: sign.sh with the real sign-image.sh and a fake cosign -> RC, OUT (cosign lines)
+  local tlog=$1; shift
+  stage "$SG"; mkdir -p "$SG/cosign" "$SG/work/out"
+  printf 'fixture-pass' > "$SG/cosign/cosign.password"; printf '{}' > "$SG/work/out/trivy-vuln.json"
+  if (cd "$SG" && env -i PATH="$FAKE:/usr/bin:/bin" HOME="$SG/tmp" TLOG_UPLOAD="$tlog" DIGEST_REF=r@sha256:1 COSIGN_KEY=k "$@" \
+      bash "$SG/opt/scripts/workflow/sign.sh") > "$SG.out" 2>&1; then RC=0; else RC=$?; fi
+  OUT=$(grep -E '^(cosign|password)' "$SG.out" || true)
+}
+CFG="--signing-config $SG/tmp/signing-config.json"
+sign false VULN_PREDICATE="$SG/work/out/trivy-vuln.json" SBOM_PREDICATE="$SG/work/out/sbom.spdx.json"
+assert_eq "$RC" 0 "koorikla-build sign: runs"
+assert_eq "$(grep '^cosign' <<<"$OUT")" "cosign sign $CFG --yes --key k --recursive r@sha256:1
+cosign attest $CFG --yes --key k --type vuln --predicate $SG/work/out/trivy-vuln.json r@sha256:1
+cosign attest $CFG --yes --key k --type https://spdx.dev/Document/v2.3 --predicate $SG/work/out/sbom.spdx.json r@sha256:1" \
+  "koorikla-build sign: index + platforms signed, vuln + SPDX 2.3 SBOM attested, all with the tlog-free signing config"
+assert_eq "$(grep -c '^password: fixture-pass$' <<<"$OUT")" 3 "sign: COSIGN_PASSWORD from the cosign Secret"
+assert_eq "$(yq -p json -o json -I0 '.' "$SG/tmp/signing-config.json")" \
+  '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","rekorTlogConfig":{},"tsaConfig":{}}' "signing config has no Rekor/TSA/Fulcio service"
+out=$(PATH="$FAKE:/usr/bin:/bin" "$SG/tmp/bin/cosign" verify r)
+assert_eq "${out%%$'\n'*}" "cosign verify r" "the cosign shim leaves other subcommands untouched"
+sign false RECURSIVE=false
+assert_eq "$RC:$(grep '^cosign' <<<"$OUT")" "0:cosign sign $CFG --yes --key k r@sha256:1" \
+  "koorikla-helm-chart sign: the chart digest only, tlog-free signing config, no attestations"
+sign true VULN_PREDICATE="$SG/work/out/trivy-vuln.json"
+assert_eq "$RC:$(grep '^cosign' <<<"$OUT")" "0:cosign sign --yes --key k --recursive r@sha256:1
+cosign attest --yes --key k --type vuln --predicate $SG/work/out/trivy-vuln.json r@sha256:1" "transparencyLog true: plain cosign (public Rekor)"
+for t in koorikla-build koorikla-helm-chart; do
+  assert_eq "$(cwt "$t" '.spec.arguments.parameters[] | select(.name == "tlog-upload") | .value')" false "$t: tlog-upload defaults to false"
+done
+
+# --- every step script parses (bash -n; build.sh is POSIX sh for the BuildKit image) -------------------------------
+for f in "$WF"/*.sh; do
+  sh_bin="bash"; [[ "$f" == */build.sh ]] && sh_bin="sh"
+  assert_eq "$("$sh_bin" -n "$f" 2>&1 && echo ok)" ok "${f#"$ROOT"/} parses ($sh_bin -n)"
+done
 
 # --- ServiceAccount token only for Argo's executor ----------------------------------------------------------------
 for t in koorikla-build koorikla-helm-chart; do
