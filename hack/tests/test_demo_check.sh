@@ -232,7 +232,7 @@ assert_eq "$(detail_of 'Kyverno policies Ready (prod1)')" "2/2 Ready" "green: ky
 assert_eq "$(result_of 'signed image admitted (production, dry-run)')" PASS "green: signed admitted"
 assert_eq "$(result_of 'unsigned image denied (production, dry-run)')" PASS "green: unsigned denied"
 assert_eq "$(detail_of 'unsigned image denied (production, dry-run)')" "denied in prod1/dp-default-demo-production-1234: image (ghcr.io/koorikla/) is not signed by gh-koorikla-hello-world-heads-main" "green: deny detail names the policy message"
-assert_match "$(printf '%s\n' "$CALLS" | grep ' apply ' | head -n1)" "^kubectl --kubeconfig .*/prod1.kubeconfig --request-timeout=20s apply --dry-run=server -f -$" "green: dry-run runs on the production cluster"
+assert_match "$(grep -m1 ' apply ' <<<"$CALLS")" "^kubectl --kubeconfig .*/prod1.kubeconfig --request-timeout=20s apply --dry-run=server -f -$" "green: dry-run runs on the production cluster"
 assert_eq "$(detail_of 'in-cluster build succeeded')" "latest build build-1 (go): succeeded" "green: build run"
 assert_eq "$(printf '%s\n' "$OUT" | awk 'substr($0, 6, 13) == "hello-world 2" { print substr($0, 6, 46) }' | sed 's/ *$//' | paste -sd, -)" \
   "hello-world 200 in development,hello-world 200 in staging,hello-world 200 in production" "green: envs in promotion order"

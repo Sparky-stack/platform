@@ -43,7 +43,7 @@ assert_same() {
   if [[ "$2" == "$3" ]]; then PASS=$((PASS + 1)); return 0; fi
   FAIL=$((FAIL + 1))
   printf '  FAIL: %s, diff (expected vs actual):\n' "$1" >&2
-  diff <(printf '%s' "$2" | yq -P '.') <(printf '%s' "$3" | yq -P '.') | head -n 20 >&2 || true
+  diff <(printf '%s' "$2" | yq -P '.') <(printf '%s' "$3" | yq -P '.') | sed -n 1,20p >&2 || true
 }
 words_in() { local w; for w in $1; do [[ " $2 " == *" $w "* ]] || { echo "$w"; return 0; }; done; echo; }
 

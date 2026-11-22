@@ -120,8 +120,8 @@ cmd_commit_msg() {
   case "$subject" in
     "Merge "* | "Revert \""* | "fixup! "* | "squash! "* | "amend! "* | "") return 0 ;;
   esac
-  if ! printf '%s\n' "$subject" \
-    | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([[:alnum:]_./,-]+\))?!?: [^[:space:]]'; then
+  if ! grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([[:alnum:]_./,-]+\))?!?: [^[:space:]]' \
+    <<<"$subject"; then
     echo "WARN: commit subject is not a conventional commit (AGENTS.md): $subject" >&2
     echo "      expected: <type>(<scope>): <description>, type one of build chore ci docs feat fix perf refactor revert style test" >&2
   fi

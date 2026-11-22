@@ -345,9 +345,10 @@ seed_openbao_secret() {
   seed_generated_secret openbao-unseal key=@hex32
 }
 
-# Platform cosign key pair for in-cluster builds, generated once with the ci-toolbox image (no host install). The private
-# key only ever exists in this Secret and the build pods; admission policies trust cosign.pub.
-COSIGN_IMAGE="ghcr.io/koorikla/platform/ci-toolbox:db7bcac@sha256:e22cd9dd65b56545ae988f84614a426192c0957a35612d77fabddb403f186858"
+# Platform cosign key pair for in-cluster builds, generated once with the build steps' toolbox image (no host install;
+# the one pin: addons/openchoreo-workflow-plane images.TOOLBOX_IMAGE). The private key only ever exists in this Secret
+# and the build pods; admission policies trust cosign.pub.
+TOOLBOX_VALUES=addons/openchoreo-workflow-plane/values.yaml
 COSIGN_TMP=""
 # shellcheck disable=SC2034  # cosign_pass is read by apply_secret through its name
 seed_cosign_secret() {
@@ -358,8 +359,9 @@ seed_cosign_secret() {
     log "  cosign-platform exists (keeping the key pair)"
     return 0
   fi
-  require_bins docker
-  local cosign_pass
+  require_bins docker yq
+  local cosign_pass image
+  image=$(yq '.images.TOOLBOX_IMAGE' "$TOOLBOX_VALUES")
   COSIGN_TMP=$(mktemp -d)
   # The private key must not outlive this function, also when docker or the apply fails (set -e exits).
   trap 'rm -rf "$COSIGN_TMP"' EXIT
@@ -369,7 +371,7 @@ seed_cosign_secret() {
   # path (no-ops elsewhere); native_path gives docker.exe the host dir as C:/Users/....
   COSIGN_PASSWORD="$cosign_pass" MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
     docker run --rm -u "$(id -u):$(id -g)" -e COSIGN_PASSWORD \
-    -v "$(native_path "$COSIGN_TMP"):/keys" -w /keys --entrypoint cosign "$COSIGN_IMAGE" generate-key-pair >/dev/null
+    -v "$(native_path "$COSIGN_TMP"):/keys" -w /keys --entrypoint cosign "$image" generate-key-pair >/dev/null
   apply_secret platform-secrets cosign-platform cosign.key=@"$COSIGN_TMP/cosign.key" \
     cosign.pub=@"$COSIGN_TMP/cosign.pub" cosign.password=cosign_pass
   rm -rf "$COSIGN_TMP"; COSIGN_TMP=""

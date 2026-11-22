@@ -12,7 +12,7 @@ wp_store() {
   local -a wf_files=()
   read_lines wf_files bash -c 'grep -l "ClusterWorkflowPlane" "$@" 2>/dev/null || true' _ "$@"
   if [[ ${#wf_files[@]} -gt 0 ]]; then
-    s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "${wf_files[@]}" 2>/dev/null | head -n1 || true)
+    s=$(yq -N 'select(.kind == "ClusterWorkflowPlane") | .spec.secretStoreRef.name' "${wf_files[@]}" 2>/dev/null | sed -n 1p || true)
   fi
   printf '%s\n' "${s:-workflows}"
 }
