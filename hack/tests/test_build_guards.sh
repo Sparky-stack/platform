@@ -203,11 +203,17 @@ symlink() {
   MSYS=winsymlinks:nativestrict ln -s "$1" "$2" 2>/dev/null && [[ -L "$2" ]] && return 0
   rm -rf "$2"; return 1
 }
+# One probe: can this shell create a symlink and copy it as one (the fake clone's `cp -R`; the link may dangle while
+# the copy runs)? Git Bash without Windows developer mode cannot: `ln -s` copies and `cp` fails on a link. Only the
+# symlink-refusal cases need links; they SKIP there with a count (and FAIL on Linux/macOS, where they must run).
+mkdir -p "$TMP/link-probe/a"
+if symlink missing "$TMP/link-probe/a/l" && MSYS=winsymlinks:nativestrict cp -R "$TMP/link-probe/a" "$TMP/link-probe/b" 2>/dev/null &&
+  [[ -L "$TMP/link-probe/b/l" ]]; then LINKS=1; else LINKS=""; fi
 REAL_GIT=$(command -v git)
 GX="$TMPP/gx"; GB="$TMP/gxbin"; mkdir -p "$GB"
 cat > "$GB/git" <<'FAKE'
 #!/bin/bash
-if [ "$1" = clone ]; then cp -R "$GITOPS_SRC" "${@: -1}"; exit 0; fi
+if [ "$1" = clone ]; then MSYS=winsymlinks:nativestrict cp -R "$GITOPS_SRC" "${@: -1}"; exit 0; fi
 exec "$REAL_GIT" "$@"
 FAKE
 # fake curl: record argv (one line per call), keep the body + auth header, answer with the next code of $CODES
@@ -241,7 +247,6 @@ R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
 printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
 printf 'apiVersion: apps/v1\nkind: Deployment\n' > "$R/deploy/openchoreo/deploy.yaml"
 printf 'kind: Workload\n' > "$R/.github/workflows/ci.yaml"
-symlink ../../.github/workflows/ci.yaml "$R/deploy/openchoreo/link.yaml" && LINKS=1 || LINKS=""
 if [[ -n "${WL_SKIP:-}" ]]; then
   echo "  SKIP gitops Workload runtime checks: no GNU realpath (brew install coreutils); production runs them on Linux"
 else
@@ -250,24 +255,26 @@ else
   assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/deploy.yaml is not an OpenChoreo Workload" "gitops: another kind refused (exact message)"
   gitops "$R" 201 new:1 bbb deploy/openchoreo/missing.yaml
   assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/missing.yaml not found (or a symlink on its path)$in_repo" "gitops: missing file refused"
+  # Symlink fixtures are separate repositories, so the cases above never copy a link.
   if [[ -n "$LINKS" ]]; then
-    gitops "$R" 201 new:1 bbb deploy/openchoreo/link.yaml
-    assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/link.yaml not found (or a symlink on its path)$in_repo" "gitops: symlinked file refused"
+    RL="$TMP/repo-link"; cp -R "$R" "$RL"
+    symlink ../../.github/workflows/ci.yaml "$RL/deploy/openchoreo/link.yaml" || LINKS=""
+    R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
+    printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
+    symlink ../.github/workflows "$R2/deploy/openchoreo" || LINKS=""
   fi
-  R2="$TMP/repo2"; mkdir -p "$R2/deploy" "$R2/.github/workflows"
-  printf 'kind: Workload\n' > "$R2/.github/workflows/ci.yaml"
-  if symlink ../.github/workflows "$R2/deploy/openchoreo"; then
+  if [[ -n "$LINKS" ]]; then
+    gitops "$RL" 201 new:1 bbb deploy/openchoreo/link.yaml
+    assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/link.yaml not found (or a symlink on its path)$in_repo" "gitops: symlinked file refused"
     gitops "$R2" 201 new:1 bbb deploy/openchoreo/ci.yaml
     assert_eq "$RC:$OUT" "1:>> deploy/openchoreo/ci.yaml not found (or a symlink on its path)$in_repo" \
       "gitops: symlinked deploy/openchoreo directory refused (exact message)"
     assert_eq "$([[ -e "$GX.calls" ]] && echo called || echo none)" none "gitops: nothing sent for a refused Workload"
+  elif [[ "$(os_name)" == windows ]]; then
+    echo "  SKIP 3 gitops symlink-refusal assertions (symlinked Workload file, symlinked deploy/openchoreo, nothing sent):" \
+      "this Git Bash cannot create and copy symlinks (enable Windows developer mode); Linux/macOS CI runs them"
   else
-    LINKS=""
-  fi
-  if [[ -z "$LINKS" ]]; then
-    [[ "$(os_name)" == windows ]] \
-      || { FAIL=$((FAIL + 1)); echo "  FAIL: cannot create symlinks on $(uname -s): the symlink refusals must run here" >&2; }
-    echo "  SKIP gitops symlink refusals: this Git Bash cannot create symlinks (enable Windows developer mode); Linux/macOS CI runs them"
+    FAIL=$((FAIL + 1)); echo "  FAIL: cannot create and copy symlinks on $(uname -s): the gitops symlink refusals must run here" >&2
   fi
 fi
 # The API path needs the Linux toolbox tools (GNU base64 -w0, realpath -e, LF-only jq output); skipped where they are

@@ -40,7 +40,7 @@ stage() {
 # points origin at a local fixture repository (file://, allowed for this fetch only: guards.sh allows https only).
 # Git Bash: Windows git and file:// fixture paths do not mix; the step only ever runs in the Linux toolbox.
 if [[ "$(os_name)" == windows ]]; then
-  echo "  SKIP checkout runtime checks on Windows (Linux/macOS run them)"
+  echo "  SKIP 7 checkout assertions on Windows (Windows git + file:// fixture; the step runs in the Linux toolbox, Linux/macOS run them)"
 else
   REAL_GIT=$(command -v git)
   UP="$TMP/upstream"; mkdir -p "$UP/deploy/openchoreo"
@@ -109,6 +109,8 @@ if [[ "$(os_name)" != windows ]]; then
   assert_match "$OUT" "FLAG=x y\|EVIL=\\\$\(touch $CK/pwned\)\|N=3\|Q=it's" "check: check-env values arrive literally"
   assert_eq "$([[ -e "$CK/pwned" ]] && echo ran || echo literal)" literal "check: a check-env value is never run as code"
   assert_eq "$(cat "$CK/work/source/app/setup" 2>/dev/null)" setup-ran "check: check-setup runs first, in WORKDIR"
+else
+  echo "  SKIP 6 check-init/check assertions on Windows (Git Bash jq writes CRLF into env.sh; Linux/macOS run them)"
 fi
 
 # build.sh (POSIX sh in the BuildKit image): build-arg JSON parsing without jq, the context fence, digest outputs. A fake
@@ -156,9 +158,20 @@ assert_eq "$RC:$OUT:$([[ -e "$BD.call" ]] && echo built || echo none)" "1:>> $BD
   "build: a ../ context is refused"
 build DOCKERFILE_PATH=../../registry-auth/config.json
 assert_eq "$RC:$OUT" "1:>> $BD/work/source/../../registry-auth resolves outside the repository" "build: a ../ Dockerfile is refused"
-if ln -s "$BD/registry-auth" "$BD/work/source/ctx" 2>/dev/null && [[ -L "$BD/work/source/ctx" ]]; then
+# Git Bash without developer mode: `ln -s` copies (not a link), so the case SKIPs there (FAILs on Linux/macOS).
+link_ctx() {   # a real symlink or nothing (Git Bash's plain `ln -s` silently copies)
+  ln -s "$BD/registry-auth" "$BD/work/source/ctx" 2>/dev/null && [[ -L "$BD/work/source/ctx" ]] && return 0
+  rm -rf "$BD/work/source/ctx"
+  MSYS=winsymlinks:nativestrict ln -s "$BD/registry-auth" "$BD/work/source/ctx" 2>/dev/null && [[ -L "$BD/work/source/ctx" ]] && return 0
+  rm -rf "$BD/work/source/ctx"; return 1
+}
+if link_ctx; then
   build DOCKER_CONTEXT=ctx
   assert_eq "$RC:$OUT" "1:>> $BD/work/source/ctx resolves outside the repository" "build: a symlinked context root is refused"
+elif [[ "$(os_name)" == windows ]]; then
+  echo "  SKIP 1 build assertion (symlinked context root): this Git Bash cannot create symlinks (enable Windows developer mode)"
+else
+  FAIL=$((FAIL + 1)); echo "  FAIL: cannot create a symlink on $(uname -s): the symlinked-context case must run here" >&2
 fi
 build NO_DIGEST=1
 assert_eq "$RC:$(grep -c '^>> no digest in build metadata$' <<<"$OUT")" "1:1" "build: no digest in the metadata fails the build"
