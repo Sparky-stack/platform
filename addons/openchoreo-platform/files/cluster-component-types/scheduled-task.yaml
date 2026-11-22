@@ -1,3 +1,6 @@
+# Platform-owned ClusterComponentType, derived from openchoreo/openchoreo@v1.3.3
+# samples/getting-started/component-types/scheduled-task.yaml. Platform changes are marked "# Platform:"; the list and the
+# upgrade recipe are in files/README.md.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterComponentType
 metadata:
@@ -6,6 +9,19 @@ metadata:
     openchoreo.dev/description: "A component that runs to completion on a schedule"
 spec:
   workloadType: cronjob
+  # Platform: the platform's build ClusterWorkflows (== values.yaml buildWorkflows.stacks, guarded by
+  # templates/upstream-defaults.yaml) instead of upstream's buildpacks/podman ones, which are not installed.
+  allowedWorkflows:
+    - kind: ClusterWorkflow
+      name: go
+    - kind: ClusterWorkflow
+      name: nextjs
+    - kind: ClusterWorkflow
+      name: elixir
+    - kind: ClusterWorkflow
+      name: ruby
+    - kind: ClusterWorkflow
+      name: dockerfile
   allowedTraits: []
   parameters:
     openAPIV3Schema:

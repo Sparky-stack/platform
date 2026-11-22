@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, upstream `ClusterComponentType`/`ClusterTrait`/`ClusterProjectType` defaults, `ClusterTrait resilience` embedded in the Deployment component types (spread, PDB, graceful shutdown, priority; docs/openchoreo.md "Resilience defaults") and their Reloader opt-in (pods roll when a referenced Secret rotates, #268), the data-service types `ClusterTrait keda-scaler` and `ClusterResourceType postgresql` (docs/data-services.md), stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
+Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`default`), `DeploymentPipeline/default`, the `ClusterComponentType`s (derived from upstream samples, `files/README.md`) and upstream `ClusterTrait`/`ClusterProjectType` defaults, `ClusterTrait resilience` embedded in the Deployment component types (spread, PDB, graceful shutdown, priority; docs/openchoreo.md "Resilience defaults") and their Reloader opt-in (pods roll when a referenced Secret rotates, #268), the data-service types `ClusterTrait keda-scaler` and `ClusterResourceType postgresql` (docs/data-services.md), stack build `ClusterWorkflow`s, the auto-build trigger (Argo `WorkflowTemplate`/`CronWorkflow` `auto-build` in `workflows-<org ns>`), and `production` promotion gates (Git-only admission, ABAC role, and `ClusterWorkflow/promotion-gate`).
 
 ## Where it runs
 
@@ -13,7 +13,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| appMetrics.enabled | bool | `true` | Render ClusterTrait `metrics` and add it to the `allowedTraits` of the Deployment component types. |
+| appMetrics.enabled | bool | `true` | Render ClusterTrait `metrics` (opt-in app metrics scraping). |
 | autoBuild.github.key | string | `"promotion-gate-github"` |  |
 | autoBuild.github.permissions.contents | string | `"read"` |  |
 | autoBuild.github.tokenRefreshInterval | string | `"30m"` |  |
@@ -171,11 +171,9 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | registry.external.repository | string | `"ghcr.io/koorikla"` |  |
 | registry.host | string | `"harbor.openchoreo.localhost:9443"` |  |
 | registry.type | string | `"harbor"` |  |
-| resilience.enabled | bool | `true` | Embed ClusterTrait `resilience` (topology spread, PodDisruptionBudget, preStop + grace period, PriorityClass) in the Deployment component types. |
 | secrets.githubGateApp.enabled | bool | `false` |  |
 | secrets.tenantStores.enabled | bool | `false` |  |
 | tenantStoreName | string | `"openbao-tenant"` |  |
-| upstreamDefaults.enabled | bool | `true` |  |
 
 ## Day-2 notes
 
