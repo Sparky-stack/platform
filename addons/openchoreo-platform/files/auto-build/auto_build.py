@@ -39,12 +39,14 @@
 # <component>-pr-<n>-<sha[:12]> from the Component's latest release with the PR image (owned by the preview
 # Environment, so it goes with it), posts commit status openchoreo/preview with the preview URL, and expires the
 # preview after the TTL by labelling the PR (the Application then renders empty and Argo CD prunes it). It re-checks
-# the Component's opt-in annotation and never builds pull requests from forks. Per-tenant cap (#385): a PR that would
-# go beyond PREVIEW_MAX_PER_TENANT (== Kyverno platform-preview-cap, both from installation.yaml previews.maxPerTenant)
-# is held with label PREVIEW_WAITING_LABEL (its Application renders empty, so nothing retries against Kyverno) and
-# commit status failure; the pass removes the label once a slot is free. Bot PRs (author login ending in [bot]) get
-# no preview unless labelled PREVIEW_BOT_LABEL (PREVIEW_SKIP_BOTS). GitHub: a second token (statuses, pull requests)
-# at PREVIEW_TOKEN_FILE.
+# the Component's opt-in annotation and never builds pull requests from forks. Per-tenant cap (#385): a preview
+# Application renders resources only once its PR carries PREVIEW_GRANTED_LABEL, and only this pass sets it: serially
+# (one pass at a time), per tenant, existing Environments first, then the oldest PRs, up to PREVIEW_MAX_PER_TENANT
+# (== Kyverno platform-preview-cap, both from installation.yaml previews.maxPerTenant). The rest get label
+# PREVIEW_WAITING_LABEL and commit status failure until a slot frees. Kyverno stays a backstop: concurrent Environment
+# creates each see the old count, so it cannot hold the cap alone. Bot PRs (author login ending in [bot]) are not
+# granted unless labelled PREVIEW_BOT_LABEL (PREVIEW_SKIP_BOTS). GitHub: a second token (statuses, pull requests) at
+# PREVIEW_TOKEN_FILE.
 #
 # Stdlib only. The WorkflowTemplate embeds this file in an Argo template: the source must not contain two opening
 # braces (hack/tests/test_workflow_scripts.sh).
@@ -566,12 +568,13 @@ class Previews:
     """One pass over the preview Applications (`api` provides cluster and GitHub calls, fake in tests).
 
     cap: previews per tenant (installation.yaml previews.maxPerTenant, the number Kyverno's platform-preview-cap
-    enforces); 0 leaves admission to Kyverno alone. A PR without an Environment needs a slot: hold() grants the free
-    slots after the pass saw every Application, oldest PR first, and holds the rest with `waiting_label`."""
+    enforces); 0 = no limit (every PR is granted). A PR's preview renders only with `granted_label`; grant() hands the
+    free slots out after the pass saw every Application and holds the rest with `waiting_label`. A pass filtered to one
+    repository (webhook) does not see the tenant's other PRs and grants nothing: the next full pass does."""
 
     def __init__(self, api, namespace, allowed_prefixes, state, opt_in, expired_label, ttl_seconds,
                  status_context="openchoreo/preview", repository="", max_runs=5, now=None, cap=0,
-                 waiting_label="preview-waiting", skip_bots=True, bot_label="preview"):
+                 waiting_label="preview-waiting", skip_bots=True, bot_label="preview", granted_label="preview-granted"):
         self.api = api
         self.namespace = namespace
         self.allowed = allowed_prefixes
@@ -588,9 +591,11 @@ class Previews:
         self.waiting_label = waiting_label
         self.skip_bots = skip_bots
         self.bot_label = bot_label
+        self.granted_label = granted_label
         self.created = []
         self.errors = []
-        self.needs_slot = []                      # PRs without an Environment, granted or held by hold()
+        self.slots = {}                           # tenant -> Environment names of granted, previewable PRs
+        self.candidates = []                      # previewable PRs without a grant, for grant()
         self._schemas = {}
 
     def status(self, key, slug, sha, state, description, url=""):
@@ -641,39 +646,57 @@ class Previews:
             log("%s: repository %s is not Component %s's build repository: skipped" % (key, slug, comp_name))
             return
         pr = self.api.pull(slug, number)
-        if pr.get("state") != "open" or (pr.get("head") or {}).get("sha") != sha:
-            log("%s: PR #%s is %s at %s, Application at %s: waiting for Argo CD"
-                % (key, number, pr.get("state"), ((pr.get("head") or {}).get("sha") or "")[:12], sha[:12]))
+        if pr.get("state") != "open":
+            log("%s: PR #%s is %s: waiting for Argo CD" % (key, number, pr.get("state")))
             return
+        project = comp["spec"]["owner"]["projectName"]
         head_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name") or ""
-        if head_repo.lower() != slug.lower():
-            self.status(key, slug, sha, "failure", "No preview: pull requests from forks are not built")
-            return
         pr_labels = [lbl.get("name") for lbl in pr.get("labels") or []]
         author = (pr.get("user") or {}).get("login") or ""
-        if self.skip_bots and author.endswith("[bot]") and self.bot_label not in pr_labels:
-            # == charts/tenant previews.yaml: the Application renders nothing, so the bot takes no slot of the cap
-            self.status(key, slug, sha, "success", "No preview for bot pull requests (%s): add label %s for one"
-                        % (author, self.bot_label))
+        fork = head_repo.lower() != slug.lower()
+        bot = self.skip_bots and author.endswith("[bot]") and self.bot_label not in pr_labels
+        expired = self.expired_label in pr_labels
+        granted = self.granted_label in pr_labels
+        if granted and not (fork or bot or expired):
+            self.slots.setdefault(project, set()).add(env_name)    # counted even while the Application is stale
+        if (pr.get("head") or {}).get("sha") != sha:
+            log("%s: PR #%s is at %s, Application at %s: waiting for Argo CD"
+                % (key, number, ((pr.get("head") or {}).get("sha") or "")[:12], sha[:12]))
             return
-        if self.expired_label in pr_labels:
-            self.status(key, slug, sha, "error", "Preview expired after the platform TTL; remove label %s for a fresh "
-                        "one" % self.expired_label)
+        if fork:
+            self.status(key, slug, sha, "failure", "No preview: pull requests from forks are not built")
             return
-        waiting = self.waiting_label in pr_labels
+        if bot or expired:
+            if granted:
+                # a later botLabel / removed expiry label must go through the cap again
+                self.api.remove_label(slug, number, self.granted_label)
+                log("%s: no preview: removed label %s from PR #%s" % (key, self.granted_label, number))
+            if bot:
+                # == charts/tenant previews.yaml: the Application renders nothing, so the bot takes no slot of the cap
+                self.status(key, slug, sha, "success", "No preview for bot pull requests (%s): add label %s for one"
+                            % (author, self.bot_label))
+            else:
+                self.status(key, slug, sha, "error", "Preview expired after the platform TTL; remove label %s for a "
+                            "fresh one" % self.expired_label)
+            return
         env = self.api.get("environments", env_name)
+        if not granted:
+            live = bool(env) and not (env.get("metadata") or {}).get("deletionTimestamp")
+            self.candidates.append({"key": key, "slug": slug, "sha": sha, "number": number, "env": env_name,
+                                    "tenant": project, "live": live, "created": pr.get("created_at") or "",
+                                    "waiting": self.waiting_label in pr_labels})
+            return
+        if self.waiting_label in pr_labels:
+            self.api.remove_label(slug, number, self.waiting_label)
+            log("%s: granted: removed label %s from PR #%s" % (key, self.waiting_label, number))
         if not env:
             msg = ((app.get("status") or {}).get("operationState") or {}).get("message") or "syncing"
-            self.needs_slot.append({"key": key, "slug": slug, "sha": sha, "number": number, "env": env_name,
-                                    "tenant": comp["spec"]["owner"]["projectName"], "waiting": waiting, "msg": msg})
+            self.status(key, slug, sha, "pending", "Waiting for environment %s: %s" % (env_name, msg))
             return
-        if waiting and not (env.get("metadata") or {}).get("deletionTimestamp"):
-            # Kyverno admitted the Environment before Argo CD saw the label: it holds a slot, keep it
-            self.api.remove_label(slug, number, self.waiting_label)
-            log("%s: has environment %s: removed label %s" % (key, env_name, self.waiting_label))
         expiry = expires_at(env, self.ttl)
         if expiry is not None and int(self.now.timestamp()) >= expiry:
             self.api.add_label(slug, number, self.expired_label)
+            self.api.remove_label(slug, number, self.granted_label)   # a fresh preview queues for a slot again
             log("%s: TTL over (expired at %d): labelled PR #%s %s" % (key, expiry, number, self.expired_label))
             self.status(key, slug, sha, "error", "Preview expired after the platform TTL; remove label %s for a fresh "
                         "one" % self.expired_label)
@@ -716,7 +739,6 @@ class Previews:
                  "openchoreo.dev/project": comp["spec"]["owner"]["projectName"]}))
             log("%s: ComponentRelease %s <- %s" % (key, release, image))
             self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
-        project = comp["spec"]["owner"]["projectName"]
         for rrb in preview_resource_bindings(self.api.get("componentreleases", release), self.namespace, project, env,
                                              {PREVIEW_LABEL: "true", PR_LABEL: number, COMPONENT_LABEL: comp_name,
                                               "openchoreo.dev/project": project}):
@@ -736,32 +758,34 @@ class Previews:
         else:
             self.status(key, slug, sha, "pending", "Deploying %s to %s" % (sha[:7], env_name))
 
-    def hold(self):
-        """Grant each tenant's free slots (cap minus its live preview Environments, counted like Kyverno's
-        platform-preview-cap) to the PRs waiting for an Environment: first those already granted (no label: their
-        Environment is on its way), then the oldest PR. The rest wait with the label and a failed status."""
-        if not self.needs_slot:
+    def grant(self):
+        """Hand each tenant's free slots to the PRs without a grant. Taken: the granted PRs (Environment or not) and
+        every live preview Environment of the tenant (what Kyverno's platform-preview-cap counts, so also those of PRs
+        this pass does not see). Order: PRs whose Environment exists (keep running previews), then the oldest. The
+        rest wait: label + failed status. Skipped on a pass filtered to one repository: it does not see every grant."""
+        if self.repository or not self.candidates:
             return
-        running = {}
-        if self.cap > 0:
-            for e in self.api.preview_environments():
-                md = e.get("metadata") or {}
-                if (md.get("labels") or {}).get(PREVIEW_LABEL) == "true" and not md.get("deletionTimestamp"):
-                    tenant = (md.get("labels") or {}).get(TENANT_LABEL, "")
-                    running[tenant] = running.get(tenant, 0) + 1
-        for tenant in sorted(set(p["tenant"] for p in self.needs_slot)):
-            prs = sorted([p for p in self.needs_slot if p["tenant"] == tenant],
-                         key=lambda p: (p["waiting"], int(p["number"])))
-            free = len(prs) if self.cap <= 0 else self.cap - running.get(tenant, 0)
+        live = {}
+        for e in self.api.preview_environments():
+            md = e.get("metadata") or {}
+            if (md.get("labels") or {}).get(PREVIEW_LABEL) == "true" and not md.get("deletionTimestamp"):
+                live.setdefault((md.get("labels") or {}).get(TENANT_LABEL, ""), set()).add(md.get("name"))
+        for tenant in sorted(set(p["tenant"] for p in self.candidates)):
+            prs = sorted([p for p in self.candidates if p["tenant"] == tenant],
+                         key=lambda p: (not p["live"], p["created"], int(p["number"])))
+            taken = (self.slots.get(tenant, set()) | live.get(tenant, set())) - set(p["env"] for p in prs)
+            free = len(prs) if self.cap <= 0 else self.cap - len(taken)
             for i, p in enumerate(prs):
                 try:
                     if i < free:
+                        self.api.add_label(p["slug"], p["number"], self.granted_label)
                         if p["waiting"]:
                             self.api.remove_label(p["slug"], p["number"], self.waiting_label)
-                            log("%s: slot free in tenant %s: removed label %s" % (p["key"], tenant, self.waiting_label))
-                            p["msg"] = "slot free, Argo CD creates it with the next pull request poll"
+                        log("%s: tenant %s: granted PR #%s a preview slot (label %s)"
+                            % (p["key"], tenant, p["number"], self.granted_label))
                         self.status(p["key"], p["slug"], p["sha"], "pending",
-                                    "Waiting for environment %s: %s" % (p["env"], p["msg"]))
+                                    "Preview slot granted: Argo CD creates environment %s with its next pull request "
+                                    "poll" % p["env"])
                         continue
                     if not p["waiting"]:
                         self.api.add_label(p["slug"], p["number"], self.waiting_label)
@@ -788,7 +812,7 @@ class Previews:
             except Failed as e:
                 log("%s: error: %s" % (app["metadata"]["name"], e))
                 self.errors.append(str(e))
-        self.hold()
+        self.grant()
         for gone in [k for k in self.state["previews"] if k not in names]:
             del self.state["previews"][gone]       # PR closed: Argo CD removed the Application
         return self.created
@@ -1135,7 +1159,8 @@ def main():
                           cap=int(env("PREVIEW_MAX_PER_TENANT", "0")),
                           waiting_label=env("PREVIEW_WAITING_LABEL", "preview-waiting"),
                           skip_bots=env("PREVIEW_SKIP_BOTS", "true") == "true",
-                          bot_label=env("PREVIEW_BOT_LABEL", "preview"))
+                          bot_label=env("PREVIEW_BOT_LABEL", "preview"),
+                          granted_label=env("PREVIEW_GRANTED_LABEL", "preview-granted"))
             try:
                 created = created + pv.run()
             finally:

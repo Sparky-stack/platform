@@ -127,6 +127,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | openchoreo.workflowPlane.enabled | bool | `true` |  |
 | previews.botLabel | string | `"preview"` |  |
 | previews.enabled | bool | `false` |  |
+| previews.grantedLabel | string | `"preview-granted"` |  |
 | previews.maxPerTenant | int | `2` |  |
 | previews.skipBots | bool | `true` |  |
 | previews.waitingLabel | string | `"preview-waiting"` |  |

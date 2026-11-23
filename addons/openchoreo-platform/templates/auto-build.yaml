@@ -312,8 +312,9 @@ spec:
           - { name: PREVIEW_OPT_IN_VALUE, value: {{ $pa.optIn.value | quote }} }
           - { name: PREVIEW_EXPIRED_LABEL, value: {{ $pv.expiredLabel | default "preview-expired" | quote }} }
           - { name: PREVIEW_TTL, value: {{ $pv.ttl | default "48h" | quote }} }
-          # the cap Kyverno platform-preview-cap enforces (same installation.yaml key): PRs beyond it wait labelled
+          # the cap Kyverno platform-preview-cap enforces (same installation.yaml key): the pass grants at most this many
           - { name: PREVIEW_MAX_PER_TENANT, value: {{ $pv.maxPerTenant | toString | quote }} }
+          - { name: PREVIEW_GRANTED_LABEL, value: {{ $pv.grantedLabel | quote }} }
           - { name: PREVIEW_WAITING_LABEL, value: {{ $pv.waitingLabel | quote }} }
           - { name: PREVIEW_SKIP_BOTS, value: {{ $pv.skipBots | toString | quote }} }
           - { name: PREVIEW_BOT_LABEL, value: {{ $pv.botLabel | quote }} }

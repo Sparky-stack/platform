@@ -54,3 +54,6 @@
 
 ## [2026-11-22] update | Preview cap signal (#385)
 - `decisions/pr-preview-environments.md`: the pass holds PRs beyond the cap with label `preview-waiting` (Application renders nothing) + failed status; Kyverno cap is the backstop; bot PRs skip previews by default.
+
+## [2026-11-23] update | Preview grants (#385)
+- `decisions/pr-preview-environments.md`: previews render only once the pass grants them (`preview-granted`); holding over-cap PRs after the fact failed live because concurrent Environment creates all pass Kyverno's count.

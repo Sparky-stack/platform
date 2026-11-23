@@ -29,9 +29,9 @@ previews:
   dataPlane: dev1
   requeueAfterSeconds: 1800
   expiredLabel: preview-expired
-  # Per-tenant cap (#385): the auto-build pass labels a PR beyond previews.maxPerTenant with waitingLabel; its
-  # Application then renders nothing until the pass removes the label (== addon openchoreo-platform previews).
-  waitingLabel: preview-waiting
+  # Per-tenant cap (#385): a preview Application renders resources only for a PR with grantedLabel, which only the
+  # auto-build pass sets, within previews.maxPerTenant (== addon openchoreo-platform previews).
+  grantedLabel: preview-granted
   skipBots: true            # PRs whose author login ends in [bot] (Dependabot, Renovate) render nothing...
   botLabel: preview         # ...unless they carry this label
 

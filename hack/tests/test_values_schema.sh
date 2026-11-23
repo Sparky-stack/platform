@@ -107,7 +107,7 @@ lint_addon() {
   skipped=$((skipped + 1))
 }
 
-PREVIEW=(--set 'project=demo,component=hello-world,pullRequest=7,commit=0123456789abcdef0123456789abcdef01234567')
+PREVIEW=(--set 'project=demo,component=hello-world,pullRequest=7,granted=true,commit=0123456789abcdef0123456789abcdef01234567')
 schema_charts=()
 skipped=0 linted=" "
 read_lines schema_charts deployable_charts "$ROOT"

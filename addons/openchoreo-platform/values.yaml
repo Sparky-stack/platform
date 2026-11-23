@@ -269,12 +269,14 @@ autoBuild:
     argocdNamespace: argocd
     schedule: "*/2 * * * *"                    # trigger webhook only (poll runs previews every pollSchedule)
 
-# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel / maxPerTenant / waitingLabel / skipBots /
-# botLabel. Defaults == charts/tenant previews and addon kyverno-policies previews.maxPerTenant (contract test 17).
+# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel / maxPerTenant / grantedLabel / waitingLabel /
+# skipBots / botLabel. Defaults == charts/tenant previews and addon kyverno-policies previews.maxPerTenant (contract
+# test 17).
 previews:
   enabled: false
-  maxPerTenant: 2                  # == Kyverno platform-preview-cap: PRs beyond it wait with waitingLabel (#385)
-  waitingLabel: preview-waiting    # set/removed by the pass; the PR's Application renders nothing meanwhile
+  maxPerTenant: 2                  # == Kyverno platform-preview-cap: the pass grants at most this many per tenant (#385)
+  grantedLabel: preview-granted    # set by the pass only: the PR's preview renders resources
+  waitingLabel: preview-waiting    # set by the pass on PRs beyond the cap (with a failed commit status)
   skipBots: true                   # PRs whose author login ends in [bot] (Dependabot, Renovate) get no preview...
   botLabel: preview                # ...unless they carry this label
 

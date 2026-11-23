@@ -4,9 +4,11 @@ ApplicationSet previews-<project> (mgmt, argocd; docs/preview-environments.md): 
                in the app repo only)
   pullRequest  the repo's open PRs (token of the platform GitHub App, minted by addon secret-stores)
 -> Application preview-<component>-pr-<n> rendering charts/preview at the PR head SHA (AppProject previews). A closed or
-merged PR drops out of the generator, so its Application and Environment are deleted. The Application renders nothing
-while the PR is expired (expiredLabel), held by the per-tenant cap (waitingLabel, set by the auto-build pass, #385) or
-opened by a bot without botLabel (skipBots).
+merged PR drops out of the generator, so its Application and Environment are deleted. The Application renders
+resources only once the PR carries grantedLabel, which only the auto-build pass sets, serially and within the tenant's
+previews.maxPerTenant (#385); and never while the PR is expired (expiredLabel) or opened by a bot without botLabel
+(skipBots). Creating the Application at once and capping at admission does not work: Kyverno's count cannot see
+concurrent creates.
 Only values that cannot inject anything reach the template: number, head_sha, labels and the Component name (pinned
 to the app name by the selector). Branch names, titles and the author are never rendered (the author only feeds a
 true/false test).
@@ -24,7 +26,7 @@ only with secrets.githubGateApp.enabled): without the App no ApplicationSet, whi
 {{- if and $pv.enabled $gh $gate }}
 {{- $p := include "tenant.project" . }}
 {{- $label := $pv.expiredLabel | default "preview-expired" }}
-{{- $waiting := required "previews.waitingLabel is required" $pv.waitingLabel }}
+{{- $granted := required "previews.grantedLabel is required" $pv.grantedLabel }}
 {{- $botLabel := required "previews.botLabel is required" $pv.botLabel }}
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -93,7 +95,7 @@ spec:
             commit: {{ `'{{ .head_sha }}'` }}
             repository: {{ `'{{ .values.repository }}'` }}
             expired: {{ printf "'{{ has %q .labels }}'" $label }}
-            waiting: {{ printf "'{{ has %q .labels }}'" $waiting }}
+            granted: {{ printf "'{{ has %q .labels }}'" $granted }}
             {{- if $pv.skipBots }}
             bot: {{ printf "'{{ and (hasSuffix \"[bot]\" .author) (not (has %q .labels)) }}'" $botLabel }}
             {{- else }}
@@ -112,9 +114,8 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=false
-        # Unlimited retries heal first-boot races. A preview over the tenant cap does not wait here: the auto-build pass
-        # labels its PR waitingLabel (it renders nothing) and removes the label when a slot frees (#385); Kyverno
-        # platform-preview-cap only backstops the minutes before the pass and the generator see the PR.
+        # Unlimited retries heal first-boot races. The tenant cap never makes a preview wait here: without a grant the
+        # Application renders nothing (#385); Kyverno platform-preview-cap is only the backstop (e.g. a hand-set label).
         retry:
           limit: -1
           backoff:

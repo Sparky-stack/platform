@@ -827,6 +827,12 @@
           "minimum": 1,
           "description": "Concurrent previews per tenant (== Kyverno platform-preview-cap)."
         },
+        "grantedLabel": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+          "description": "PR label granting a preview slot (set by the pass only)."
+        },
         "waitingLabel": {
           "type": "string",
           "minLength": 1,

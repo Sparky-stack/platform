@@ -515,9 +515,11 @@ BASE_RELEASE = {"metadata": {"name": "hello-world-77ff9dc697"},
 PR_IMAGE = "harbor/apps/demo/hello-world:bbbbbbb@sha256:" + "2" * 64
 
 
-def pull(sha=SHA_B, state="open", head_repo=SLUG, labels=(), author="koorik"):
+def pull(sha=SHA_B, state="open", head_repo=SLUG, labels=(), author="koorik", granted=True, created=""):
+    """granted: the PR carries preview-granted (the pass gave it a slot of the tenant's cap)."""
+    names = list(labels) + (["preview-granted"] if granted else [])
     return {"state": state, "head": {"sha": sha, "ref": "feat/x", "repo": {"full_name": head_repo} if head_repo else None},
-            "labels": [{"name": n} for n in labels], "user": {"login": author}}
+            "labels": [{"name": n} for n in names], "user": {"login": author}, "created_at": created}
 
 
 def run_obj(name, done=False, ok=True):
@@ -586,9 +588,14 @@ class FakePreviewApi(FakeApi):
 
     def add_label(self, slug, number, label):
         self.labels_added.append((slug, number, label))
+        self.pulls[number]["labels"].append({"name": label})       # GitHub: the next pass sees it
 
     def remove_label(self, slug, number, label):
         self.labels_removed.append((slug, number, label))
+        self.pulls[number]["labels"] = [lb for lb in self.pulls[number]["labels"] if lb["name"] != label]
+
+    def labels_of(self, number):
+        return sorted(lb["name"] for lb in self.pulls[number]["labels"])
 
     def preview_environments(self):
         return [o for (r, _), o in sorted(self.objects.items()) if r == "environments" and o]
@@ -834,19 +841,22 @@ class PreviewReconcile(unittest.TestCase):
         self.assertEqual(api.created, [])
 
 
-class PreviewCap(unittest.TestCase):
-    """#385: a PR beyond the tenant's cap waits as a PR label (its Application renders nothing) with a failed
-    commit status, instead of an Application whose Environment Kyverno denies on every retry."""
+class PreviewGrant(unittest.TestCase):
+    """#385: no preview until the pass grants a slot of the tenant's cap (label preview-granted, the only thing the
+    ApplicationSet renders resources for). The pass decides serially, so PRs opened together cannot all slip past the
+    cap the way concurrent Environment creates slip past Kyverno platform-preview-cap."""
 
-    def api(self, prs=("7", "8", "9"), running=(), waiting=()):
-        """prs: open PRs of hello-world (tenant demo), head SHA = the number repeated; running: those with a live
-        preview Environment; waiting: those labelled preview-waiting."""
+    def api(self, prs=("7", "8", "9"), granted=(), running=(), waiting=(), tenant_of=None):
+        """prs: open PRs of hello-world (tenant demo), head SHA = the number repeated, opened in number order;
+        granted: those carrying preview-granted; running: those with a live preview Environment; waiting: those
+        labelled preview-waiting."""
         objs = {("componentreleases", "hello-world-77ff9dc697"): BASE_RELEASE}
         for n in running:
             objs[("environments", "pr-%s-hello-world" % n)] = environment(
                 name="pr-%s-hello-world" % n, expires=int(NOW.timestamp()) + 3600)
         apps = [preview_app(number=n, sha=n * 40) for n in prs]
-        pulls = dict((n, pull(sha=n * 40, labels=["preview-waiting"] if n in waiting else [])) for n in prs)
+        pulls = dict((n, pull(sha=n * 40, granted=n in granted, labels=["preview-waiting"] if n in waiting else [],
+                              created="2026-11-17T10:%02d:00Z" % int(n))) for n in prs)
         return FakePreviewApi(apps, [opted_in()], pulls, objs)
 
     def status_of(self, api, n):
@@ -854,84 +864,125 @@ class PreviewCap(unittest.TestCase):
         mine = [(st[1], st[2]) for st in api.statuses if st[0] == n * 40]
         return mine[-1] if mine else None
 
-    def test_pr_beyond_the_cap_is_held_with_a_failed_status_naming_cap_and_tenant(self):
-        api = self.api(running=("7", "8"))
+    def granted(self, api):
+        return sorted(n for _, n, label in api.labels_added if label == "preview-granted")
+
+    def test_three_new_prs_in_one_pass_get_exactly_cap_grants_oldest_first(self):
+        # the live failure: three PRs opened 20 s apart, no Environment yet -> all three were previewed
+        api = self.api()
         previews(api, cap=2)
-        self.assertEqual(api.labels_added, [(SLUG, "9", "preview-waiting")])
+        self.assertEqual(self.granted(api), ["7", "8"])
+        self.assertEqual(api.labels_of("9"), ["preview-waiting"])
         state, desc = self.status_of(api, "9")
         self.assertEqual(state, "failure")
         self.assertIn("preview cap 2 reached for tenant demo", desc)
         self.assertIn("close a PR or wait for expiry", desc)
         self.assertLessEqual(len(desc), 140)
-        self.assertNotIn("hello-world-pr9-" + "9" * 12, [r["metadata"]["name"] for r in api.created])
+        self.assertEqual(self.status_of(api, "7")[0], "pending")
+        self.assertEqual(api.created, [])          # nothing is built before the Environment exists
 
-    def test_held_pr_is_not_labelled_twice_and_the_status_is_posted_once(self):
-        api = self.api(running=("7", "8"), waiting=("9",))
-        state = {}
-        previews(api, state, cap=2)
-        previews(api, state, cap=2)
+    def test_ungranted_pr_is_never_built(self):
+        api = self.api(prs=("7",), running=("7",))   # an Environment without a grant (created before the pass ran)
+        previews(api, cap=0, repository=SLUG)        # a webhook pass never grants
+        self.assertEqual(api.created, [])
         self.assertEqual(api.labels_added, [])
-        self.assertEqual(api.labels_removed, [])
-        self.assertEqual(len([st for st in api.statuses if st[0] == "9" * 40]), 1)
+
+    def test_grants_are_counted_before_their_environments_exist(self):
+        # pass 1 granted 7 and 8; Argo CD has not created their Environments yet: pass 2 must not grant 9
+        api = self.api(granted=("7", "8"))
+        previews(api, cap=2)
+        self.assertEqual(self.granted(api), [])
         self.assertEqual(self.status_of(api, "9")[0], "failure")
 
-    def test_freed_slot_releases_the_held_pr_so_the_next_pass_creates_it(self):
-        api = self.api(prs=("7", "9"), running=("7",), waiting=("9",))
+    def test_second_pass_changes_nothing(self):
+        api = self.api()
+        state = {}
+        previews(api, state, cap=2)
+        added, removed, failures = list(api.labels_added), list(api.labels_removed), len(api.statuses)
+        previews(api, state, cap=2)
+        self.assertEqual((api.labels_added, api.labels_removed), (added, removed))
+        self.assertEqual([st[1] for st in api.statuses[failures:]], ["pending", "pending"])   # 7, 8: wait for Argo CD
+        self.assertEqual(self.status_of(api, "9")[0], "failure")
+
+    def test_freed_slot_is_granted_to_the_waiting_pr(self):
+        # PR 8 closed (Application gone): 7 runs, 9 waits
+        api = self.api(prs=("7", "9"), granted=("7",), running=("7",), waiting=("9",))
         previews(api, cap=2)
-        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
-        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.granted(api), ["9"])
+        self.assertEqual(api.labels_of("9"), ["preview-granted"])
         self.assertEqual(self.status_of(api, "9")[0], "pending")
 
     def test_terminating_environment_frees_its_slot_like_the_kyverno_policy(self):
-        api = self.api(prs=("7", "9"), running=("7",), waiting=("9",))
+        api = self.api(prs=("7", "9"), granted=("7",), running=("7",), waiting=("9",))
         api.objects[("environments", "pr-8-hello-world")] = environment(name="pr-8-hello-world", deleting=True)
         previews(api, cap=2)
-        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
+        self.assertEqual(self.granted(api), ["9"])
 
-    def test_one_free_slot_goes_to_one_pr_oldest_first(self):
-        api = self.api(running=("7",), waiting=("8", "9"))
+    def test_environment_of_a_pr_the_pass_does_not_see_still_counts(self):
+        # e.g. a closed PR whose Environment Argo CD has not deleted yet
+        api = self.api(prs=("7", "9"), granted=("7",), running=("7",))
+        api.objects[("environments", "pr-3-hello-world")] = environment(name="pr-3-hello-world")
         previews(api, cap=2)
-        self.assertEqual(api.labels_removed, [(SLUG, "8", "preview-waiting")])
-        self.assertEqual(api.labels_added, [])
+        self.assertEqual(self.granted(api), [])
+
+    def test_existing_environments_are_granted_first(self):
+        # previews from before the grant label (or admitted by Kyverno in a race): keep those that fit the cap
+        api = self.api(running=("8", "9"))
+        previews(api, cap=2)
+        self.assertEqual(self.granted(api), ["8", "9"])
+        self.assertEqual(api.labels_of("7"), ["preview-waiting"])
+
+    def test_environments_over_the_cap_lose_them(self):
+        # three admitted by Kyverno at once: the youngest waits, its Application renders nothing, Argo CD prunes
+        api = self.api(running=("7", "8", "9"))
+        previews(api, cap=2)
+        self.assertEqual(self.granted(api), ["7", "8"])
         self.assertEqual(self.status_of(api, "9")[0], "failure")
 
-    def test_released_pr_keeps_its_slot_until_its_environment_exists(self):
-        # PR 9 was released last pass (label gone, Environment not created yet): an older PR that still waits does
-        # not overtake it, so nothing goes over the cap
-        api = self.api(running=("7",), waiting=("8",))
-        previews(api, cap=2)
-        self.assertEqual(api.labels_removed, [])
-        self.assertEqual(api.labels_added, [])
-        self.assertEqual(self.status_of(api, "9")[0], "pending")
-        self.assertEqual(self.status_of(api, "8")[0], "failure")
-
-    def test_preview_that_got_its_environment_keeps_it_even_when_labelled(self):
-        # labelled by an earlier pass, but Kyverno admitted its Environment before Argo CD saw the label
-        api = self.api(prs=("7", "9"), running=("7", "9"), waiting=("9",))
-        previews(api, cap=2)
-        self.assertEqual(api.labels_removed, [(SLUG, "9", "preview-waiting")])
-        self.assertEqual(api.labels_added, [])
-
     def test_other_tenants_do_not_count(self):
-        api = self.api(prs=("7", "9"), running=("7",))
+        api = self.api(prs=("7", "9"), granted=("7",), running=("7",))
         api.objects[("environments", "pr-1-other")] = environment(name="pr-1-other", tenant="other")
         previews(api, cap=2)
-        self.assertEqual(api.labels_added, [])
-        self.assertEqual(self.status_of(api, "9")[0], "pending")
+        self.assertEqual(self.granted(api), ["9"])
 
-    def test_no_cap_configured_leaves_admission_to_kyverno(self):
-        api = self.api(running=("7", "8"))
+    def test_no_cap_grants_every_pr(self):
+        api = self.api()
         previews(api)
+        self.assertEqual(self.granted(api), ["7", "8", "9"])
+
+    def test_repository_filtered_pass_does_not_grant(self):
+        # a webhook pass sees one repository, not the tenant's other previews: the next full pass decides
+        api = self.api()
+        previews(api, cap=2, repository=SLUG)
         self.assertEqual(api.labels_added, [])
-        self.assertEqual(self.status_of(api, "9")[0], "pending")
+        self.assertEqual(api.statuses, [])
+
+    def test_expiry_removes_the_grant_so_a_fresh_preview_waits_for_a_slot(self):
+        api = self.api(prs=("7",), granted=("7",))
+        api.objects[("environments", "pr-7-hello-world")] = environment(created="2026-11-15T11:00:00Z")
+        previews(api, cap=2)
+        self.assertEqual(api.labels_of("7"), ["preview-expired"])
+
+    def test_expired_pr_takes_no_slot(self):
+        api = self.api(prs=("7", "8", "9"), granted=("7", "8"))
+        api.pulls["8"]["labels"].append({"name": "preview-expired"})
+        previews(api, cap=2)
+        self.assertNotIn("preview-granted", api.labels_of("8"))
+        self.assertEqual(self.granted(api), ["9"])
+
+    def test_granted_pr_drops_its_waiting_label(self):
+        api = self.api(prs=("7",), granted=("7",), waiting=("7",))
+        previews(api, cap=2)
+        self.assertEqual(api.labels_of("7"), ["preview-granted"])
 
 
 class PreviewBots(unittest.TestCase):
-    def api(self, labels=(), author="dependabot[bot]"):
+    def api(self, labels=(), author="dependabot[bot]", granted=False):
         objs = {("componentreleases", "hello-world-77ff9dc697"): BASE_RELEASE}
-        return FakePreviewApi([preview_app()], [opted_in()], {"7": pull(labels=labels, author=author)}, objs)
+        return FakePreviewApi([preview_app()], [opted_in()], {"7": pull(labels=labels, author=author, granted=granted)},
+                              objs)
 
-    def test_bot_pr_gets_no_preview_and_a_non_blocking_status(self):
+    def test_bot_pr_gets_no_grant_and_a_non_blocking_status(self):
         api = self.api()
         previews(api, cap=2)
         self.assertEqual(api.created, [])
@@ -939,21 +990,26 @@ class PreviewBots(unittest.TestCase):
         self.assertEqual(api.statuses[-1][1], "success")
         self.assertIn("label preview", api.statuses[-1][2])
 
-    def test_bot_pr_labelled_preview_gets_one(self):
+    def test_bot_pr_labelled_preview_is_granted_like_any_other(self):
         api = self.api(labels=["preview"])
         previews(api, cap=2)
+        self.assertEqual(api.labels_added, [(SLUG, "7", "preview-granted")])
         self.assertEqual(api.statuses[-1][1], "pending")
-        self.assertNotIn("bot", api.statuses[-1][2])
 
-    def test_switch_off_previews_bot_prs_like_any_other(self):
+    def test_bot_label_removed_drops_the_grant(self):
+        api = self.api(granted=True)
+        previews(api, cap=2)
+        self.assertEqual(api.labels_of("7"), [])
+
+    def test_switch_off_grants_bot_prs_like_any_other(self):
         api = self.api()
         previews(api, cap=2, skip_bots=False)
-        self.assertEqual(api.statuses[-1][1], "pending")
+        self.assertEqual(api.labels_added, [(SLUG, "7", "preview-granted")])
 
     def test_human_login_containing_bot_is_not_a_bot(self):
         api = self.api(author="robotnik")
         previews(api, cap=2)
-        self.assertEqual(api.statuses[-1][1], "pending")
+        self.assertEqual(api.labels_added, [(SLUG, "7", "preview-granted")])
 
 
 DB_RELEASE = {"metadata": {"name": "hello-world-pr-7-bbbbbbbbbbbb"},

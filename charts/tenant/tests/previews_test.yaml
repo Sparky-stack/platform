@@ -15,7 +15,7 @@ set:
     dataPlane: dev1
     requeueAfterSeconds: 120
     expiredLabel: preview-expired
-    waitingLabel: preview-waiting
+    grantedLabel: preview-granted
     skipBots: true
     botLabel: preview
   secrets.githubGateApp.enabled: true   # platform GitHub App seeded (charts/platform values.yaml, #192)
@@ -76,7 +76,7 @@ tests:
             commit: "{{ .head_sha }}"
             repository: "{{ .values.repository }}"
             expired: '{{ has "preview-expired" .labels }}'
-            waiting: '{{ has "preview-waiting" .labels }}'
+            granted: '{{ has "preview-granted" .labels }}'
             bot: '{{ and (hasSuffix "[bot]" .author) (not (has "preview" .labels)) }}'
             openchoreo: { orgNamespace: default }
             previews: { dataPlane: dev1 }
@@ -116,11 +116,16 @@ tests:
     asserts:
       - equal: { path: spec.template.spec.source.helm.valuesObject.bot, value: "false" }
 
-  - it: refuses a waiting label that could break the template expression
+  - it: refuses a granted label that could break the template expression
     set:
-      previews.waitingLabel: 'x" .labels }}{{ "'
+      previews.grantedLabel: 'x" .labels }}{{ "'
     asserts:
-      - failedTemplate: { errorPattern: "at '/previews/waitingLabel': .* does not match pattern" }
+      - failedTemplate: { errorPattern: "at '/previews/grantedLabel': .* does not match pattern" }
+
+  - it: "no preview without the grant: the granted value tests the label only the auto-build pass sets (#385)"
+    set: { previews.grantedLabel: slot ok }
+    asserts:
+      - equal: { path: spec.template.spec.source.helm.valuesObject.granted, value: "{{ has \"slot ok\" .labels }}" }
 
   - it: refuses a bot label that could break the template expression
     set:

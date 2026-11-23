@@ -119,6 +119,7 @@ previews:
   maxPerTenant: 2                              # concurrent previews per tenant (RAM-bound locally); Kyverno + auto-build
   requeueAfterSeconds: 120                     # pull request poll (no GitHub webhook locally)
   expiredLabel: preview-expired                # remove it from the PR for a fresh preview
+  grantedLabel: preview-granted                # set by the auto-build pass only: the PR's preview renders
   waitingLabel: preview-waiting                # set by the auto-build pass while the tenant is at maxPerTenant
   skipBots: true                               # Dependabot/Renovate PRs: no preview unless labelled botLabel
   botLabel: preview
