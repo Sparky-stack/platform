@@ -1,4 +1,4 @@
-suite: harbor - registry glue (PKI, CA publication store, secrets, desired-state Job)
+suite: harbor - registry glue (PKI, CA publication store, secrets, desired state as Crossplane managed resources)
 templates:
   - templates/pki.yaml
   - templates/ca-store.yaml
@@ -81,26 +81,183 @@ tests:
     template: templates/secrets.yaml
     set:
       secrets.ghcrKey: platform-ghcr
+      secrets.ghcrUsername: koorikla-bot
     asserts:
       - contains: { path: spec.data, content: { secretKey: ghcrToken, remoteRef: { key: platform-ghcr, property: token } } }
       - exists: { path: 'spec.target.template.data["ghcr-token"]' }
 
-  - it: desired state renders projects, proxy caches and robots
-    template: templates/config.yaml
-    documentSelector: { path: kind, value: ConfigMap }
+  - it: the provider's admin credential is JSON built from the store's admin password (no literal)
+    template: templates/secrets.yaml
     asserts:
-      - matchRegex: { path: 'data["state.json"]', pattern: '"name": "apps"' }
-      - matchRegex: { path: 'data["state.json"]', pattern: '"registry": "cr.openchoreo.dev"' }
-      - matchRegex: { path: 'data["state.json"]', pattern: '"secretEnv": "ROBOT_NODES"' }
-      - matchRegex: { path: 'data["harbor-config.py"]', pattern: 'def ensure_robot' }
+      - equal: { path: 'spec.target.template.data["provider-credentials"]', value: '{"username":"admin","password":{{ .adminPassword | toJson }}}' }
+      - notExists: { path: 'spec.target.template.data["ghcr-username"]' }
 
-  - it: the PostSync Job and the CronJob run the same reconciler
+  # --- desired state: provider-upjet-harbor managed resources (templates/config.yaml) ----------------------------------
+  - it: one object per registry endpoint, project, replication rule and robot (local values), plus the ProviderConfig
     template: templates/config.yaml
     asserts:
-      - equal: { path: "metadata.annotations['argocd.argoproj.io/hook']", value: PostSync }
-        documentSelector: { path: kind, value: Job }
-      - equal: { path: 'spec.jobTemplate.spec.template.spec.containers[0].command', value: [python3, /config/harbor-config.py, /config/state.json] }
-        documentSelector: { path: kind, value: CronJob }
+      - hasDocuments: { count: 18 }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1beta1, kind: ProviderConfig, name: harbor, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1alpha1, kind: Registry, name: docker.io, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1alpha1, kind: Project, name: apps, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1alpha1, kind: Project, name: apps-ghcr, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1alpha1, kind: Project, name: openchoreo, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: harbor.m.crossplane.io/v1alpha1, kind: Replication, name: ghcr-koorikla, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: robot.harbor.m.crossplane.io/v1alpha1, kind: Account, name: builder, namespace: harbor, any: true }
+      - containsDocument: { apiVersion: robot.harbor.m.crossplane.io/v1alpha1, kind: Account, name: nodes, namespace: harbor, any: true }
+
+  - it: every object syncs after the Harbor workloads, tolerates the provider CRDs arriving later, uses ProviderConfig harbor
+    template: templates/config.yaml
+    asserts:
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "1" }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
+      - equal: { path: metadata.namespace, value: harbor }
+
+  - it: managed resources reference the namespaced ProviderConfig, never the cluster-wide default
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: Account, matchMany: true }
+    asserts:
+      - equal: { path: spec.providerConfigRef, value: { kind: ProviderConfig, name: harbor } }
+
+  - it: ProviderConfig talks to Harbor core in-cluster with the credential from Secret harbor-platform
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: ProviderConfig }
+    asserts:
+      - equal: { path: spec.url, value: http://harbor-core.harbor.svc }
+      - equal: { path: spec.credentials, value: { source: Secret, secretRef: { namespace: harbor, name: harbor-platform, key: provider-credentials } } }
+
+  - it: projects are never deleted from Harbor (no Delete management policy) and stay private
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: Project, matchMany: true }
+    asserts:
+      - equal: { path: spec.managementPolicies, value: [Observe, Create, Update, LateInitialize] }
+      - notContains: { path: spec.managementPolicies, content: Delete }
+      - notContains: { path: spec.managementPolicies, content: "*" }
+      - equal: { path: spec.forProvider.public, value: false }
+      - equal: { path: spec.forProvider.storageQuota, value: -1 }
+
+  - it: registries are kept too (projects reference them)
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: Registry, matchMany: true }
+    asserts:
+      - notContains: { path: spec.managementPolicies, content: Delete }
+      - equal: { path: spec.forProvider.insecure, value: false }
+
+  - it: apps scans on push, without cosign enforcement or a pull block (the build gates on CRITICAL)
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: apps }
+    asserts:
+      - equal: { path: spec.forProvider.vulnerabilityScanning, value: true }
+      - equal: { path: spec.forProvider.enableContentTrustCosign, value: false }
+      - notExists: { path: spec.forProvider.deploymentSecurity }
+      - notExists: { path: spec.forProvider.registryIdRef }
+
+  - it: preventVulnerable blocks pulls at config.apps.severity
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: apps }
+    set: { config.apps.preventVulnerable: true }
+    asserts:
+      - equal: { path: spec.forProvider.deploymentSecurity, value: critical }
+
+  - it: a proxy-cache project references its upstream's Registry and does not scan
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: dockerhub }
+    asserts:
+      - equal: { path: kind, value: Project }
+      - equal: { path: spec.forProvider.registryIdRef, value: { name: docker.io } }
+      - equal: { path: spec.forProvider.vulnerabilityScanning, value: false }
+
+  - it: registry endpoints use the Harbor adapter type and URL from config.endpoints
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: docker.io }
+    asserts:
+      - equal: { path: spec.forProvider, value: { name: docker.io, providerName: docker-hub, endpointUrl: "https://hub.docker.com", description: platform, insecure: false } }
+
+  - it: without secrets.ghcrKey GHCR is anonymous and the replication rule exists disabled
+    template: templates/config.yaml
+    asserts:
+      - notExists: { path: spec.forProvider.accessSecretSecretRef }
+        documentSelector: { path: metadata.name, value: ghcr.io }
+      - equal: { path: spec.forProvider.enabled, value: false }
+        documentSelector: { path: kind, value: Replication }
+
+  - it: with secrets.ghcrKey the GHCR registry authenticates (token by Secret reference only) and replication runs
+    template: templates/config.yaml
+    set: { secrets.ghcrKey: platform-ghcr, secrets.ghcrUsername: koorikla-bot }
+    asserts:
+      - equal: { path: spec.forProvider.accessId, value: koorikla-bot }
+        documentSelector: { path: metadata.name, value: ghcr.io }
+      - equal: { path: spec.forProvider.accessSecretSecretRef, value: { name: harbor-platform, key: ghcr-token } }
+        documentSelector: { path: metadata.name, value: ghcr.io }
+      - equal: { path: spec.forProvider.enabled, value: true }
+        documentSelector: { path: kind, value: Replication }
+
+  - it: GHCR replication pulls koorikla/** into apps-ghcr on Harbor's 6-field cron
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: Replication }
+    asserts:
+      - equal: { path: spec.forProvider.action, value: pull }
+      - equal: { path: spec.forProvider.registryIdRef, value: { name: ghcr.io } }
+      - equal: { path: spec.forProvider.destNamespace, value: apps-ghcr }
+      - equal: { path: spec.forProvider.filters, value: [{ name: "koorikla/**" }, { tag: "**" }] }
+      - equal: { path: spec.forProvider.schedule, value: "0 0 */6 * * *" }
+
+  - it: robots are system-level, never expire, and take their secret only from the store Secret
+    template: templates/config.yaml
+    documentSelector: { path: kind, value: Account, matchMany: true }
+    asserts:
+      - equal: { path: spec.forProvider.level, value: system }
+      - equal: { path: spec.forProvider.duration, value: -1 }
+      - matchRegex: { path: spec.forProvider.secretSecretRef.key, pattern: '^robot-(builder|nodes)$' }
+      - equal: { path: spec.forProvider.secretSecretRef.name, value: harbor-platform }
+      - notExists: { path: spec.forProvider.secret }
+      - notExists: { path: spec.forProvider.secretWo }
+
+  - it: builder pushes to apps and pulls apps-ghcr and every proxy cache
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: builder }
+    asserts:
+      - lengthEqual: { path: spec.forProvider.permissions, count: 8 }
+      - equal: { path: 'spec.forProvider.permissions[0].namespace', value: apps }
+      - contains: { path: 'spec.forProvider.permissions[0].access', content: { resource: repository, action: push } }
+      - contains: { path: 'spec.forProvider.permissions[0].access', content: { resource: tag, action: create } }
+      - equal: { path: 'spec.forProvider.permissions[7].namespace', value: gcr }
+      - notContains: { path: 'spec.forProvider.permissions[7].access', content: { resource: repository, action: push } }
+
+  - it: nodes only pulls (apps, apps-ghcr, every proxy cache)
+    template: templates/config.yaml
+    documentSelector: { path: metadata.name, value: nodes }
+    asserts:
+      - lengthEqual: { path: spec.forProvider.permissions, count: 8 }
+      - equal: { path: 'spec.forProvider.permissions[0].namespace', value: apps }
+      - equal:
+          path: 'spec.forProvider.permissions[0].access'
+          value:
+            - { resource: repository, action: pull }
+            - { resource: repository, action: list }
+            - { resource: artifact, action: read }
+            - { resource: artifact, action: list }
+            - { resource: tag, action: list }
+
+  - it: a non-empty system CVE allowlist renders one Security object
+    template: templates/config.yaml
+    set: { config.cveAllowlist: [CVE-2024-0001] }
+    documentSelector: { path: kind, value: Security }
+    asserts:
+      - equal: { path: spec.forProvider.cveAllowlist, value: [CVE-2024-0001] }
+      - equal: { path: metadata.name, value: system-cve-allowlist }
+
+  - it: no Job, CronJob or ConfigMap reconciles Harbor imperatively any more
+    asserts:
+      - notEqual: { path: kind, value: Job }
+      - notEqual: { path: kind, value: CronJob }
+      - notEqual: { path: kind, value: ConfigMap }
+
+  - it: fails when secrets.ghcrKey is set without the token's user
+    template: templates/validate.yaml
+    set: { secrets.ghcrKey: platform-ghcr }
+    asserts:
+      - failedTemplate: { errorMessage: "secrets.ghcrUsername is required with secrets.ghcrKey platform-ghcr (the GitHub user of the GHCR token)" }
 
   - it: fails when externalURL drifts from registry.host
     template: templates/validate.yaml

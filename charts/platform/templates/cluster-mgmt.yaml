@@ -1,6 +1,12 @@
 {{- /* Argo CD cluster secret of mgmt itself (in-cluster): its labels select the mgmt addons (appset-addons.yaml);
 mgmt.addons.<name>: "true"/"false" become the per-addon toggle labels. */ -}}
 {{- $mgmt := .Values.mgmt | default dict -}}
+{{- $toggles := $mgmt.addons | default dict -}}
+{{- /* Addon harbor declares Harbor's projects, proxy caches and robots as managed resources of the Harbor provider, which
+addon crossplane installs on mgmt (opt-in, values/role-mgmt.yaml there). */ -}}
+{{- if and (eq (toString (.Values.registry | default dict).type) "harbor") (ne (toString (get $toggles "harbor")) "false") (ne (toString (get $toggles "crossplane")) "true") }}
+{{- fail "registry.type harbor: addon harbor declares its projects, proxy caches and robot accounts as Crossplane managed resources - set mgmt.addons.crossplane: true in installation.yaml" }}
+{{- end -}}
 apiVersion: v1
 kind: Secret
 metadata:

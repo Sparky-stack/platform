@@ -91,12 +91,16 @@
         },
         "ghcrKey": {
           "type": "string",
-          "description": "Store key with GHCR credentials for private ghcr.io packages (\"\" = none)."
+          "description": "Store key with the GHCR token (property token) for private ghcr.io packages (\"\" = none)."
         },
         "secretName": {
           "type": "string",
           "minLength": 1,
           "description": "Secret the upstream chart's existingSecret* keys point at."
+        },
+        "ghcrUsername": {
+          "type": "string",
+          "description": "GitHub user of the GHCR token (required with ghcrKey; the provider's registry accessId is not a Secret reference)."
         }
       },
       "description": "ExternalSecret inputs for Harbor's admin/DB/robot secrets."

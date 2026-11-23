@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
+Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + the Harbor provider only, `values/role-mgmt.yaml`): core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
 
 ## Where it runs
 
-- **Roles / providers:** `roles: [workload]`, all providers (`namespace: crossplane-system`, `serverSideDiff: true`; layers `values/provider-docker.yaml` on `docker`).
-- **Catalog label:** `addons.platform.koorikla.io/crossplane` (`default: false`, opt-in with `"true"` per cluster via `addons.crossplane: true`).
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: crossplane-system`, `serverSideDiff: true`; layers `values/provider-docker.yaml` on `docker`, `values/role-mgmt.yaml` on mgmt: `platformAPIs.enabled: false`, `harborProvider.enabled: true`).
+- **Catalog label:** `addons.platform.koorikla.io/crossplane` (`default: false`, opt-in with `"true"` per cluster via `addons.crossplane: true`; mgmt: `mgmt.addons.crossplane: true`, required with `registry.type: harbor`).
 
 ## Key values
 
@@ -50,6 +50,17 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | crossplane.securityContextRBACManager.runAsNonRoot | bool | `true` |  |
 | crossplane.securityContextRBACManager.runAsUser | int | `65532` |  |
 | crossplane.securityContextRBACManager.seccompProfile.type | string | `"RuntimeDefault"` |  |
+| harborProvider.activate[0] | string | `"registries.harbor.m.crossplane.io"` |  |
+| harborProvider.activate[1] | string | `"projects.harbor.m.crossplane.io"` |  |
+| harborProvider.activate[2] | string | `"replications.harbor.m.crossplane.io"` |  |
+| harborProvider.activate[3] | string | `"accounts.robot.harbor.m.crossplane.io"` |  |
+| harborProvider.activate[4] | string | `"securities.config.harbor.m.crossplane.io"` |  |
+| harborProvider.enabled | bool | `false` | `true` on mgmt (`values/role-mgmt.yaml`): installs `provider-upjet-harbor` and activates only the Harbor kinds addon harbor uses. |
+| harborProvider.package | string | `"xpkg.crossplane.io/crossplane-contrib/provider-upjet-harbor:v1.4.3@sha256:8f379d7081bfbb1cd8261439d18fe2bc3f1f90aa0dcc05c82065842555659b73"` |  |
+| harborProvider.resources.limits.cpu | string | `"500m"` |  |
+| harborProvider.resources.limits.memory | string | `"512Mi"` |  |
+| harborProvider.resources.requests.cpu | string | `"10m"` |  |
+| harborProvider.resources.requests.memory | string | `"96Mi"` |  |
 | monitoring.podMonitor | bool | `true` |  |
 | mysql.backend | string | `"moco"` |  |
 | mysql.configuration | string | `"ghcr.io/koorikla/platform/mysql:v0.3.0@sha256:0ed7c47fd696d14315cf134e3149236c0f05e4f409c87802726ecb8e9cf5c58d"` |  |
@@ -83,6 +94,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | packages.signatureVerification.issuer | string | `"https://token.actions.githubusercontent.com"` |  |
 | packages.signatureVerification.prefix | string | `"ghcr.io/koorikla/platform/"` |  |
 | packages.signatureVerification.subjectRegExp | string | `"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"` |  |
+| platformAPIs | object | `{"enabled":true}` | `false` skips the platform data APIs (PostgreSQL and MySQL packages, EnvironmentConfigs, Functions, compose RBAC, admission policies); `values/role-mgmt.yaml` sets it. |
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |
 | policy.exemptNamespaces[1] | string | `"cnpg-system"` |  |
@@ -125,6 +137,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 | postgresql.gcp.privateNetwork | string | `""` |  |
 | postgresql.gcp.project | string | `""` |  |
 | postgresql.gcp.region | string | `""` |  |
+| registry.type | string | `"external"` |  |
 
 ## Day-2 notes
 
@@ -135,5 +148,5 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 
 ## Links
 
-- [Crossplane platform APIs](../../docs/crossplane.md)
+- [Crossplane platform APIs](../../docs/crossplane.md), [Crossplane on mgmt](../../docs/crossplane.md#crossplane-on-mgmt)
 - [Data services: PostgreSQL as a service](../../docs/data-services.md#postgresql-as-a-service)

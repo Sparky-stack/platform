@@ -1,5 +1,6 @@
 {{- /* Crossplane v2 activates managed resource definitions explicitly: only what the backend's Composition composes gets a
 CRD (provider.defaultActivations is empty, so there is no "*" policy). cnpg composes no managed resources. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $backend := include "crossplane.pgBackend" . }}
 {{- $mrds := dict
   "aws-rds" (list "instances.rds.aws.m.upbound.io" "clusters.rds.aws.m.upbound.io" "clusterinstances.rds.aws.m.upbound.io" "subnetgroups.rds.aws.m.upbound.io" "securitygroups.ec2.aws.m.upbound.io" "securitygroupingressrules.ec2.aws.m.upbound.io" "keys.kms.aws.m.upbound.io")
@@ -16,4 +17,5 @@ metadata:
 spec:
   activate:
     {{- toYaml . | nindent 4 }}
+{{- end }}
 {{- end }}

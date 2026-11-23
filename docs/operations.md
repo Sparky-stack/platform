@@ -46,6 +46,7 @@ Start with [observability-first-look.md](runbooks/observability-first-look.md) i
 | Back up or restore etcd, OpenBao, Thunder, Harbor, CloudNativePG; restore drills | [backup-restore.md](runbooks/backup-restore.md) |
 | Inspect or rotate CAs, the OpenBao mesh CA, agent certificates, GitHub App keys, the Cosign key, ESO secrets | [certificates-and-secrets.md](runbooks/certificates-and-secrets.md) |
 | Add or remove a cluster, scale workers, 1 vs 3 control-plane servers, local RAM | [scaling-and-capacity.md](runbooks/scaling-and-capacity.md) |
+| Add a Harbor proxy cache, project or robot account; rotate a robot secret; Harbor objects not Ready | [harbor.md](runbooks/harbor.md) |
 
 Diagrams: [cluster lifecycle](diagrams/cluster-lifecycle.svg), [trust and certificates](diagrams/trust.svg),
 [backup and restore](diagrams/backup.svg), [upgrade flow](diagrams/upgrade.svg) (step-by-step:

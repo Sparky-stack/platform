@@ -13,7 +13,7 @@ a restore drill. Everything not in this table is rebuilt from Git by Argo CD.
 | Workload `etcd` (`dev1`, cloud clusters) | Workload API state, local Secrets/PV bindings | Addons and OpenChoreo `RenderedRelease` resources re-sync from mgmt |
 | OpenBao (`openbao`) | PVC `data-openbao-0` (internal mesh root + intermediate keys, tenant app secrets in `kv-tenant-<project>`) **and** store key `openbao-unseal` | Policies, member roles and tenant mounts rebuild (`mesh-reconcile`, tenant reconcile); CA private keys and app secret values do **not** (locally the demo tenant's value is re-seeded) |
 | Thunder (`thunder`) | PVCs `thunder-database-pvc`, `thunder-certs-pvc`, `thunder-secrets-pvc` | Default clients/roles upsert (`thunder-setup`); runtime users, sessions, and signing keys live on the PVCs |
-| Harbor (`harbor`) | PVCs `database-data-harbor-database-0`, `harbor-registry` **and** store key `harbor` (`secretKey`) | Projects, proxy caches, replication, and robots rebuild (`harbor-config`); pushed `apps/` images do **not** |
+| Harbor (`harbor`) | PVCs `database-data-harbor-database-0`, `harbor-registry` **and** store key `harbor` (`secretKey`) | Projects, proxy caches, replication, and robots rebuild (Crossplane managed resources in ns `harbor`); pushed `apps/` images do **not** |
 | CloudNativePG (`cnpg-system`, tenant ns) | PostgreSQL PVCs + Barman Cloud object-store WAL/base backups | Operator and `Cluster` CRs rebuild from Git; tenant database rows come from Barman recovery |
 
 ## Symptoms
@@ -186,7 +186,7 @@ $K -n argocd scale statefulset/argocd-application-controller deploy/argocd-appli
 
 ### 5. Harbor (`harbor`)
 
-Harbor's persistent state lives in `database-data-harbor-database-0` (PostgreSQL metadata) and `harbor-registry` (OCI blobs), paired with store key `harbor` (`secretKey` encrypts stored credentials; `addons/harbor/values.yaml`). Projects, proxy-cache endpoints, replication rules, and robot accounts (`robot$builder`, `robot$nodes`) are re-applied hourly by `CronJob/harbor-config` ([build-plane.md](../build-plane.md#registry-harbor)).
+Harbor's persistent state lives in `database-data-harbor-database-0` (PostgreSQL metadata) and `harbor-registry` (OCI blobs), paired with store key `harbor` (`secretKey` encrypts stored credentials; `addons/harbor/values.yaml`). Projects, proxy-cache endpoints, replication rules, and robot accounts (`robot$builder`, `robot$nodes`) are Crossplane managed resources in ns `harbor`: the Harbor provider re-creates whatever a restored or fresh Harbor lacks ([build-plane.md](../build-plane.md#declarative-configuration)).
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"

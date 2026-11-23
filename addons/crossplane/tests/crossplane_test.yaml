@@ -1,4 +1,4 @@
-suite: crossplane wrapper (Crossplane v2 + PostgreSQL as a service)
+suite: crossplane wrapper (Crossplane v2 + PostgreSQL as a service; Harbor provider on mgmt)
 release:
   name: crossplane
   namespace: crossplane-system
@@ -14,6 +14,7 @@ templates:
   - templates/mysql.yaml
   - templates/policies.yaml
   - templates/validate.yaml
+  - templates/harbor-provider.yaml
   - charts/crossplane/templates/deployment.yaml
   - charts/crossplane/templates/rbac-manager-deployment.yaml
 tests:
@@ -445,3 +446,82 @@ tests:
         documentSelector: { path: metadata.name, value: mysql-production-ha }
       - equal: { path: 'spec.validationActions', value: [Deny] }
         documentSelector: { path: metadata.name, value: mysql-production-ha }
+
+  # --- mgmt (values/role-mgmt.yaml): the Harbor provider only ---------------------------------------------------------
+  - it: workload clusters get no Harbor provider, even when the installation runs Harbor
+    template: templates/harbor-provider.yaml
+    set: { registry.type: harbor }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: mgmt installs the Harbor provider pinned by multi-arch digest, under its restricted runtime config
+    template: templates/harbor-provider.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { registry.type: harbor }
+    documentSelector: { path: kind, value: Provider }
+    asserts:
+      - matchRegex:
+          path: spec.package
+          pattern: '^xpkg\.crossplane\.io/crossplane-contrib/provider-upjet-harbor:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
+      - equal: { path: spec.skipDependencyResolution, value: true }
+      - equal: { path: spec.runtimeConfigRef.name, value: provider-harbor }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-options"]', value: SkipDryRunOnMissingResource=true }
+
+  - it: the Harbor provider pod meets Pod Security restricted with small requests
+    template: templates/harbor-provider.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { registry.type: harbor }
+    documentSelector: { path: kind, value: DeploymentRuntimeConfig }
+    asserts:
+      - equal: { path: metadata.name, value: provider-harbor }
+      - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.runAsNonRoot, value: true }
+      - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].name', value: package-runtime }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation', value: false }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].resources.requests', value: { cpu: 10m, memory: 96Mi } }
+
+  - it: only the Harbor kinds addon harbor renders get a CRD
+    template: templates/harbor-provider.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { registry.type: harbor }
+    documentSelector: { path: kind, value: ManagedResourceActivationPolicy }
+    asserts:
+      - equal:
+          path: spec.activate
+          value:
+            - registries.harbor.m.crossplane.io
+            - projects.harbor.m.crossplane.io
+            - replications.harbor.m.crossplane.io
+            - accounts.robot.harbor.m.crossplane.io
+            - securities.config.harbor.m.crossplane.io
+
+  - it: mgmt with an external registry installs no Harbor provider
+    template: templates/harbor-provider.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { registry.type: external }
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: mgmt runs none of the data APIs (packages, Functions, EnvironmentConfig, compose RBAC, policies, validation)
+    values: [../values/role-mgmt.yaml]
+    set: { registry.type: harbor, cluster.provider: unmapped-provider, mysql.enabled: "true" }
+    templates:
+      - templates/packages.yaml
+      - templates/provider-config.yaml
+      - templates/activation-policy.yaml
+      - templates/rbac.yaml
+      - templates/environment-config.yaml
+      - templates/configuration.yaml
+      - templates/mysql.yaml
+      - templates/policies.yaml
+      - templates/validate.yaml
+      - templates/podmonitor.yaml
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: mgmt keeps Pod Security restricted on crossplane-system
+    template: templates/namespace.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - equal: { path: 'metadata.labels["pod-security.kubernetes.io/enforce"]', value: restricted }

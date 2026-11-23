@@ -1,4 +1,2 @@
-# helm package/template ignores (python bytecode from local runs of files/harbor-config.py)
-__pycache__/
-*.py[cod]
+# helm package/template ignores
 tests/

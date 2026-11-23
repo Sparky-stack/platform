@@ -1,5 +1,6 @@
 {{- /* This cluster's PostgreSQL facts (no developer input): the Composition "postgresql" loads them with
 function-environment-configs and dispatches on data.backend. Missing facts fail in templates/validate.yaml. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 apiVersion: apiextensions.crossplane.io/v1beta1
 kind: EnvironmentConfig
 metadata:
@@ -8,3 +9,4 @@ metadata:
     {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
 data:
   {{- include "crossplane.pgFacts" . | fromJson | toYaml | nindent 2 }}
+{{- end }}

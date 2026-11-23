@@ -1,6 +1,6 @@
 apiVersion: v2
 name: harbor
-description: Harbor registry on mgmt - project apps (in-cluster builds), proxy caches for node pulls, GHCR replication; TLS from a mgmt-only CA, secrets from ClusterSecretStore platform, desired state applied by a Job
+description: Harbor registry on mgmt - project apps (in-cluster builds), proxy caches for node pulls, GHCR replication; TLS from a mgmt-only CA, secrets from ClusterSecretStore platform, desired state as Crossplane managed resources (provider-upjet-harbor)
 type: application
 version: 0.1.0
 dependencies:

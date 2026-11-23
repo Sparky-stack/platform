@@ -49,3 +49,39 @@ argocd.argoproj.io/sync-wave: {{ . | default "1" | quote }}
 {{- end -}}
 {{- toJson $f -}}
 {{- end }}
+
+{{/* DeploymentRuntimeConfig spec meeting Pod Security restricted (Crossplane's default package runtime sets neither
+seccomp nor a capability drop). Input: dict "resources" [, "serviceAccount", "podLabels"]. */}}
+{{- define "crossplane.runtimeSpec" -}}
+deploymentTemplate:
+  spec:
+    selector: {}
+    template:
+      {{- with .podLabels }}
+      metadata:
+        labels:
+          {{- toYaml . | nindent 10 }}
+      {{- end }}
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 2000
+          runAsGroup: 2000
+          seccompProfile: { type: RuntimeDefault }
+        containers:
+          - name: package-runtime
+            securityContext:
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              privileged: false
+              readOnlyRootFilesystem: true
+              capabilities: { drop: [ALL] }
+              seccompProfile: { type: RuntimeDefault }
+            resources:
+              {{- toYaml .resources | nindent 14 }}
+{{- with .serviceAccount }}
+serviceAccountTemplate:
+  metadata:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}

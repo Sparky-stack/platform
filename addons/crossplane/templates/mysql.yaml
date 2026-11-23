@@ -1,5 +1,6 @@
 {{- /* The MySQL API (packages/mysql) where the cluster runs addon moco, shaped like the PostgreSQL one: package, embedded
 Function, EnvironmentConfig and compose RBAC. Admission policies: templates/policies.yaml. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $m := .Values.mysql }}
 {{- if eq (toString $m.enabled) "true" }}
 {{- if ne $m.backend "moco" }}{{ fail (printf "mysql.backend %q: only moco is enabled (cloud Compositions of packages/mysql are layout, #256)" $m.backend) }}{{ end }}
@@ -77,4 +78,5 @@ rules:
   - apiGroups: [generators.external-secrets.io]
     resources: [passwords]
     verbs: [get, list, watch, create, update, patch, delete]
+{{- end }}
 {{- end }}

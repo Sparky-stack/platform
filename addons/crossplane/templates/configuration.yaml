@@ -1,5 +1,6 @@
 {{- /* The PostgreSQL API package (packages/postgresql), pinned tag@digest. skipDependencyResolution: templates/packages.yaml
 pins its Functions and Providers under the restricted runtime; the resolver would install floating tags. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 apiVersion: pkg.crossplane.io/v1
 kind: Configuration
 metadata:
@@ -36,5 +37,6 @@ spec:
             identities:
               - issuer: {{ .issuer }}
                 subjectRegExp: {{ .subjectRegExp | quote }}
+{{- end }}
 {{- end }}
 {{- end }}

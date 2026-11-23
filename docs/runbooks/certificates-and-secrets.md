@@ -91,7 +91,7 @@ kubectl --context k3d-platform-mgmt -n argocd get externalsecret platform-repo-c
 ```
 
 - **`promotion-gate-github`**: the gate reads it per `WorkflowRun`; builds mint tokens through ExternalSecret `workflows-default/build-github-app` (refresh 1h; force-sync it to use a rotated key at once).
-- **`platform-ghcr`**: force-sync `harbor/harbor-platform` (and run a Job from `CronJob/harbor-config`) so Harbor proxy-cache/replication picks it up; workload nodes only pick up rotated `fleet/<cluster>-registries` credentials when replaced.
+- **`platform-ghcr`**: force-sync `harbor/harbor-platform` and touch the `Registry ghcr.io` managed resource so Harbor proxy-cache/replication picks it up at once ([harbor.md](harbor.md#4-rotate-a-robot-or-ghcr-secret)); workload nodes only pick up rotated `fleet/<cluster>-registries` credentials when replaced.
 
 ### 5. `cosign-platform` signing key
 
@@ -136,7 +136,7 @@ kubectl --kubeconfig dev1.kubeconfig -n falco rollout restart deploy/falco-falco
 
 - **`openchoreo` / `promotion-gate`**: trigger a `thunder-mgmt` sync (runs `thunder-setup` to upsert OAuth client secrets) and restart `deploy/backstage` + `deploy/openchoreo-api` in `openchoreo-control-plane`.
 - **`openchoreo-observability`**: on the local backend, `charts/cluster` seeds `openchoreo-secrets` on each workload cluster (`secrets.workloadSeed`); sync `cluster-<name>`, force-sync `ExternalSecret`s in `openchoreo-observability-plane` and `telemetry`, and restart `fluent-bit` / `events-collector` / `observer`.
-- **`harbor`**: force-sync `harbor/harbor-platform` and trigger a Job from `CronJob/harbor-config` (`kubectl --context k3d-platform-mgmt -n harbor create job --from=cronjob/harbor-config harbor-config-manual`) to update `robot$builder` and `robot$nodes`. Do **not** rotate `secret-key` on a populated Harbor DB without Harbor's upstream key-migration step.
+- **`harbor`**: force-sync `harbor/harbor-platform`; the Harbor provider sets `robot$builder` and `robot$nodes` from it at its next reconcile, or at once when you touch their `Account` managed resources ([harbor.md](harbor.md#4-rotate-a-robot-or-ghcr-secret)). The provider's admin credential (`provider-credentials`) follows `admin-password` the same way. Do **not** rotate `secret-key` on a populated Harbor DB without Harbor's upstream key-migration step.
 - **`external-dns-cloudflare`**: delivered via `ClusterSecretStore/dns` ([dns.md](../dns.md#credentials)); force-sync the `ExternalSecret` in `external-dns` and restart `deploy/external-dns` `(not yet verified live)`.
 
 ### 7. Tenant application secrets (OpenBao)

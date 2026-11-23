@@ -302,6 +302,61 @@
         }
       },
       "description": "Admission policies for PostgreSQL claims."
+    },
+    "platformAPIs": {
+      "type": "object",
+      "description": "Platform data APIs (PostgreSQL, MySQL); values/role-mgmt.yaml turns them off.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "registry": {
+      "type": "object",
+      "description": "installation.yaml registry (type harbor installs the Harbor provider where harborProvider.enabled).",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "harbor",
+            "external"
+          ]
+        }
+      }
+    },
+    "harborProvider": {
+      "type": "object",
+      "description": "provider-upjet-harbor on mgmt (addon harbor's managed resources).",
+      "required": [
+        "enabled",
+        "package",
+        "activate"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^xpkg\\.crossplane\\.io/crossplane-contrib/provider-upjet-harbor:v[0-9.]+@sha256:[0-9a-f]{64}$",
+          "description": "Pinned tag@sha256 (multi-arch index)."
+        },
+        "resources": {
+          "type": "object"
+        },
+        "activate": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+\\.([a-z]+\\.)?harbor\\.m\\.crossplane\\.io$"
+          },
+          "minItems": 1
+        }
+      }
     }
   }
 }

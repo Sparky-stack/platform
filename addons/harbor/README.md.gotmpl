@@ -1,19 +1,21 @@
 {{- define "chart.purpose" -}}
-Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` project for in-cluster builds and upstream pull-through proxy caches (`dockerhub`, `ghcr`, `quay`, `k8s`, `openchoreo`, `gcr`) for cluster nodes, with TLS from a `mgmt`-local CA and declarative project reconciliation.
+Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` project for in-cluster builds and upstream pull-through proxy caches (`dockerhub`, `ghcr`, `quay`, `k8s`, `openchoreo`, `gcr`) for cluster nodes, with TLS from a `mgmt`-local CA; projects, proxy caches, replication and robot accounts are Crossplane managed resources (`provider-upjet-harbor`).
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
 - **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: harbor`).
-- **Catalog label:** `addons.platform.koorikla.io/harbor` (`default: true`; cloud/external-registry installations set `mgmt.addons.harbor: "false"`).
+- **Catalog label:** `addons.platform.koorikla.io/harbor` (`default: true`; cloud/external-registry installations set `mgmt.addons.harbor: "false"`). Needs `mgmt.addons.crossplane: true` (the Harbor provider; charts/platform fails the render without it).
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
 - Values are checked by `values.schema.json` (`registry.host` format, `secrets.store` and other platform keys; `helm` prints the failing path). `registry.type` other than `harbor` and cross-field rules (upstream literals vs `registry.host`, gateway, token Secret, proxy-cache endpoints) are in `templates/validate.yaml`.
+- Harbor objects: `kubectl --context k3d-platform-mgmt -n harbor get managed` (Synced/Ready per object); add a proxy cache or robot, rotate secrets: [Harbor runbook](../../docs/runbooks/harbor.md). Projects and registries are never deleted from Harbor.
 - Database/blob backups and node registry secret recovery: [backup and restore](../../docs/runbooks/backup-restore.md#5-harbor-harbor) and [break-glass](../../docs/runbooks/break-glass.md#blocked-cluster-sync-on-node-registry-secret).
 {{- end -}}
 
 {{- define "chart.links" -}}
 - [Build plane: Harbor](../../docs/build-plane.md#registry-harbor)
+- [Harbor runbook](../../docs/runbooks/harbor.md)
 {{- end -}}
 
 {{- define "chart.keyValuesNotes" }}
@@ -26,8 +28,8 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | `templates/gateway.yaml` | Gateway `harbor` (HTTPS 9443, TLS terminated) + timeouts for the chart HTTPRoute |
 | `templates/pki.yaml` | Registry CA scoped to ns harbor (Issuer `harbor-ca`) -> `harbor-tls`; `harbor-token` (core token-signing cert); `harbor-ca-bundle` (ca.crt only) |
 | `templates/ca-store.yaml` | ClusterSecretStore `mgmt-harbor`: name-scoped GET of `harbor-ca-bundle` only (for CAPI node bootstrap data and build pods; no private key is read) |
-| `templates/secrets.yaml` | Secret `harbor-platform` from ClusterSecretStore `platform` (key `harbor`, plus `platform-ghcr`) |
-| `templates/config.yaml` | Harbor has no CRDs: a PostSync Job + CronJob apply `files/harbor-config.py` to the desired state in `config` (projects, proxy caches, replication, robot accounts, empty CVE allowlist). Idempotent. |
+| `templates/secrets.yaml` | Secret `harbor-platform` from ClusterSecretStore `platform` (key `harbor`, plus `platform-ghcr`), incl. the provider's admin credential `provider-credentials` |
+| `templates/config.yaml` | `config` as provider-upjet-harbor managed resources (sync wave 1): `ProviderConfig harbor`, a `Registry` per upstream, a `Project` per apps/replication target/proxy cache (no `Delete` policy), `Replication`, robot `Account`s with their secret from `harbor-platform` |
 
 - **Images:** Harbor v2.15 publishes linux/amd64 only. On arm64 hosts set `registry.type: external` and disable this addon ([Registry](../../docs/build-plane.md)).
 - **Endpoint** `https://<registry.host>`, e.g. `https://harbor.openchoreo.localhost:9443`. Harbor's token realm is `externalURL`, so the same name must resolve everywhere:
