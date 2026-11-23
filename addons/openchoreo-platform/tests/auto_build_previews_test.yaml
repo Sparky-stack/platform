@@ -24,6 +24,7 @@ tests:
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_EXPIRED_LABEL, value: preview-expired } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_TTL, value: 48h } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_MAX_PER_TENANT, value: "2" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_GRANTED_LABEL, value: preview-granted } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_WAITING_LABEL, value: preview-waiting } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_SKIP_BOTS, value: "true" } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_BOT_LABEL, value: preview } }
@@ -32,10 +33,11 @@ tests:
 
   - it: "installation.yaml previews: the cap, the waiting label and the bot switch reach the pass (#385)"
     set:
-      previews: { enabled: true, maxPerTenant: 5, waitingLabel: queued, skipBots: false, botLabel: try-me }
+      previews: { enabled: true, maxPerTenant: 5, grantedLabel: go, waitingLabel: queued, skipBots: false, botLabel: try-me }
     documentSelector: { path: kind, value: WorkflowTemplate }
     asserts:
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_MAX_PER_TENANT, value: "5" } }
+      - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_GRANTED_LABEL, value: go } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_WAITING_LABEL, value: queued } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_SKIP_BOTS, value: "false" } }
       - contains: { path: "spec.templates[0].script.env", content: { name: PREVIEW_BOT_LABEL, value: try-me } }

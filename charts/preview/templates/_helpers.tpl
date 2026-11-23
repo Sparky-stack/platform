@@ -1,10 +1,11 @@
-{{- /* "true" unless the preview is off for this PR: expired (TTL), waiting (per-tenant cap, #385) or a bot PR without
-the opt-in label. Off renders nothing, so Argo CD prunes the preview (or never creates it). */ -}}
+{{- /* "true" only for a PR the auto-build pass granted a slot of the tenant's cap (#385) that is neither expired (TTL)
+nor a bot PR without the opt-in label. Default off: renders nothing, so no Environment exists before the grant and
+Argo CD prunes a preview that loses it. */ -}}
 {{- define "preview.on" -}}
-{{- if or (eq (toString .Values.expired) "true") (eq (toString .Values.waiting) "true") (eq (toString .Values.bot) "true") -}}
-false
-{{- else -}}
+{{- if and (eq (toString .Values.granted) "true") (ne (toString .Values.expired) "true") (ne (toString .Values.bot) "true") -}}
 true
+{{- else -}}
+false
 {{- end -}}
 {{- end }}
 

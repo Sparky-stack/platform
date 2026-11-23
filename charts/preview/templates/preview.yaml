@@ -3,7 +3,8 @@ One PR preview from stock OpenChoreo objects (docs/preview-environments.md):
   Environment            pr-<n>-<component>             on previews.dataPlane, never production, in no pipeline
   ProjectReleaseBinding  <project>-pr-<n>-<component>   the project's cell namespace, labelled preview for Kyverno
   ReleaseBinding         <component>-pr-<n>             pins the auto-build's ComponentRelease of the PR head
-Closing the PR (or expired / waiting / bot: "true", see preview.on) removes the Environment; OpenChoreo's finalizers
+Nothing renders until the auto-build pass grants the PR a slot (granted: "true", see preview.on). Closing the PR (or
+expired / bot: "true") removes the Environment; OpenChoreo's finalizers
 take the bindings, cell namespace, ComponentRelease and the auto-build's ResourceReleaseBindings with it (the delete
 waits for the bindings: blockOwnerDeletion).
 */ -}}

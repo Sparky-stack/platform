@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "preview chart values",
-  "description": "Identity of one PR preview, from the pull request generator. Empty identity is allowed by the schema (standalone lint, previews that are off); templates/validate.yaml requires it unless expired, waiting or bot.",
+  "description": "Identity of one PR preview, from the pull request generator. Empty identity is allowed by the schema (standalone lint, previews that are off); templates/validate.yaml requires it only for a granted, live preview.",
   "type": "object",
   "properties": {
     "project": {
@@ -50,7 +50,7 @@
       ],
       "description": "\"true\" when the PR carries the expiry label: renders nothing, Argo CD prunes."
     },
-    "waiting": {
+    "granted": {
       "type": [
         "string",
         "boolean"
@@ -61,7 +61,7 @@
         true,
         false
       ],
-      "description": "\"true\" when the PR carries the waiting label (tenant at its preview cap): renders nothing."
+      "description": "\"true\" when the auto-build pass granted the PR a slot of the tenant's cap (granted label); anything else renders nothing."
     },
     "bot": {
       "type": [

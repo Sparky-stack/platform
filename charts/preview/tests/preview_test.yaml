@@ -9,6 +9,7 @@ set:
   commit: 0123456789abcdef0123456789abcdef01234567
   repository: koorikla/hello-world
   branch: feat/x
+  granted: "true"
 tests:
   - it: renders Environment, ProjectReleaseBinding and ReleaseBinding in that order of sync waves
     template: templates/preview.yaml
@@ -82,24 +83,31 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: renders nothing while the PR waits for a slot of the tenant's cap (#385)
+  - it: renders nothing until the auto-build pass grants a slot of the tenant's cap (#385)
     template: templates/preview.yaml
     set:
-      waiting: "true"
+      granted: "false"
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: renders nothing for a bot PR without the opt-in label (#385)
+  - it: renders nothing by default (no granted value at all)
+    template: templates/preview.yaml
+    set:
+      granted: null
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: renders nothing for a bot PR without the opt-in label, even when granted (#385)
     template: templates/preview.yaml
     set:
       bot: "true"
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: a held preview needs no identity (the generator still renders it)
+  - it: a preview without a grant needs no identity (the generator still renders it)
     template: templates/validate.yaml
     set:
-      waiting: "true"
+      granted: "false"
       commit: ""
     asserts:
       - notFailedTemplate: {}

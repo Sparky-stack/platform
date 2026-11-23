@@ -134,9 +134,9 @@
           "description": "PR label that expires a preview: letters, digits, space, . _ - (\"\" = preview-expired).",
           "pattern": "^([A-Za-z0-9][A-Za-z0-9 ._-]*)?$"
         },
-        "waitingLabel": {
+        "grantedLabel": {
           "type": "string",
-          "description": "PR label of a preview held by the per-tenant cap: letters, digits, space, . _ -.",
+          "description": "PR label the auto-build pass sets when it grants a preview slot: letters, digits, space, . _ -.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$"
         },
         "skipBots": {

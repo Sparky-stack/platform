@@ -488,18 +488,19 @@ assert_eq "$(yq '.argocd.namespace' "$tenant_values")" "$(yq '.previewToken.name
   "previews: the token Secret lives in the ApplicationSets' namespace (tokenRef is namespace-local)"
 assert_eq "$(yq '.autoBuild.previews.argocdNamespace' "$ocp_values")" "$(yq '.argocd.namespace' "$tenant_values")" \
   "previews: the auto-build pass lists preview Applications where the ApplicationSets put them"
-# The per-tenant cap (#385): the pass holds PRs beyond the number Kyverno enforces, with the label the ApplicationSet
-# renders empty, and skips the same bot PRs the ApplicationSet renders empty (defaults; installation.yaml feeds all).
+# The per-tenant cap (#385): the pass grants at most the number Kyverno enforces, with the label the ApplicationSet
+# renders resources for, and skips the same bot PRs the ApplicationSet renders empty (defaults; installation.yaml
+# feeds all).
 assert_eq "$(yq '.previews.maxPerTenant' "$ocp_values")" "$(yq '.previews.maxPerTenant' "$ROOT/addons/kyverno-policies/values.yaml")" \
   "previews: the auto-build pass's cap default == Kyverno platform-preview-cap's"
-for k in waitingLabel skipBots botLabel; do
+for k in grantedLabel skipBots botLabel; do
   assert_eq "$(yq ".previews.$k" "$ocp_values")" "$(yq ".previews.$k" "$tenant_values")" \
     "previews: openchoreo-platform previews.$k == charts/tenant previews.$k"
 done
 helm template platform "$ROOT/charts/platform" --namespace argocd -s templates/projects.yaml > "$TMP/pv-projects.yaml"
 pv_kinds=$(yq 'select(.metadata.name == "previews") | .spec.namespaceResourceWhitelist[] | .group + "/" + .kind' \
   "$TMP/pv-projects.yaml" | sort | tr '\n' ' ')
-helm template p "$ROOT/charts/preview" --set project=demo,component=hello-world,pullRequest=7 \
+helm template p "$ROOT/charts/preview" --set project=demo,component=hello-world,pullRequest=7,granted=true \
   --set-string commit=0123456789abcdef0123456789abcdef01234567 > "$TMP/pv-chart.yaml"
 chart_kinds=$(yq 'select(.kind) | (.apiVersion | sub("/.*", "")) + "/" + .kind' "$TMP/pv-chart.yaml" | grep -v '^---$' | sort -u | tr '\n' ' ')
 assert_eq "$pv_kinds" "$chart_kinds" "previews: AppProject previews admits exactly the kinds charts/preview renders"

@@ -2,8 +2,9 @@
 PR preview environments (docs/preview-environments.md), by cluster role.
 mgmt (previewGuards.environments), on Environments labelled platform.koorikla.io/preview=true:
   MutatingPolicy   platform-preview-expiry  stamps platform.koorikla.io/expires-at = now + previews.ttl, once
-  ValidatingPolicy platform-preview-cap     at most previews.maxPerTenant live previews per tenant (backstop: the
-                                            auto-build pass enforces the same number first and tells the PR, #385)
+  ValidatingPolicy platform-preview-cap     at most previews.maxPerTenant live previews per tenant. Backstop only:
+                                            concurrent creates each see the old count; the cap holds because the
+                                            auto-build pass grants previews one pass at a time (#385)
   DeletingPolicy   platform-preview-ttl     backstop: deletes previews ttlGrace past expires-at
 data planes (previewGuards.namespaces), on preview cell namespaces:
   GeneratingPolicy platform-preview-guardrails  ResourceQuota, LimitRange and egress isolation from other cells
@@ -50,9 +51,9 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     policies.kyverno.io/title: PR previews per tenant
     policies.kyverno.io/description: >-
-      A tenant runs at most {{ $cap }} preview Environments at a time. Backstop: the auto-build pass counts the same
-      cap first and holds further pull requests (label, failed commit status) until a pull request closes or a preview
-      expires, so this denial only fires in the minutes before the pass sees a new pull request.
+      A tenant runs at most {{ $cap }} preview Environments at a time. Backstop only: Environments created at the same
+      moment each see the old count and are all admitted. The cap is held by the auto-build pass, which grants preview
+      slots one pass at a time and labels further pull requests as waiting (failed commit status) until a slot frees.
 spec:
   validationActions: [Deny]
   failurePolicy: Fail                # only preview Environments are matched: an outage delays previews, nothing else

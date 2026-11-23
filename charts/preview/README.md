@@ -18,12 +18,12 @@ Renders one pull request preview environment: OpenChoreo `Environment/pr-<n>-<co
 | commit | string | `""` |  |
 | component | string | `""` |  |
 | expired | string | `"false"` | `"true"` when the PR carries the expiry label; renders nothing, so Argo CD prunes the preview. |
+| granted | string | `"false"` | `"true"` when the PR carries `previews.grantedLabel`, which only the auto-build pass sets once the tenant has a free slot of `previews.maxPerTenant` (#385). Default `"false"`: renders nothing (no preview until granted). |
 | openchoreo.orgNamespace | string | `"default"` | OpenChoreo organization namespace (from `installation.yaml`). |
 | previews.dataPlane | string | `"dev1"` | `ClusterDataPlane` every preview lands on (from `installation.yaml`). |
 | project | string | `""` | OpenChoreo `Project` (from the pull request generator alongside `component`, `pullRequest`, `commit`, `repository`, `branch`; malformed values fail the render). |
 | pullRequest | string | `""` |  |
 | repository | string | `""` |  |
-| waiting | string | `"false"` | `"true"` when the PR carries `previews.waitingLabel`: the tenant is at its preview cap, the auto-build pass holds this PR (failed commit status) and removes the label when a slot frees (#385); renders nothing meanwhile. |
 
 ## Day-2 notes
 
