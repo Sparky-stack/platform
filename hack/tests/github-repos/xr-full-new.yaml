@@ -1,0 +1,13 @@
+# A repository Crossplane creates and fully manages (the scaffolder path, #59): every spec field set.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: GitHubRepository
+metadata:
+  name: orders-api
+  namespace: crossplane-system
+spec:
+  management: Full
+  description: Orders service
+  visibility: private
+  requiredChecks: ["checks / vet, lint, test, govulncheck", "checks / manifests / OpenChoreo manifests"]
+  bypassApps: [5788333]
+  collaborators: [alice, Bob]

@@ -1,0 +1,11 @@
+# An existing repository switched to full management, adopting its hand-made ruleset (rulesetId).
+apiVersion: platform.koorikla.io/v1alpha1
+kind: GitHubRepository
+metadata:
+  name: hello-world
+  namespace: crossplane-system
+spec:
+  management: Full
+  requiredChecks: [validate]
+  bypassApps: [5788333]
+  rulesetId: "27395845"

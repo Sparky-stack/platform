@@ -269,6 +269,15 @@ assert_eq "$RC" 1 "gate App partial: fails closed"
 run gate_none "$S" NO_GH=1
 assert_eq "$(applied promotion-gate-github)" "" "gate App unset: nothing seeded"
 assert_eq "$(has "$OUT" 'no GITHUB_GATE_APP_\*: auto-build and PR previews stay off')" yes "gate App unset: says what stays off"
+run repo_admin_app "$S" NO_GH=1 GITHUB_REPO_ADMIN_APP_ID=5 GITHUB_REPO_ADMIN_APP_INSTALLATION_ID=4 GITHUB_REPO_ADMIN_APP_PRIVATE_KEY_FILE="$PEM"
+assert_eq "$(keys github-repo-admin)" "githubAppID,githubAppInstallationID,githubAppPrivateKey" "repo-admin App: keys"
+assert_eq "$(val github-repo-admin githubAppInstallationID)" 4 "repo-admin App: installation"
+assert_eq "$(val github-repo-admin githubAppPrivateKey | grep -c FAKEPEMBODY)" 1 "repo-admin App: private key from the file"
+assert_eq "$(applied promotion-gate-github)" "" "repo-admin App: does not seed the gate App"
+run repo_admin_partial "$S" NO_GH=1 GITHUB_REPO_ADMIN_APP_ID=5
+assert_eq "$RC" 1 "repo-admin App partial: fails closed"
+run repo_admin_none "$S" NO_GH=1
+assert_eq "$(applied github-repo-admin)" "" "repo-admin App unset: nothing seeded (an earlier seed is left as is)"
 
 # --- root app: secrets.githubGateApp.enabled follows the seeded key (#192) -------------------------------------------
 mkdir -p "$TMP/gate-seeded"; printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: promotion-gate-github\n' > "$TMP/gate-seeded/promotion-gate-github.yaml"

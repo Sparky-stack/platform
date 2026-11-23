@@ -27,19 +27,28 @@ cluster's workload identity; no package composes IAM roles or per-app cloud iden
 
 The management cluster runs addon crossplane too (`mgmt.addons.crossplane: true` in `installation.yaml`; the local
 installation sets it) with `values/role-mgmt.yaml`: Crossplane core plus platform-level providers, and none of the data
-APIs (`platformAPIs.enabled: false`: no Configuration packages, EnvironmentConfigs, Functions or their policies; apps
-and their databases live on workload clusters). Today that is one provider:
+APIs (`platformAPIs.enabled: false`: no Configuration packages, EnvironmentConfigs or their policies; apps and their
+databases live on workload clusters). Two providers:
 
 | Provider | For | Objects (namespace) |
 |---|---|---|
 | `provider-upjet-harbor` (crossplane-contrib, `harborProvider.package`, pinned `tag@sha256`) | addon harbor, when `registry.type: harbor` | Harbor projects, proxy-cache registries, replication, robot accounts (`harbor`, [build-plane.md](build-plane.md#declarative-configuration)) |
+| `provider-upjet-github` (crossplane-contrib, `githubRepos.package`, pinned `tag@sha256`) | repository governance, when the installation sets `githubRepos.enabled` | `GitHubRepository` XRs and their repository settings, ruleset, collaborators (`crossplane-system`, [github-repos.md](github-repos.md)) |
 
-Same rules as on workload clusters: restricted `DeploymentRuntimeConfig` (`provider-harbor`), PSS `restricted` on
-`crossplane-system`, `defaultActivations: []` plus a `ManagedResourceActivationPolicy` listing exactly the kinds in use
-(`harborProvider.activate`), a namespaced `ProviderConfig` next to the objects that use it. charts/platform fails the
-render when `registry.type` is harbor without `mgmt.addons.crossplane`. The objects sync one wave after Harbor's
-workloads with `SkipDryRunOnMissingResource`: on a clean bootstrap Argo CD retries them until the provider is Healthy.
-Memory: core ~130-170 MiB, RBAC manager ~20 MiB, the Harbor provider requests 96 MiB.
+The GitHub side is the one platform API on mgmt: the XRD and Composition live in the addon
+(`files/github-repository/`, applied as is) rather than in a Configuration package, because only mgmt uses them and
+every change must be live with the declarations that use it. For its Composition mgmt also runs `function-go-templating`
+and `function-auto-ready` (the pins of `packages.functions`). It is turned on per installation, not by the role file:
+exactly one mgmt may govern a GitHub account (`installations/local/addons/crossplane/cluster-mgmt.yaml`).
+
+Same rules as on workload clusters: restricted `DeploymentRuntimeConfig`s (`provider-harbor`, `provider-github`,
+`restricted` for the Functions), PSS `restricted` on `crossplane-system`, `defaultActivations: []` plus one
+`ManagedResourceActivationPolicy` per provider listing exactly the kinds in use (`harborProvider.activate`,
+`githubRepos.activate`), a namespaced `ProviderConfig` next to the objects that use it (`harbor` in `harbor`, `github`
+in `crossplane-system`, credentials from ESO). Neither provider is ever granted `Delete`. charts/platform fails the
+render when `registry.type` is harbor without `mgmt.addons.crossplane`. The objects sync one wave after what they need
+with `SkipDryRunOnMissingResource`: on a clean bootstrap Argo CD retries them until the provider is Healthy.
+Memory: core ~130-170 MiB, RBAC manager ~20 MiB, the Harbor provider requests 96 MiB, the GitHub provider 128 MiB.
 
 ## Cluster facts: EnvironmentConfig
 

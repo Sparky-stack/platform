@@ -29,7 +29,8 @@ Subcommands:
   secrets  Seed/refresh local platform-secrets (no-op if backend != kubernetes). GitHub creds from env, least
            privilege first: GITHUB_APP_ID/GITHUB_APP_INSTALLATION_ID/GITHUB_APP_PRIVATE_KEY_FILE,
            PLATFORM_GITHUB_TOKEN [PLATFORM_GITHUB_USER] (GITHUB_TOKEN accepted with a warning), else gh CLI
-           (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_* (docs/forking.md); provider byo
+           (NO_GH=1 skips); GHCR_TOKEN/GHCR_USER; push App GITHUB_PUSH_APP_*, gate App GITHUB_GATE_APP_*,
+           repo governance App GITHUB_REPO_ADMIN_APP_* (docs/forking.md); provider byo
            clusters: BYO_KUBECONFIG_<NAME> or the k3d cluster of that name (docs/providers.md)
   argocd   Install/upgrade Argo CD via Helm, seed the bootstrap repo secret until ESO's repo-creds is Ready (then
            delete it), apply root-app. `up` waits REPO_CREDS_WAIT seconds (default 600, 0 skips) for that hand-over
@@ -481,6 +482,15 @@ cmd_secrets() {
   else
     warn "  promotion-gate-github: no GITHUB_GATE_APP_*: auto-build and PR previews stay off, the promotion gate fails"
     warn "  closed, builds cannot clone (docs/forking.md (c2))"
+  fi
+
+  # github-repo-admin: the repo governance GitHub App (addon crossplane githubRepos, docs/github-repos.md). Optional:
+  # without it the GitHubRepository objects of an installation that turns githubRepos on cannot reach GitHub.
+  if [[ -n "${GITHUB_REPO_ADMIN_APP_ID:-}${GITHUB_REPO_ADMIN_APP_INSTALLATION_ID:-}${GITHUB_REPO_ADMIN_APP_PRIVATE_KEY_FILE:-}" ]]; then
+    require_app_env GITHUB_REPO_ADMIN_APP_ID GITHUB_REPO_ADMIN_APP_INSTALLATION_ID GITHUB_REPO_ADMIN_APP_PRIVATE_KEY_FILE
+    apply_github_app_secret github-repo-admin GITHUB_REPO_ADMIN_APP
+  else
+    log "  github-repo-admin: no GITHUB_REPO_ADMIN_APP_*: left as is (repo governance App, docs/forking.md (c3))"
   fi
 
   seed_openchoreo_secret

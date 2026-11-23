@@ -1,0 +1,22 @@
+# What provider-upjet-github reports for the repository once it observed it (status.atProvider): the XR's status.url.
+apiVersion: repo.github.m.upbound.io/v1alpha1
+kind: Repository
+metadata:
+  name: platform-repository
+  namespace: crossplane-system
+  annotations:
+    crossplane.io/composition-resource-name: repository
+    crossplane.io/external-name: platform
+spec:
+  managementPolicies: [Observe]
+  providerConfigRef: { kind: ProviderConfig, name: github }
+  forProvider: {}
+status:
+  atProvider:
+    fullName: koorikla/platform
+    htmlUrl: https://github.com/koorikla/platform
+    defaultBranch: main
+    allowMergeCommit: true
+  conditions:
+    - { type: Ready, status: "True", reason: Available, lastTransitionTime: "2026-11-23T00:00:00Z" }
+    - { type: Synced, status: "True", reason: ReconcileSuccess, lastTransitionTime: "2026-11-23T00:00:00Z" }

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + the Harbor provider only, `values/role-mgmt.yaml`): core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
+Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + the Harbor provider, `values/role-mgmt.yaml`, and, per installation, GitHub repository governance: `githubRepos`, the `GitHubRepository` API in `files/github-repository/`): core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
 
 ## Where it runs
 
@@ -50,6 +50,19 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 | crossplane.securityContextRBACManager.runAsNonRoot | bool | `true` |  |
 | crossplane.securityContextRBACManager.runAsUser | int | `65532` |  |
 | crossplane.securityContextRBACManager.seccompProfile.type | string | `"RuntimeDefault"` |  |
+| githubRepos.activate[0] | string | `"repositories.repo.github.m.upbound.io"` |  |
+| githubRepos.activate[1] | string | `"repositoryrulesets.repo.github.m.upbound.io"` |  |
+| githubRepos.activate[2] | string | `"repositorycollaborators.repo.github.m.upbound.io"` |  |
+| githubRepos.credentials.remoteKey | string | `"github-repo-admin"` | Store key with githubAppID, githubAppInstallationID, githubAppPrivateKey of the repo-admin GitHub App. |
+| githubRepos.credentials.store | string | `"platform"` |  |
+| githubRepos.enabled | bool | `false` | `true` installs `provider-upjet-github`, the `GitHubRepository` API and `githubRepos.repositories` (per installation, on its mgmt only). |
+| githubRepos.owner | string | `""` | GitHub account (user or organisation) the App is installed on: the `owner` of every repository. |
+| githubRepos.package | string | `"xpkg.crossplane.io/crossplane-contrib/provider-upjet-github:v0.23.0@sha256:3da1fc7df824246e0d31bc55d47d5b5acfcb65d13b3f495027b84fdfbc9b1836"` |  |
+| githubRepos.repositories | object | `{}` | GitHub repositories by name: `management` (`Observe` or `Full`, required), `description`, `visibility`, `requiredChecks`, `bypassApps`, `collaborators`, `rulesetId` (XRD `files/github-repository/definition.yaml`). |
+| githubRepos.resources.limits.cpu | string | `"500m"` |  |
+| githubRepos.resources.limits.memory | string | `"512Mi"` |  |
+| githubRepos.resources.requests.cpu | string | `"10m"` |  |
+| githubRepos.resources.requests.memory | string | `"128Mi"` |  |
 | harborProvider.activate[0] | string | `"registries.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[1] | string | `"projects.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[2] | string | `"replications.harbor.m.crossplane.io"` |  |
@@ -144,9 +157,10 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 - Values are checked by `values.schema.json` (backend enums, `aws.identity.source`, every package pinned `<repo>:<tag>@sha256:<digest>`; `helm` prints the failing path). Facts each backend needs (aws/gcp/azure ids, a backend for `cluster.provider`) are checked in `templates/validate.yaml`.
 - Crossplane v2 installs its own CRDs from its init container: the platform objects here carry `SkipDryRunOnMissingResource` and sync wave 1 (wave 2 for the ProviderConfigs, whose CRDs come with the providers).
 - Only the managed resources the active Composition composes are activated (`crossplane.provider.defaultActivations: []` plus `templates/activation-policy.yaml`), which keeps provider CRD count and memory low.
+- `githubRepos.repositories` entries must state `management` (`Observe` reads GitHub only, `Full` enforces and reverts drift, never deletes): [GitHub repository governance](../../docs/github-repos.md#day-2).
 - Backing up composed CloudNativePG databases and upgrading Crossplane: [backup and restore](../../docs/runbooks/backup-restore.md#6-cloudnativepg-cloudnative-pg) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
 
 ## Links
 
-- [Crossplane platform APIs](../../docs/crossplane.md), [Crossplane on mgmt](../../docs/crossplane.md#crossplane-on-mgmt)
+- [Crossplane platform APIs](../../docs/crossplane.md), [Crossplane on mgmt](../../docs/crossplane.md#crossplane-on-mgmt), [GitHub repository governance](../../docs/github-repos.md)
 - [Data services: PostgreSQL as a service](../../docs/data-services.md#postgresql-as-a-service)

@@ -106,29 +106,34 @@ if [[ -f addons/crossplane/values.yaml ]]; then
     fetch_crd "crossplane-${XP_VER}-${crd}" "https://raw.githubusercontent.com/crossplane/crossplane/${XP_VER}/cluster/crds/${crd}.yaml"
   done
   # <repo>|<tag>|<crd file>...  (only what the Compositions compose + the family's ClusterProviderConfig, and the
-  # Harbor kinds addon harbor renders on mgmt)
+  # Harbor kinds addon harbor renders on mgmt, the GitHub kinds the GitHubRepository Composition composes)
   for spec in \
     "provider-upjet-aws|$(xp_tag '.packages.providers["aws-rds"]["provider-aws-rds"]')|aws.m.upbound.io_clusterproviderconfigs rds.aws.m.upbound.io_instances rds.aws.m.upbound.io_clusters rds.aws.m.upbound.io_clusterinstances rds.aws.m.upbound.io_subnetgroups ec2.aws.m.upbound.io_securitygroups ec2.aws.m.upbound.io_securitygroupingressrules kms.aws.m.upbound.io_keys" \
     "provider-upjet-gcp|$(xp_tag '.packages.providers["gcp-cloudsql"]["provider-gcp-sql"]')|gcp.m.upbound.io_clusterproviderconfigs sql.gcp.m.upbound.io_databaseinstances sql.gcp.m.upbound.io_databases sql.gcp.m.upbound.io_users" \
     "provider-upjet-azure|$(xp_tag '.packages.providers["azure-flexible"]["provider-azure-dbforpostgresql"]')|azure.m.upbound.io_clusterproviderconfigs dbforpostgresql.azure.m.upbound.io_flexibleservers dbforpostgresql.azure.m.upbound.io_flexibleserverdatabases" \
-    "provider-upjet-harbor|$(xp_tag '.harborProvider.package')|harbor.m.crossplane.io_providerconfigs harbor.m.crossplane.io_registries harbor.m.crossplane.io_projects harbor.m.crossplane.io_replications robot.harbor.m.crossplane.io_accounts config.harbor.m.crossplane.io_securities"; do
+    "provider-upjet-harbor|$(xp_tag '.harborProvider.package')|harbor.m.crossplane.io_providerconfigs harbor.m.crossplane.io_registries harbor.m.crossplane.io_projects harbor.m.crossplane.io_replications robot.harbor.m.crossplane.io_accounts config.harbor.m.crossplane.io_securities" \
+    "provider-upjet-github|$(xp_tag '.githubRepos.package')|github.m.upbound.io_providerconfigs repo.github.m.upbound.io_repositories repo.github.m.upbound.io_repositoryrulesets repo.github.m.upbound.io_repositorycollaborators"; do
     IFS='|' read -r repo tag files <<<"$spec"
     for crd in $files; do
       fetch_crd "${repo}-${tag}-${crd}" "https://raw.githubusercontent.com/crossplane-contrib/${repo}/${tag}/package/crds/${crd}.yaml"
     done
   done
-  # The CRD Crossplane derives from the PostgreSQL XRD (packages/postgresql) (Crossplane adds spec.crossplane and status.conditions), so XRs
-  # (docs examples, hack/tests/crossplane) validate like any custom resource.
-  yq '{
-    "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition", "metadata": {"name": .metadata.name},
-    "spec": {"group": .spec.group, "names": .spec.names, "scope": .spec.scope, "versions": [.spec.versions[] | {
-      "name": .name, "served": true, "storage": true, "schema": {"openAPIV3Schema": {"type": "object", "properties": {
-        "apiVersion": {"type": "string"}, "kind": {"type": "string"}, "metadata": {"type": "object"},
-        "spec": (.schema.openAPIV3Schema.properties.spec * {"properties": {"crossplane": {"type": "object",
-          "x-kubernetes-preserve-unknown-fields": true}}}),
-        "status": (.schema.openAPIV3Schema.properties.status * {"properties": {"conditions": {"type": "array",
-          "items": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}}}})}}}}]}}' packages/postgresql/apis/postgresql/definition.yaml \
-    > "$TMP/crds-xrd-postgresql.yaml" 2>/dev/null || true
+  # The CRDs Crossplane derives from the XRDs (adding spec.crossplane and status.conditions), so XRs (docs examples,
+  # hack/tests/crossplane, the GitHubRepository objects of addon crossplane) validate like any custom resource:
+  # PostgreSQL (packages/postgresql), GitHubRepository (addon crossplane files/github-repository).
+  for xrd in packages/postgresql/apis/postgresql/definition.yaml addons/crossplane/files/github-repository/definition.yaml; do
+    [[ -f "$xrd" ]] || continue
+    yq '{
+      "apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition", "metadata": {"name": .metadata.name},
+      "spec": {"group": .spec.group, "names": .spec.names, "scope": .spec.scope, "versions": [.spec.versions[] | {
+        "name": .name, "served": true, "storage": true, "schema": {"openAPIV3Schema": {"type": "object", "properties": {
+          "apiVersion": {"type": "string"}, "kind": {"type": "string"}, "metadata": {"type": "object"},
+          "spec": (.schema.openAPIV3Schema.properties.spec * {"properties": {"crossplane": {"type": "object",
+            "x-kubernetes-preserve-unknown-fields": true}}}),
+          "status": (.schema.openAPIV3Schema.properties.status * {"properties": {"conditions": {"type": "array",
+            "items": {"type": "object", "x-kubernetes-preserve-unknown-fields": true}}}})}}}}]}}' "$xrd" \
+      > "$TMP/crds-xrd-$(yq -r '.spec.names.singular' "$xrd" | tr -d '\r').yaml" 2>/dev/null || true
+  done
 fi
 
 crd_files=()
