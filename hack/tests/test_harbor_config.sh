@@ -45,8 +45,11 @@ for f in "$RENDERED_DIR"/addon-crossplane-*.yaml; do
       active=$(yq -N 'select(.kind == "ManagedResourceActivationPolicy" and .metadata.name == "harbor") | .spec.activate[]' "$f" \
         | sort -u | tr -d '\r')
       assert_eq "$(comm -23 <(kinds "$h") <(echo "$active"))" "" "$n: every Harbor kind addon harbor renders is activated"
-      assert_eq "$(yq -N 'select(.kind == "Configuration" or .kind == "EnvironmentConfig" or .kind == "Function") | .metadata.name' "$f" \
-        | tr -d '\r')" "" "$n: no platform data API on mgmt" ;;
+      assert_eq "$(yq -N 'select(.kind == "Configuration" or .kind == "EnvironmentConfig") | .metadata.name' "$f" \
+        | tr -d '\r')" "" "$n: no platform data API on mgmt"
+      # The only Functions on mgmt run the GitHubRepository Composition (githubRepos, hack/tests/test_github_repos.sh).
+      assert_eq "$(yq -N 'select(.kind == "Function") | .metadata.name' "$f" | tr -d '\r' \
+        | grep -vxE 'function-go-templating|function-auto-ready' || true)" "" "$n: no data API Functions on mgmt" ;;
     *)
       assert_eq "$providers" "" "$n: no Harbor provider outside mgmt" ;;
   esac

@@ -1,4 +1,4 @@
-suite: crossplane wrapper (Crossplane v2 + PostgreSQL as a service; Harbor provider on mgmt)
+suite: crossplane wrapper (Crossplane v2 + PostgreSQL as a service; Harbor provider and GitHub governance on mgmt)
 release:
   name: crossplane
   namespace: crossplane-system
@@ -15,6 +15,7 @@ templates:
   - templates/policies.yaml
   - templates/validate.yaml
   - templates/harbor-provider.yaml
+  - templates/github-repos.yaml
   - charts/crossplane/templates/deployment.yaml
   - charts/crossplane/templates/rbac-manager-deployment.yaml
 tests:
@@ -525,3 +526,90 @@ tests:
     values: [../values/role-mgmt.yaml]
     asserts:
       - equal: { path: 'metadata.labels["pod-security.kubernetes.io/enforce"]', value: restricted }
+
+  # --- GitHub repository governance (githubRepos, docs/github-repos.md) ------------------------------------------------
+  - it: githubRepos is off by default and on mgmt's role file (the installation turns it on)
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    asserts:
+      - hasDocuments: { count: 0 }
+
+  - it: githubRepos needs the GitHub account
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { githubRepos.enabled: true }
+    asserts:
+      - failedTemplate: { errorMessage: "githubRepos.owner: the GitHub account the repo-admin App is installed on is required" }
+
+  - it: a repository without management fails the render (write access is never a default)
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { githubRepos.enabled: true, githubRepos.owner: koorikla, githubRepos.repositories.r.description: x }
+    asserts:
+      - failedTemplate: {}
+
+  - it: mgmt installs provider-upjet-github pinned by digest, its two Functions, the API and the ProviderConfig
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    asserts:
+      - hasDocuments: { count: 10 }
+      - matchRegex:
+          path: spec.package
+          pattern: '^xpkg\.crossplane\.io/crossplane-contrib/provider-upjet-github:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
+        documentSelector: { path: kind, value: Provider }
+      - equal: { path: spec.runtimeConfigRef.name, value: provider-github }
+        documentSelector: { path: kind, value: Provider }
+      - equal:
+          path: spec.activate
+          value: [repositories.repo.github.m.upbound.io, repositoryrulesets.repo.github.m.upbound.io, repositorycollaborators.repo.github.m.upbound.io]
+        documentSelector: { path: kind, value: ManagedResourceActivationPolicy }
+      - equal: { path: spec.package, value: "xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.13.2@sha256:20198cb6ea5b4b8a48042343410ec9031e5ec43431d874364ecd3eac8e861290" }
+        documentSelector: { path: metadata.name, value: function-go-templating }
+      - equal: { path: spec.credentials.secretRef, value: { namespace: crossplane-system, name: github-repo-admin, key: credentials } }
+        documentSelector: { path: kind, value: ProviderConfig }
+      - equal: { path: spec.defaultCompositionRef.name, value: github-repository }
+        documentSelector: { path: kind, value: CompositeResourceDefinition }
+
+  - it: the provider pod meets Pod Security restricted
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    documentSelector: { path: metadata.name, value: provider-github }
+    asserts:
+      - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.capabilities.drop', value: [ALL] }
+      - equal: { path: 'spec.deploymentTemplate.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation', value: false }
+
+  - it: the App credentials come from store platform as app_auth JSON, in the final wave
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    documentSelector: { path: kind, value: ExternalSecret }
+    asserts:
+      - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+      - equal:
+          path: spec.target.template.data.credentials
+          value: '{{ dict "app_auth" (list (dict "id" .githubAppID "installation_id" .githubAppInstallationID "pem_file" .githubAppPrivateKey)) "owner" "koorikla" | toJson }}'
+      - equal: { path: 'spec.data[2].remoteRef', value: { key: github-repo-admin, property: githubAppPrivateKey } }
+
+  - it: each repository becomes a GitHubRepository with its spec as written
+    template: templates/github-repos.yaml
+    values: [../values/role-mgmt.yaml]
+    set:
+      githubRepos.enabled: true
+      githubRepos.owner: koorikla
+      githubRepos.repositories.hello-world: { management: Observe, bypassApps: [5788333] }
+    documentSelector: { path: kind, value: GitHubRepository }
+    asserts:
+      - equal: { path: metadata.name, value: hello-world }
+      - equal: { path: metadata.namespace, value: crossplane-system }
+      - equal: { path: spec, value: { management: Observe, bypassApps: [5788333] } }
+      - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
+
+  - it: where the data APIs run, their Functions are reused (no duplicates)
+    template: templates/github-repos.yaml
+    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    asserts:
+      - hasDocuments: { count: 7 }   # provider runtime, Provider, MRAP, XRD, Composition, ExternalSecret, ProviderConfig

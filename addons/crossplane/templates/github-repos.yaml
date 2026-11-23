@@ -1,0 +1,127 @@
+{{- /* GitHub repository governance on mgmt (docs/github-repos.md): provider-upjet-github, the GitHubRepository API
+(files/github-repository/, applied verbatim) and one GitHubRepository per githubRepos.repositories entry, all in this
+namespace with the namespaced ProviderConfig github: only objects here can use the App's credentials. */ -}}
+{{- $g := .Values.githubRepos }}
+{{- if $g.enabled }}
+{{- if not $g.owner }}{{ fail "githubRepos.owner: the GitHub account the repo-admin App is installed on is required" }}{{ end }}
+{{- $ns := .Release.Namespace }}
+{{- $rc := .Values.packages.runtimeConfig }}
+{{- if not .Values.platformAPIs.enabled }}
+{{- /* The two Functions the Composition runs, under the restricted runtime; where the data APIs run,
+templates/packages.yaml installs the same objects. */}}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: {{ $rc.name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  {{- include "crossplane.runtimeSpec" (dict "resources" $rc.resources) | nindent 2 }}
+{{- range $name := list "function-go-templating" "function-auto-ready" }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: {{ $name }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ index $.Values.packages.functions $name }}
+  packagePullPolicy: IfNotPresent
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: {{ $rc.name }}
+{{- end }}
+---
+{{- end }}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-github
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  {{- include "crossplane.runtimeSpec" (dict "resources" $g.resources) | nindent 2 }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-upjet-github
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $g.package }}
+  packagePullPolicy: IfNotPresent
+  skipDependencyResolution: true    # a single provider, no family: nothing to resolve
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: provider-github
+---
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceActivationPolicy
+metadata:
+  name: github
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  activate:
+    {{- toYaml $g.activate | nindent 4 }}
+---
+{{ .Files.Get "files/github-repository/definition.yaml" | trim }}
+---
+{{ .Files.Get "files/github-repository/composition.yaml" | trim }}
+---
+{{- /* The App's credentials in the JSON shape the provider reads (app_auth, owner). The key reaches only ESO and the
+provider. Store key seeded by bootstrap from GITHUB_REPO_ADMIN_APP_* (docs/forking.md). Final wave: an installation
+without the App gets a Degraded ExternalSecret, never a stalled sync of the other providers. */}}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: github-repo-admin
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $g.credentials.store }}
+  target:
+    name: github-repo-admin
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: Opaque
+      data:
+        credentials: '{{`{{ dict "app_auth" (list (dict "id" .githubAppID "installation_id" .githubAppInstallationID "pem_file" .githubAppPrivateKey)) "owner" "`}}{{ $g.owner }}{{`" | toJson }}`}}'
+  data:
+    {{- range list "githubAppID" "githubAppInstallationID" "githubAppPrivateKey" }}
+    - { secretKey: {{ . }}, remoteRef: { key: {{ $g.credentials.remoteKey }}, property: {{ . }} } }
+    {{- end }}
+---
+apiVersion: github.m.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: github
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "2" | nindent 4 }}
+spec:
+  credentials:
+    source: Secret
+    secretRef: { namespace: {{ $ns }}, name: github-repo-admin, key: credentials }
+{{- range $name, $repo := $g.repositories }}
+---
+apiVersion: platform.koorikla.io/v1alpha1
+kind: GitHubRepository
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "3" | nindent 4 }}
+spec:
+  {{- toYaml $repo | nindent 2 }}
+{{- end }}
+{{- end }}

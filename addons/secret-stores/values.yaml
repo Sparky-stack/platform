@@ -97,6 +97,7 @@ platformStore:
     - openbao                          # openbao-unseal: static auto-unseal key of the mesh CA (addon openbao)
     - external-dns                     # external-dns-cloudflare when opted in on mgmt with Cloudflare (addon external-dns)
     - agentgateway-system              # <provider>-llm-auth when opted in (addon agentgateway)
+    - crossplane-system                # github-repo-admin: GitHub App of repo governance (addon crossplane githubRepos)
 
 # ClusterSecretStore `workflows` on mgmt: per-run ExternalSecrets in `workflows-*`, key-scoped on the kubernetes
 # backend, never the full `platform` store (AGENTS.md invariant 5; hack/tests/test_secret_store_scope.sh).
