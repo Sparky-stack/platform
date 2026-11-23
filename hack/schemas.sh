@@ -89,7 +89,7 @@ fetch_crd "cilium-${CILIUM_VER}-cnp" "https://raw.githubusercontent.com/cilium/c
 fetch_crd "prometheus-servicemonitor" "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml"
 
 # Crossplane v2 installs its CRDs from its init container (not in the chart), the upjet providers bring theirs with the
-# package: fetch the ones addon crossplane and its PostgreSQL Compositions use, at the versions pinned there.
+# package: fetch the ones addon crossplane, its PostgreSQL Compositions and addon harbor use, at the versions pinned there.
 xp_tag() {   # xp_tag <yq path to a package ref in addons/crossplane/values.yaml> -> its tag (v1.2.3)
   local ref
   ref=$(yq -r "$1" addons/crossplane/values.yaml | tr -d '\r')
@@ -105,11 +105,13 @@ if [[ -f addons/crossplane/values.yaml ]]; then
     apiextensions.crossplane.io_environmentconfigs; do
     fetch_crd "crossplane-${XP_VER}-${crd}" "https://raw.githubusercontent.com/crossplane/crossplane/${XP_VER}/cluster/crds/${crd}.yaml"
   done
-  # <repo>|<tag>|<crd file>...  (only what the Compositions compose + the family's ClusterProviderConfig)
+  # <repo>|<tag>|<crd file>...  (only what the Compositions compose + the family's ClusterProviderConfig, and the
+  # Harbor kinds addon harbor renders on mgmt)
   for spec in \
     "provider-upjet-aws|$(xp_tag '.packages.providers["aws-rds"]["provider-aws-rds"]')|aws.m.upbound.io_clusterproviderconfigs rds.aws.m.upbound.io_instances rds.aws.m.upbound.io_clusters rds.aws.m.upbound.io_clusterinstances rds.aws.m.upbound.io_subnetgroups ec2.aws.m.upbound.io_securitygroups ec2.aws.m.upbound.io_securitygroupingressrules kms.aws.m.upbound.io_keys" \
     "provider-upjet-gcp|$(xp_tag '.packages.providers["gcp-cloudsql"]["provider-gcp-sql"]')|gcp.m.upbound.io_clusterproviderconfigs sql.gcp.m.upbound.io_databaseinstances sql.gcp.m.upbound.io_databases sql.gcp.m.upbound.io_users" \
-    "provider-upjet-azure|$(xp_tag '.packages.providers["azure-flexible"]["provider-azure-dbforpostgresql"]')|azure.m.upbound.io_clusterproviderconfigs dbforpostgresql.azure.m.upbound.io_flexibleservers dbforpostgresql.azure.m.upbound.io_flexibleserverdatabases"; do
+    "provider-upjet-azure|$(xp_tag '.packages.providers["azure-flexible"]["provider-azure-dbforpostgresql"]')|azure.m.upbound.io_clusterproviderconfigs dbforpostgresql.azure.m.upbound.io_flexibleservers dbforpostgresql.azure.m.upbound.io_flexibleserverdatabases" \
+    "provider-upjet-harbor|$(xp_tag '.harborProvider.package')|harbor.m.crossplane.io_providerconfigs harbor.m.crossplane.io_registries harbor.m.crossplane.io_projects harbor.m.crossplane.io_replications robot.harbor.m.crossplane.io_accounts config.harbor.m.crossplane.io_securities"; do
     IFS='|' read -r repo tag files <<<"$spec"
     for crd in $files; do
       fetch_crd "${repo}-${tag}-${crd}" "https://raw.githubusercontent.com/crossplane-contrib/${repo}/${tag}/package/crds/${crd}.yaml"

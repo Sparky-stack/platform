@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` project for in-cluster builds and upstream pull-through proxy caches (`dockerhub`, `ghcr`, `quay`, `k8s`, `openchoreo`, `gcr`) for cluster nodes, with TLS from a `mgmt`-local CA and declarative project reconciliation.
+Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` project for in-cluster builds and upstream pull-through proxy caches (`dockerhub`, `ghcr`, `quay`, `k8s`, `openchoreo`, `gcr`) for cluster nodes, with TLS from a `mgmt`-local CA; projects, proxy caches, replication and robot accounts are Crossplane managed resources (`provider-upjet-harbor`).
 
 ## Where it runs
 
 - **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: harbor`).
-- **Catalog label:** `addons.platform.koorikla.io/harbor` (`default: true`; cloud/external-registry installations set `mgmt.addons.harbor: "false"`).
+- **Catalog label:** `addons.platform.koorikla.io/harbor` (`default: true`; cloud/external-registry installations set `mgmt.addons.harbor: "false"`). Needs `mgmt.addons.crossplane: true` (the Harbor provider; charts/platform fails the render without it).
 
 ## Key values
 
@@ -22,7 +22,7 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | config.apps.contentTrustCosign | bool | `false` |  |
 | config.apps.preventVulnerable | bool | `false` |  |
 | config.apps.severity | string | `"critical"` |  |
-| config.coreURL | string | `"http://harbor-core"` |  |
+| config.cveAllowlist | list | `[]` |  |
 | config.endpoints."cr.openchoreo.dev".type | string | `"docker-registry"` |  |
 | config.endpoints."cr.openchoreo.dev".url | string | `"https://cr.openchoreo.dev"` |  |
 | config.endpoints."docker.io".type | string | `"docker-hub"` |  |
@@ -36,7 +36,6 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | config.endpoints."quay.io".url | string | `"https://quay.io"` |  |
 | config.endpoints."registry.k8s.io".type | string | `"docker-registry"` |  |
 | config.endpoints."registry.k8s.io".url | string | `"https://registry.k8s.io"` |  |
-| config.image | string | `"docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67"` |  |
 | config.replication[0].cron | string | `"0 0 */6 * * *"` |  |
 | config.replication[0].destProject | string | `"apps-ghcr"` |  |
 | config.replication[0].enabled | bool | `true` |  |
@@ -46,10 +45,6 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | config.replication[0].filters[1].type | string | `"tag"` |  |
 | config.replication[0].filters[1].value | string | `"**"` |  |
 | config.replication[0].name | string | `"ghcr-koorikla"` |  |
-| config.resources.limits.cpu | string | `"200m"` |  |
-| config.resources.limits.memory | string | `"128Mi"` |  |
-| config.resources.requests.cpu | string | `"10m"` |  |
-| config.resources.requests.memory | string | `"32Mi"` |  |
 | config.robots[0].description | string | `"OpenChoreo workflow plane builds (push to apps)"` |  |
 | config.robots[0].name | string | `"builder"` |  |
 | config.robots[0].pull[0] | string | `"apps-ghcr"` |  |
@@ -63,7 +58,6 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | config.robots[1].pull[2] | string | `"proxyCache"` |  |
 | config.robots[1].push | list | `[]` |  |
 | config.robots[1].secretProperty | string | `"nodes-secret"` |  |
-| config.schedule | string | `"17 * * * *"` |  |
 | config.storageLimitGiB | int | `-1` |  |
 | gateway.className | string | `"kgateway"` |  |
 | gateway.name | string | `"harbor"` |  |
@@ -184,9 +178,10 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | registry.proxyCache[5].upstream | string | `"gcr.io"` |  |
 | registry.type | string | `"harbor"` | Registry mode, `host` (`harbor.externalURL` via `installationParameters`), `appsProject`, and upstream `proxyCache` projects. |
 | secrets.ghcrKey | string | `""` |  |
+| secrets.ghcrUsername | string | `""` |  |
 | secrets.remoteKey | string | `"harbor"` |  |
 | secrets.secretName | string | `"harbor-platform"` |  |
-| secrets.store | string | `"platform"` | Pulls Harbor admin, robot, and component credentials (`secrets.{store,remoteKey,ghcrKey,secretName}`) from `ClusterSecretStore/platform`. |
+| secrets.store | string | `"platform"` | Pulls Harbor admin, robot, and component credentials (`secrets.{store,remoteKey,ghcrKey,ghcrUsername,secretName}`) from `ClusterSecretStore/platform`. |
 
 ### Design notes
 
@@ -196,8 +191,8 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 | `templates/gateway.yaml` | Gateway `harbor` (HTTPS 9443, TLS terminated) + timeouts for the chart HTTPRoute |
 | `templates/pki.yaml` | Registry CA scoped to ns harbor (Issuer `harbor-ca`) -> `harbor-tls`; `harbor-token` (core token-signing cert); `harbor-ca-bundle` (ca.crt only) |
 | `templates/ca-store.yaml` | ClusterSecretStore `mgmt-harbor`: name-scoped GET of `harbor-ca-bundle` only (for CAPI node bootstrap data and build pods; no private key is read) |
-| `templates/secrets.yaml` | Secret `harbor-platform` from ClusterSecretStore `platform` (key `harbor`, plus `platform-ghcr`) |
-| `templates/config.yaml` | Harbor has no CRDs: a PostSync Job + CronJob apply `files/harbor-config.py` to the desired state in `config` (projects, proxy caches, replication, robot accounts, empty CVE allowlist). Idempotent. |
+| `templates/secrets.yaml` | Secret `harbor-platform` from ClusterSecretStore `platform` (key `harbor`, plus `platform-ghcr`), incl. the provider's admin credential `provider-credentials` |
+| `templates/config.yaml` | `config` as provider-upjet-harbor managed resources (sync wave 1): `ProviderConfig harbor`, a `Registry` per upstream, a `Project` per apps/replication target/proxy cache (no `Delete` policy), `Replication`, robot `Account`s with their secret from `harbor-platform` |
 
 - **Images:** Harbor v2.15 publishes linux/amd64 only. On arm64 hosts set `registry.type: external` and disable this addon ([Registry](../../docs/build-plane.md)).
 - **Endpoint** `https://<registry.host>`, e.g. `https://harbor.openchoreo.localhost:9443`. Harbor's token realm is `externalURL`, so the same name must resolve everywhere:
@@ -208,8 +203,10 @@ Wrapper chart for Harbor (`1.19.4` / `v2.15.4`) on `mgmt`. Hosts the `apps` proj
 ## Day-2 notes
 
 - Values are checked by `values.schema.json` (`registry.host` format, `secrets.store` and other platform keys; `helm` prints the failing path). `registry.type` other than `harbor` and cross-field rules (upstream literals vs `registry.host`, gateway, token Secret, proxy-cache endpoints) are in `templates/validate.yaml`.
+- Harbor objects: `kubectl --context k3d-platform-mgmt -n harbor get managed` (Synced/Ready per object); add a proxy cache or robot, rotate secrets: [Harbor runbook](../../docs/runbooks/harbor.md). Projects and registries are never deleted from Harbor.
 - Database/blob backups and node registry secret recovery: [backup and restore](../../docs/runbooks/backup-restore.md#5-harbor-harbor) and [break-glass](../../docs/runbooks/break-glass.md#blocked-cluster-sync-on-node-registry-secret).
 
 ## Links
 
 - [Build plane: Harbor](../../docs/build-plane.md#registry-harbor)
+- [Harbor runbook](../../docs/runbooks/harbor.md)

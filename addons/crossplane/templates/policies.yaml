@@ -1,5 +1,6 @@
 {{- /* Tenants get PostgreSQL only through the XR. Kyverno ValidatingPolicies (CEL); autogen also emits them as native
 ValidatingAdmissionPolicies, so the API server enforces them even while Kyverno is unavailable. CRDs: addon kyverno. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- if .Values.policy.enabled }}
 {{- $pol := .Values.policy }}
 {{- $saPrefixes := list }}
@@ -184,5 +185,6 @@ rules:
     resources: {{ .resources | toJson }}
     verbs: [get, list, watch]
   {{- end }}
+{{- end }}
 {{- end }}
 {{- end }}

@@ -1,5 +1,6 @@
 {{- /* Crossplane core composes plain Kubernetes kinds (no provider-kubernetes in v2): it needs RBAC for them. Aggregated
 into ClusterRole crossplane by the label. Managed resource kinds get theirs from the RBAC manager. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $backend := include "crossplane.pgBackend" . }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -27,3 +28,4 @@ rules:
     resources: [passwords]
     verbs: [get, list, watch, create, update, patch, delete]
   {{- end }}
+{{- end }}

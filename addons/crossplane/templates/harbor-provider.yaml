@@ -1,0 +1,39 @@
+{{- /* The Harbor provider on mgmt: addons/harbor declares Harbor's projects, proxy caches, replication and robot accounts
+as its managed resources (namespace harbor, ProviderConfig there). Restricted runtime like every package here; only the
+kinds addon harbor renders are activated (crossplane.provider.defaultActivations is empty). */ -}}
+{{- $h := .Values.harborProvider }}
+{{- if and $h.enabled (eq (toString .Values.registry.type) "harbor") }}
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-harbor
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  {{- include "crossplane.runtimeSpec" (dict "resources" $h.resources) | nindent 2 }}
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-upjet-harbor
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  package: {{ $h.package }}
+  packagePullPolicy: IfNotPresent
+  skipDependencyResolution: true    # a single provider, no family: nothing to resolve
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: provider-harbor
+---
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: ManagedResourceActivationPolicy
+metadata:
+  name: harbor
+  annotations:
+    {{- include "crossplane.syncAnnotations" "1" | nindent 4 }}
+spec:
+  activate:
+    {{- toYaml $h.activate | nindent 4 }}
+{{- end }}

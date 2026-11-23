@@ -1,10 +1,10 @@
 {{- define "chart.purpose" -}}
-Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
+Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + the Harbor provider only, `values/role-mgmt.yaml`): core, the pinned Functions / Providers (PSS `restricted` runtime configs), the PostgreSQL API as the signed Configuration package `platform-postgresql` (from `packages/postgresql`, `tag@digest`, `skipDependencyResolution`), `EnvironmentConfig platform-postgresql` with this cluster's facts (backend from the provider label), MRAP, workload-identity ProviderConfigs and Kyverno policies.
 {{- end -}}
 
 {{- define "chart.whereItRuns" -}}
-- **Roles / providers:** `roles: [workload]`, all providers (`namespace: crossplane-system`, `serverSideDiff: true`; layers `values/provider-docker.yaml` on `docker`).
-- **Catalog label:** `addons.platform.koorikla.io/crossplane` (`default: false`, opt-in with `"true"` per cluster via `addons.crossplane: true`).
+- **Roles / providers:** `roles: [mgmt, workload]`, all providers (`namespace: crossplane-system`, `serverSideDiff: true`; layers `values/provider-docker.yaml` on `docker`, `values/role-mgmt.yaml` on mgmt: `platformAPIs.enabled: false`, `harborProvider.enabled: true`).
+- **Catalog label:** `addons.platform.koorikla.io/crossplane` (`default: false`, opt-in with `"true"` per cluster via `addons.crossplane: true`; mgmt: `mgmt.addons.crossplane: true`, required with `registry.type: harbor`).
 {{- end -}}
 
 {{- define "chart.day2Notes" -}}
@@ -15,6 +15,6 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters: core, the pinned
 {{- end -}}
 
 {{- define "chart.links" -}}
-- [Crossplane platform APIs](../../docs/crossplane.md)
+- [Crossplane platform APIs](../../docs/crossplane.md), [Crossplane on mgmt](../../docs/crossplane.md#crossplane-on-mgmt)
 - [Data services: PostgreSQL as a service](../../docs/data-services.md#postgresql-as-a-service)
 {{- end -}}

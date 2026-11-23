@@ -58,7 +58,8 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.crossplane.clusterLabelParameters."mysql.enabled".label | string | `"addons.platform.koorikla.io/moco"` |  |
 | addons.crossplane.default | bool | `false` |  |
 | addons.crossplane.namespace | string | `"crossplane-system"` |  |
-| addons.crossplane.roles[0] | string | `"workload"` |  |
+| addons.crossplane.roles[0] | string | `"mgmt"` |  |
+| addons.crossplane.roles[1] | string | `"workload"` |  |
 | addons.crossplane.serverSideDiff | bool | `true` |  |
 | addons.crossplane.valuesFromAddons[0] | string | `"moco"` |  |
 | addons.external-dns.clusterIdParameters[0] | string | `"external-dns.txtOwnerId"` |  |
@@ -88,6 +89,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.harbor.installationParameters."harbor.externalURL" | string | `"https://{{ .Values.registry.host }}"` |  |
 | addons.harbor.namespace | string | `"harbor"` |  |
 | addons.harbor.roles[0] | string | `"mgmt"` |  |
+| addons.harbor.serverSideDiff | bool | `true` |  |
 | addons.hcloud-ccm.default | bool | `true` |  |
 | addons.hcloud-ccm.namespace | string | `"kube-system"` |  |
 | addons.hcloud-ccm.providers[0] | string | `"hetzner"` |  |

@@ -1,5 +1,6 @@
 {{- /* ClusterProviderConfig "default" of the backend's provider family (the namespaced managed resources the Composition
 creates reference it): workload identity only, never a static key. CRDs come with the providers: sync wave 2. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $cloud := include "crossplane.pgCloud" . }}
 {{- $pg := .Values.postgresql }}
 {{- if eq $cloud "aws" }}
@@ -36,4 +37,5 @@ spec:
   tenantID: {{ $pg.azure.tenantID | quote }}
   credentials:
     source: OIDCTokenFile
+{{- end }}
 {{- end }}

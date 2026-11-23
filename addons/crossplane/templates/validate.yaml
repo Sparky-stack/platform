@@ -1,5 +1,6 @@
 {{- /* Renders nothing: per-backend facts the Composition needs, so a missing fact fails the render, not the cluster.
 Types, enums and package pins: values.schema.json. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $p := .Values.postgresql }}
 {{- $b := include "crossplane.pgBackend" . }}
 {{- if not $b }}
@@ -21,5 +22,6 @@ Types, enums and package pins: values.schema.json. */ -}}
 {{- range $missing }}
 {{- if not (get (get $p $cloud) .) }}
 {{- fail (printf "postgresql.%s.%s is required for backend %s" $cloud . $b) }}
+{{- end }}
 {{- end }}
 {{- end }}

@@ -149,7 +149,8 @@ addons:
       capabilityGate.addons.telemetry.enabled:  { label: addons.platform.koorikla.io/telemetry,  default: "true" }    # default-on addon
   openchoreo-workflow-plane:       { namespace: openchoreo-workflow-plane,       roles: [mgmt],            default: true,  compareOptions: [IncludeMutationWebhook=true] }
   # Image registry for registry.type harbor (the examples set mgmt.addons.harbor "false").
-  harbor:                          { namespace: harbor,                          roles: [mgmt],            default: true,  installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }
+  # Its projects, proxy caches and robots are Crossplane managed resources: needs mgmt.addons.crossplane (cluster-mgmt.yaml).
+  harbor:                          { namespace: harbor,                          roles: [mgmt],            default: true,  serverSideDiff: true, installationParameters: { harbor.externalURL: 'https://{{ .Values.registry.host }}' } }
   # Platform event receiver: Falco escalations and OpenChoreo rollout events -> workflows (docs/promotion.md). Its
   # workflow objects need the workflow plane's Argo Workflows CRDs.
   argo-events:                     { namespace: argo-events,                     roles: [mgmt],            default: true,  fleetParameters: [falco.clusters], compareOptions: [IncludeMutationWebhook=true] }
@@ -169,10 +170,11 @@ addons:
   cloudnative-pg:                  { namespace: cnpg-system,                     roles: [workload],        default: false, serverSideDiff: true }
   moco:                            { namespace: moco-system,                     roles: [workload],        default: false, serverSideDiff: true }   # in-cluster MySQL backend (#256)
   # PostgreSQL / MySQL as a service (Crossplane v2); the cluster's provider label picks the Composition. mysql.enabled
-  # follows the moco opt-in; the mysqld image catalog comes from addons/moco.
+  # follows the moco opt-in; the mysqld image catalog comes from addons/moco. On mgmt (values/role-mgmt.yaml) only the
+  # platform-level providers (Harbor for addon harbor), no data APIs (docs/crossplane.md "Crossplane on mgmt").
   crossplane:
     namespace: crossplane-system
-    roles: [workload]
+    roles: [mgmt, workload]
     default: false
     serverSideDiff: true
     valuesFromAddons: [moco]

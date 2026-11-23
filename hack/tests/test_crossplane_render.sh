@@ -36,7 +36,8 @@ PKG_RE='^(xpkg\.crossplane\.io/crossplane(-contrib)?/[a-z0-9-]+:v[0-9]+\.[0-9]+\
 # --- 1a. selection through the ApplicationSet for local dev1 ------------------------------------------------------------
 render_platform local "$TMP/platform.yaml"
 assert_eq "$(yq '.addons.crossplane.default' charts/platform/values.yaml)" false "catalog: crossplane is opt-in"
-assert_eq "$(yq -o=json -I=0 '.addons.crossplane.roles' charts/platform/values.yaml)" '["workload"]' "catalog: crossplane targets workload clusters"
+assert_eq "$(yq -o=json -I=0 '.addons.crossplane.roles' charts/platform/values.yaml)" '["mgmt","workload"]' \
+  "catalog: crossplane targets workload clusters and mgmt (values/role-mgmt.yaml: Harbor provider only)"
 # dev1's labels as charts/cluster renders them (like hack/test.sh), so the standalone run sees its moco opt-in too
 render_cluster local dev1 "$TMP/cluster-dev1.yaml"
 yq 'select(.kind == "ExternalSecret" and .metadata.namespace == "argocd") | .spec.target.template.metadata.labels' \

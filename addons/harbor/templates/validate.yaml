@@ -25,3 +25,6 @@
 {{- fail (printf "registry.proxyCache upstream %s has no config.endpoints entry" .upstream) }}
 {{- end }}
 {{- end }}
+{{- if and .Values.secrets.ghcrKey (not .Values.secrets.ghcrUsername) }}
+{{- fail (printf "secrets.ghcrUsername is required with secrets.ghcrKey %s (the GitHub user of the GHCR token)" .Values.secrets.ghcrKey) }}
+{{- end }}

@@ -6,6 +6,7 @@ identity and needs no cross-cluster Secret delivery (owner decision in #91). Pla
 signed **Configuration packages** built from `packages/<name>/`; per-cluster facts reach them through an
 **EnvironmentConfig**. PostgreSQL (`packages/postgresql`, [data-services.md](data-services.md#postgresql-as-a-service))
 is the first; APIs that are not data services follow the same pattern.
+Crossplane also runs on mgmt, for platform-level resources only ([Crossplane on mgmt](#crossplane-on-mgmt)).
 
 Crossplane itself runs nothing but control loops. A claim ends up in one of two places, chosen by the cluster's
 EnvironmentConfig: in the cluster, where the Composition renders objects for an operator addon (CloudNativePG, MOCO)
@@ -21,6 +22,24 @@ cluster's workload identity; no package composes IAM roles or per-app cloud iden
 | `EnvironmentConfig` per API (cluster facts) | `addons/crossplane/templates/environment-config.yaml` | backend, region, network ids, backup target |
 | XRD + Composition(s), examples, render tests | `packages/<name>/` (Crossplane Project) | the API itself, versioned on its own (`<name>-vX.Y.Z`) |
 | `ManagedResourceActivationPolicy`, `ClusterProviderConfig`, Kyverno policies | `addons/crossplane` | CRD footprint, workload identity, admission |
+
+## Crossplane on mgmt
+
+The management cluster runs addon crossplane too (`mgmt.addons.crossplane: true` in `installation.yaml`; the local
+installation sets it) with `values/role-mgmt.yaml`: Crossplane core plus platform-level providers, and none of the data
+APIs (`platformAPIs.enabled: false`: no Configuration packages, EnvironmentConfigs, Functions or their policies; apps
+and their databases live on workload clusters). Today that is one provider:
+
+| Provider | For | Objects (namespace) |
+|---|---|---|
+| `provider-upjet-harbor` (crossplane-contrib, `harborProvider.package`, pinned `tag@sha256`) | addon harbor, when `registry.type: harbor` | Harbor projects, proxy-cache registries, replication, robot accounts (`harbor`, [build-plane.md](build-plane.md#declarative-configuration)) |
+
+Same rules as on workload clusters: restricted `DeploymentRuntimeConfig` (`provider-harbor`), PSS `restricted` on
+`crossplane-system`, `defaultActivations: []` plus a `ManagedResourceActivationPolicy` listing exactly the kinds in use
+(`harborProvider.activate`), a namespaced `ProviderConfig` next to the objects that use it. charts/platform fails the
+render when `registry.type` is harbor without `mgmt.addons.crossplane`. The objects sync one wave after Harbor's
+workloads with `SkipDryRunOnMissingResource`: on a clean bootstrap Argo CD retries them until the provider is Healthy.
+Memory: core ~130-170 MiB, RBAC manager ~20 MiB, the Harbor provider requests 96 MiB.
 
 ## Cluster facts: EnvironmentConfig
 

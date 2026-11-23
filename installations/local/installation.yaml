@@ -15,6 +15,7 @@ mgmt:
   environment: mgmt
   addons:                                     # addons.platform.koorikla.io/<addon> overrides for mgmt
     openbao: true                             # Istio mesh CA (OpenBao: one root + intermediate per mesh.groups entry)
+    crossplane: true                          # Harbor provider: addon harbor's projects, proxy caches, robots (registry.type harbor)
 
 secrets:
   backend: kubernetes                         # kubernetes | aws | vault

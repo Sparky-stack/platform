@@ -1,0 +1,9 @@
+# mgmt runs Crossplane for platform-level resources only (docs/crossplane.md "Crossplane on mgmt"): the Harbor provider
+# for addon harbor. The data APIs (PostgreSQL, MySQL) stay on workload clusters, where applications run.
+platformAPIs:
+  enabled: false
+harborProvider:
+  enabled: true
+# The PodMonitor CRD on mgmt comes only with the optional observability plane.
+monitoring:
+  podMonitor: false

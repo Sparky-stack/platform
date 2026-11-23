@@ -1,35 +1,130 @@
 {{- /*
-Declarative Harbor configuration (Harbor has no CRDs). files/harbor-config.py applies the desired state below through
-Harbor's API, idempotently: as an Argo CD PostSync hook after every sync and hourly as a CronJob (drift, rotated robot
-secrets). Chosen over Terraform/OpenTofu (state backend + provider credentials on mgmt) and over a Harbor operator
-(none maintained for Harbor 2.15): ~200 lines of stdlib Python, no state, re-runnable.
+Harbor's desired state as managed resources of provider-upjet-harbor (Crossplane, installed on mgmt by addon crossplane,
+docs/build-plane.md "Harbor"). One object per registry endpoint, project, replication rule and robot account; its
+Synced/Ready conditions show drift and API errors: kubectl get managed -n harbor.
+Sync wave 1: after the Harbor workloads (wave 0) are Healthy. The CRDs come with the provider, hence
+SkipDryRunOnMissingResource; Argo CD retries until the provider is Healthy.
 */ -}}
 {{- $c := .Values.config }}
-{{- $proxy := list }}{{ range .Values.registry.proxyCache }}{{ $proxy = append $proxy .project }}{{ end }}
-{{- /* registries: every proxy-cache upstream + every replication source */ -}}
+{{- $ns := .Release.Namespace }}
+{{- $secret := .Values.secrets.secretName }}
+{{- $ghcr := ne (toString .Values.secrets.ghcrKey) "" }}
+{{- define "harbor-addon.mrMeta" -}}
+annotations:
+  argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  argocd.argoproj.io/sync-wave: "1"
+{{- end }}
+{{- define "harbor-addon.providerRef" -}}
+providerConfigRef: { kind: ProviderConfig, name: harbor }
+{{- end }}
+{{- /* Projects and registries hold data or are referenced by projects: never deleted from Harbor (removing an entry
+orphans the object; delete it in the UI if intended). */ -}}
+{{- define "harbor-addon.keep" -}}
+managementPolicies: [Observe, Create, Update, LateInitialize]
+{{- end }}
+{{- /* Registries: every proxy-cache upstream + every replication source. */ -}}
 {{- $regNames := list }}
 {{- range .Values.registry.proxyCache }}{{ $regNames = append $regNames .upstream }}{{ end }}
 {{- range $c.replication }}{{ $regNames = append $regNames .endpoint }}{{ end }}
-{{- $registries := list }}
+{{- $proxy := list }}{{ range .Values.registry.proxyCache }}{{ $proxy = append $proxy .project }}{{ end }}
+# Admin credential for the provider: key provider-credentials of Secret {{ $secret }} (templates/secrets.yaml, store key
+# {{ .Values.secrets.remoteKey }}). Namespaced: only managed resources in ns {{ $ns }} can use it.
+apiVersion: harbor.m.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: harbor
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" . | nindent 2 }}
+spec:
+  url: http://harbor-core.{{ $ns }}.svc   # Harbor core in-cluster (internal TLS off); the provider runs in crossplane-system
+  credentials:
+    source: Secret
+    secretRef: { namespace: {{ $ns }}, name: {{ $secret }}, key: provider-credentials }
 {{- range $n := $regNames | uniq }}
 {{- $e := index $c.endpoints $n }}
-{{- $registries = append $registries (dict "name" $n "type" $e.type "url" $e.url "credentials" ($e.credentials | default "")) }}
+---
+apiVersion: harbor.m.crossplane.io/v1alpha1
+kind: Registry
+metadata:
+  name: {{ $n }}
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" . | nindent 2 }}
+spec:
+  {{- include "harbor-addon.providerRef" . | nindent 2 }}
+  {{- include "harbor-addon.keep" . | nindent 2 }}
+  forProvider:
+    name: {{ $n }}
+    providerName: {{ $e.type }}
+    endpointUrl: {{ $e.url }}
+    description: platform
+    insecure: false
+    {{- if and (eq (toString $e.credentials) "ghcr") $ghcr }}
+    accessId: {{ $.Values.secrets.ghcrUsername | quote }}
+    accessSecretSecretRef: { name: {{ $secret }}, key: ghcr-token }
+    {{- end }}
 {{- end }}
-{{- $appsMeta := dict "auto_scan" $c.apps.autoScan "severity" $c.apps.severity "prevent_vul" $c.apps.preventVulnerable "enable_content_trust_cosign" $c.apps.contentTrustCosign "reuse_sys_cve_allowlist" true }}
-{{- $projects := list (dict "name" .Values.registry.appsProject "public" false "metadata" $appsMeta "storageLimit" $c.storageLimitGiB) }}
-{{- range $c.replication }}
-{{- $projects = append $projects (dict "name" .destProject "public" false "metadata" (dict "auto_scan" $c.apps.autoScan "reuse_sys_cve_allowlist" true) "storageLimit" $c.storageLimitGiB) }}
+{{- /* Projects: apps (in-cluster builds), every replication target, every proxy cache. All private: the nodes robot
+pulls (a proxy cache with GHCR credentials would otherwise republish private packages anonymously). */ -}}
+{{- $projects := list (dict "name" .Values.registry.appsProject "scan" $c.apps.autoScan "cosign" $c.apps.contentTrustCosign "security" (ternary $c.apps.severity "" $c.apps.preventVulnerable)) }}
+{{- range $c.replication }}{{ $projects = append $projects (dict "name" .destProject "scan" $c.apps.autoScan) }}{{ end }}
+{{- range .Values.registry.proxyCache }}{{ $projects = append $projects (dict "name" .project "scan" false "registry" .upstream) }}{{ end }}
+{{- range $p := $projects }}
+---
+apiVersion: harbor.m.crossplane.io/v1alpha1
+kind: Project
+metadata:
+  name: {{ $p.name }}
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" . | nindent 2 }}
+spec:
+  {{- include "harbor-addon.providerRef" . | nindent 2 }}
+  {{- include "harbor-addon.keep" . | nindent 2 }}
+  forProvider:
+    name: {{ $p.name }}
+    public: false
+    vulnerabilityScanning: {{ $p.scan }}     # scan on push (Trivy)
+    {{- if hasKey $p "cosign" }}
+    enableContentTrustCosign: {{ $p.cosign }}
+    {{- end }}
+    {{- with $p.security }}
+    deploymentSecurity: {{ . }}         # prevent pulls of artifacts with vulnerabilities of this severity or worse
+    {{- end }}
+    storageQuota: {{ $c.storageLimitGiB }}
+    {{- with $p.registry }}
+    registryIdRef: { name: {{ . }} }    # proxy cache of this upstream
+    {{- end }}
 {{- end }}
-{{- range .Values.registry.proxyCache }}
-{{- $projects = append $projects (dict "name" .project "public" false "registry" .upstream "metadata" (dict "auto_scan" false) "storageLimit" $c.storageLimitGiB) }}
+{{- range $r := $c.replication }}
+---
+apiVersion: harbor.m.crossplane.io/v1alpha1
+kind: Replication
+metadata:
+  name: {{ $r.name }}
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" . | nindent 2 }}
+spec:
+  {{- include "harbor-addon.providerRef" . | nindent 2 }}
+  forProvider:
+    name: {{ $r.name }}
+    action: pull
+    registryIdRef: { name: {{ $r.endpoint }} }
+    destNamespace: {{ $r.destProject }}
+    destNamespaceReplace: 1
+    {{- /* A credential-less endpoint (no secrets.ghcrKey) cannot list packages: the rule exists, disabled. */}}
+    enabled: {{ and $r.enabled (or $ghcr (not (index $c.endpoints $r.endpoint).credentials)) }}
+    schedule: {{ $r.cron | quote }}
+    override: true
+    speed: -1
+    copyByChunk: false
+    filters:
+      {{- range $r.filters }}
+      - {{ .type }}: {{ .value | quote }}
+      {{- end }}
 {{- end }}
-{{- $replication := list }}
-{{- range $c.replication }}
-{{- $replication = append $replication (dict "name" .name "enabled" .enabled "registry" .endpoint "destProject" .destProject "filters" .filters "cron" .cron) }}
-{{- end }}
+{{- /* System robot accounts (robot$<name>). Their secret comes from the store (secretSecretRef), so every consumer reads
+the same value from the store; a changed store value is set on the robot at the next reconcile. */ -}}
 {{- $pullAccess := list (list "repository" "pull") (list "repository" "list") (list "artifact" "read") (list "artifact" "list") (list "tag" "list") }}
 {{- $pushAccess := concat $pullAccess (list (list "repository" "push") (list "tag" "create") (list "scan" "read") (list "sbom" "read")) }}
-{{- $robots := list }}
 {{- range $r := $c.robots }}
 {{- $perms := list }}
 {{- range $p := $r.push }}{{ $perms = append $perms (dict "project" (eq $p "appsProject" | ternary $.Values.registry.appsProject $p) "access" $pushAccess) }}{{ end }}
@@ -40,55 +135,44 @@ secrets). Chosen over Terraform/OpenTofu (state backend + provider credentials o
 {{- $perms = append $perms (dict "project" $p "access" $pullAccess) }}
 {{- end }}
 {{- end }}
-{{- $robots = append $robots (dict "name" $r.name "description" $r.description "secretEnv" (printf "ROBOT_%s" ($r.name | upper | replace "-" "_")) "permissions" $perms) }}
+---
+apiVersion: robot.harbor.m.crossplane.io/v1alpha1
+kind: Account
+metadata:
+  name: {{ $r.name }}
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" . | nindent 2 }}
+spec:
+  {{- include "harbor-addon.providerRef" . | nindent 2 }}
+  forProvider:
+    name: {{ $r.name }}
+    description: {{ $r.description | quote }}
+    level: system
+    duration: -1                        # never expires
+    disable: false
+    secretSecretRef: { name: {{ $secret }}, key: robot-{{ $r.name }} }
+    permissions:
+      {{- range $perms }}
+      - kind: project
+        namespace: {{ .project }}
+        access:
+          {{- range .access }}
+          - { resource: {{ index . 0 }}, action: {{ index . 1 }} }
+          {{- end }}
+      {{- end }}
 {{- end }}
-{{- $state := dict "registries" $registries "projects" $projects "replication" $replication "robots" $robots "cveAllowlist" list }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: harbor-config
-  namespace: {{ .Release.Namespace }}
-data:
-  harbor-config.py: |
-    {{- .Files.Get "files/harbor-config.py" | nindent 4 }}
-  state.json: |
-    {{- toPrettyJson $state | nindent 4 }}
+{{- /* The system CVE allowlist: rendered only when non-empty (the provider requires a non-empty list); a fresh Harbor
+starts with an empty one. */ -}}
+{{- with $c.cveAllowlist }}
 ---
-apiVersion: batch/v1
-kind: Job
+apiVersion: config.harbor.m.crossplane.io/v1alpha1
+kind: Security
 metadata:
-  name: harbor-config
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  name: system-cve-allowlist
+  namespace: {{ $ns }}
+  {{- include "harbor-addon.mrMeta" $ | nindent 2 }}
 spec:
-  backoffLimit: 20                 # Harbor core may still be starting on the first sync
-  activeDeadlineSeconds: 1800
-  template:
-    metadata:
-      labels: { app.kubernetes.io/name: harbor-config }
-      annotations:
-        checksum/state: {{ toJson $state | sha256sum | trunc 16 }}
-    spec:
-      {{- include "harbor-addon.configPod" . | nindent 6 }}
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: harbor-config
-  namespace: {{ .Release.Namespace }}
-spec:
-  schedule: {{ $c.schedule | quote }}
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 2
-  jobTemplate:
-    spec:
-      backoffLimit: 3
-      activeDeadlineSeconds: 900
-      template:
-        metadata:
-          labels: { app.kubernetes.io/name: harbor-config }
-        spec:
-          {{- include "harbor-addon.configPod" . | nindent 10 }}
+  {{- include "harbor-addon.providerRef" $ | nindent 2 }}
+  forProvider:
+    cveAllowlist: {{ toYaml . | nindent 6 }}
+{{- end }}

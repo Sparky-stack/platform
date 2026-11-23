@@ -91,7 +91,7 @@ if out=$(helm template platform charts/platform --namespace argocd --values "$TM
 assert_match "$out" "at '/addons/falco/clusterNameFormats/x': 'no-placeholder' does not match pattern" "clusterNameFormats without %s fails (values.schema.json)"
 
 # Values are not @tsv-escaped (a backslash arrives once).
-printf 'installation: { name: t, repoURL: https://example.test/r.git, githubOrg: https://example.test }\nregistry: { type: harbor, host: "a\\\\b.example.test" }\n' > "$TMP/inst.yaml"
+printf 'installation: { name: t, repoURL: https://example.test/r.git, githubOrg: https://example.test }\nregistry: { type: harbor, host: "a\\\\b.example.test" }\nmgmt: { addons: { crossplane: true } }\n' > "$TMP/inst.yaml"
 helm template platform charts/platform --namespace argocd --values "$TMP/inst.yaml" > "$TMP/p.yaml"
 assert_eq "$(addon_installation_params "$TMP/p.yaml" harbor)" $'harbor.externalURL\thttps://a\\b.example.test' "installation parameter keeps a single backslash"
 

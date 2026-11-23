@@ -68,7 +68,7 @@ assert_eq "$got" "docker.io/library/nats:2.10.29 docker.io/natsio/nats-server-co
 # installationParameters: one renderer (hack/lib/addons.sh), templates evaluated by Helm in the ApplicationSet.
 # shellcheck source=../lib/addons.sh
 ( cd "$ROOT" && source hack/lib/addons.sh
-  printf 'registry:\n  type: harbor\n  host: harbor.example.test:9443\nopenchoreo:\n  observability:\n    enabled: true\n  workflowPlane:\n    enabled: false\n' > "$TMP/inst.yaml"
+  printf 'registry:\n  type: harbor\n  host: harbor.example.test:9443\nmgmt:\n  addons:\n    crossplane: true\nopenchoreo:\n  observability:\n    enabled: true\n  workflowPlane:\n    enabled: false\n' > "$TMP/inst.yaml"
   helm template platform charts/platform --namespace argocd --values "$TMP/inst.yaml" > "$TMP/platform.yaml"
   addon_installation_params "$TMP/platform.yaml" harbor > "$TMP/harbor.params"
   addon_installation_params "$TMP/platform.yaml" openchoreo-control-plane > "$TMP/ocp.params" )

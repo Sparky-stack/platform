@@ -48,6 +48,26 @@ tests:
             kind: ExternalSecret
         documentIndex: 1
 
+  - it: the local mgmt runs addon crossplane (Harbor provider for addon harbor)
+    template: cluster-mgmt.yaml
+    asserts:
+      - equal: { path: 'metadata.labels["addons.platform.koorikla.io/crossplane"]', value: "true" }
+
+  - it: registry.type harbor without addon crossplane on mgmt fails the render
+    template: cluster-mgmt.yaml
+    set:
+      mgmt.addons.crossplane: false
+    asserts:
+      - failedTemplate: { errorMessage: "registry.type harbor: addon harbor declares its projects, proxy caches and robot accounts as Crossplane managed resources - set mgmt.addons.crossplane: true in installation.yaml" }
+
+  - it: no crossplane requirement when addon harbor is off or the registry is external
+    template: cluster-mgmt.yaml
+    set:
+      mgmt.addons.crossplane: false
+      mgmt.addons.harbor: false
+    asserts:
+      - hasDocuments: { count: 1 }
+
   - it: renders mgmt cluster secret in-cluster with installation labels
     template: cluster-mgmt.yaml
     set:

@@ -1,42 +1,10 @@
 {{- /* Functions and the backend's providers, pinned by digest. Crossplane's default package runtime lacks seccomp and a
 capability drop, so every package runs under a DeploymentRuntimeConfig that meets Pod Security restricted. */ -}}
+{{- if .Values.platformAPIs.enabled }}
 {{- $rc := .Values.packages.runtimeConfig }}
 {{- $backend := include "crossplane.pgBackend" . }}
 {{- $cloud := include "crossplane.pgCloud" . }}
 {{- $pg := .Values.postgresql }}
-{{- define "crossplane.runtimeSpec" -}}
-deploymentTemplate:
-  spec:
-    selector: {}
-    template:
-      {{- with .podLabels }}
-      metadata:
-        labels:
-          {{- toYaml . | nindent 10 }}
-      {{- end }}
-      spec:
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 2000
-          runAsGroup: 2000
-          seccompProfile: { type: RuntimeDefault }
-        containers:
-          - name: package-runtime
-            securityContext:
-              runAsNonRoot: true
-              allowPrivilegeEscalation: false
-              privileged: false
-              readOnlyRootFilesystem: true
-              capabilities: { drop: [ALL] }
-              seccompProfile: { type: RuntimeDefault }
-            resources:
-              {{- toYaml .resources | nindent 14 }}
-{{- with .serviceAccount }}
-serviceAccountTemplate:
-  metadata:
-    {{- toYaml . | nindent 4 }}
-{{- end }}
-{{- end }}
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
@@ -102,5 +70,6 @@ spec:
     apiVersion: pkg.crossplane.io/v1beta1
     kind: DeploymentRuntimeConfig
     name: provider-{{ $cloud }}
+{{- end }}
 {{- end }}
 {{- end }}
