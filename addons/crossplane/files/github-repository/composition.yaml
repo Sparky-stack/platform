@@ -1,0 +1,140 @@
+# Composition of GitHubRepository (definition.yaml): what one repository looks like on GitHub. docs/github-repos.md.
+#   Repository        settings: squash merges only (the PR title becomes the conventional commit release-please reads),
+#                     branches deleted on merge, Dependabot alerts, secret scanning + push protection, no wiki/projects
+#   RepositoryRuleset "main-protection" on the default branch: no deletion or force push, linear history, changes by
+#                     pull request (0 approvals, but code-owner review, stale-review dismissal and resolved threads),
+#                     spec.requiredChecks from GitHub Actions; bypass: spec.bypassApps always (the platform App's
+#                     hand-off commits, releases, promotion PRs), repository admins for pull requests only (break-glass)
+#   RepositoryCollaborator per spec.collaborators (write; personal account repositories have no other role)
+# spec.management Observe composes every object with managementPolicies [Observe] (read-only, nothing on GitHub
+# changes) and the ruleset only when spec.rulesetId names an existing one; Full adds Create, Update and LateInitialize.
+# Delete is never granted: removing an XR leaves the repository, its ruleset and collaborators on GitHub.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: github-repository
+  annotations:   # addon crossplane applies this file as is (templates/github-repos.yaml)
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  compositeTypeRef:
+    apiVersion: platform.koorikla.io/v1alpha1
+    kind: GitHubRepository
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $s := $xr.spec }}
+            {{- $repo := $xr.metadata.name }}
+            {{- $full := eq $s.management "Full" }}
+            {{- $policies := list "Observe" }}
+            {{- if $full }}{{ $policies = list "Observe" "Create" "Update" "LateInitialize" }}{{ end }}
+            {{- /* GitHub constants: the GitHub Actions app reports the CI checks; role 5 is the repository admin. */}}
+            {{- $actionsApp := 15368 }}
+            {{- $adminRole := 5 }}
+            ---
+            apiVersion: repo.github.m.upbound.io/v1alpha1
+            kind: Repository
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: repository
+                crossplane.io/external-name: {{ $repo }}
+            spec:
+              managementPolicies: {{ toJson $policies }}
+              providerConfigRef: { kind: ProviderConfig, name: github }
+              forProvider:
+                name: {{ $repo }}
+                description: {{ $s.description | default "" | toJson }}
+                visibility: {{ $s.visibility | default "public" }}
+                hasIssues: true
+                hasWiki: false
+                hasProjects: false
+                hasDiscussions: false
+                allowMergeCommit: false
+                allowRebaseMerge: false
+                allowSquashMerge: true
+                squashMergeCommitTitle: PR_TITLE
+                squashMergeCommitMessage: COMMIT_MESSAGES
+                deleteBranchOnMerge: true
+                vulnerabilityAlerts: true
+                archiveOnDestroy: true
+                securityAndAnalysis:
+                  - secretScanning: [{ status: enabled }]
+                    secretScanningPushProtection: [{ status: enabled }]
+            {{- if or $full $s.rulesetId }}
+            ---
+            apiVersion: repo.github.m.upbound.io/v1alpha1
+            kind: RepositoryRuleset
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: ruleset
+                {{- with $s.rulesetId }}
+                crossplane.io/external-name: {{ . | quote }}
+                {{- end }}
+            spec:
+              managementPolicies: {{ toJson $policies }}
+              providerConfigRef: { kind: ProviderConfig, name: github }
+              forProvider:
+                repository: {{ $repo }}
+                name: main-protection
+                target: branch
+                enforcement: active
+                conditions:
+                  - refName: [{ include: ["~DEFAULT_BRANCH"], exclude: [] }]
+                bypassActors:
+                  {{- range $s.bypassApps }}
+                  - { actorType: Integration, actorId: {{ . }}, bypassMode: always }
+                  {{- end }}
+                  - { actorType: RepositoryRole, actorId: {{ $adminRole }}, bypassMode: pull_request }
+                rules:
+                  - deletion: true
+                    nonFastForward: true
+                    requiredLinearHistory: true
+                    pullRequest:
+                      - requiredApprovingReviewCount: 0
+                        requireCodeOwnerReview: true
+                        dismissStaleReviewsOnPush: true
+                        requireLastPushApproval: true
+                        requiredReviewThreadResolution: true
+                        allowedMergeMethods: [squash]
+                    {{- with $s.requiredChecks }}
+                    requiredStatusChecks:
+                      - strictRequiredStatusChecksPolicy: false
+                        requiredCheck:
+                          {{- range . }}
+                          - { context: {{ . | toJson }}, integrationId: {{ $actionsApp }} }
+                          {{- end }}
+                    {{- end }}
+            {{- end }}
+            {{- range $user := $s.collaborators }}
+            ---
+            apiVersion: repo.github.m.upbound.io/v1alpha1
+            kind: RepositoryCollaborator
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: collaborator-{{ $user | lower }}
+                crossplane.io/external-name: {{ printf "%s:%s" $repo $user }}
+            spec:
+              managementPolicies: {{ toJson $policies }}
+              providerConfigRef: { kind: ProviderConfig, name: github }
+              forProvider:
+                repository: {{ $repo }}
+                username: {{ $user }}
+                permission: push
+            {{- end }}
+            ---
+            apiVersion: platform.koorikla.io/v1alpha1
+            kind: GitHubRepository
+            status:
+              url: {{ dig "resources" "repository" "resource" "status" "atProvider" "htmlUrl" "" .observed | toJson }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready

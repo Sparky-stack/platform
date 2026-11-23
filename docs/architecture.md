@@ -151,7 +151,9 @@ is one file in the platform repo; deploying and promoting are commits in the app
 ### Platform APIs: Crossplane on each workload cluster, next to the app
 Crossplane v2 is a control plane on each workload cluster that opts in, not a data service itself. It is an addon
 like the operators it feeds (`addons: { crossplane: true }`). Mgmt runs it as well, for platform-level resources only
-(the Harbor provider that declares Harbor's projects, proxy caches, replication and robots, [crossplane.md](crossplane.md#crossplane-on-mgmt)):
+(the Harbor provider that declares Harbor's projects, proxy caches, replication and robots, and the GitHub provider
+behind `GitHubRepository`: repository settings, rulesets, collaborators, [github-repos.md](github-repos.md);
+[crossplane.md](crossplane.md#crossplane-on-mgmt)):
 the data APIs below stay on workload clusters.
 Apps claim a resource through OpenChoreo (resource type `postgresql` or `mysql`), the cluster-agent applies the
 claim (a namespaced XR rendered from the ResourceReleaseBinding) in the app's cell namespace, and the cluster's

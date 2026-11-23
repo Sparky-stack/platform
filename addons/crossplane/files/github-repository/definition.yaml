@@ -1,0 +1,86 @@
+# GitHubRepository: one GitHub repository of the account the GitHub App koorikla-repo-admin is installed on, declared in
+# git and reconciled by Crossplane on mgmt (docs/github-repos.md). Namespaced XR (Crossplane v2, no claims); the XR name
+# is the repository name. The Composition github-repository (composition.yaml) renders the repository settings, one
+# ruleset on the default branch and the collaborators. Personal account: rulesets per repository, collaborators instead
+# of teams; on an organisation only the Composition changes.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: githubrepositories.platform.koorikla.io
+  annotations:   # addon crossplane applies this file as is (templates/github-repos.yaml)
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scope: Namespaced
+  group: platform.koorikla.io
+  names:
+    kind: GitHubRepository
+    plural: githubrepositories
+    singular: githubrepository
+    categories: [platform]
+  defaultCompositionRef:
+    name: github-repository
+  defaultCompositionUpdatePolicy: Automatic
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      additionalPrinterColumns:
+        - { name: Management, type: string, jsonPath: .spec.management }
+        - { name: URL, type: string, jsonPath: .status.url }
+        - { name: Ready, type: string, jsonPath: '.status.conditions[?(@.type=="Ready")].status' }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [management]
+              properties:
+                management:
+                  description: >-
+                    Observe: Crossplane only reads the repository (status.atProvider of the composed resources); nothing
+                    on GitHub changes. Full: Crossplane creates what is missing, enforces this spec and reverts changes
+                    made in the GitHub UI. It never deletes a repository, ruleset or collaborator. No default on
+                    purpose: every repository states it (docs/github-repos.md "Switch to full management").
+                  type: string
+                  enum: [Observe, Full]
+                description:
+                  description: Repository description shown on GitHub.
+                  type: string
+                  default: ""
+                visibility:
+                  type: string
+                  enum: [public, private]
+                  default: public
+                requiredChecks:
+                  description: >-
+                    Status checks from GitHub Actions that must pass before a pull request merges into the default
+                    branch (the check run names, e.g. "validate" or "checks / vet, lint, test, govulncheck").
+                  type: array
+                  items: { type: string, minLength: 1 }
+                  default: []
+                bypassApps:
+                  description: >-
+                    GitHub App IDs that may push to the default branch without a pull request: the platform App that
+                    writes the GitOps hand-off commits, cuts releases and opens promotion PRs.
+                  type: array
+                  items: { type: integer, minimum: 1 }
+                  default: []
+                collaborators:
+                  description: GitHub users with write access (personal account repositories know no other role).
+                  type: array
+                  items: { type: string, minLength: 1 }
+                  default: []
+                rulesetId:
+                  description: >-
+                    ID of a ruleset that already exists on the repository (Settings, Rules, Rulesets: the number in
+                    the URL). Observe reads it; Full rewrites it in place instead of adding a second ruleset.
+                  type: string
+                  pattern: "^[0-9]+$"
+            status:
+              type: object
+              properties:
+                url:
+                  description: The repository's web URL, as GitHub reports it.
+                  type: string

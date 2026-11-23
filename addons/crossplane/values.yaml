@@ -115,6 +115,33 @@ harborProvider:
     - accounts.robot.harbor.m.crossplane.io
     - securities.config.harbor.m.crossplane.io
 
+# --- GitHub repository governance (mgmt) -------------------------------------------------------------------------------
+# Repository settings, the default-branch ruleset and collaborators as GitHubRepository XRs (docs/github-repos.md):
+# provider-upjet-github authenticated as the GitHub App koorikla-repo-admin (store key credentials.remoteKey, seeded
+# from GITHUB_REPO_ADMIN_APP_* by bootstrap), the XRD + Composition in files/github-repository/, one XR per entry of
+# `repositories`. One mgmt per GitHub account: turn it on in installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml.
+githubRepos:
+  # -- `true` installs `provider-upjet-github`, the `GitHubRepository` API and `githubRepos.repositories` (per installation, on its mgmt only).
+  enabled: false
+  # crossplane-contrib provider-upjet-github (upjet over integrations/terraform-provider-github), multi-arch index digest.
+  package: xpkg.crossplane.io/crossplane-contrib/provider-upjet-github:v0.23.0@sha256:3da1fc7df824246e0d31bc55d47d5b5acfcb65d13b3f495027b84fdfbc9b1836
+  resources:                        # three kinds activated out of ~100
+    requests: { cpu: 10m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  # Managed resource definitions the Composition composes; nothing else gets a CRD.
+  activate:
+    - repositories.repo.github.m.upbound.io
+    - repositoryrulesets.repo.github.m.upbound.io
+    - repositorycollaborators.repo.github.m.upbound.io
+  # -- GitHub account (user or organisation) the App is installed on: the `owner` of every repository.
+  owner: ""
+  credentials:
+    store: platform                 # ClusterSecretStore (mgmt)
+    # -- Store key with githubAppID, githubAppInstallationID, githubAppPrivateKey of the repo-admin GitHub App.
+    remoteKey: github-repo-admin
+  # -- GitHub repositories by name: `management` (`Observe` or `Full`, required), `description`, `visibility`, `requiredChecks`, `bypassApps`, `collaborators`, `rulesetId` (XRD `files/github-repository/definition.yaml`).
+  repositories: {}
+
 # --- PostgreSQL as a service (docs/data-services.md "PostgreSQL as a service") ---------------------------------------
 postgresql:
   # Empty: backendByProvider[cluster.provider]; an unmapped provider fails the render. Set it only to force a backend.

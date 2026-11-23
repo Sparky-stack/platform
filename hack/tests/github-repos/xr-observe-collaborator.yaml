@@ -1,0 +1,9 @@
+# An existing repository observed only, with a collaborator: every composed object is read-only.
+apiVersion: platform.koorikla.io/v1alpha1
+kind: GitHubRepository
+metadata:
+  name: observed
+  namespace: crossplane-system
+spec:
+  management: Observe
+  collaborators: [alice]

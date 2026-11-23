@@ -357,6 +357,118 @@
           "minItems": 1
         }
       }
+    },
+    "githubRepos": {
+      "type": "object",
+      "description": "provider-upjet-github + the GitHubRepository API on mgmt (docs/github-repos.md).",
+      "required": [
+        "enabled",
+        "package",
+        "activate",
+        "owner",
+        "credentials",
+        "repositories"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "package": {
+          "type": "string",
+          "pattern": "^xpkg\\.crossplane\\.io/crossplane-contrib/provider-upjet-github:v[0-9.]+@sha256:[0-9a-f]{64}$",
+          "description": "Pinned tag@sha256 (multi-arch index)."
+        },
+        "resources": {
+          "type": "object"
+        },
+        "activate": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+\\.repo\\.github\\.m\\.upbound\\.io$"
+          },
+          "minItems": 1
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9-]*)?$"
+        },
+        "credentials": {
+          "type": "object",
+          "required": [
+            "store",
+            "remoteKey"
+          ],
+          "properties": {
+            "store": {
+              "type": "string",
+              "minLength": 1
+            },
+            "remoteKey": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "repositories": {
+          "type": "object",
+          "description": "GitHubRepository specs by repository name; management is required (no default: Observe or Full is always a written decision).",
+          "propertyNames": {
+            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "management"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "management": {
+                "type": "string",
+                "enum": [
+                  "Observe",
+                  "Full"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "private"
+                ]
+              },
+              "requiredChecks": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "bypassApps": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "collaborators": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "rulesetId": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

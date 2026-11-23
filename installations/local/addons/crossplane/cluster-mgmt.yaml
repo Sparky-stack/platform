@@ -1,0 +1,23 @@
+# Addon crossplane on this installation's mgmt (cluster mgmt). GitHub repository governance (docs/github-repos.md):
+# the GitHub App koorikla-repo-admin (bootstrap seeds it from GITHUB_REPO_ADMIN_APP_*, docs/forking.md) and the
+# repositories it governs. A fork without that App: githubRepos.enabled false, or your own owner and repositories.
+githubRepos:
+  enabled: true
+  owner: koorikla
+  repositories:
+    # The two repositories existed before governance: Observe reads them, nothing on GitHub changes. Switching one to
+    # `management: Full` (one line) makes Crossplane enforce the spec below; review the observed-vs-desired diff
+    # first (docs/github-repos.md "Switch to full management").
+    platform:
+      management: Observe
+      description: "Cloud-agnostic platform: Cluster API + OpenChoreo + ESO + Argo CD"
+      requiredChecks: [validate]              # .github/workflows/ci.yaml: the one always-running merge gate
+      bypassApps: [5788333]                   # koorikla-promotion-gate: release-please (release.yaml) runs as this App
+      rulesetId: "27395845"                   # the hand-made ruleset "main": Full rewrites it instead of adding one
+    hello-world:
+      management: Observe
+      description: Hello-world app for koorikla/platform (OpenChoreo component)
+      requiredChecks:                         # hello-world .github/workflows/ci.yaml (platform app-go.yaml)
+        - "checks / vet, lint, test, govulncheck"
+        - "checks / manifests / OpenChoreo manifests"
+      bypassApps: [5788333]                   # koorikla-promotion-gate: GitOps hand-off commits, promotion PRs
