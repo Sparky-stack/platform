@@ -5,7 +5,7 @@
 
 > Synthesis knowledge base for AI agents. Authoritative contracts live in [AGENTS.md](../AGENTS.md) and [docs/](../docs/conventions.md).
 > Read [SCHEMA.md](SCHEMA.md) and this index before starting work; update when you learn a new decision or gotcha.
-> Last updated: 2026-11-21 | Total pages: 27
+> Last updated: 2026-11-23 | Total pages: 28
 
 ## Decisions
 - [Build Trigger Polling Locally, Webhook in Cloud, and GitHub App Tokens](decisions/build-trigger-polling-and-github-app-tokens.md) — Poll git locally and use HMAC webhooks in cloud with registry-aware rebuilds and per-repo GitHub App tokens (no PATs).
@@ -25,6 +25,7 @@
 - [OpenChoreo Authz - Deny Is Per Entitlement Value; Developers Per Project](gotchas/openchoreo-authz-per-project-developers.md) — Upstream binds `developers` to write every project; a deny only revokes grants of the same group value. Org-wide read-only + per-project `AuthzRoleBinding` with the production condition in the allow (#335).
 - [Preview Teardown - Stuck ResourceReleaseBinding and Re-created Tenant Descriptor](gotchas/preview-teardown-leaks.md) — The Environment must outlive the preview's ResourceReleaseBindings (blockOwnerDeletion + foreground); terminating bindings must not match the descriptor GeneratingPolicy.
 - [Preview Cells - Tenant Secrets and CloudNativePG under Cilium](gotchas/preview-cells-tenant-secrets-and-cnpg.md) — Previews bind to their tenant's OpenBao role via Kyverno descriptors; CNPG pods need kube-apiserver egress that Cilium never grants via ipBlock (#267, #331).
+- [OpenChoreo Console - Catalog Opens on Projects; Templates Need spec.type Component](gotchas/openchoreo-console-visibility-and-template-types.md) — Catalog defaults to Projects and filters only by OpenChoreo authz (ownership and Thunder user sync are irrelevant); Create > Component lists only `spec.type: Component` templates.
 - [OpenChoreo SecretReference Rotation and Scope](gotchas/openchoreo-secretreference-rotation-and-scope.md) — App secrets refresh in 15 s but pods need a restart; the store is platform-fixed; `targetPlane` belongs to the secrets API.
 - [Argo CD Custom Health for Kyverno DeletingPolicy and Unmatched CRS](gotchas/argocd-custom-health-deletingpolicy-and-crs.md) — Kyverno `DeletingPolicy` never sets `Ready` and unmatched peers-only `ClusterResourceSet`s stay `Progressing` without custom Lua checks (#187, #198).
 - [Argo CD Server-Side Diff Hides Changes to Argo Workflows Objects](gotchas/argocd-server-side-diff-atomic-crd-spec.md) — Atomic + preserve-unknown CRD `spec` makes server-side diff report Synced while a ClusterWorkflowTemplate stays old; addons rendering Argo Workflows kinds set `IncludeMutationWebhook=true` (#184).

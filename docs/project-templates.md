@@ -1,7 +1,9 @@
 # Golden-path project templates
 
-Tenants create new services from Backstage (OpenChoreo console, *Create*): one Backstage scaffolder `Template` per
-framework, kept in this repo under [`templates/`](../templates/catalog-info.yaml). The scaffolder only does **day 0**:
+Tenants create new services from Backstage (OpenChoreo console, *Create* > *Component*, or a project's *Create
+Component* button): one Backstage scaffolder `Template` per framework, kept in this repo under
+[`templates/`](../templates/catalog-info.yaml). The service templates use `spec.type: Component`, because the console
+lists nothing else there ([openchoreo.md](openchoreo.md#finding-things-in-the-console)). The scaffolder only does **day 0**:
 it creates the repository with its content and opens a pull request in the platform repo. Everything after that is
 declarative: repository settings and rulesets come from a governance record that Crossplane reconciles
 ([#100](https://github.com/koorikla/platform/issues/100)); the app is wired into its tenant by the merged PR and
@@ -43,7 +45,8 @@ entity with the same ref would conflict.
 
 ### Platform API: `crossplane-api`
 
-Not a service (`spec.type: platform-api`): a repository for a new platform API as a Crossplane Configuration package,
+Not a service (`spec.type: platform-api`, listed under *Other Templates* on the console's *Create* page): a repository
+for a new platform API as a Crossplane Configuration package,
 laid out by `crossplane project init` - `crossplane-project.yaml`, `apis/api/{definition,composition}.yaml` (an XRD
 for the chosen kind / plural / group and its Composition), `functions/compose/` (embedded function-go-templating
 function, one file per composed resource; copied without templating), `examples/example.yaml`, `tests/`,

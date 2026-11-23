@@ -187,6 +187,8 @@ openchoreo-control-plane:
         enabled: true
     # platform: Backstage REPLACES arrays from earlier config files, so catalog.locations repeats the image's list
     # (openchoreo-ui v1.3.3) before this repo's golden-path templates; a chart bump re-checks it (docs/forking.md).
+    # No `thunder:` block (Thunder user/group sync): upstream leaves it off and the console needs no User entities
+    # (docs/openchoreo.md "Finding things in the console").
     appConfig:
       catalog:
         rules:
