@@ -214,7 +214,7 @@ AWS with IRSA / EKS Pod Identity (`secrets.aws.role`), to Vault with its Kuberne
 
 ```bash
 task up         # k3d mgmt, secrets, Argo CD, root app; then everything else is Argo CD
-task status     # CAPI clusters, Argo CD apps, ClusterDataPlanes, how to read the Argo CD admin password
+task status     # CAPI clusters, Argo CD apps, ClusterDataPlanes, each UI's URL and the command that reads its password
 ```
 
 What happens, roughly (8-CPU / 16 GB Linux host; a warm image cache is faster; other hosts:

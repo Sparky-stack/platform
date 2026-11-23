@@ -69,7 +69,7 @@ tasks:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} argocd'
 
   status:
-    desc: Show CAPI clusters, Argo CD apps, ClusterDataPlanes and how to read the Argo CD admin password (never the password)
+    desc: Show CAPI clusters, Argo CD apps, ClusterDataPlanes, and each UI's URL or port-forward with the command that reads its password (never the password)
     cmds:
       - '"{{.BASH}}" bootstrap/bootstrap.sh --inst {{shellQuote .INST}} status'
 

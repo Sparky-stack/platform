@@ -33,7 +33,8 @@ Subcommands:
            clusters: BYO_KUBECONFIG_<NAME> or the k3d cluster of that name (docs/providers.md)
   argocd   Install/upgrade Argo CD via Helm, seed the bootstrap repo secret until ESO's repo-creds is Ready (then
            delete it), apply root-app. `up` waits REPO_CREDS_WAIT seconds (default 600, 0 skips) for that hand-over
-  status   Show clusters, Argo CD apps, and UI info (how to read the admin password; never the password)
+  status   Show clusters, Argo CD apps, and each UI's URL or port-forward plus the command that reads its login
+           password (never the password)
   ui       Port-forward argocd-server on localhost:8081 (prints how to read the admin password, not the password)
   down     Freeze Argo CD, delete CAPD workload clusters (if any), then k3d platform-mgmt (local only)
   timings  Phase timings of the running stack: mgmt apps, each workload cluster provisioned/converged (read-only)
@@ -641,8 +642,44 @@ cmd_status() {
   echo ""
   kubectl --context "$CTX" get clusterdataplanes 2>/dev/null || true
   echo ""
-  echo "Argo CD UI: kubectl --context $CTX port-forward -n argocd svc/argocd-server 8081:80"
+  access_info
+}
+
+# access_info: each UI this installation runs, how to reach it, and the command that reads its login password (never
+# the password). Gateway UIs are listed only when their HTTPRoute exists, i.e. their addon is installed.
+access_info() {
+  local url
+  echo "=== Access (run a password command to read it; this output never contains one) ==="
+  echo "Argo CD             http://localhost:8081 via 'task ui' (= kubectl --context $CTX port-forward -n argocd svc/argocd-server 8081:80)"
   admin_password_hint
+  url=$(route_url openchoreo-control-plane backstage)
+  if [[ -n "$url" ]]; then
+    echo "OpenChoreo console  $url (Backstage; sign-in through Thunder)"
+    echo "  user admin@openchoreo.dev, password: $(secret_cmd thunder thunder-bootstrap admin-user-password)"
+    echo "  user developer@openchoreo.dev: the same with key developer-user-password"
+  fi
+  url=$(route_url thunder thunder-httproute)
+  [[ -z "$url" ]] || printf '%s\n' "Thunder console     $url/console" \
+    "  user admin, password: $(secret_cmd thunder thunder-bootstrap thunder-admin-password)"
+  url=$(route_url harbor harbor-route)
+  [[ -z "$url" ]] || printf '%s\n' "Harbor              $url (trust its CA: docs/build-plane.md \"Ports and DNS\")" \
+    "  user admin, password: $(secret_cmd harbor harbor-platform HARBOR_ADMIN_PASSWORD)"
+}
+
+# route_url <namespace> <httproute>: browser URL of a UI behind a Gateway: the route's first hostname plus scheme and
+# port of the Gateway listener it attaches to (locally 8080/9443, the ports k3d publishes on 127.0.0.1). Prints nothing
+# when the route does not exist.
+route_url() {
+  local ref host gw gw_ns section proto="" port=""
+  ref=$(kubectl --context "$CTX" -n "$1" get httproute "$2" -o 'jsonpath={.spec.hostnames[0]}|{.spec.parentRefs[0].name}|{.spec.parentRefs[0].namespace}|{.spec.parentRefs[0].sectionName}' 2>/dev/null) || return 0
+  IFS='|' read -r host gw gw_ns section <<<"$ref"
+  [[ -n "$host" && -n "$gw" ]] || return 0
+  read -r proto port <<<"$(kubectl --context "$CTX" -n "${gw_ns:-$1}" get gateway "$gw" \
+    -o 'jsonpath={range .spec.listeners[*]}{.name} {.protocol} {.port}{"\n"}{end}' 2>/dev/null \
+    | awk -v s="$section" '(s == "" || $1 == s) && ($2 == "HTTP" || $2 == "HTTPS") { print tolower($2), $3; exit }')"
+  [[ -n "$port" ]] || return 0
+  case "$proto:$port" in http:80|https:443) port="" ;; *) port=":$port" ;; esac
+  printf '%s://%s%s\n' "$proto" "$host" "$port"
 }
 
 # cmd_timings (read-only): minutes from the first mgmt node to each app's first successful sync (history[0]), for
@@ -685,14 +722,20 @@ cmd_timings() {
 # admin_password_hint: how to read the Argo CD admin password, never the password itself. Output of `up`/`status` lands
 # in terminals, CI logs and agent transcripts; a printed password is an exposed password.
 admin_password_hint() {
-  # shellcheck disable=SC2016  # printed for the user to run, not expanded here
-  printf '%s\n' "Argo CD admin password (user admin; not printed): kubectl --context $CTX -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 --decode; echo" \
-    "  The secret is gone once the password was changed (argocd account update-password)."
+  printf '%s\n' "  user admin, password: $(secret_cmd argocd argocd-initial-admin-secret password)" \
+    "  (the secret is gone once the password was changed: argocd account update-password)"
+}
+
+# secret_cmd <namespace> <secret> <key>: the command that prints one Secret key, for the user to run. It only builds
+# the text: nothing here reads a Secret.
+secret_cmd() {
+  printf "kubectl --context %s -n %s get secret %s -o jsonpath='{.data.%s}' | base64 --decode; echo" "$CTX" "$1" "$2" "$3"
 }
 
 cmd_ui() {
   load_inst
   require_bins kubectl
+  echo "Argo CD"
   admin_password_hint
   log "Port-forwarding Argo CD UI to http://localhost:8081 (Ctrl-C to stop; NO_BROWSER=1 skips opening a browser)"
   ( sleep 3; open_url http://localhost:8081 ) &

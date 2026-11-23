@@ -15,7 +15,7 @@ How to run, upgrade, back up and recover the platform after `task up`. Design re
 ## Cluster access
 
 ```bash
-task status                     # CAPI clusters, Argo CD apps, ClusterDataPlanes
+task status                     # CAPI clusters, Argo CD apps, ClusterDataPlanes, each UI's URL + password command
 task demo:check                 # read-only PASS/FAIL table of the live stack
 task ui                         # Argo CD UI on http://localhost:8081
 task kubeconfig CLUSTER=dev1    # writes dev1.kubeconfig (mode 0600, gitignored)
