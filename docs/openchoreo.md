@@ -232,6 +232,38 @@ from `kv-tenant-<its project>`. A `remoteRef.key` naming another project's path 
 (ESO prefixes the store's mount), and OpenBao would deny it anyway. Tests: `hack/tests/test_tenant_app_secrets.sh`,
 `task test:openbao`. Mounts, identities and policies: [multicluster.md](multicluster.md#tenant-secrets-openbao).
 
+## Finding things in the console
+
+The console (openchoreo-ui v1.3.3, http://openchoreo.localhost:8080) opens its **Catalog** on *Project* entities. That
+filter is hard-coded in the image, so on a fresh stack you see only `demo` until you pick another kind in the *Kind*
+drop-down or open the project. Sign in as `admin@openchoreo.dev` to see everything. `developer@openchoreo.dev` sees the
+`demo` project's contents plus the read-only platform kinds ([above](#developer-access-is-per-project)).
+
+| Looking for | Where | Direct link |
+|---|---|---|
+| Components (`hello-world`) | Catalog, Kind *Component*, or project `demo` > card *Project Contents* | `/catalog?filters[kind]=component` |
+| Resources (`orders-db`) | Catalog, Kind *Resource*, or project `demo` > card *Project Contents* | `/catalog?filters[kind]=resource` |
+| Crossplane database types (PostgreSQL, MySQL) | Catalog, Kind *Cluster Resource Type* (group *Platform Configuration*) | `/catalog?filters[kind]=clusterresourcetype` |
+| Component types (service, web-application, worker, scheduled-task) | Catalog, Kind *Cluster Component Type* | `/catalog?filters[kind]=clustercomponenttype` |
+| Golden-path service templates (docker, go, java-quarkus, node-fastify, python, rust) | *Create* > *Component*, next to OpenChoreo's per-ComponentType wizards; also project `demo` > *Project Contents* > *Create Component* | `/create?view=components` |
+| New database for a project | *Create* > *Resource* (PostgreSQL / MySQL wizards, generated from the ClusterResourceTypes) | `/create?view=resources` |
+| Platform API template (`crossplane-api`) | *Create*, section *Other Templates* at the bottom | `/create` |
+
+What decides visibility in the console:
+
+- **Visibility comes from OpenChoreo authz, not from ownership.** Every OpenChoreo entity is shown or hidden by the
+  signed-in user's OpenChoreo capabilities (`component:view`, `resource:view`, `clusterresourcetype:view` ...,
+  resolved from the `groups` claim of the Thunder token). Check a user with MCP `evaluate_authz`. The catalog has no
+  *Owned* filter, so `spec.owner` (`group:default/openchoreo-users` on every generated entity) changes nothing.
+- **No User or Group entities from Thunder.** The upstream chart never sets `thunder.baseUrl`, so Backstage logs
+  `Thunder IDP not configured ... skipping user/group sync`. This is expected. The only visible effect is an empty
+  sidebar *My Groups*. The sync is left off on purpose: it authenticates only with a static bearer `thunder.token`,
+  and its entity names (`admin-openchoreo-dev`, members by Thunder user ID) do not match the sign-in identity
+  `user:default/admin@openchoreo.dev`.
+- **Where a template appears depends on its `spec.type`.** Under *Create* > *Component* the console lists only templates
+  with `spec.type: Component`. A project's *Create Component* button additionally filters on the project's
+  namespace (`default`). Any other type ends up in *Other Templates*. Contract: `hack/tests/test_project_templates.sh`.
+
 ## Adding a data plane
 
 ```yaml

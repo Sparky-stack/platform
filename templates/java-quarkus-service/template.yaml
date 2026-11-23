@@ -12,7 +12,8 @@ metadata:
     platform.koorikla.io/ci-workflow: app-java.yaml
 spec:
   owner: group:default/openchoreo-users
-  type: service
+  # Component: the console lists only this type under Create > Component (docs/openchoreo.md "Finding things in the console")
+  type: Component
   parameters:
     - title: Service
       required: [name, owner, project]

@@ -60,12 +60,16 @@ for d in templates/*/template.yaml; do
   t=${d#templates/}; t=${t%/template.yaml}
   [[ "$t" == _* ]] || TEMPLATES+=("$t")
 done
-# service golden paths (spec.type service) share parameters and steps; the platform API template (spec.type
-# platform-api, templates/crossplane-api) has its own contract in hack/tests/test_crossplane_api_template.sh
+# service golden paths (spec.type Component) share parameters and steps; the platform API template (spec.type
+# platform-api, templates/crossplane-api) has its own contract in hack/tests/test_crossplane_api_template.sh.
+# openchoreo-ui v1.3.3 lists a template under Create > Component only when spec.type is exactly `Component`
+# (CustomTemplateListPage.tsx componentGroups), and a project's "Create > Component" button filters spec.type=component
+# and the project's namespace (openchoreo-react routing/pathBuilders.ts buildCreateComponentPath): any other type lands
+# in "Other Templates" at the bottom of the Create page only (docs/openchoreo.md "Finding things in the console").
 SERVICES=(); OTHERS=""
 for t in "${TEMPLATES[@]}"; do
   case "$(yq -r '.spec.type' "templates/$t/template.yaml")" in
-    service) SERVICES+=("$t") ;;
+    Component) SERVICES+=("$t") ;;
     *) OTHERS="$OTHERS $t:$(yq -r '.spec.type' "templates/$t/template.yaml")" ;;
   esac
 done
@@ -111,6 +115,8 @@ for t in "${SERVICES[@]}"; do
   q() { yq -r "explode(.) | $1" "$f"; }
   assert_eq "$(q '.apiVersion + " " + .kind')" "scaffolder.backstage.io/v1beta3 Template" "$t: scaffolder Template v1beta3"
   assert_eq "$(q '.metadata.name')" "$t" "$t: metadata.name == directory"
+  # Backstage namespace default == OpenChoreo org namespace default, which the project page's Create button filters on
+  assert_eq "$(q '.metadata.namespace // "default"')" default "$t: in Backstage namespace default (project page Create > Component)"
   stack=$(q '.metadata.annotations["platform.koorikla.io/stack"]')
   assert_nonempty "$stack" "$t: annotation platform.koorikla.io/stack"
   assert_eq "$(q '[.spec.steps[] | select(.id == "fetch-base" or .id == "fetch-platform-repo") | .input.values.stack] | unique | join(",")')" "$stack" "$t: skeletons get stack=$stack"

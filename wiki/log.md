@@ -57,3 +57,6 @@
 
 ## [2026-11-23] update | Preview grants (#385)
 - `decisions/pr-preview-environments.md`: previews render only once the pass grants them (`preview-granted`); holding over-cap PRs after the fact failed live because concurrent Environment creates all pass Kyverno's count.
+
+## [2026-11-23] create | Console visibility and template types
+- `gotchas/openchoreo-console-visibility-and-template-types.md`: the console catalog opens on Projects (hard-coded), visibility is OpenChoreo authz only (no ownership filter, Thunder user sync not needed), golden-path service templates need `spec.type: Component` for Create > Component.
