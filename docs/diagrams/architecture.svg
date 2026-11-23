@@ -33,10 +33,11 @@
 <rect x="44" y="264" width="158" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="123.0" y="299.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Argo CD</text>
 <text class="s" x="123.0" y="319.4" font-size="13" fill="#dde5ef" text-anchor="middle">GitOps engine</text>
-<rect x="758" y="264" width="158" height="80" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
-<text class="s" x="837.0" y="290.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Shared services</text>
-<text class="s" x="837.0" y="310.4" font-size="13" fill="#dde5ef" text-anchor="middle">image registry, sign-in,</text>
-<text class="s" x="837.0" y="328.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenBao secrets</text>
+<rect x="706" y="264" width="210" height="96" rx="8" fill="#263247" stroke="none" stroke-width="0"/>
+<text class="s" x="811.0" y="289.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Shared services</text>
+<text class="s" x="811.0" y="309.4" font-size="13" fill="#dde5ef" text-anchor="middle">image registry, sign-in,</text>
+<text class="s" x="811.0" y="327.4" font-size="13" fill="#dde5ef" text-anchor="middle">OpenBao secrets; Crossplane</text>
+<text class="s" x="811.0" y="345.4" font-size="13" fill="#dde5ef" text-anchor="middle">on mgmt configures Harbor</text>
 <rect x="44" y="424" width="158" height="80" rx="8" fill="#15363f" stroke="#2dd4bf" stroke-width="1.5"/>
 <text class="s" x="123.0" y="450.4" font-size="15" fill="#f8fafc" font-weight="600" text-anchor="middle">Cluster API</text>
 <text class="s" x="123.0" y="470.4" font-size="13" fill="#dde5ef" text-anchor="middle">creates</text>

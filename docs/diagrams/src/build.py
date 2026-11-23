@@ -78,7 +78,9 @@ def architecture() -> Diagram:
     d.box(c[0], 108, w, 52, "external", "Git", ["platform + app repos"])
     d.zone(28, Z1, 904, Z1b - Z1, "management cluster", "mgmt", label_at="tr")
     d.box(c[0], R1, w, H, "mgmt", "Argo CD", ["GitOps engine"])
-    d.box(c[3], R1, w, H, "mgmt", "Shared services", ["image registry, sign-in,", "OpenBao secrets"], context=True)
+    ws = 210                                    # wider and one line taller: names Crossplane on mgmt (Harbor only)
+    d.box(c[3] + w - ws, R1, ws, H + 16, "mgmt", "Shared services",
+          ["image registry, sign-in,", "OpenBao secrets; Crossplane", "on mgmt configures Harbor"], context=True)
     d.box(c[0], R2, w, H, "mgmt", "Cluster API", ["creates", "clusters"])
     d.box(c[2], R2, c[3] + w - c[2], H, "mgmt", "OpenChoreo", ["developer platform: builds, releases, telemetry"])
     # the first column of the workload zone stays empty: step 4 points at the cluster (its label), not at a box
