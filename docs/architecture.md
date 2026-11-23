@@ -13,7 +13,7 @@ Contracts (invariants, labels, names): [conventions.md](conventions.md). Diagram
 
 ## Topology
 
-<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images; the cluster-agent applies each app's resource claims (e.g. a database) for Crossplane on the same workload cluster, which composes each one for an in-cluster operator (CloudNativePG, MOCO) or, through its cloud providers, creates it with the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server)" width="100%">
+<img src="diagrams/architecture.svg" alt="Architecture: Argo CD on the management cluster reads Git, has Cluster API build the workload clusters, installs addons and the OpenChoreo cluster-agent on them and hands app releases to OpenChoreo; the cluster-agent dials out to OpenChoreo, submits the apps, and Kyverno admits only signed images; the cluster-agent applies each app's resource claims (e.g. a database) for Crossplane on the same workload cluster, which composes each one for an in-cluster operator (CloudNativePG, MOCO) or, through its cloud providers, creates it with the cloud APIs (RDS or Aurora, Cloud SQL, Azure Flexible Server); on mgmt, a Crossplane with only the Harbor provider configures the Harbor registry" width="100%">
 
 The numbered steps are listed in [diagrams/README.md](diagrams/README.md#steps). Not drawn:
 External Secrets Operator (credentials, below), cert-manager (agent certificates, [Trust between OpenChoreo
@@ -151,7 +151,7 @@ is one file in the platform repo; deploying and promoting are commits in the app
 ### Platform APIs: Crossplane on each workload cluster, next to the app
 Crossplane v2 is a control plane on each workload cluster that opts in, not a data service itself. It is an addon
 like the operators it feeds (`addons: { crossplane: true }`). Mgmt runs it as well, for platform-level resources only
-(the Harbor provider that declares Harbor's projects, proxy caches and robots, [crossplane.md](crossplane.md#crossplane-on-mgmt)):
+(the Harbor provider that declares Harbor's projects, proxy caches, replication and robots, [crossplane.md](crossplane.md#crossplane-on-mgmt)):
 the data APIs below stay on workload clusters.
 Apps claim a resource through OpenChoreo (resource type `postgresql` or `mysql`), the cluster-agent applies the
 claim (a namespaced XR rendered from the ResourceReleaseBinding) in the app's cell namespace, and the cluster's
