@@ -77,7 +77,7 @@ unittest_version() {
 }
 
 cmd_check() {
-  local tools=("$@") t want have missing=0 drift=0
+  local tools=("$@") t want have fix missing=0 drift=0
   if (( ${#tools[@]} == 0 )); then
     while IFS= read -r t; do tools+=("$t"); done < <(
       tools_table | awk '{ print $1 }')
@@ -112,8 +112,19 @@ cmd_check() {
       printf '  WARN    %-12s not installed (task hooks:install)\n' git-hooks
     fi
   fi
-  (( drift == 0 )) || echo "WARN: $drift tool(s) differ from mise.toml (run 'mise install' and activate mise in your shell)" >&2
-  (( missing == 0 )) || { echo "ERROR: $missing tool(s) missing: run 'mise install' (docs/dev-environment.md)" >&2; return 1; }
+  fix="run 'mise install', then put its tools on PATH: $(activate_cmd) (docs/dev-environment.md)"
+  (( drift == 0 )) || echo "WARN: $drift tool(s) differ from mise.toml: $fix" >&2
+  (( missing == 0 )) || { echo "ERROR: $missing tool(s) missing: $fix" >&2; return 1; }
+}
+
+# activate_cmd: the line that activates mise in the user's shell ($SHELL), which `mise install` alone does not do.
+activate_cmd() {
+  # shellcheck disable=SC2016  # printed for the user to run, not expanded here
+  case "${SHELL##*/}" in
+    zsh)  echo 'eval "$(mise activate zsh)"' ;;
+    fish) echo 'mise activate fish | source' ;;
+    *)    echo 'eval "$(mise activate bash)"' ;;
+  esac
 }
 
 # Installs the release archive directly instead of `helm plugin install <git url>`: the plugin's install hook needs

@@ -45,6 +45,13 @@ Ubuntu 24.04 + its own Docker engine (docker-in-docker feature v4: it picks ipta
 legacy iptables, which GitHub's amd64 runners need) and runs `mise install` on create. Codespaces needs the 8-core /
 32 GB machine for the full local platform (estimated from the k3d + two CAPD clusters footprint).
 
+**Activate mise.** `mise install` only downloads the tools; they are on `PATH` once mise is activated in the shell:
+`eval "$(mise activate zsh)"` (bash: `eval "$(mise activate bash)"`, fish: `mise activate fish | source`). That lasts
+for the current shell. To make it permanent, append the same line to `~/.zshrc`, `~/.bashrc` or
+`~/.config/fish/config.fish` (the install lines above do) and open a new shell
+([mise: activate](https://mise.jdx.dev/getting-started.html#activate-mise)). When a tool is missing, `task doctor`
+prints the activate line for your `$SHELL`.
+
 Without mise activated in your shell, prefix commands with `mise exec --` (`mise exec -- task test`). `task doctor` reports missing
 tools and version drift against `mise.toml`. `mise activate` sets `PATH` for the directory the shell started in and
 only updates it at a prompt: a non-interactive `bash -ic 'cd <clone> && ./hack/test.sh'` started elsewhere (scripts,

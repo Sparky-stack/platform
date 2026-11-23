@@ -38,4 +38,13 @@ real=$(cd "$ROOT" && FN="$tmp/fn.sh" bash -c '. "$FN"; tools_table')
 bad=$(awk 'NF != 2 || $1 ~ /["{}:\/=]/ || $2 !~ /^[0-9][0-9A-Za-z.+-]*$/' <<<"$real")
 assert_eq "$bad" "" "real mise.toml parses"
 
+# A tool that is missing from PATH (e.g. `mise install` ran but mise is not activated in this shell): `task doctor`
+# fails and names the activate line for the user's shell.
+for sh in zsh bash fish; do
+  rc=0; msg=$(cd "$tmp" && SHELL="/bin/$sh" bash hack/tools.sh check some-repo 2>&1 >/dev/null) || rc=$?
+  assert_eq "$rc" 1 "doctor ($sh): a missing tool fails"
+  case "$sh" in fish) want='mise activate fish | source' ;; *) want="eval \"\$(mise activate $sh)\"" ;; esac
+  assert_eq "$(grep -cF "$want" <<<"$msg")" 1 "doctor ($sh): suggests $want"
+done
+
 finish

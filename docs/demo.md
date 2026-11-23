@@ -94,8 +94,8 @@ window and production serves. Doing this before the demo gives step 5 three serv
 ### Checklist
 
 - Browser tabs: Argo CD (`task ui`, http://localhost:8081), the OpenChoreo console http://openchoreo.localhost:8080
-  (user `admin@openchoreo.dev`, password: docs/forking.md "4. Boot"), Harbor https://harbor.openchoreo.localhost:9443,
-  the promotion pull requests of koorikla/hello-world.
+  (user `admin@openchoreo.dev`), Harbor https://harbor.openchoreo.localhost:9443 (`task status` prints each URL and
+  the command that reads its password), the promotion pull requests of koorikla/hello-world.
 - Terminal with the workload cluster's kubeconfig: `task kubeconfig CLUSTER=dev1` (file `dev1.kubeconfig`, gitignored;
   in the multicluster profile also `CLUSTER=prod1`).
 - Font size up, notifications off. Close the terminal that shows `task secrets` output.

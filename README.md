@@ -21,11 +21,12 @@ You need Docker and [mise](https://mise.jdx.dev) on Linux, macOS or Windows (WSL
 Host setup and RAM: [docs/dev-environment.md](docs/dev-environment.md).
 
 ```bash
-mise install      # pinned toolchain; `task doctor` checks it
-task up           # k3d mgmt, local secrets, Argo CD, root Application
-task status       # CAPI clusters, Argo CD apps, OpenChoreo data planes
-task demo:check   # read-only PASS/FAIL table for every demo step
-task down         # freeze Argo CD, delete workload clusters, delete mgmt
+mise install                  # pinned toolchain; `task doctor` checks it
+eval "$(mise activate zsh)"   # tools on PATH (bash: mise activate bash; permanent: docs/dev-environment.md)
+task up                       # k3d mgmt, local secrets, Argo CD, root Application
+task status                   # clusters, Argo CD apps, data planes; each UI's URL and the command that reads its login
+task demo:check               # read-only PASS/FAIL table for every demo step
+task down                     # freeze Argo CD, delete workload clusters, delete mgmt
 ```
 
 - Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>`
