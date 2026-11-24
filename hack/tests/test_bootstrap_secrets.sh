@@ -384,6 +384,64 @@ assert_eq "$(grep -c '^docker ' "$HLOG/calls" || true)" 0 "api timeout: cosign k
 assert_eq "$(has "$OUT" 'ERROR:.*cosign-platform')" yes "api timeout: clear error names cosign-platform"
 assert_eq "$(grep -c FAKEKEEP "$HLOG/out" || true)" 0 "api timeout: no cosign secret value in the output"
 
+# --- lab logins: console, Thunder and Harbor admin passwords from a file outside the cluster (survive task down/up) --
+# Values are compared as sha256 only, so not even a failing assertion prints one.
+source "$ROOT/hack/lib/portable.sh"   # sha256_file, file_group_other_perms
+LAB="$TMP/lab-config"; LABF="$LAB/koorikla-platform/lab-logins.env"
+LOGINS="openchoreo:thunder-admin-password:THUNDER_ADMIN_PASSWORD openchoreo:admin-user-password:OPENCHOREO_ADMIN_PASSWORD
+openchoreo:developer-user-password:OPENCHOREO_DEVELOPER_PASSWORD harbor:admin-password:HARBOR_ADMIN_PASSWORD"
+hs() { printf '%s' "$1" > "$TMP/hs"; sha256_file "$TMP/hs"; }
+file_val() { sed -n "s/^$1=//p" "$LABF"; }
+# check_logins <name>: every applied lab login equals its file line, reaches neither the output nor an argv, and the
+# file has one line per login. Sets HASHES to the sha256 of the applied values.
+check_logins() {
+  local l s k v a
+  HASHES=""
+  for l in $LOGINS; do
+    IFS=: read -r s k v <<<"$l"
+    a=$(val "$s" "$k")
+    assert_match "$a" '^[A-Za-z0-9!]{24,}$' "$1: $s/$k seeded"
+    assert_eq "$(hs "$a")" "$(hs "$(file_val "$v")")" "$1: $s/$k = $v in the file"
+    assert_eq "$(grep -c "^$v=" "$LABF" || true)" 1 "$1: one $v line"
+    assert_eq "$(grep -cF -- "$a" "$HLOG/out" || true)" 0 "$1: $v not in the output"
+    assert_eq "$(grep -cF -- "$a" "$HLOG/calls" || true)" 0 "$1: $v not in any argv"
+    HASHES="$HASHES $(hs "$a")"
+  done
+}
+run lab_create "$S" NO_GH=1 XDG_CONFIG_HOME="$LAB"
+assert_eq "$RC" 0 "lab logins: rc"
+assert_eq "$([[ -f "$LABF" ]] && echo created || echo missing)" created "lab logins: missing file created under XDG_CONFIG_HOME"
+[[ "$(os_name)" == windows ]] || assert_eq "$(file_group_other_perms "$LABF")" "------" "lab logins: file mode 600"
+assert_match "$OUT" "lab logins: created $LABF" "lab logins: creation names the path"
+assert_match "$OUT" "Harbor admin passwords: $LABF" "lab logins: secrets output names the path"
+check_logins lab_create; first=$HASHES
+assert_match "$(val harbor admin-password)" '[[:upper:]]' "lab logins: Harbor policy (upper)"
+assert_match "$(val harbor admin-password)" '[[:digit:]]' "lab logins: Harbor policy (digit)"
+assert_match "$(val harbor admin-password)" '[[:lower:]]' "lab logins: Harbor policy (lower)"
+file1=$(sha256_file "$LABF")
+# A clean rebuild (empty store): the same file, byte for byte, and the same values seeded.
+run lab_rebuild "$S" NO_GH=1 XDG_CONFIG_HOME="$LAB"
+assert_eq "$(sha256_file "$LABF")" "$file1" "lab logins: existing file reused byte for byte"
+check_logins lab_rebuild
+assert_eq "$HASHES" "$first" "lab logins: rebuild seeds the same passwords"
+assert_eq "$(has "$OUT" 'lab logins: created')" no "lab logins: no second creation"
+# The file wins over the store; a login missing from the file is appended, existing lines are kept as they are.
+mkdir -p "$TMP/lab-store"
+printf 'apiVersion: v1\nkind: Secret\nmetadata: { name: openchoreo }\ndata:\n  thunder-admin-password: %s\n  developer-user-password: %s\n' \
+  "$(b64 FAKEKEEPSTORE1)" "$(b64 FAKEKEEPSTORE2)" > "$TMP/lab-store/openchoreo.yaml"
+grep -v '^OPENCHOREO_DEVELOPER_PASSWORD=' "$LABF" > "$TMP/lab-partial"; cp "$TMP/lab-partial" "$LABF"
+run lab_partial "seed_openchoreo_secret" XDG_CONFIG_HOME="$LAB" FAKE_SECRET_DIR="$TMP/lab-store"
+assert_eq "$(hs "$(val openchoreo thunder-admin-password)")" "$(hs "$(file_val THUNDER_ADMIN_PASSWORD)")" "lab logins: file wins over the store"
+assert_eq "$(file_val OPENCHOREO_DEVELOPER_PASSWORD)" FAKEKEEPSTORE2 "lab logins: missing line adopts the running stack's value"
+sed '$d' "$LABF" > "$TMP/lab-head"
+assert_eq "$(sha256_file "$TMP/lab-head")" "$(sha256_file "$TMP/lab-partial")" "lab logins: existing lines untouched (append only)"
+# First run against a running stack: the file adopts the store's passwords, so nothing changes under Thunder.
+rm -rf "$LAB"
+run lab_adopt "seed_openchoreo_secret" XDG_CONFIG_HOME="$LAB" FAKE_SECRET_DIR="$TMP/lab-store"
+assert_eq "$(file_val THUNDER_ADMIN_PASSWORD)" FAKEKEEPSTORE1 "lab logins: new file adopts the store's value"
+assert_eq "$(val openchoreo thunder-admin-password)" FAKEKEEPSTORE1 "lab logins: adopted value seeded unchanged"
+assert_eq "$(grep -c 'lab logins: created' "$HLOG/out" || true)" 1 "lab logins: adoption creates the file once"
+
 # --- Argo CD bootstrap repo secret ----------------------------------------------------------------------------------
 B=seed_argocd_repo_secret
 run repo_app "$B" GITHUB_APP_ID=123 GITHUB_APP_INSTALLATION_ID=456 GITHUB_APP_PRIVATE_KEY_FILE="$PEM"

@@ -31,6 +31,9 @@ task down                     # freeze Argo CD, delete workload clusters, delete
 
 - Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>`
   ([docs/forking.md](docs/forking.md)).
+- Lab login passwords (OpenChoreo console, Thunder, Harbor) are created once in
+  `~/.config/koorikla-platform/lab-logins.env` and survive `task down && task up`
+  ([docs/dev-environment.md](docs/dev-environment.md#lab-logins)).
 - Before you push: `task lint` and `task test`. `task --list` shows every target.
 - Templates that create repos need a GitHub org and the platform GitHub App:
   [repository creation](docs/project-templates.md#repository-creation).
