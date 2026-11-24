@@ -13,8 +13,8 @@ spec:
   forProvider: {}
 status:
   atProvider:
-    fullName: koorikla/platform
-    htmlUrl: https://github.com/koorikla/platform
+    fullName: Sparky-stack/platform
+    htmlUrl: https://github.com/Sparky-stack/platform
     defaultBranch: main
     allowMergeCommit: true
   conditions:

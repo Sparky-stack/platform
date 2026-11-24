@@ -21,7 +21,7 @@ declared in git -> reconciler -> cluster -> admission verifies the signature**.
 
 | Lane | Source | CI | Artifact | Declared in | Reconciled by |
 |---|---|---|---|---|---|
-| Apps | app repo, scaffolded from `templates/` (example: koorikla/hello-world) | in-cluster build ClusterWorkflow per stack (default); optional GitHub Actions `app-<lang>.yaml` -> `app-container.yaml` + `app-workload-bump.yaml` | container image in Harbor, signed with the platform cosign key, SBOM + SLSA + vuln attestations (GitHub path: ghcr.io, keyless) | app repo `deploy/openchoreo/`: Workload (image by digest), ReleaseBinding per environment (`releaseName`) | Argo CD (tenant Application, mgmt) -> OpenChoreo control plane -> cluster agent -> data plane |
+| Apps | app repo, scaffolded from `templates/` (example: Sparky-stack/hello-world) | in-cluster build ClusterWorkflow per stack (default); optional GitHub Actions `app-<lang>.yaml` -> `app-container.yaml` + `app-workload-bump.yaml` | container image in Harbor, signed with the platform cosign key, SBOM + SLSA + vuln attestations (GitHub path: ghcr.io, keyless) | app repo `deploy/openchoreo/`: Workload (image by digest), ReleaseBinding per environment (`releaseName`) | Argo CD (tenant Application, mgmt) -> OpenChoreo control plane -> cluster agent -> data plane |
 | Infra | `addons/`, `charts/` (`platform`, `cluster`, `tenant`, `preview`), `installations/`, `bootstrap/` | `ci.yaml` job `validate` (`task lint`, `task test`, scoped to the changed units on PRs), release-please | none built: Argo CD renders the wrapper charts from git; upstream charts pinned by version + `Chart.lock`, images by `tag@sha256`, bumps by Renovate | catalog `charts/platform/values.yaml`, installation values, fleet files (`addonsRevision` per cluster) | Argo CD on mgmt, push mode, one Application per addon and cluster label match; Cluster API for the clusters |
 | Extensions | `packages/<api>/` (Crossplane), `addons/openchoreo-platform/files/` (OpenChoreo types), `templates/` (Backstage) | `package-<api>.yaml` -> `app-crossplane-configuration.yaml`; OpenChoreo types ride `ci.yaml`; templates `templates.yaml` | Configuration package + embedded Function on `ghcr.io/koorikla/platform/`, keyless-signed + SLSA; OpenChoreo types and templates are plain YAML in git | `addons/crossplane/values.yaml` (`vX.Y.Z@sha256` pins); openchoreo-platform files; `templates/catalog-info.yaml` | Crossplane package manager on each workload cluster; Argo CD -> OpenChoreo (mgmt); Backstage catalog |
 
@@ -30,7 +30,7 @@ Where the lanes differ from the pattern today:
 | Step | Apps | Infra | Extensions |
 |---|---|---|---|
 | Signed, digest-pinned artifact | yes | images digest-pinned (`hack/tests/test_image_pins.sh`); charts are not signed upstream, so nothing to pin but the version + `Chart.lock` | Crossplane packages yes; OpenChoreo types and templates are git content, no artifact |
-| Admission verifies the signature | Kyverno on every data plane: Audit in development/staging, Deny in production ([supply-chain.md](supply-chain.md#image-signatures-and-attestations-at-admission)) | no: Argo CD 3.6 cannot verify chart signatures, and platform namespaces are outside image verification ([supply-chain.md](supply-chain.md#helm-and-oci-charts-not-covered)) | no: Crossplane package signature verification is switched off until its verifier reads cosign v3 bundles ([#247](https://github.com/koorikla/platform/issues/247)) |
+| Admission verifies the signature | Kyverno on every data plane: Audit in development/staging, Deny in production ([supply-chain.md](supply-chain.md#image-signatures-and-attestations-at-admission)) | no: Argo CD 3.6 cannot verify chart signatures, and platform namespaces are outside image verification ([supply-chain.md](supply-chain.md#helm-and-oci-charts-not-covered)) | no: Crossplane package signature verification is switched off until its verifier reads cosign v3 bundles ([#247](https://github.com/Sparky-stack/platform/issues/247)) |
 
 ### Apps lane
 
@@ -128,7 +128,7 @@ type change run `task docs:reference`.
 
 <img src="diagrams/app-database-map.svg" width="100%" alt="App and database object map: the developer's Component, Workload, SecretReference, Resource of type postgresql and bindings on mgmt; OpenChoreo renders them into the cell namespace on the data plane, where the PostgreSQL XR is composed by the Configuration package into a CloudNativePG Cluster whose Secret feeds the app's environment variables">
 
-The worked example is koorikla/hello-world in tenant `demo`, environment `development`, on the local stack (mgmt +
+The worked example is Sparky-stack/hello-world in tenant `demo`, environment `development`, on the local stack (mgmt +
 dev1). Developer access rules: [openchoreo.md](openchoreo.md#developer-access-is-per-project). The chain:
 
 1. The developer commits `deploy/openchoreo/` in the app repo: Component (with the `keda-scaler` trait), Workload
@@ -194,10 +194,10 @@ Nothing below runs today. Strimzi exists as an opt-in addon, but no local cluste
 
 | Object | State | Tracked in |
 |---|---|---|
-| `Resource` of a `ClusterResourceType kafka-topic` | PLANNED: the type exists in `packages/kafka-topic/openchoreo/`, not deployed | [#259](https://github.com/koorikla/platform/issues/259) |
-| `KafkaTopic` XR -> Configuration package `packages/kafka-topic` -> Strimzi `KafkaTopic` + `KafkaUser` (or Event Hubs) -> credentials Secret | PLANNED: layout and offline render only | [#259](https://github.com/koorikla/platform/issues/259) |
-| Event bus as a service (an EventBus XRD over Strimzi, MSK, Managed Kafka, Event Hubs) | PLANNED | [#113](https://github.com/koorikla/platform/issues/113) |
-| Topics as component options (a trait wiring topic, least-privilege access, credentials and KEDA lag scaling) | PLANNED | [#114](https://github.com/koorikla/platform/issues/114) |
+| `Resource` of a `ClusterResourceType kafka-topic` | PLANNED: the type exists in `packages/kafka-topic/openchoreo/`, not deployed | [#259](https://github.com/Sparky-stack/platform/issues/259) |
+| `KafkaTopic` XR -> Configuration package `packages/kafka-topic` -> Strimzi `KafkaTopic` + `KafkaUser` (or Event Hubs) -> credentials Secret | PLANNED: layout and offline render only | [#259](https://github.com/Sparky-stack/platform/issues/259) |
+| Event bus as a service (an EventBus XRD over Strimzi, MSK, Managed Kafka, Event Hubs) | PLANNED | [#113](https://github.com/Sparky-stack/platform/issues/113) |
+| Topics as component options (a trait wiring topic, least-privilege access, credentials and KEDA lag scaling) | PLANNED | [#114](https://github.com/Sparky-stack/platform/issues/114) |
 
 ## 4. Day-to-day recipes
 

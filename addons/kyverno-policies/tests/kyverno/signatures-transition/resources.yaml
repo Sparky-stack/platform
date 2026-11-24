@@ -3,7 +3,7 @@ kind: Pod
 metadata: { name: prod-signed-mutable-ref, namespace: dp-default-demo-production-1 }
 spec:
   containers:
-    # Built by koorikla/hello-world main through koorikla/ci container.yaml (keyless, cosign v3 bundle) with signed
+    # Built by Sparky-stack/hello-world main through koorikla/ci container.yaml (keyless, cosign v3 bundle) with signed
     # SPDX SBOM, SLSA provenance and vuln attestations - but called as koorikla/ci@v1: the certificate SAN names the
     # mutable ref (container.yaml@refs/tags/v1), not the pinned commit, so it is rejected (#41).
     - { name: app, image: "ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1" }
@@ -13,7 +13,7 @@ kind: Pod
 metadata: { name: prod-signed-current-pin, namespace: dp-default-demo-production-1 }
 spec:
   containers:
-    # Built by koorikla/hello-world main through koorikla/ci go.yaml@a31c234 (= workflowRef): admitted in production.
+    # Built by Sparky-stack/hello-world main through koorikla/ci go.yaml@a31c234 (= workflowRef): admitted in production.
     - { name: app, image: "ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede064440d2b16c96189876a46d7ddd5cc8b3818d4bedfd6aa553042c86" }
 ---
 apiVersion: v1

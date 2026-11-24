@@ -96,7 +96,7 @@ tests:
     asserts:
       - matchRegex:
           path: data["app-config.extra.yaml"]
-          pattern: 'target: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml'
+          pattern: 'target: https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml'
       - matchRegex:
           path: data["app-config.extra.yaml"]
           pattern: 'target: /app/catalog-entities/org.yaml'
@@ -105,7 +105,7 @@ tests:
           pattern: 'target: /app/templates/create-openchoreo-clusterworkflow/template.yaml'
       - matchRegex:
           path: data["app-config.extra.yaml"]
-          pattern: '- allow:\n    - Template\n    locations:\n    - exact: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml\n      type: url'
+          pattern: '- allow:\n    - Template\n    locations:\n    - exact: https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml\n      type: url'
       - notMatchRegex:
           path: data["app-config.extra.yaml"]
           pattern: 'template.yaml\n      type: url'   # a per-template pattern never matches the origin Backstage checks

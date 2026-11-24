@@ -7,7 +7,7 @@ set:
   component: hello-world
   pullRequest: "7"
   commit: 0123456789abcdef0123456789abcdef01234567
-  repository: koorikla/hello-world
+  repository: Sparky-stack/hello-world
   branch: feat/x
   granted: "true"
 tests:

@@ -50,7 +50,7 @@ step, then hand the pushed digest to the toolbox steps.
 
 Copy the caller for your stack from [`templates/workflows/`](templates/workflows) to
 `.github/workflows/ci.yaml`. It calls
-`koorikla/platform/.github/workflows/app-<stack>.yaml@<commit sha> # ci-vX.Y.Z`; use the SHA the
+`Sparky-stack/platform/.github/workflows/app-<stack>.yaml@<commit sha> # ci-vX.Y.Z`; use the SHA the
 platform trusts (`addons/kyverno-policies/values.yaml` `imageVerification.github.workflowRef`),
 otherwise production admission rejects the image. Every workflow input is documented in the
 `description:` of its `on.workflow_call.inputs` entry.
@@ -161,21 +161,21 @@ stack workflow (go, python, node, rust, java, nextjs, elixir, ruby) signs throug
 | Certificate field | Value |
 |---|---|
 | Issuer | `https://token.actions.githubusercontent.com` |
-| Subject (SAN) | `https://github.com/koorikla/platform/.github/workflows/app-{container,helm-chart,crossplane-configuration,crossplane-provider}.yaml@<sha>` |
-| `githubWorkflowRepository` (1.3.6.1.4.1.57264.1.5) | caller, e.g. `koorikla/hello-world` |
+| Subject (SAN) | `https://github.com/Sparky-stack/platform/.github/workflows/app-{container,helm-chart,crossplane-configuration,crossplane-provider}.yaml@<sha>` |
+| `githubWorkflowRepository` (1.3.6.1.4.1.57264.1.5) | caller, e.g. `Sparky-stack/hello-world` |
 | `githubWorkflowRef` (1.3.6.1.4.1.57264.1.6) | caller ref, e.g. `refs/heads/main` |
-| Build Config URI | caller workflow, e.g. `https://github.com/koorikla/hello-world/.github/workflows/ci.yaml@refs/heads/main` |
+| Build Config URI | caller workflow, e.g. `https://github.com/Sparky-stack/hello-world/.github/workflows/ci.yaml@refs/heads/main` |
 
 So the identity `https://github.com/koorikla/<repo>/.github/workflows/<file>@refs/heads/main`
 is the *caller*; it is carried in the extensions, not the SAN. **Always pin the caller
-repository/ref as well as the subject:** `koorikla/platform` is public, so any repository can call
+repository/ref as well as the subject:** `Sparky-stack/platform` is public, so any repository can call
 its workflows and obtain a certificate with the same SAN.
 
 ```sh
 cosign verify ghcr.io/koorikla/hello-world:<sha> \
-  --certificate-identity https://github.com/koorikla/platform/.github/workflows/app-container.yaml@<sha> \
+  --certificate-identity https://github.com/Sparky-stack/platform/.github/workflows/app-container.yaml@<sha> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-github-workflow-repository koorikla/hello-world \
+  --certificate-github-workflow-repository Sparky-stack/hello-world \
   --certificate-github-workflow-ref refs/heads/main
 # GitHub attestations (SLSA provenance + SPDX SBOM):
 gh attestation verify oci://ghcr.io/koorikla/hello-world:<sha> --owner koorikla
@@ -210,7 +210,7 @@ pushed and commits it back (`chore(deploy): bump <name> image to <sha> [skip ci]
   bump:
     needs: python
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: koorikla/platform/.github/workflows/app-workload-bump.yaml@<sha> # ci-vX.Y.Z
+    uses: Sparky-stack/platform/.github/workflows/app-workload-bump.yaml@<sha> # ci-vX.Y.Z
     permissions:
       contents: write
     with:
@@ -282,7 +282,7 @@ The real templates are rendered by
 ## Script contract (both runners)
 
 Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.sh`, fetched from
-`koorikla/platform` (`ci/scripts`) at **the same commit as the running reusable workflow** (`job.workflow_sha`).
+`Sparky-stack/platform` (`ci/scripts`) at **the same commit as the running reusable workflow** (`job.workflow_sha`).
 
 - **Env in, files out.** Inputs are environment variables documented in each script header.
   File outputs go to `$CI_OUT_DIR` (default `./.ci-out`); every scalar output is also written to

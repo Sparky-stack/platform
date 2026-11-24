@@ -12,7 +12,7 @@ its GitHub settings are a `GitHubRepository` object here.
 | Credential | GitHub App **koorikla-repo-admin**, store key `github-repo-admin` ([forking.md](forking.md#what-needs-which-credential) (c3)) |
 | Objects | namespace `crossplane-system` on mgmt: `GitHubRepository` XRs, their composed `Repository`, `RepositoryRuleset`, `RepositoryCollaborator` |
 
-Installation `local` governs `koorikla/platform` and `koorikla/hello-world`. Exactly one mgmt per GitHub account turns
+Installation `local` governs `Sparky-stack/platform` and `Sparky-stack/hello-world`. Exactly one mgmt per GitHub account turns
 `githubRepos.enabled` on: two would fight over the same repositories.
 
 ## What a repository looks like
@@ -48,7 +48,7 @@ The spec is small:
 release-please pushes to its own `release-please--branches--*` branch and creates tags; the ruleset targets only the
 default branch, so it does not block either. Renovate and Dependabot open ordinary PRs.
 `openchoreo/promotion-gate` is not a required check: it would block every PR that does not touch production. The
-planned always-running `promotion-gate-guard` job ([#59](https://github.com/koorikla/platform/issues/59)) goes into
+planned always-running `promotion-gate-guard` job ([#59](https://github.com/Sparky-stack/platform/issues/59)) goes into
 `requiredChecks` once it exists.
 
 ## Observe and Full

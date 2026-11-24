@@ -61,7 +61,7 @@ die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 load_inst() {
   local -a _inst=()
-  read_lines _inst yq -r '(.secrets.backend // "kubernetes"), (.installation.repoURL // "https://github.com/koorikla/platform.git"), (.installation.githubOrg // ""), (.installation.revision // "HEAD")' "$INST_FILE"
+  read_lines _inst yq -r '(.secrets.backend // "kubernetes"), (.installation.repoURL // "https://github.com/Sparky-stack/platform.git"), (.installation.githubOrg // ""), (.installation.revision // "HEAD")' "$INST_FILE"
   BACKEND="${_inst[0]}"
   REPO_URL="${_inst[1]}"
   GITHUB_ORG="${_inst[2]}"

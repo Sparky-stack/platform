@@ -2,7 +2,7 @@
 # Consumed by charts/platform (root app values) and passed to every generated Application as `installation.*`.
 installation:
   name: local
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
   githubOrg: https://github.com/koorikla      # repo-creds prefix (covers app repos too)
   domain: localhost                           # base domain for platform endpoints

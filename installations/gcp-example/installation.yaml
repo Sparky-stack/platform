@@ -5,7 +5,7 @@
 # in clusters/<name>.yaml only. Setup and live-verification steps: docs/providers.md "GKE (CAPG) - untested example".
 installation:
   name: gcp-example
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
   githubOrg: https://github.com/koorikla
   domain: gcp.example.com                     # VERIFY: a DNS zone you own

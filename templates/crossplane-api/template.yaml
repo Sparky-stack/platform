@@ -1,13 +1,13 @@
 # Golden-path template for a new platform API (docs/project-templates.md, docs/crossplane.md "Inner loop"): a repository
 # with the `crossplane project init` layout (XRD + Composition + embedded go-templating function + example) and the
-# koorikla/platform reusable workflow app-crossplane-configuration.yaml wired. Not a service: no OpenChoreo Component
+# Sparky-stack/platform reusable workflow app-crossplane-configuration.yaml wired. Not a service: no OpenChoreo Component
 # and no tenant file (hack/tests/test_project_templates.sh checks it apart from the service templates).
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: crossplane-api
   title: Platform API (Crossplane Configuration)
-  description: A platform API as a Crossplane Project (XRD, Composition, embedded function), validated, rendered, built, pushed and signed by koorikla/platform app-crossplane-configuration.yaml.
+  description: A platform API as a Crossplane Project (XRD, Composition, embedded function), validated, rendered, built, pushed and signed by Sparky-stack/platform app-crossplane-configuration.yaml.
   tags: [golden-path, crossplane, platform-api]
   annotations:
     platform.koorikla.io/stack: crossplane
@@ -110,7 +110,7 @@ spec:
       action: publish:github
       input:
         # No token input: the GitHub integration authenticates as the platform write GitHub App. Repository settings
-        # and rulesets come from the governance record below, reconciled by Crossplane (koorikla/platform#100).
+        # and rulesets come from the governance record below, reconciled by Crossplane (Sparky-stack/platform#100).
         repoUrl: github.com?owner=${{ parameters.repoOwner }}&repo=${{ parameters.name }}
         description: ${{ parameters.description }}
         repoVisibility: ${{ parameters.visibility }}

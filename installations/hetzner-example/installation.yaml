@@ -4,7 +4,7 @@
 # Cloud (ClusterClass k3s-hetzner). Adding a cluster: docs/providers.md.
 installation:
   name: hetzner-example
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
   githubOrg: https://github.com/koorikla
   domain: hetzner.example.com                 # VERIFY: a DNS zone you own

@@ -233,7 +233,7 @@ tests:
     template: projects.yaml
     documentSelector: { path: metadata.name, value: previews }
     asserts:
-      - equal: { path: spec.sourceRepos, value: [https://github.com/koorikla/platform.git] }
+      - equal: { path: spec.sourceRepos, value: [https://github.com/Sparky-stack/platform.git] }
       - equal: { path: spec.destinations, value: [{ server: https://kubernetes.default.svc, namespace: default }] }
       - equal: { path: spec.clusterResourceWhitelist, value: [] }
       - equal:

@@ -4,8 +4,8 @@ How workload clusters are built: Cluster API (CAPI) with the **k3s** bootstrap +
 infrastructure providers, a managed control plane (GKE via CAPG), or not at all: `provider: byo` registers an existing
 cluster ([below](#bring-your-own-cluster-byo)). Docker (CAPD) and byo (a plain k3d cluster) are the booted paths in this
 lab; AWS (CAPA), Hetzner (CAPH) and GKE (CAPG) are **untested examples**, rendered and schema-checked in `task test`
-only, kept as a reference for real infrastructure ([#26](https://github.com/koorikla/platform/issues/26),
-[#87](https://github.com/koorikla/platform/issues/87)); the developer-facing platform does not depend on them. What
+only, kept as a reference for real infrastructure ([#26](https://github.com/Sparky-stack/platform/issues/26),
+[#87](https://github.com/Sparky-stack/platform/issues/87)); the developer-facing platform does not depend on them. What
 differs per provider and what never does: [portability.md](portability.md). Design: [architecture.md](architecture.md);
 names and labels: [conventions.md](conventions.md).
 
@@ -45,7 +45,7 @@ Core 1.13 accepts v1beta1-contract providers (v1beta2 is "temporarily compatible
 clusterctl's provider list, so its operator CRs carry
 `fetchConfig.url: https://github.com/k3s-io/cluster-api-k3s/releases/<version>/{bootstrap,control-plane}-components.yaml`.
 cluster-api-k3s v0.5.0's own e2e runs k3s 1.33/1.34; 1.35 is the newest line every other piece supports, and this
-combination runs on CAPD ([#56](https://github.com/koorikla/platform/issues/56)).
+combination runs on CAPD ([#56](https://github.com/Sparky-stack/platform/issues/56)).
 
 ### Feature gates and leader election
 
@@ -148,7 +148,7 @@ With **1 server** step 3 is always a 2 -> 1 member removal, which etcd calls uns
 member pre-voting forever for the removed one (k3s#12908, k3s#13498; Rancher delays the removal, rancher#51780; CAPI
 calls the kubeadm case won't-fix, cluster-api#11772). It happened on dev1 and the cluster had to be recreated. With
 **3 servers** a rollout goes 3 -> 4 -> 3 voters and never removes from 2 (even when the newest server is still a learner:
-3 voters -> 2 + learner; [#23](https://github.com/koorikla/platform/issues/23)), and KCP remediates unhealthy servers
+3 voters -> 2 + learner; [#23](https://github.com/Sparky-stack/platform/issues/23)), and KCP remediates unhealthy servers
 only from 3 up.
 
 | Option | Rollout safety | Cost / limits | Verdict |
@@ -165,7 +165,7 @@ charts/cluster enforces odd `controlPlane.replicas` >= 1, and >= 3 for a non-doc
 Local clusters stay at 1 server for host RAM (each extra CAPD server costs roughly 1-2 GiB with its etcd and addons);
 set `controlPlane.replicas: 3` in the fleet file (`installations/local/clusters/dev1.yaml` shows it) to test rollouts
 that must not break. A single-server rollout that lost quorum (local/dev only) is recovered by resetting etcd membership
-to the promoted server, which holds a full copy (`--cluster-reset`, [#56](https://github.com/koorikla/platform/issues/56)):
+to the promoted server, which holds a full copy (`--cluster-reset`, [#56](https://github.com/Sparky-stack/platform/issues/56)):
 [runbooks/break-glass.md](runbooks/break-glass.md#single-server-etcd-quorum-loss).
 
 ### Node registry config
@@ -333,7 +333,7 @@ workload project.
 
 Validated offline: CAPG CRD schemas (kubeconform -strict on the rendered class, templates, provider CRs and the example),
 a ClusterClass patch simulation of `gke-managed` for the example cluster, helm-unittest. Needs a live account
-([#87](https://github.com/koorikla/platform/issues/87)): the operator's handling of the CAPG image/feature gates/patch,
+([#87](https://github.com/Sparky-stack/platform/issues/87)): the operator's handling of the CAPG image/feature gates/patch,
 WIF token exchange incl. the `client_email` self-impersonation, node pool sizing per zone, `argocd-k8s-auth gcp`,
 ClusterResourceSet delivery through the token kubeconfig, Istio's GKE profile.
 
@@ -357,7 +357,7 @@ openchoreo:
 ```
 
 `kubernetesVersion`, `controlPlane`, `workers`, `providerSpec`, `addons.cilium: true` and (for now) `mesh.group`
-([#174](https://github.com/koorikla/platform/issues/174)) fail the render.
+([#174](https://github.com/Sparky-stack/platform/issues/174)) fail the render.
 
 Credential: a kubeconfig in the `platform` store, key `byo-<name>`, property `kubeconfig`: client certificate or bearer
 token (no exec plugins), with a server address mgmt's pods can reach. Locally `task secrets` seeds it from
@@ -400,7 +400,7 @@ task secrets                     # seeds byo-byo1
 
 A project deploys to a byo cluster's environments like to any other: the environment needs a `ProjectReleaseBinding`
 (charts/tenant creates one per `deploymentPipeline.environments` entry) and a `ReleaseBinding` per component (the live
-test used a temporary pair for environment `byo`, evidence on [#173](https://github.com/koorikla/platform/issues/173)).
+test used a temporary pair for environment `byo`, evidence on [#173](https://github.com/Sparky-stack/platform/issues/173)).
 Harbor-built images also need the node's registry config (`--registry-config` with the Harbor CA and the `nodes` robot,
 `--host-alias` for the registry name), which CAPD clusters get from their ClusterClass.
 
@@ -412,6 +412,6 @@ Harbor-built images also need the node's registry config (`--registry-config` wi
   `capi-operator` with `ServerSideApply=true`. CAPI webhooks default many Cluster/ClusterClass fields: use server-side
   diff (or ignoreDifferences) for the `cluster-*` and `cluster-fleet-mgmt` Applications.
 
-Open checks: AWS and Hetzner [#26](https://github.com/koorikla/platform/issues/26); GKE
-[#87](https://github.com/koorikla/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
+Open checks: AWS and Hetzner [#26](https://github.com/Sparky-stack/platform/issues/26); GKE
+[#87](https://github.com/Sparky-stack/platform/issues/87) (`grep -rn -e VERIFY -e '#26' -e '#87' addons/capi-*
 charts/cluster addons/*-ccm addons/mesh installations/*-example`).

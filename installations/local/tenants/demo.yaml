@@ -4,7 +4,7 @@ project: demo
 description: Demo project - hello-world
 apps:
   - name: hello-world
-    repoURL: https://github.com/koorikla/hello-world.git
+    repoURL: https://github.com/Sparky-stack/hello-world.git
     path: deploy/openchoreo      # default
     revision: main               # default
 # DEMO ONLY: values hello-world's SecretReference (deploy/openchoreo/greeting-secret.yaml) points to, seeded into

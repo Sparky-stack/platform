@@ -220,12 +220,12 @@ assert_match "$(detail_of 'cluster files render for other providers')" "^renders
 assert_eq "$(result_of 'Backstage console responds')" PASS "green: console"
 assert_eq "$(detail_of 'component types for self-service')" "2: service, worker" "green: component types"
 assert_eq "$(result_of 'latest image signed (cosign, pinned identity)')" PASS "green: cosign"
-assert_match "$(detail_of 'latest image signed (cosign, pinned identity)')" "^ghcr.io/koorikla/hello-world:abc1234@sha256:889643d395ab\.\.\. signed by app-container.yaml@[0-9a-f]{7} \(koorikla/hello-world, refs/heads/main, push\)$" "green: cosign detail (digest shortened)"
+assert_match "$(detail_of 'latest image signed (cosign, pinned identity)')" "^ghcr.io/koorikla/hello-world:abc1234@sha256:889643d395ab\.\.\. signed by app-container.yaml@[0-9a-f]{7} \(Sparky-stack/hello-world, refs/heads/main, push\)$" "green: cosign detail (digest shortened)"
 WREF=$(yq '.imageVerification.github.workflowRef' "$ROOT/addons/kyverno-policies/values.yaml")
 cos=$(printf '%s\n' "$CALLS" | grep '^cosign verify ' || true)
-assert_match "$cos" "--certificate-identity https://github.com/koorikla/platform/.github/workflows/app-container.yaml@$WREF " "green: cosign uses the pinned workflow identity"
+assert_match "$cos" "--certificate-identity https://github.com/Sparky-stack/platform/.github/workflows/app-container.yaml@$WREF " "green: cosign uses the pinned workflow identity"
 assert_match "$cos" "--certificate-oidc-issuer https://token.actions.githubusercontent.com " "green: cosign pins the issuer"
-assert_match "$cos" "--certificate-github-workflow-repository koorikla/hello-world --certificate-github-workflow-ref refs/heads/main --certificate-github-workflow-trigger push " "green: cosign pins repository, ref, trigger"
+assert_match "$cos" "--certificate-github-workflow-repository Sparky-stack/hello-world --certificate-github-workflow-ref refs/heads/main --certificate-github-workflow-trigger push " "green: cosign pins repository, ref, trigger"
 assert_match "$cos" "$SIGNED\$" "green: cosign verifies the Workload's image"
 assert_eq "$(result_of 'Kyverno policies Ready (dev1)')" PASS "green: kyverno dev1"
 assert_eq "$(detail_of 'Kyverno policies Ready (prod1)')" "2/2 Ready" "green: kyverno prod1 detail"

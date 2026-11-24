@@ -7,7 +7,7 @@ before 1.0.0 a breaking change bumps the minor).
 | Line | Tag | Covers | Changelog | Who consumes it |
 |---|---|---|---|---|
 | platform | `vX.Y.Z` (from `v0.1.0`) | everything except `ci/` | [CHANGELOG.md](../CHANGELOG.md) | forks / installations tracking a platform release |
-| ci | `ci-vX.Y.Z` (from `ci-v1.0.0`) | `ci/` (scripts, toolbox, fixtures) | [ci/CHANGELOG.md](../ci/CHANGELOG.md) | app repos: `uses: koorikla/platform/.github/workflows/app-<stack>.yaml@<sha> # ci-vX.Y.Z`, Kyverno `imageVerification.github.workflowRef` |
+| ci | `ci-vX.Y.Z` (from `ci-v1.0.0`) | `ci/` (scripts, toolbox, fixtures) | [ci/CHANGELOG.md](../ci/CHANGELOG.md) | app repos: `uses: Sparky-stack/platform/.github/workflows/app-<stack>.yaml@<sha> # ci-vX.Y.Z`, Kyverno `imageVerification.github.workflowRef` |
 
 ## How a release happens
 

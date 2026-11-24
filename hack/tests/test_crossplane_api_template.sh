@@ -3,7 +3,7 @@
 # "Inner loop"): a Backstage Template that scaffolds a repository with the `crossplane project init` layout and the
 # reusable workflow app-crossplane-configuration.yaml wired.
 #   - same day-0 rules as the service templates (hack/tests/test_project_templates.sh): allowed actions only, no token,
-#     publish:github sets no governance, a governance record PR to koorikla/platform, catalog:register;
+#     publish:github sets no governance, a governance record PR to Sparky-stack/platform, catalog:register;
 #   - renders offline (hack/tests/render_template.py): crossplane-project.yaml, apis/api/ XRD + Composition consistent
 #     with the parameters and the example XR (kubeconform with the Crossplane CRD schemas), the Composition calls the
 #     embedded function the project build names (<owner>-<name> + functions/compose), CI pins the workflow by SHA at a
@@ -80,8 +80,8 @@ assert_eq "$(find "$R/platform" -type f | wc -l | tr -d ' ')" 1 "$T: the platfor
 # --- CI caller -------------------------------------------------------------------------------------------------------
 wf=$R/.github/workflows/ci.yaml
 uses=$(yq -r '.jobs[] | select(.uses) | .uses' "$wf")
-assert_match "$uses" '^koorikla/platform/\.github/workflows/app-crossplane-configuration\.yaml@[0-9a-f]{40}$' "$T: calls app-crossplane-configuration.yaml by commit SHA"
-tag=$(sed -n 's|.*uses: koorikla/platform/[^ ]*@[0-9a-f]\{40\} # \(ci-v[0-9]*\.[0-9]*\.[0-9]*\)$|\1|p' "$wf")
+assert_match "$uses" '^Sparky-stack/platform/\.github/workflows/app-crossplane-configuration\.yaml@[0-9a-f]{40}$' "$T: calls app-crossplane-configuration.yaml by commit SHA"
+tag=$(sed -n 's|.*uses: Sparky-stack/platform/[^ ]*@[0-9a-f]\{40\} # \(ci-v[0-9]*\.[0-9]*\.[0-9]*\)$|\1|p' "$wf")
 assert_match "$tag" '^ci-v[0-9]+\.[0-9]+\.[0-9]+$' "$T: SHA carries a '# ci-vX.Y.Z' comment (Renovate)"
 assert_eq "$(yq -r '.jobs.package.with.package_root' "$wf")" . "$T: package_root is the repository root"
 sha=${uses##*@}

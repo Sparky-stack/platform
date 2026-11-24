@@ -57,6 +57,6 @@ spec:
   repository: ghcr.io/koorikla/platform/postgresql
   description: PostgreSQL as a service
   maintainer: koorikla platform
-  source: github.com/koorikla/platform/tree/main/packages/postgresql
+  source: github.com/Sparky-stack/platform/tree/main/packages/postgresql
   crossplane:
     version: '>=v2.4.0'

@@ -6,12 +6,12 @@ Component* button): one Backstage scaffolder `Template` per framework, kept in t
 lists nothing else there ([openchoreo.md](openchoreo.md#finding-things-in-the-console)). The scaffolder only does **day 0**:
 it creates the repository with its content and opens a pull request in the platform repo. Everything after that is
 declarative: repository settings and rulesets come from a governance record that Crossplane reconciles
-([#100](https://github.com/koorikla/platform/issues/100)); the app is wired into its tenant by the merged PR and
+([#100](https://github.com/Sparky-stack/platform/issues/100)); the app is wired into its tenant by the merged PR and
 deployed by Argo CD + OpenChoreo ([openchoreo.md](openchoreo.md#tenants)).
 
 ## Templates
 
-| Template | Stack | CI (koorikla/platform app-*, pinned by SHA `# ci-v1.0.0`) | Runtime image |
+| Template | Stack | CI (Sparky-stack/platform app-*, pinned by SHA `# ci-v1.0.0`) | Runtime image |
 |---|---|---|---|
 | `go-service` | Go, stdlib `net/http` | `go.yaml` | distroless static |
 | `python-service` | Python 3.13, FastAPI, uv, ruff, pytest | `python.yaml` | distroless python3 |
@@ -24,7 +24,7 @@ Each stack workflow runs the stack's linters, tests, dependency audit and CodeQL
 builds, scans, signs and attests the multi-arch image; the Dockerfile's build stage runs the tests again, so
 `docker build` alone also fails on a broken test. More frameworks
 (Elixir, Next.js, Ruby, Spring Boot, NestJS, Helm chart, GraphQL):
-[#59](https://github.com/koorikla/platform/issues/59).
+[#59](https://github.com/Sparky-stack/platform/issues/59).
 
 Every generated service repository contains:
 
@@ -73,14 +73,14 @@ project build` on the generated repository).
    - `installations/<inst>/repos/<name>.yaml`: the `GitHubRepository` governance record (shape from #100);
    - for a new tenant, `installations/<inst>/tenants/<project>.yaml` with the app. For an existing tenant the PR
      description carries the `apps` entry to add before merging (fetch:template cannot merge into an existing file;
-     [#108](https://github.com/koorikla/platform/issues/108)).
+     [#108](https://github.com/Sparky-stack/platform/issues/108)).
 5. `catalog:register` of the new repo's `catalog-info.yaml`.
 
 Merging the PR lets Argo CD sync the tenant: the app's Application syncs `deploy/openchoreo/`, and the first CI run on
 `main` bumps the Workload, so the service serves in `development`. Production admits only images signed by the
 app-container.yaml workflow for listed repositories: before the first production promotion the new repo goes into addon
 kyverno-policies `imageVerification.github.trustedSources` (installation overlay; the PR description says so,
-[#108](https://github.com/koorikla/platform/issues/108)). The skeletons pin the app-* workflows at the same commit Kyverno
+[#108](https://github.com/Sparky-stack/platform/issues/108)). The skeletons pin the app-* workflows at the same commit Kyverno
 trusts (`imageVerification.github.workflowRef`; the test fails when they drift).
 
 ## Backstage wiring
@@ -88,7 +88,7 @@ trusts (`imageVerification.github.workflowRef`; the test fails when they drift).
 OpenChoreo's Backstage (addon openchoreo-control-plane) reads extra config from
 `openchoreo-control-plane.backstage.appConfig` (ConfigMap `backstage-extra-config`, loaded last):
 
-- `catalog.locations` adds the url location `https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml`
+- `catalog.locations` adds the url location `https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml`
   (a `Location` listing every `template.yaml`). Backstage replaces arrays across config files, so the list repeats the
   image's own locations (org groups and the 14 OpenChoreo wizards of openchoreo-ui v1.3.3); re-check it on a chart bump.
 - `catalog.rules` allows `Template` only from this repo's `templates/catalog-info.yaml`, and `Resource` (the generated
@@ -107,9 +107,9 @@ merged `appConfig` change is live after Argo CD's sync plus a Backstage restart 
 
 The publish steps need the platform write GitHub App ([forking.md](forking.md#what-needs-which-credential) (c)).
 GitHub lets an App installation create repositories only in an **organisation**, not on a personal account
-([#109](https://github.com/koorikla/platform/issues/109)), so the scaffolder needs an org for the new app repos. The
+([#109](https://github.com/Sparky-stack/platform/issues/109)), so the scaffolder needs an org for the new app repos. The
 App is owned by that org and installed twice: on the org (create repos) and on the platform repo (open the platform
-PR). Example below: org `Sparky-stack`, platform repo `koorikla/platform`.
+PR). Example below: org `Sparky-stack`, platform repo `Sparky-stack/platform`.
 
 1. **Create the org** (web UI only, github.com has no API for it): *github.com/account/organizations/new?plan=free*,
    owned by your personal account.
@@ -167,7 +167,7 @@ openchoreo-control-plane:
 `templates/validate.yaml` of the addon fails the render when only one side is set. Argo CD read access to the new
 repos (public repos need none; private ones need the read App (a) installed on the org), production admission
 (Kyverno `imageVerification.github.trustedSources`) and the promotion gate App (c2) on each new repo are separate steps;
-the end-to-end run is tracked in [#109](https://github.com/koorikla/platform/issues/109).
+the end-to-end run is tracked in [#109](https://github.com/Sparky-stack/platform/issues/109).
 
 ## Adding a template
 

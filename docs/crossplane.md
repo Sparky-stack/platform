@@ -121,7 +121,7 @@ A `ManagedResourceActivationPolicy` activates only the managed resources the Com
   SHA, `main`, `vX.Y.Z` from the component tag) plus its embedded function `<name>_compose-<name>` (same tags), then
   cosign keyless signing and SLSA provenance of both. release-please
   versions each package as its own component (`release-please-config.json`).
-- Signature verification: OFF for now ([#247](https://github.com/koorikla/platform/issues/247)). Crossplane 2.4's
+- Signature verification: OFF for now ([#247](https://github.com/Sparky-stack/platform/issues/247)). Crossplane 2.4's
   alpha cosign verifier only finds legacy `.sig` tags; cosign v3 signs with Sigstore bundles attached as OCI
   referrers, so every package failed with "no signatures found". Packages are still keyless-signed with SLSA
   provenance in CI. The ready-made config stays: `packages.signatureVerification.enabled: true` renders `ImageConfig

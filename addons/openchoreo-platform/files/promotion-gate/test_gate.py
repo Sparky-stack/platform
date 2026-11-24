@@ -219,10 +219,10 @@ def workload(project, component, repo):
 
 class Repository(unittest.TestCase):
     def test_from_workload(self):
-        wl = [workload("demo", "hello-world", "https://github.com/koorikla/hello-world")]
-        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "koorikla/hello-world")
-        wl = [workload("demo", "hello-world", "https://github.com/koorikla/hello-world.git")]
-        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "koorikla/hello-world")
+        wl = [workload("demo", "hello-world", "https://github.com/Sparky-stack/hello-world")]
+        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "Sparky-stack/hello-world")
+        wl = [workload("demo", "hello-world", "https://github.com/Sparky-stack/hello-world.git")]
+        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "Sparky-stack/hello-world")
 
     def test_other_owner_rejected(self):
         wl = [workload("demo", "hello-world", "https://github.com/evil/hello-world")]

@@ -5,7 +5,7 @@ kind: Template
 metadata:
   name: python-service
   title: Python service
-  description: HTTP service in Python (FastAPI, uv, ruff, pytest) on distroless Python 3.13, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
+  description: HTTP service in Python (FastAPI, uv, ruff, pytest) on distroless Python 3.13, CI via Sparky-stack/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, python, fastapi, service]
   annotations:
     platform.koorikla.io/stack: python

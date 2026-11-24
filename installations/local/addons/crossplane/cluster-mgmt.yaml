@@ -16,7 +16,7 @@ githubRepos:
       rulesetId: "27395845"                   # the hand-made ruleset "main": Full rewrites it instead of adding one
     hello-world:
       management: Observe
-      description: Hello-world app for koorikla/platform (OpenChoreo component)
+      description: Hello-world app for Sparky-stack/platform (OpenChoreo component)
       requiredChecks:                         # hello-world .github/workflows/ci.yaml (platform app-go.yaml)
         - "checks / vet, lint, test, govulncheck"
         - "checks / manifests / OpenChoreo manifests"

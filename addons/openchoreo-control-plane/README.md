@@ -41,7 +41,7 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[14].rules[0].allow[0] | string | `"Template"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[14].target | string | `"/app/templates/create-openchoreo-notification-channel/template.yaml"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[14].type | string | `"file"` |  |
-| openchoreo-control-plane.backstage.appConfig.catalog.locations[15].target | string | `"https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml"` |  |
+| openchoreo-control-plane.backstage.appConfig.catalog.locations[15].target | string | `"https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[15].type | string | `"url"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[1].rules[0].allow[0] | string | `"Template"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.locations[1].target | string | `"/app/templates/create-openchoreo-componenttype/template.yaml"` |  |
@@ -75,7 +75,7 @@ Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenC
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[0].allow[2] | string | `"Location"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[0].allow[3] | string | `"Resource"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[1].allow[0] | string | `"Template"` |  |
-| openchoreo-control-plane.backstage.appConfig.catalog.rules[1].locations[0].exact | string | `"https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml"` |  |
+| openchoreo-control-plane.backstage.appConfig.catalog.rules[1].locations[0].exact | string | `"https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml"` |  |
 | openchoreo-control-plane.backstage.appConfig.catalog.rules[1].locations[0].type | string | `"url"` |  |
 | openchoreo-control-plane.backstage.baseUrl | string | `"http://openchoreo.localhost:8080"` |  |
 | openchoreo-control-plane.backstage.extraArgs[0] | string | `"--config"` |  |

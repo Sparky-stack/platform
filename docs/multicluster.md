@@ -127,7 +127,7 @@ ztunnel / gateways --CSR--> istio-csr --CertificateRequest--> cert-manager Vault
   (charts/cluster fails otherwise).
 - **A group is a cryptographic boundary.** A member of group A reaches only group A's intermediate, so it cannot get
   an identity group B accepts. All groups still share trust domain `cluster.local` (per-environment trust domains:
-  [#71](https://github.com/koorikla/platform/issues/71)).
+  [#71](https://github.com/Sparky-stack/platform/issues/71)).
 - **Groups follow trust levels.** Clusters of different environments or trust levels never share a group. `local`
   (dev1 + prod1 on one laptop) is the deliberate demo exception; real installations use e.g. `dev` and `prod`.
 - **One role per member**, `pki-mesh-<group>-int/roles/<name>`: URI SANs `spiffe://cluster.local/ns/*/sa/*` only, DNS
@@ -224,7 +224,7 @@ The reconcile identities are **mesh CA administrators, not OpenBao administrator
 sign an intermediate (CA-equivalent), and only the Sync-hook Job holds it; the config identity decides which JWKS a
 `mesh-<name>` mount trusts. Whoever can create pods or ServiceAccount tokens in namespace `openbao` can use them and,
 with the static seal, holds the unseal key: protect namespace `openbao` like the CA (Argo AppProject + RBAC;
-production: KMS seal, [#31](https://github.com/koorikla/platform/issues/31)).
+production: KMS seal, [#31](https://github.com/Sparky-stack/platform/issues/31)).
 
 The mesh policies and mgmt identities apply only on first start; changing them later means re-initialising OpenBao
 ([break-glass.md](runbooks/break-glass.md#openbao-local-re-initialization), new mesh roots). Tenant policies change from
@@ -262,7 +262,7 @@ controller with a broad token). The script is ~150 lines, tested against a fake 
 Locally OpenBao uses the **static seal** (`seal "static"`, AES-256-GCM key from the secret backend): `task secrets` seeds
 `openbao-unseal` once in the `platform` store, ESO mounts it, and OpenBao unseals itself on every start. That puts the
 key next to the data: laptop only. **Production**: a cloud KMS seal (`seal "awskms"` with IRSA / Pod Identity, no static
-keys) or `seal "transit"` against a separate OpenBao, and 3 raft replicas ([#31](https://github.com/koorikla/platform/issues/31)).
+keys) or `seal "transit"` against a separate OpenBao, and 3 raft replicas ([#31](https://github.com/Sparky-stack/platform/issues/31)).
 Backup/restore of the raft directory + unseal secret, sealed triage and local re-initialisation:
 [runbooks/backup-restore.md](runbooks/backup-restore.md#3-openbao-raft-storage-and-unseal-key),
 [runbooks/incidents.md](runbooks/incidents.md#openbao-sealed),
@@ -326,11 +326,11 @@ workload ServiceAccounts) are denied.
 
 A planned procedure, not a renewal (the intermediate lives 5 years inside OpenBao; issued certificates are the
 short-lived part): generate a new root next to the old one, publish both in `mesh-root-ca` (a trust bundle), switch the
-intermediate to the new root, then drop the old root. Tracked in [#71](https://github.com/koorikla/platform/issues/71).
+intermediate to the new root, then drop the old root. Tracked in [#71](https://github.com/Sparky-stack/platform/issues/71).
 
 ## Tenant secrets (OpenBao)
 
-Tenants never share a secret store ([#96](https://github.com/koorikla/platform/issues/96)). With `installation.yaml
+Tenants never share a secret store ([#96](https://github.com/Sparky-stack/platform/issues/96)). With `installation.yaml
 secrets.tenantStores.enabled` (on in `local`; needs `mgmt.addons.openbao` and mesh members) every OpenChoreo cell
 namespace on a workload cluster has its own `SecretStore openbao-tenant`, and the OpenBao that is the mesh CA holds one
 KV v2 mount per tenant (tenant = OpenChoreo project). Developer steps: [openchoreo.md](openchoreo.md#application-secrets-developer-view).
@@ -356,7 +356,7 @@ confined), `tests/vap` of addon secret-stores (kyverno CLI).
 Running pods keep the old value until restarted; the component types make Reloader roll them
 ([runbook](runbooks/certificates-and-secrets.md#7-tenant-application-secrets-openbao)). Tenant self-service (OpenBao
 UI/CLI with OIDC from Thunder and a per-tenant group) and per-tenant build secrets on mgmt (`workflows-<org>` is shared
-by all projects of an org) are follow-ups: [#169](https://github.com/koorikla/platform/issues/169).
+by all projects of an org) are follow-ups: [#169](https://github.com/Sparky-stack/platform/issues/169).
 
 ### Writing a secret
 
@@ -582,9 +582,9 @@ Fresh clusters follow the same order; ztunnel waits until istiod is up.
 ## Follow-ups and open checks
 
 Per-environment trust domains + URI name constraints, root rotation runbook, baggage stripping at the north-south edge,
-peer API 6443 restrictions on CAPA/CAPH: [#71](https://github.com/koorikla/platform/issues/71). Production unseal and
-HA: [#31](https://github.com/koorikla/platform/issues/31). istiod's nil-unsafe
+peer API 6443 restrictions on CAPA/CAPH: [#71](https://github.com/Sparky-stack/platform/issues/71). Production unseal and
+HA: [#31](https://github.com/Sparky-stack/platform/issues/31). istiod's nil-unsafe
 `PILOT_ENABLE_REMOTE_CREDENTIALS_CONTROLLER=false`: fixed on `master` (istio/istio#62295), not yet released; the Secret
 opt-in goes with a 1.32 backport or 1.33 ([Reader RBAC](#reader-rbac-what-a-peer-may-read)). Values inferred but not
 confirmed live (`grep -rn VERIFY docs/multicluster.md addons/openbao addons/mesh charts/cluster/templates/common/mesh-*`):
-[#72](https://github.com/koorikla/platform/issues/72).
+[#72](https://github.com/Sparky-stack/platform/issues/72).

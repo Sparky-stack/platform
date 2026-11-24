@@ -4,7 +4,7 @@ Generated, animated SVGs, safe to embed in GitHub READMEs (rendered through `<im
 `foreignObject`, no external fonts, images or CSS):
 
 ```html
-<img src="docs/diagrams/architecture.svg" alt="koorikla/platform architecture" width="100%">
+<img src="docs/diagrams/architecture.svg" alt="Sparky-stack/platform architecture" width="100%">
 ```
 
 | Diagram | One idea | Owning doc |

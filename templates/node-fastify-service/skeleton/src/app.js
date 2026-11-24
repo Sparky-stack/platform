@@ -1,4 +1,4 @@
-// Golden-path Node.js API (koorikla/platform templates/node-fastify-service): JSON API, health and version endpoints.
+// Golden-path Node.js API (Sparky-stack/platform templates/node-fastify-service): JSON API, health and version endpoints.
 // Replace the routes with your own; keep /healthz (the platform's probes and smoke tests use it).
 import os from 'node:os';
 import Fastify from 'fastify';

@@ -1,7 +1,7 @@
 # Governance record of ${{ values.repoOwner }}/${{ values.name }}, written by the Backstage scaffolder (golden path
 # `${{ values.stack }}`, docs/project-templates.md). Day-0 only: the scaffolder creates the repository and its content;
 # repository settings, the default-branch ruleset, permissions and GitHub App installations are reconciled from this
-# record by Crossplane on mgmt (koorikla/platform#100; schema owned there).
+# record by Crossplane on mgmt (Sparky-stack/platform#100; schema owned there).
 apiVersion: platform.koorikla.io/v1alpha1
 kind: GitHubRepository
 metadata:

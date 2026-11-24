@@ -294,7 +294,7 @@ project: demo                       # OpenChoreo Project (DNS-1123)
 description: Demo project
 apps:
   - name: hello-world               # unique in the tenant -> Application demo-hello-world
-    repoURL: https://github.com/koorikla/hello-world.git
+    repoURL: https://github.com/Sparky-stack/hello-world.git
     path: deploy/openchoreo         # default
     revision: main                  # default
 ```
@@ -513,13 +513,13 @@ spec:
 
 When a workload cluster is re-created under the same name (new CAPD/cloud cluster, new agent connection), the
 RenderedRelease controller can stay on a failed apply (`proxy request failed with status 502`, from while the agent was
-not connected) for a long backoff ([#51](https://github.com/koorikla/platform/issues/51)). Triage and the annotation kick
+not connected) for a long backoff ([#51](https://github.com/Sparky-stack/platform/issues/51)). Triage and the annotation kick
 command: [runbooks/incidents.md](runbooks/incidents.md#data-plane-agent-disconnected).
 
-Cause (v1.3.3 source, live in [#246](https://github.com/koorikla/platform/issues/246)): the controller returns the apply
+Cause (v1.3.3 source, live in [#246](https://github.com/Sparky-stack/platform/issues/246)): the controller returns the apply
 error to controller-runtime and watches only RenderedReleases, so the retry follows the default rate limiter (5 ms
 doubling, max 1000 s) and nothing re-queues it when the data plane recovers. The same backoff is why a data plane's
 agent starts only once its opt-in addons' CRDs exist ([capability gate](data-services.md#only-on-data-planes-that-run-the-operator)).
 
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/openchoreo-* addons/thunder addons/coredns-local charts/cluster/templates/common/openchoreo-*`):
-[#52](https://github.com/koorikla/platform/issues/52).
+[#52](https://github.com/Sparky-stack/platform/issues/52).

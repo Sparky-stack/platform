@@ -34,6 +34,6 @@ spec:
   repository: ghcr.io/koorikla/platform/kafka-topic
   description: Kafka topics with credentials
   maintainer: koorikla platform
-  source: github.com/koorikla/platform/tree/main/packages/kafka-topic
+  source: github.com/Sparky-stack/platform/tree/main/packages/kafka-topic
   crossplane:
     version: '>=v2.4.0'

@@ -33,7 +33,7 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | imageVerification.attestationTypes.vuln | string | `"https://cosign.sigstore.dev/attestation/vuln/v1"` |  |
 | imageVerification.cellNamespaceSelector.matchLabels."openchoreo.dev/managed-by" | string | `"renderedrelease-controller"` |  |
 | imageVerification.defaultAction | string | `"Audit"` |  |
-| imageVerification.enabled | bool | `true` | `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures. |
+| imageVerification.enabled | bool | `true` | `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying Sparky-stack/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures. |
 | imageVerification.environments.development | string | `"Audit"` |  |
 | imageVerification.environments.production | string | `"Deny"` |  |
 | imageVerification.environments.staging | string | `"Audit"` |  |
@@ -50,9 +50,9 @@ Installs upstream Kyverno CEL Pod Security Standards (`baseline`, `Audit`) plus 
 | imageVerification.github.transitionWorkflowRefs | list | `[]` |  |
 | imageVerification.github.trustedSources[0].name | string | `"gh-koorikla-hello-world-heads-main"` |  |
 | imageVerification.github.trustedSources[0].ref | string | `"refs/heads/main"` |  |
-| imageVerification.github.trustedSources[0].repository | string | `"koorikla/hello-world"` |  |
+| imageVerification.github.trustedSources[0].repository | string | `"Sparky-stack/hello-world"` |  |
 | imageVerification.github.trustedSources[0].trigger | string | `"push"` |  |
-| imageVerification.github.workflow | string | `"https://github.com/koorikla/platform/.github/workflows/app-container.yaml"` |  |
+| imageVerification.github.workflow | string | `"https://github.com/Sparky-stack/platform/.github/workflows/app-container.yaml"` |  |
 | imageVerification.github.workflowRef | string | `"3311f541a8eab72a2649b6f1eda4fe05efa3142e"` |  |
 | imageVerification.platformKey.attestations[0] | string | `"sbom"` |  |
 | imageVerification.platformKey.attestations[1] | string | `"vuln"` |  |

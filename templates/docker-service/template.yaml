@@ -5,7 +5,7 @@ kind: Template
 metadata:
   name: docker-service
   title: Generic Docker service
-  description: Any language - bring your own Dockerfile. Build, scan, SBOM and sign via koorikla/platform app-container.yaml, deployed by OpenChoreo.
+  description: Any language - bring your own Dockerfile. Build, scan, SBOM and sign via Sparky-stack/platform app-container.yaml, deployed by OpenChoreo.
   tags: [golden-path, docker, container, service]
   annotations:
     platform.koorikla.io/stack: docker

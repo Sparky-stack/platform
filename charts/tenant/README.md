@@ -27,7 +27,7 @@ Registers one OpenChoreo tenant project from `installations/<inst>/tenants/<proj
 | developerRole | string | `"developer"` |  |
 | installation.githubOrg | string | `"https://github.com/koorikla"` |  |
 | installation.name | string | `"local"` |  |
-| installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |
+| installation.repoURL | string | `"https://github.com/Sparky-stack/platform.git"` |  |
 | installation.revision | string | `"main"` |  |
 | openchoreo.orgNamespace | string | `"default"` |  |
 | previewOptIn.annotation | string | `"platform.koorikla.io/preview-environments"` |  |

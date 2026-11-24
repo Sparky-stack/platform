@@ -67,7 +67,7 @@ FAKE
   checkout() {   # checkout <branch> [commit] -> RC, OUT; outputs under $CO/tmp
     stage "$CO"
     if env -i PATH="$CB:$PATH" HOME="$CO/tmp" TMPDIR="$CO" REAL_GIT="$REAL_GIT" UPSTREAM="$UP" GIT_SECRET_DIR="$SEC" \
-        REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" BRANCH="$1" \
+        REPO=https://github.com/Sparky-stack/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" BRANCH="$1" \
         COMMIT="${2:-}" WORKLOAD_PATH=deploy/openchoreo/workload.yaml bash "$CO/opt/scripts/workflow/checkout.sh" > "$CO.out" 2>&1
     then RC=0; else RC=$?; fi
     OUT=$(cat "$CO.out")

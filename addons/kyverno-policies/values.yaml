@@ -92,7 +92,7 @@ mesh:
 
 # --- Supply-chain gate per environment (templates/image-verification.yaml, docs/supply-chain.md) ----------------------
 imageVerification:
-  # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying koorikla/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures.
+  # -- `Audit` in `development`/`staging` and `Deny` in `production` (`imageVerification.{enabled,environments,github,platformKey,requireDigest}`), verifying Sparky-stack/platform `app-container.yaml` keyless workflow attestations or `cosign-platform` signatures.
   enabled: true
   # environment -> Audit (PolicyReport only) | Deny (blocked at admission).
   environments:
@@ -120,7 +120,7 @@ imageVerification:
     issuer: https://token.actions.githubusercontent.com
     # Subject = <workflow>@<workflowRef>; a tag is mutable, so workflowRef must be a 40-hex commit SHA (Renovate
     # tracks the tag in the trailing comment).
-    workflow: https://github.com/koorikla/platform/.github/workflows/app-container.yaml
+    workflow: https://github.com/Sparky-stack/platform/.github/workflows/app-container.yaml
     workflowRef: "3311f541a8eab72a2649b6f1eda4fe05efa3142e" # ci-v1.0.0
     # Previous pin, kept until every production image is rebuilt at workflowRef (at most one; docs/supply-chain.md
     # "Moving the workflow pin"). Each costs a failed verification per check, so keep the window short.
@@ -132,7 +132,7 @@ imageVerification:
     # may build untrusted PR code). An installation overlay adds its app repos (docs/supply-chain.md).
     trustedSources:
       - name: gh-koorikla-hello-world-heads-main
-        repository: koorikla/hello-world
+        repository: Sparky-stack/hello-world
         ref: refs/heads/main
         trigger: push
     rekorURL: https://rekor.sigstore.dev

@@ -97,7 +97,7 @@ for f in "$RENDERED_DIR"/addon-crossplane-*.yaml; do
   done < <(printf '%s\n' "$repos" | sed '/^$/d')
 done
 assert_eq "$(q 'select(.kind == "GitHubRepository") | .metadata.name' "$RENDERED_DIR/addon-crossplane-local-mgmt.yaml" | sort | tr '\n' ' ')" \
-  "hello-world platform " "local mgmt declares koorikla/platform and koorikla/hello-world"
+  "hello-world platform " "local mgmt declares Sparky-stack/platform and Sparky-stack/hello-world"
 
 # --- 2. crossplane render -----------------------------------------------------------------------------------------------
 if ! command -v crossplane >/dev/null 2>&1; then
@@ -189,7 +189,7 @@ assert_eq "$(kinds "$TMP/out-observe-platform.yaml")" "Repository=1 RepositoryRu
   "platform (Observe, rulesetId): the repository and its existing ruleset, nothing else"
 assert_eq "$(q 'select(.kind == "RepositoryRuleset") | .metadata.annotations["crossplane.io/external-name"]' "$TMP/out-observe-platform.yaml")" \
   27395845 "platform: observes the hand-made ruleset 27395845"
-assert_eq "$(q '.status.url' "$TMP/xrout-observe-platform.yaml")" https://github.com/koorikla/platform \
+assert_eq "$(q '.status.url' "$TMP/xrout-observe-platform.yaml")" https://github.com/Sparky-stack/platform \
   "platform: XR status.url from the observed repository (status.atProvider.htmlUrl)"
 render observe-hello "$TMP/xr-observe-hello-world.yaml"
 assert_eq "$(kinds "$TMP/out-observe-hello.yaml")" "Repository=1 " \

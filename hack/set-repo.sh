@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Point a fork of koorikla/platform at itself (docs/forking.md). Idempotent; prints every file it changed.
+# Point a fork of Sparky-stack/platform at itself (docs/forking.md). Idempotent; prints every file it changed.
 #
 # Usage: hack/set-repo.sh https://github.com/<you>/platform.git
 #        task set-repo REPO=https://github.com/<you>/platform.git [ORG=...] [APPS_ORG=...] [DOCS=1]

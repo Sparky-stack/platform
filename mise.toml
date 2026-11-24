@@ -1,4 +1,4 @@
-# Developer toolchain for koorikla/platform, pinned for macOS / Linux / Windows on amd64 and arm64.
+# Developer toolchain for Sparky-stack/platform, pinned for macOS / Linux / Windows on amd64 and arm64.
 #   mise install          # installs everything below (+ the helm-unittest plugin via the postinstall hook)
 #   task --list           # entrypoints (Taskfile.yml)
 # Every tool uses the aqua backend (prebuilt release binaries, checksum-verified) except python (mise core,

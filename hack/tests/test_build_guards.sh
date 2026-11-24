@@ -38,7 +38,7 @@ rejects() { local l=$1 re=$2 v; shift 2; for v in "$@"; do assert_eq "$([[ "$v" 
 for wf in go dockerfile; do
   url=$(cw "$wf" "$S.repository.properties.url.pattern")
   assert_nonempty "$url" "$wf: repository.url has a pattern"
-  accepts "$wf url" "$url" https://github.com/koorikla/hello-world https://github.com/koorikla/hello-world.git \
+  accepts "$wf url" "$url" https://github.com/Sparky-stack/hello-world https://github.com/Sparky-stack/hello-world.git \
     https://github.com/koorikla/a_b-c.d
   rejects "$wf url" "$url" https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
     https://github.com/koorikla/../platform https://github.com/koorikla/.. https://github.com/koorikla/a/b \
@@ -104,13 +104,13 @@ guard() {
 mkdir -p "$TMP/home"
 fill() { printf 'git_access %q; printf "url=%%s\\\\n\\\\n" %q | git credential fill 2>&1 || true' "$1" "$2"; }
 
-guard "$(fill https://github.com/koorikla/hello-world.git https://github.com/koorikla/hello-world.git)"; out=$OUT
+guard "$(fill https://github.com/Sparky-stack/hello-world.git https://github.com/Sparky-stack/hello-world.git)"; out=$OUT
 assert_match "$out" 'password=TOKEN-FAKE-123' "allowed repo: credential helper answers"
 guard "$(fill https://git.example.com/team/app https://git.example.com/team/app)"; out=$OUT
 assert_match "$out" 'password=TOKEN-FAKE-123' "second allowed prefix: credential helper answers"
 for victim in https://attacker.example/koorikla/x.git https://github.com/other/x.git https://github.com/koorikla-evil/x.git \
   https://git.example.com/other/x; do
-  guard "$(fill https://github.com/koorikla/hello-world.git "$victim")"; out=$OUT
+  guard "$(fill https://github.com/Sparky-stack/hello-world.git "$victim")"; out=$OUT
   assert_eq "$([[ "$out" == *TOKEN-FAKE-123* ]] && echo leaked || echo kept)" kept "token not sent to $victim (redirect/401)"
 done
 for bad in https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
@@ -263,13 +263,13 @@ chmod +x "$GB/git" "$GB/curl"
 gitops() {   # gitops <source repo> <codes> <image> [source commit] [workload path] -> RC, OUT; curl calls in $GX.calls
   rm -rf "$GX.calls"*; stage "$GX"
   if env -i PATH="$GB:$WL_PATH" HOME="$GX" TMPDIR="$GX" REAL_GIT="$REAL_GIT" GITOPS_SRC="$1" CALLS="$GX.calls" CODES="$2" \
-      GIT_SECRET_DIR="$SEC" REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+      GIT_SECRET_DIR="$SEC" REPO=https://github.com/Sparky-stack/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
       GITHUB_API_URL=https://api.github.com GITOPS_BRANCH=main WORKLOAD_PATH="${5:-deploy/openchoreo/workload.yaml}" \
       IMAGE="$3" COMMIT_SHA="${4:-bbb}" SHORT_SHA=bbb COMPONENT=hello PROJECT=demo NAMESPACE=default RUN=run-1 \
       bash "$GX/opt/scripts/workflow/gitops.sh" > "$GX.out" 2>&1; then RC=0; else RC=$?; fi
   OUT=$(cat "$GX.out")
 }
-in_repo=" in https://github.com/koorikla/hello-world.git@main"
+in_repo=" in https://github.com/Sparky-stack/hello-world.git@main"
 fence_msg() { [[ "$1" == *"not found (or a symlink"* || "$1" == *"is not an OpenChoreo Workload"* || "$1" == *"resolves outside"* ]] && echo refused || echo passed; }
 R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
 printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
@@ -316,12 +316,12 @@ if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)"
   BLOB=$(cd "$SRC" && "$REAL_GIT" rev-parse HEAD:deploy/openchoreo/workload.yaml)
   gitops "$SRC" "201" new:1
   assert_eq "$RC" 0 "gitops API: committed"
-  assert_match "$OUT" 'committed c0ffee to koorikla/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
+  assert_match "$OUT" 'committed c0ffee to Sparky-stack/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
   assert_eq "$(wc -l < "$GX.calls" | tr -d ' ')" 1 "gitops API: one request"
   call=$(cat "$GX.calls")
   assert_match "$call" '-X PUT' "gitops API: PUT"
   assert_match "$call" '--proto =https' "gitops API: https only"
-  assert_match "$call" 'https://api.github.com/repos/koorikla/hello-world/contents/deploy/openchoreo/workload.yaml$' \
+  assert_match "$call" 'https://api.github.com/repos/Sparky-stack/hello-world/contents/deploy/openchoreo/workload.yaml$' \
     "gitops API: the run's repository (.git removed) and the Workload path"
   assert_eq "$([[ "$call" == *TOKEN-FAKE-123* ]] && echo argv || echo header-file)" header-file "gitops API: token not in argv"
   assert_eq "$(cat "$GX.calls.auth")" "Authorization: Bearer TOKEN-FAKE-123" "gitops API: token in the auth header file"
@@ -336,8 +336,8 @@ OpenChoreo WorkflowRun run-1 (default/demo/hello): new:1" "gitops API: commit me
   assert_match "$OUT" '>> main moved, re-reading \(attempt 1\)' "gitops API: says the branch moved"
   gitops "$SRC" "403" new:1
   assert_eq "$RC" 1 "gitops API: 403 fails the run"
-  assert_eq "$OUT" ">> GitHub contents API (koorikla/hello-world deploy/openchoreo/workload.yaml): HTTP 403 Resource not accessible\
- by integration. The platform GitHub App needs Contents: Read and write on koorikla/hello-world, and a bypass if main is\
+  assert_eq "$OUT" ">> GitHub contents API (Sparky-stack/hello-world deploy/openchoreo/workload.yaml): HTTP 403 Resource not accessible\
+ by integration. The platform GitHub App needs Contents: Read and write on Sparky-stack/hello-world, and a bypass if main is\
  protected" "gitops API: GitHub's answer and the App permission hint, word for word"
   gitops "$SRC" "201" old aaa
   assert_eq "$RC:$([[ -e "$GX.calls" ]] && echo called || echo none)" "0:none" "gitops API: unchanged Workload, no commit"

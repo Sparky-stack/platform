@@ -199,7 +199,7 @@ openchoreo-control-plane:
           - allow: [Template]
             locations:
               - type: url
-                exact: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
+                exact: https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml
         locations:
           - type: file
             target: /app/catalog-entities/org.yaml
@@ -247,7 +247,7 @@ openchoreo-control-plane:
             target: /app/templates/create-openchoreo-notification-channel/template.yaml
             rules: [{ allow: [Template] }]
           - type: url
-            target: https://github.com/koorikla/platform/blob/main/templates/catalog-info.yaml
+            target: https://github.com/Sparky-stack/platform/blob/main/templates/catalog-info.yaml
     # platform: app-config.cost-views.yaml (templates/backstage-cost-views.yaml), loaded after app-config.extra.yaml
     extraArgs: ["--config", "app-config.cost-views.yaml"]
     extraVolumes:

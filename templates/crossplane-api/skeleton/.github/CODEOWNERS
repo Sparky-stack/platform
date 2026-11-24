@@ -1,3 +1,3 @@
 # Code owners review every change (the repo ruleset requires one code-owner approval; Crossplane reconciles it from
-# koorikla/platform installations/<inst>/repos/, not from here).
+# Sparky-stack/platform installations/<inst>/repos/, not from here).
 * ${{ values.codeowners }}

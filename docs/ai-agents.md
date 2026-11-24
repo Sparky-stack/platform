@@ -146,4 +146,4 @@ For a BYO cluster set `OPENCHOREO_TOKEN_URL` and `OPENCHOREO_MCP_CLIENT_SECRET` 
 
 ## Open items
 First live run of the agents, agentgateway overlays and NetworkPolicy, OpenCost attribution, Thunder's handling of
-unlisted agents, then dropping agentgateway-system's Kyverno exemption: [#22](https://github.com/koorikla/platform/issues/22).
+unlisted agents, then dropping agentgateway-system's Kyverno exemption: [#22](https://github.com/Sparky-stack/platform/issues/22).

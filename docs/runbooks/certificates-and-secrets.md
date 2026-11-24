@@ -48,7 +48,7 @@ kubectl --kubeconfig dev1.kubeconfig get certificate -A
   # On mgmt, remove the leftover reader cert Secret
   kubectl --context k3d-platform-mgmt -n fleet delete secret <gone>-mesh-reader --ignore-not-found
   ```
-- **Root (`10y`) and intermediate (`5y`) rotation** `(not yet verified live)`: generate the new root alongside the active root inside OpenBao, publish both in `openbao-ca-bundle` / `mesh-root-ca`, issue a new intermediate under the new root, then retire the old root once old leaves expire ([#71](https://github.com/koorikla/platform/issues/71), [multicluster.md](../multicluster.md#root-and-intermediate-rotation)).
+- **Root (`10y`) and intermediate (`5y`) rotation** `(not yet verified live)`: generate the new root alongside the active root inside OpenBao, publish both in `openbao-ca-bundle` / `mesh-root-ca`, issue a new intermediate under the new root, then retire the old root once old leaves expire ([#71](https://github.com/Sparky-stack/platform/issues/71), [multicluster.md](../multicluster.md#root-and-intermediate-rotation)).
 
 ### 3. OpenChoreo agent certificates
 

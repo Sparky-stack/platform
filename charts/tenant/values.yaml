@@ -18,7 +18,7 @@ developerGroups: []
 installation:
   name: local
   githubOrg: https://github.com/koorikla
-  repoURL: https://github.com/koorikla/platform.git   # charts/preview source of the preview Applications
+  repoURL: https://github.com/Sparky-stack/platform.git   # charts/preview source of the preview Applications
   revision: main
 openchoreo:
   orgNamespace: default

@@ -92,7 +92,7 @@ k3s starts with no CNI, so nodes stay `NotReady` until Cilium runs. Bootstrap st
   off (this CNI app syncs before the Prometheus Operator CRDs exist); addon telemetry scrapes `hubble-metrics` instead
   (docs/observability.md "HTTP metrics").
 - **L7 HTTP visibility** (`l7Visibility`, CiliumClusterwideNetworkPolicy `openchoreo-http-visibility`), **off**: on dev1
-  the redirected connections into ambient pods hung at Cilium's proxy and cut the apps off ([#104](https://github.com/koorikla/platform/issues/104)). When on: an allow-all
+  the redirected connections into ambient pods hung at Cilium's proxy and cut the apps off ([#104](https://github.com/Sparky-stack/platform/issues/104)). When on: an allow-all
   `http: [{}]` rule on port 8080 of every pod with an `openchoreo.dev/component` label, with `enableDefaultDeny: false`
   on both directions, so it never denies anything. Hubble only emits `hubble_http_*` for traffic Cilium's L7 proxy
   parses, and that takes an L7 rule. Only list ports that serve HTTP on every component pod: the proxy rejects other
@@ -166,14 +166,14 @@ every tenant would have to repeat it. The platform default is a Kyverno `Mutatin
 
 ### Strict mTLS in cell namespaces
 Every ambient cell namespace refuses plaintext: Kyverno generates a `PeerAuthentication` `default` with
-`mtls.mode: STRICT` into it ([#53](https://github.com/koorikla/platform/issues/53)). That only works because every
+`mtls.mode: STRICT` into it ([#53](https://github.com/Sparky-stack/platform/issues/53)). That only works because every
 in-cluster client of cell pods is itself in the mesh:
 
 | Client | Reaches in the cells | Enrolled by |
 |---|---|---|
 | data-plane gateway `gateway-default` (kgateway Envoy, `openchoreo-data-plane`) | component endpoints (ingress) | pod label through `Gateway.spec.infrastructure.labels` (addon `openchoreo-data-plane`) |
 | CNPG / Strimzi / KEDA operators (`cnpg-system`, `strimzi`, `keda`) | instance, broker and scaler endpoints | namespace label (each addon, `namespace.ambient`) |
-| Prometheus agent (`telemetry`, [#209](https://github.com/koorikla/platform/issues/209)) | PodMonitor / ServiceMonitor targets (app metrics, CloudNativePG `:9187`) | pod labels `istio.io/dataplane-mode=ambient` + `openchoreo.dev/system-component=prometheus-agent` through prometheus-operator `--labels` (addon `telemetry`) |
+| Prometheus agent (`telemetry`, [#209](https://github.com/Sparky-stack/platform/issues/209)) | PodMonitor / ServiceMonitor targets (app metrics, CloudNativePG `:9187`) | pod labels `istio.io/dataplane-mode=ambient` + `openchoreo.dev/system-component=prometheus-agent` through prometheus-operator `--labels` (addon `telemetry`) |
 
 The gateway follows upstream's ambient ingress setup (kgateway docs "Ingress" for ambient: put the proxy in the mesh,
 ztunnel carries its upstream connections as HBONE). Only the proxy pod is labelled, so the cluster-agent next to it
@@ -195,14 +195,14 @@ enrollment (synchronized: an edited or deleted object is restored, generated for
   as `world`, not `host`, so OpenChoreo's port rule drops it. Without the rule every component with a startup probe is
   killed into CrashLoopBackOff (`Startup probe failed ... context deadline exceeded`; seen on dev1 after the resilience
   probes of #251). The source can't be used by anything else: it is host-local and Cilium refuses spoofed pod sources.
-- `openchoreo-cell-strimzi` ([#210](https://github.com/koorikla/platform/issues/210)): NetworkPolicy `platform-strimzi`
+- `openchoreo-cell-strimzi` ([#210](https://github.com/Sparky-stack/platform/issues/210)): NetworkPolicy `platform-strimzi`
   for Kafka pods (`strimzi.io/cluster`): the cell's pods, `openchoreo.dev/system-component` pods and
   `ambientEnrollment.strimzi.peers` (Strimzi and KEDA operators) on any port, so `15008/tcp` too, plus the probe source.
   It replaces the operator's per-listener policies (addon `strimzi`: `STRIMZI_NETWORK_POLICY_GENERATION=false`), which
   open only Kafka ports and drop HBONE ([data-services.md](data-services.md#kafka-strimzi)).
 - `openchoreo-cell-mtls`: the `PeerAuthentication` (STRICT, or PERMISSIVE for an opted-out cell), off with
   `ambientEnrollment.mtls.strict: false`.
-- `openchoreo-cell-authz` ([#324](https://github.com/koorikla/platform/issues/324)): `AuthorizationPolicy`
+- `openchoreo-cell-authz` ([#324](https://github.com/Sparky-stack/platform/issues/324)): `AuthorizationPolicy`
   `platform-cell-peers`. STRICT proves the caller is *a* mesh workload; this decides *which*. An `ALLOW` policy without
   a selector covers every pod of the cell (databases too, which no NetworkPolicy selects), so ztunnel refuses any
   identity not listed: source namespace == the cell (its own workloads, on any mesh member), plus the SPIFFE principals
@@ -300,4 +300,4 @@ Measured on dev1 (single node, idle, `kubectl top`, #52): cilium-agent 232Mi, ci
 25Mi, ztunnel 11Mi, istio-cni 24Mi, istiod 55Mi, Kyverno 343Mi (admission 178Mi): ~730Mi, below the requests.
 
 Values inferred but not yet confirmed live (`grep -rn VERIFY addons/cilium addons/mesh addons/kyverno* charts/cluster`):
-[#52](https://github.com/koorikla/platform/issues/52).
+[#52](https://github.com/Sparky-stack/platform/issues/52).

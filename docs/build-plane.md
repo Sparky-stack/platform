@@ -101,7 +101,7 @@ spec:
     name: go                         # go | nextjs | elixir | ruby | dockerfile
     parameters:
       repository:
-        url: https://github.com/koorikla/hello-world.git
+        url: https://github.com/Sparky-stack/hello-world.git
         revision: { branch: main }
         appPath: "."
       docker: { context: ".", filePath: Dockerfile }
@@ -112,7 +112,7 @@ spec:
 ```
 
 Loop guard: OpenChoreo's matcher treats appPath `.` as "every change", so `checkout` skips commits that only touch the
-GitOps directory, auto-build starts no run for them, and the hand-off commit carries `[skip ci]` for GitHub Actions. koorikla/hello-world builds only here; its GitHub Actions run PR checks (`app-go.yaml`
+GitOps directory, auto-build starts no run for them, and the hand-off commit carries `[skip ci]` for GitHub Actions. Sparky-stack/hello-world builds only here; its GitHub Actions run PR checks (`app-go.yaml`
 with `build_container: false`). Building and signing on GitHub Actions stays available to any app through the
 app-<stack>.yaml workflows (templates/ use it).
 
@@ -175,7 +175,7 @@ kubectl -n default get workflowrun -l platform.koorikla.io/trigger=auto-build
 Opt out per Component with `autoBuild: false`, per installation with `none`. Webhook setup (cloud): GitHub App settings
 → Webhook active, URL `https://events.<openchoreo.controlPlane.host>/github`, secret = store key `github-webhook`
 property `secret`, subscribe to Push. The webhook path renders and is tested offline; live verification:
-[#166](https://github.com/koorikla/platform/issues/166).
+[#166](https://github.com/Sparky-stack/platform/issues/166).
 
 ### GitOps hand-off
 
@@ -230,7 +230,7 @@ not. Narrow `platforms` per Component to build only the node's architecture.
   Branch, commit and path parameters have patterns against option injection (`--upload-pack=…`) and traversal; the
   build step refuses a context or Dockerfile outside the checkout. `hack/tests/test_build_guards.sh` exercises it with
   real `git credential fill`. Residual: a build may use any repo under an allowed owner (e.g. rebuild another tenant's
-  repo at an old commit), [#34](https://github.com/koorikla/platform/issues/34).
+  repo at an old commit), [#34](https://github.com/Sparky-stack/platform/issues/34).
 - **Pod Security `restricted`** for every step (non-root 65532, RuntimeDefault seccomp, no privilege escalation, all
   capabilities dropped, read-only root where the tool allows) **except `build`**. Rootless BuildKit runs as uid 1000
   with no effective capabilities, but needs `seccompProfile`/`appArmorProfile: Unconfined` to create user namespaces
@@ -242,12 +242,12 @@ not. Narrow `platforms` per Component to build only the node's architecture.
   snapshotter on the k3d node and a hello-world build took over 15 minutes. No privileged container, Docker daemon or
   DinD. Kyverno's Pod Security policies (Audit) report that pod.
 - **Digest-pinned images only** in `workflows-*` (addon kyverno-policies, ValidatingPolicy
-  `platform-workflow-image-digests`, Deny, fail closed, mgmt; [#36](https://github.com/koorikla/platform/issues/36)):
+  `platform-workflow-image-digests`, Deny, fail closed, mgmt; [#36](https://github.com/Sparky-stack/platform/issues/36)):
   every container of a run pod (init and ephemeral included) must be `image@sha256:<digest>`, since run pods sit next to
   the push credentials and the signing key. No exceptions are needed (toolbox, BuildKit, PostgreSQL, check images and
   Argo's executor are pinned). A tag `checks.image` is rejected by the ClusterWorkflow schema before the run starts.
 - **Cluster-agent RBAC** (addon openchoreo-workflow-plane `clusterAgentRBAC`,
-  [#33](https://github.com/koorikla/platform/issues/33)): the agent replays the control plane's API calls with its own
+  [#33](https://github.com/Sparky-stack/platform/issues/33)): the agent replays the control plane's API calls with its own
   ServiceAccount, so its RBAC is OpenChoreo's reach into mgmt. The upstream ClusterRole (`*` on secrets, namespaces,
   roles/rolebindings, ClusterSecretStores, workloads, cluster-wide) is off (`clusterAgent.rbac.create: false`). What
   OpenChoreo 1.3.3 sends to a workflow plane, and the grant:
@@ -291,10 +291,10 @@ trusts, and a local k3d (or private EKS/Hetzner) workload identity is not one. T
 
 - Key pair `cosign-platform` (private key encrypted with `cosign.password`; only in the secret backend and the signing
   pod; `task secrets` generates it once). Cloud installations should use a KMS key through workload identity instead,
-  so no key material sits in the secret backend ([#37](https://github.com/koorikla/platform/issues/37)).
+  so no key material sits in the secret backend ([#37](https://github.com/Sparky-stack/platform/issues/37)).
 - **No public transparency log by default**: `buildWorkflows.signing.transparencyLog: false` makes the sign steps use a
   cosign v3 signing config without Rekor/TSA (a shim adds `--signing-config` to `cosign sign|attest`; ci/scripts
-  `sign-image.sh` has no switch yet, [#37](https://github.com/koorikla/platform/issues/37)), so private repo names and
+  `sign-image.sh` has no switch yet, [#37](https://github.com/Sparky-stack/platform/issues/37)), so private repo names and
   digests never reach public Rekor and signing needs no egress to Sigstore. Set it `true` per installation
   (`installations/<inst>/addons/openchoreo-platform/values.yaml`) to upload to public Rekor.
 - Verify: `cosign verify --key cosign.pub --insecure-ignore-tlog=true <image>@sha256:…` (and `verify-attestation --type
@@ -388,7 +388,7 @@ with their entry. Day-2 steps (add a proxy cache, a robot, rotate a secret):
 
 Content trust (`enable_content_trust_cosign` on `apps`) is **off** until it is confirmed that Harbor 2.15 counts cosign
 v3 Sigstore-bundle referrers as signatures; enabling it blocks every pull without one
-([#39](https://github.com/koorikla/platform/issues/39)). Every chart secret (core, jobservice, registry, CSRF,
+([#39](https://github.com/Sparky-stack/platform/issues/39)). Every chart secret (core, jobservice, registry, CSRF,
 secretKey, htpasswd, DB password, admin password) comes from key `harbor`: the chart's own generated values would
 re-roll on every Argo CD render (`helm template` has no `lookup`).
 
@@ -431,7 +431,7 @@ The `build` step mounts it (optional) as `buildkitd.toml`. A mirror with a path 
 `<host>/dockerhub/library/golang`, so `FROM` lines keep their upstream names and digests (a digest-pinned base resolves
 to the same digest through the proxy). The run's registry credentials (`robot$builder`, pull on every proxy-cache
 project) authenticate the mirror; BuildKit falls back to upstream like containerd. Cold and warm build timings:
-[#38](https://github.com/koorikla/platform/issues/38).
+[#38](https://github.com/Sparky-stack/platform/issues/38).
 
 ### Images and architectures
 
@@ -441,7 +441,7 @@ This is a **deliberate, expiring exception** to the multi-arch rule: the 8 Harbo
 `valkey-photon`, tag prefix `v2.15.`) are listed in `hack/image-audit.sh` `ARCH_EXCEPTIONS` with an expiry
 (2027-03-31), so `task images:audit` reports them as `EXCEPTION` and stays green. A Harbor bump or the expiry date drops
 the exception and the audit fails again; the list goes away with Harbor 2.16
-([#27](https://github.com/koorikla/platform/issues/27)). `hack/tests/test_image_audit.sh` pins the list to exactly those
+([#27](https://github.com/Sparky-stack/platform/issues/27)). `hack/tests/test_image_audit.sh` pins the list to exactly those
 images. On arm64 hosts use `registry.type: external`. Everything else here (BuildKit, toolbox, Argo Workflows,
 cluster-agent, toolchains, Python, PostgreSQL) is multi-arch and pinned by digest.
 
@@ -495,7 +495,7 @@ per run a 5Gi workspace PVC (deleted with the workflow).
 ## Open work
 
 Before builds run untrusted code on a shared cloud mgmt cluster: dedicated build nodes
-([#32](https://github.com/koorikla/platform/issues/32)), per-repository git credentials and branch protection for the
-hand-off ([#34](https://github.com/koorikla/platform/issues/34)), per-project Harbor robots
-([#35](https://github.com/koorikla/platform/issues/35)). Values not yet confirmed live:
-[#40](https://github.com/koorikla/platform/issues/40).
+([#32](https://github.com/Sparky-stack/platform/issues/32)), per-repository git credentials and branch protection for the
+hand-off ([#34](https://github.com/Sparky-stack/platform/issues/34)), per-project Harbor robots
+([#35](https://github.com/Sparky-stack/platform/issues/35)). Values not yet confirmed live:
+[#40](https://github.com/Sparky-stack/platform/issues/40).

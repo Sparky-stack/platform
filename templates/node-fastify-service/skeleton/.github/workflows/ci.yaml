@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    uses: koorikla/platform/.github/workflows/app-node.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1.0.0
+    uses: Sparky-stack/platform/.github/workflows/app-node.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1.0.0
     permissions:
       contents: read
       actions: read
@@ -27,7 +27,7 @@ jobs:
   bump:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: koorikla/platform/.github/workflows/app-workload-bump.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1.0.0
+    uses: Sparky-stack/platform/.github/workflows/app-workload-bump.yaml@3311f541a8eab72a2649b6f1eda4fe05efa3142e # ci-v1.0.0
     permissions:
       contents: write
     with:
