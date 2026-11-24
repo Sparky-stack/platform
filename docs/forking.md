@@ -245,7 +245,8 @@ and retry until the CRDs they need exist: expected (docs/openchoreo.md "Ordering
 | http://observer.openchoreo.localhost:11080 | observability (logs, metrics, traces) API; browse it through the console | via the console |
 | `development-default.dev1.apps.localhost:19080/hello-world-http/` | hello-world on `dev1` (container IP, not published; docs/openchoreo.md "App traffic") | none |
 
-Read a seeded password:
+On the local lab the console, Thunder and Harbor passwords are also in `~/.config/koorikla-platform/lab-logins.env`,
+created once and reused by every rebuild ([dev-environment.md](dev-environment.md#lab-logins)). Read a seeded password:
 
 ```bash
 kubectl --context k3d-platform-mgmt -n platform-secrets get secret openchoreo \

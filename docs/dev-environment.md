@@ -77,6 +77,31 @@ agents) runs your global tool versions, so use `mise exec --` there. `hack/test.
 | `tools:lock` | refresh `mise.lock` for all six platforms after editing `mise.toml` |
 | `clean` | drop downloaded chart dependencies |
 
+## Lab logins
+
+The local lab's UI passwords are created once and kept outside the cluster, in
+`~/.config/koorikla-platform/lab-logins.env` (`$XDG_CONFIG_HOME/koorikla-platform/` when set; mode 600). A clean
+rebuild (`task down && task up`, the nightly rehearsal) brings back the same passwords, so save them once in a password
+manager.
+
+| Line | Login |
+|---|---|
+| `OPENCHOREO_ADMIN_PASSWORD` | OpenChoreo console, `admin@openchoreo.dev` |
+| `OPENCHOREO_DEVELOPER_PASSWORD` | OpenChoreo console, `developer@openchoreo.dev` |
+| `THUNDER_ADMIN_PASSWORD` | Thunder console, user `admin` |
+| `HARBOR_ADMIN_PASSWORD` | Harbor, user `admin` |
+
+- `task secrets` (part of `task up`) seeds these values into the `platform` store (keys `openchoreo` and `harbor`); the
+  file wins over the store. Without the file it is created: from the passwords a running stack already has, else from
+  fresh random ones (24 alphanumerics with upper, lower and digit). A missing line is appended the same way; existing
+  lines are never rewritten. `task up` and `task status` print the file's path, never a value.
+- Rotate: `task down`, delete the file (or one line), `task up`. Thunder and Harbor create these users on first start,
+  so an edited value on a running stack reaches the store but not the login: rotate with a rebuild. Keep values
+  alphanumeric: Thunder's bootstrap splices them into YAML.
+- Argo CD is not in the file: it generates its own admin password at install (`argocd-initial-admin-secret`, `task
+  status` prints the command that reads it). A fixed one would need a bcrypt hash in its Helm values, and the toolchain
+  has no portable bcrypt tool.
+
 ## Why mise + Task
 
 - **mise** reads one file, installs prebuilt, checksum-verified binaries for each OS/arch, and activates them per

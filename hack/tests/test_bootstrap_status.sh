@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # bootstrap/bootstrap.sh never prints a password: `status` (also the end of `up`) lists each UI the installation runs
 # (Argo CD, plus the OpenChoreo console, Thunder and Harbor when their HTTPRoute exists) with its URL or port-forward
-# and the command that reads its login password; `ui` prints the Argo CD one. A fake kubectl answers every Secret read
-# with a sentinel: it must not appear in the output, decoded or encoded, and no Secret may even be read. Output of these
-# commands lands in terminals, CI logs and agent transcripts.
+# and the command that reads its login password, plus the path of the lab logins file; `ui` prints the Argo CD one. A
+# fake kubectl answers every Secret read (and the lab logins file holds) a sentinel: it must not appear in the output,
+# decoded or encoded, and no Secret may even be read. Output of these commands lands in terminals, CI logs and agent
+# transcripts.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -36,6 +37,7 @@ exit 0
 EOF
 chmod +x "$BIN/"*
 
+has_lab_line() { [[ "$OUT" == *"Lab logins "* ]] && echo yes || echo no; }
 # pw_cmd <ns> <secret> <key>: regex of the printed command that reads one Secret key.
 pw_cmd() { printf '%s' "kubectl --context fake -n $1 get secret $2 -o jsonpath='\\{\\.data\\.$3\\}' \\| base64 --decode; echo"; }
 
@@ -58,6 +60,15 @@ assert_match "$OUT" "Thunder console     http://thunder\.openchoreo\.localhost:8
 assert_match "$OUT" "$(pw_cmd thunder thunder-bootstrap thunder-admin-password)" "status: Thunder password command"
 assert_match "$OUT" "Harbor              https://harbor\.openchoreo\.localhost:9443 " "status: Harbor URL (sectionName https)"
 assert_match "$OUT" "$(pw_cmd harbor harbor-platform HARBOR_ADMIN_PASSWORD)" "status: Harbor password command"
+
+assert_eq "$(has_lab_line)" no "status: no lab logins line before the file exists"
+# The lab logins file (bootstrap.sh lab_logins_file): status names it, never prints what is in it.
+LABF="$TMP/config/koorikla-platform/lab-logins.env"
+mkdir -p "${LABF%/*}"; printf 'THUNDER_ADMIN_PASSWORD=%s\n' "$SENTINEL" > "$LABF"
+run status-lab cmd_status
+assert_match "$OUT" "Lab logins          $LABF: the console, Thunder and Harbor passwords below are also there" \
+  "status: names the lab logins file"
+rm -f "$LABF"
 
 run status-no-addons cmd_status FAKE_ROUTES=none
 assert_eq "$(grep -cE 'OpenChoreo console|Thunder console|Harbor ' "$HLOG/out" || true)" 0 \

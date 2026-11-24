@@ -80,13 +80,13 @@ fake_bin_yq() {
 }
 
 # run_isolated <name> <script> [VAR=val ...]: bash <script> with only HOME, PATH=$BIN:/usr/bin:/bin, SYSTEMROOT (Winsock
-# on Windows), TMPDIR, HLOG and the given variables. Fakes log their argv to $HLOG/calls. Sets HLOG, RC and OUT
-# (stdout+stderr, colours stripped).
+# on Windows), TMPDIR, XDG_CONFIG_HOME=$TMP/config (never the user's real config, e.g. the lab logins file), HLOG and the
+# given variables. Fakes log their argv to $HLOG/calls. Sets HLOG, RC and OUT (stdout+stderr, colours stripped).
 run_isolated() {
   local name=$1 script=$2; shift 2
   HLOG="$TMP/out/$name"; mkdir -p "$HLOG"; : > "$HLOG/calls"
-  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" HLOG="$HLOG" \
-      "$@" "$BASH" "$script" > "$HLOG/out" 2>&1; then
+  if env -i HOME="$HOME" PATH="$BIN:/usr/bin:/bin" SYSTEMROOT="${SYSTEMROOT:-}" TMPDIR="$TMP" XDG_CONFIG_HOME="$TMP/config" \
+      HLOG="$HLOG" "$@" "$BASH" "$script" > "$HLOG/out" 2>&1; then
     RC=0
   else
     RC=$?

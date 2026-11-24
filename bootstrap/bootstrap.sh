@@ -292,27 +292,69 @@ rand_alnum() {
   openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-"${1:-24}"
 }
 
-# seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>|=@hex32] ...: generates each missing
-# property once and keeps existing values on re-runs. @strong satisfies upper/lower/digit/special password policies.
+# rand_login: 24 alphanumerics with an upper, a lower and a digit (Harbor's policy), easy to type on a phone.
+rand_login() {
+  local v=""
+  until [[ "$v" =~ [[:upper:]] && "$v" =~ [[:lower:]] && "$v" =~ [[:digit:]] ]]; do v=$(rand_alnum); done
+  printf '%s' "$v"
+}
+
+# --- lab logins: the local lab's UI passwords live in a file outside the cluster, so they survive `task down && up` ---
+
+lab_logins_file() { printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/koorikla-platform/lab-logins.env"; }
+
+# lab_login <VAR>: the value of VAR=... in the lab logins file, "" without file or line. Read line by line, never sourced.
+lab_login() {
+  local file k v
+  file=$(lab_logins_file)
+  [[ -f "$file" ]] || return 0
+  while IFS='=' read -r k v || [[ -n "$k" ]]; do
+    [[ "$k" == "$1" ]] && { printf '%s' "${v%$'\r'}"; return 0; }
+  done < "$file"
+  return 0
+}
+
+# save_lab_login <VAR> <value>: append VAR=value to the lab logins file, creating it first (mode 600, new dirs 700).
+# Existing lines are never rewritten.
+save_lab_login() {
+  local file
+  file=$(lab_logins_file)
+  if [[ ! -f "$file" ]]; then
+    ( umask 077; mkdir -p "${file%/*}"
+      printf '%s\n' "# Local lab login passwords, written once by 'task secrets' / 'task up' and kept across" \
+        "# 'task down && task up'. Rotate: task down, delete this file, task up. docs/dev-environment.md" > "$file" )
+    chmod 600 "$file"
+    log "  lab logins: created $file"
+  fi
+  printf '%s=%s\n' "$1" "$2" >> "$file"
+}
+
+# seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>|=@hex32|=@login:<VAR>] ...: generates each
+# missing property once and keeps existing values on re-runs. @strong satisfies upper/lower/digit/special password
+# policies. @login:<VAR> is a lab login: the value of VAR in lab_logins_file wins; without one, the existing value (or
+# else rand_login) is appended to that file, so the next clean rebuild seeds the same password.
 seed_generated_secret() {
   local name=$1 existing; shift
   existing=$(get_secret_yaml platform-secrets "$name") \
     || die "failed to look up secret platform-secrets/$name in context '$CTX'; refusing to generate or overwrite secrets"
   local -a specs=() vals=()
-  local spec k fixed val i=0
+  local spec k fixed val saved i=0
   for spec in "$@"; do
     k=${spec%%=*}; fixed=""; [[ "$spec" == *=* ]] && fixed=${spec#*=}
-    val=""
-    [[ -n "$existing" ]] && val=$(printf '%s\n' "$existing" | K="$k" yq -r '.data[strenv(K)] // ""' 2>/dev/null | b64dec 2>/dev/null || true)
+    val=""; saved=""
+    [[ "$fixed" == @login:* ]] && { saved=$(lab_login "${fixed#@login:}"); val=$saved; }
+    [[ -z "$val" && -n "$existing" ]] && val=$(printf '%s\n' "$existing" | K="$k" yq -r '.data[strenv(K)] // ""' 2>/dev/null | b64dec 2>/dev/null || true)
     if [[ -z "$val" ]]; then
       case "$fixed" in
         "")      val=$(rand_alnum) ;;
         @strong) val="Px9!$(rand_alnum)" ;;
         @hex32)  val=$(openssl rand -hex 32) ;;       # 32 random bytes as 64 hex chars (OpenBao static seal key)
+        @login:*) val=$(rand_login) ;;
         @[0-9]*) val=$(rand_alnum "${fixed#@}") ;;   # exact length (Harbor secretKey 16, CSRF key 32)
         *)       val=$fixed ;;
       esac
     fi
+    [[ "$fixed" == @login:* && -z "$saved" ]] && save_lab_login "${fixed#@login:}" "$val"
     # shellcheck disable=SC2034  # read by apply_secret through the spec name vals[i]
     vals[i]=$val
     specs+=("${k}=vals[$i]")
@@ -321,8 +363,10 @@ seed_generated_secret() {
   apply_secret platform-secrets "$name" "${specs[@]}"
 }
 
+# The three console logins (Thunder console admin, admin@ and developer@openchoreo.dev) are lab logins (@login).
 seed_openchoreo_secret() {
-  seed_generated_secret openchoreo thunder-admin-password admin-user-password developer-user-password \
+  seed_generated_secret openchoreo thunder-admin-password=@login:THUNDER_ADMIN_PASSWORD \
+    admin-user-password=@login:OPENCHOREO_ADMIN_PASSWORD developer-user-password=@login:OPENCHOREO_DEVELOPER_PASSWORD \
     backstage-client-secret backstage-backend-secret service-mcp-client-secret
   # Observability plane (addon openchoreo-observability-plane) and data-plane telemetry; observer-client-secret is
   # shared with Thunder's observer OAuth client.
@@ -336,9 +380,10 @@ seed_openchoreo_secret() {
 
 # Harbor (addon harbor): every key the chart would otherwise generate per render, the admin password and the robot
 # secrets (builder: in-cluster builds, nodes: k3s node pulls). Harbor's policy: >= 8 chars, upper + lower + digit.
+# The admin password is a lab login (@login).
 seed_harbor_secret() {
-  seed_generated_secret harbor admin-password=@strong secret-key=@16 core-secret csrf-key=@32 jobservice-secret \
-    registry-http-secret registry-password database-password builder-secret=@strong nodes-secret=@strong
+  seed_generated_secret harbor admin-password=@login:HARBOR_ADMIN_PASSWORD secret-key=@16 core-secret csrf-key=@32 \
+    jobservice-secret registry-http-secret registry-password database-password builder-secret=@strong nodes-secret=@strong
 }
 
 # OpenBao static auto-unseal key (addon openbao, local backend only; cloud installations use a KMS seal instead). Never
@@ -498,6 +543,10 @@ cmd_secrets() {
   seed_cosign_secret
   seed_openbao_secret
   log "  openchoreo, openchoreo-observability, harbor, cosign-platform, openbao-unseal: generated once, kept on re-runs"
+  log "  console, Thunder and Harbor admin passwords: $(lab_logins_file) (kept across task down/up)"
+  local perms
+  perms=$(file_group_other_perms "$(lab_logins_file)")
+  [[ -z "$perms" || "$perms" == "------" ]] || warn "$(lab_logins_file) is accessible by group/others (mode ...${perms}): chmod 600 it"
   seed_byo_kubeconfigs
   # A running stack picks up a newly seeded (or removed) gate App without a full `up`.
   if kubectl --context "$CTX" -n argocd get application root -o name >/dev/null 2>&1; then
@@ -662,6 +711,8 @@ access_info() {
   echo "=== Access (run a password command to read it; this output never contains one) ==="
   echo "Argo CD             http://localhost:8081 via 'task ui' (= kubectl --context $CTX port-forward -n argocd svc/argocd-server 8081:80)"
   admin_password_hint
+  [[ ! -f "$(lab_logins_file)" ]] \
+    || echo "Lab logins          $(lab_logins_file): the console, Thunder and Harbor passwords below are also there"
   url=$(route_url openchoreo-control-plane backstage)
   if [[ -n "$url" ]]; then
     echo "OpenChoreo console  $url (Backstage; sign-in through Thunder)"
