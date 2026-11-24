@@ -38,13 +38,13 @@ rejects() { local l=$1 re=$2 v; shift 2; for v in "$@"; do assert_eq "$([[ "$v" 
 for wf in go dockerfile; do
   url=$(cw "$wf" "$S.repository.properties.url.pattern")
   assert_nonempty "$url" "$wf: repository.url has a pattern"
-  accepts "$wf url" "$url" https://github.com/koorikla/hello-world https://github.com/koorikla/hello-world.git \
-    https://github.com/koorikla/a_b-c.d
+  accepts "$wf url" "$url" https://github.com/Sparky-stack/hello-world https://github.com/Sparky-stack/hello-world.git \
+    https://github.com/Sparky-stack/a_b-c.d
   rejects "$wf url" "$url" https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
-    https://github.com/koorikla/../platform https://github.com/koorikla/.. https://github.com/koorikla/a/b \
-    http://github.com/koorikla/x "https://github.com/koorikla/x?y=1" https://u:p@github.com/koorikla/x \
-    https://github.com.evil.io/koorikla/x file:///etc/passwd git@github.com:koorikla/x.git "" \
-    "$(printf 'https://github.com/koorikla/ok\nhttps://attacker.example/x')"
+    https://github.com/Sparky-stack/../platform https://github.com/Sparky-stack/.. https://github.com/Sparky-stack/a/b \
+    http://github.com/koorikla/x "https://github.com/Sparky-stack/x?y=1" https://u:p@github.com/koorikla/x \
+    https://github.com.evil.io/koorikla/x file:///etc/passwd git@github.com:Sparky-stack/x.git "" \
+    "$(printf 'https://github.com/Sparky-stack/ok\nhttps://attacker.example/x')"
   wl=$(cw "$wf" "$S.gitops.properties.workloadPath.pattern")
   accepts "$wf workloadPath" "$wl" deploy/openchoreo/workload.yaml deploy/openchoreo/api.yaml
   rejects "$wf workloadPath" "$wl" .github/workflows/ci.yaml deploy/openchoreo/../../.github/workflows/ci.yaml \
@@ -94,7 +94,7 @@ for step in checkout gitops; do
 done
 
 SEC="$TMP/git-secret"; mkdir -p "$SEC"; printf 'builder' > "$SEC/username"; printf 'TOKEN-FAKE-123' > "$SEC/password"
-ALLOWED="https://github.com/koorikla/ https://git.example.com/team/"
+ALLOWED="https://github.com/Sparky-stack/ https://git.example.com/team/"
 # guard <cmd>: run cmd after sourcing guards.sh in a clean environment (no user gitconfig); OUT = stdout+stderr, RC = rc
 guard() {
   if env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$SEC" GIT_ALLOWED_PREFIXES="$ALLOWED" \
@@ -104,18 +104,18 @@ guard() {
 mkdir -p "$TMP/home"
 fill() { printf 'git_access %q; printf "url=%%s\\\\n\\\\n" %q | git credential fill 2>&1 || true' "$1" "$2"; }
 
-guard "$(fill https://github.com/koorikla/hello-world.git https://github.com/koorikla/hello-world.git)"; out=$OUT
+guard "$(fill https://github.com/Sparky-stack/hello-world.git https://github.com/Sparky-stack/hello-world.git)"; out=$OUT
 assert_match "$out" 'password=TOKEN-FAKE-123' "allowed repo: credential helper answers"
 guard "$(fill https://git.example.com/team/app https://git.example.com/team/app)"; out=$OUT
 assert_match "$out" 'password=TOKEN-FAKE-123' "second allowed prefix: credential helper answers"
 for victim in https://attacker.example/koorikla/x.git https://github.com/other/x.git https://github.com/koorikla-evil/x.git \
   https://git.example.com/other/x; do
-  guard "$(fill https://github.com/koorikla/hello-world.git "$victim")"; out=$OUT
+  guard "$(fill https://github.com/Sparky-stack/hello-world.git "$victim")"; out=$OUT
   assert_eq "$([[ "$out" == *TOKEN-FAKE-123* ]] && echo leaked || echo kept)" kept "token not sent to $victim (redirect/401)"
 done
 for bad in https://attacker.example/x.git https://github.com/other/x https://github.com/koorikla-evil/x \
-  https://github.com/koorikla/../platform https://github.com/koorikla/a/b "file:///$TMP" "ext::sh -c touch% /tmp/pwned" \
-  "$(printf 'https://github.com/koorikla/ok\nhttps://attacker.example/x')"; do
+  https://github.com/Sparky-stack/../platform https://github.com/Sparky-stack/a/b "file:///$TMP" "ext::sh -c touch% /tmp/pwned" \
+  "$(printf 'https://github.com/Sparky-stack/ok\nhttps://attacker.example/x')"; do
   guard "git_access $(printf %q "$bad"); echo REACHED"; out=$OUT
   assert_eq "$RC:$([[ "$out" == *REACHED* ]] && echo reached || echo stopped)" "1:stopped" "git_access refuses '$bad'"
   assert_match "$out" 'not under an allowed prefix' "git_access says why for '$bad'"
@@ -124,8 +124,8 @@ done
 guard 'git_access https://attacker.example/x.git'
 assert_eq "$OUT" ">> repository 'https://attacker.example/x.git' is not under an allowed prefix ($ALLOWED)" \
   "foreign host: exact message"
-guard 'GIT_ALLOWED_PREFIXES=""; git_access https://github.com/koorikla/x; echo REACHED'; out=$OUT
-assert_eq "$RC:$out" "1:>> repository 'https://github.com/koorikla/x' is not under an allowed prefix (none)" \
+guard 'GIT_ALLOWED_PREFIXES=""; git_access https://github.com/Sparky-stack/x; echo REACHED'; out=$OUT
+assert_eq "$RC:$out" "1:>> repository 'https://github.com/Sparky-stack/x' is not under an allowed prefix (none)" \
   "empty allowlist refuses everything"
 for ref in --upload-pack=touch -b "a b"; do
   guard "check_ref $(printf %q "$ref")"
@@ -142,28 +142,28 @@ guard 'check_workload_path deploy/openchoreo/workload.yaml'
 assert_eq "$RC" 0 "check_workload_path accepts deploy/openchoreo/workload.yaml"
 # https only: file:// (and every other transport) is off even for a URL that slipped through
 git init -q --bare "$TMP/bare.git"
-guard "git_access https://github.com/koorikla/x; git ls-remote file://$TMP/bare.git && echo LISTED"; out=$OUT
+guard "git_access https://github.com/Sparky-stack/x; git ls-remote file://$TMP/bare.git && echo LISTED"; out=$OUT
 assert_eq "$([[ "$out" == *LISTED* ]] && echo listed || echo blocked)" blocked "protocol.allow never: file:// blocked"
-guard 'git_access https://github.com/koorikla/x; env | grep -c "^GIT_ASKPASS=" || true'; out=$OUT
+guard 'git_access https://github.com/Sparky-stack/x; env | grep -c "^GIT_ASKPASS=" || true'; out=$OUT
 assert_eq "$out" 0 "git_access leaves no GIT_ASKPASS"
-guard 'git_access https://github.com/koorikla/x; echo "$GIT_CONFIG_NOSYSTEM $GIT_CONFIG_GLOBAL"'
+guard 'git_access https://github.com/Sparky-stack/x; echo "$GIT_CONFIG_NOSYSTEM $GIT_CONFIG_GLOBAL"'
 assert_eq "$OUT" "1 /dev/null" "git_access: no system or global gitconfig"
 # No token (the platform GitHub App is not installed on the repository, so ESO's generator never wrote <run>-git): the
 # run stops with the reason instead of an anonymous clone and a failing push at the end (#34).
 rm -f "$TMP/git-credential"
 out=$(env -i PATH="$PATH" HOME="$TMP/home" TMPDIR="$TMP" GIT_SECRET_DIR="$TMP/none" GIT_SECRET_WAIT=0 GIT_SECRET=run-1-git \
-  RUN_NAMESPACE=workflows-default GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
-  GUARDS="$GUARDS" bash -c 'set -euo pipefail; source "$GUARDS"; git_access https://github.com/koorikla/x; echo REACHED' 2>&1 || true)
+  RUN_NAMESPACE=workflows-default GIT_ALLOWED_PREFIXES="https://github.com/Sparky-stack/" \
+  GUARDS="$GUARDS" bash -c 'set -euo pipefail; source "$GUARDS"; git_access https://github.com/Sparky-stack/x; echo REACHED' 2>&1 || true)
 assert_eq "$([[ "$out" == *REACHED* ]] && echo reached || echo stopped):$([[ -e "$TMP/git-credential" ]] && echo helper || echo none)" \
   "stopped:none" "no git token: the run stops, no anonymous clone"
-assert_eq "$out" ">> no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created.\
+assert_eq "$out" ">> no GitHub token for https://github.com/Sparky-stack/x: Secret run-1-git was not created.\
  The platform GitHub App must be installed on this repository with Contents: Read and write\
  (GitHub: Settings > Applications > the App > Configure > Repository access). Status:\
  kubectl -n workflows-default describe externalsecret run-1-git;\
  GitHub's answer (e.g. 422 not accessible to the installation): kubectl -n external-secrets logs\
  deploy/external-secrets | grep run-1-git" "no git token: exact message (Secret, App permission hint, ExternalSecret, ESO log)"
 assert_matches "$out" <<'CASES'
-no git token: says which Secret | no GitHub token for https://github.com/koorikla/x: Secret run-1-git was not created
+no git token: says which Secret | no GitHub token for https://github.com/Sparky-stack/x: Secret run-1-git was not created
 no git token: says what to fix | GitHub App must be installed on this repository
 no git token: points at the ExternalSecret | kubectl -n workflows-default describe externalsecret run-1-git
 no git token: points at GitHub's answer (ESO log) | logs deploy/external-secrets \| grep run-1-git
@@ -263,13 +263,13 @@ chmod +x "$GB/git" "$GB/curl"
 gitops() {   # gitops <source repo> <codes> <image> [source commit] [workload path] -> RC, OUT; curl calls in $GX.calls
   rm -rf "$GX.calls"*; stage "$GX"
   if env -i PATH="$GB:$WL_PATH" HOME="$GX" TMPDIR="$GX" REAL_GIT="$REAL_GIT" GITOPS_SRC="$1" CALLS="$GX.calls" CODES="$2" \
-      GIT_SECRET_DIR="$SEC" REPO=https://github.com/koorikla/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/koorikla/" \
+      GIT_SECRET_DIR="$SEC" REPO=https://github.com/Sparky-stack/hello-world.git GIT_ALLOWED_PREFIXES="https://github.com/Sparky-stack/" \
       GITHUB_API_URL=https://api.github.com GITOPS_BRANCH=main WORKLOAD_PATH="${5:-deploy/openchoreo/workload.yaml}" \
       IMAGE="$3" COMMIT_SHA="${4:-bbb}" SHORT_SHA=bbb COMPONENT=hello PROJECT=demo NAMESPACE=default RUN=run-1 \
       bash "$GX/opt/scripts/workflow/gitops.sh" > "$GX.out" 2>&1; then RC=0; else RC=$?; fi
   OUT=$(cat "$GX.out")
 }
-in_repo=" in https://github.com/koorikla/hello-world.git@main"
+in_repo=" in https://github.com/Sparky-stack/hello-world.git@main"
 fence_msg() { [[ "$1" == *"not found (or a symlink"* || "$1" == *"is not an OpenChoreo Workload"* || "$1" == *"resolves outside"* ]] && echo refused || echo passed; }
 R="$TMP/repo"; mkdir -p "$R/deploy/openchoreo" "$R/.github/workflows"
 printf 'apiVersion: openchoreo.dev/v1alpha1\nkind: Workload\nspec: {}\n' > "$R/deploy/openchoreo/workload.yaml"
@@ -316,12 +316,12 @@ if base64 -w0 </dev/null >/dev/null 2>&1 && [[ -z "${WL_SKIP:-}" && "$(os_name)"
   BLOB=$(cd "$SRC" && "$REAL_GIT" rev-parse HEAD:deploy/openchoreo/workload.yaml)
   gitops "$SRC" "201" new:1
   assert_eq "$RC" 0 "gitops API: committed"
-  assert_match "$OUT" 'committed c0ffee to koorikla/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
+  assert_match "$OUT" 'committed c0ffee to Sparky-stack/hello-world@main as koorikla-promotion-gate\[bot\]' "gitops API: reports the bot commit"
   assert_eq "$(wc -l < "$GX.calls" | tr -d ' ')" 1 "gitops API: one request"
   call=$(cat "$GX.calls")
   assert_match "$call" '-X PUT' "gitops API: PUT"
   assert_match "$call" '--proto =https' "gitops API: https only"
-  assert_match "$call" 'https://api.github.com/repos/koorikla/hello-world/contents/deploy/openchoreo/workload.yaml$' \
+  assert_match "$call" 'https://api.github.com/repos/Sparky-stack/hello-world/contents/deploy/openchoreo/workload.yaml$' \
     "gitops API: the run's repository (.git removed) and the Workload path"
   assert_eq "$([[ "$call" == *TOKEN-FAKE-123* ]] && echo argv || echo header-file)" header-file "gitops API: token not in argv"
   assert_eq "$(cat "$GX.calls.auth")" "Authorization: Bearer TOKEN-FAKE-123" "gitops API: token in the auth header file"
@@ -336,8 +336,8 @@ OpenChoreo WorkflowRun run-1 (default/demo/hello): new:1" "gitops API: commit me
   assert_match "$OUT" '>> main moved, re-reading \(attempt 1\)' "gitops API: says the branch moved"
   gitops "$SRC" "403" new:1
   assert_eq "$RC" 1 "gitops API: 403 fails the run"
-  assert_eq "$OUT" ">> GitHub contents API (koorikla/hello-world deploy/openchoreo/workload.yaml): HTTP 403 Resource not accessible\
- by integration. The platform GitHub App needs Contents: Read and write on koorikla/hello-world, and a bypass if main is\
+  assert_eq "$OUT" ">> GitHub contents API (Sparky-stack/hello-world deploy/openchoreo/workload.yaml): HTTP 403 Resource not accessible\
+ by integration. The platform GitHub App needs Contents: Read and write on Sparky-stack/hello-world, and a bypass if main is\
  protected" "gitops API: GitHub's answer and the App permission hint, word for word"
   gitops "$SRC" "201" old aaa
   assert_eq "$RC:$([[ -e "$GX.calls" ]] && echo called || echo none)" "0:none" "gitops API: unchanged Workload, no commit"

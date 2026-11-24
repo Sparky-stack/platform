@@ -2,7 +2,7 @@
 
 ${{ values.description }}
 
-Go service created from the koorikla/platform golden path (`templates/go-service`). Owner: `${{ values.owner }}`,
+Go service created from the Sparky-stack/platform golden path (`templates/go-service`). Owner: `${{ values.owner }}`,
 OpenChoreo project `${{ values.project }}`.
 
 ## Endpoints
@@ -24,7 +24,7 @@ docker build -t ${{ values.name }}:dev .   # runs the unit tests in the build st
 
 ## CI and delivery
 
-`.github/workflows/ci.yaml` is two calls to koorikla/platform reusable workflows, pinned by commit SHA (Renovate keeps
+`.github/workflows/ci.yaml` is two calls to Sparky-stack/platform reusable workflows, pinned by commit SHA (Renovate keeps
 them current); there is no CI code in this repository:
 
 1. `build` (`app-go.yaml`): `go vet`, golangci-lint, `go test -race`, govulncheck, CodeQL, multi-arch distroless image.
@@ -38,5 +38,5 @@ Staging and production move by pull request: set `spec.releaseName` in `deploy/o
 to the release running in the previous environment. Production is gated (code-owner review + the platform's promotion
 gate).
 
-Repository settings and rulesets are not set here: koorikla/platform declares them (`GitHubRepository`, reconciled by
+Repository settings and rulesets are not set here: Sparky-stack/platform declares them (`GitHubRepository`, reconciled by
 Crossplane).

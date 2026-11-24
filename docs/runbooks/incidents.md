@@ -68,7 +68,7 @@ Each failure mode below has its own Steps, Verify and Rollback.
   ```
   - **Host I/O or swap thrash (`leaderelection lost`)**: check `free -g`; reduce local footprint per [scaling-and-capacity.md](scaling-and-capacity.md).
   - **Single-server CAPD rollout lost `etcd` quorum**: recover the surviving server with `--cluster-reset` ([break-glass.md](break-glass.md#single-server-etcd-quorum-loss)).
-  - **Workload cluster recreated under the same name**: kick stalled `RenderedRelease` controllers ([#51](https://github.com/koorikla/platform/issues/51)):
+  - **Workload cluster recreated under the same name**: kick stalled `RenderedRelease` controllers ([#51](https://github.com/Sparky-stack/platform/issues/51)):
     ```bash
     kubectl --context k3d-platform-mgmt -n default annotate renderedrelease --all \
       platform.koorikla.io/kick="$(date +%s)" --overwrite
@@ -122,7 +122,7 @@ Each failure mode below has its own Steps, Verify and Rollback.
   ```
   Fix the underlying cause (never weaken `production` to `Audit`):
   - **Tag-only image (`requireDigest`)**: update the app `Workload` image to `<repo>:<tag>@sha256:<digest>` (the app-* workflows output `image_digest_ref`) and cut a new `ComponentRelease`.
-  - **Repository or `workflowRef` mismatch**: add a trusted source for `owner/repo` (ref, trigger) to `imageVerification.github.trustedSources` in `installations/<inst>/addons/kyverno-policies/values.yaml` ([supply-chain.md](../supply-chain.md#trusted-sources)) or align `workflowRef` with koorikla/platform tag `ci-v1`.
+  - **Repository or `workflowRef` mismatch**: add a trusted source for `owner/repo` (ref, trigger) to `imageVerification.github.trustedSources` in `installations/<inst>/addons/kyverno-policies/values.yaml` ([supply-chain.md](../supply-chain.md#trusted-sources)) or align `workflowRef` with Sparky-stack/platform tag `ci-v1`.
   - **Harbor `apps/` image fails the platform-key check**: with no inline `publicKey`, the key comes from mgmt in ConfigMap `kyverno/platform-image-verification`. Check it exists on the cluster and that `ClusterResourceSet/<cluster>-image-verification` in `fleet` on mgmt is applied ([supply-chain.md](../supply-chain.md#wiring-the-key)).
   - **Webhook timeout (`context deadline exceeded`)**: a check of a digest not yet in Kyverno's verification cache takes ~5-10 s ([supply-chain.md "Admission latency"](../supply-chain.md#admission-latency)); much slower means the cluster's egress to `ghcr.io` / `tuf-repo-cdn.sigstore.dev` is degraded. The rollout retries; successful checks are cached per digest.
   - **Kyverno webhook down (`failurePolicy: Fail`)**: running production pods stay up and platform namespaces are excluded; restore `deploy/kyverno-admission-controller` in `kyverno`.
@@ -192,7 +192,7 @@ Each failure mode below has its own Steps, Verify and Rollback.
   $K -n openbao delete pod openbao-0
   $K -n openbao wait --for=condition=Ready pod/openbao-0 --timeout=120s
   ```
-  - **Cloud KMS auto-unseal (`awskms` / `transit`, [#31](https://github.com/koorikla/platform/issues/31))** `(not yet verified live)`: check `openbao-0` logs for KMS IAM/Pod Identity or key-policy errors, restore KMS access, and restart `openbao-0`.
+  - **Cloud KMS auto-unseal (`awskms` / `transit`, [#31](https://github.com/Sparky-stack/platform/issues/31))** `(not yet verified live)`: check `openbao-0` logs for KMS IAM/Pod Identity or key-policy errors, restore KMS access, and restart `openbao-0`.
   - **Static key lost / corrupted locally** (`decryption failed` on startup): `data-openbao-0` cannot be unsealed without its original key; re-initialize OpenBao via [break-glass.md](break-glass.md#openbao-local-re-initialization).
 - **Verify**: `$K -n openbao exec openbao-0 -- bao status` shows `Sealed: false`, `CronJob/mesh-reconcile` succeeds, and `kubectl --kubeconfig dev1.kubeconfig -n istio-system get issuer openbao-mesh` is `Ready=True`.
 - **Rollback**: if a seal stanza edit in `addons/openbao` caused the failure, `git revert` it before deleting any PVC.
@@ -220,7 +220,7 @@ Each failure mode below has its own Steps, Verify and Rollback.
     kubectl --kubeconfig dev1.kubeconfig -n openchoreo-data-plane rollout restart deploy/cluster-agent-dataplane
     ```
   - **DNS / port `8443` path broken locally**: confirm `coredns-local-dev1` is `Synced` and `k3d-platform-mgmt-serverlb` is on Docker network `kind`.
-  - **Cluster recreated under the same name ([#51](https://github.com/koorikla/platform/issues/51))**: once the agent reconnects, kick `RenderedRelease`s ([openchoreo.md](../openchoreo.md#known-issue-re-created-data-plane-clusters)):
+  - **Cluster recreated under the same name ([#51](https://github.com/Sparky-stack/platform/issues/51))**: once the agent reconnects, kick `RenderedRelease`s ([openchoreo.md](../openchoreo.md#known-issue-re-created-data-plane-clusters)):
     ```bash
     $K -n default annotate renderedrelease --all platform.koorikla.io/kick="$(date +%s)" --overwrite
     ```

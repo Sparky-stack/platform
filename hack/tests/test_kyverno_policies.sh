@@ -71,7 +71,7 @@ for m in cfg.get("customManagers", []):
         continue
     for ms in m.get("matchStrings", []):
         hit = re.search(ms.replace("(?<", "(?P<"), text)
-        if hit and m.get("depNameTemplate") == "koorikla/platform":
+        if hit and m.get("depNameTemplate") == "Sparky-stack/platform":
             print(hit.group("currentDigest"), hit.group("currentValue"))
 PY
 )

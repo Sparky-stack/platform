@@ -62,7 +62,7 @@ falco:
       url: http://falco-falcosidekick:2801   # == falcosidekick.fullnameOverride
   customRules:
     platform-rules.yaml: |-
-      # Platform rules (koorikla/platform addons/falco). App namespaces = OpenChoreo data-plane namespaces
+      # Platform rules (Sparky-stack/platform addons/falco). App namespaces = OpenChoreo data-plane namespaces
       # dp-<org>-<project>-<env>-<hash>. Talon acts on these rule names (falco-talon.config.rulesOverride).
       - list: platform_namespaces
         items: [kube-system, kube-public, kube-node-lease, local-path-storage, falco, telemetry, obi, cert-manager,

@@ -1,5 +1,5 @@
-# Copy to .github/workflows/ci.yaml. Docs: https://github.com/koorikla/platform/tree/main/ci
-# Platform repos pin the koorikla/platform app-* workflows by commit SHA (`@<sha> # ci-vX.Y.Z`, tracked by Renovate);
+# Copy to .github/workflows/ci.yaml. Docs: https://github.com/Sparky-stack/platform/tree/main/ci
+# Platform repos pin the Sparky-stack/platform app-* workflows by commit SHA (`@<sha> # ci-vX.Y.Z`, tracked by Renovate);
 # the platform's admission policy verifies signatures against that commit.
 name: ci
 
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   node:
-    uses: koorikla/platform/.github/workflows/app-node.yaml@<sha> # ci-v1.0.0
+    uses: Sparky-stack/platform/.github/workflows/app-node.yaml@<sha> # ci-v1.0.0
     permissions:
       contents: read
       actions: read
@@ -38,7 +38,7 @@ jobs:
   bump:
     needs: node
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: koorikla/platform/.github/workflows/app-workload-bump.yaml@<sha> # ci-v1.0.0
+    uses: Sparky-stack/platform/.github/workflows/app-workload-bump.yaml@<sha> # ci-v1.0.0
     permissions:
       contents: write
     with:

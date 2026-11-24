@@ -2,7 +2,7 @@
 role: mgmt
 
 installation:
-  githubOrg: https://github.com/koorikla
+  githubOrg: https://github.com/Sparky-stack
 
 secrets:
   # -- `kubernetes` (`platform-secrets` / `openchoreo-secrets`), `aws`, or `vault`.

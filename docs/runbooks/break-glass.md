@@ -86,7 +86,7 @@ $K -n thunder delete pvc thunder-database-pvc
 
 Use it on local or `dev` clusters with `controlPlane.replicas: 1` when the `2 -> 1` etcd member removal of a rollout
 lost quorum (the new server already holds the data). Data written before the loss survives and the API accepts writes
-again (tested on a two-server k3s reproduction, [#56](https://github.com/koorikla/platform/issues/56)).
+again (tested on a two-server k3s reproduction, [#56](https://github.com/Sparky-stack/platform/issues/56)).
 
 The newest server joined through the load balancer, so cluster-api-k3s wrote `server: https://<endpoint>` into its `/etc/rancher/k3s/config.yaml`. k3s refuses `--cluster-reset` while that is set (`cannot perform cluster-reset while server URL is set`). Remove the line for the reset only and restore it afterwards. k3s then starts from the reset data and ignores `server:`. On the first (`cluster-init`) server the `sed` changes nothing.
 

@@ -37,7 +37,7 @@ spec:
     name: go # test, multi-arch image, scan, sign, then commit the image digest into workload.yaml
     parameters:
       repository:
-        url: https://github.com/koorikla/hello-world.git
+        url: https://github.com/Sparky-stack/hello-world.git
         revision: { branch: main }
         appPath: "."
       docker: { context: ".", filePath: Dockerfile }

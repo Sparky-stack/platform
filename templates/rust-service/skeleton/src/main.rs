@@ -1,4 +1,4 @@
-//! Golden-path Rust service (koorikla/platform templates/rust-service): JSON API, health and version endpoints,
+//! Golden-path Rust service (Sparky-stack/platform templates/rust-service): JSON API, health and version endpoints,
 //! structured logs, graceful shutdown. Replace the handlers with your own; keep /healthz (the platform's probes and
 //! smoke tests use it).
 

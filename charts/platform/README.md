@@ -189,9 +189,9 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.thunder.roles[0] | string | `"mgmt"` |  |
 | dns.domainFilters | list | `[]` |  |
 | dns.provider | string | `"none"` |  |
-| installation.githubOrg | string | `"https://github.com/koorikla"` |  |
+| installation.githubOrg | string | `"https://github.com/Sparky-stack"` |  |
 | installation.name | string | `"local"` | GitOps repository and org scope (`installation.{name,repoURL,revision,githubOrg}`) layered from `installations/<inst>/installation.yaml`. |
-| installation.repoURL | string | `"https://github.com/koorikla/platform.git"` |  |
+| installation.repoURL | string | `"https://github.com/Sparky-stack/platform.git"` |  |
 | installation.revision | string | `"HEAD"` |  |
 | mgmt.addons | object | `{}` | `mgmt` addon opt-in/opt-out overrides. |
 | mgmt.environment | string | `"mgmt"` |  |

@@ -4,9 +4,9 @@
 # workload clusters are CAPA k3s clusters (ClusterClass k3s-aws). Adding a cluster: docs/providers.md.
 installation:
   name: aws-example
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
-  githubOrg: https://github.com/koorikla
+  githubOrg: https://github.com/Sparky-stack
   domain: aws.example.com                     # VERIFY: a Route 53 zone you own
 
 mgmt:
@@ -34,7 +34,7 @@ secrets:
 registry:
   type: external
   external:
-    repository: ghcr.io/koorikla
+    repository: ghcr.io/sparky-stack
     credentialsKey: platform-ghcr
 
 capi:

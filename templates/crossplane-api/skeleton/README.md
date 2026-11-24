@@ -3,7 +3,7 @@
 ${{ values.description }}
 
 A platform API as a Crossplane Configuration package, laid out by `crossplane project init` (Crossplane CLI 2.4
-Project tooling, beta) and scaffolded from the koorikla/platform `crossplane-api` golden path:
+Project tooling, beta) and scaffolded from the Sparky-stack/platform `crossplane-api` golden path:
 
 | Path | What |
 |---|---|
@@ -25,16 +25,16 @@ mise exec -- crossplane project build                 # _output/${{ values.name 
 mise exec -- crossplane project run                   # optional: local dev control plane (KIND), `project stop`
 ```
 
-The full loop and how it relates to the platform's k3d stack: koorikla/platform `docs/crossplane.md` ("Inner loop").
+The full loop and how it relates to the platform's k3d stack: Sparky-stack/platform `docs/crossplane.md` ("Inner loop").
 
 ## CI
 
-`.github/workflows/ci.yaml` calls koorikla/platform `app-crossplane-configuration.yaml` (pinned by SHA): PRs validate
+`.github/workflows/ci.yaml` calls Sparky-stack/platform `app-crossplane-configuration.yaml` (pinned by SHA): PRs validate
 and render every example (diffed against `tests/render/expected/<example>` when present); pushes to `main` and `v*`
 tags build, push, sign (cosign keyless) and attest the Configuration and the embedded function.
 
 ## Installing it
 
-A cluster installs the package through koorikla/platform `addons/crossplane` (pinned by digest, dependency resolution
+A cluster installs the package through Sparky-stack/platform `addons/crossplane` (pinned by digest, dependency resolution
 off). Composing plain Kubernetes kinds (the sample ConfigMap) needs a ClusterRole labelled
 `rbac.crossplane.io/aggregate-to-crossplane: "true"` there.

@@ -87,7 +87,7 @@ openchoreo-platform `files/platform/`, OpenChoreo 1.3.3 API):
 `keda-scaler` is allowed on `service`, `web-application` and `worker`, not on `scheduled-task` (CronJob). The cluster
 agent may apply these kinds (addon openchoreo-data-plane `templates/cluster-agent-data-services.yaml`; upstream's
 ClusterRole knows none of them). Kafka has no type: the event bus as a service (XR across Strimzi / MSK / Managed
-Kafka) is [#113](https://github.com/koorikla/platform/issues/113) / [#114](https://github.com/koorikla/platform/issues/114),
+Kafka) is [#113](https://github.com/Sparky-stack/platform/issues/113) / [#114](https://github.com/Sparky-stack/platform/issues/114),
 and no local cluster runs Strimzi (host RAM).
 
 ### Only on data planes that run the operator
@@ -149,7 +149,7 @@ package (`kubectl get configuration.pkg`) keeps the agent waiting, by design.
 One developer-facing API, `platform.koorikla.io/v1alpha1` `PostgreSQL` (a namespaced Crossplane v2 composite resource,
 no claims). The cluster's provider decides the backend: **CloudNativePG** in-cluster where there is no managed database
 (local docker, Hetzner, Talos on vSphere), **Amazon RDS / Aurora** on AWS, **Cloud SQL** on GCP, **Azure Database for
-PostgreSQL Flexible Server** on Azure. Design and owner decisions: [#91](https://github.com/koorikla/platform/issues/91).
+PostgreSQL Flexible Server** on Azure. Design and owner decisions: [#91](https://github.com/Sparky-stack/platform/issues/91).
 
 ### Developer view
 
@@ -275,7 +275,7 @@ empty), so each provider installs a handful of CRDs.
 - **Passwords** never pass through Crossplane functions: CNPG and RDS generate them; on GCP / Azure ESO generates one
   into the connection Secret (once; deleting the Secret rotates it) and the provider sets it from there. Cloud
   identifiers: `pg-<namespace>-<name>-<hash of cluster/namespace/name>`. Cloud `username` is the owner/master role;
-  per-app least-privilege roles: [#107](https://github.com/koorikla/platform/issues/107).
+  per-app least-privilege roles: [#107](https://github.com/Sparky-stack/platform/issues/107).
 - **Cluster facts** (values only, `installations/<inst>/addons/crossplane/{values,cluster-<name>}.yaml`; a missing one
   fails the render): [crossplane.md](crossplane.md#cluster-facts-environmentconfig). CNPG backups also need
   `plugin-barman-cloud.enabled: true` in addon cloudnative-pg.
@@ -290,7 +290,7 @@ empty), so each provider installs a handful of CRDs.
   `Cluster` and goes with the XR either way: keep backups on.
 - Packaging, Pod Security of Functions / Providers (PSS `restricted`), offline render tests and the one-off
   `compositionRef` patch when upgrading from the Helm-templated API: [crossplane.md](crossplane.md). Live checks:
-  [#107](https://github.com/koorikla/platform/issues/107).
+  [#107](https://github.com/Sparky-stack/platform/issues/107).
 
 ## MySQL as a service
 

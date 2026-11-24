@@ -27,7 +27,7 @@ for p in $PACKAGES; do
   assert_eq "$(yq -r '.apiVersion + " " + .kind + " " + .metadata.name' "$pf" 2>/dev/null)" "dev.crossplane.io/v1alpha1 Project $p" "$p: crossplane-project.yaml is Project $p"
   assert_eq "$([[ -e $d/crossplane.yaml ]] && echo classic || echo project)" project "$p: no classic crossplane.yaml next to the project file"
   assert_eq "$(yq -r '.spec.repository' "$pf")" "ghcr.io/koorikla/platform/$p" "$p: repository (names the embedded function)"
-  assert_eq "$(yq -r '.spec.source' "$pf")" "github.com/koorikla/platform/tree/main/packages/$p" "$p: package source"
+  assert_eq "$(yq -r '.spec.source' "$pf")" "github.com/Sparky-stack/platform/tree/main/packages/$p" "$p: package source"
   assert_nonempty "$(yq -r '.spec.crossplane.version' "$pf")" "$p: crossplane version constraint"
   for sub in apis examples functions operations tests/render; do
     assert_eq "$([[ -d $d/$sub ]] && echo yes)" yes "$p: has $sub/ (crossplane project init layout)"

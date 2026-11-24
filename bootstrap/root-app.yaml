@@ -9,7 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/koorikla/platform.git
+    repoURL: https://github.com/Sparky-stack/platform.git
     targetRevision: HEAD
     path: charts/platform
     helm:

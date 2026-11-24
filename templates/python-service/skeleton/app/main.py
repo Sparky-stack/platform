@@ -1,4 +1,4 @@
-"""Golden-path Python service (koorikla/platform templates/python-service): JSON API, health and version endpoints.
+"""Golden-path Python service (Sparky-stack/platform templates/python-service): JSON API, health and version endpoints.
 
 Replace the routes with your own; keep /healthz (the platform's probes and smoke tests use it).
 """

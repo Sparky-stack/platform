@@ -45,6 +45,6 @@ spec:
   repository: ghcr.io/koorikla/platform/mysql
   description: MySQL as a service
   maintainer: koorikla platform
-  source: github.com/koorikla/platform/tree/main/packages/mysql
+  source: github.com/Sparky-stack/platform/tree/main/packages/mysql
   crossplane:
     version: '>=v2.4.0'

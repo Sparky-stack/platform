@@ -7,7 +7,7 @@ installation, then shows what changes for AWS / Hetzner.
 
 | Step | Command | Time |
 |---|---|---|
-| [1. Fork and clone](#1-fork-and-clone) | `gh repo fork koorikla/platform --clone` | 2 min |
+| [1. Fork and clone](#1-fork-and-clone) | `gh repo fork Sparky-stack/platform --clone` | 2 min |
 | [2. Point the fork at itself](#2-point-the-fork-at-itself) | `task set-repo REPO=https://github.com/<you>/platform.git` | 1 min |
 | [3. Credentials](#3-credentials) | env vars + `task secrets` (local) / your secret manager (cloud) | 0-15 min |
 | [4. Boot](#4-boot) | `task up` | 20-30 min (first boot; image pulls dominate), ~15 min on a rebuild with warm registry caches |
@@ -17,13 +17,13 @@ installation, then shows what changes for AWS / Hetzner.
 
 | Repo | Fork it? | Why |
 |---|---|---|
-| [koorikla/platform](https://github.com/koorikla/platform) | **yes** | bootstrap, charts, addons, installations: the GitOps root |
-| [koorikla/hello-world](https://github.com/koorikla/hello-world) | optional | example tenant app (`installations/local/tenants/demo.yaml`). Fork it to see your own CI build, push and roll out an image; skip it to deploy the upstream image as-is |
-| [`ci/`](https://github.com/koorikla/platform/tree/main/ci) | optional | reusable workflows hello-world calls (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`). Fork it only if you want to own the build logic; otherwise pin the upstream tag or, better, a commit SHA |
+| [Sparky-stack/platform](https://github.com/Sparky-stack/platform) | **yes** | bootstrap, charts, addons, installations: the GitOps root |
+| [Sparky-stack/hello-world](https://github.com/Sparky-stack/hello-world) | optional | example tenant app (`installations/local/tenants/demo.yaml`). Fork it to see your own CI build, push and roll out an image; skip it to deploy the upstream image as-is |
+| [`ci/`](https://github.com/Sparky-stack/platform/tree/main/ci) | optional | reusable workflows hello-world calls (`uses: Sparky-stack/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`). Fork it only if you want to own the build logic; otherwise pin the upstream tag or, better, a commit SHA |
 
 ```bash
-gh repo fork koorikla/platform --clone && cd platform     # or fork in the UI and git clone
-gh repo fork koorikla/hello-world                         # optional
+gh repo fork Sparky-stack/platform --clone && cd platform     # or fork in the UI and git clone
+gh repo fork Sparky-stack/hello-world                         # optional
 mise trust && mise install                                # pinned toolchain (docs/dev-environment.md)
 task doctor                                               # every tool at the version in mise.toml
 ```
@@ -32,7 +32,7 @@ Forks of public repos are public. A public fork needs **no repo credentials at a
 empty private repo and mirror into it instead of forking:
 
 ```bash
-git clone --bare https://github.com/koorikla/platform.git && cd platform.git
+git clone --bare https://github.com/Sparky-stack/platform.git && cd platform.git
 git push --mirror https://github.com/<you>/platform.git && cd .. && rm -rf platform.git
 git clone https://github.com/<you>/platform.git
 ```
@@ -62,7 +62,7 @@ rewrites:
 | `REPO` | required | `https://<host>/<owner>/<name>.git` (ssh URLs are rejected: Argo CD credentials here are HTTPS) |
 | `ORG` | `REPO` minus `/<name>.git` | repo-creds prefix, if your app repos live in another org than the platform repo |
 | `APPS_ORG` | `ORG` | org of the tenant app repos. `APPS_ORG=https://github.com/koorikla` keeps the upstream hello-world when you did not fork it |
-| `DOCS=1` | off | also rewrite links in `README.md`, `docs/*.md` (except this page: its fork and mirror steps must keep naming upstream) and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`): `koorikla/platform` URLs and `[koorikla/platform]` link texts become `REPO` (a renamed fork gets its own name), `koorikla/hello-world` and `ghcr.io/koorikla/` follow `APPS_ORG` |
+| `DOCS=1` | off | also rewrite links in `README.md`, `docs/*.md` (except this page: its fork and mirror steps must keep naming upstream) and `docs/diagrams/src/build.py` (then run `python3 docs/diagrams/src/build.py`): `Sparky-stack/platform` URLs and `[Sparky-stack/platform]` link texts become `REPO` (a renamed fork gets its own name), `Sparky-stack/hello-world` and `ghcr.io/koorikla/` follow `APPS_ORG` |
 
 `task set-repo REPO=... ORG=... APPS_ORG=... DOCS=1` passes optional overrides on the same command.
 
@@ -72,9 +72,9 @@ What it deliberately leaves alone, and what you edit by hand if it applies:
 |---|---|
 | Label and annotation keys `platform.koorikla.io/*`, `addons.platform.koorikla.io/*` | **keep**: they are an API contract between the CAPI clusters, Argo CD cluster secrets and ApplicationSets (docs/conventions.md), not an org name. Renaming them means renaming every selector at once |
 | Chart defaults in `addons/*/values.yaml` (e.g. `addons/secret-stores` `installation.githubOrg`) | keep: only used when a chart renders standalone; every generated Application gets `installation.yaml`, which `set-repo` rewrote. The unit tests assert the defaults |
-| Links in prose and diagrams | `DOCS=1`, or leave them: they describe upstream. Plain-text mentions (`gh repo fork koorikla/platform`, diagram box titles) stay either way |
-| Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/koorikla/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
-| Your hello-world fork: `uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0` | keep (public, but pin a SHA), or point it at your platform fork and change the `uses:` owner |
+| Links in prose and diagrams | `DOCS=1`, or leave them: they describe upstream. Plain-text mentions (`gh repo fork Sparky-stack/platform`, diagram box titles) stay either way |
+| Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/sparky-stack/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
+| Your hello-world fork: `uses: Sparky-stack/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0` | keep (public, but pin a SHA), or point it at your platform fork and change the `uses:` owner |
 | `.devcontainer/devcontainer.json` name, `mise.toml` comment, schema cache dir `koorikla-platform` | cosmetic |
 
 ## 3. Credentials
@@ -221,7 +221,7 @@ task status     # CAPI clusters, Argo CD apps, ClusterDataPlanes, each UI's URL 
 ```
 
 What happens, roughly (8-CPU / 16 GB Linux host; a warm image cache is faster; other hosts:
-[#60](https://github.com/koorikla/platform/issues/60)):
+[#60](https://github.com/Sparky-stack/platform/issues/60)):
 
 | Minute | What |
 |---|---|

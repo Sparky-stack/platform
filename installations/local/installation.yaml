@@ -2,9 +2,9 @@
 # Consumed by charts/platform (root app values) and passed to every generated Application as `installation.*`.
 installation:
   name: local
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
-  githubOrg: https://github.com/koorikla      # repo-creds prefix (covers app repos too)
+  githubOrg: https://github.com/Sparky-stack      # repo-creds prefix (covers app repos too)
   domain: localhost                           # base domain for platform endpoints
 
 # The management cluster itself (not CAPI-managed in this installation: k3d).
@@ -67,7 +67,7 @@ registry:
       - { upstream: reg.kyverno.io, remote: "https://reg.kyverno.io" }
       - { upstream: cr.fluentbit.io, remote: "https://cr.fluentbit.io" }
   external:
-    repository: ghcr.io/koorikla              # used when type is external
+    repository: ghcr.io/sparky-stack              # used when type is external
     credentialsKey: platform-ghcr             # username, token
 
 capi:

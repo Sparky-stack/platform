@@ -88,7 +88,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/go
       image_name: ci-selftest-go
 
@@ -102,7 +102,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/nextjs
       image_name: ci-selftest-nextjs
 
@@ -115,7 +115,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/elixir
       image_name: ci-selftest-elixir
       build_args: |
@@ -131,7 +131,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/ruby
       image_name: ci-selftest-ruby
       trivy_ignore_file: ci/fixtures/ruby/.trivyignore.yaml
@@ -144,7 +144,7 @@ jobs:
       id-token: write
       attestations: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       package_root: ci/fixtures/crossplane-configuration
       package_name: ci-selftest-crossplane-configuration
 
@@ -157,7 +157,7 @@ jobs:
       attestations: write
     with:
       chart_path: ci/fixtures/helm/ci-selftest-helm
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
 
   crossplane-provider:
     uses: ./.github/workflows/app-crossplane-provider.yaml
@@ -169,7 +169,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/crossplane-provider
       package_name: ci-selftest-crossplane-provider
 
@@ -183,7 +183,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/python
       image_name: ci-selftest-python
 
@@ -197,7 +197,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/node
       image_name: ci-selftest-node
       start_entry: dist/server.js
@@ -212,7 +212,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/rust
       image_name: ci-selftest-rust
 
@@ -226,7 +226,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/java-quarkus
       image_name: ci-selftest-java-quarkus
 
@@ -240,7 +240,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/java-quarkus
       image_name: ci-selftest-java-quarkus-native
       native: true
@@ -256,7 +256,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       working_directory: ci/fixtures/java-spring
       image_name: ci-selftest-java-spring
 
@@ -274,10 +274,10 @@ jobs:
     permissions:
       contents: write
     with:
-      image: ghcr.io/koorikla/platform/ci-selftest-go:selftest
+      image: ghcr.io/sparky-stack/platform/ci-selftest-go:selftest
       digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
       workload_file: ci/fixtures/openchoreo/workload.yaml
       branch: ${{ github.head_ref || github.ref_name }}
       validate_command: >-
-        grep -q 'image: ghcr.io/koorikla/platform/ci-selftest-go:selftest@sha256:1111' ci/fixtures/openchoreo/workload.yaml
+        grep -q 'image: ghcr.io/sparky-stack/platform/ci-selftest-go:selftest@sha256:1111' ci/fixtures/openchoreo/workload.yaml
       push: false

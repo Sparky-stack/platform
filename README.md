@@ -29,7 +29,7 @@ task demo:check               # read-only PASS/FAIL table for every demo step
 task down                     # freeze Argo CD, delete workload clusters, delete mgmt
 ```
 
-- Run from your own fork: `gh repo fork koorikla/platform --clone`, then `task set-repo REPO=<your-fork-url>`
+- Run from your own fork: `gh repo fork Sparky-stack/platform --clone`, then `task set-repo REPO=<your-fork-url>`
   ([docs/forking.md](docs/forking.md)).
 - Lab login passwords (OpenChoreo console, Thunder, Harbor) are created once in
   `~/.config/koorikla-platform/lab-logins.env` and survive `task down && task up`
@@ -46,7 +46,7 @@ The full walkthrough with commands is [docs/demo.md](docs/demo.md) (about 30 min
 2. Add a cluster by committing `installations/<inst>/clusters/<name>.yaml`.
 3. Scaffold a new app repo from a Backstage golden-path template.
 4. Build multi-arch images with SBOM and SLSA provenance, signed with Cosign.
-5. Promote [koorikla/hello-world](https://github.com/koorikla/hello-world) `development -> staging -> production`,
+5. Promote [Sparky-stack/hello-world](https://github.com/Sparky-stack/hello-world) `development -> staging -> production`,
    gated by HTTP and 5xx SLO checks and a reviewed PR.
 6. Query logs, traces, metrics and Hubble flows from `mgmt`.
 7. Detect container anomalies with Falco and respond with Falco Talon and Argo Events.

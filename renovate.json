@@ -95,7 +95,7 @@
     },
     {
       "customType": "regex",
-      "description": "koorikla/platform app-container.yaml commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag ci-v1); bump together with the app repos' `uses: koorikla/platform/.github/workflows/app-*.yaml@<sha> # ci-v1.0.0`",
+      "description": "Sparky-stack/platform app-container.yaml commit Kyverno trusts for keyless signatures (kyverno-policies imageVerification.github.workflowRef, tracks tag ci-v1); bump together with the app repos' `uses: Sparky-stack/platform/.github/workflows/app-*.yaml@<sha> # ci-v1.0.0`",
       "managerFilePatterns": [
         "/^addons/kyverno-policies/values\\.yaml$/",
         "/^installations/[^/]+/addons/kyverno-policies/[^/]+\\.ya?ml$/"
@@ -104,7 +104,7 @@
         "workflowRef:\\s*\"?(?<currentDigest>[0-9a-f]{40})\"?\\s*#\\s*(?<currentValue>ci-v[0-9][^\\s]*)"
       ],
       "datasourceTemplate": "github-tags",
-      "depNameTemplate": "koorikla/platform"
+      "depNameTemplate": "Sparky-stack/platform"
     },
     {
       "customType": "regex",

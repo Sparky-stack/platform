@@ -8,7 +8,7 @@ import java.util.Map;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * Golden-path Quarkus service (koorikla/platform templates/java-quarkus-service): JSON API, health and version
+ * Golden-path Quarkus service (Sparky-stack/platform templates/java-quarkus-service): JSON API, health and version
  * endpoints. Replace the resources with your own; keep /healthz (the platform's probes and smoke tests use it).
  */
 @Path("/")

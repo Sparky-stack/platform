@@ -5,7 +5,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Location
 metadata:
   name: golden-path-templates
-  description: koorikla/platform golden-path project templates (docs/project-templates.md)
+  description: Sparky-stack/platform golden-path project templates (docs/project-templates.md)
 spec:
   targets:
     - ./crossplane-api/template.yaml

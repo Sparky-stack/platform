@@ -5,7 +5,7 @@ kind: Template
 metadata:
   name: java-quarkus-service
   title: Java service (Quarkus)
-  description: Recommended Java path - Quarkus REST service (health, metrics) on distroless Java 25, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
+  description: Recommended Java path - Quarkus REST service (health, metrics) on distroless Java 25, CI via Sparky-stack/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, java, quarkus, service, recommended]
   annotations:
     platform.koorikla.io/stack: java
@@ -60,8 +60,8 @@ spec:
           title: GitHub owner
           type: string
           description: Owner the platform write GitHub App (platform-github-app) is installed on
-          default: koorikla
-          enum: [koorikla]
+          default: Sparky-stack
+          enum: [Sparky-stack]
         visibility:
           title: Visibility
           type: string
@@ -139,7 +139,7 @@ spec:
       name: Platform pull request
       action: publish:github:pull-request
       input:
-        repoUrl: github.com?owner=koorikla&repo=platform
+        repoUrl: github.com?owner=Sparky-stack&repo=platform
         sourcePath: ./platform
         branchName: scaffold/${{ parameters.name }}
         title: 'feat(tenants): onboard ${{ parameters.repoOwner }}/${{ parameters.name }} (java-quarkus-service)'

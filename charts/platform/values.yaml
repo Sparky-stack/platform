@@ -4,9 +4,9 @@
 installation:
   # -- GitOps repository and org scope (`installation.{name,repoURL,revision,githubOrg}`) layered from `installations/<inst>/installation.yaml`.
   name: local
-  repoURL: https://github.com/koorikla/platform.git
+  repoURL: https://github.com/Sparky-stack/platform.git
   revision: HEAD
-  githubOrg: https://github.com/koorikla
+  githubOrg: https://github.com/Sparky-stack
 
 mgmt:
   # -- Management cluster identity (`mgmt.{name,provider,region,environment}`).

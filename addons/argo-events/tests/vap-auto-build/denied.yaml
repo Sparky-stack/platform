@@ -47,7 +47,7 @@ spec:
   workflowTemplateRef: { name: auto-build }
   arguments:
     parameters:
-      - { name: repository, value: https://github.com/koorikla/hello-world.git }
+      - { name: repository, value: https://github.com/Sparky-stack/hello-world.git }
       - { name: image, value: docker.io/library/alpine:3 }
 ---
 # 7. Artifacts instead of parameters.

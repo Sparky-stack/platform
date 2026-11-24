@@ -40,7 +40,7 @@ jobs:
           if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then echo "no OpenChoreo manifests at '${DIR}', skipping"; exit 0; fi
           d="$RUNNER_TEMP/koorikla-ci"
           rm -rf "$d" && git init -q "$d"
-          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-koorikla/platform}.git" "${CI_SHA:-main}"
+          git -C "$d" fetch -q --depth 1 "https://github.com/${CI_REPO:-Sparky-stack/platform}.git" "${CI_SHA:-main}"
           git -C "$d" checkout -q FETCH_HEAD
           echo "dir=$d/ci" >> "$GITHUB_OUTPUT"
 

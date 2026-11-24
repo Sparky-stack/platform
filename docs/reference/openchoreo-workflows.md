@@ -21,7 +21,7 @@ Any Dockerfile - dependency scan, multi-arch image, scan, SBOM, signature (no la
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  | Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only) |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Branch to build (and to commit the new image ref to) Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Commit to build (default: branch head) Pattern `^([0-9a-f]{7,40})?$`. |
@@ -50,7 +50,7 @@ mix project - compile --warnings-as-errors, format, credo, test (+ PostgreSQL), 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  | Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only) |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Branch to build (and to commit the new image ref to) Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Commit to build (default: branch head) Pattern `^([0-9a-f]{7,40})?$`. |
@@ -84,7 +84,7 @@ Go module - go vet, golangci-lint (if present), go test -race, govulncheck, mult
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  | Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only) |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Branch to build (and to commit the new image ref to) Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Commit to build (default: branch head) Pattern `^([0-9a-f]{7,40})?$`. |
@@ -117,7 +117,7 @@ Lint, unit-test, package, push and sign a Helm chart as an OCI artifact. Source:
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  |  |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Pattern `^([0-9a-f]{7,40})?$`. |
@@ -135,7 +135,7 @@ Next.js app - install, lint, typecheck, test, next build, dependency audit, mult
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  | Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only) |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Branch to build (and to commit the new image ref to) Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Commit to build (default: branch head) Pattern `^([0-9a-f]{7,40})?$`. |
@@ -183,7 +183,7 @@ Bundler app - rubocop, rspec / rails test (+ PostgreSQL), brakeman, bundler-audi
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `repository` | object | yes |  | Git repository of the component (the platform GitHub App must be installed on it; each run gets a token for this repository only) |
-| `repository.url` | string | yes |  | Git repository URL, under https://github.com/koorikla/ Pattern `^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
+| `repository.url` | string | yes |  | Git repository URL, under https://github.com/Sparky-stack/ Pattern `^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$`. |
 | `repository.revision` | object |  | `{}` |  |
 | `repository.revision.branch` | string |  | `main` | Branch to build (and to commit the new image ref to) Pattern `^[A-Za-z0-9_][A-Za-z0-9._/-]*$`. |
 | `repository.revision.commit` | string |  | `""` | Commit to build (default: branch head) Pattern `^([0-9a-f]{7,40})?$`. |

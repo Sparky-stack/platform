@@ -48,7 +48,7 @@ In the app repo, configure:
   - require a PR, one approval from code owners, dismiss stale approvals;
   - required status check `openchoreo/promotion-gate`. Pin it to the gate's GitHub App (store key
     `promotion-gate-github`, [forking.md](forking.md#3-credentials) (c2); setup:
-    [#10](https://github.com/koorikla/platform/issues/10)), so nobody else can set the status;
+    [#10](https://github.com/Sparky-stack/platform/issues/10)), so nobody else can set the status;
   - no bypass for admins, except a documented break-glass role.
 
 Argo CD then syncs the merged binding: `charts/tenant` gives every gated environment its own Application
@@ -157,7 +157,7 @@ For one component and one edge (default staging → next environment) the gate c
      the source environment during the last `observe.windowMinutes` (15).
    - **HTTP 5xx rate** from the observability-plane Prometheus (`promotionGate.prometheusURL`, plain PromQL, no
      token). Source: the data plane's kgateway Envoy, which terminates all north-south HTTP, so it works with any CNI
-     and with Istio ambient mTLS ([observability.md](observability.md#http-metrics), [#104](https://github.com/koorikla/platform/issues/104)).
+     and with Istio ambient mTLS ([observability.md](observability.md#http-metrics), [#104](https://github.com/Sparky-stack/platform/issues/104)).
      The gate resolves the source environment's namespace(s) from `kube_pod_labels` (`openchoreo.dev/namespace`,
      `project`, `component`, `environment` pod labels, over the window), then compares
      `sum(increase(envoy_cluster_upstream_rq{envoy_cluster_name=~"kube_<ns>_<component>_[0-9]+",envoy_response_code=~"5.."}[15m]))`
@@ -185,7 +185,7 @@ in the observer (`workflow` log scope).
   Sensor `promotion-gate` creates `WorkflowRun gate-<component>-<sha256(rolloutId)[:10]>`. The name is deterministic, so one rollout gives exactly one
   run, and re-delivered events fail with AlreadyExists. Both status checks reject the previous release's finished
   rollout, which a `releaseName` edit leaves behind twice: the spec-edit event itself carries the whole old status
-  (only the generation differs, [#155](https://github.com/koorikla/platform/issues/155)), and the controller's first
+  (only the generation differs, [#155](https://github.com/Sparky-stack/platform/issues/155)), and the controller's first
   status write still carries the old delivery.
 - Manual: create a WorkflowRun (below).
 
@@ -227,13 +227,13 @@ platform renders for it:
 - the AppProject `tenant-demo` sync window;
 - the authz denies (production bindings, deleting `hello-world`) and the VAP.
 
-App repo changes (koorikla/hello-world, outside this repo):
+App repo changes (Sparky-stack/hello-world, outside this repo):
 
 - `CODEOWNERS` + branch ruleset as in gate 1.
 - Builds write the image **by digest** into `workload.yaml`: the in-cluster build does it for every Component with
   `autoBuild: true` ([build-plane.md](build-plane.md#auto-build-poll-or-webhook)); on the optional GitHub Actions path
   the app-* workflows output `image_digest_ref`. Production denies tag-only references
-  ([#16](https://github.com/koorikla/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push`
+  ([#16](https://github.com/Sparky-stack/platform/issues/16)). Commit through the GitHub API (signed) rather than `git push`
   if `sourceIntegrity` is enabled ([supply-chain.md](supply-chain.md#git-commit-signatures)).
 - Optional `/` health endpoint for the smoke test (`promotionGate.smoke.path`).
 
@@ -321,10 +321,10 @@ Secrets (store `workflows` for the gate run, `platform` for addon thunder; seede
 
 ## Limits
 
-- The gate fails closed until its GitHub App is seeded ([#10](https://github.com/koorikla/platform/issues/10)).
+- The gate fails closed until its GitHub App is seeded ([#10](https://github.com/Sparky-stack/platform/issues/10)).
 - Locally `<env>-default.<cluster>.apps.localhost` resolves to the gate pod's own loopback on mgmt and CAPD node
   containers have no stable DNS name, so the local smoke probe connects by node IP (`smoke.connect: podHostIP`,
-  [#156](https://github.com/koorikla/platform/issues/156)); it supports plain-HTTP endpoints only.
+  [#156](https://github.com/Sparky-stack/platform/issues/156)); it supports plain-HTTP endpoints only.
 - Argo Events allows one source type per EventSource: the Falco webhook is EventSource `platform`, the
   ReleaseBinding watch is EventSource `releasebindings`.
 - After a WorkflowRun's TTL (1 hour) any status update of an old staging rollout re-runs the gate. It is idempotent: a

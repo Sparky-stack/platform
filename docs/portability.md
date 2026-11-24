@@ -61,7 +61,7 @@ Everything else renders identically on every workload cluster.
 ## Not portable yet
 
 - byo clusters as mesh members, and with them per-tenant OpenBao secrets on byo
-  ([#174](https://github.com/koorikla/platform/issues/174)).
+  ([#174](https://github.com/Sparky-stack/platform/issues/174)).
 - CSI drivers for the cloud examples (an addon per provider when one is booted).
-- Cloud paths are untested: AWS and Hetzner ([#26](https://github.com/koorikla/platform/issues/26)), GKE
-  ([#87](https://github.com/koorikla/platform/issues/87)).
+- Cloud paths are untested: AWS and Hetzner ([#26](https://github.com/Sparky-stack/platform/issues/26)), GKE
+  ([#87](https://github.com/Sparky-stack/platform/issues/87)).

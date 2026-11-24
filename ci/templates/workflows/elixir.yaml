@@ -1,4 +1,4 @@
-# Copy to .github/workflows/ci.yaml. Docs: https://github.com/koorikla/platform/tree/main/ci
+# Copy to .github/workflows/ci.yaml. Docs: https://github.com/Sparky-stack/platform/tree/main/ci
 name: ci
 
 on:
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   elixir:
-    uses: koorikla/platform/.github/workflows/app-elixir.yaml@<sha> # ci-v1.0.0
+    uses: Sparky-stack/platform/.github/workflows/app-elixir.yaml@<sha> # ci-v1.0.0
     permissions:
       contents: read
       packages: write

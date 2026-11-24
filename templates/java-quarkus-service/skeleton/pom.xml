@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Golden-path Quarkus service (koorikla/platform templates/java-quarkus-service). Versions: Renovate. -->
+<!-- Golden-path Quarkus service (Sparky-stack/platform templates/java-quarkus-service). Versions: Renovate. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>

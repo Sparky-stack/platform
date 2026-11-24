@@ -11,7 +11,7 @@ ab.log = lambda msg: None   # quiet: assertions check the outcome
 SHA_A = "a" * 40
 SHA_B = "b" * 40
 SHA_C = "c" * 40
-PREFIXES = ["https://github.com/koorikla/"]
+PREFIXES = ["https://github.com/Sparky-stack/"]
 
 SCHEMA = {
     "type": "object",
@@ -36,7 +36,7 @@ SCHEMA = {
 }
 
 
-def component(name="hello-world", auto=True, url="https://github.com/koorikla/hello-world.git", branch="main",
+def component(name="hello-world", auto=True, url="https://github.com/Sparky-stack/hello-world.git", branch="main",
               workflow="go"):
     params = {"repository": {"url": url, "appPath": "."}, "docker": {"context": "."}}
     if branch is not None:
@@ -49,7 +49,7 @@ def component(name="hello-world", auto=True, url="https://github.com/koorikla/he
 
 
 def workload(commit, image=""):
-    text = "spec:\n  source:\n    repository: https://github.com/koorikla/hello-world\n    commit: \"%s\"\n" % commit
+    text = "spec:\n  source:\n    repository: https://github.com/Sparky-stack/hello-world\n    commit: \"%s\"\n" % commit
     return text + ("  container:\n    image: %s\n    env:\n      - key: GREETING\n" % image if image else "")
 
 
@@ -124,7 +124,7 @@ def reconcile(api, state=None, **kw):
     return rec
 
 
-SLUG = "koorikla/hello-world"
+SLUG = "Sparky-stack/hello-world"
 WL = "deploy/openchoreo/workload.yaml"
 
 
@@ -145,13 +145,13 @@ class PureHelpers(unittest.TestCase):
         self.assertNotIn("revision", params["repository"])
 
     def test_repo_slug(self):
-        self.assertEqual(ab.repo_slug("https://github.com/koorikla/hello-world.git", PREFIXES), SLUG)
-        self.assertEqual(ab.repo_slug("https://github.com/koorikla/hello-world", PREFIXES), SLUG)
-        self.assertEqual(ab.repo_slug("https://github.com/Koorikla/hello-world/", PREFIXES), "Koorikla/hello-world")
+        self.assertEqual(ab.repo_slug("https://github.com/Sparky-stack/hello-world.git", PREFIXES), SLUG)
+        self.assertEqual(ab.repo_slug("https://github.com/Sparky-stack/hello-world", PREFIXES), SLUG)
+        self.assertEqual(ab.repo_slug("https://github.com/sparky-stack/hello-world/", PREFIXES), "sparky-stack/hello-world")
 
     def test_repo_slug_rejects(self):
-        for url in ["https://github.com/other/x.git", "http://github.com/koorikla/x", "https://gitlab.com/koorikla/x",
-                    "https://github.com/koorikla/../x", "https://github.com/koorikla/a/b", "git@github.com:koorikla/x",
+        for url in ["https://github.com/other/x.git", "http://github.com/Sparky-stack/x", "https://gitlab.com/koorikla/x",
+                    "https://github.com/Sparky-stack/../x", "https://github.com/Sparky-stack/a/b", "git@github.com:Sparky-stack/x",
                     None, 42, "https://github.com/koorikla-evil/x"]:
             self.assertIsNone(ab.repo_slug(url, PREFIXES), url)
 
@@ -310,9 +310,9 @@ class Reconcile(unittest.TestCase):
         self.assertEqual(len(api.created), 1)
 
     def test_webhook_repository_filter(self):
-        comps = [component(), component(name="other", url="https://github.com/koorikla/other.git")]
-        api = FakeApi(comps, {(SLUG, "main"): SHA_A, ("koorikla/other", "main"): SHA_B})
-        reconcile(api, repository="Koorikla/Hello-World")
+        comps = [component(), component(name="other", url="https://github.com/Sparky-stack/other.git")]
+        api = FakeApi(comps, {(SLUG, "main"): SHA_A, ("Sparky-stack/other", "main"): SHA_B})
+        reconcile(api, repository="sparky-stack/Hello-World")
         self.assertEqual([r["metadata"]["name"] for r in api.created], ["hello-world-aaaaaaaaaaaa"])
 
     def test_one_head_request_per_repo_and_branch(self):
@@ -334,10 +334,10 @@ class Reconcile(unittest.TestCase):
     def test_error_in_one_component_does_not_stop_others(self):
         class Broken(FakeApi):
             def branch_head(self, slug, branch, etag):
-                if slug == "koorikla/broken":
+                if slug == "Sparky-stack/broken":
                     raise ab.Failed("boom")
                 return super().branch_head(slug, branch, etag)
-        comps = [component(name="a", url="https://github.com/koorikla/broken"), component(name="b")]
+        comps = [component(name="a", url="https://github.com/Sparky-stack/broken"), component(name="b")]
         api = Broken(comps, {(SLUG, "main"): SHA_A})
         rec = reconcile(api)
         self.assertEqual([r["metadata"]["name"] for r in api.created], ["b-aaaaaaaaaaaa"])
@@ -804,7 +804,7 @@ class PreviewReconcile(unittest.TestCase):
         self.assertNotIn(("pull", SLUG, "7"), api.calls)
 
     def test_repository_must_be_the_components_build_repository(self):
-        api = self.api(apps=[preview_app(slug="koorikla/other")])
+        api = self.api(apps=[preview_app(slug="Sparky-stack/other")])
         previews(api)
         self.assertEqual(api.created, [])
         self.assertEqual(api.statuses, [])
@@ -837,7 +837,7 @@ class PreviewReconcile(unittest.TestCase):
 
     def test_webhook_repository_filter(self):
         api = self.api()
-        previews(api, repository="koorikla/other")
+        previews(api, repository="Sparky-stack/other")
         self.assertEqual(api.created, [])
 
 

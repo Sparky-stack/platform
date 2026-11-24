@@ -7,9 +7,9 @@ every CLI at the version in [`mise.toml`](../mise.toml), [`Taskfile.yml`](../Tas
 | Host | Status | Proof |
 |---|---|---|
 | Linux amd64 / arm64 | supported | `portability` workflow (`ubuntu-latest`, `ubuntu-24.04-arm`): `mise install`, `task lint test` |
-| macOS arm64 (Apple Silicon) / amd64 | supported (offline validation proven; `task up` not yet, [#60](https://github.com/koorikla/platform/issues/60)) | `macos-latest`, scripts forced onto the stock `/bin/bash` 3.2 |
+| macOS arm64 (Apple Silicon) / amd64 | supported (offline validation proven; `task up` not yet, [#60](https://github.com/Sparky-stack/platform/issues/60)) | `macos-latest`, scripts forced onto the stock `/bin/bash` 3.2 |
 | Windows 11 + WSL2 | **recommended on Windows**: it is Linux | as Linux |
-| Windows amd64, Git Bash | `doctor`/`lint`/`test` (incl. schemas) proven; `task up` not yet ([#60](https://github.com/koorikla/platform/issues/60)) | `windows-latest`, `shell: bash` |
+| Windows amd64, Git Bash | `doctor`/`lint`/`test` (incl. schemas) proven; `task up` not yet ([#60](https://github.com/Sparky-stack/platform/issues/60)) | `windows-latest`, `shell: bash` |
 | Windows on Arm | as above; helm/yq/argocd ship native arm64, jq/k3d/shellcheck run x64-emulated | lock entries only |
 | Dev container / Codespaces | zero-install option, amd64 + arm64 | `devcontainer` job builds it, starts its Docker engine and runs `task doctor lint` on both arches |
 
@@ -281,7 +281,7 @@ elsewhere:
 | Resources | host RAM | give the VM >= 8 CPUs / 16 GB (Docker Desktop: Settings -> Resources) |
 | `*.localhost` names (`openchoreo.localhost:8080`) | browsers and curl resolve to loopback | same in browsers and curl; other CLIs on macOS/Windows may need `/etc/hosts` / `C:\Windows\System32\drivers\etc\hosts` entries |
 
-Not yet proven with a full `task up` on these hosts: [#60](https://github.com/koorikla/platform/issues/60).
+Not yet proven with a full `task up` on these hosts: [#60](https://github.com/Sparky-stack/platform/issues/60).
 
 ## Local profiles
 
@@ -349,10 +349,10 @@ work inside the containers, so Linux, macOS and Windows Docker hosts behave the 
 
 | Setting | Where | Why |
 |---|---|---|
-| Embedded etcd (`--cluster-init`) | `bootstrap/k3d-mgmt.yaml` | kine/SQLite compaction crash-looped a busy single-server mgmt ([#76](https://github.com/koorikla/platform/issues/76)). etcd compacts incrementally. |
-| `--etcd-arg=unsafe-no-fsync=true` | `bootstrap/k3d-mgmt.yaml` | WAL fsyncs on the shared disk stalled etcd for over 8 s ([#344](https://github.com/koorikla/platform/issues/344)). |
+| Embedded etcd (`--cluster-init`) | `bootstrap/k3d-mgmt.yaml` | kine/SQLite compaction crash-looped a busy single-server mgmt ([#76](https://github.com/Sparky-stack/platform/issues/76)). etcd compacts incrementally. |
+| `--etcd-arg=unsafe-no-fsync=true` | `bootstrap/k3d-mgmt.yaml` | WAL fsyncs on the shared disk stalled etcd for over 8 s ([#344](https://github.com/Sparky-stack/platform/issues/344)). |
 | `CATTLE_ELECTION_LEASE_DURATION=120s`, `..._RENEW_DEADLINE=90s`, `..._RETRY_PERIOD=10s` | `bootstrap/k3d-mgmt.yaml` | k3s's own `k3s` and `k3s-etcd` leases. One server, so a long lease costs nothing. |
-| 60 s leases, 40 s renew deadline for kube-controller-manager, scheduler, cloud-controller-manager | `bootstrap/k3d-mgmt.yaml`, ClusterClass `k3s-docker` (`k3s.dockerLeaderElectionArgs`) | Upstream 15 s / 10 s lost leader election on 5-8 s fsync stalls ([#82](https://github.com/koorikla/platform/issues/82)). |
+| 60 s leases, 40 s renew deadline for kube-controller-manager, scheduler, cloud-controller-manager | `bootstrap/k3d-mgmt.yaml`, ClusterClass `k3s-docker` (`k3s.dockerLeaderElectionArgs`) | Upstream 15 s / 10 s lost leader election on 5-8 s fsync stalls ([#82](https://github.com/Sparky-stack/platform/issues/82)). |
 | `--leaderElectionRetryPeriod=10s` (60 s lease, 50 s deadline) | `addons/kyverno` | Upstream 2 s restarted all Kyverno controllers on etcd stalls and rejected pods while admission was down. The build `sign` step also retries (`retryPolicy: OnError`). |
 
 Trade-off: without fsync, a host or Docker VM crash can lose the last mgmt writes. Rebuild with `task down` and
@@ -426,7 +426,7 @@ publishes `linux/amd64` and `linux/arm64`.
 Every image must publish both. The only accepted exceptions are listed, each with an expiry, in
 `hack/image-audit.sh` `ARCH_EXCEPTIONS` (today: Harbor 2.15, [build-plane.md](build-plane.md#images-and-architectures));
 the audit reports them as `EXCEPTION`. Images that are tag-only or not fully qualified:
-[#45](https://github.com/koorikla/platform/issues/45).
+[#45](https://github.com/Sparky-stack/platform/issues/45).
 
 Apps built by the ci/ workflows must publish multi-arch images too, or arm64 hosts will fail to run them on CAPD clusters.
 

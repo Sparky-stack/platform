@@ -5,7 +5,7 @@ kind: Template
 metadata:
   name: rust-service
   title: Rust service (axum)
-  description: HTTP service in Rust (axum, tokio) as a static binary on distroless static, CI via koorikla/platform app-* workflows, deployed by OpenChoreo.
+  description: HTTP service in Rust (axum, tokio) as a static binary on distroless static, CI via Sparky-stack/platform app-* workflows, deployed by OpenChoreo.
   tags: [golden-path, rust, axum, service]
   annotations:
     platform.koorikla.io/stack: rust
@@ -60,8 +60,8 @@ spec:
           title: GitHub owner
           type: string
           description: Owner the platform write GitHub App (platform-github-app) is installed on
-          default: koorikla
-          enum: [koorikla]
+          default: Sparky-stack
+          enum: [Sparky-stack]
         visibility:
           title: Visibility
           type: string
@@ -139,7 +139,7 @@ spec:
       name: Platform pull request
       action: publish:github:pull-request
       input:
-        repoUrl: github.com?owner=koorikla&repo=platform
+        repoUrl: github.com?owner=Sparky-stack&repo=platform
         sourcePath: ./platform
         branchName: scaffold/${{ parameters.name }}
         title: 'feat(tenants): onboard ${{ parameters.repoOwner }}/${{ parameters.name }} (rust-service)'

@@ -29,7 +29,7 @@ on data planes at all: OpenChoreo's cluster-agent dials **out** to the control p
 behind a NAT where mgmt cannot reach its API cannot be CAPI-managed from this mgmt either, so that case is out of scope.
 
 Planned: argocd-agent in managed mode, so addon delivery is pulled by an agent per cluster and mgmt holds no workload
-admin kubeconfigs ([#20](https://github.com/koorikla/platform/issues/20)). Catalog and label targeting stay as they
+admin kubeconfigs ([#20](https://github.com/Sparky-stack/platform/issues/20)). Catalog and label targeting stay as they
 are; the agent's client cert would reach each cluster over the same ClusterResourceSet path as the OpenChoreo agent
 identity.
 
@@ -134,8 +134,8 @@ consumer.
 `installations/<inst>/` is one mgmt cluster and its fleet: `installation.yaml` (domain, secret backend, enabled CAPI
 providers, OpenChoreo endpoints, registry, promotion), `clusters/`, `addons/` overrides, `tenants/`. `local` is the
 booted one; `aws-example`, `hetzner-example` and `gcp-example` (GKE) are reference installations that render but have
-not been booted ([#26](https://github.com/koorikla/platform/issues/26),
-[#87](https://github.com/koorikla/platform/issues/87)).
+not been booted ([#26](https://github.com/Sparky-stack/platform/issues/26),
+[#87](https://github.com/Sparky-stack/platform/issues/87)).
 
 Local: mgmt is the k3d cluster `platform-mgmt` on Docker network `kind` (shared with CAPD), docker.sock mounted for
 CAPD. The workload cluster is the CAPD k3s cluster `dev1`, hosting the environments development, staging and production
@@ -183,8 +183,8 @@ build path identical on every installation ([build-plane.md](build-plane.md)).
 ### Repos
 | Repo | Owner | Contents |
 |---|---|---|
-| `koorikla/platform` | platform team | bootstrap, charts, addons, installations (fleet, tenants), OpenChoreo platform config |
-| `koorikla/hello-world` | app team | code, Dockerfile, CI, `deploy/openchoreo/` |
+| `Sparky-stack/platform` | platform team | bootstrap, charts, addons, installations (fleet, tenants), OpenChoreo platform config |
+| `Sparky-stack/hello-world` | app team | code, Dockerfile, CI, `deploy/openchoreo/` |
 
 Both are public. Private forks work with repo credentials from `platform-github` (ESO -> Argo CD `repo-creds`);
 nodes pull private GHCR images with `platform-ghcr` ([forking.md](forking.md#3-credentials)).

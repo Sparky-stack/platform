@@ -2,7 +2,7 @@
 
 ${{ values.description }}
 
-Python service created from the koorikla/platform golden path (`templates/python-service`): FastAPI on uvicorn,
+Python service created from the Sparky-stack/platform golden path (`templates/python-service`): FastAPI on uvicorn,
 dependencies locked with uv, ruff + pytest, distroless Python 3.13 image. Owner: `${{ values.owner }}`, OpenChoreo
 project `${{ values.project }}`.
 
@@ -29,11 +29,11 @@ Add a dependency with `uv add <pkg>` (commit `uv.lock`; the image build uses `--
 
 ## CI and delivery
 
-`.github/workflows/ci.yaml` calls the reusable `app-*` workflows (koorikla/platform), pinned by commit SHA (`# ci-v1.0.0`, Renovate keeps
+`.github/workflows/ci.yaml` calls the reusable `app-*` workflows (Sparky-stack/platform), pinned by commit SHA (`# ci-v1.0.0`, Renovate keeps
 them current): manifest validation, multi-arch image build + scan (pull requests) or build, push, SBOM, provenance and
 keyless signature (`main`), then the `bump` job pins the new image digest in `deploy/openchoreo/workload.yaml` and
-OpenChoreo deploys it to `development`. Until koorikla/platform ships its Python workflow the image build is the test gate.
+OpenChoreo deploys it to `development`. Until Sparky-stack/platform ships its Python workflow the image build is the test gate.
 
 Staging and production move by pull request: set `spec.releaseName` in `deploy/openchoreo/release-bindings/<env>.yaml`
 to the release running in the previous environment. Production is gated (code-owner review + the platform's promotion
-gate). Repository settings and rulesets are declared in koorikla/platform (`GitHubRepository`, reconciled by Crossplane).
+gate). Repository settings and rulesets are declared in Sparky-stack/platform (`GitHubRepository`, reconciled by Crossplane).

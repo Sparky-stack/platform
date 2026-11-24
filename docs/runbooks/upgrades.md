@@ -99,7 +99,7 @@ kubectl --kubeconfig dev1.kubeconfig -n istio-system rollout status ds/ztunnel -
 ### 6. Kyverno and supply-chain policy pins
 
 1. When bumping `addons/kyverno/Chart.yaml`, update `kyverno-policies.kyvernoVersion` in `addons/kyverno-policies/values.yaml` (and `kyverno` in `mise.toml` + `task tools:lock`) to the matching engine `appVersion`.
-2. When Renovate bumps `imageVerification.github.workflowRef` (the 40-hex commit SHA of koorikla/platform tag `ci-v1` in `addons/kyverno-policies/values.yaml`), bump or merge the matching `uses: koorikla/platform/.github/workflows/app-*.yaml@<sha>` pin in tenant app repos before promoting newly built images to `production` ([supply-chain.md](../supply-chain.md#image-signatures-and-attestations-at-admission)).
+2. When Renovate bumps `imageVerification.github.workflowRef` (the 40-hex commit SHA of Sparky-stack/platform tag `ci-v1` in `addons/kyverno-policies/values.yaml`), bump or merge the matching `uses: Sparky-stack/platform/.github/workflows/app-*.yaml@<sha>` pin in tenant app repos before promoting newly built images to `production` ([supply-chain.md](../supply-chain.md#image-signatures-and-attestations-at-admission)).
 3. Run the offline policy suite before pushing:
 
 ```bash

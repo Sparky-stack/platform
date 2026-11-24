@@ -5,7 +5,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 
 | Stage | Control | State |
 |---|---|---|
-| Image build (GitHub) | koorikla/platform reusable workflow `app-container.yaml`: multi-arch build, Trivy scan, Sigstore keyless signature, SPDX SBOM, SLSA provenance, vuln attestation (cosign v3 bundles) | on (app repos) |
+| Image build (GitHub) | Sparky-stack/platform reusable workflow `app-container.yaml`: multi-arch build, Trivy scan, Sigstore keyless signature, SPDX SBOM, SLSA provenance, vuln attestation (cosign v3 bundles) | on (app repos) |
 | Image build (in-cluster) | OpenChoreo workflow plane: cosign with the platform key (`cosign-platform`), Trivy vuln + SPDX SBOM attestations, no public tlog (docs/build-plane.md) | on (mgmt); admission trust per installation (below) |
 | Admission, data planes | Kyverno `ImageValidatingPolicy` + `ValidatingPolicy` per environment | on: Audit dev/staging, Deny production |
 | Git sources (Argo CD) | AppProject `sourceIntegrity` GnuPG policy | example, off (`sourceIntegrity.enabled`) |
@@ -24,11 +24,11 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **GitHub-built images** (`github.prefixes`, default `ghcr.io/koorikla/`):
   - issuer `https://token.actions.githubusercontent.com`;
   - subject = the reusable workflow at one commit: `github.workflow` + `@` + `github.workflowRef`
-    (`https://github.com/koorikla/platform/.github/workflows/app-container.yaml@<40-hex SHA>`). Rendering fails for anything but
+    (`https://github.com/Sparky-stack/platform/.github/workflows/app-container.yaml@<40-hex SHA>`). Rendering fails for anything but
     a full commit SHA: a tag such as `v1` is mutable, so whoever can move it would decide what is trusted. App repos
-    call the app-* workflows by the same SHA (`uses: koorikla/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`); the nested
+    call the app-* workflows by the same SHA (`uses: Sparky-stack/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0`); the nested
     `container.yaml` call inherits that ref, so it is what the Fulcio certificate names. Renovate bumps
-    `workflowRef` (custom manager in `renovate.json`, tag `ci-v1` of koorikla/platform) and the app repos' `uses:` pins
+    `workflowRef` (custom manager in `renovate.json`, tag `ci-v1` of Sparky-stack/platform) and the app repos' `uses:` pins
     (github-actions digest pinning) to the same commit;
   - **moving the pin**: running production images were signed at the previous commit, so a bare bump of
     `workflowRef` would deny their next rollout. `github.transitionWorkflowRefs` keeps the previous commit trusted
@@ -40,7 +40,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
     Steps: (1) move `workflowRef`, put the old SHA into `transitionWorkflowRefs`; (2) bump the app repos and promote
     their rebuilt images; (3) empty `transitionWorkflowRefs`, which denies images signed at the old commit. Rendering and
     `hack/tests/test_kyverno_policies.sh` allow 40-hex SHAs only, no repeats, at most two commits in total
-    ([#128](https://github.com/koorikla/platform/issues/128));
+    ([#128](https://github.com/Sparky-stack/platform/issues/128));
   - **plus** the certificate extensions `githubWorkflowRepository`, `githubWorkflowRef` and `githubWorkflowTrigger`,
     one record per trusted source in `github.trustedSources` (below). The subject alone would accept any repository on
     GitHub calling the public reusable workflow; the trigger pin (`push`) keeps out `pull_request_target` /
@@ -53,7 +53,7 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
 - **Workflow-plane images**: prefix `<registry.host>/<registry.appsProject>/` from installation.yaml (locally
   `harbor.openchoreo.localhost:9443/apps/`; host, port and project pinned), cosign public key
   (`platformKey.publicKey`, not a secret), no tlog by default. Keyless would need an OIDC issuer that Fulcio trusts
-  ([#37](https://github.com/koorikla/platform/issues/37)). The key is inline (`platformKey.publicKey`) or, with
+  ([#37](https://github.com/Sparky-stack/platform/issues/37)). The key is inline (`platformKey.publicKey`) or, with
   `registry.type: harbor`, delivered from mgmt to each workload cluster and read at admission; required signed
   attestations: SBOM (`https://spdx.dev/Document/v2.3`) and vuln. **Without a key source the registry is not a trusted
   source at all**: its images fail `openchoreo-trusted-registries-*` (denied in production, reported elsewhere) instead
@@ -74,13 +74,13 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   Audit `Ignore`. Webhook timeout 30 s, the maximum (a cold check takes ~5-10 s, below).
 
 Evidence (Kyverno CLI v1.20.0 against the real image
-`ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
+`ghcr.io/sparky-stack/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
 - `hack/tests/test_kyverno_policies.sh` with `KYVERNO_ONLINE=1`:
   - that image was built through `koorikla/ci@v1` (the archived predecessor repo), before the commit pin: it now fails in production ("expected SAN
     value …container.yaml@<sha>, got …container.yaml@refs/tags/v1") and is reported in staging. With the subject at
     `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
   - the tag-only reference fails in production.
-  - `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
+  - `ghcr.io/sparky-stack/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
     in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d` (the previous pin), fails since
     `transitionWorkflowRefs` is empty again.
   - an initContainer signed by a repository that is not allowed (the frozen old `ghcr.io/koorikla/ci-toolbox`, signed by
@@ -105,8 +105,8 @@ Evidence (Kyverno CLI v1.20.0 against the real image
 imageVerification:
   github:
     trustedSources:
-      - name: gh-koorikla-hello-world-heads-main
-        repository: koorikla/hello-world   # githubWorkflowRepository
+      - name: gh-sparky-stack-hello-world-heads-main
+        repository: Sparky-stack/hello-world   # githubWorkflowRepository
         ref: refs/heads/main               # githubWorkflowRef
         trigger: push                      # githubWorkflowTrigger
 ```
@@ -121,7 +121,7 @@ Helm replaces lists, so repeat the default entry if the installation still runs 
 imageVerification:
   github:
     trustedSources:
-      - {name: gh-koorikla-hello-world-heads-main, repository: koorikla/hello-world, ref: refs/heads/main, trigger: push}
+      - {name: gh-sparky-stack-hello-world-heads-main, repository: Sparky-stack/hello-world, ref: refs/heads/main, trigger: push}
       - {name: gh-acme-orders-heads-main, repository: acme/orders, ref: refs/heads/main, trigger: push}
 ```
 
@@ -131,7 +131,7 @@ with the old `repositories` / `refs` / `triggers` keys fails to render instead o
 ### Admission latency
 
 Production admission must finish within the webhook timeout (30 s max, `failurePolicy: Fail`), for every rollout
-([#136](https://github.com/koorikla/platform/issues/136)). Where the time goes, per keyless verification on Kyverno 1.20
+([#136](https://github.com/Sparky-stack/platform/issues/136)). Where the time goes, per keyless verification on Kyverno 1.20
 (measured from the local host against the real image; the admission controller logs show the same ~5-6 s per call):
 
 - **Sigstore TUF, ~1-1.5 s**: Kyverno refreshes the TUF metadata on every call, twice (sigstore `tuf.Initialize` with a
@@ -163,7 +163,7 @@ What the platform does about it:
   check on every admission.
 
 Measured on dev1 with a server dry-run in production (`kubectl -n <production cell namespace> run probe
---image=<ref> --dry-run=server`, timed; `<ref>` = `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`). "New
+--image=<ref> --dry-run=server`, timed; `<ref>` = `ghcr.io/sparky-stack/hello-world:5129f77@sha256:79cf2ede…`). "New
 digest" uses a reference Kyverno has not seen yet (same digest, another tag: the cache key is the full reference):
 
 | | before (#135: one policy, 4 checks) | after (#142) |
@@ -191,7 +191,7 @@ Two key sources for the workflow-plane prefix (addon kyverno-policies `imageVeri
 - **Inline** (`publicKey`): `cosign.pub` of store key `cosign-platform` in
   `installations/<inst>/addons/kyverno-policies/values.yaml` (print it with
   `kubectl -n platform-secrets get secret cosign-platform -o jsonpath='{.data.cosign\.pub}' | base64 -d`). For
-  long-lived installations with a stable key (or, better, a KMS key, [#37](https://github.com/koorikla/platform/issues/37)).
+  long-lived installations with a stable key (or, better, a KMS key, [#37](https://github.com/Sparky-stack/platform/issues/37)).
 - **From mgmt, per workload cluster** (default with `registry.type: harbor` and no `publicKey`; `installations/local`):
   `task secrets` generates a fresh pair per mgmt cluster, so no committed key could match. `charts/cluster`
   (`templates/common/image-verification-crs.yaml`) builds an ESO-templated ClusterResourceSet payload on mgmt and CAPI applies
@@ -226,7 +226,7 @@ the digest reference:
 - The app-* workflows already output it: `go.yaml` / `container.yaml` / `elixir.yaml` output `image_digest_ref`
   (`<image>:<tag>@sha256:<digest>`).
 - hello-world's `bump` job still writes the tag-only `needs.go.outputs.image`; switching it to `image_digest_ref` is
-  [#16](https://github.com/koorikla/platform/issues/16). Development and staging keep working meanwhile (Audit).
+  [#16](https://github.com/Sparky-stack/platform/issues/16). Development and staging keep working meanwhile (Audit).
 
 Builds themselves follow the same rule on mgmt: pods in the workflow run namespaces `workflows-*` admit only digest
 references (Kyverno `platform-workflow-image-digests`, Deny; [build plane](build-plane.md#security-posture-of-build-pods)).
@@ -241,7 +241,7 @@ render this policy when `sourceIntegrity.enabled: true`:
 sourceIntegrity:
   git:
     policies:
-      - repos: [{ url: "https://github.com/koorikla/*" }]
+      - repos: [{ url: "https://github.com/Sparky-stack/*" }]
         gpg:
           mode: head                 # none | head | strict
           keys: [B5690EEEBB952194]   # GitHub web-flow key: commits GitHub creates (UI merges, REST API commits)
@@ -253,7 +253,7 @@ sourceIntegrity:
 - Public keys go into the Argo CD keyring. Addon `argo-cd`:
   `argo-cd.configs.gpg.keys: { B5690EEEBB952194: "<armored public key>" }` (`gpg --export --armor`).
 - Off by default: the platform repo history and the hello-world CI bump (`git push` by github-actions) are not signed
-  ([#42](https://github.com/koorikla/platform/issues/42)).
+  ([#42](https://github.com/Sparky-stack/platform/issues/42)).
 - GnuPG verification covers Git sources only. Argo CD documents that Helm and OCI sources cannot be verified this way.
 
 ## Helm and OCI charts: not covered
@@ -275,10 +275,10 @@ sourceIntegrity:
     server).
   - Images, whatever chart deploys them into cell namespaces, are verified at admission.
   - When upstreams sign their charts: verify them in the Renovate PR workflow and mirror them into an internal OCI
-    registry ([#43](https://github.com/koorikla/platform/issues/43)).
+    registry ([#43](https://github.com/Sparky-stack/platform/issues/43)).
 - Not covered: tampering between `helm dependency build` and render on the Argo CD repo server (it pulls chart
   tarballs over TLS but does not check signatures), and platform images in excluded namespaces. Those come from
   upstream charts and are pinned by digest (`hack/tests/test_image_pins.sh`), not verified at admission.
 
-Open checks: web-flow key ID ([#42](https://github.com/koorikla/platform/issues/42)), Kyverno egress and registry
-credentials on data planes ([#44](https://github.com/koorikla/platform/issues/44)).
+Open checks: web-flow key ID ([#42](https://github.com/Sparky-stack/platform/issues/42)), Kyverno egress and registry
+credentials on data planes ([#44](https://github.com/Sparky-stack/platform/issues/44)).

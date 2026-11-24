@@ -159,4 +159,4 @@ overlay; no cluster is opted in.
 - `charts/platform/tests/`: `installationValueFiles` order and the path guard.
 
 ## Open items
-Live Route 53 (IRSA on CAPA k3s) and Cloudflare runs: [#21](https://github.com/koorikla/platform/issues/21).
+Live Route 53 (IRSA on CAPA k3s) and Cloudflare runs: [#21](https://github.com/Sparky-stack/platform/issues/21).

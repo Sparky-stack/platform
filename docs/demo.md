@@ -2,7 +2,7 @@
 
 A scripted 30-minute demo of the whole platform on the local stack (k3d mgmt + CAPD `dev1`, the lean profile of
 docs/dev-environment.md "Local profiles"), for the team and for management. It follows the storyline of
-[#98](https://github.com/koorikla/platform/issues/98). Each step lists what to show, commands and URLs, expected output,
+[#98](https://github.com/Sparky-stack/platform/issues/98). Each step lists what to show, commands and URLs, expected output,
 talking points and a fallback. A step whose feature is not on `main` yet is marked **pending #NN**.
 
 ## Before the demo
@@ -66,7 +66,7 @@ PENDING while the app declares none).
 
 `task down && task up` deletes Harbor and every ComponentRelease, but the app repo still pins what the previous stack
 built: the Workload's image digest and, in `release-bindings/{staging,production}.yaml`, the release names the previous
-stack's OpenChoreo cut ([#200](https://github.com/koorikla/platform/issues/200)):
+stack's OpenChoreo cut ([#200](https://github.com/Sparky-stack/platform/issues/200)):
 
 | Environment | After the bootstrap | Manual steps |
 |---|---|---|
@@ -78,7 +78,7 @@ stack's OpenChoreo cut ([#200](https://github.com/koorikla/platform/issues/200))
 Staging and production come back only through a promotion, on purpose: the gate evidence (rollout, smoke test, 5xx
 rate in the previous environment, docs/promotion.md "The gates") belongs to the stack it was gathered in, and automatic
 re-pinning would bypass the gate and the release manager's merge. Promote development's release to staging (in a
-koorikla/hello-world checkout):
+Sparky-stack/hello-world checkout):
 
 ```bash
 REL=$(kubectl --context k3d-platform-mgmt -n default get releasebinding hello-world-development -o jsonpath='{.spec.releaseName}')
@@ -95,7 +95,7 @@ window and production serves. Doing this before the demo gives step 5 three serv
 
 - Browser tabs: Argo CD (`task ui`, http://localhost:8081), the OpenChoreo console http://openchoreo.localhost:8080
   (user `admin@openchoreo.dev`), Harbor https://harbor.openchoreo.localhost:9443 (`task status` prints each URL and
-  the command that reads its password), the promotion pull requests of koorikla/hello-world.
+  the command that reads its password), the promotion pull requests of Sparky-stack/hello-world.
 - Terminal with the workload cluster's kubeconfig: `task kubeconfig CLUSTER=dev1` (file `dev1.kubeconfig`, gitignored;
   in the multicluster profile also `CLUSTER=prod1`).
 - Font size up, notifications off. Close the terminal that shows `task secrets` output.
@@ -186,7 +186,7 @@ Talking points:
 - Developers get golden paths (component types, traits) and a portal; the platform team owns the templates.
 - The app repo contract is small: docs/openchoreo.md "App repo contract".
 
-Fallback: show the existing `hello-world` component and its repo (koorikla/hello-world, `deploy/openchoreo/`).
+Fallback: show the existing `hello-world` component and its repo (Sparky-stack/hello-world, `deploy/openchoreo/`).
 
 ## 4. Build and supply chain
 
@@ -220,7 +220,7 @@ spec:
     kind: ClusterWorkflow
     name: go
     parameters:
-      repository: { url: https://github.com/koorikla/hello-world.git, revision: { branch: main }, appPath: "." }
+      repository: { url: https://github.com/Sparky-stack/hello-world.git, revision: { branch: main }, appPath: "." }
 EOF
 kubectl --context k3d-platform-mgmt get workflowruns -n default -w
 ```
@@ -250,7 +250,7 @@ NS=$(kubectl --kubeconfig dev1.kubeconfig get ns -l openchoreo.dev/environment=p
 kubectl --kubeconfig dev1.kubeconfig get imagevalidatingpolicies,validatingpolicies
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run signed --image="$IMAGE" --dry-run=server
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run unsigned \
-  --image=ghcr.io/koorikla/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7 --dry-run=server
+  --image=ghcr.io/sparky-stack/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7 --dry-run=server
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
 ```
 
@@ -439,10 +439,10 @@ hello-world opts in with the Component annotation `platform.koorikla.io/preview-
 open a PR that changes the code (the build takes ~6 minutes), e.g. the greeting in `main.go`:
 
 ```bash
-gh pr create -R koorikla/hello-world --head <branch> --fill     # or in the GitHub UI
+gh pr create -R Sparky-stack/hello-world --head <branch> --fill     # or in the GitHub UI
 kubectl --context k3d-platform-mgmt -n argocd get applications -l platform.koorikla.io/preview=true
 kubectl --context k3d-platform-mgmt -n default get environment,releasebinding -l platform.koorikla.io/preview=true -L platform.koorikla.io/expires-at
-gh pr checks <n> -R koorikla/hello-world                          # openchoreo/preview: the URL
+gh pr checks <n> -R Sparky-stack/hello-world                          # openchoreo/preview: the URL
 NODE_DEV=$(kubectl --context k3d-platform-mgmt get machines -n fleet -l cluster.x-k8s.io/cluster-name=dev1 -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 H=pr-<n>-hello-world-default.dev1.apps.localhost
 curl -s --resolve "$H:19080:$NODE_DEV" "http://$H:19080/hello-world-http/version"   # the PR head's short SHA
@@ -462,4 +462,4 @@ Fallback: the commit status on an older PR and docs/preview-environments.md "How
 - One repo, one command, a file per cluster; every change through Git and Argo CD.
 - Supply chain enforced at admission, promotion through reviewed PRs and automated gates, runtime detection and
   response, workload identity and secrets without long-lived credentials.
-- What is next: the PENDING rows of `task demo:check` and the open items of [#98](https://github.com/koorikla/platform/issues/98).
+- What is next: the PENDING rows of `task demo:check` and the open items of [#98](https://github.com/Sparky-stack/platform/issues/98).

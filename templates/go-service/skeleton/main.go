@@ -1,4 +1,4 @@
-// Command app is a golden-path Go HTTP service (koorikla/platform templates/go-service): JSON API, health and
+// Command app is a golden-path Go HTTP service (Sparky-stack/platform templates/go-service): JSON API, health and
 // version endpoints, structured logs, graceful shutdown. Replace the handlers with your own.
 package main
 

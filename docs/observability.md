@@ -55,7 +55,7 @@ workload cluster <name>                                      mgmt (k3d platform-
   is copied anywhere.
 - **Ingestion**: OpenSearch's TLS + basic auth for logs/events; plain HTTP through the Gateway for OTLP and remote
   write (no upstream collector mTLS yet). Fine on one docker network; cloud needs TLS and authenticated ingest first
-  ([#46](https://github.com/koorikla/platform/issues/46)).
+  ([#46](https://github.com/Sparky-stack/platform/issues/46)).
 - **One OpenSearch** (single node) holds container logs (`container-logs-*`), k8s events (`k8s-events-*`) and traces
   (`otel-traces-*`); the modules bring index setup Jobs and retention (7d locally). Prometheus keeps 7d.
 
@@ -104,7 +104,7 @@ adapter queries: `container_cpu_usage_seconds_total`, `container_memory_working_
 scrapes only `/metrics/cadvisor` and `/metrics/probes` (`kube-prometheus-stack.kubelet.serviceMonitor.kubelet: false`,
 contract `hack/tests/test_telemetry_series.sh`): on k3s `/metrics` also serves the embedded control plane, ~100k samples
 (15 MB) per scrape on dev1, which kept the agent at 230-250 MiB even with `metricRelabelings`
-([#83](https://github.com/koorikla/platform/issues/83)). `kubelet_*` series (volume stats, pod start latency) are not
+([#83](https://github.com/Sparky-stack/platform/issues/83)). `kubelet_*` series (volume stats, pod start latency) are not
 collected.
 
 ## Component alert rules
@@ -186,7 +186,7 @@ spec:
 | `default` or `platform` / `falco-slack` (optional) | `webhook-url` | falcosidekick Slack output |
 
 Data planes use the OpenSearch admin credentials (upstream recipe); a dedicated ingest-only user is part of
-[#46](https://github.com/koorikla/platform/issues/46).
+[#46](https://github.com/Sparky-stack/platform/issues/46).
 
 ## Backstage and MCP
 
@@ -247,13 +247,13 @@ per upstream cluster x response code, `envoy_cluster_name="kube_<namespace>_<ser
 `kube_dp-default-demo-staging-ba410b48_hello-world_8080`), `envoy_response_code`, plus pod labels
 `openchoreo_dev_plane_id` and `gateway_networking_k8s_io_gateway_name`. Envoy creates a code's series on its first
 response with that code, so the count stays at backends x codes seen. The promotion gate queries these series directly
-in Prometheus, not through the observer ([promotion.md](promotion.md), [#104](https://github.com/koorikla/platform/issues/104)).
+in Prometheus, not through the observer ([promotion.md](promotion.md), [#104](https://github.com/Sparky-stack/platform/issues/104)).
 They cover gateway traffic only (external endpoints), not east-west calls inside the mesh.
 
 **Observer `metric: http`** (Backstage HTTP charts) is served by the observability-metrics-prometheus adapter 0.8.0,
 which reads only Cilium Hubble series: `hubble_http_requests_total{reporter="server"}` (`status` 1xx-3xx ok, 4xx/5xx
 unsuccessful) and `hubble_http_request_duration_seconds`, joined to kube-state-metrics' `kube_pod_labels` on
-`(destination_namespace, destination_pod)`. Three pieces make them exist ([#104](https://github.com/koorikla/platform/issues/104)):
+`(destination_namespace, destination_pod)`. Three pieces make them exist ([#104](https://github.com/Sparky-stack/platform/issues/104)):
 
 1. addon cilium: L7 visibility policy on the component pods' HTTP port (docs/networking.md; **off**, it broke traffic
    into ambient pods, so today there are no `hubble_http_*` series) and `httpV2` `labelsContext` with
@@ -292,7 +292,7 @@ without `k8s.ns.name`) to the three rules that fired on foreign containers: "Dro
 (Critical, the escalation trigger), "Platform write below etc" and "Contact K8S API Server From Container"
 (`installations/local/addons/falco/values.yaml`); otherwise every Critical and Error alert of a dev1 Falco came from such
 containers (CAPD nodes' k3s, mount and CNI processes, other clusters' pods) and escalated uselessly. Namespaced app pods
-keep full coverage ([#49](https://github.com/koorikla/platform/issues/49) has the measurement).
+keep full coverage ([#49](https://github.com/Sparky-stack/platform/issues/49) has the measurement).
 
 **In-cluster builds:** build pods in `workflows-<org>` (mgmt workflow plane) run binaries they wrote themselves, which
 "Drop and execute new binary in container" reports at Critical. On mgmt the only Critical alerts from `workflows-*` pods
@@ -402,8 +402,8 @@ Receiver contract:
 - Delivery is best effort (sidekick retries are limited); the event also stays in OpenSearch (Falco stdout) and Talon has
   already acted. The receiver must be idempotent on `uuid`. Cluster identity is the (authenticated) endpoint;
   `output_fields.cluster` is informational and cross-checked.
-- Open hardening of the response workflow: [#12](https://github.com/koorikla/platform/issues/12),
-  [#13](https://github.com/koorikla/platform/issues/13).
+- Open hardening of the response workflow: [#12](https://github.com/Sparky-stack/platform/issues/12),
+  [#13](https://github.com/Sparky-stack/platform/issues/13).
 
 ## Argo CD requirements (catalog)
 
@@ -438,4 +438,4 @@ the host kernel (k3d shares it; Arch/systemd default 1048576).
 
 Values inferred but not yet confirmed live: `grep -rn VERIFY addons/openchoreo-observability-plane addons/telemetry
 addons/obi addons/falco` (the AI agent routes' TLS, [ai-agents.md](ai-agents.md)); the rest was confirmed live in
-[#49](https://github.com/koorikla/platform/issues/49).
+[#49](https://github.com/Sparky-stack/platform/issues/49).

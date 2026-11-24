@@ -83,9 +83,9 @@ docker exec "$MACHINE" k3s etcd-snapshot ls
 
 ### 3. OpenBao (`raft` storage and unseal key)
 
-OpenBao stores mesh CA private keys (`pki-mesh-<group>-root`, `pki-mesh-<group>-int`) and the tenants' app secrets (KV mounts `kv-tenant-<project>`, [openchoreo.md](../openchoreo.md#application-secrets-developer-view)) encrypted on PVC `data-openbao-0` (`/openbao/data` in `openbao-0`). Locally it uses `seal "static"` from `ClusterSecretStore/platform` key `openbao-unseal` ([multicluster.md](../multicluster.md#unseal)); production replaces this with KMS auto-unseal and 3 raft replicas ([#31](https://github.com/koorikla/platform/issues/31)).
+OpenBao stores mesh CA private keys (`pki-mesh-<group>-root`, `pki-mesh-<group>-int`) and the tenants' app secrets (KV mounts `kv-tenant-<project>`, [openchoreo.md](../openchoreo.md#application-secrets-developer-view)) encrypted on PVC `data-openbao-0` (`/openbao/data` in `openbao-0`). Locally it uses `seal "static"` from `ClusterSecretStore/platform` key `openbao-unseal` ([multicluster.md](../multicluster.md#unseal)); production replaces this with KMS auto-unseal and 3 raft replicas ([#31](https://github.com/Sparky-stack/platform/issues/31)).
 
-Because OpenBao revokes its root token during self-initialization (`addons/openbao/values.yaml`) and no runtime ACL policy grants `sys/storage/raft/snapshot`, online `bao operator raft snapshot save` requires adding a snapshot role before first start ([#31](https://github.com/koorikla/platform/issues/31)). Until then, take a consistent cold copy of `data-openbao-0` **together with** verifying `openbao-unseal` `(not yet verified live)`:
+Because OpenBao revokes its root token during self-initialization (`addons/openbao/values.yaml`) and no runtime ACL policy grants `sys/storage/raft/snapshot`, online `bao operator raft snapshot save` requires adding a snapshot role before first start ([#31](https://github.com/Sparky-stack/platform/issues/31)). Until then, take a consistent cold copy of `data-openbao-0` **together with** verifying `openbao-unseal` `(not yet verified live)`:
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"
@@ -113,7 +113,7 @@ To restore from `$BK` `(not yet verified live)`, confirm the matching `platform-
 
 Thunder's 3 PVCs (`thunder-database-pvc`, `thunder-certs-pvc`, `thunder-secrets-pvc` in `thunder`) are PreSync hooks with `hook-failed` and `platform.koorikla.io/delete-protection: enabled`, guarded by `ValidatingAdmissionPolicy/thunder-pvc-delete-protection` ([openchoreo.md](../openchoreo.md#argo-cd-requirements)).
 
-Use this when a Thunder PVC is `Terminating` or must be rebound to its `Retain` PV ([#85](https://github.com/koorikla/platform/issues/85) has the live run):
+Use this when a Thunder PVC is `Terminating` or must be rebound to its `Retain` PV ([#85](https://github.com/Sparky-stack/platform/issues/85) has the live run):
 
 ```bash
 K="kubectl --context k3d-platform-mgmt"

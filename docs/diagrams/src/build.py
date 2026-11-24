@@ -62,7 +62,7 @@ ARCH_NOTE = ("The cluster's facts pick one backend per API. The providers sign i
 
 
 def architecture() -> Diagram:
-    d = Diagram("koorikla/platform · architecture",
+    d = Diagram("Sparky-stack/platform · architecture",
                 "Argo CD reads everything from Git; the management cluster turns it into clusters, addons and app "
                 "releases. The workload clusters run the apps, and Crossplane on each one creates what the apps claim.")
     c, w = COLS4, CW4

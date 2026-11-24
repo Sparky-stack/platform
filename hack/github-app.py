@@ -26,9 +26,9 @@ PERMISSIONS = {"administration": "write", "contents": "write", "metadata": "read
 def manifest(org, public_url):
     return {
         "name": f"{org}-scaffolder"[:34],
-        "url": "https://github.com/koorikla/platform",
+        "url": "https://github.com/Sparky-stack/platform",
         "description": "Backstage scaffolder: creates app repos in the org and opens the platform PR "
-                       "(koorikla/platform docs/forking.md credentials (c)).",
+                       "(Sparky-stack/platform docs/forking.md credentials (c)).",
         "redirect_url": f"{public_url}/callback",
         "hook_attributes": {"url": "https://example.invalid/unused", "active": False},
         "public": True,   # installable on a second account too (the owner of the platform repo)

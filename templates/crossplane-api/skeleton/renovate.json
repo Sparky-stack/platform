@@ -1,20 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Golden-path defaults: GitHub Actions pinned by digest; the koorikla/platform reusable workflow SHA (# ci-vX.Y.Z) follows its tag; the Crossplane CLI in mise.toml.",
+  "description": "Golden-path defaults: GitHub Actions pinned by digest; the Sparky-stack/platform reusable workflow SHA (# ci-vX.Y.Z) follows its tag; the Crossplane CLI in mise.toml.",
   "extends": [
     "config:recommended",
     "helpers:pinGitHubActionDigests"
   ],
   "packageRules": [
     {
-      "description": "koorikla/platform reusable workflows: one PR per bump",
+      "description": "Sparky-stack/platform reusable workflows: one PR per bump",
       "matchManagers": [
         "github-actions"
       ],
       "matchPackageNames": [
-        "koorikla/platform"
+        "Sparky-stack/platform"
       ],
-      "groupName": "koorikla/platform reusable workflows"
+      "groupName": "Sparky-stack/platform reusable workflows"
     }
   ]
 }
