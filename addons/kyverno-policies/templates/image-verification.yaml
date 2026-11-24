@@ -120,7 +120,7 @@ metadata:
     {{- else }}
     policies.kyverno.io/title: Signed images in OpenChoreo {{ $scope }}
     policies.kyverno.io/description: >-
-      Images from a trusted source carry that source's cosign signature: keyless from the Sparky-stack/platform app-container.yaml reusable workflow
+      Images from a trusted source carry that source's cosign signature: keyless from the koorikla/platform app-container.yaml reusable workflow
       for an allowed repository and ref, or the platform key for images the workflow plane built. The required signed
       attestations are checked by openchoreo-attest-*-{{ $suffix }}. Action {{ $action }} in {{ $scope }}.
     {{- end }}

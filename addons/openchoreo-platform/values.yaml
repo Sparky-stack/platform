@@ -3,7 +3,7 @@
 
 # --- installation.yaml (defaults so `helm template` works standalone) ---------------------------------------------
 installation:
-  githubOrg: https://github.com/koorikla      # the promotion gate opens PRs only in repositories of this owner
+  githubOrg: https://github.com/Sparky-stack      # the promotion gate opens PRs only in repositories of this owner
 openchoreo:
   orgNamespace: default
   controlPlane:
@@ -135,7 +135,7 @@ registry:
   host: harbor.openchoreo.localhost:9443
   appsProject: apps
   external:
-    repository: ghcr.io/koorikla
+    repository: ghcr.io/sparky-stack
     credentialsKey: platform-ghcr
 
 # ClusterWorkflows (OpenChoreo, on the control plane) -> Argo ClusterWorkflowTemplate koorikla-build on the workflow plane

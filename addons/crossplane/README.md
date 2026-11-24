@@ -106,7 +106,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 | packages.signatureVerification.enabled | bool | `false` |  |
 | packages.signatureVerification.issuer | string | `"https://token.actions.githubusercontent.com"` |  |
 | packages.signatureVerification.prefix | string | `"ghcr.io/koorikla/platform/"` |  |
-| packages.signatureVerification.subjectRegExp | string | `"^https://github\\.com/koorikla/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"` |  |
+| packages.signatureVerification.subjectRegExp | string | `"^https://github\\.com/(koorikla|Sparky-stack)/platform/\\.github/workflows/app-crossplane-configuration\\.yaml@refs/(heads/main|tags/postgresql-v[0-9.]+)$"` |  |
 | platformAPIs | object | `{"enabled":true}` | `false` skips the platform data APIs (PostgreSQL and MySQL packages, EnvironmentConfigs, Functions, compose RBAC, admission policies); `values/role-mgmt.yaml` sets it. |
 | policy.enabled | bool | `true` |  |
 | policy.exemptNamespaces[0] | string | `"crossplane-system"` |  |

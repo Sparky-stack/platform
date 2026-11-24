@@ -11,7 +11,7 @@ spec:
     projectName: demo
     componentName: ci-selftest
   source:
-    repository: https://github.com/koorikla/ci-selftest
+    repository: https://github.com/Sparky-stack/ci-selftest
     branch: main
     commit: "0000000000000000000000000000000000000000"
   container:

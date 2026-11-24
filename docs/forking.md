@@ -73,7 +73,7 @@ What it deliberately leaves alone, and what you edit by hand if it applies:
 | Label and annotation keys `platform.koorikla.io/*`, `addons.platform.koorikla.io/*` | **keep**: they are an API contract between the CAPI clusters, Argo CD cluster secrets and ApplicationSets (docs/conventions.md), not an org name. Renaming them means renaming every selector at once |
 | Chart defaults in `addons/*/values.yaml` (e.g. `addons/secret-stores` `installation.githubOrg`) | keep: only used when a chart renders standalone; every generated Application gets `installation.yaml`, which `set-repo` rewrote. The unit tests assert the defaults |
 | Links in prose and diagrams | `DOCS=1`, or leave them: they describe upstream. Plain-text mentions (`gh repo fork Sparky-stack/platform`, diagram box titles) stay either way |
-| Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/koorikla/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
+| Your hello-world fork: `deploy/openchoreo/workload.yaml` `image: ghcr.io/sparky-stack/hello-world:<sha>` | nothing: the first CI run on your fork's `main` builds `ghcr.io/<you>/hello-world` and commits the new tag. Until then the upstream (public) image runs |
 | Your hello-world fork: `uses: Sparky-stack/platform/.github/workflows/app-go.yaml@<sha> # ci-v1.0.0` | keep (public, but pin a SHA), or point it at your platform fork and change the `uses:` owner |
 | `.devcontainer/devcontainer.json` name, `mise.toml` comment, schema cache dir `koorikla-platform` | cosmetic |
 

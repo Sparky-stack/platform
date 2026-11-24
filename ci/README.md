@@ -166,7 +166,7 @@ stack workflow (go, python, node, rust, java, nextjs, elixir, ruby) signs throug
 | `githubWorkflowRef` (1.3.6.1.4.1.57264.1.6) | caller ref, e.g. `refs/heads/main` |
 | Build Config URI | caller workflow, e.g. `https://github.com/Sparky-stack/hello-world/.github/workflows/ci.yaml@refs/heads/main` |
 
-So the identity `https://github.com/koorikla/<repo>/.github/workflows/<file>@refs/heads/main`
+So the identity `https://github.com/Sparky-stack/<repo>/.github/workflows/<file>@refs/heads/main`
 is the *caller*; it is carried in the extensions, not the SAN. **Always pin the caller
 repository/ref as well as the subject:** `Sparky-stack/platform` is public, so any repository can call
 its workflows and obtain a certificate with the same SAN.

@@ -37,7 +37,7 @@ jobs:
       attestations: write
       security-events: write
     with:
-      registry: ghcr.io/koorikla/platform
+      registry: ghcr.io/sparky-stack/platform
       image_name: ci-toolbox
       context: ci
       dockerfile: ci/toolbox/Dockerfile

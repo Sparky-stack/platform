@@ -7,7 +7,7 @@
 #   REPO      GitOps repo Argo CD reads (https, ends in .git)               -> root app, installation.repoURL
 #   ORG       repo-creds URL prefix, default: REPO minus /<name>.git        -> installation.githubOrg
 #   APPS_ORG  org of the tenant app repos (hello-world), default: ORG       -> installations/*/tenants/*.yaml
-#             (APPS_ORG=https://github.com/koorikla keeps the upstream example app)
+#             (APPS_ORG=https://github.com/Sparky-stack keeps the upstream example app)
 #   DOCS=1    also rewrite links in README.md, docs/*.md (not docs/forking.md: its fork steps must keep pointing at
 #             upstream) and diagram sources: <old>/platform URLs + [owner/name] link texts -> REPO, <old>/hello-world
 #             and ghcr.io/<old>/ -> APPS_ORG (ci/ lives in this repo, so it follows REPO)
@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh
 source hack/lib/portable.sh
 
-UPSTREAM_ORG="https://github.com/koorikla"
+UPSTREAM_ORG="https://github.com/Sparky-stack"
 
 REPO="${1:-${REPO:-}}"
 REPO="${REPO%/}"

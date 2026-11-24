@@ -7,7 +7,7 @@ set:
     - name: hello-world
       repoURL: https://github.com/Sparky-stack/hello-world.git
     - name: other
-      repoURL: https://github.com/koorikla/other
+      repoURL: https://github.com/Sparky-stack/other
       path: ops/oc/
       revision: v1.2.3
   previews:
@@ -47,7 +47,7 @@ tests:
           path: spec.generators[0].matrix.generators[1].pullRequest
           value:
             github:
-              owner: koorikla
+              owner: Sparky-stack
               repo: hello-world
               tokenRef: { secretName: preview-github-token, key: token }
             requeueAfterSeconds: 120

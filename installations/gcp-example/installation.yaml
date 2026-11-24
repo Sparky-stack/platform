@@ -7,7 +7,7 @@ installation:
   name: gcp-example
   repoURL: https://github.com/Sparky-stack/platform.git
   revision: main
-  githubOrg: https://github.com/koorikla
+  githubOrg: https://github.com/Sparky-stack
   domain: gcp.example.com                     # VERIFY: a DNS zone you own
 
 mgmt:
@@ -38,7 +38,7 @@ secrets:
 registry:
   type: external
   external:
-    repository: ghcr.io/koorikla
+    repository: ghcr.io/sparky-stack
     credentialsKey: platform-ghcr
 
 capi:

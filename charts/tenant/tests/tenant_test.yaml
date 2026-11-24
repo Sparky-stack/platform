@@ -13,7 +13,7 @@ set:
     - name: hello-world
       repoURL: https://github.com/Sparky-stack/hello-world.git
     - name: other
-      repoURL: https://github.com/koorikla/other.git
+      repoURL: https://github.com/Sparky-stack/other.git
       path: ops/oc
       revision: v1.2.3
 tests:
@@ -56,7 +56,7 @@ tests:
       - equal: { path: metadata.namespace, value: argocd }
       - equal:
           path: spec.sourceRepos
-          value: [https://github.com/Sparky-stack/hello-world.git, https://github.com/koorikla/other.git]
+          value: [https://github.com/Sparky-stack/hello-world.git, https://github.com/Sparky-stack/other.git]
       - equal:
           path: spec.destinations
           value: [{ server: "https://kubernetes.default.svc", namespace: default }]
@@ -124,7 +124,7 @@ tests:
       - equal:
           path: spec.source
           value:
-            repoURL: "https://github.com/koorikla/other.git"
+            repoURL: "https://github.com/Sparky-stack/other.git"
             targetRevision: v1.2.3
             path: ops/oc
             directory: { recurse: true, exclude: release-bindings/production.yaml }
@@ -234,7 +234,7 @@ tests:
           value:
             git:
               policies:
-                - repos: [{ url: "https://github.com/koorikla/*" }]
+                - repos: [{ url: "https://github.com/Sparky-stack/*" }]
                   gpg: { mode: head, keys: [B5690EEEBB952194] }
       - notExists: { path: spec.signatureKeys }
 
@@ -266,7 +266,7 @@ tests:
     set:
       apps:
         - { name: hello-world, repoURL: https://github.com/Sparky-stack/hello-world.git }
-        - { name: other, repoURL: https://github.com/koorikla/other.git, promotionGates: false }
+        - { name: other, repoURL: https://github.com/Sparky-stack/other.git, promotionGates: false }
     asserts:
       - equal:
           path: spec.roleMappings

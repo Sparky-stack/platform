@@ -46,7 +46,7 @@ tests:
     asserts:
       - contains:
           path: spec.runTemplate.spec.arguments.parameters
-          content: { name: image-repo, value: "ghcr.io/koorikla/${metadata.labels['openchoreo.dev/component']}" }
+          content: { name: image-repo, value: "ghcr.io/sparky-stack/${metadata.labels['openchoreo.dev/component']}" }
       - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: registry-host, value: ghcr.io } }
       - notExists: { path: 'spec.resources[?(@.id == "registry-ca")]' }
 
@@ -154,8 +154,8 @@ tests:
     asserts:
       - equal:
           path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
-          value: '^(https://github\.com/koorikla/)[A-Za-z0-9][A-Za-z0-9._-]*$'
-      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/koorikla/" } }
+          value: '^(https://github\.com/Sparky-stack/)[A-Za-z0-9][A-Za-z0-9._-]*$'
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/Sparky-stack/" } }
 
   - it: the allowlist follows installation.githubOrg (trailing slash normalized)
     template: templates/build-workflows.yaml
@@ -170,12 +170,12 @@ tests:
   - it: explicit allowedRepositoryPrefixes replace githubOrg, one alternative per prefix
     template: templates/helm-chart-workflow.yaml
     set:
-      buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/koorikla/", "https://git.example.com:8443/team/apps/"]
+      buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/Sparky-stack/", "https://git.example.com:8443/team/apps/"]
     asserts:
       - equal:
           path: spec.parameters.openAPIV3Schema.properties.repository.properties.url.pattern
-          value: '^(https://github\.com/koorikla/|https://git\.example\.com:8443/team/apps/)[A-Za-z0-9][A-Za-z0-9._-]*$'
-      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/koorikla/ https://git.example.com:8443/team/apps/" } }
+          value: '^(https://github\.com/Sparky-stack/|https://git\.example\.com:8443/team/apps/)[A-Za-z0-9][A-Za-z0-9._-]*$'
+      - contains: { path: spec.runTemplate.spec.arguments.parameters, content: { name: git-allowed-prefixes, value: "https://github.com/Sparky-stack/ https://git.example.com:8443/team/apps/" } }
 
   - it: rejects an allowlist prefix that is not https://<host>/<owner>/
     template: templates/helm-chart-workflow.yaml
@@ -185,9 +185,9 @@ tests:
 
   - it: rejects a prefix without the closing slash (would also match koorikla-evil)
     template: templates/helm-chart-workflow.yaml
-    set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/koorikla"] }
+    set: { buildWorkflows.git.allowedRepositoryPrefixes: ["https://github.com/Sparky-stack"] }
     asserts:
-      - failedTemplate: { errorPattern: "at '/buildWorkflows/git/allowedRepositoryPrefixes/0': 'https://github.com/koorikla' does not match pattern" }
+      - failedTemplate: { errorPattern: "at '/buildWorkflows/git/allowedRepositoryPrefixes/0': 'https://github.com/Sparky-stack' does not match pattern" }
 
   - it: rejects a non-https prefix
     template: templates/helm-chart-workflow.yaml

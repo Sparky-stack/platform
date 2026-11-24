@@ -45,7 +45,7 @@ tests:
           content: { name: REPOSITORY, value: "{{workflow.parameters.repository}}" }
       - contains:
           path: 'spec.templates[0].script.env'
-          content: { name: ALLOWED_PREFIXES, value: "https://github.com/koorikla/" }
+          content: { name: ALLOWED_PREFIXES, value: "https://github.com/Sparky-stack/" }
       - contains: { path: 'spec.templates[0].script.env', content: { name: ORG_NAMESPACE, value: default } }
       - notMatchRegex: { path: 'spec.templates[0].script.source', pattern: "workflow\\.parameters" }   # input only as env
       - matchRegex: { path: 'spec.templates[0].script.source', pattern: "class Reconciler" }

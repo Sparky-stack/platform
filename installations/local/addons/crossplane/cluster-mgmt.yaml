@@ -3,7 +3,7 @@
 # repositories it governs. A fork without that App: githubRepos.enabled false, or your own owner and repositories.
 githubRepos:
   enabled: true
-  owner: koorikla
+  owner: Sparky-stack
   repositories:
     # The two repositories existed before governance: Observe reads them, nothing on GitHub changes. Switching one to
     # `management: Full` (one line) makes Crossplane enforce the spec below; review the observed-vs-desired diff

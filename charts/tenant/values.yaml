@@ -17,7 +17,7 @@ developerGroups: []
 # --- from installation.yaml (defaults only so the chart renders standalone) ---------------------------------------
 installation:
   name: local
-  githubOrg: https://github.com/koorikla
+  githubOrg: https://github.com/Sparky-stack
   repoURL: https://github.com/Sparky-stack/platform.git   # charts/preview source of the preview Applications
   revision: main
 openchoreo:

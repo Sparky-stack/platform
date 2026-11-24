@@ -118,7 +118,7 @@ tests:
       - contains: { path: "spec.runTemplate.spec.templates[0].script.volumeMounts", content: { name: credentials, mountPath: /var/run/secrets/promotion-gate, readOnly: true } }
       - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_TOKEN }, any: true }
       - notContains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: CLIENT_SECRET }, any: true }
-      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_OWNER_URL, value: "https://github.com/koorikla" } }
+      - contains: { path: "spec.runTemplate.spec.templates[0].script.env", content: { name: GITHUB_OWNER_URL, value: "https://github.com/Sparky-stack" } }
       - matchRegex: { path: "spec.runTemplate.spec.templates[0].script.source", pattern: 'def installation_token\(repo\)' }
 
   - it: the target repository is not a parameter; parameters are DNS-1123 constrained

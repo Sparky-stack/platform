@@ -37,7 +37,7 @@ assert_eq "$(words_in "$(q '.spec.steps[].action' | sort -u | tr '\n' ' ')" "$AL
 assert_eq "$(q '[.. | select(tag == "!!map") | select(has("token"))] | length')" 0 "$T: no token input (GitHub App integration)"
 assert_eq "$(words_in "$(q '.spec.steps[] | select(.action == "publish:github") | .input | keys | .[]' | tr '\n' ' ')" "$PUBLISH_INPUTS")" "" "$T: publish:github sets no repo governance (#100)"
 assert_eq "$(q '.spec.steps[] | select(.action == "publish:github") | .input.protectDefaultBranch')" false "$T: protectDefaultBranch false"
-assert_eq "$(q '.spec.steps[] | select(.action == "publish:github:pull-request") | .input.repoUrl')" "github.com?owner=koorikla&repo=platform" "$T: governance record is a PR to the platform repo"
+assert_eq "$(q '.spec.steps[] | select(.action == "publish:github:pull-request") | .input.repoUrl')" "github.com?owner=Sparky-stack&repo=platform" "$T: governance record is a PR to the platform repo"
 assert_eq "$(q '.spec.steps[] | select(.action == "catalog:register") | .input.catalogInfoPath')" /catalog-info.yaml "$T: catalog:register the repo's catalog-info.yaml"
 assert_eq "$(q '[.spec.steps[] | select(.id == "fetch-project") | .input.copyWithoutTemplating[]] | join(" ")')" ".github/workflows/* functions/compose/*" "$T: workflows and go-templates copied verbatim"
 assert_eq "$(q '[.spec.steps[].id] | join(" ")')" "fetch-project publish fetch-platform-repo platform-pr register" "$T: no tenant/OpenChoreo steps (a platform API is not a service)"

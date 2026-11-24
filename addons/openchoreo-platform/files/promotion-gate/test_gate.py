@@ -220,27 +220,27 @@ def workload(project, component, repo):
 class Repository(unittest.TestCase):
     def test_from_workload(self):
         wl = [workload("demo", "hello-world", "https://github.com/Sparky-stack/hello-world")]
-        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "Sparky-stack/hello-world")
+        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "Sparky-stack"), "Sparky-stack/hello-world")
         wl = [workload("demo", "hello-world", "https://github.com/Sparky-stack/hello-world.git")]
-        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "koorikla"), "Sparky-stack/hello-world")
+        self.assertEqual(gate.workload_repository(wl, "demo", "hello-world", "Sparky-stack"), "Sparky-stack/hello-world")
 
     def test_other_owner_rejected(self):
         wl = [workload("demo", "hello-world", "https://github.com/evil/hello-world")]
         with self.assertRaises(gate.GateFailed):
-            gate.workload_repository(wl, "demo", "hello-world", "koorikla")
+            gate.workload_repository(wl, "demo", "hello-world", "Sparky-stack")
 
     def test_not_github_or_odd_url_rejected(self):
-        for url in ("https://gitlab.com/koorikla/x", "git@github.com:koorikla/x.git", "https://github.com/koorikla/x/y",
-                    "https://github.com/koorikla/../x", "https://github.com/koorikla/..", ""):
+        for url in ("https://gitlab.com/koorikla/x", "git@github.com:Sparky-stack/x.git", "https://github.com/Sparky-stack/x/y",
+                    "https://github.com/Sparky-stack/../x", "https://github.com/Sparky-stack/..", ""):
             with self.assertRaises(gate.GateFailed, msg=url):
-                gate.workload_repository([workload("demo", "c", url)], "demo", "c", "koorikla")
+                gate.workload_repository([workload("demo", "c", url)], "demo", "c", "Sparky-stack")
 
     def test_other_component_or_ambiguous_rejected(self):
         with self.assertRaises(gate.GateFailed):
-            gate.workload_repository([workload("other", "c", "https://github.com/koorikla/x")], "demo", "c", "koorikla")
-        two = [workload("demo", "c", "https://github.com/koorikla/x"), workload("demo", "c", "https://github.com/koorikla/y")]
+            gate.workload_repository([workload("other", "c", "https://github.com/Sparky-stack/x")], "demo", "c", "Sparky-stack")
+        two = [workload("demo", "c", "https://github.com/Sparky-stack/x"), workload("demo", "c", "https://github.com/Sparky-stack/y")]
         with self.assertRaises(gate.GateFailed):
-            gate.workload_repository(two, "demo", "c", "koorikla")
+            gate.workload_repository(two, "demo", "c", "Sparky-stack")
 
 
 @unittest.skipUnless(shutil.which("openssl"), "openssl not installed")

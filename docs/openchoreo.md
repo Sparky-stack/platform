@@ -326,7 +326,7 @@ directory). Every object goes to the org namespace (`default`) and names the ten
 `spec.owner.projectName`. One Component per app repo, named like the app in the tenant file: on gated environments the
 admission policy accepts a component's production binding only from Application `<project>-<component>-production`
 ([promotion.md](promotion.md#2-git-is-the-only-path-to-gated-bindings-native)). For `hello-world` (project `demo`,
-image `ghcr.io/koorikla/hello-world:<tag>`, HTTP 8080):
+image `ghcr.io/sparky-stack/hello-world:<tag>`, HTTP 8080):
 
 `deploy/openchoreo/component.yaml`
 ```yaml
@@ -356,7 +356,7 @@ spec:
     projectName: demo
     componentName: hello-world
   container:
-    image: ghcr.io/koorikla/hello-world:sha-0123abc
+    image: ghcr.io/sparky-stack/hello-world:sha-0123abc
   endpoints:
     http:                         # endpoint name -> URL path /hello-world-http
       type: HTTP

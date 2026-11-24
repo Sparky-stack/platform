@@ -74,13 +74,13 @@ What is verified between a commit and a running pod, and what is not (yet). Prom
   Audit `Ignore`. Webhook timeout 30 s, the maximum (a cold check takes ~5-10 s, below).
 
 Evidence (Kyverno CLI v1.20.0 against the real image
-`ghcr.io/koorikla/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
+`ghcr.io/sparky-stack/hello-world:d04ca59@sha256:068979444334cb0dc031d9a286dcd7daed372572a5354135d19e8a471fcb2ec1`):
 - `hack/tests/test_kyverno_policies.sh` with `KYVERNO_ONLINE=1`:
   - that image was built through `koorikla/ci@v1` (the archived predecessor repo), before the commit pin: it now fails in production ("expected SAN
     value …container.yaml@<sha>, got …container.yaml@refs/tags/v1") and is reported in staging. With the subject at
     `refs/tags/v1` its signature + SBOM + provenance + vuln attestations passed in production;
   - the tag-only reference fails in production.
-  - `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
+  - `ghcr.io/sparky-stack/hello-world:5129f77@sha256:79cf2ede…`, built through `go.yaml@a31c234` (= `workflowRef`), passes
     in production; `df72ab8@sha256:889643d3…`, built through `go.yaml@de39b1d` (the previous pin), fails since
     `transitionWorkflowRefs` is empty again.
   - an initContainer signed by a repository that is not allowed (the frozen old `ghcr.io/koorikla/ci-toolbox`, signed by
@@ -105,7 +105,7 @@ Evidence (Kyverno CLI v1.20.0 against the real image
 imageVerification:
   github:
     trustedSources:
-      - name: gh-koorikla-hello-world-heads-main
+      - name: gh-sparky-stack-hello-world-heads-main
         repository: Sparky-stack/hello-world   # githubWorkflowRepository
         ref: refs/heads/main               # githubWorkflowRef
         trigger: push                      # githubWorkflowTrigger
@@ -121,7 +121,7 @@ Helm replaces lists, so repeat the default entry if the installation still runs 
 imageVerification:
   github:
     trustedSources:
-      - {name: gh-koorikla-hello-world-heads-main, repository: Sparky-stack/hello-world, ref: refs/heads/main, trigger: push}
+      - {name: gh-sparky-stack-hello-world-heads-main, repository: Sparky-stack/hello-world, ref: refs/heads/main, trigger: push}
       - {name: gh-acme-orders-heads-main, repository: acme/orders, ref: refs/heads/main, trigger: push}
 ```
 
@@ -163,7 +163,7 @@ What the platform does about it:
   check on every admission.
 
 Measured on dev1 with a server dry-run in production (`kubectl -n <production cell namespace> run probe
---image=<ref> --dry-run=server`, timed; `<ref>` = `ghcr.io/koorikla/hello-world:5129f77@sha256:79cf2ede…`). "New
+--image=<ref> --dry-run=server`, timed; `<ref>` = `ghcr.io/sparky-stack/hello-world:5129f77@sha256:79cf2ede…`). "New
 digest" uses a reference Kyverno has not seen yet (same digest, another tag: the cache key is the full reference):
 
 | | before (#135: one policy, 4 checks) | after (#142) |
@@ -241,7 +241,7 @@ render this policy when `sourceIntegrity.enabled: true`:
 sourceIntegrity:
   git:
     policies:
-      - repos: [{ url: "https://github.com/koorikla/*" }]
+      - repos: [{ url: "https://github.com/Sparky-stack/*" }]
         gpg:
           mode: head                 # none | head | strict
           keys: [B5690EEEBB952194]   # GitHub web-flow key: commits GitHub creates (UI merges, REST API commits)

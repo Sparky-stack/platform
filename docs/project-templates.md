@@ -182,5 +182,5 @@ the end-to-end run is tracked in [#109](https://github.com/Sparky-stack/platform
    `test_crossplane_api_template.sh`); `TEMPLATES_BUILD=1` also builds and smoke-tests
    the images (needs Docker; CI workflow `templates.yaml` runs it on amd64 and arm64).
 
-Forks: change `github.com?owner=koorikla&repo=platform`, the `repoOwner` enum in every template and the catalog url
+Forks: change `github.com?owner=Sparky-stack&repo=platform`, the `repoOwner` enum in every template and the catalog url
 location in the addon values to your own repo and owner.

@@ -544,14 +544,14 @@ tests:
   - it: a repository without management fails the render (write access is never a default)
     template: templates/github-repos.yaml
     values: [../values/role-mgmt.yaml]
-    set: { githubRepos.enabled: true, githubRepos.owner: koorikla, githubRepos.repositories.r.description: x }
+    set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack, githubRepos.repositories.r.description: x }
     asserts:
       - failedTemplate: {}
 
   - it: mgmt installs provider-upjet-github pinned by digest, its two Functions, the API and the ProviderConfig
     template: templates/github-repos.yaml
     values: [../values/role-mgmt.yaml]
-    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack }
     asserts:
       - hasDocuments: { count: 10 }
       - matchRegex:
@@ -574,7 +574,7 @@ tests:
   - it: the provider pod meets Pod Security restricted
     template: templates/github-repos.yaml
     values: [../values/role-mgmt.yaml]
-    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack }
     documentSelector: { path: metadata.name, value: provider-github }
     asserts:
       - equal: { path: spec.deploymentTemplate.spec.template.spec.securityContext.seccompProfile.type, value: RuntimeDefault }
@@ -584,14 +584,14 @@ tests:
   - it: the App credentials come from store platform as app_auth JSON, in the final wave
     template: templates/github-repos.yaml
     values: [../values/role-mgmt.yaml]
-    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack }
     documentSelector: { path: kind, value: ExternalSecret }
     asserts:
       - equal: { path: spec.secretStoreRef, value: { kind: ClusterSecretStore, name: platform } }
       - equal: { path: 'metadata.annotations["argocd.argoproj.io/sync-wave"]', value: "3" }
       - equal:
           path: spec.target.template.data.credentials
-          value: '{{ dict "app_auth" (list (dict "id" .githubAppID "installation_id" .githubAppInstallationID "pem_file" .githubAppPrivateKey)) "owner" "koorikla" | toJson }}'
+          value: '{{ dict "app_auth" (list (dict "id" .githubAppID "installation_id" .githubAppInstallationID "pem_file" .githubAppPrivateKey)) "owner" "Sparky-stack" | toJson }}'
       - equal: { path: 'spec.data[2].remoteRef', value: { key: github-repo-admin, property: githubAppPrivateKey } }
 
   - it: each repository becomes a GitHubRepository with its spec as written
@@ -599,7 +599,7 @@ tests:
     values: [../values/role-mgmt.yaml]
     set:
       githubRepos.enabled: true
-      githubRepos.owner: koorikla
+      githubRepos.owner: Sparky-stack
       githubRepos.repositories.hello-world: { management: Observe, bypassApps: [5788333] }
     documentSelector: { path: kind, value: GitHubRepository }
     asserts:
@@ -610,6 +610,6 @@ tests:
 
   - it: where the data APIs run, their Functions are reused (no duplicates)
     template: templates/github-repos.yaml
-    set: { githubRepos.enabled: true, githubRepos.owner: koorikla }
+    set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack }
     asserts:
       - hasDocuments: { count: 7 }   # provider runtime, Provider, MRAP, XRD, Composition, ExternalSecret, ProviderConfig

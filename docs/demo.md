@@ -250,7 +250,7 @@ NS=$(kubectl --kubeconfig dev1.kubeconfig get ns -l openchoreo.dev/environment=p
 kubectl --kubeconfig dev1.kubeconfig get imagevalidatingpolicies,validatingpolicies
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run signed --image="$IMAGE" --dry-run=server
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run unsigned \
-  --image=ghcr.io/koorikla/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7 --dry-run=server
+  --image=ghcr.io/sparky-stack/hello-world@sha256:5760e176af0ec30cb8b06c80e99b3ab1746243c6c2d54997847ff850e8e38ad7 --dry-run=server
 kubectl --kubeconfig dev1.kubeconfig -n "$NS" run untrusted --image=docker.io/library/busybox:1.37.0 --dry-run=server
 ```
 

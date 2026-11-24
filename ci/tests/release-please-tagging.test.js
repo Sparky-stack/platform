@@ -27,7 +27,7 @@ const quiet = () => (...a) => logs.push(a.join(' '));
 setLogger({error: quiet(), warn: quiet(), info: quiet(), debug: quiet(), trace: quiet()});
 
 const github = {
-  repository: {owner: 'koorikla', repo: 'platform', defaultBranch: 'main'},
+  repository: {owner: 'Sparky-stack', repo: 'platform', defaultBranch: 'main'},
   getFileJson: async f => JSON.parse(fs.readFileSync(path.join(repo, f), 'utf8')),
 };
 

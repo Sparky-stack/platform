@@ -126,7 +126,7 @@ for t in "${SERVICES[@]}"; do
   assert_eq "$(q '[.. | select(tag == "!!map") | select(has("token"))] | length')" 0 "$t: no token input anywhere (GitHub App integration, no PAT)"
   assert_eq "$(words_in "$(q '.spec.steps[] | select(.action == "publish:github") | .input | keys | .[]' | tr '\n' ' ')" "$PUBLISH_INPUTS")" "" "$t: publish:github sets no repo governance (#100)"
   assert_eq "$(q '.spec.steps[] | select(.action == "publish:github") | .input.protectDefaultBranch')" false "$t: publish:github protectDefaultBranch: false (its default would set branch protection)"
-  assert_eq "$(q '.spec.steps[] | select(.action == "publish:github:pull-request") | .input.repoUrl')" "github.com?owner=koorikla&repo=platform" "$t: tenant wiring is a PR to the platform repo"
+  assert_eq "$(q '.spec.steps[] | select(.action == "publish:github:pull-request") | .input.repoUrl')" "github.com?owner=Sparky-stack&repo=platform" "$t: tenant wiring is a PR to the platform repo"
   assert_eq "$(q '.spec.steps[] | select(.action == "catalog:register") | .input.catalogInfoPath')" /catalog-info.yaml "$t: catalog:register the repo's catalog-info.yaml"
   assert_eq "$(q '.spec.steps[] | select(.id == "fetch-stack") | .input.url')" ./skeleton "$t: stack skeleton ./skeleton"
   assert_eq "$(q '.spec.steps[] | select(.id == "fetch-stack") | .input.copyWithoutTemplating[]')" '.github/workflows/*' "$t: workflows copied without templating"
@@ -135,7 +135,7 @@ done
 
 # --- render + check every template --------------------------------------------------------------------------------
 params() {   # <newTenant>
-  printf '{"name":"sample-svc","description":"Sample \\"quoted\\" service: golden path","owner":"group:default/openchoreo-users","project":"demo","newTenant":%s,"installation":"local","repoOwner":"koorikla","visibility":"public","codeowners":"@koorikla @octocat"}' "$1"
+  printf '{"name":"sample-svc","description":"Sample \\"quoted\\" service: golden path","owner":"group:default/openchoreo-users","project":"demo","newTenant":%s,"installation":"local","repoOwner":"Sparky-stack","visibility":"public","codeowners":"@koorikla @octocat"}' "$1"
 }
 params true > "$TMP/params-new.json"; params false > "$TMP/params-existing.json"
 yq -o=json '.' installations/local/installation.yaml > /dev/null
@@ -167,7 +167,7 @@ for t in "${SERVICES[@]}"; do
   done
   assert_eq "$(kc_valid "$R/deploy/openchoreo")" yes "$t: deploy/openchoreo passes kubeconform -strict (OpenChoreo CRDs)"
   assert_eq "$(yq -r 'select(.kind == "Component") | .metadata.name + " " + .spec.owner.projectName' "$R/deploy/openchoreo/component.yaml")" "sample-svc demo" "$t: Component sample-svc in project demo"
-  assert_eq "$(yq -r '.spec.container.image' "$R/deploy/openchoreo/workload.yaml")" "ghcr.io/koorikla/sample-svc:main" "$t: Workload names the image CI publishes"
+  assert_eq "$(yq -r '.spec.container.image' "$R/deploy/openchoreo/workload.yaml")" "ghcr.io/sparky-stack/sample-svc:main" "$t: Workload names the image CI publishes"
   assert_eq "$(yq -r '.kind + " " + .metadata.name + " " + .spec.dependencyOf[0]' "$R/catalog-info.yaml")" "Resource sample-svc-repo component:default/sample-svc" "$t: catalog-info is a Resource pointing at OpenChoreo's Component (no duplicate Component ref)"
   assert_eq "$(grep -v '^#' "$R/.github/CODEOWNERS")" "* @koorikla @octocat" "$t: CODEOWNERS from the parameter"
 
@@ -232,7 +232,7 @@ for t in "${SERVICES[@]}"; do
   fi
   assert_eq "$ok" yes "$t: new tenant file renders through charts/tenant and passes kubeconform"
   assert_eq "$(yq -r 'select(.kind == "Application" and .metadata.name == "demo-sample-svc") | .spec.source.repoURL' "$TMP/$t-tenant.yaml")" \
-    "https://github.com/koorikla/sample-svc.git" "$t: tenant chart syncs the new repo's deploy/openchoreo"
+    "https://github.com/Sparky-stack/sample-svc.git" "$t: tenant chart syncs the new repo's deploy/openchoreo"
 done
 
 # --- optional: build and smoke-test the images -------------------------------------------------------------------

@@ -118,7 +118,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | helmChartWorkflow.enabled | bool | `true` |  |
 | helmChartWorkflow.name | string | `"helm-chart"` |  |
 | helmChartWorkflow.workflowTemplate | string | `"koorikla-helm-chart"` |  |
-| installation.githubOrg | string | `"https://github.com/koorikla"` |  |
+| installation.githubOrg | string | `"https://github.com/Sparky-stack"` |  |
 | openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
 | openchoreo.observability.enabled | bool | `true` |  |
 | openchoreo.observability.httpPort | int | `11080` |  |
@@ -173,7 +173,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | promotionGate.workflowPlane | string | `"default"` |  |
 | registry.appsProject | string | `"apps"` |  |
 | registry.external.credentialsKey | string | `"platform-ghcr"` |  |
-| registry.external.repository | string | `"ghcr.io/koorikla"` |  |
+| registry.external.repository | string | `"ghcr.io/sparky-stack"` |  |
 | registry.host | string | `"harbor.openchoreo.localhost:9443"` |  |
 | registry.type | string | `"harbor"` |  |
 | secrets.githubGateApp.enabled | bool | `false` |  |
