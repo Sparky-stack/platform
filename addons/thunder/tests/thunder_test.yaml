@@ -198,3 +198,21 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: { name: FINOPS_AGENT_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: thunder-bootstrap, key: finops-agent-client-secret, optional: true } } }
+
+  - it: bootstrap defines only the four org-team groups (developers, qa, release-managers, platform-engineers)
+    template: charts/thunderid/templates/bootstrap-configmap.yaml
+    asserts:
+      - matchRegex: { path: 'data["50-user-schema-and-users.yaml"]', pattern: 'name: developers' }
+      - matchRegex: { path: 'data["50-user-schema-and-users.yaml"]', pattern: 'name: qa' }
+      - matchRegex: { path: 'data["50-user-schema-and-users.yaml"]', pattern: 'name: release-managers' }
+      - matchRegex: { path: 'data["50-user-schema-and-users.yaml"]', pattern: 'name: platform-engineers' }
+      - notMatchRegex: { path: 'data["50-user-schema-and-users.yaml"]', pattern: 'name: (admins|demo-developers)\b' }
+
+  - it: fails validation when a required org-team group is missing
+    template: templates/validate.yaml
+    set:
+      thunderid:
+        bootstrap:
+          scripts:
+            "50-user-schema-and-users.yaml": "empty"
+    asserts: [ { failedTemplate: {} } ]

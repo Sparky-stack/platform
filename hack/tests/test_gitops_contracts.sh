@@ -357,14 +357,17 @@ assert_eq "$(yq "$authz_mappings | select(.name == \"developer-binding\") | [.ro
   "negative: org-wide group developers gets read-only roles only"
 assert_eq "$(yq "[$authz_mappings | select(.entitlement.claim == \"groups\" and .roleMappings[].roleRef.name == \"developer\")] | length" \
   "$ROOT/addons/openchoreo-control-plane/values.yaml")" 0 "negative: no group gets role developer cluster-wide"
+helm template t "$ROOT/charts/tenant" --namespace argocd -f "$ROOT/installations/local/installation.yaml" \
+  -f "$ROOT/installations/local/tenants/demo.yaml" > "$TMP/tenant-demo.yaml"
+helm template t "$ROOT/charts/tenant" --namespace argocd -f "$ROOT/installations/local/installation.yaml" \
+  --set project=billing --set description=Billing > "$TMP/tenant-billing.yaml"
 for p in demo billing; do
-  helm template t "$ROOT/charts/tenant" --namespace argocd -f "$ROOT/installations/local/installation.yaml" \
-    -f "$ROOT/installations/local/tenants/demo.yaml" --set project="$p" > "$TMP/tenant-$p.yaml"
   allow='select(.kind == "AuthzRoleBinding" and .spec.effect == "allow")'
   assert_eq "$(yq ea "[$allow] | length" "$TMP/tenant-$p.yaml")" 1 "tenant $p: one allow AuthzRoleBinding (its developers)"
   assert_eq "$(yq ea "[$allow | .spec.roleMappings[] | .scope.project // \"<namespace-wide>\"] | unique | join(\",\")" "$TMP/tenant-$p.yaml")" "$p" \
     "negative: tenant $p grants developer rights in project $p only (never another project or namespace-wide)"
-  assert_eq "$(yq "$allow | .spec.entitlement.value" "$TMP/tenant-$p.yaml")" "$p-developers" "tenant $p: developer group $p-developers"
+  want_grp="$([ "$p" = demo ] && echo developers || echo "$p-developers")"
+  assert_eq "$(yq "$allow | .spec.entitlement.value" "$TMP/tenant-$p.yaml")" "$want_grp" "tenant $p: developer group $want_grp"
 done
 helm template openchoreo-platform "$ROOT/addons/openchoreo-platform" --namespace default \
   -s templates/upstream-defaults.yaml > "$TMP/upstream-defaults.yaml"

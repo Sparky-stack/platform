@@ -562,7 +562,7 @@ tests:
         documentSelector: { path: kind, value: Provider }
       - equal:
           path: spec.activate
-          value: [repositories.repo.github.m.upbound.io, repositoryrulesets.repo.github.m.upbound.io, repositorycollaborators.repo.github.m.upbound.io]
+          value: [repositories.repo.github.m.upbound.io, repositoryrulesets.repo.github.m.upbound.io, repositorycollaborators.repo.github.m.upbound.io, teams.team.github.m.upbound.io, teamrepositories.team.github.m.upbound.io]
         documentSelector: { path: kind, value: ManagedResourceActivationPolicy }
       - equal: { path: spec.package, value: "xpkg.crossplane.io/crossplane-contrib/function-go-templating:v0.13.2@sha256:20198cb6ea5b4b8a48042343410ec9031e5ec43431d874364ecd3eac8e861290" }
         documentSelector: { path: metadata.name, value: function-go-templating }
@@ -613,3 +613,55 @@ tests:
     set: { githubRepos.enabled: true, githubRepos.owner: Sparky-stack }
     asserts:
       - hasDocuments: { count: 7 }   # provider runtime, Provider, MRAP, XRD, Composition, ExternalSecret, ProviderConfig
+
+  - it: renders Team and TeamRepository for githubRepos.teams without Delete policy
+    template: templates/github-repos.yaml
+    set:
+      githubRepos.enabled: true
+      githubRepos.owner: Sparky-stack
+      githubRepos.teams:
+        developers:
+          description: Application developers
+          repositories:
+            hello-world: push
+            platform: pull
+    asserts:
+      - hasDocuments: { count: 10 }
+      - isKind: { of: Team }
+        documentIndex: 7
+      - equal: { path: metadata.name, value: developers }
+        documentIndex: 7
+      - equal: { path: spec.providerConfigRef.kind, value: ProviderConfig }
+        documentIndex: 7
+      - equal: { path: spec.forProvider.privacy, value: closed }
+        documentIndex: 7
+      - notContains: { path: spec.managementPolicies, content: Delete }
+        documentIndex: 7
+      - isKind: { of: TeamRepository }
+        documentIndex: 8
+      - equal: { path: spec.forProvider.teamIdRef.name, value: developers }
+        documentIndex: 8
+      - equal: { path: spec.forProvider.repository, value: hello-world }
+        documentIndex: 8
+      - equal: { path: spec.forProvider.permission, value: push }
+        documentIndex: 8
+      - notContains: { path: spec.managementPolicies, content: Delete }
+        documentIndex: 8
+      - isKind: { of: TeamRepository }
+        documentIndex: 9
+      - equal: { path: spec.forProvider.repository, value: platform }
+        documentIndex: 9
+      - equal: { path: spec.forProvider.permission, value: pull }
+        documentIndex: 9
+
+  - it: rejects invalid githubRepos.teams permission in values schema
+    template: templates/github-repos.yaml
+    set:
+      githubRepos.enabled: true
+      githubRepos.owner: Sparky-stack
+      githubRepos.teams:
+        developers:
+          repositories:
+            hello-world: superuser
+    asserts:
+      - failedTemplate: {}

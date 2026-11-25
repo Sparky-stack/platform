@@ -127,8 +127,8 @@ made, fix the declaration under `Full`, or change the setting in the GitHub UI w
 
 The platform defines four GitHub org teams whose slugs double as the OIDC `groups` claim for OpenChoreo RBAC. Team
 membership is managed in GitHub (never in git — no `TeamMembership` objects or user lists); `githubRepos.teams` in
-`installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml` declares each `Team` (`privacy: closed`, full management)
-and its `TeamRepository` permissions.
+`installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml` declares each `Team` (`privacy: closed`, full management
+without `Delete`) and its `TeamRepository` permissions.
 
 | Team / group | OpenChoreo | GitHub repo permission |
 |---|---|---|

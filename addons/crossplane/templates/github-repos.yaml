@@ -124,4 +124,43 @@ metadata:
 spec:
   {{- toYaml $repo | nindent 2 }}
 {{- end }}
+{{- range $team, $cfg := $g.teams }}
+---
+apiVersion: team.github.m.upbound.io/v1alpha1
+kind: Team
+metadata:
+  name: {{ $team }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "3" | nindent 4 }}
+spec:
+  managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+  providerConfigRef:
+    kind: ProviderConfig
+    name: github
+  forProvider:
+    name: {{ $team }}
+    description: {{ $cfg.description | default "" | toJson }}
+    privacy: closed
+{{- range $repo, $perm := $cfg.repositories }}
+---
+apiVersion: team.github.m.upbound.io/v1alpha1
+kind: TeamRepository
+metadata:
+  name: {{ $team }}-{{ $repo }}
+  namespace: {{ $ns }}
+  annotations:
+    {{- include "crossplane.syncAnnotations" "3" | nindent 4 }}
+spec:
+  managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+  providerConfigRef:
+    kind: ProviderConfig
+    name: github
+  forProvider:
+    teamIdRef:
+      name: {{ $team }}
+    repository: {{ $repo }}
+    permission: {{ $perm }}
+{{- end }}
+{{- end }}
 {{- end }}

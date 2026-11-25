@@ -1,16 +1,15 @@
 # openchoreo-control-plane
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+## Purpose
 
-OpenChoreo control plane on mgmt (controller, API, console, cluster-gateway) + its platform glue
+Wrapper chart for `openchoreo-control-plane` (`1.3.3`) on `mgmt`. Runs the OpenChoreo controller-manager, API, Backstage console (with golden-path scaffolder templates), and `cluster-gateway`, plus ESO secrets and CA export to `fleet`.
 
-## Requirements
+## Where it runs
 
-| Repository | Name | Version |
-|------------|------|---------|
-| oci://cr.openchoreo.dev/openchoreo/helm-charts | openchoreo-control-plane | 1.3.3 |
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: openchoreo-control-plane`).
+- **Catalog label:** `addons.platform.koorikla.io/openchoreo-control-plane` (`default: true`, opt-out with `"false"`).
 
-## Values
+## Key values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -117,7 +116,7 @@ OpenChoreo control plane on mgmt (controller, API, console, cluster-gateway) + i
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.image | string | `"registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].effect | string | `"allow"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].entitlement.claim | string | `"groups"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].entitlement.value | string | `"admins"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].entitlement.value | string | `"platform-engineers"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].kind | string | `"ClusterAuthzRoleBinding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].name | string | `"admin-binding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[0].roleMappings[0].roleRef.kind | string | `"ClusterAuthzRole"` |  |
@@ -133,18 +132,22 @@ OpenChoreo control plane on mgmt (controller, API, console, cluster-gateway) + i
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[1].roleMappings[1].roleRef.name | string | `"namespace-reader"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].effect | string | `"allow"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].entitlement.claim | string | `"groups"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].entitlement.value | string | `"platform-engineers"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].entitlement.value | string | `"qa"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].kind | string | `"ClusterAuthzRoleBinding"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].name | string | `"platform-engineer-binding"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].name | string | `"qa-binding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].roleMappings[0].roleRef.kind | string | `"ClusterAuthzRole"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].roleMappings[0].roleRef.name | string | `"platform-engineer"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].roleMappings[0].roleRef.name | string | `"cluster-reader"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].roleMappings[1].roleRef.kind | string | `"ClusterAuthzRole"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[2].roleMappings[1].roleRef.name | string | `"namespace-reader"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].effect | string | `"allow"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].entitlement.claim | string | `"groups"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].entitlement.value | string | `"sres"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].entitlement.value | string | `"release-managers"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].kind | string | `"ClusterAuthzRoleBinding"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].name | string | `"sre-binding"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].name | string | `"release-manager-binding"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].roleMappings[0].roleRef.kind | string | `"ClusterAuthzRole"` |  |
-| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].roleMappings[0].roleRef.name | string | `"sre"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].roleMappings[0].roleRef.name | string | `"cluster-reader"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].roleMappings[1].roleRef.kind | string | `"ClusterAuthzRole"` |  |
+| openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[3].roleMappings[1].roleRef.name | string | `"namespace-reader"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[4].effect | string | `"allow"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[4].entitlement.claim | string | `"client_id"` |  |
 | openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[4].entitlement.value | string | `"service_mcp_client"` |  |
@@ -207,5 +210,13 @@ OpenChoreo control plane on mgmt (controller, API, console, cluster-gateway) + i
 | scaffolder.githubApp.secretName | string | `"backstage-github-app"` |  |
 | scaffolder.githubApp.store | string | `"platform"` |  |
 
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
+## Day-2 notes
+
+- Control-plane triage and upgrades: [observability first look](../../docs/runbooks/observability-first-look.md) and [upgrades](../../docs/runbooks/upgrades.md#4-openchoreo-and-thunder).
+- Console cost views follow the FinOps module (#207): `costViews.enabled` comes from the mgmt label `addons.platform.koorikla.io/finops-opencost`; while false, ConfigMap `backstage-cost-views` (Backstage's last config file) switches off Cost Insights and Cost Analysis. It repeats the image's `app.extensions` (`appExtensions`): re-check that list on an openchoreo-ui bump.
+- Values are checked before rendering: `values.schema.json` (hosts, `wss://` gateway URL, stores, required keys) and `templates/validate.yaml` (cross-field: subchart hostnames, gateway port and TLS SANs match `installation.yaml`, GitHub App wiring). A schema error names the failing key path.
+
+## Links
+
+- [OpenChoreo](../../docs/openchoreo.md)
+- [Golden-path project templates](../../docs/project-templates.md)

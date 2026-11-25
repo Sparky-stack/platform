@@ -104,13 +104,13 @@ openchoreo-control-plane:
         authorization:
           bootstrap:   # authz bootstrap Job (kubectl apply of the default roles and mappings)
             image: registry.k8s.io/kubectl:v1.36.0@sha256:63e5e76b746bb8b891a94968d380736c035e768dab0d56ddad1f50c750a4be39   # index: amd64, arm64, ...
-            # platform: upstream's 10 default role bindings verbatim except developer-binding (below) and
-            # mcp-tryout-client-binding, bound to ClusterAuthzRole mcp-service instead of admin (docs/ai-agents.md).
+            # platform: the four GitHub org teams (docs/github-repos.md#teams-and-roles) plus M2M client_id bindings;
+            # upstream's admins/sres/platform-engineer-binding are replaced and mcp-tryout-client-binding uses mcp-service.
             mappings:
               - name: admin-binding
                 kind: ClusterAuthzRoleBinding
                 roleMappings: [{ roleRef: { name: admin, kind: ClusterAuthzRole } }]
-                entitlement: { claim: groups, value: admins }
+                entitlement: { claim: groups, value: platform-engineers }
                 effect: allow
               # platform: developers get org-wide READ-ONLY roles; write access is per project (charts/tenant
               # developer-authz.yaml binds `developer` to each tenant's developerGroups).
@@ -121,15 +121,19 @@ openchoreo-control-plane:
                   - { roleRef: { name: namespace-reader, kind: ClusterAuthzRole } }
                 entitlement: { claim: groups, value: developers }
                 effect: allow
-              - name: platform-engineer-binding
+              - name: qa-binding
                 kind: ClusterAuthzRoleBinding
-                roleMappings: [{ roleRef: { name: platform-engineer, kind: ClusterAuthzRole } }]
-                entitlement: { claim: groups, value: platform-engineers }
+                roleMappings:
+                  - { roleRef: { name: cluster-reader, kind: ClusterAuthzRole } }
+                  - { roleRef: { name: namespace-reader, kind: ClusterAuthzRole } }
+                entitlement: { claim: groups, value: qa }
                 effect: allow
-              - name: sre-binding
+              - name: release-manager-binding
                 kind: ClusterAuthzRoleBinding
-                roleMappings: [{ roleRef: { name: sre, kind: ClusterAuthzRole } }]
-                entitlement: { claim: groups, value: sres }
+                roleMappings:
+                  - { roleRef: { name: cluster-reader, kind: ClusterAuthzRole } }
+                  - { roleRef: { name: namespace-reader, kind: ClusterAuthzRole } }
+                entitlement: { claim: groups, value: release-managers }
                 effect: allow
               - name: mcp-tryout-client-binding
                 kind: ClusterAuthzRoleBinding

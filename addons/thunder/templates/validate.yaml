@@ -7,3 +7,8 @@ issuer and Backstage's redirect URIs are derived from the same host (addon openc
 {{- if not (contains $want .Values.thunderid.configuration.server.publicUrl) }}
 {{- fail (printf "thunderid.configuration.server.publicUrl must point at %s" $want) }}
 {{- end }}
+{{- range $g := list "developers" "qa" "release-managers" "platform-engineers" }}
+{{- if not (contains (printf "name: %s" $g) (index $.Values.thunderid.bootstrap.scripts "50-user-schema-and-users.yaml")) }}
+{{- fail (printf "50-user-schema-and-users.yaml must define the four org-team groups (missing %s)" $g) }}
+{{- end }}
+{{- end }}

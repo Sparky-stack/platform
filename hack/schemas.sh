@@ -112,7 +112,7 @@ if [[ -f addons/crossplane/values.yaml ]]; then
     "provider-upjet-gcp|$(xp_tag '.packages.providers["gcp-cloudsql"]["provider-gcp-sql"]')|gcp.m.upbound.io_clusterproviderconfigs sql.gcp.m.upbound.io_databaseinstances sql.gcp.m.upbound.io_databases sql.gcp.m.upbound.io_users" \
     "provider-upjet-azure|$(xp_tag '.packages.providers["azure-flexible"]["provider-azure-dbforpostgresql"]')|azure.m.upbound.io_clusterproviderconfigs dbforpostgresql.azure.m.upbound.io_flexibleservers dbforpostgresql.azure.m.upbound.io_flexibleserverdatabases" \
     "provider-upjet-harbor|$(xp_tag '.harborProvider.package')|harbor.m.crossplane.io_providerconfigs harbor.m.crossplane.io_registries harbor.m.crossplane.io_projects harbor.m.crossplane.io_replications robot.harbor.m.crossplane.io_accounts config.harbor.m.crossplane.io_securities" \
-    "provider-upjet-github|$(xp_tag '.githubRepos.package')|github.m.upbound.io_providerconfigs repo.github.m.upbound.io_repositories repo.github.m.upbound.io_repositoryrulesets repo.github.m.upbound.io_repositorycollaborators"; do
+    "provider-upjet-github|$(xp_tag '.githubRepos.package')|github.m.upbound.io_providerconfigs repo.github.m.upbound.io_repositories team.github.m.upbound.io_teams team.github.m.upbound.io_teamrepositories repo.github.m.upbound.io_repositoryrulesets repo.github.m.upbound.io_repositorycollaborators"; do
     IFS='|' read -r repo tag files <<<"$spec"
     for crd in $files; do
       fetch_crd "${repo}-${tag}-${crd}" "https://raw.githubusercontent.com/crossplane-contrib/${repo}/${tag}/package/crds/${crd}.yaml"
