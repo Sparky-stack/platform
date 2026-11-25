@@ -43,13 +43,13 @@ The app repo owns `deploy/openchoreo/release-bindings/<env>.yaml`. Promotion to 
 sets `spec.releaseName` in `release-bindings/production.yaml`. The PR can be opened by the gate workflow or by a person.
 In the app repo, configure:
 
-- `CODEOWNERS`: `/deploy/openchoreo/release-bindings/production.yaml @koorikla/release-managers`
+- `CODEOWNERS`: `/deploy/openchoreo/release-bindings/production.yaml @Sparky-stack/release-managers` ([Teams and roles](github-repos.md#teams-and-roles))
 - Branch protection / ruleset on `main`:
   - require a PR, one approval from code owners, dismiss stale approvals;
   - required status check `openchoreo/promotion-gate`. Pin it to the gate's GitHub App (store key
     `promotion-gate-github`, [forking.md](forking.md#3-credentials) (c2); setup:
     [#10](https://github.com/Sparky-stack/platform/issues/10)), so nobody else can set the status;
-  - no bypass for admins, except a documented break-glass role.
+  - no bypass for `platform-engineers`, except a documented break-glass role.
 
 Argo CD then syncs the merged binding: `charts/tenant` gives every gated environment its own Application
 `<project>-<app>-production`. That Application includes only `release-bindings/production.yaml`, and the app's main

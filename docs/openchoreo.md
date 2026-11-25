@@ -186,22 +186,25 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 | `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; platform secrets on the data plane. Refuses tenant (cell) namespaces when `secrets.tenantStores.enabled` |
 | `SecretStore openbao-tenant` (each cell namespace) | app secrets: OpenChoreo `SecretReference`s, read from the project's own OpenBao mount `kv-tenant-<project>` ([below](#application-secrets-developer-view)) |
 
-Thunder users: `admin@openchoreo.dev` (group `admins` -> OpenChoreo role admin) and `developer@openchoreo.dev` (groups
-`developers` and `demo-developers`), passwords from the `openchoreo` key. Thunder console: user `admin`,
+Thunder users: `admin@openchoreo.dev` (group `platform-engineers` -> OpenChoreo role `admin`) and `developer@openchoreo.dev`
+(group `developers` -> read-only org-wide; `developer` in non-prod `demo`), passwords from the `openchoreo` key. Thunder console: user `admin`,
 `thunder-admin-password`.
 
 ### Developer access is per project
 
+The four org-wide platform roles (`platform-engineers`, `developers`, `qa`, `release-managers`) are mapped in
+[Teams and roles](github-repos.md#teams-and-roles):
+
 - Group `developers` (every developer) gets org-wide read-only roles `cluster-reader` + `namespace-reader` (addon
   openchoreo-control-plane `developer-binding`; upstream would give role `developer`, write access to every project).
-- Each tenant's `developerGroups` (tenant file, default `<project>-developers`) get role `developer` in that project
-  only (`charts/tenant` `AuthzRoleBinding <project>-developer-<group>`), with binding writes in gated environments
-  excluded by a condition. In project B a developer of project A gets OpenChoreo's default deny, so anything they create
-  through console, `occ` or MCP has their own project as `spec.owner.projectName`.
+- Each tenant's `developerGroups` (tenant file; defaults to `<project>-developers` for multi-team installations, or
+  `[developers]` for single-team installations such as local `demo`) get role `developer` in that project only
+  (`charts/tenant` `AuthzRoleBinding <project>-developer-<group>`), with binding writes in gated environments excluded by
+  a condition. In project B a developer of project A gets OpenChoreo's default deny, so anything they create through
+  console, `occ` or MCP has their own project as `spec.owner.projectName`.
 - The deny bindings (`promotion.restrictedGroups`) cover only grants of the same group value (OpenChoreo resolves deny
   per entitlement value), so project groups carry their production exclusion in their own binding.
-- Onboarding = add the developer to `developers` and the project's group in the IdP. `developerGroups` may not list
-  `developers` (chart validation: that would reopen the project to everyone).
+- Onboarding = add the user to the appropriate GitHub org team (or `<project>-developers` in a multi-team IdP setup).
 - `SecretReference` is namespace-level in OpenChoreo, so developers do not create them through the API: app repos sync
   them from git ([App repo contract](#app-repo-contract)).
 

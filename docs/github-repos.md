@@ -6,11 +6,11 @@ its GitHub settings are a `GitHubRepository` object here.
 
 | Piece | Where |
 |---|---|
-| Declarations (one entry per repository) | `installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml`, `githubRepos.repositories` |
+| Declarations (one entry per repository / team) | `installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml`, `githubRepos.repositories` & `githubRepos.teams` |
 | API (XRD) and Composition | `addons/crossplane/files/github-repository/{definition,composition}.yaml` |
 | Provider | `provider-upjet-github` (crossplane-contrib, `githubRepos.package`, pinned `tag@sha256`), addon crossplane on mgmt |
 | Credential | GitHub App **koorikla-repo-admin**, store key `github-repo-admin` ([forking.md](forking.md#what-needs-which-credential) (c3)) |
-| Objects | namespace `crossplane-system` on mgmt: `GitHubRepository` XRs, their composed `Repository`, `RepositoryRuleset`, `RepositoryCollaborator` |
+| Objects | namespace `crossplane-system` on mgmt: `GitHubRepository` XRs, their composed `Repository`, `RepositoryRuleset`, `RepositoryCollaborator`, plus `Team` and `TeamRepository` |
 
 Installation `local` governs `Sparky-stack/platform` and `Sparky-stack/hello-world`. Exactly one mgmt per GitHub account turns
 `githubRepos.enabled` on: two would fight over the same repositories.
@@ -122,6 +122,20 @@ made, fix the declaration under `Full`, or change the setting in the GitHub UI w
 - `401` or `Bad credentials`: App ID, installation ID or key do not match; re-seed with `task secrets`.
 - `403 Resource not accessible by integration`: the App is not installed on that repository, or lacks
   Administration: write (rulesets, settings, collaborators).
+
+## Teams and roles
+
+The platform defines four GitHub org teams whose slugs double as the OIDC `groups` claim for OpenChoreo RBAC. Team
+membership is managed in GitHub (never in git — no `TeamMembership` objects or user lists); `githubRepos.teams` in
+`installations/<inst>/addons/crossplane/cluster-<mgmt>.yaml` declares each `Team` (`privacy: closed`, full management
+without `Delete`) and its `TeamRepository` permissions.
+
+| Team / group | OpenChoreo | GitHub repo permission |
+|---|---|---|
+| `platform-engineers` | ClusterAuthzRole `admin` | `platform`: `admin`, `hello-world`: `maintain` |
+| `developers` | Org-wide read-only; `developer` in non-prod tenant projects (prod denied) | `hello-world`: `push`, `platform`: `pull` |
+| `qa` | Org-wide read-only (`cluster-reader` + `namespace-reader`) | `hello-world`: `triage`, `platform`: `pull` |
+| `release-managers` | Org-wide read-only; production promotion via PR approval (`CODEOWNERS`) | `hello-world`: `maintain`, `platform`: `pull` |
 
 ## Not covered yet
 

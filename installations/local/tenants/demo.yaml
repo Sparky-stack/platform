@@ -2,6 +2,8 @@
 # project; each app repo then owns its OpenChoreo manifests under <path> (docs/openchoreo.md "App repo contract").
 project: demo
 description: Demo project - hello-world
+# Local demo: the org-wide `developers` team gets write access in project demo (non-prod only).
+developerGroups: [developers]
 apps:
   - name: hello-world
     repoURL: https://github.com/Sparky-stack/hello-world.git

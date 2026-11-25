@@ -385,7 +385,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[a-z]+\\.repo\\.github\\.m\\.upbound\\.io$"
+            "pattern": "^[a-z]+\\.(repo|team)\\.github\\.m\\.upbound\\.io$"
           },
           "minItems": 1
         },
@@ -464,6 +464,37 @@
               "rulesetId": {
                 "type": "string",
                 "pattern": "^[0-9]+$"
+              }
+            }
+          }
+        },
+        "teams": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "repositories"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "repositories": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "pull",
+                    "triage",
+                    "push",
+                    "maintain",
+                    "admin"
+                  ]
+                }
               }
             }
           }

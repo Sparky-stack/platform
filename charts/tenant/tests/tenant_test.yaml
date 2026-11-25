@@ -241,25 +241,26 @@ tests:
   - it: restricted and project developer groups may not delete gated Components (deny per group, one mapping per gated app)
     template: templates/authz.yaml
     set:
+      project: payments
       promotion.restrictedGroups: [developers, Contractors_EU]
     asserts:
       - hasDocuments: { count: 3 }
-      - equal: { path: spec.entitlement.value, value: demo-developers }
+      - equal: { path: spec.entitlement.value, value: payments-developers }
         documentIndex: 2
       - isKind: { of: AuthzRoleBinding }
       - equal: { path: metadata.namespace, value: default }
       - equal: { path: spec.effect, value: deny }
-      - equal: { path: metadata.name, value: demo-promotion-deny-component-delete-developers }
+      - equal: { path: metadata.name, value: payments-promotion-deny-component-delete-developers }
         documentIndex: 0
       - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
         documentIndex: 0
-      - equal: { path: metadata.name, value: demo-promotion-deny-component-delete-contractors-eu }
+      - equal: { path: metadata.name, value: payments-promotion-deny-component-delete-contractors-eu }
         documentIndex: 1
       - equal:
           path: spec.roleMappings
           value:
-            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: demo, component: hello-world } }
-            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: demo, component: other } }
+            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: payments, component: hello-world } }
+            - { roleRef: { kind: ClusterAuthzRole, name: promotion-component-deleter }, scope: { project: payments, component: other } }
 
   - it: an app that opts out of promotion gates keeps component:delete
     template: templates/authz.yaml
@@ -283,21 +284,24 @@ tests:
   - it: without restricted groups the project's developer group is still denied component:delete (deny is per group)
     template: templates/authz.yaml
     set:
+      developerGroups: [developers]
       promotion.restrictedGroups: []
     asserts:
       - hasDocuments: { count: 1 }
-      - equal: { path: spec.entitlement, value: { claim: groups, value: demo-developers } }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
 
   # Per-project developer authz (#335): the only OpenChoreo write grant for developers, scoped to the tenant's project.
   - it: project developers get role developer in their own project only, gated binding writes excluded
     template: templates/developer-authz.yaml
+    set:
+      developerGroups: [developers]
     asserts:
       - hasDocuments: { count: 1 }
       - isKind: { of: AuthzRoleBinding }
-      - equal: { path: metadata.name, value: demo-developer-demo-developers }
+      - equal: { path: metadata.name, value: demo-developer-developers }
       - equal: { path: metadata.namespace, value: default }
       - equal: { path: spec.effect, value: allow }
-      - equal: { path: spec.entitlement, value: { claim: groups, value: demo-developers } }
+      - equal: { path: spec.entitlement, value: { claim: groups, value: developers } }
       - equal:
           path: spec.roleMappings
           value:
@@ -318,7 +322,7 @@ tests:
       - equal:
           path: spec.roleMappings[0].scope
           value: { project: billing }
-      - notEqual: { path: spec.entitlement.value, value: demo-developers }
+      - notEqual: { path: spec.entitlement.value, value: developers }
       - lengthEqual: { path: spec.roleMappings, count: 1 }
 
   - it: explicit developer groups, one binding each; no gated environments = no conditions
@@ -336,9 +340,9 @@ tests:
           path: spec.roleMappings[0].scope
           value: { project: demo }
 
-  - it: "negative: an org-wide restricted group (developers) is rejected as a project developer group"
+  - it: allows org-wide developers group in developerGroups (single-team installations such as local demo)
     template: templates/validate.yaml
     set:
-      developerGroups: [demo-team, developers]
+      developerGroups: [developers]
     asserts:
-      - failedTemplate: { errorMessage: 'developerGroups: "developers" is an org-wide group (promotion.restrictedGroups); use a group of this project''s developers' }
+      - hasDocuments: { count: 0 }

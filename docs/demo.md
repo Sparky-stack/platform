@@ -172,7 +172,7 @@ Show: a developer creates a component in the console without touching Kubernetes
 - Create: Create -> pick a component type (`service`, `web-application`, `worker`, `scheduled-task`). Create also lists
   this repo's golden-path templates (Go, Python, Docker, Quarkus, Fastify, Rust; docs/project-templates.md). Show the
   form, do not run it: creating the repo needs a GitHub org (#109).
-- Logged in as `developer@openchoreo.dev` (groups `developers` + `demo-developers`): write access in project `demo`
+- Logged in as `developer@openchoreo.dev` (group `developers`): write access in project `demo`
   only, production bindings excluded ([developer access](openchoreo.md#developer-access-is-per-project)).
 
 ```bash

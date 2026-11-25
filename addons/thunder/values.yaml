@@ -234,8 +234,8 @@ thunderid:
         ---
         resource_type: group
         id: 01900000-0000-7000-8001-000000000040
-        name: admins
-        description: Openchoreo Admins group
+        name: platform-engineers
+        description: OpenChoreo Platform Engineers group
         ouHandle: default
         members:
           - id: 01900000-0000-7000-8001-000000000030
@@ -244,7 +244,7 @@ thunderid:
         resource_type: group
         id: 01900000-0000-7000-8001-000000000041
         name: developers
-        description: Openchoreo Developers group
+        description: OpenChoreo Developers group
         ouHandle: default
         members:
           - id: 01900000-0000-7000-8001-000000000031
@@ -252,12 +252,15 @@ thunderid:
         ---
         resource_type: group
         id: 01900000-0000-7000-8001-000000000042
-        name: demo-developers
-        description: Developers of OpenChoreo project demo (platform, DEMO; charts/tenant developerGroups default)
+        name: qa
+        description: OpenChoreo QA group
         ouHandle: default
-        members:
-          - id: 01900000-0000-7000-8001-000000000031
-            type: user
+        ---
+        resource_type: group
+        id: 01900000-0000-7000-8001-000000000043
+        name: release-managers
+        description: OpenChoreo Release Managers group
+        ouHandle: default
 
       51-backstage-app.yaml: |
         resource_type: application

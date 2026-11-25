@@ -53,6 +53,8 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 | githubRepos.activate[0] | string | `"repositories.repo.github.m.upbound.io"` |  |
 | githubRepos.activate[1] | string | `"repositoryrulesets.repo.github.m.upbound.io"` |  |
 | githubRepos.activate[2] | string | `"repositorycollaborators.repo.github.m.upbound.io"` |  |
+| githubRepos.activate[3] | string | `"teams.team.github.m.upbound.io"` |  |
+| githubRepos.activate[4] | string | `"teamrepositories.team.github.m.upbound.io"` |  |
 | githubRepos.credentials.remoteKey | string | `"github-repo-admin"` | Store key with githubAppID, githubAppInstallationID, githubAppPrivateKey of the repo-admin GitHub App. |
 | githubRepos.credentials.store | string | `"platform"` |  |
 | githubRepos.enabled | bool | `false` | `true` installs `provider-upjet-github`, the `GitHubRepository` API and `githubRepos.repositories` (per installation, on its mgmt only). |
@@ -63,6 +65,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 | githubRepos.resources.limits.memory | string | `"512Mi"` |  |
 | githubRepos.resources.requests.cpu | string | `"10m"` |  |
 | githubRepos.resources.requests.memory | string | `"128Mi"` |  |
+| githubRepos.teams | object | `{}` | GitHub org teams by slug: `{ description, repositories: { <repo>: <permission> } }` (membership stays in GitHub). |
 | harborProvider.activate[0] | string | `"registries.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[1] | string | `"projects.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[2] | string | `"replications.harbor.m.crossplane.io"` |  |
@@ -157,7 +160,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 - Values are checked by `values.schema.json` (backend enums, `aws.identity.source`, every package pinned `<repo>:<tag>@sha256:<digest>`; `helm` prints the failing path). Facts each backend needs (aws/gcp/azure ids, a backend for `cluster.provider`) are checked in `templates/validate.yaml`.
 - Crossplane v2 installs its own CRDs from its init container: the platform objects here carry `SkipDryRunOnMissingResource` and sync wave 1 (wave 2 for the ProviderConfigs, whose CRDs come with the providers).
 - Only the managed resources the active Composition composes are activated (`crossplane.provider.defaultActivations: []` plus `templates/activation-policy.yaml`), which keeps provider CRD count and memory low.
-- `githubRepos.repositories` entries must state `management` (`Observe` reads GitHub only, `Full` enforces and reverts drift, never deletes): [GitHub repository governance](../../docs/github-repos.md#day-2).
+- `githubRepos.repositories` entries must state `management` (`Observe` reads GitHub only, `Full` enforces and reverts drift, never deletes); `githubRepos.teams` declares the four org teams and their `TeamRepository` permissions (no `Delete`, membership stays in GitHub): [GitHub repository governance](../../docs/github-repos.md#day-2).
 - Backing up composed CloudNativePG databases and upgrading Crossplane: [backup and restore](../../docs/runbooks/backup-restore.md#6-cloudnativepg-cloudnative-pg) and [upgrades](../../docs/runbooks/upgrades.md#3-addon-chart-bumps-and-staged-rollout-addonsrevision).
 
 ## Links

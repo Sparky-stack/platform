@@ -11,7 +11,7 @@
 #      the renders declare plus hack/tests/github-repos/xr-*.yaml: Observe composes every object with
 #      managementPolicies exactly [Observe] (nothing on GitHub can change), the ruleset only to adopt an existing one;
 #      Full adds Create, Update, LateInitialize and never Delete; the ruleset keeps CI bump commits, releases and
-#      promotion PRs flowing (bypassApps always, admins by pull request only) and requires the declared checks from
+#      promotion PRs flowing (bypassApps always, platform-engineers by pull request only) and requires the declared checks from
 #      GitHub Actions; status.url comes from the observed repository.
 # Part 2 needs a Linux Docker engine; without one (macOS / Windows CI runners) it is skipped, part 1 still runs.
 set -euo pipefail
@@ -70,11 +70,13 @@ for f in "$RENDERED_DIR"/addon-crossplane-*.yaml; do
     | .spec.deploymentTemplate.spec.template.spec.containers[0].securityContext
     | [.allowPrivilegeEscalation, .readOnlyRootFilesystem, (.capabilities.drop | join(","))] | join(" ")' "$f")" \
     "false true ALL" "$n: provider-github runtime meets Pod Security restricted"
-  # MRAP = exactly the managed kinds the Composition can compose.
-  want=$( (grep -E '^ *kind: (Repository|RepositoryRuleset|RepositoryCollaborator)$' "$FILES/composition.yaml" 2>/dev/null || true) \
-    | awk '{print tolower($2) "s.repo.github.m.upbound.io"}' | sed 's/ys\./ies./' | LC_ALL=C sort -u | tr '\n' ' ')
+  # MRAP = exactly the managed kinds the Composition + teams template use.
+  want=$( ( (grep -E '^ *kind: (Repository|RepositoryRuleset|RepositoryCollaborator)$' "$FILES/composition.yaml" 2>/dev/null || true) \
+      | awk '{print tolower($2) "s.repo.github.m.upbound.io"}' | sed 's/ys\./ies./'; \
+      printf '%s\n' teams.team.github.m.upbound.io teamrepositories.team.github.m.upbound.io ) \
+    | LC_ALL=C sort -u | tr '\n' ' ')
   assert_eq "$(q 'select(.kind == "ManagedResourceActivationPolicy" and .metadata.name == "github") | .spec.activate[]' "$f" | LC_ALL=C sort | tr '\n' ' ')" \
-    "$want" "$n: MRAP github activates exactly the composed kinds"
+    "$want" "$n: MRAP github activates exactly the composed + team kinds"
   assert_eq "$(q 'select(.kind == "ProviderConfig" and .apiVersion == "github.m.upbound.io/*") | .metadata.name + " " + .spec.credentials.secretRef.name + "/" + .spec.credentials.secretRef.key' "$f")" \
     "github github-repo-admin/credentials" "$n: ProviderConfig github reads Secret github-repo-admin key credentials"
   assert_eq "$(q 'select(.kind == "ExternalSecret" and .metadata.name == "github-repo-admin") | .spec.secretStoreRef.name + " " + ([.spec.data[].remoteRef.key] | unique | join(","))' "$f")" \
@@ -220,7 +222,7 @@ assert_eq "$(q "$RULESET | .rules[0].requiredStatusChecks[0].requiredCheck[] | .
   "ruleset: the declared checks, pinned to the GitHub Actions app (15368)"
 assert_eq "$(q "$RULESET | .bypassActors[] | .actorType + \":\" + (.actorId | tostring) + \":\" + .bypassMode" "$F" | tr '\n' ' ')" \
   "Integration:5788333:always RepositoryRole:5:pull_request " \
-  "ruleset bypass: the bump App always (hand-off commits, releases, promotion PRs), admins by pull request only"
+  "ruleset bypass: the bump App always (hand-off commits, releases, promotion PRs), platform-engineers by pull request only"
 assert_eq "$(q 'select(.kind == "RepositoryCollaborator") | .metadata.annotations["crossplane.io/external-name"] + "=" + .spec.forProvider.permission' "$F" | tr '\n' ' ')" \
   "orders-api:alice=push orders-api:Bob=push " "collaborators: write access, external-name <repo>:<user>"
 render full-adopt "$FIX/xr-full-adopt.yaml"
@@ -231,4 +233,17 @@ yq '.spec.requiredChecks = []' "$FIX/xr-full-adopt.yaml" > "$TMP/xr-nochecks.yam
 render full-nochecks "$TMP/xr-nochecks.yaml"
 assert_eq "$(q "$RULESET | .rules[0] | has(\"requiredStatusChecks\")" "$TMP/out-full-nochecks.yaml")" false \
   "ruleset: no required-checks rule without declared checks (an empty rule would block every merge)"
+
+echo "=== 3. Four GitHub org teams (Team + TeamRepository) ==="
+local_val="$ROOT/installations/local/addons/crossplane/cluster-mgmt.yaml"
+for team in developers qa release-managers platform-engineers; do
+  assert_eq "$(t="$team" yq '.githubRepos.teams[strenv(t)].repositories | length >= 1' "$local_val")" true "local team $team has repositories"
+done
+teams_out="$TMP/teams.yaml"
+helm template crossplane "$ROOT/$ADDON" -f "$ROOT/$ADDON/values/role-mgmt.yaml" -f "$local_val" -s templates/github-repos.yaml >"$teams_out"
+assert_eq "$(yq ea '[select(.kind == "Team")] | length' "$teams_out")" "4" "local renders 4 Team objects"
+assert_eq "$(yq ea '[select(.kind == "Team") | select(.spec.forProvider.privacy != "closed")] | length' "$teams_out")" "0" "all Teams have privacy closed"
+assert_eq "$(yq ea '[select(.kind == "Team") | select(.spec.managementPolicies[] == "Delete")] | length' "$teams_out")" "0" "Team excludes Delete policy"
+assert_eq "$(yq ea '[select(.kind == "TeamRepository")] | length' "$teams_out")" "8" "local renders 8 TeamRepository objects"
+assert_eq "$(yq ea '[select(.kind == "TeamRepository") | select(.spec.managementPolicies[] == "Delete")] | length' "$teams_out")" "0" "TeamRepository excludes Delete policy"
 finish
