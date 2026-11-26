@@ -1,24 +1,8 @@
 #!/usr/bin/env bash
-# Read-only pre-flight of the full platform demo (docs/demo.md): one or more checks per demo step against the live
-# local stack, printed as a PASS / FAIL / PENDING table. Exit 1 when any check FAILs.
-# Usage: hack/demo-check.sh                                                   (task demo:check)
-#
-# Read-only by construction: `kubectl get`, `kubectl get --raw` (API service proxy), `kubectl apply --dry-run=server`
-# (admission runs, nothing is stored), curl GETs and `cosign verify`. Workload-cluster kubeconfigs are written by
-# hack/kubeconfig.sh into a private temp dir and removed on exit; no secret value is printed.
-#
-# PENDING: nothing to check yet - a feature not merged (check returns 2, detail "#<issue> ..."), a production freeze
-# window, or no promotion since a clean bootstrap. See docs/demo.md.
-#
-# Environment (defaults in brackets):
-#   KUBE_CTX            mgmt kubectl context [k3d-platform-mgmt]
-#   DEMO_NAMESPACE      OpenChoreo org namespace [default]
-#   DEMO_COMPONENT      demo component [hello-world], DEMO_ENDPOINT its HTTP endpoint name [http]
-#   DEMO_UNSIGNED_IMAGE image the signature policy must deny [a digest in ghcr.io/koorikla/hello-world CI never
-#                       signed: the manifest of one build's attestations]
-#   DEMO_HTTP_MODE      direct | docker: how app URLs on CAPD node IPs are reached [direct on Linux, docker elsewhere:
-#                       only a native Linux host routes to container IPs (docs/dev-environment.md)]
-#   DEMO_NOW            ISO 8601 time sync windows are evaluated at [now] (tests)
+# Read-only pre-flight of the platform demo (docs/demo.md): PASS / FAIL / PENDING table against the live local stack.
+# Usage: hack/demo-check.sh   (task demo:check; exits 1 on any FAIL)
+# Env: KUBE_CTX [k3d-platform-mgmt], DEMO_NAMESPACE [default], DEMO_COMPONENT [hello-world], DEMO_ENDPOINT [http],
+#      DEMO_UNSIGNED_IMAGE, DEMO_HTTP_MODE [direct|docker], DEMO_NOW [now].
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 # shellcheck source=lib/portable.sh
@@ -61,26 +45,17 @@ one_line() {
   printf '%s' "$s"
 }
 
-# check <step> <id> <title> <function> [args...]: the function prints a detail line and returns 0 (PASS), 1 (FAIL) or
-# 2 (PENDING; detail starts with "#<issue> "). <id> only names the check in this file. Rows print as checks finish;
-# the summary follows the table.
+# check <step> <id> <title> <function> [args...]: rc 0=PASS, 1=FAIL, 2=PENDING (optional "#<issue> " prefix).
 check() {
   local step=$1 title=$3 detail rc status
   shift 3
   detail=$("$@" 2>&1); rc=$?
   detail=$(one_line "$detail")
   case "$rc" in
-    0) status=PASS ;;
-    2) status=PENDING
-       if [[ "$detail" =~ ^#([0-9]+)[[:space:]]*(.*)$ ]]; then
-         status="PENDING #${BASH_REMATCH[1]}"; detail=${BASH_REMATCH[2]}
-       fi ;;
-    *) status=FAIL ;;
-  esac
-  case "$status" in
-    PASS) N_PASS=$((N_PASS + 1)) ;;
-    FAIL) N_FAIL=$((N_FAIL + 1)) ;;
-    *) N_PENDING=$((N_PENDING + 1)) ;;
+    0) status=PASS; N_PASS=$((N_PASS + 1)) ;;
+    2) status=PENDING; N_PENDING=$((N_PENDING + 1))
+       [[ "$detail" =~ ^#([0-9]+)[[:space:]]*(.*)$ ]] && { status="PENDING #${BASH_REMATCH[1]}"; detail=${BASH_REMATCH[2]}; } ;;
+    *) status=FAIL; N_FAIL=$((N_FAIL + 1)) ;;
   esac
   row "$step" "$title" "$status" "$detail"
 }
@@ -152,47 +127,15 @@ summarize_apps() {
           printf "%d/%d Synced/Healthy", ok, n; if (bad) { printf "; not: %s\n", bad; exit 1 } print "" }'
 }
 
-# lines "<name> <phase> <Available status>"
-summarize_clusters() {
-  awk 'NF { n++; if ($2 == "Provisioned" && $3 == "True") ok = ok (ok ? ", " : "") $1; else bad = bad (bad ? ", " : "") $1 "(" $2 "/available=" ($3 == "" ? "?" : $3) ")" }
-    END { if (!n) { print "no CAPI clusters in namespace fleet"; exit 1 }
-          if (bad) { print "not ready: " bad (ok ? "; ok: " ok : ""); exit 1 } print ok " Provisioned/Available" }'
-}
-
-# lines "<name> <connected> <connectedAgents>"
-summarize_dataplanes() {
-  awk 'NF { n++; if ($2 == "true") ok = ok (ok ? ", " : "") $1 "(" $3 " agent)"; else bad = bad (bad ? ", " : "") $1 }
-    END { if (!n) { print "no ClusterDataPlanes"; exit 1 }
-          if (bad) { print "agent not connected: " bad; exit 1 } print "connected: " ok }'
-}
-
-# lines "<kind> <name> <ready>" (ready: true/false/empty)
-summarize_policies() {
-  awk 'NF { n++; if ($3 == "true") ok++; else bad = bad (bad ? ", " : "") $2 }
-    END { if (!n) { print "no Kyverno policies"; exit 1 }
-          if (bad) { printf "%d/%d Ready; not: %s\n", ok, n, bad; exit 1 } printf "%d/%d Ready\n", ok, n }'
-}
-
-# lines "<kind> <name> <want> <have>" (DaemonSet desired/ready, Deployment replicas/ready; empty -> 0)
-summarize_workloads() {
-  awk 'NF { n++; w = $3 + 0; h = $4 + 0; if (w > 0 && w == h) ok = ok (ok ? ", " : "") $2 " " h "/" w; else bad = bad (bad ? ", " : "") $2 " " h "/" w }
-    END { if (!n) { print "no workloads found"; exit 1 }
-          if (bad) { print "not ready: " bad; exit 1 } print ok }'
-}
-
 # lines "<created> <name> <succeeded> <failed>" (condition statuses) -> latest run's outcome
 latest_run() {
   sort | awk 'NF { last = $0 } END { if (last == "") exit 1; print last }'
 }
 
-# lines "<name> <ready>" (ClusterSecretStores)
-summarize_stores() {
-  awk 'NF { n++; if ($2 == "True") ok = ok (ok ? ", " : "") $1; else bad = bad (bad ? ", " : "") $1 }
-    END { if (!n) { print "no ClusterSecretStores"; exit 1 }
-          if (bad) { print "not Ready: " bad; exit 1 } print "Ready: " ok }'
-}
-
 # ---- lookups --------------------------------------------------------------------------------------------------------
+argo_app_names() {
+  km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null
+}
 # env_names: environments of the org namespace, non-production first (= promotion order of the demo).
 env_names() {
   km get environments.openchoreo.dev -n "$NS" \
@@ -250,10 +193,7 @@ release_bindings() {
 }
 
 # ---- step 1: clean bootstrap ----------------------------------------------------------------------------------------
-# An app OutOfSync only because an active deny sync window holds it (production freeze, docs/promotion.md#5-freeze-window-optional)
-# is PENDING, not FAIL. Argo CD does not report that, so hack/lib/syncwindow.py evaluates the windows.
-# frozen_apps: lines "<app>\t<window description>\t<end>", cached in $KCDIR (checks run in subshells); returns 1 with
-# the reason on stdout when the windows cannot be evaluated.
+# An app held OutOfSync only by an active deny sync window (docs/promotion.md#5-freeze-window-optional) is PENDING.
 frozen_apps() {
   local apps="$KCDIR/applications.json" projects="$KCDIR/appprojects.json" cache="$KCDIR/frozen"
   [[ -f "$cache" ]] && { cat "$cache"; return 0; }
@@ -301,7 +241,9 @@ c_clusters() {
   out=$(km get clusters.cluster.x-k8s.io -n fleet \
     -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{.status.conditions[?(@.type=="Available")].status}{"\n"}{end}') \
     || { echo "cannot list CAPI clusters"; return 1; }
-  printf '%s\n' "$out" | summarize_clusters
+  printf '%s\n' "$out" | awk 'NF { n++; if ($2 == "Provisioned" && $3 == "True") ok = ok (ok ? ", " : "") $1; else bad = bad (bad ? ", " : "") $1 "(" $2 "/available=" ($3 == "" ? "?" : $3) ")" }
+    END { if (!n) { print "no CAPI clusters in namespace fleet"; exit 1 }
+          if (bad) { print "not ready: " bad (ok ? "; ok: " ok : ""); exit 1 } print ok " Provisioned/Available" }'
 }
 
 c_dataplanes() {
@@ -309,7 +251,9 @@ c_dataplanes() {
   out=$(km get clusterdataplanes.openchoreo.dev \
     -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.agentConnection.connected}{" "}{.status.agentConnection.connectedAgents}{"\n"}{end}') \
     || { echo "cannot list ClusterDataPlanes"; return 1; }
-  printf '%s\n' "$out" | summarize_dataplanes
+  printf '%s\n' "$out" | awk 'NF { n++; if ($2 == "true") ok = ok (ok ? ", " : "") $1 "(" $3 " agent)"; else bad = bad (bad ? ", " : "") $1 }
+    END { if (!n) { print "no ClusterDataPlanes"; exit 1 }
+          if (bad) { print "agent not connected: " bad; exit 1 } print "connected: " ok }'
 }
 
 # The same cluster file contract rendered for the other providers' installations (offline: helm template only).
@@ -361,9 +305,7 @@ platform_prefix() {
   [[ -n "$host" ]] && printf '%s/%s/' "$host" "$project"
 }
 
-# cosign_platform <image>: verify an in-cluster build with the platform key (cosign.pub of store key cosign-platform,
-# public), the registry CA (public) and the pull-only robot `nodes` (private apps project; written into a docker config
-# in the private temp dir, never printed). No public tlog by default (buildWorkflows.signing.transparencyLog).
+# cosign_platform <image>: verify an in-cluster build with the platform key, registry CA, and pull-only robot `nodes`.
 cosign_platform() {
   local image=$1 host=${1%%/*} d="$KCDIR/cosign" pw err
   mkdir -p "$d/docker"
@@ -413,7 +355,9 @@ c_kyverno() {
   out=$(kw "$1" get imagevalidatingpolicies.policies.kyverno.io,validatingpolicies.policies.kyverno.io \
     -o jsonpath='{range .items[*]}{.kind}{" "}{.metadata.name}{" "}{.status.conditionStatus.ready}{"\n"}{end}') \
     || { echo "cannot list Kyverno policies on $1"; return 1; }
-  printf '%s\n' "$out" | summarize_policies
+  printf '%s\n' "$out" | awk 'NF { n++; if ($3 == "true") ok++; else bad = bad (bad ? ", " : "") $2 }
+    END { if (!n) { print "no Kyverno policies"; exit 1 }
+          if (bad) { printf "%d/%d Ready; not: %s\n", ok, n, bad; exit 1 } printf "%d/%d Ready\n", ok, n }'
 }
 
 # prod_target: "<cluster> <cell namespace>" of the production environment (where images must be signed: Deny).
@@ -603,7 +547,9 @@ c_falco() {
   out=$(kc "$1" get daemonsets,deployments -n falco \
     -o jsonpath='{range .items[*]}{.kind}{" "}{.metadata.name}{" "}{.status.desiredNumberScheduled}{.spec.replicas}{" "}{.status.numberReady}{.status.readyReplicas}{"\n"}{end}') \
     || { echo "cannot list namespace falco on $1"; return 1; }
-  printf '%s\n' "$out" | summarize_workloads
+  printf '%s\n' "$out" | awk 'NF { n++; w = $3 + 0; h = $4 + 0; if (w > 0 && w == h) ok = ok (ok ? ", " : "") $2 " " h "/" w; else bad = bad (bad ? ", " : "") $2 " " h "/" w }
+    END { if (!n) { print "no workloads found"; exit 1 }
+          if (bad) { print "not ready: " bad; exit 1 } print ok }'
 }
 
 c_falco_escalation() {
@@ -629,11 +575,10 @@ c_falco_cluster_name() {
 }
 
 # ---- step 8: zero trust ---------------------------------------------------------------------------------------------
-# Mesh members (CAPI Clusters labelled mesh.platform.koorikla.io/group): Issuer istio-system/openbao-mesh (Vault issuer
-# for OpenBao on mgmt) is Ready and issued istiod's serving Certificate (addons/mesh templates/csr-issuer.yaml).
+# Mesh members (mesh.platform.koorikla.io/group): Vault Issuer openbao-mesh is Ready and issued istiod's Certificate.
 c_mesh_certs() {
   local apps members c iss crt ok="" bad="" skip=""
-  apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+  apps=$(argo_app_names)
   grep -q '^openbao-' <<<"$apps" || { echo "OpenBao addon not installed on mgmt"; return 1; }
   members=$(km get clusters.cluster.x-k8s.io -n fleet -l mesh.platform.koorikla.io/group \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
@@ -665,11 +610,12 @@ c_secret_stores() {
   out=$(kc "$1" get clustersecretstores.external-secrets.io \
     -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') \
     || { echo "cannot list ClusterSecretStores on $1"; return 1; }
-  printf '%s\n' "$out" | summarize_stores
+  printf '%s\n' "$out" | awk 'NF { n++; if ($2 == "True") ok = ok (ok ? ", " : "") $1; else bad = bad (bad ? ", " : "") $1 }
+    END { if (!n) { print "no ClusterSecretStores"; exit 1 }
+          if (bad) { print "not Ready: " bad; exit 1 } print "Ready: " ok }'
 }
 
-# c_app_secret: in the first environment, the component's Deployment takes $SECRET_ENV from a Secret that an
-# ExternalSecret on SecretStore openbao-tenant keeps synced (docs/openchoreo.md "Secrets"). Only the value's length is read.
+# c_app_secret: first env's Deployment reads $SECRET_ENV from an ExternalSecret on SecretStore openbao-tenant.
 c_app_secret() {
   local env dp ns name es len
   env=$(env_names | sed -n 1p)
@@ -691,11 +637,10 @@ c_app_secret() {
 }
 
 # ---- step 9: app with a database ------------------------------------------------------------------------------------
-# On every workload cluster opted in to addon crossplane (docs/data-services.md) the PostgreSQL XRD is Established.
-# No opted-in cluster fails: step 9 has nothing to show.
+# Every workload cluster opted in to addon crossplane (docs/data-services.md) has the PostgreSQL XRD Established.
 c_postgres() {
   local apps c est ok="" bad=""
-  apps=$(km get applications.argoproj.io -n argocd -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+  apps=$(argo_app_names)
   for c in ${CLUSTERS[@]+"${CLUSTERS[@]}"}; do
     grep -qx -- "crossplane-$c" <<<"$apps" || continue
     est=$(kw "$c" get compositeresourcedefinitions.apiextensions.crossplane.io postgresqls.platform.koorikla.io \
@@ -741,9 +686,7 @@ c_db_claim() {
 
 # ---- main -----------------------------------------------------------------------------------------------------------
 CLUSTERS=()
-cluster_names() {
-  km get clusters.cluster.x-k8s.io -n fleet -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null
-}
+cluster_names() { km get clusters.cluster.x-k8s.io -n fleet -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null; }
 read_lines CLUSTERS cluster_names
 fetch_kubeconfigs
 
