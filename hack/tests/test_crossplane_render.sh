@@ -20,6 +20,8 @@ cd "$ROOT"
 source hack/lib/portable.sh
 # shellcheck source=../lib/addons.sh
 source hack/lib/addons.sh
+# shellcheck source=crossplane_render_lib.sh
+source "$(dirname "$0")/crossplane_render_lib.sh"
 
 ADDON=addons/crossplane
 FIX=hack/tests/crossplane
@@ -27,7 +29,7 @@ EX=packages/postgresql/examples   # the sample XRs live with the API (one copy)
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 [[ -d "$SCHEMAS_DIR/rds.aws.m.upbound.io" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
 [[ -d "$ADDON/charts" ]] || helm dependency build "$ADDON" >/dev/null
-kc() { assert_eq "$(kc_valid "$1")" yes "$2 passes kubeconform -strict"; }   # kc <file> <label>
+kc() { assert_kc_valid "$1" "$2"; }
 COMP=packages/postgresql/apis/postgresql/composition.yaml
 # Release tags only (release-please postgresql-vX.Y.Z -> image tag vX.Y.Z): `main` / short SHAs move or are not releases.
 CFG_RE='^ghcr\.io/koorikla/platform/postgresql:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'
@@ -124,57 +126,12 @@ cp packages/postgresql/apis/postgresql/definition.yaml "$TMP/xrd.yaml"
 yq '.data.backend = "mysql"' "$TMP/env-cnpg.yaml" > "$TMP/env-unknown.yaml"
 
 # --- 2. crossplane render ---------------------------------------------------------------------------------------------
-if ! command -v crossplane >/dev/null 2>&1; then
-  echo "  SKIP crossplane render: crossplane CLI not found (mise install)"
-  finish; exit 0
-fi
-if [[ "$(docker info --format '{{.OSType}}' 2>/dev/null | tr -d '\r')" != linux ]]; then
-  echo "  SKIP crossplane render: needs a Linux Docker engine (functions run as containers)"
-  finish; exit 0
-fi
+xp_check_docker
 XP_IMAGE="$(yq -r '.crossplane.image.repository + ":" + .crossplane.image.tag' "$ADDON/values.yaml" | tr -d '\r')"
-# One Docker network and one container per Function for the whole run, shared by every render. Left to itself each
-# `crossplane render` creates its own bridge network (crossplane-render-<random>) plus fresh function containers, and
-# leaves both behind when it is killed: ten renders per run, several runs at once on a shared Docker host and the leaked
-# networks of killed runs exhaust Docker's default address pools (~30 networks) and renders fail with "all predefined
-# address pools have been fully subnetted". The run's network and containers carry its name, are removed on exit
-# (including INT / TERM), and a later run removes those of runs whose process is gone (SIGKILL).
-XP_LABEL=koorikla.platform/test=crossplane-render
-XP_HOST=$(uname -n)
-XP_NET="koorikla-xp-render-$$-$RANDOM"
+# One Docker network and one container per Function for the whole run, shared by every render (avoiding leaked
+# crossplane-render-* networks exhausting Docker address pools).
 XP_RENDER_JOBS=${XP_RENDER_JOBS:-4}   # parallel renders (each one starts the render engine container)
-xp_cleanup_run() {   # xp_cleanup_run <network>: remove the run's containers, then its network
-  local ids
-  ids=$( (docker ps -aq --filter "name=$1-"; docker ps -aq --filter "network=$1") 2>/dev/null | sort -u | tr '\n' ' ')
-  # shellcheck disable=SC2086 # word-split container ids
-  [[ -z "${ids// /}" ]] || docker rm -f $ids >/dev/null 2>&1 || true
-  docker network rm "$1" >/dev/null 2>&1 || true
-}
-xp_cleanup() {
-  local pids
-  pids=$(jobs -p)
-  # shellcheck disable=SC2086 # word-split pids
-  [[ -z "$pids" ]] || kill $pids 2>/dev/null || true
-  xp_cleanup_run "$XP_NET"
-  [[ -z "${XP_FN_IMAGE:-}" ]] || docker rmi -f "$XP_FN_IMAGE" >/dev/null 2>&1 || true
-  rm -rf "$TMP"
-}
-trap xp_cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-while read -r net pid host; do
-  [[ -n "$net" && "$host" == "$XP_HOST" ]] || continue
-  kill -0 "$pid" 2>/dev/null || xp_cleanup_run "$net"
-done < <(docker network ls --filter "label=$XP_LABEL" \
-  --format '{{.Name}} {{.Label "koorikla.platform/owner-pid"}} {{.Label "koorikla.platform/owner-host"}}' | tr -d '\r')
-if ! out=$(docker network create --label "$XP_LABEL" --label "koorikla.platform/owner-pid=$$" \
-  --label "koorikla.platform/owner-host=$XP_HOST" "$XP_NET" 2>&1); then
-  echo "$out" >&2
-  echo "  hint: $(docker network ls -q | wc -l | tr -d ' ') Docker networks exist; networks left by killed renders:" \
-    "docker network ls --filter name=crossplane-render- (remove only those without containers you own)" >&2
-  assert_eq failed ok "crossplane render: create the run's Docker network $XP_NET"
-  finish; exit 1
-fi
+xp_render_init koorikla-xp-render
 # The embedded function compose-postgresql, built from the working tree's templates exactly like `crossplane project
 # build` does (CLI 2.4.1: FROM function-go-templating v0.12.0, templates in /src): renders test the templates you edit.
 XP_FN=koorikla-platform-postgresqlcompose-postgresql
@@ -201,14 +158,9 @@ XP_NET="$XP_NET" yq 'select(.kind == "Function")
   | .metadata.annotations["render.crossplane.io/runtime-docker-name"] = strenv(XP_NET) + "-" + (.metadata.name | sub("^koorikla-platform-postgresql", ""))
   | .metadata.annotations["render.crossplane.io/runtime-docker-cleanup"] = "Orphan"' "$TMP/addon-functions.yaml" \
   > "$TMP/functions.yaml"
-# Pull every image once, serially and with retries, before the parallel renders: ten renders pulling the same images
-# at once from xpkg.crossplane.io get connection resets (#140). The renders then find them locally (IfNotPresent).
 pkgs=()
 read_lines pkgs yq -N -r '.spec.package' "$TMP/functions.yaml"
-for img in "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}; do
-  [[ -n "$img" && "$img" != null && "$img" != "$XP_FN_IMAGE" ]] || continue
-  docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
-done
+xp_pull_images "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}
 
 # render_one <case> <EnvironmentConfig> <xr> [observed]: crossplane composition render (one retry for a transient
 # registry/Docker error; a real render failure fails both attempts, the stderr of both is kept for render())
@@ -254,8 +206,8 @@ render() {
   assert_eq "$(yq -N '.status.conditions[] | select(.type == "Synced") | .status' "$TMP/xr-$c.yaml")" True \
     "crossplane render $c: XR Synced"
 }
-q() { yq -N "$1" "$2" | tr -d '\r' | sed '/^$/d'; }   # q <expr> <file> (blank lines of non-matching documents dropped)
-kinds() { yq -N '.kind' "$1" | tr -d '\r' | sort | uniq -c | awk '{print $2 "=" $1}' | tr '\n' ' '; }
+q() { xp_yq "$1" "$2"; }
+kinds() { xp_kinds "$1"; }
 # secret_shape <case>: the connection Secret keys an app receives, "cnpg-operator" when the operator writes it.
 secret_shape() {
   local es

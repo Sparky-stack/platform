@@ -84,24 +84,6 @@ data:
         kind: Group
         name: system:unauthenticated
 ---
-apiVersion: addons.cluster.x-k8s.io/v1beta2
-kind: ClusterResourceSet
-metadata:
-  name: {{ $name }}-mesh-trust
-  namespace: fleet
-  labels:
-    {{- include "mesh.labels" . | nindent 4 }}
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"   # after its payload (wave 0) and the Cluster: docs/providers.md "Sync waves of a cluster app"
-spec:
-  strategy: Reconcile
-  clusterSelector:
-    matchLabels:
-      platform.koorikla.io/name: {{ $name }}
-  resources:
-    - kind: ConfigMap
-      name: {{ $name }}-mesh-oidc
-    - kind: Secret
-      name: {{ $name }}-mesh-trust
+{{ include "capi.clusterResourceSet" (dict "cluster" $name "name" (printf "%s-mesh-trust" $name) "labels" (include "mesh.labels" .) "resources" (list (dict "kind" "ConfigMap" "name" (printf "%s-mesh-oidc" $name)) (dict "kind" "Secret" "name" (printf "%s-mesh-trust" $name)))) }}
 {{- end }}
 {{- end }}

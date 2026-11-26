@@ -133,24 +133,7 @@ spec:
                 variable: kindImage
     # cni-flannel replaces the whole control-plane files list: it must run before every patch that appends files.
     {{- include "clusterclass.cniFlannelPatch" "flannel-backend: vxlan" | nindent 4 }}
-    - name: registryAuth
-      enabledIf: {{`"{{ .registryAuth }}"`}}
-      definitions:
-        - selector:
-            apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-            kind: KThreesControlPlaneTemplate
-            matchResources:
-              controlPlane: true
-          jsonPatches:
-            {{- include "clusterclass.registriesPatch" (list "/spec/template/spec/kthreesConfigSpec/files" true) | nindent 12 }}
-        - selector:
-            apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
-            kind: KThreesConfigTemplate
-            matchResources:
-              machineDeploymentClass:
-                names: [default-worker]
-          jsonPatches:
-            {{- include "clusterclass.registriesPatch" (list "/spec/template/spec/files" false) | nindent 12 }}
+    {{- include "clusterclass.registryAuthPatch" . | nindent 4 }}
     {{- include "clusterclass.registryCAPatch" . | nindent 4 }}
     - name: registryHostAlias
       enabledIf: {{`'{{ if .registryHostAliasTarget }}true{{ end }}'`}}

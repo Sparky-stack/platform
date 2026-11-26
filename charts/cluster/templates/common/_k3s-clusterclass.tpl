@@ -14,13 +14,8 @@ argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 {{- end }}
 
 {{/*
-k3s private registry auth: /etc/rancher/k3s/registries.yaml (k3s' default --private-registry path) from Secret
-<cluster>-registries (key registries.yaml, ns fleet), rendered by charts/cluster (capi-registries.yaml). The k3s
-bootstrap provider resolves files[].contentFrom.secret in the KThreesConfig's namespace once, at bootstrap time. Its
-controller watches only KThreesConfigs, not these Secrets: a missing Secret fails the reconcile and is retried on
-controller backoff / the 10 min resync only, so charts/cluster syncs the Secret's ExternalSecret before the Cluster
-(sync wave -1; hack/tests/test_bootstrap_file_sources.sh). The CAPI template (`{{ .builtin.cluster.name }}`) is
-evaluated by the topology controller.
+Private registry auth (/etc/rancher/k3s/registries.yaml) from Secret <cluster>-registries (capi-registries.yaml).
+Bootstrap resolves contentFrom.secret once without watching it, so Clusters wait on wave -1 (test_bootstrap_file_sources.sh).
 */}}
 {{- define "clusterclass.registriesFile" -}}
 path: /etc/rancher/k3s/registries.yaml
@@ -32,27 +27,35 @@ contentFrom:
     key: registries.yaml
 {{- end }}
 
-{{/*
-jsonPatch adding the registries file. Args: (list "<path to files>" <base template already has files: bool>)
-*/}}
-{{- define "clusterclass.registriesPatch" -}}
-{{- $path := index . 0 -}}
-{{- $append := index . 1 -}}
-- op: add
-  path: {{ $path }}{{ if $append }}/-{{ end }}
-  valueFrom:
-    template: |
-      {{- if $append }}
-      {{- include "clusterclass.registriesFile" . | nindent 6 }}
-      {{- else }}
-      - {{ include "clusterclass.registriesFile" . | indent 8 | trim }}
-      {{- end }}
+{{- define "clusterclass.registryAuthPatch" -}}
+- name: registryAuth
+  enabledIf: {{`"{{ .registryAuth }}"`}}
+  definitions:
+    - selector:
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+        kind: KThreesControlPlaneTemplate
+        matchResources:
+          controlPlane: true
+      jsonPatches:
+        - op: add
+          path: /spec/template/spec/kthreesConfigSpec/files/-
+          valueFrom:
+            template: |
+              {{- include "clusterclass.registriesFile" . | nindent 14 }}
+    - selector:
+        apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+        kind: KThreesConfigTemplate
+        matchResources:
+          machineDeploymentClass:
+            names: [default-worker]
+      jsonPatches:
+        - op: add
+          path: /spec/template/spec/files
+          valueFrom:
+            template: |
+              - {{ include "clusterclass.registriesFile" . | indent 16 | trim }}
 {{- end }}
 
-{{/*
-Registry CA: /etc/rancher/k3s/registry-ca.crt (the registries.yaml `tls.ca_file` of the installation's Harbor) from
-key registry-ca.crt of the same Secret <cluster>-registries. Public certificate only (charts/cluster).
-*/}}
 {{- define "clusterclass.registryCAFile" -}}
 path: /etc/rancher/k3s/registry-ca.crt
 owner: root:root
@@ -63,12 +66,7 @@ contentFrom:
     key: registry-ca.crt
 {{- end }}
 
-{{/*
-Patch appending the CA file. Ordered after registryAuth, so the files list exists on both template kinds. The worker
-template has a files list only when registryAuth created it, so the patch is gated on both variables here too (not
-only by charts/cluster setting them together): registryCA alone renders nothing instead of a failing JSON patch.
-Arg: list of (path-to-files) per template kind is implied by the selector order: control plane, workers.
-*/}}
+{{/* Ordered after registryAuth so workers already have `files`; gated on both so registryCA alone is a no-op. */}}
 {{- define "clusterclass.registryCAPatch" -}}
 - name: registryCA
   enabledIf: {{`'{{ if and .registryAuth .registryCA }}true{{ end }}'`}}

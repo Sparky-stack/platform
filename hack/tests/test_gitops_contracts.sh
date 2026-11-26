@@ -204,9 +204,7 @@ yq 'del(.options.k3s.extraArgs[] | select(.arg == "--etcd-arg=*"))' "$ROOT/boots
 assert_match "$(k3d_stall_missing "$TMP/k3d-fsync.yaml")" "unsafe-no-fsync" "contract catches a k3d config with fsync in the mgmt etcd"
 
 # 9b. external-dns is NOT a Kyverno-excluded platform namespace either: the chart defaults meet Pod Security restricted.
-for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
-  assert_eq "$(grep -cE '^ *- external-dns( |$)' "$ROOT/$f" || true)" 0 "external-dns not excluded from Kyverno ($f)"
-done
+assert_kyverno_not_excluded external-dns
 helm template external-dns "$ROOT/addons/external-dns" --namespace external-dns -f "$ROOT/addons/external-dns/values/role-workload.yaml" \
   -f "$ROOT/addons/external-dns/values/dns-route53.yaml" --set dns.provider=route53 --set 'dns.domainFilters={a.example.com}' \
   --set 'external-dns.domainFilters={a.example.com}' --set-string external-dns.txtOwnerId=sample > "$TMP/edns-pss.yaml"
@@ -219,9 +217,7 @@ assert_eq "$(yq -o=json -I=0 "$edns_pod | .containers[0].securityContext.capabil
 # 9c. reloader (#50) is NOT a Kyverno-excluded platform namespace, meets Pod Security restricted, may roll workloads in
 #     openchoreo-data-plane (and tenant cells, #268: cluster-wide watch fenced by VAP reloader-rollout-only, CEL in
 #     test_reloader_admission.sh), and cluster-agent's Reloader annotations match the CRS-delivered Secret/ConfigMap.
-for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
-  assert_eq "$(grep -cE '^ *- reloader( |$)' "$ROOT/$f" || true)" 0 "reloader not excluded from Kyverno ($f)"
-done
+assert_kyverno_not_excluded reloader
 rel_ns=$(yq '.addons.reloader.namespace' "$PV")
 dp_ns=$(yq '.addons["openchoreo-data-plane"].namespace' "$PV")
 helm template reloader "$ROOT/addons/reloader" --namespace "$rel_ns" > "$TMP/reloader-pss.yaml"
@@ -281,14 +277,11 @@ done
 
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.
-for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
-  assert_eq "$(grep -cE '^ *- harbor$' "$ROOT/$f" || true)" 0 "harbor not excluded from Kyverno ($f)"
-done
+assert_kyverno_not_excluded harbor
 helm template harbor "$ROOT/addons/harbor" --namespace harbor --values "$ROOT/installations/local/installation.yaml" \
   --set harbor.externalURL=https://harbor.openchoreo.localhost:9443 > "$TMP/harbor.yaml"
-pss=$(yq 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob")' "$TMP/harbor.yaml" \
-  | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
-assert_eq "$pss" "" "Harbor workloads meet Pod Security baseline (no privileged/host namespaces/hostPath/hostPort/added caps)"
+assert_pss_baseline "$TMP/harbor.yaml" '.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob"' \
+  "Harbor workloads meet Pod Security baseline (no privileged/host namespaces/hostPath/hostPort/added caps)"
 
 # 10. Platform-workflow egress + Prometheus ingress: the promotion gate's pod labels are the exact selector of the
 #     workflow plane's NetworkPolicy platform-workflows-openchoreo AND the observability plane's NetworkPolicy
