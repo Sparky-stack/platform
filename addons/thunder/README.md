@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wrapper chart for ThunderID (`1.0.1`). Runs OpenChoreo's OIDC identity provider on `mgmt`, serving console, API, CLI, observer, promotion-gate, and opt-in AI agent OAuth clients over the control-plane `Gateway`, backed by delete-protected PVCs.
+Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider on `mgmt`, serving console, API, CLI, observer, promotion-gate, and opt-in AI agent OAuth clients over the control-plane `Gateway`, backed by delete-protected PVCs.
 
 ## Where it runs
 
@@ -47,8 +47,8 @@ Wrapper chart for ThunderID (`1.0.1`). Runs OpenChoreo's OIDC identity provider 
 | thunderid.configuration.server.httpOnly | bool | `true` |  |
 | thunderid.configuration.server.publicUrl | string | `"http://thunder.openchoreo.localhost:8080"` |  |
 | thunderid.deployment.image.pullPolicy | string | `"IfNotPresent"` |  |
-| thunderid.deployment.image.tag | string | `"1.0.1@sha256:d3c0613ff447a551fd440768a15bdfb6668948e80809cbb50f82d6752f22ab3e"` |  |
-| thunderid.deployment.replicaCount | int | `1` | `1` (single-writer SQLite persistence) with `1.0.1` pinned by multi-arch index digest. |
+| thunderid.deployment.image.tag | string | `"1.1.1@sha256:c0d566c4bfe82ebd6161596248f4008c5014820b192117c07dc8633f16651fc6"` |  |
+| thunderid.deployment.replicaCount | int | `1` | `1` (single-writer SQLite persistence) with `1.1.1` pinned by multi-arch index digest. |
 | thunderid.fullnameOverride | string | `"thunder"` |  |
 | thunderid.hpa.enabled | bool | `false` |  |
 | thunderid.httproute.enabled | bool | `true` | Exposes `thunder.<openchoreo.controlPlane.host>` via `openchoreo-control-plane/gateway-default`. |

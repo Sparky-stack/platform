@@ -9,100 +9,25 @@
 # contracts between addon openbao, addon secret-stores, charts/tenant and the policies in files/policies/.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=openbao_lib.sh
+source "$(dirname "$0")/openbao_lib.sh"
 
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; IN="$TMP/inputs"
 mkdir -p "$S/mounts" "$S/auth" "$S/writes" "$S/entities" "$S/roles" "$BIN" "$IN/tenants" "$IN/clusters"
-cat > "$BIN/bao" <<'FAKE'
-#!/usr/bin/env bash
-# fake bao: state under $FAKE_STATE, every call appended to $FAKE_STATE/calls
-set -u
-S=$FAKE_STATE
-printf '%s %s\n' "${BAO_TOKEN:-none}" "$*" >> "$S/calls"
-enc() { printf '%s' "$1" | tr '/' '_'; }
-field=""
-args=("$@")
-cmd=${args[0]}; args=("${args[@]:1}")
-if [[ "$cmd" =~ ^(read|write)$ && "${args[0]:-}" == -field=* ]]; then field=${args[0]#-field=}; args=("${args[@]:1}"); fi
-case "$cmd" in
-  read)
-    p=${args[0]}
-    case "$p" in
-      sys/mounts/*) [[ -e "$S/mounts/$(enc "${p#sys/mounts/}")" ]] ;;
-      sys/auth/*) [[ -e "$S/auth/$(enc "${p#sys/auth/}")" ]] && { [[ -z "$field" ]] || echo "acc_${p#sys/auth/}"; } ;;
-      identity/entity/name/*) [[ -e "$S/entities/${p##*/}" ]] && echo "id-${p##*/}" ;;
-      *) exit 2 ;;
-    esac ;;
-  write)
-    p=${args[0]}; rest=("${args[@]:1}")
-    if [[ "$p" == auth/*/config && "${rest[*]}" == *unreachable* ]]; then
-      echo "Error writing data to $p: Code: 400. * error checking jwks URL" >&2; exit 2
-    fi
-    if [[ "${rest[*]:-}" == "-" ]]; then cat > "$S/writes/$(enc "$p")"; else printf '%s\n' "${rest[@]}" > "$S/writes/$(enc "$p")"; fi
-    case "$p" in
-      auth/kubernetes/login) for a in "${rest[@]}"; do [[ "$a" == role=* ]] && echo "tok-${a#role=}"; done; true ;;
-      identity/entity/name/*) touch "$S/entities/${p##*/}" ;;
-      identity/entity-alias)
-        an=""; ac=""; aa=""
-        for a in "${rest[@]}"; do case "$a" in name=*) an=${a#name=} ;; canonical_id=*) ac=${a#canonical_id=} ;; mount_accessor=*) aa=${a#mount_accessor=} ;; esac; done
-        # OpenBao: an entity has at most ONE alias per auth mount; an existing alias (name, mount) moves to the new entity
-        if awk -v n="$an" -v c="$ac" -v a="$aa" '$2 == a && $3 == c && $1 != n {f=1} END {exit !f}' "$S/aliasmap" 2>/dev/null; then
-          echo "Error writing data to identity/entity-alias: Code: 400. * Alias already exists for requested entity and mount accessor" >&2; exit 2
-        fi
-        { awk -v n="$an" -v a="$aa" '!($1 == n && $2 == a)' "$S/aliasmap" 2>/dev/null; printf '%s %s %s\n' "$an" "$aa" "$ac"; } > "$S/aliasmap.new"
-        mv "$S/aliasmap.new" "$S/aliasmap"
-        cat "$S/writes/identity_entity-alias" >> "$S/aliases"; echo >> "$S/aliases" ;;
-      auth/*/role/*) cp "$S/writes/$(enc "$p")" "$S/roles/$(enc "$p")" ;;
-    esac ;;
-  delete)
-    p=${args[0]}
-    case "$p" in
-      identity/entity/name/*) rm -f "$S/entities/${p##*/}"; awk -v c="id-${p##*/}" '$3 != c' "$S/aliasmap" > "$S/aliasmap.new" 2>/dev/null; mv "$S/aliasmap.new" "$S/aliasmap" ;;
-      auth/*/role/*) rm -f "$S/roles/$(enc "$p")" ;;
-      *) exit 2 ;;
-    esac ;;
-  list)
-    p=${args[0]}
-    if [[ "$p" == identity/entity/name ]]; then
-      found=$(cd "$S/entities" && ls 2>/dev/null)
-      [[ -n "$found" ]] || { echo "No value found at $p" >&2; exit 2; }
-      printf 'Keys\n----\n%s\n' "$found"; exit 0
-    fi
-    m=${p#auth/}; m=${m%/role}
-    found=$(cd "$S/roles" && ls "auth_${m}_role_"* 2>/dev/null | sed "s/^auth_${m}_role_//")
-    [[ -n "$found" ]] || { echo "No value found at $p" >&2; exit 2; }
-    printf 'Keys\n----\n%s\n' "$found" ;;
-  secrets)
-    sub=${args[0]}
-    case "$sub" in
-      enable) for a in "${args[@]}"; do [[ "$a" == -path=* ]] && touch "$S/mounts/$(enc "${a#-path=}")"; done; true ;;
-      *) echo "fake bao: secrets $sub" >&2; exit 3 ;;
-    esac ;;
-  auth)
-    sub=${args[0]}
-    case "$sub" in
-      enable) for a in "${args[@]}"; do [[ "$a" == -path=* ]] && touch "$S/auth/$(enc "${a#-path=}")"; done; true ;;
-      disable) rm -f "$S/auth/$(enc "${args[1]}")" ;;
-      list) printf 'Path Type Accessor Description\n---- ---- -------- -----------\nkubernetes/ kubernetes auth_kubernetes_a1 n/a\ntoken/ token auth_token_a2 n/a\n'
-            for f in "$S"/auth/*; do [[ -e "$f" ]] && printf '%s/ jwt acc_%s n/a\n' "$(basename "$f")" "$(basename "$f")"; done; true ;;
-    esac ;;
-  policy) echo "fake bao: policy $*" >&2; exit 3 ;;
-  *) echo "fake bao: unhandled $*" >&2; exit 3 ;;
-esac
-FAKE
-chmod +x "$BIN/bao"
+fake_bin_bao "$BIN"
 
 helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
   --set secrets.tenantStores.enabled=true -s templates/tenant-secrets.yaml \
   | yq -N 'select(.kind == "CronJob") | .spec.jobTemplate.spec.template.spec.containers[0].env[] | .name + "=" + .value' > "$TMP/env"
 run() {
   ( set -a; while IFS= read -r l; do export "${l?}"; done < "$TMP/env"; set +a
-    export INPUT_DIR="$IN" TOKEN_FILE="$TMP/token" FAKE_STATE="$S" PATH="$BIN:$PATH" TERMINATION_LOG="$TMP/termination"
+    export INPUT_DIR="$IN" TOKEN_FILE="$TMP/token" FAKE_STATE="$S" FAKE_AUTH_ACC_PREFIX=acc_ PATH="$BIN:$PATH" TERMINATION_LOG="$TMP/termination"
     unset BAO_TOKEN
     sh addons/openbao/files/tenant-reconcile.sh ) > "$TMP/out" 2>&1
 }
 ents() { (cd "$S/entities" && printf '%s\n' *); }
-wr() { cat "$S/writes/$(printf '%s' "$1" | tr '/' '_')" 2>/dev/null; }
+wr() { openbao_wr "$1"; }
 tenant() { printf '%s' "$2" > "$IN/tenants/$1.namespaces"; }
 cluster() { printf 'local' > "$IN/clusters/$1.group"; printf '%s' "${2:-https://172.18.0.9:6443}" > "$IN/clusters/$1.server"; printf -- '-----BEGIN CERTIFICATE-----\n' > "$IN/clusters/$1.ca"; }
 printf 'jwt' > "$TMP/token"
