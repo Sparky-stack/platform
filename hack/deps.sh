@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
-# Build chart dependencies for every chart under charts/ and addons/.
-# `helm dependency build` only resolves https repositories that are registered locally, so register each one
-# (name = short hash of the URL, idempotent) before building. OCI dependencies need no registration.
-# Charts whose charts/ already holds exactly the locked tarballs are not rebuilt (cache), so every Chart.lock is first
-# checked against its Chart.yaml (hack/lib/chartlock.py, helm's own digest): a stale lock fails here on a warm tree exactly as it would on a clean
-# checkout or in Argo CD's repo-server.
-# Charts that pin dependency digests (Chart.yaml annotation, see hack/lib/chartlock.py) get their tarballs checked on
-# every run: a mismatching cached tarball is rebuilt, a freshly downloaded one that still mismatches fails.
-# Repositories are registered in a throwaway repository config holding exactly the https repositories of the charts
-# being built, never in the user's helm config: `helm repo update` refreshes, and `helm dependency build` loads the
-# cached index of, every registered repository, so one stale or retired entry there (e.g. Istio's GCS bucket, 403
-# during upstream's scream tests, removed 2026-12-16) would fail every build.
+# Build chart dependencies for every chart under charts/ and addons/ (cached when tarballs match Chart.lock and pins).
+# Uses a throwaway HELM_REPOSITORY_CONFIG so stale entries in the user's helm config cannot break builds.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh

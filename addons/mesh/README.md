@@ -71,7 +71,6 @@ Umbrella chart for the Istio Ambient service mesh (`1.32.0`: `base`, `istiod`, `
 | gateway.serviceAnnotations | object | `{}` |  |
 | global.istioNamespace | string | `"istio-system"` | Istio namespace (`global.{multiCluster.clusterName,meshID,network}` are populated from cluster labels; `global.platform` is `k3s` in `values/cni-flannel.yaml` and `gke` in `values/provider-gcp-gke.yaml`). |
 | global.proxy.image | string | `"docker.io/istio/proxyv2:1.32.0-distroless@sha256:9cd1f1cc261f3fe250ab483543e7256c39d5871eae5f1817c0809eff09e365d4"` |  |
-| installation.name | string | `"local"` |  |
 | issuer.caSecret | string | `"openbao-ca"` |  |
 | issuer.certManagerServiceAccount.name | string | `"cert-manager"` |  |
 | issuer.certManagerServiceAccount.namespace | string | `"cert-manager"` |  |

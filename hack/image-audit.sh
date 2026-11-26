@@ -42,17 +42,7 @@ arch_exception() {
   done
 }
 
-# Images from rendered manifests (stdin):
-#   - every string under a key ending in `image` (`image:`, and e.g. the Argo Events controller config's natsImage);
-#   - the same keys inside YAML embedded in ConfigMap data (the Argo Events EventBus JetStream versions live there),
-#     each embedded document parsed on its own (a script that merely contains "image:" cannot abort the extraction);
-#   - images operators receive by name through env vars and ConfigMap keys containing IMAGE (e.g. ARGO_EVENTS_IMAGE,
-#     Strimzi STRIMZI_KAFKA_IMAGES "<version>=<image>" lines, CNPG POSTGRES_IMAGE_NAME, the Barman Cloud plugin's
-#     SIDECAR_IMAGE): those pods are created by the operator, not rendered;
-#   - Crossplane package references (spec.package of Function / Provider / Configuration): OCI images Crossplane pulls
-#     and runs as pods.
-# CustomResourceDefinitions are dropped first: schemas run nothing, and they are most of the bytes (kyverno: 98%), so
-# every pass below walks only the objects.
+# Extract image refs from rendered YAML (stdin): *image fields (including embedded ConfigMap YAML), *IMAGE* env/data, Crossplane packages.
 extract_images() {
   local f b keys='.. | select(tag == "!!map") | to_entries[] | select((.key | tag) == "!!str")
     | select(.key | test("(?i)image$")) | .value | select(tag == "!!str")'
@@ -145,14 +135,7 @@ INV="$TMP/inventory.tsv"   # <image>\t<source>
 
 add() { printf '%s\t%s\n' "$1" "$2" >> "$INV"; }
 
-# runs_on <provider> <providers list>: an empty list (catalog `providers`) means every provider.
-runs_on() { [[ -z "$2" ]] || grep -qx "$1" <<<"$2"; }
-
-SAMPLE_SERVER=https://192.0.2.10:6443        # as hack/test.sh: stands in for a workload cluster's API endpoint
-MGMT_SERVER=https://kubernetes.default.svc
-
-# render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels file>]: layered like the ApplicationSet
-# (hack/lib/addons.sh), installation parameters / value files from the charts/platform render of this installation.
+# render <addon> <role> <name> <provider> <environment> <region> <cni> <server> [<labels file>]: layered like the ApplicationSet.
 render() {
   local addon=$1 role=$2 name=$3 target=$3 dir="addons/$1" rf="$TMP/render.yaml" ns
   [[ "$role" == mgmt ]] && target=mgmt
@@ -216,8 +199,8 @@ for dir in addons/*; do
   [[ -n "$roles" ]] || roles=$'mgmt\nworkload'
   provs=$(yq ".addons[\"$addon\"].providers[]?" "$CATALOG" | tr -d '\r')
   if grep -qx mgmt <<<"$roles"; then
-    if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" && runs_on "$m_prov" "$provs"; then
-      render "$addon" mgmt "$m_name" "$m_prov" "$m_env" "$m_reg" "$m_cni" "$MGMT_SERVER"
+    if enabled "$addon" "$(yq ".mgmt.addons[\"$addon\"]" "$INST_FILE")" && addon_runs_on "$m_prov" "$provs"; then
+      render "$addon" mgmt "$m_name" "$m_prov" "$m_env" "$m_reg" "$m_cni" "$ADDONS_MGMT_SERVER"
     fi
   fi
   if grep -qx workload <<<"$roles"; then
@@ -225,11 +208,10 @@ for dir in addons/*; do
       [[ -f "$cf" ]] || continue
       c_prov=$(yq '.provider // "docker"' "$cf")
       c_name=$(yq '.name' "$cf")
-      toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$TMP/labels-$c_name.yaml" 2>/dev/null || true)
-      [[ -n "$toggle" && "$toggle" != "null" ]] || toggle=$(yq ".addons[\"$addon\"]" "$cf")
-      if enabled "$addon" "$toggle" && runs_on "$c_prov" "$provs"; then
+      toggle=$(addon_cluster_toggle "$addon" "$cf" "$TMP/labels-$c_name.yaml")
+      if enabled "$addon" "$toggle" && addon_runs_on "$c_prov" "$provs"; then
         render "$addon" workload "$c_name" "$c_prov" "$(yq '.environment // "development"' "$cf")" \
-          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$SAMPLE_SERVER" "$TMP/labels-$c_name.yaml"
+          "$(yq '.region // "local"' "$cf")" "$(yq '.cni // "cilium"' "$cf")" "$ADDONS_SAMPLE_SERVER" "$TMP/labels-$c_name.yaml"
       fi
     done
   fi

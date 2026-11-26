@@ -15,3 +15,30 @@ objectSelector:
     {{- end }}
     - {{ .mode }}
 {{- end }}
+
+{{- /* Shared spec preamble of the cell-mesh GeneratingPolicies (templates/cell-mesh.yaml). */ -}}
+{{- define "kp.cellMeshSpec" -}}
+evaluation:
+  synchronize:
+    enabled: true
+  generateExisting:
+    enabled: true
+matchConstraints:
+  resourceRules:
+    - apiGroups: [""]
+      apiVersions: [v1]
+      operations: [CREATE, UPDATE]
+      resources: [namespaces]
+  {{- include "kp.cellObjectSelector" .cells | nindent 2 }}
+matchConditions:
+  - name: never-platform-namespaces
+    expression: '!(object.metadata.name in {{ .root.Values.platformNamespaces | toJson }})'
+{{- end }}
+
+{{- /* Kubelet probe ingress rule after istio-cni SNAT (embedded inside NetworkPolicy value scalars). */ -}}
+{{- define "kp.probeIngress" -}}
+- from:
+{{- range .Values.mesh.probeSourceCIDRs }}
+    - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
+{{- end }}
+{{- end }}

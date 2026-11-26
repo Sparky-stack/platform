@@ -1,16 +1,4 @@
-{{- /*
-Harbor TLS from a registry CA scoped to ns harbor (cert-manager, namespaced Issuers only: nobody outside this
-namespace can mint a cert every node trusts for the registry host):
-  Issuer harbor-selfsigned -> Certificate harbor/harbor-ca (isCA) -> Issuer harbor/harbor-ca
-    -> Certificate harbor/harbor-tls          Gateway serving cert: the registry host only (the Gateway listener's
-                                              hostname; nothing reaches Harbor under another name)
-  Issuer harbor/harbor-token-selfsigned -> Certificate harbor/harbor-token   core's token-signing key pair (RSA)
-  SecretStore harbor-ca-source + ExternalSecret harbor-ca-bundle -> Secret harbor/harbor-ca-bundle with ONLY ca.crt
-    (the CA certificate). The store's ServiceAccount may GET only Secret harbor-ca; the CA key and every other Secret
-    here stay unreadable for consumers.
-Nodes and build pods receive ca.crt only, through ClusterSecretStore mgmt-harbor (templates/ca-store.yaml), which may
-GET only harbor-ca-bundle.
-*/ -}}
+{{- /* Namespaced registry CA + serving/token certificates in ns harbor, and harbor-ca-bundle exposing only ca.crt for mgmt-harbor (docs/build-plane.md "Harbor"). */ -}}
 {{- $host := include "harbor-addon.hostname" . }}
 {{- $ns := .Release.Namespace }}
 {{- $p := .Values.pki }}

@@ -111,6 +111,10 @@ fi
 if is_true "${RUN_BUILD:-true}"; then
   if has_script "${BUILD_SCRIPT:-build}"; then
     run_script "${BUILD_SCRIPT:-build}"
+  elif [[ -n "${DEFAULT_BUILD_CMD:-}" ]]; then
+    log "${DEFAULT_BUILD_CMD}"
+    # shellcheck disable=SC2086
+    pm_exec ${DEFAULT_BUILD_CMD}
   else
     log "no '${BUILD_SCRIPT:-build}' script; nothing to build"
   fi

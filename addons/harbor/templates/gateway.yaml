@@ -1,10 +1,4 @@
-{{- /*
-Gateway API front door for Harbor (no nginx, no Ingress): Gateway `harbor` with one HTTPS listener on the port of
-registry.host, TLS terminated with harbor-tls (templates/pki.yaml). The chart's HTTPRoute (expose.type route) attaches
-to it. kgateway provisions the proxy Deployment + Service `harbor` (type LoadBalancer; klipper binds the listener
-port as a hostPort on mgmt, k3d publishes it; Service port == listener port == published port, like the control
-plane's gateway). TrafficPolicy: Envoy's default 15s route timeout would cut large layer transfers.
-*/ -}}
+{{- /* Gateway `harbor` terminating TLS with harbor-tls on registry.host's port, plus TrafficPolicy lifting Envoy's 15s route timeout for layer transfers. */ -}}
 {{- $g := .Values.gateway }}
 {{- $port := regexFind ":[0-9]+$" .Values.registry.host | trimPrefix ":" | default "443" }}
 apiVersion: gateway.networking.k8s.io/v1

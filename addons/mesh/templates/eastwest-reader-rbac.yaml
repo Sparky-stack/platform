@@ -1,10 +1,4 @@
-{{- /*
-Peers' istiods discover this cluster's endpoints as user platform:istio-reader (7-day client cert issued on mgmt, no
-ServiceAccount token). Bound to ClusterRole platform-istio-reader with only the discovery reads istiod 1.32 needs,
-NOT upstream's istio-reader-clusterrole-istio-system, which lets every peer read every Secret of this cluster.
-istiod 1.32.0 also waits for a cluster-wide Secret informer before it serves a peer; that grant is separate and
-explicit (reader.remoteCredentialsSecrets). Per-resource rationale: docs/multicluster.md "Reader RBAC".
-*/ -}}
+{{- /* Scoped endpoint-discovery RBAC for peer istiods (user platform:istio-reader) without upstream's cluster-wide Secret read (docs/multicluster.md "Reader RBAC"). */ -}}
 {{- if and .Values.mesh.eastwest.enabled .Values.reader.enabled }}
 {{- $labels := dict "app.kubernetes.io/part-of" "istio-mesh" }}
 apiVersion: rbac.authorization.k8s.io/v1

@@ -6,7 +6,7 @@ name: toolbox
 on:
   workflow_dispatch:
   pull_request:
-    paths:
+    paths: &paths
       - '.github/workflows/ci-toolbox.yaml'
       - 'ci/toolbox/**'
       - 'ci/scripts/**'
@@ -15,10 +15,7 @@ on:
     # `v*` releases do not (paths are not evaluated for tag pushes).
     tags: ['ci-v*']
     branches: [main]
-    paths:
-      - '.github/workflows/ci-toolbox.yaml'
-      - 'ci/toolbox/**'
-      - 'ci/scripts/**'
+    paths: *paths
 
 concurrency:
   group: toolbox-${{ github.ref }}

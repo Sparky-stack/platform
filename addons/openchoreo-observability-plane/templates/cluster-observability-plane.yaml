@@ -1,11 +1,4 @@
-{{- /*
-ClusterObservabilityPlane (cluster-scoped, control plane on mgmt). ClusterDataPlanes reference it via
-observabilityPlaneRef (charts/cluster, when installation.yaml openchoreo.observability.enabled). Trust: exactly the
-plane's self-signed agent cert (Secret cluster-agent-tls in this namespace; ca.crt of a self-signed cert is the cert
-itself), read live by the cluster-gateway. observerURL is what Backstage, openchoreo-api and MCP clients call;
-rcaAgentURL / finOpsAgentURL (only while those agents are enabled) are what the portal calls, via their HTTPRoutes.
-Applied after the OpenChoreo CRDs exist (control-plane addon); skipped in dry-run until then (Argo retries).
-*/ -}}
+{{- /* ClusterObservabilityPlane on mgmt: trusts the plane agent's self-signed cert and publishes observer/AI agent URLs (docs/observability.md). */ -}}
 {{- $obs := index .Values "openchoreo-observability-plane" }}
 {{- $o := .Values.openchoreo.observability }}
 apiVersion: openchoreo.dev/v1alpha1

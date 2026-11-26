@@ -48,16 +48,11 @@ tenantStoreName: openbao-tenant
 # installation.yaml `promotion` is shared with charts/tenant (Argo CD sync windows, per-environment Applications) and
 # overrides these defaults.
 promotion:
-  # Environments whose ReleaseBinding changes only through a reviewed pull request: their binding file syncs through
-  # its own Argo CD Application (charts/tenant) and in OpenChoreo only `approverGroups` may write their bindings.
   # -- Restricts `production` binding writes to Argo CD (`promotion.{gatedEnvironments,restrictedGroups,gitOnly,freezeWindows}`) and enforces sync freeze windows.
   gatedEnvironments: [production]
-  # Groups (JWT claim `groups`) denied releasebinding, projectreleasebinding and resourcereleasebinding
-  # create/update/delete in gated environments through console, openchoreo-api, occ and MCP (an explicit deny wins over
-  # the upstream developer role's allow). Argo CD applies git through the Kubernetes API and is not affected.
+  # Groups (JWT claim `groups`) denied binding writes in gated environments via console/API/occ/MCP (docs/promotion.md).
   restrictedGroups: [developers]
-  # Native ValidatingAdmissionPolicy: bindings of gated environments are written only by Argo CD (git), whoever asks
-  # (openchoreo-api on behalf of console/occ/MCP users, kubectl). templates/promotion-git-only.yaml.
+  # Native ValidatingAdmissionPolicy: bindings of gated environments are written only by Argo CD (templates/promotion-git-only.yaml).
   gitOnly:
     enabled: true
     writers: [system:serviceaccount:argocd:argocd-application-controller]
@@ -72,56 +67,38 @@ promotion:
       timeZone: Europe/Tallinn
       environments: [production]
 
-# ClusterWorkflow `promotion-gate`: a generic OpenChoreo Workflow (WorkflowRun, no component) that verifies a release
-# in its source environment and opens the promotion pull request (files/promotion-gate/gate.py). Started by the
-# Sensor in addon argo-events after a successful rollout in one of its promotionGate.sourceEnvironments, or by hand
-# (occ / console Workflows / MCP / kubectl create of a WorkflowRun). Runs in the workflow plane (namespace
-# workflows-<org namespace>, ServiceAccount workflow-sa) and needs a ClusterWorkflowPlane `default`.
+# ClusterWorkflow `promotion-gate` (files/promotion-gate/gate.py, docs/promotion.md): verifies a release in its source
+# environment and opens the promotion PR. Triggered by addon argo-events or manually in workflows-<org namespace>.
 promotionGate:
   # -- HTTP `smoke` + 15-minute Prometheus 5xx SLO gate (`observe`) posting `statusContext` (`openchoreo/promotion-gate`) on PRs.
   enabled: true
   workflowPlane: default             # ClusterWorkflowPlane (addon openchoreo-workflow-plane)
-  # Pod labels of the gate pod: opt-in to the run namespace's NetworkPolicy platform-workflows-openchoreo (egress to the
-  # control-plane Gateway (API, Thunder) and the observer). == openchoreo-workflow-plane runNetworkPolicy.platformWorkflows.podLabels
+  # Egress opt-in (== openchoreo-workflow-plane runNetworkPolicy.platformWorkflows.podLabels).
   podLabels: { platform.koorikla.io/egress: openchoreo }
   image: docker.io/library/python:3.14.10-alpine3.24@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
   resources:
     requests: { cpu: 20m, memory: 48Mi }
     limits: { memory: 128Mi }
-  # The WorkflowRun and its per-run resources (the credentials Secret) are deleted this long after completion.
   ttlAfterCompletion: 1h
-  # Endpoints (empty = derived from installation openchoreo.controlPlane.host / openchoreo.observability.httpPort).
-  # Derived = plain HTTP (local docker network only): every other installation sets https:// URLs here, the gate
-  # sends the Thunder client secret to tokenURL.
+  # Empty = plain HTTP derived from openchoreo.controlPlane.host / observability.httpPort (local only; set https:// in cloud).
   apiURL: ""                         # http://api.<host>:8080
   tokenURL: ""                       # http://thunder.<host>:8080/oauth2/token
   observerURL: ""                    # http://observer.<host>:<httpPort>
-  # Observability-plane Prometheus (in-cluster on mgmt; NetworkPolicies: openchoreo-workflow-plane
-  # runNetworkPolicy.platformWorkflows egress, openchoreo-observability-plane prometheusIngress). The gate's 5xx rate
-  # reads the data-plane kgateway Envoy series there (addon telemetry gatewayMetrics; docs/promotion.md).
+  # In-cluster Prometheus queried for data-plane kgateway Envoy 5xx rate (docs/promotion.md).
   prometheusURL: http://openchoreo-observability-prometheus.openchoreo-observability-plane:9091
   controlPlanePort: 8080             # control-plane Gateway HTTP listener (addon openchoreo-control-plane)
-  # Thunder client (client_credentials) the gate authenticates as (addon thunder bootstrap script 70, same store key);
-  # role binding in templates/promotion-authz.yaml. Secret from the workflow plane's secret store, key `promotion-gate`,
-  # property `client-secret`.
+  # Thunder OAuth client (addon thunder bootstrap script 70; role binding in templates/promotion-authz.yaml).
   clientID: openchoreo-promotion-gate
   clientSecret: { key: promotion-gate, property: client-secret }
-  # The gate's own GitHub App (store key with githubAppID, githubAppInstallationID, githubAppPrivateKey; permissions
-  # and setup: docs/promotion.md, docs/forking.md). Each run mints a token for the component's one repository.
+  # Platform GitHub App (docs/promotion.md): each run mints a token scoped to the component's repository.
   github: { key: promotion-gate-github }
   statusContext: openchoreo/promotion-gate   # required status check on the app repo's default branch
-  baseBranch: main
-  bindingPath: deploy/openchoreo/release-bindings/{environment}.yaml   # app repo contract (docs/openchoreo.md)
   smoke:
     http: true                       # GET every external endpoint of the source binding; only 2xx passes
     path: /
-    # How the probe reaches an endpoint. dns: connect to the externalURL host (cloud: public DNS / load balancer).
-    # podHostIP: connect to the hostIP of a running Pod of the source binding (OpenChoreo API k8sresources tree) on the
-    # externalURL port (= ClusterDataPlane gateway port) and send the URL host as Host header. For data planes whose
-    # Gateway listens on every node (k3s klipper hostPort, CAPD) and whose hosts do not resolve from mgmt (local).
+    # dns (cloud) or podHostIP (local CAPD: connect to a running Pod's node IP on the Gateway port with Host header).
     connect: dns
-    # Extra gate egress for connect podHostIP: TCP ports to any address (NetworkPolicy promotion-gate-smoke in
-    # workflows-<org ns>; CAPD node IPs come from a per-host docker network). == charts/cluster openchoreo.dataPlane.gatewayPort
+    # Gate egress TCP ports for connect podHostIP (== charts/cluster openchoreo.dataPlane.gatewayPort).
     egressPorts: []
   observe:
     enabled: true
@@ -148,32 +125,22 @@ buildWorkflows:
   workflowTemplate: koorikla-build
   ttlAfterCompletion: 1d
   platforms: linux/amd64,linux/arm64         # default per run; a run may narrow it (e.g. the node's arch only)
-  # Signing with the platform key (cosign-platform). transparencyLog false (default): no entry in the public Rekor log
-  # (it would publish private repo names and digests); verify with `cosign verify --key cosign.pub
-  # --insecure-ignore-tlog=true`. true: also upload to public Rekor (needs egress to Sigstore). Per installation in
-  # installations/<inst>/addons/openchoreo-platform/values.yaml. docs/build-plane.md "Signing".
+  # Signing with cosign-platform; transparencyLog false keeps private repo names/digests out of public Rekor (docs/build-plane.md#signing).
   signing:
     transparencyLog: false
-  # Repositories builds may clone and push to: https URL prefixes ending in "/" (one owner each). Empty = the
-  # installation's githubOrg. Enforced three times: the ClusterWorkflow schema pattern on repository.url, the checkout
-  # and gitops scripts (BUILD_GUARDS in koorikla-build), and git's credential helper, registered only for these
-  # prefixes, so the run's token is never sent to any other host or owner.
+  # Allowed https://<host>/<owner>/ prefixes (empty = installation.githubOrg); enforced in schema, scripts and git credential helper.
   git:
     allowedRepositoryPrefixes: []
-  # Per-run installation tokens of a GitHub App for the run's one repository (docs/build-plane.md "Git credentials").
-  # `key` must be in addon secret-stores workflowStore.keys; previews and helm-chart runs get `readPermissions`.
+  # Per-run installation tokens for the run's repository (docs/build-plane.md#git-credentials); key must be in workflowStore.keys.
   github:
     # -- Per-run GitHub App installation tokens (`buildWorkflows.github`) for the run's one repository (ESO `GithubAccessToken` generator; `contents: write` for builds, `read` for charts), no PAT.
     key: promotion-gate-github
-    appSecret: build-github-app
     secretStore: workflows                   # == addon openchoreo-workflow-plane clusterWorkflowPlane.secretStore
     apiURL: ""                               # GitHub Enterprise Server: https://<host>/api/v3 ("" = api.github.com)
     permissions: { contents: write }
     readPermissions: { contents: read }
     tokenRefreshInterval: 30m
-    # OpenChoreo's workflow-plane agent applies the per-run resources: it gets create/update/delete on
-    # GithubAccessToken generators in workflows-<org ns> only (upstream ClusterRole cluster-agent-workflowplane has no
-    # generators.external-secrets.io).
+    # Workflow-plane agent SA granted GithubAccessToken CRUD in workflows-<org ns> (templates/build-github.yaml).
     agent: { namespace: openchoreo-workflow-plane, serviceAccount: cluster-agent-workflowplane }
   # Per-run Secrets (ExternalSecrets in workflows-<org ns>, store = the ClusterWorkflowPlane's secretStoreRef):
   secrets:
@@ -223,30 +190,23 @@ buildWorkflows:
       checkSetup: ""
       checkEnv: {}
 
-# Auto-build (docs/build-plane.md "Auto-build"): WorkflowRun <component>-<sha[:12]> once per new commit of every
-# Component with spec.autoBuild: true. Trigger = installation.yaml openchoreo.workflowPlane.autoBuild:
-#   poll     CronWorkflow on pollSchedule (no inbound traffic)
-#   webhook  GitHub push -> addon argo-events; the CronWorkflow still runs on resyncSchedule as a safety net
-#   none     builds only from Backstage / occ / kubectl
+# Auto-build (docs/build-plane.md#auto-build): creates WorkflowRun <component>-<sha[:12]> per new commit for Components
+# with spec.autoBuild: true. Trigger = installation.yaml openchoreo.workflowPlane.autoBuild (poll | webhook | none).
 autoBuild:
   workflowTemplate: auto-build               # == addon argo-events autoBuild.workflowTemplate (Sensor target)
   # -- Builds Components with `autoBuild: true` once per new commit (`autoBuild.{pollSchedule,resyncSchedule,github}`); trigger per installation `openchoreo.workflowPlane.autoBuild` (`poll` | `webhook` | `none`).
-  pollSchedule: "* * * * *"                  # trigger poll (cron, UTC); GitHub cost: one conditional request per
-                                             # repo/branch, 304s are free; a pass that overlaps the next is skipped
+  pollSchedule: "* * * * *"                  # trigger poll (cron, UTC; conditional requests, Forbid concurrency)
   resyncSchedule: "*/30 * * * *"             # trigger webhook: reconcile missed deliveries ("" = off)
   maxRunsPerPass: 5                          # WorkflowRuns one pass may create (the rest wait for the next pass)
   staleRunSeconds: 7200                      # an unfinished auto-build run older than this no longer blocks the next
   minRateRemaining: 100                      # pause the pass when the token's GitHub rate limit falls below this
-  stateConfigMap: auto-build-state           # cache only (ETags, last handled head); losing it never rebuilds
   secretStore: workflows                     # == addon openchoreo-workflow-plane clusterWorkflowPlane.secretStore
-  # Installation token of this GitHub App (store key in addon secret-stores workflowStore.keys), limited to
-  # `permissions` and re-minted every tokenRefreshInterval; the pass mounts only that token.
+  # Read-only installation token of the platform GitHub App (key in addon secret-stores workflowStore.keys).
   github:
     key: promotion-gate-github
     permissions: { contents: read }
     tokenRefreshInterval: 30m
-  # registry.type harbor: a Workload digest missing in Harbor (e.g. after a clean bootstrap) is rebuilt. Pull-only robot
-  # == addons/harbor config.robots[name=nodes]; CA from buildWorkflows.secrets.harbor.caStore/caSecret.
+  # registry.type harbor: pull-only robot (== addons/harbor config.robots[name=nodes]) to rebuild missing digests.
   registry:
     robot: robot$nodes
     key: harbor
@@ -255,9 +215,7 @@ autoBuild:
   resources:
     requests: { cpu: 10m, memory: 32Mi }
     limits: { memory: 96Mi }
-  # PR previews (installation.yaml previews.enabled, docs/preview-environments.md): the same pass builds PR heads of
-  # opted-in Components, cuts their ComponentRelease, posts the URL and expires them. A second token of the same App
-  # for that (commit statuses, PR lookup, the expiry label); the App needs Commit statuses + Pull requests write.
+  # PR previews (docs/preview-environments.md): second App token for commit statuses and PR labels.
   previews:
     github:
       permissions: { statuses: write, pull_requests: write }
@@ -269,19 +227,17 @@ autoBuild:
     argocdNamespace: argocd
     schedule: "*/2 * * * *"                    # trigger webhook only (poll runs previews every pollSchedule)
 
-# installation.yaml (valuesObject): previews.enabled / ttl / expiredLabel / maxPerTenant / grantedLabel / waitingLabel /
-# skipBots / botLabel. Defaults == charts/tenant previews and addon kyverno-policies previews.maxPerTenant (contract
-# test 17).
+# installation.yaml previews.* (defaults == charts/tenant previews and addon kyverno-policies previews.maxPerTenant).
 previews:
   enabled: false
+  ttl: 48h
+  expiredLabel: preview-expired
   maxPerTenant: 2                  # == Kyverno platform-preview-cap: the pass grants at most this many per tenant (#385)
   grantedLabel: preview-granted    # set by the pass only: the PR's preview renders resources
   waitingLabel: preview-waiting    # set by the pass on PRs beyond the cap (with a failed commit status)
   skipBots: true                   # PRs whose author login ends in [bot] (Dependabot, Renovate) get no preview...
   botLabel: preview                # ...unless they carry this label
 
-# Generic (non-component) workflow: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
+# Generic (non-component) ClusterWorkflow `helm-chart`: package + push + sign a Helm chart as OCI (<registry>/charts/<name>).
 helmChartWorkflow:
   enabled: true
-  name: helm-chart
-  workflowTemplate: koorikla-helm-chart

@@ -1,7 +1,7 @@
 {{- /* OpenChoreo authz for promotions (docs/promotion.md "Manual approval"): restricted groups may not write bindings in
 gated environments through console/API/occ/MCP; plus the promotion gate's read-only client identity. */ -}}
 {{- $ns := .Values.openchoreo.orgNamespace }}
-{{- $gated := .Values.promotion.gatedEnvironments | default list }}
+{{- $gated := .Values.promotion.gatedEnvironments }}
 {{- if $gated }}
 {{- $bindingWrites := list "releasebinding:create" "releasebinding:update" "releasebinding:delete"
       "projectreleasebinding:create" "projectreleasebinding:update" "projectreleasebinding:delete"
@@ -16,10 +16,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   description: Change ReleaseBindings, ProjectReleaseBindings and ResourceReleaseBindings (used with environment conditions to gate promotions)
-  actions:
-    {{- range $bindingWrites }}
-    - {{ . }}
-    {{- end }}
+  actions: {{- toYaml $bindingWrites | nindent 4 }}
 ---
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterAuthzRole
@@ -52,10 +49,7 @@ spec:
       scope:
         namespace: {{ $ns }}
       conditions:
-        - actions:
-            {{- range $bindingWrites }}
-            - {{ . }}
-            {{- end }}
+        - actions: {{- toYaml $bindingWrites | nindent 12 }}
           expression: {{ printf "resource.environment in %s" ($envIds | toJson) | quote }}
 {{- end }}
 {{- end }}

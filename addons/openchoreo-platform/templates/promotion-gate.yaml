@@ -145,8 +145,8 @@ spec:
               # JSON lists go in base64: OpenChoreo's WorkflowRun renderer decodes a string that looks like a JSON
               # list/map into a list/map, the Argo Workflow then has a non-string env value and its controller panics
               # on it (CrashLoopBackOff for every run). hack/tests/test_gitops_contracts.sh check 13.
-              - { name: GATED_TARGETS_B64, value: {{ .Values.promotion.gatedEnvironments | default list | toJson | b64enc | quote }} }
-              - { name: FREEZE_WINDOWS_B64, value: {{ .Values.promotion.freezeWindows | default list | toJson | b64enc | quote }} }
+              - { name: GATED_TARGETS_B64, value: {{ .Values.promotion.gatedEnvironments | toJson | b64enc | quote }} }
+              - { name: FREEZE_WINDOWS_B64, value: {{ .Values.promotion.freezeWindows | toJson | b64enc | quote }} }
               - { name: API_URL, value: {{ $apiURL | quote }} }
               - { name: TOKEN_URL, value: {{ $tokenURL | quote }} }
               - { name: OBSERVER_URL, value: {{ $observerURL | quote }} }
@@ -155,17 +155,17 @@ spec:
               - { name: SECRETS_DIR, value: /var/run/secrets/promotion-gate }
               - { name: GITHUB_OWNER_URL, value: {{ $githubOwner | quote }} }
               - { name: STATUS_CONTEXT, value: {{ $g.statusContext | quote }} }
-              - { name: BASE_BRANCH, value: {{ $g.baseBranch | quote }} }
-              - { name: BINDING_PATH, value: {{ $g.bindingPath | quote }} }
+              - { name: BASE_BRANCH, value: main }
+              - { name: BINDING_PATH, value: "deploy/openchoreo/release-bindings/{environment}.yaml" }
               - { name: SMOKE_HTTP, value: {{ $g.smoke.http | toString | quote }} }
               - { name: SMOKE_PATH, value: {{ $g.smoke.path | quote }} }
-              - { name: SMOKE_CONNECT, value: {{ $g.smoke.connect | default "dns" | quote }} }
+              - { name: SMOKE_CONNECT, value: {{ $g.smoke.connect | quote }} }
               - { name: OBSERVE, value: {{ $observe | toString | quote }} }
               - { name: OBSERVE_WINDOW_MINUTES, value: {{ $g.observe.windowMinutes | toString | quote }} }
               - { name: MAX_ERROR_RATE, value: {{ $g.observe.maxErrorRate | toString | quote }} }
             source: |
               {{- $script | nindent 14 }}
-{{- if and $g.smoke.http (eq ($g.smoke.connect | default "dns") "podHostIP") }}
+{{- if and $g.smoke.http (eq $g.smoke.connect "podHostIP") }}
 {{- if not $g.smoke.egressPorts }}{{ fail "promotionGate.smoke.connect podHostIP needs promotionGate.smoke.egressPorts (the data-plane Gateway port)" }}{{ end }}
 ---
 # The gate pod's smoke probe dials data-plane node IPs on the Gateway port (connect podHostIP). Additive to the run

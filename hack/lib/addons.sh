@@ -5,6 +5,10 @@
 
 ADDONS_CATALOG=${ADDONS_CATALOG:-charts/platform/values.yaml}
 ADDONS_SAMPLE_SERVER=https://192.0.2.10:6443   # stands in for a workload cluster's CAPI API endpoint (TEST-NET-1)
+export ADDONS_MGMT_SERVER=https://kubernetes.default.svc
+
+# addon_runs_on <provider> <providers list>: an empty list (catalog `providers`) means every provider.
+addon_runs_on() { [[ -z "$2" ]] || grep -qx "$1" <<<"$2"; }
 
 # addon_appset <platform render> <addon> -> the addon's ApplicationSet document (YAML) from a charts/platform render.
 addon_appset() {
@@ -32,6 +36,13 @@ addon_cluster_labels() {
 # addon_label <label> [<labels file>] -> the label's value ("" when the file or label is missing).
 addon_label() {
   if [[ -n "${2:-}" && -s "$2" ]]; then K="$1" yq -r '.[strenv(K)] // ""' "$2" | tr -d '\r'; fi
+}
+
+# addon_cluster_toggle <addon> <cluster file> [<labels file>] -> derived label value, else .addons.<addon> in <cluster file>.
+addon_cluster_toggle() {
+  local v
+  v=$(addon_label "addons.platform.koorikla.io/$1" "${3:-}")
+  if [[ -n "$v" && "$v" != "null" ]]; then printf '%s\n' "$v"; else yq ".addons[\"$1\"]" "$2" | tr -d '\r'; fi
 }
 
 # addon_label_tpl <string> [<labels file>] -> <string> with the cluster-label goTemplates Argo CD evaluates per cluster
