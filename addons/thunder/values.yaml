@@ -26,10 +26,10 @@ thunderid:
   fullnameOverride: thunder
 
   deployment:
-    # -- `1` (single-writer SQLite persistence) with `1.0.1` pinned by multi-arch index digest.
+    # -- `1` (single-writer SQLite persistence) with `1.1.1` pinned by multi-arch index digest.
     replicaCount: 1           # SQLite: single writer
     image:
-      tag: 1.0.1@sha256:d3c0613ff447a551fd440768a15bdfb6668948e80809cbb50f82d6752f22ab3e   # multi-arch index digest: amd64, arm64
+      tag: 1.1.1@sha256:c0d566c4bfe82ebd6161596248f4008c5014820b192117c07dc8633f16651fc6   # multi-arch index digest: amd64, arm64
       pullPolicy: IfNotPresent   # platform: chart default Always
   hpa:
     enabled: false
