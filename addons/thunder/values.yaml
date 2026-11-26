@@ -21,6 +21,28 @@ bootstrapSecret:
 openchoreo:
   controlPlane:
     host: openchoreo.localhost
+secrets:
+  githubLogin:
+    enabled: false
+
+# Sign in with GitHub via Dex (docs/openchoreo.md#sign-in-with-github). Active when both `githubLogin.enabled` and
+# `secrets.githubLogin.enabled` (set on the root app by `task secrets` when github-login.{json,secret} exist) are true.
+# Each `teams` entry maps Dex's `groups` claim `<org>:<team>` (array includes) -> Thunder group id with
+# `sync.groupsAndRoles: override_all` so team changes apply on the next login.
+githubLogin:
+  # -- Opt-in Sign in with GitHub (`connection` -> Dex + auth flow with JIT provisioning and `override_all` team sync).
+  enabled: false
+  org: Sparky-stack
+  issuer: http://dex.openchoreo.localhost:8080
+  clientId: thunder
+  clientSecret: { remoteKey: github-login, property: thunder-client-secret }
+  connectionId: 01900000-0000-7000-8001-000000000070
+  authFlowId: 01900000-0000-7000-8001-000000000071
+  teams:
+    - { team: platform-engineers, group: platform-engineers, groupId: "01900000-0000-7000-8001-000000000040" }
+    - { team: developers,         group: developers,         groupId: "01900000-0000-7000-8001-000000000041" }
+    - { team: qa,                 group: qa,                 groupId: "01900000-0000-7000-8001-000000000042" }
+    - { team: release-managers,   group: release-managers,   groupId: "01900000-0000-7000-8001-000000000043" }
 
 thunderid:
   fullnameOverride: thunder
@@ -31,6 +53,9 @@ thunderid:
     image:
       tag: 1.1.1@sha256:c0d566c4bfe82ebd6161596248f4008c5014820b192117c07dc8633f16651fc6   # multi-arch index digest: amd64, arm64
       pullPolicy: IfNotPresent   # platform: chart default Always
+    # Dex<->Thunder OIDC client secret for declarative connection loading (templates/github-login.yaml).
+    secretEnv:
+      - { name: DEX_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: dex-client-secret, optional: true }
   hpa:
     enabled: false
   ingress:
@@ -86,6 +111,34 @@ thunderid:
     passkey:
       allowedOrigins:
         - "http://openchoreo.localhost:8080"
+    # platform: load the Dex OIDC connection declaratively (identity_provider: composite) so it stays immutable/GitOps-
+    # owned and avoids Thunder 1.1.1's bootstrap import order (connection before group) rejecting group-id rules on a
+    # clean DB. Every other store stays mutable so bootstrap and JIT provisioning continue writing to SQLite.
+    flow:
+      store: mutable
+    openid4vp:
+      store: mutable
+    openid4vci:
+      store: mutable
+    stores:
+      user: mutable
+      group: mutable
+      role: mutable
+      theme: mutable
+      layout: mutable
+      translation: mutable
+      agent: mutable
+      user_type: mutable
+      organization_unit: mutable
+      identity_provider: composite
+      application: mutable
+      server_config: mutable
+      resource: mutable
+
+  declarativeResources:
+    enabled: true
+    configMap:
+      name: thunder-github-login
 
   setup:
     enabled: true
@@ -105,8 +158,17 @@ thunderid:
       # and only those agents' scripts reference them (templates/ai-agent-clients.yaml).
       - { name: RCA_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: rca-agent-client-secret, optional: true }
       - { name: FINOPS_AGENT_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: finops-agent-client-secret, optional: true }
-    # Scripts 53 / 60 (AI agent OAuth clients, templates/ai-agent-clients.yaml): only agents listed in
-    # bootstrapSecret.aiAgentClients get a file, because Thunder fails on an empty or comment-only document.
+      # Dex<->Thunder OIDC client secret: present only when Sign in with GitHub is active (templates/github-login.yaml).
+      - { name: DEX_CLIENT_SECRET, secretName: thunder-bootstrap, secretKey: dex-client-secret, optional: true }
+    # Active auth flow for Backstage and CLI apps (default flow when GitHub login is off, github flow when on).
+    env:
+      - name: OPENCHOREO_AUTH_FLOW_ID
+        valueFrom:
+          configMapKeyRef:
+            name: thunder-github-login
+            key: AUTH_FLOW_ID
+    # Scripts 53 / 60 (AI agent OAuth clients, templates/ai-agent-clients.yaml) and 52 (GitHub login connection + flow,
+    # templates/github-login.yaml): only active features get a *.yaml file, because Thunder fails on empty documents.
     extraVolumes:
       - name: ai-agent-clients
         configMap:
@@ -116,8 +178,16 @@ thunderid:
             - { key: README, path: ai-agent-clients/README }
             - { key: 53-rca-agent-client.yaml, path: ai-agent-clients/53-rca-agent-client.yaml }
             - { key: 60-finops-agent-client.yaml, path: ai-agent-clients/60-finops-agent-client.yaml }
+      - name: github-login
+        configMap:
+          name: thunder-github-login
+          optional: true
+          items:
+            - { key: README, path: github-login/README }
+            - { key: 52-github-flow.yaml, path: github-login/52-github-flow.yaml }
     extraVolumeMounts:
       - { name: ai-agent-clients, mountPath: /opt/thunderid/bootstrap/ai-agent-clients, subPath: ai-agent-clients, readOnly: true }
+      - { name: github-login, mountPath: /opt/thunderid/bootstrap/github-login, subPath: github-login, readOnly: true }
 
   # Documents the setup Job upserts by fixed id (01900000-0000-7000-8001-*; platform clients 70+ from ...0100). Upstream
   # 48-51, 54 kept; clients for components not installed here dropped (add one back with its feature); 53/60 above.
@@ -180,10 +250,14 @@ thunderid:
         category: user
         name: openchoreo-user
         ouHandle: default
-        allowSelfRegistration: false
+        allowSelfRegistration: true
         systemAttributes:
           display: username
         schema:
+          sub:
+            type: string
+            displayName: Subject
+            required: false
           username:
             type: string
             displayName: Username
@@ -197,11 +271,11 @@ thunderid:
           given_name:
             type: string
             displayName: First Name
-            required: true
+            required: false
           family_name:
             type: string
             displayName: Last Name
-            required: true
+            required: false
           email:
             type: string
             displayName: Email
@@ -268,7 +342,7 @@ thunderid:
         ouId: 01900000-0000-7000-8000-000000000001
         name: Backstage
         type: fullstack
-        authFlowId: 01900000-0000-7000-8000-000000000061
+        authFlowId: "{{ .OPENCHOREO_AUTH_FLOW_ID }}"
         description: OpenChoreo Backstage Portal
         logoUrl: "https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png"
         allowedUserTypes:
@@ -400,7 +474,7 @@ thunderid:
         ouId: 01900000-0000-7000-8000-000000000001
         name: OpenChoreo CLI
         type: custom
-        authFlowId: 01900000-0000-7000-8000-000000000061
+        authFlowId: "{{ .OPENCHOREO_AUTH_FLOW_ID }}"
         description: OpenChoreo CLI Default Application
         logoUrl: "https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png"
         allowedUserTypes:

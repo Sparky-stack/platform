@@ -21,12 +21,33 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
 | bootstrapSecret.promotionGate.remoteKey | string | `"promotion-gate"` |  |
 | bootstrapSecret.remoteKey | string | `"openchoreo"` |  |
 | bootstrapSecret.store | string | `"platform"` | Pulls OIDC client and admin secrets (`bootstrapSecret.{store,remoteKey,observabilityRemoteKey,promotionGate}`) from `ClusterSecretStore/platform` into `thunder-bootstrap`. |
+| githubLogin.authFlowId | string | `"01900000-0000-7000-8001-000000000071"` |  |
+| githubLogin.clientId | string | `"thunder"` |  |
+| githubLogin.clientSecret.property | string | `"thunder-client-secret"` |  |
+| githubLogin.clientSecret.remoteKey | string | `"github-login"` |  |
+| githubLogin.connectionId | string | `"01900000-0000-7000-8001-000000000070"` |  |
+| githubLogin.enabled | bool | `false` | Opt-in Sign in with GitHub (`connection` -> Dex + auth flow with JIT provisioning and `override_all` team sync). |
+| githubLogin.issuer | string | `"http://dex.openchoreo.localhost:8080"` |  |
+| githubLogin.org | string | `"Sparky-stack"` |  |
+| githubLogin.teams[0].group | string | `"platform-engineers"` |  |
+| githubLogin.teams[0].groupId | string | `"01900000-0000-7000-8001-000000000040"` |  |
+| githubLogin.teams[0].team | string | `"platform-engineers"` |  |
+| githubLogin.teams[1].group | string | `"developers"` |  |
+| githubLogin.teams[1].groupId | string | `"01900000-0000-7000-8001-000000000041"` |  |
+| githubLogin.teams[1].team | string | `"developers"` |  |
+| githubLogin.teams[2].group | string | `"qa"` |  |
+| githubLogin.teams[2].groupId | string | `"01900000-0000-7000-8001-000000000042"` |  |
+| githubLogin.teams[2].team | string | `"qa"` |  |
+| githubLogin.teams[3].group | string | `"release-managers"` |  |
+| githubLogin.teams[3].groupId | string | `"01900000-0000-7000-8001-000000000043"` |  |
+| githubLogin.teams[3].team | string | `"release-managers"` |  |
 | openchoreo | object | `{"controlPlane":{"host":"openchoreo.localhost"}}` | - installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks the hostname - |
+| secrets.githubLogin.enabled | bool | `false` |  |
 | thunderid.bootstrap.scripts."48-csp.yaml" | string | `"resource_type: server_config\nname: csp\nvalue:\n  paths:\n    - location: \"/gate/\"\n      directives:\n        img-src:\n          - \"'self'\"\n          - \"data:\"\n          - \"https://cdn.statically.io\"\n          - \"https://raw.githubusercontent.com\"\n        font-src:\n          - \"'self'\"\n          - \"data:\"\n        style-src-attr:\n          - \"'self'\"\n          - \"'unsafe-inline'\"\n        style-src-elem:\n          - \"'self'\"\n    - location: \"/console/\"\n      directives:\n        img-src:\n          - \"'self'\"\n          - \"data:\"\n          - \"https://cdn.statically.io\"\n          - \"https://raw.githubusercontent.com\"\n        font-src:\n          - \"'self'\"\n          - \"data:\"\n        connect-src:\n          - \"'self'\"\n          - \"https://thunderid.dev\"\n        style-src-attr:\n          - \"'self'\"\n          - \"'unsafe-inline'\"\n        style-src-elem:\n          - \"'self'\"\n          - \"'unsafe-inline'\"\n        worker-src:\n          - \"'self'\"\n          - \"blob:\"\n"` |  |
 | thunderid.bootstrap.scripts."49-cors.yaml" | string | `"resource_type: server_config\nname: cors\nvalue:\n  allowedOrigins:\n    - \"http://openchoreo.localhost:8080\"\n"` |  |
-| thunderid.bootstrap.scripts."50-user-schema-and-users.yaml" | string | `"resource_type: user_type\nid: 01900000-0000-7000-8001-000000000010\ncategory: user\nname: openchoreo-user\nouHandle: default\nallowSelfRegistration: false\nsystemAttributes:\n  display: username\nschema:\n  username:\n    type: string\n    displayName: Username\n    required: true\n    unique: true\n  password:\n    type: string\n    displayName: Password\n    required: false\n    credential: true\n  given_name:\n    type: string\n    displayName: First Name\n    required: true\n  family_name:\n    type: string\n    displayName: Last Name\n    required: true\n  email:\n    type: string\n    displayName: Email\n    required: true\n    unique: true\n---\nresource_type: user\nid: 01900000-0000-7000-8001-000000000030\ntype: openchoreo-user\nouHandle: default\nattributes:\n  username: admin@openchoreo.dev\n  email: admin@openchoreo.dev\n  given_name: Admin\n  family_name: User\ncredentials:\n  password: \"{{ .OPENCHOREO_ADMIN_PASSWORD }}\"\n---\nresource_type: user\nid: 01900000-0000-7000-8001-000000000031\ntype: openchoreo-user\nouHandle: default\nattributes:\n  username: developer@openchoreo.dev\n  email: developer@openchoreo.dev\n  given_name: Developer\n  family_name: User\ncredentials:\n  password: \"{{ .OPENCHOREO_DEVELOPER_PASSWORD }}\"\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000040\nname: platform-engineers\ndescription: OpenChoreo Platform Engineers group\nouHandle: default\nmembers:\n  - id: 01900000-0000-7000-8001-000000000030\n    type: user\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000041\nname: developers\ndescription: OpenChoreo Developers group\nouHandle: default\nmembers:\n  - id: 01900000-0000-7000-8001-000000000031\n    type: user\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000042\nname: qa\ndescription: OpenChoreo QA group\nouHandle: default\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000043\nname: release-managers\ndescription: OpenChoreo Release Managers group\nouHandle: default\n"` |  |
-| thunderid.bootstrap.scripts."51-backstage-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000060\nouId: 01900000-0000-7000-8000-000000000001\nname: Backstage\ntype: fullstack\nauthFlowId: 01900000-0000-7000-8000-000000000061\ndescription: OpenChoreo Backstage Portal\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-backstage-client\n      clientSecret: \"{{ .BACKSTAGE_CLIENT_SECRET }}\"\n      redirectUris:\n        - \"http://openchoreo.localhost:8080/api/auth/openchoreo-auth/handler/frame\"\n      grantTypes:\n        - authorization_code\n        - client_credentials\n        - refresh_token\n      responseTypes:\n        - code\n      tokenEndpointAuthMethod: client_secret_post\n      pkceRequired: false\n      publicClient: false\n      token:\n        accessToken:\n          userConfig:\n            validityPeriod: 86400\n            attributes:\n              - given_name\n              - family_name\n              - username\n              - groups\n          clientConfig:\n            validityPeriod: 86400\n        idToken:\n          validityPeriod: 86400\n          userAttributes:\n            - given_name\n            - family_name\n            - username\n            - groups\n      scopeClaims:\n        email:\n          - email\n        groups:\n          - groups\n        profile:\n          - username\n          - given_name\n          - family_name\n          - picture\n"` |  |
-| thunderid.bootstrap.scripts."54-cli-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000063\nouId: 01900000-0000-7000-8000-000000000001\nname: OpenChoreo CLI\ntype: custom\nauthFlowId: 01900000-0000-7000-8000-000000000061\ndescription: OpenChoreo CLI Default Application\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-cli\n      redirectUris:\n        - \"http://127.0.0.1:55152/auth-callback\"\n      grantTypes:\n        - authorization_code\n        - refresh_token\n      responseTypes:\n        - code\n      tokenEndpointAuthMethod: none\n      pkceRequired: true\n      publicClient: true\n      token:\n        accessToken:\n          userConfig:\n            validityPeriod: 3600\n            attributes:\n              - given_name\n              - family_name\n              - username\n              - groups\n        idToken:\n          validityPeriod: 3600\n          userAttributes:\n            - given_name\n            - family_name\n            - username\n            - groups\n      scopeClaims:\n        email:\n          - email\n        groups:\n          - groups\n        profile:\n          - username\n          - given_name\n          - family_name\n          - picture\n          - groups\n"` |  |
+| thunderid.bootstrap.scripts."50-user-schema-and-users.yaml" | string | `"resource_type: user_type\nid: 01900000-0000-7000-8001-000000000010\ncategory: user\nname: openchoreo-user\nouHandle: default\nallowSelfRegistration: true\nsystemAttributes:\n  display: username\nschema:\n  sub:\n    type: string\n    displayName: Subject\n    required: false\n  username:\n    type: string\n    displayName: Username\n    required: true\n    unique: true\n  password:\n    type: string\n    displayName: Password\n    required: false\n    credential: true\n  given_name:\n    type: string\n    displayName: First Name\n    required: false\n  family_name:\n    type: string\n    displayName: Last Name\n    required: false\n  email:\n    type: string\n    displayName: Email\n    required: true\n    unique: true\n---\nresource_type: user\nid: 01900000-0000-7000-8001-000000000030\ntype: openchoreo-user\nouHandle: default\nattributes:\n  username: admin@openchoreo.dev\n  email: admin@openchoreo.dev\n  given_name: Admin\n  family_name: User\ncredentials:\n  password: \"{{ .OPENCHOREO_ADMIN_PASSWORD }}\"\n---\nresource_type: user\nid: 01900000-0000-7000-8001-000000000031\ntype: openchoreo-user\nouHandle: default\nattributes:\n  username: developer@openchoreo.dev\n  email: developer@openchoreo.dev\n  given_name: Developer\n  family_name: User\ncredentials:\n  password: \"{{ .OPENCHOREO_DEVELOPER_PASSWORD }}\"\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000040\nname: platform-engineers\ndescription: OpenChoreo Platform Engineers group\nouHandle: default\nmembers:\n  - id: 01900000-0000-7000-8001-000000000030\n    type: user\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000041\nname: developers\ndescription: OpenChoreo Developers group\nouHandle: default\nmembers:\n  - id: 01900000-0000-7000-8001-000000000031\n    type: user\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000042\nname: qa\ndescription: OpenChoreo QA group\nouHandle: default\n---\nresource_type: group\nid: 01900000-0000-7000-8001-000000000043\nname: release-managers\ndescription: OpenChoreo Release Managers group\nouHandle: default\n"` |  |
+| thunderid.bootstrap.scripts."51-backstage-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000060\nouId: 01900000-0000-7000-8000-000000000001\nname: Backstage\ntype: fullstack\nauthFlowId: \"{{ .OPENCHOREO_AUTH_FLOW_ID }}\"\ndescription: OpenChoreo Backstage Portal\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-backstage-client\n      clientSecret: \"{{ .BACKSTAGE_CLIENT_SECRET }}\"\n      redirectUris:\n        - \"http://openchoreo.localhost:8080/api/auth/openchoreo-auth/handler/frame\"\n      grantTypes:\n        - authorization_code\n        - client_credentials\n        - refresh_token\n      responseTypes:\n        - code\n      tokenEndpointAuthMethod: client_secret_post\n      pkceRequired: false\n      publicClient: false\n      token:\n        accessToken:\n          userConfig:\n            validityPeriod: 86400\n            attributes:\n              - given_name\n              - family_name\n              - username\n              - groups\n          clientConfig:\n            validityPeriod: 86400\n        idToken:\n          validityPeriod: 86400\n          userAttributes:\n            - given_name\n            - family_name\n            - username\n            - groups\n      scopeClaims:\n        email:\n          - email\n        groups:\n          - groups\n        profile:\n          - username\n          - given_name\n          - family_name\n          - picture\n"` |  |
+| thunderid.bootstrap.scripts."54-cli-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000063\nouId: 01900000-0000-7000-8000-000000000001\nname: OpenChoreo CLI\ntype: custom\nauthFlowId: \"{{ .OPENCHOREO_AUTH_FLOW_ID }}\"\ndescription: OpenChoreo CLI Default Application\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-cli\n      redirectUris:\n        - \"http://127.0.0.1:55152/auth-callback\"\n      grantTypes:\n        - authorization_code\n        - refresh_token\n      responseTypes:\n        - code\n      tokenEndpointAuthMethod: none\n      pkceRequired: true\n      publicClient: true\n      token:\n        accessToken:\n          userConfig:\n            validityPeriod: 3600\n            attributes:\n              - given_name\n              - family_name\n              - username\n              - groups\n        idToken:\n          validityPeriod: 3600\n          userAttributes:\n            - given_name\n            - family_name\n            - username\n            - groups\n      scopeClaims:\n        email:\n          - email\n        groups:\n          - groups\n        profile:\n          - username\n          - given_name\n          - family_name\n          - picture\n          - groups\n"` |  |
 | thunderid.bootstrap.scripts."57-service-mcp-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000066\nouId: 01900000-0000-7000-8000-000000000001\nname: Service MCP App\ntype: mcp\ndescription: Service MCP app to be used by backend services which can securely store the secret\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: service_mcp_client\n      clientSecret: \"{{ .SERVICE_MCP_CLIENT_SECRET }}\"\n      grantTypes:\n        - client_credentials\n      tokenEndpointAuthMethod: client_secret_basic\n      pkceRequired: false\n      publicClient: false\n      token:\n        accessToken:\n          clientConfig:\n            validityPeriod: 3600\n"` |  |
 | thunderid.bootstrap.scripts."59-openchoreo-observer-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000068\nouId: 01900000-0000-7000-8000-000000000001\nname: OpenChoreo Observer Resource Reader\ntype: m2m\ndescription: OpenChoreo Observer Resource Reader Client\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-observer-resource-reader-client\n      clientSecret: \"{{ .OBSERVER_CLIENT_SECRET }}\"\n      grantTypes:\n        - client_credentials\n      tokenEndpointAuthMethod: client_secret_post\n      pkceRequired: false\n      publicClient: false\n      token:\n        accessToken:\n          clientConfig:\n            validityPeriod: 3600\n"` |  |
 | thunderid.bootstrap.scripts."70-openchoreo-promotion-gate-app.yaml" | string | `"resource_type: application\nid: 01900000-0000-7000-8001-000000000100\nouId: 01900000-0000-7000-8000-000000000001\nname: OpenChoreo Promotion Gate\ntype: m2m\ndescription: Promotion gate workflow - read-only OpenChoreo API and observer queries (docs/promotion.md)\ninboundAuthConfig:\n  - type: oauth2\n    config:\n      clientId: openchoreo-promotion-gate\n      clientSecret: \"{{ .PROMOTION_GATE_CLIENT_SECRET }}\"\n      grantTypes:\n        - client_credentials\n      tokenEndpointAuthMethod: client_secret_post\n      pkceRequired: false\n      publicClient: false\n      token:\n        accessToken:\n          clientConfig:\n            validityPeriod: 900\n"` |  |
@@ -40,15 +61,37 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
 | thunderid.configuration.database.runtime_persistent.type | string | `"sqlite"` |  |
 | thunderid.configuration.database.runtime_transient.postgres.password | string | `""` |  |
 | thunderid.configuration.database.runtime_transient.type | string | `"sqlite"` |  |
+| thunderid.configuration.flow.store | string | `"mutable"` |  |
 | thunderid.configuration.gateClient.hostname | string | `"thunder.openchoreo.localhost"` |  |
 | thunderid.configuration.gateClient.port | int | `8080` |  |
 | thunderid.configuration.gateClient.scheme | string | `"http"` |  |
+| thunderid.configuration.openid4vci.store | string | `"mutable"` |  |
+| thunderid.configuration.openid4vp.store | string | `"mutable"` |  |
 | thunderid.configuration.passkey.allowedOrigins[0] | string | `"http://openchoreo.localhost:8080"` |  |
 | thunderid.configuration.server.httpOnly | bool | `true` |  |
 | thunderid.configuration.server.publicUrl | string | `"http://thunder.openchoreo.localhost:8080"` |  |
+| thunderid.configuration.stores.agent | string | `"mutable"` |  |
+| thunderid.configuration.stores.application | string | `"mutable"` |  |
+| thunderid.configuration.stores.group | string | `"mutable"` |  |
+| thunderid.configuration.stores.identity_provider | string | `"composite"` |  |
+| thunderid.configuration.stores.layout | string | `"mutable"` |  |
+| thunderid.configuration.stores.organization_unit | string | `"mutable"` |  |
+| thunderid.configuration.stores.resource | string | `"mutable"` |  |
+| thunderid.configuration.stores.role | string | `"mutable"` |  |
+| thunderid.configuration.stores.server_config | string | `"mutable"` |  |
+| thunderid.configuration.stores.theme | string | `"mutable"` |  |
+| thunderid.configuration.stores.translation | string | `"mutable"` |  |
+| thunderid.configuration.stores.user | string | `"mutable"` |  |
+| thunderid.configuration.stores.user_type | string | `"mutable"` |  |
+| thunderid.declarativeResources.configMap.name | string | `"thunder-github-login"` |  |
+| thunderid.declarativeResources.enabled | bool | `true` |  |
 | thunderid.deployment.image.pullPolicy | string | `"IfNotPresent"` |  |
 | thunderid.deployment.image.tag | string | `"1.1.1@sha256:c0d566c4bfe82ebd6161596248f4008c5014820b192117c07dc8633f16651fc6"` |  |
 | thunderid.deployment.replicaCount | int | `1` | `1` (single-writer SQLite persistence) with `1.1.1` pinned by multi-arch index digest. |
+| thunderid.deployment.secretEnv[0].name | string | `"DEX_CLIENT_SECRET"` |  |
+| thunderid.deployment.secretEnv[0].optional | bool | `true` |  |
+| thunderid.deployment.secretEnv[0].secretKey | string | `"dex-client-secret"` |  |
+| thunderid.deployment.secretEnv[0].secretName | string | `"thunder-bootstrap"` |  |
 | thunderid.fullnameOverride | string | `"thunder"` |  |
 | thunderid.hpa.enabled | bool | `false` |  |
 | thunderid.httproute.enabled | bool | `true` | Exposes `thunder.<openchoreo.controlPlane.host>` via `openchoreo-control-plane/gateway-default`. |
@@ -63,10 +106,17 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
 | thunderid.setup.admin.passwordRef.key | string | `"thunder-admin-password"` |  |
 | thunderid.setup.admin.passwordRef.name | string | `"thunder-bootstrap"` |  |
 | thunderid.setup.enabled | bool | `true` |  |
+| thunderid.setup.env[0].name | string | `"OPENCHOREO_AUTH_FLOW_ID"` |  |
+| thunderid.setup.env[0].valueFrom.configMapKeyRef.key | string | `"AUTH_FLOW_ID"` |  |
+| thunderid.setup.env[0].valueFrom.configMapKeyRef.name | string | `"thunder-github-login"` |  |
 | thunderid.setup.extraVolumeMounts[0].mountPath | string | `"/opt/thunderid/bootstrap/ai-agent-clients"` |  |
 | thunderid.setup.extraVolumeMounts[0].name | string | `"ai-agent-clients"` |  |
 | thunderid.setup.extraVolumeMounts[0].readOnly | bool | `true` |  |
 | thunderid.setup.extraVolumeMounts[0].subPath | string | `"ai-agent-clients"` |  |
+| thunderid.setup.extraVolumeMounts[1].mountPath | string | `"/opt/thunderid/bootstrap/github-login"` |  |
+| thunderid.setup.extraVolumeMounts[1].name | string | `"github-login"` |  |
+| thunderid.setup.extraVolumeMounts[1].readOnly | bool | `true` |  |
+| thunderid.setup.extraVolumeMounts[1].subPath | string | `"github-login"` |  |
 | thunderid.setup.extraVolumes[0].configMap.items[0].key | string | `"README"` |  |
 | thunderid.setup.extraVolumes[0].configMap.items[0].path | string | `"ai-agent-clients/README"` |  |
 | thunderid.setup.extraVolumes[0].configMap.items[1].key | string | `"53-rca-agent-client.yaml"` |  |
@@ -76,6 +126,13 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
 | thunderid.setup.extraVolumes[0].configMap.name | string | `"thunder-ai-agent-clients"` |  |
 | thunderid.setup.extraVolumes[0].configMap.optional | bool | `true` |  |
 | thunderid.setup.extraVolumes[0].name | string | `"ai-agent-clients"` |  |
+| thunderid.setup.extraVolumes[1].configMap.items[0].key | string | `"README"` |  |
+| thunderid.setup.extraVolumes[1].configMap.items[0].path | string | `"github-login/README"` |  |
+| thunderid.setup.extraVolumes[1].configMap.items[1].key | string | `"52-github-flow.yaml"` |  |
+| thunderid.setup.extraVolumes[1].configMap.items[1].path | string | `"github-login/52-github-flow.yaml"` |  |
+| thunderid.setup.extraVolumes[1].configMap.name | string | `"thunder-github-login"` |  |
+| thunderid.setup.extraVolumes[1].configMap.optional | bool | `true` |  |
+| thunderid.setup.extraVolumes[1].name | string | `"github-login"` |  |
 | thunderid.setup.preserveJob | bool | `true` |  |
 | thunderid.setup.secretEnv[0].name | string | `"OPENCHOREO_ADMIN_PASSWORD"` |  |
 | thunderid.setup.secretEnv[0].secretKey | string | `"admin-user-password"` |  |
@@ -103,6 +160,10 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
 | thunderid.setup.secretEnv[7].optional | bool | `true` |  |
 | thunderid.setup.secretEnv[7].secretKey | string | `"finops-agent-client-secret"` |  |
 | thunderid.setup.secretEnv[7].secretName | string | `"thunder-bootstrap"` |  |
+| thunderid.setup.secretEnv[8].name | string | `"DEX_CLIENT_SECRET"` |  |
+| thunderid.setup.secretEnv[8].optional | bool | `true` |  |
+| thunderid.setup.secretEnv[8].secretKey | string | `"dex-client-secret"` |  |
+| thunderid.setup.secretEnv[8].secretName | string | `"thunder-bootstrap"` |  |
 
 ### Design notes
 
@@ -119,7 +180,7 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
   | `backstage-backend-secret` | addon openchoreo-control-plane only |
   | `service-mcp-client-secret` | OAuth client `service_mcp_client` (headless MCP, [AI agents](../../docs/ai-agents.md)) |
 
-  Plus `openchoreo-observability` / `observer-client-secret` (observer client) and `promotion-gate` / `client-secret` ([promotion](../../docs/promotion.md)). The setup Job resolves `{{ .VAR }}` placeholders from its environment; `setup.secretEnv` puts the values there.
+  Plus `openchoreo-observability` / `observer-client-secret` (observer client), `promotion-gate` / `client-secret` ([promotion](../../docs/promotion.md)), and `github-login` / `thunder-client-secret` when Sign in with GitHub is active ([OpenChoreo](../../docs/openchoreo.md#sign-in-with-github)). The setup Job resolves `{{ .VAR }}` placeholders from its environment; `setup.secretEnv` puts the values there.
 - **Hooks:** Argo CD runs every Helm hook as PreSync on every sync, in this order:
   1. VAP `thunder-pvc-delete-protection` (weight -30): denies deleting the PVCs, so a failed sync cannot make Argo CD delete them.
   2. ExternalSecret `thunder-bootstrap` (-20).

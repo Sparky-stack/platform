@@ -1,0 +1,4 @@
+# local: enable "Sign in with GitHub" (Dex OIDC broker -> Thunder groups) when secrets.githubLogin.enabled is true
+# (set on the root app by `task secrets` / `task up` when ~/.config/koorikla-platform/github-login.{json,secret} exist).
+githubLogin:
+  enabled: true

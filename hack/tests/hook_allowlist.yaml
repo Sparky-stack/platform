@@ -29,4 +29,5 @@
 - { addon: thunder, kind: ConfigMap, name: thunder-bootstrap, reason: "upstream pre-install hook read by the PreSync setup Job; checksum in ConfigMap thunder-setup-inputs" }
 - { addon: thunder, kind: ConfigMap, name: thunder-setup-config-map, reason: "upstream pre-install hook read by the PreSync setup Job; checksum in ConfigMap thunder-setup-inputs" }
 - { addon: thunder, kind: ConfigMap, name: thunder-ai-agent-clients, reason: "mounted by the PreSync setup Job (upstream hardcodes it as a hook, no wave can precede PreSync); checksum in ConfigMap thunder-setup-inputs" }
+- { addon: thunder, kind: ConfigMap, name: thunder-github-login, reason: "mounted by the PreSync setup Job (upstream hardcodes it as a hook, no wave can precede PreSync); checksum in ConfigMap thunder-setup-inputs" }
 - { addon: thunder, kind: ExternalSecret, name: thunder-bootstrap, reason: "Secret of the PreSync setup Job (upstream hardcodes it as a hook, no wave can precede PreSync); checksum in ConfigMap thunder-setup-inputs" }

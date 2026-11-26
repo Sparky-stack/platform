@@ -1,0 +1,220 @@
+{{- /*
+ConfigMap thunder-github-login: Thunder 1.1.1 OIDC connection (-> Dex) + authentication flow (username/password +
+"Continue with GitHub" + JIT provisioning), mounted into /opt/thunderid/bootstrap/github-login/ by the setup Job.
+Active only when BOTH githubLogin.enabled (installation opt-in) AND secrets.githubLogin.enabled (credentials seeded)
+are true; otherwise AUTH_FLOW_ID selects Thunder's default password flow and no *.yaml file is projected (Thunder
+rejects empty/comment-only bootstrap documents).
+PreSync hook below the setup Job's weight (-5); checksummed in ConfigMap thunder-setup-inputs.
+*/ -}}
+{{- $gh := .Values.githubLogin }}
+{{- $on := and $gh.enabled (dig "githubLogin" "enabled" false (.Values.secrets | default dict)) }}
+{{- $publicUrl := .Values.thunderid.configuration.server.publicUrl | trimSuffix "/" }}
+{{- $issuer := $gh.issuer | trimSuffix "/" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thunder-github-login
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: openchoreo
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: hook-failed
+data:
+  README: |
+    Sign in with GitHub via Dex (docs/openchoreo.md#sign-in-with-github): {{ if $on }}enabled (org {{ $gh.org }}){{ else }}disabled{{ end }}.
+  AUTH_FLOW_ID: {{ if $on }}{{ $gh.authFlowId | quote }}{{ else }}"01900000-0000-7000-8000-000000000061"{{ end }}
+  {{- if $on }}
+  github-dex-connection.yaml: |
+    resource_type: connection
+    id: {{ $gh.connectionId }}
+    type: oidc
+    name: GitHub
+    description: GitHub org teams via Dex OIDC broker
+    clientId: {{ $gh.clientId }}
+    clientSecret: "{{ "{{ .DEX_CLIENT_SECRET }}" }}"
+    redirectUri: {{ printf "%s/gate/callback" $publicUrl | quote }}
+    authorizationEndpoint: {{ printf "%s/auth" $issuer | quote }}
+    tokenEndpoint: {{ printf "%s/token" $issuer | quote }}
+    userInfoEndpoint: {{ printf "%s/userinfo" $issuer | quote }}
+    jwksEndpoint: {{ printf "%s/keys" $issuer | quote }}
+    issuer: {{ $issuer | quote }}
+    scopes:
+      - openid
+      - profile
+      - email
+      - groups
+    attributeConfiguration:
+      user_type_resolution:
+        default: openchoreo-user
+      user_type_attribute_mappings:
+        - user_type: openchoreo-user
+          attributes:
+            - external_attribute: preferred_username
+              local_attribute: username
+      accountLinking:
+        attributes:
+          - email
+      authorizationMapping:
+        rules:
+          - claim: groups
+            valueType: array
+            values:
+              {{- range $t := $gh.teams }}
+              - operator: includes
+                value: {{ printf "%s:%s" $gh.org $t.team | quote }}
+                targets:
+                  - type: group
+                    id: {{ $t.groupId }}
+              {{- end }}
+      sync:
+        attributes: override_received
+        groupsAndRoles: override_all
+  52-github-flow.yaml: |
+    resource_type: flow
+    id: {{ $gh.authFlowId }}
+    name: OpenChoreo Sign In with GitHub
+    handle: openchoreo-github-flow
+    flowType: AUTHENTICATION
+    nodes:
+      - id: start
+        type: START
+        onSuccess: prompt_credentials
+      - id: prompt_credentials
+        type: PROMPT
+        meta:
+          components:
+            - alt: '{{ "{{ t(signin:images.app_logo.alt) }}" }}'
+              category: DISPLAY
+              height: '60'
+              id: image
+              resourceType: ELEMENT
+              src: '{{ "{{ meta(application.logoUrl) }}" }}'
+              type: IMAGE
+              width: ''
+            - align: center
+              type: TEXT
+              id: text_001
+              label: '{{ "{{ t(signin:forms.credentials.title) }}" }}'
+              variant: HEADING_1
+            - type: BLOCK
+              id: block_001
+              components:
+                - id: input_001
+                  ref: username
+                  type: TEXT_INPUT
+                  label: '{{ "{{ t(signin:forms.credentials.fields.username.label) }}" }}'
+                  required: true
+                  placeholder: '{{ "{{ t(signin:forms.credentials.fields.username.placeholder) }}" }}'
+                - id: input_002
+                  ref: password
+                  type: PASSWORD_INPUT
+                  label: '{{ "{{ t(signin:forms.credentials.fields.password.label) }}" }}'
+                  required: true
+                  placeholder: '{{ "{{ t(signin:forms.credentials.fields.password.placeholder) }}" }}'
+                - type: ACTION
+                  id: action_001
+                  label: '{{ "{{ t(signin:forms.credentials.actions.submit.label) }}" }}'
+                  variant: PRIMARY
+                  eventType: SUBMIT
+            - type: BLOCK
+              id: block_github
+              category: ACTION
+              components:
+                - id: action_github
+                  category: ACTION
+                  type: ACTION
+                  variant: OUTLINED
+                  eventType: TRIGGER
+                  label: Continue with GitHub
+                  image: assets/images/icons/github.svg
+        prompts:
+          - inputs:
+              - ref: input_001
+                identifier: username
+                type: TEXT_INPUT
+                required: true
+              - ref: input_002
+                identifier: password
+                type: PASSWORD_INPUT
+                required: true
+            action:
+              ref: action_001
+              nextNode: credentials_auth
+          - action:
+              ref: action_github
+              nextNode: oidc_auth
+      - id: credentials_auth
+        type: TASK_EXECUTION
+        executor:
+          name: CredentialsAuthExecutor
+        onSuccess: authorization_check
+        onIncomplete: prompt_credentials
+        onFailure: prompt_credentials
+      - id: oidc_auth
+        type: TASK_EXECUTION
+        properties:
+          idpId: {{ $gh.connectionId }}
+          allowAuthenticationWithoutLocalUser: true
+        executor:
+          name: OIDCAuthExecutor
+        onSuccess: provisioning
+        onFailure: prompt_credentials
+      - id: provisioning
+        type: TASK_EXECUTION
+        properties:
+          allowCrossOUProvisioning: false
+          includeOptional: false
+          includeOptionalCredentials: false
+          maxPerPrompt: 5
+        executor:
+          name: ProvisioningExecutor
+        onSuccess: authorization_check
+        onIncomplete: prompt_schema_attrs
+        onFailure: prompt_credentials
+      - id: prompt_schema_attrs
+        type: PROMPT
+        meta:
+          components:
+            - alt: '{{ "{{ t(signup:images.app_logo.alt) }}" }}'
+              category: DISPLAY
+              height: '60'
+              id: image_attrs
+              resourceType: ELEMENT
+              src: '{{ "{{ meta(application.logoUrl) }}" }}'
+              type: IMAGE
+              width: ''
+            - align: center
+              type: TEXT
+              id: heading_schema_attrs
+              label: Complete your details
+              variant: HEADING_1
+            - type: BLOCK
+              id: block_dynamic_user_inputs
+              components:
+                - type: DYNAMIC_INPUT_PLACEHOLDER
+                  id: dynamic_inputs
+                - type: ACTION
+                  id: action_schema_attrs
+                  label: Continue
+                  variant: PRIMARY
+                  eventType: SUBMIT
+        prompts:
+          - inputs: []
+            action:
+              ref: action_schema_attrs
+              nextNode: provisioning
+      - id: authorization_check
+        type: TASK_EXECUTION
+        executor:
+          name: AuthorizationExecutor
+        onSuccess: auth_assert
+      - id: auth_assert
+        type: TASK_EXECUTION
+        executor:
+          name: AuthAssertExecutor
+        onSuccess: end
+      - id: end
+        type: END
+  {{- end }}

@@ -34,7 +34,7 @@ Wrapper chart for ThunderID (`1.1.1`). Runs OpenChoreo's OIDC identity provider 
   | `backstage-backend-secret` | addon openchoreo-control-plane only |
   | `service-mcp-client-secret` | OAuth client `service_mcp_client` (headless MCP, [AI agents](../../docs/ai-agents.md)) |
 
-  Plus `openchoreo-observability` / `observer-client-secret` (observer client) and `promotion-gate` / `client-secret` ([promotion](../../docs/promotion.md)). The setup Job resolves `{{ "{{ .VAR }}" }}` placeholders from its environment; `setup.secretEnv` puts the values there.
+  Plus `openchoreo-observability` / `observer-client-secret` (observer client), `promotion-gate` / `client-secret` ([promotion](../../docs/promotion.md)), and `github-login` / `thunder-client-secret` when Sign in with GitHub is active ([OpenChoreo](../../docs/openchoreo.md#sign-in-with-github)). The setup Job resolves `{{ "{{ .VAR }}" }}` placeholders from its environment; `setup.secretEnv` puts the values there.
 - **Hooks:** Argo CD runs every Helm hook as PreSync on every sync, in this order:
   1. VAP `thunder-pvc-delete-protection` (weight -30): denies deleting the PVCs, so a failed sync cannot make Argo CD delete them.
   2. ExternalSecret `thunder-bootstrap` (-20).
