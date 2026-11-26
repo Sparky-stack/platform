@@ -1,12 +1,6 @@
 {{- /*
-Per-project developer access (#335). The OpenChoreo control plane binds group `developers` org-wide to READ-ONLY roles
-(addon openchoreo-control-plane, developer-binding). Write access comes only from here: per developer group of this
-tenant (developerGroups, default <project>-developers) one AuthzRoleBinding granting ClusterAuthzRole developer, scoped
-to THIS project. A developer of project A therefore gets OpenChoreo's default deny for Components, (Project)Release-
-Bindings, Resources, ... of project B, and `spec.owner.projectName` of what they create is always their own project.
-Gated environments are excluded by a condition on the binding writes of this allow, NOT by the deny of addon
-openchoreo-platform: OpenChoreo resolves deny per entitlement value, so a deny on `developers` never revokes what
-`<project>-developers` grants. templates/authz.yaml also denies these groups deleting gated Components.
+Per-project developer allow per group in developerGroups (default <project>-developers). Gated binding writes are
+excluded on this allow directly because OpenChoreo resolves deny per entitlement value, not across groups (#335).
 */ -}}
 {{- $p := include "tenant.project" . }}
 {{- $ns := .Values.openchoreo.orgNamespace }}

@@ -98,3 +98,31 @@ workers:
     {{- end }}
 {{- end }}
 {{- end }}
+
+{{/* ClusterResourceSet targeting cluster .cluster in namespace fleet (wave default "1"). */}}
+{{- define "capi.clusterResourceSet" -}}
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: {{ .name }}
+  namespace: fleet
+  {{- with .labels }}
+  labels:
+    {{- . | nindent 4 }}
+  {{- end }}
+  annotations:
+    {{- if .skipDryRun }}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    {{- end }}
+    argocd.argoproj.io/sync-wave: {{ .wave | default "1" | quote }}
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      platform.koorikla.io/name: {{ .cluster }}
+  resources:
+    {{- range .resources }}
+    - kind: {{ .kind }}
+      name: {{ .name }}
+    {{- end }}
+{{- end }}
