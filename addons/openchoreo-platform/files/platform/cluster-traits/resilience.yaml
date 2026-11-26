@@ -1,17 +1,5 @@
-# Platform ClusterTrait resilience (#251, docs/openchoreo.md "Resilience defaults"): production-grade pod scheduling and
-# shutdown for every Deployment-based component. Developers never attach it: the service / web-application / worker
-# files in files/cluster-component-types/ embed it and bind its environmentConfigs to the component type's
-# (replicas, resilience.*), so the defaults below apply in every environment unless a ReleaseBinding overrides them.
-#
-#   everywhere           topologySpreadConstraints over nodes and zones (maxSkew 1, best effort), preStop sleep +
-#                        terminationGracePeriodSeconds (the gateway stops routing before the process gets SIGTERM)
-#   staging, production  PodDisruptionBudget maxUnavailable 1 when replicas >= 2 (a drain never takes all pods)
-#   production           PriorityClass app-production (queue priority ahead of app-standard; both Never preempt)
-#                        (both shipped to every data plane by addon openchoreo-data-plane)
-#
-# The label resilience.platform.koorikla.io/min-replicas states the replica floor the component asked for: autoscaler
-# traits remove spec.replicas, and the production policy (addon kyverno-policies workload-resilience) reads the floor
-# from here instead of the Deployment's defaulted 1.
+# Platform ClusterTrait resilience (docs/openchoreo.md#resilience-defaults): embedded in every Deployment component type.
+# Sets resilience.platform.koorikla.io/min-replicas so workload-resilience policy checks the requested floor when KEDA/HPA removes spec.replicas.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterTrait
 metadata:

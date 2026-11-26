@@ -45,16 +45,7 @@ agentServerCA:
   sourceSecret: cluster-gateway-ca
   configMapName: cluster-gateway-ca   # == openchoreo-observability-plane.clusterAgent.tls.serverCAConfigMap
 
-# Secrets from ClusterSecretStore `platform` (never committed; seeded by `task secrets` locally):
-#   key `openchoreo-observability`:
-#     opensearch-username     must be `admin` (OpenSearch demo security config user)
-#     opensearch-password     >= 8 chars, upper+lower+digit+special (OpenSearch 3 initial admin password policy)
-#     observer-client-secret  == Thunder client openchoreo-observer-resource-reader-client's secret
-#   key `openchoreo-ai` (read only while rca / finOpsAgent are enabled; docs/ai-agents.md):
-#     rca-llm-api-key             provider key, or any placeholder when llm.baseUrl is the agentgateway
-#     rca-oauth-client-secret     == Thunder client openchoreo-rca-agent's secret (addon thunder reads the same property)
-#     finops-llm-api-key          provider key, or any placeholder when llmBaseUrl is the agentgateway
-#     finops-oauth-client-secret  == Thunder client openchoreo-finops-agent's secret (addon thunder reads it too)
+# Secrets from ClusterSecretStore `platform` (properties: docs/observability.md "Secrets", docs/ai-agents.md):
 secrets:
   # -- Pulls OpenSearch/observer (`openchoreo-observability`) and optional AI agent (`openchoreo-ai`) credentials (`secrets.{store,remoteKey,aiRemoteKey}`) from `ClusterSecretStore/platform`.
   store: platform

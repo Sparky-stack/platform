@@ -1,11 +1,5 @@
-# Docker (CAPD / k3d) clusters: no ambient DNS capture (#209). The local installation's ingress hosts are RFC 6761
-# `*.openchoreo.localhost` names (addon coredns-local rewrites them to the mgmt k3d load balancer), and ztunnel's DNS
-# proxy answers every `.localhost` name with loopback. Captured, an enrolled pod gets `::1` for its ingest or app host
-# (`dial tcp [::1]:11080: connection refused`): the Prometheus agent, which joins the mesh to scrape STRICT cells
-# (addon telemetry), would lose remote write, and so would any cell app calling a local ingress host. Without capture
-# pods resolve through CoreDNS as before; nothing here uses ServiceEntry hostnames (the only thing capture adds in
-# ambient), and multicluster Services exist in every member (docs/multicluster.md). Other providers keep Istio's
-# default (on): their hosts are real DNS names. docs/networking.md "Strict mTLS in cell namespaces".
+# Docker (CAPD / k3d): disable ambient DNS capture so ztunnel does not resolve RFC 6761 *.localhost ingress hosts
+# to loopback instead of coredns-local (docs/networking.md "Strict mTLS in cell namespaces").
 cni:
   ambient:
     dnsCapture: false

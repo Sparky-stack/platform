@@ -1,10 +1,4 @@
-{{- /*
-Ambient east-west gateway: peers' ztunnels open double-HBONE (outer mTLS to this gateway, inner mTLS end-to-end to the
-destination ztunnel) to <service>.<namespace> on this network; the gateway forwards the inner stream to a local
-endpoint. Pods are addressed by service name, so pod CIDRs may overlap between clusters. istiod (multi-network on)
-deploys it from the waypoint template; parametersRef customises that Deployment/Service.
-Outside docker gateway.loadBalancerSourceRanges is required (templates/validate.yaml).
-*/ -}}
+{{- /* Ambient east-west Gateway (double-HBONE on 15008, deployed by istiod from the waypoint template via parametersRef; docs/multicluster.md). */ -}}
 {{- if .Values.mesh.eastwest.enabled }}
 {{- $network := .Values.mesh.network | default .Values.cluster.name }}
 {{- $g := .Values.gateway }}

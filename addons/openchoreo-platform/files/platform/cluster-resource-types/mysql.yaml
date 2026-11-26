@@ -1,10 +1,5 @@
-# Platform ClusterResourceType mysql (#256, docs/data-services.md "MySQL as a service"): renders the platform's MySQL
-# API (platform.koorikla.io/v1alpha1 MySQL, a namespaced Crossplane v2 XR of addon crossplane, package packages/mysql)
-# into the cell namespace. Never a raw MOCO MySQLCluster: Kyverno denies those to everyone but the platform. The
-# connection Secret <name>-app (host, port, dbname, username, password, uri - the keys of the PostgreSQL API) is written
-# on the data plane by ESO; only its name and keys reach the control plane.
-# Only on data planes that run addons crossplane AND moco (moco's label also installs the MySQL API there): checked by
-# the mgmt admission policy platform-data-plane-capabilities (addon kyverno-policies) on ResourceReleaseBindings.
+# Platform ClusterResourceType mysql (docs/data-services.md#mysql-as-a-service): renders a Crossplane MySQL XR into
+# the cell and exposes connection Secret <name>-app; requires addons crossplane and moco on the data plane.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterResourceType
 metadata:
