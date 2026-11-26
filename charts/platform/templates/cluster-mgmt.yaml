@@ -21,8 +21,13 @@ metadata:
     platform.koorikla.io/environment: {{ $mgmt.environment | default "mgmt" | quote }}
     platform.koorikla.io/installation: {{ .Values.installation.name | quote }}
     platform.koorikla.io/cni: {{ $mgmt.cni | default "flannel" | quote }}   # k3d's bundled flannel
+    {{- $ghLogin := dig "githubLogin" "enabled" false (.Values.secrets | default dict) }}
     {{- range $k, $v := ($mgmt.addons | default dict) }}
+    {{- if and (eq $k "dex") (not $ghLogin) }}
+    addons.platform.koorikla.io/dex: "false"
+    {{- else }}
     addons.platform.koorikla.io/{{ $k }}: {{ $v | quote }}
+    {{- end }}
     {{- end }}
   annotations:
     platform.koorikla.io/addons-revision: {{ $mgmt.addonsRevision | default "HEAD" | quote }}

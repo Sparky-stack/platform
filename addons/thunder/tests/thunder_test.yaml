@@ -3,12 +3,16 @@ templates:
   - templates/bootstrap-secret.yaml
   - templates/validate.yaml
   - templates/ai-agent-clients.yaml
+  - templates/github-login.yaml
+  - templates/setup-inputs.yaml
   - templates/pvc-delete-protection.yaml
   - charts/thunderid/templates/pvc.yaml
   - charts/thunderid/templates/setup-job.yaml
   - charts/thunderid/templates/admin-secret.yaml
   - charts/thunderid/templates/setup-config-map.yaml
   - charts/thunderid/templates/bootstrap-configmap.yaml
+  - charts/thunderid/templates/config-map.yaml
+  - charts/thunderid/templates/thunderid-deployment.yaml
   - charts/thunderid/templates/secret.yaml
 release:
   name: thunder
@@ -215,4 +219,113 @@ tests:
         bootstrap:
           scripts:
             "50-user-schema-and-users.yaml": "empty"
+    asserts: [ { failedTemplate: {} } ]
+
+  - it: Sign in with GitHub stays off by default (README + default AUTH_FLOW_ID only, no dex-client-secret)
+    templates: [templates/github-login.yaml, templates/bootstrap-secret.yaml]
+    asserts:
+      - template: templates/github-login.yaml
+        equal: { path: 'metadata.annotations["helm.sh/hook-weight"]', value: "-10" }
+      - template: templates/github-login.yaml
+        equal: { path: 'metadata.annotations["helm.sh/hook-delete-policy"]', value: "hook-failed" }
+      - template: templates/github-login.yaml
+        equal: { path: data.AUTH_FLOW_ID, value: "01900000-0000-7000-8000-000000000061" }
+      - template: templates/github-login.yaml
+        notExists: { path: 'data["github-dex-connection.yaml"]' }
+      - template: templates/github-login.yaml
+        notExists: { path: 'data["52-github-flow.yaml"]' }
+      - template: templates/bootstrap-secret.yaml
+        notContains:
+          path: spec.data
+          content: { secretKey: dex-client-secret, remoteRef: { key: github-login, property: thunder-client-secret } }
+
+  - it: Sign in with GitHub stays off when installation opts in but secrets.githubLogin.enabled is false
+    templates: [templates/github-login.yaml, templates/bootstrap-secret.yaml]
+    set:
+      githubLogin.enabled: true
+      secrets.githubLogin.enabled: false
+    asserts:
+      - template: templates/github-login.yaml
+        equal: { path: data.AUTH_FLOW_ID, value: "01900000-0000-7000-8000-000000000061" }
+      - template: templates/github-login.yaml
+        notExists: { path: 'data["github-dex-connection.yaml"]' }
+      - template: templates/github-login.yaml
+        notExists: { path: 'data["52-github-flow.yaml"]' }
+      - template: templates/bootstrap-secret.yaml
+        notContains:
+          path: spec.data
+          content: { secretKey: dex-client-secret, remoteRef: { key: github-login, property: thunder-client-secret } }
+
+  - it: Sign in with GitHub renders Dex OIDC connection, team authorizationMapping rules, override_all sync, and JIT auth flow when enabled
+    templates: [templates/github-login.yaml, templates/bootstrap-secret.yaml, templates/setup-inputs.yaml]
+    set:
+      githubLogin.enabled: true
+      secrets.githubLogin.enabled: true
+    asserts:
+      - template: templates/github-login.yaml
+        equal: { path: data.AUTH_FLOW_ID, value: "01900000-0000-7000-8001-000000000071" }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: '(?m)^resource_type: connection$' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'clientSecret: "\{\{ \.DEX_CLIENT_SECRET \}\}"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'redirectUri: "http://thunder\.openchoreo\.localhost:8080/gate/callback"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'valueType: array' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'value: "Sparky-stack:platform-engineers"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'value: "Sparky-stack:developers"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'value: "Sparky-stack:qa"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'value: "Sparky-stack:release-managers"' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["github-dex-connection.yaml"]', pattern: 'groupsAndRoles: override_all' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["52-github-flow.yaml"]', pattern: '(?m)^resource_type: flow$' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["52-github-flow.yaml"]', pattern: 'name: OIDCAuthExecutor' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["52-github-flow.yaml"]', pattern: 'allowAuthenticationWithoutLocalUser: true' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["52-github-flow.yaml"]', pattern: 'name: ProvisioningExecutor' }
+      - template: templates/github-login.yaml
+        matchRegex: { path: 'data["52-github-flow.yaml"]', pattern: 'label: Continue with GitHub' }
+      - template: templates/bootstrap-secret.yaml
+        contains:
+          path: spec.data
+          content: { secretKey: dex-client-secret, remoteRef: { key: github-login, property: thunder-client-secret } }
+      - template: templates/setup-inputs.yaml
+        exists: { path: 'data["configmap.thunder-github-login"]' }
+
+  - it: Thunder server loads identity_provider declaratively (composite) while keeping all other stores mutable
+    templates: [charts/thunderid/templates/config-map.yaml, charts/thunderid/templates/thunderid-deployment.yaml]
+    asserts:
+      - template: charts/thunderid/templates/config-map.yaml
+        matchRegex: { path: 'data["deployment.yaml"]', pattern: 'identity_provider:\n  store: "composite"' }
+      - template: charts/thunderid/templates/config-map.yaml
+        matchRegex: { path: 'data["deployment.yaml"]', pattern: 'group:\n  store: "mutable"' }
+      - template: charts/thunderid/templates/thunderid-deployment.yaml
+        contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: DEX_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: thunder-bootstrap, key: dex-client-secret, optional: true } } }
+      - template: charts/thunderid/templates/thunderid-deployment.yaml
+        contains:
+          path: spec.template.spec.volumes
+          content: { name: declarative-resources, configMap: { name: thunder-github-login } }
+
+  - it: fails validation when githubLogin.issuer drifts from openchoreo.controlPlane.host
+    template: templates/validate.yaml
+    set:
+      githubLogin.enabled: true
+      githubLogin.issuer: https://dex.wrong.example.com
+    asserts: [ { failedTemplate: {} } ]
+
+  - it: fails validation when githubLogin.teams references a missing groupId
+    template: templates/validate.yaml
+    set:
+      githubLogin.enabled: true
+      githubLogin.teams:
+        - { team: ghost, group: ghost, groupId: "01900000-0000-7000-8001-999999999999" }
     asserts: [ { failedTemplate: {} } ]

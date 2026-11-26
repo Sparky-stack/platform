@@ -17,6 +17,7 @@ mgmt:
   environment: mgmt
   cni: gke
   addons:
+    dex: "false"                              # opt-in per installation (needs GitHub org + OAuth App overlay)
     harbor: "false"                           # registry.type external
     openchoreo-observability-plane: "false"   # openchoreo.observability.enabled is false in this installation
 

@@ -12,3 +12,15 @@ issuer and Backstage's redirect URIs are derived from the same host (addon openc
 {{- fail (printf "50-user-schema-and-users.yaml must define the four org-team groups (missing %s)" $g) }}
 {{- end }}
 {{- end }}
+{{- if .Values.githubLogin.enabled }}
+{{- $wantDex := printf "dex.%s" .Values.openchoreo.controlPlane.host }}
+{{- if not (contains $wantDex .Values.githubLogin.issuer) }}
+{{- fail (printf "githubLogin.issuer must point at %s (openchoreo.controlPlane.host)" $wantDex) }}
+{{- end }}
+{{- $users := index .Values.thunderid.bootstrap.scripts "50-user-schema-and-users.yaml" }}
+{{- range $t := .Values.githubLogin.teams }}
+{{- if not (contains (printf "id: %s" $t.groupId) $users) }}
+{{- fail (printf "githubLogin.teams entry %s references groupId %s missing from 50-user-schema-and-users.yaml" $t.team $t.groupId) }}
+{{- end }}
+{{- end }}
+{{- end }}

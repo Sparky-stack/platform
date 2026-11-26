@@ -22,5 +22,6 @@ metadata:
 data:
   externalsecret.{{ .Values.bootstrapSecret.name }}: {{ include (print $.Template.BasePath "/bootstrap-secret.yaml") . | sha256sum | quote }}
   configmap.thunder-ai-agent-clients: {{ include (print $.Template.BasePath "/ai-agent-clients.yaml") . | sha256sum | quote }}
+  configmap.thunder-github-login: {{ include (print $.Template.BasePath "/github-login.yaml") . | sha256sum | quote }}
   configmap.thunder-bootstrap: {{ $upstream | quote }}
   configmap.thunder-setup-config-map: {{ $upstream | quote }}

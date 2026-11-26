@@ -69,6 +69,80 @@
     "thunderid": {
       "description": "Upstream ThunderID chart values (not constrained here).",
       "type": "object"
+    },
+    "secrets": {
+      "description": "installation.yaml secrets: githubLogin.enabled gates Sign in with GitHub.",
+      "type": "object",
+      "properties": {
+        "githubLogin": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "True when github-login secret is seeded in the platform store.",
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "githubLogin": {
+      "description": "Sign in with GitHub via Dex OIDC broker (connection + auth flow + team-to-group rules).",
+      "type": "object",
+      "required": ["enabled", "org", "issuer", "clientId", "clientSecret", "connectionId", "authFlowId", "teams"],
+      "properties": {
+        "enabled": {
+          "description": "Opt-in Sign in with GitHub for this installation (also requires secrets.githubLogin.enabled).",
+          "type": "boolean"
+        },
+        "org": {
+          "description": "GitHub organization slug prefixing Dex groups claims (<org>:<team>).",
+          "type": "string",
+          "minLength": 1
+        },
+        "issuer": {
+          "description": "Dex OIDC issuer URL (http(s)://dex.<controlPlane.host>[:port]).",
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "clientId": {
+          "description": "Static OIDC client ID registered in Dex for Thunder.",
+          "type": "string",
+          "minLength": 1
+        },
+        "clientSecret": {
+          "description": "Platform store key and property holding the Dex<->Thunder shared client secret.",
+          "type": "object",
+          "required": ["remoteKey", "property"],
+          "properties": {
+            "remoteKey": { "type": "string", "minLength": 1 },
+            "property": { "type": "string", "minLength": 1 }
+          }
+        },
+        "connectionId": {
+          "description": "Stable UUID of the Thunder OIDC connection.",
+          "type": "string",
+          "minLength": 1
+        },
+        "authFlowId": {
+          "description": "Stable UUID of the Thunder authentication flow offering GitHub + password.",
+          "type": "string",
+          "minLength": 1
+        },
+        "teams": {
+          "description": "GitHub org team slugs mapped to Thunder group IDs via authorizationMapping.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["team", "group", "groupId"],
+            "properties": {
+              "team": { "type": "string", "minLength": 1 },
+              "group": { "type": "string", "minLength": 1 },
+              "groupId": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
     }
   }
 }

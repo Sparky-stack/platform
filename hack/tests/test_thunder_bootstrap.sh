@@ -75,6 +75,10 @@ for agents in "rca" "finops" "rca,finops"; do
   helm template thunder addons/thunder --namespace thunder --set "bootstrapSecret.aiAgentClients={$agents}" > "$TMP/th.yaml"
   check "$TMP/th.yaml" "agents [$agents]"
 done
+helm template thunder addons/thunder --namespace thunder --set githubLogin.enabled=true --set secrets.githubLogin.enabled=false > "$TMP/th-gh-off.yaml"
+check "$TMP/th-gh-off.yaml" "githubLogin opted in, secret absent"
+helm template thunder addons/thunder --namespace thunder --set githubLogin.enabled=true --set secrets.githubLogin.enabled=true > "$TMP/th-gh-on.yaml"
+check "$TMP/th-gh-on.yaml" "githubLogin enabled"
 # The renders hack/test.sh made per installation (overlays may add bootstrap scripts).
 need_renders
 for r in "$RENDERED_DIR"/addon-thunder-*.yaml; do
@@ -84,7 +88,7 @@ done
 
 # Negative (mutation): the PR #5 placeholders - a comment-only and an empty file - are caught.
 files "$TMP/th-default.yaml" "$TMP/neg"
-assert_eq "$(cd "$TMP/neg" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" "./48-csp.yaml ./49-cors.yaml ./50-user-schema-and-users.yaml ./51-backstage-app.yaml ./54-cli-app.yaml ./57-service-mcp-app.yaml ./59-openchoreo-observer-app.yaml ./70-openchoreo-promotion-gate-app.yaml ./ai-agent-clients/README " "agents off: the Job sees the platform scripts and the README, no agent file"
+assert_eq "$(cd "$TMP/neg" && find . -type f | LC_ALL=C sort | tr '\n' ' ')" "./48-csp.yaml ./49-cors.yaml ./50-user-schema-and-users.yaml ./51-backstage-app.yaml ./54-cli-app.yaml ./57-service-mcp-app.yaml ./59-openchoreo-observer-app.yaml ./70-openchoreo-promotion-gate-app.yaml ./ai-agent-clients/README ./github-login/README " "agents and github-login off: the Job sees the platform scripts and the READMEs, no optional yaml file"
 mkdir -p "$TMP/neg/ai-agent-clients"
 printf '# rca agent client off\n' > "$TMP/neg/ai-agent-clients/53-rca-agent-client.yaml"
 : > "$TMP/neg/ai-agent-clients/60-finops-agent-client.yaml"
@@ -94,8 +98,9 @@ assert_match "$(yq -N 'tag' "$TMP/neg.yaml" | grep -vx '!!map' | sort -u | tr -d
 printf 'name: no-type\n' > "$TMP/neg/ai-agent-clients/53-rca-agent-client.yaml"; rm "$TMP/neg/ai-agent-clients/60-finops-agent-client.yaml"
 bundle "$TMP/neg" > "$TMP/neg.yaml"
 assert_match "$(yq -N 'select(tag == "!!map") | has("resource_type")' "$TMP/neg.yaml" | sort -u | tr '\n' ' ')" 'false' "a document without resource_type is detected"
-# The README the agent directory always carries is not part of the bundle (not *.yaml).
-assert_eq "$(find "$TMP/neg" -name README | wc -l | tr -d ' ')" 1 "README projected into the agent directory"
-assert_eq "$(bundle "$TMP/neg" | grep -c 'OAuth clients of the OpenChoreo AI agents' || true)" 0 "README is not read as a bootstrap document"
+# The READMEs the optional directories always carry are not part of the bundle (not *.yaml).
+assert_eq "$(find "$TMP/neg" -name README | wc -l | tr -d ' ')" 2 "README projected into both optional directories"
+assert_eq "$(bundle "$TMP/neg" | grep -c 'OAuth clients of the OpenChoreo AI agents' || true)" 0 "ai-agent README is not read as a bootstrap document"
+assert_eq "$(bundle "$TMP/neg" | grep -c 'Sign in with GitHub via Dex' || true)" 0 "github-login README is not read as a bootstrap document"
 
 finish

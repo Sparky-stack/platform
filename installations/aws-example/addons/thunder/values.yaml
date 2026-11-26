@@ -17,7 +17,7 @@ thunderid:
       49-cors.yaml: "resource_type: server_config\nname: cors\nvalue:\n  allowedOrigins:\n    - \"https://openchoreo.aws.example.com\"\
         \n"
       51-backstage-app.yaml: "resource_type: application\nid: 01900000-0000-7000-8001-000000000060\nouId: 01900000-0000-7000-8000-000000000001\n\
-        name: Backstage\ntype: fullstack\nauthFlowId: 01900000-0000-7000-8000-000000000061\ndescription: OpenChoreo Backstage\
+        name: Backstage\ntype: fullstack\nauthFlowId: \"{{ .OPENCHOREO_AUTH_FLOW_ID }}\"\ndescription: OpenChoreo Backstage\
         \ Portal\nlogoUrl: \"https://cdn.statically.io/gh/openchoreo/openchoreo.github.io@main/static/img/openchoreo-logo.png\"\
         \nallowedUserTypes:\n  - openchoreo-user\nassertion:\n  validityPeriod: 3600\ninboundAuthConfig:\n  - type: oauth2\n\
         \    config:\n      clientId: openchoreo-backstage-client\n      clientSecret: \"{{ .BACKSTAGE_CLIENT_SECRET }}\"\n\
