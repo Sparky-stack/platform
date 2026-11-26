@@ -1,10 +1,4 @@
-{{- /*
-Harbor's desired state as managed resources of provider-upjet-harbor (Crossplane, installed on mgmt by addon crossplane,
-docs/build-plane.md "Harbor"). One object per registry endpoint, project, replication rule and robot account; its
-Synced/Ready conditions show drift and API errors: kubectl get managed -n harbor.
-Sync wave 1: after the Harbor workloads (wave 0) are Healthy. The CRDs come with the provider, hence
-SkipDryRunOnMissingResource; Argo CD retries until the provider is Healthy.
-*/ -}}
+{{- /* Harbor desired state as provider-upjet-harbor managed resources in sync wave 1 after Harbor workloads (docs/build-plane.md "Harbor"). */ -}}
 {{- $c := .Values.config }}
 {{- $ns := .Release.Namespace }}
 {{- $secret := .Values.secrets.secretName }}
@@ -127,7 +121,7 @@ the same value from the store; a changed store value is set on the robot at the 
 {{- $pushAccess := concat $pullAccess (list (list "repository" "push") (list "tag" "create") (list "scan" "read") (list "sbom" "read")) }}
 {{- range $r := $c.robots }}
 {{- $perms := list }}
-{{- range $p := $r.push }}{{ $perms = append $perms (dict "project" (eq $p "appsProject" | ternary $.Values.registry.appsProject $p) "access" $pushAccess) }}{{ end }}
+{{- range $p := $r.push }}{{ $perms = append $perms (dict "project" $p "access" $pushAccess) }}{{ end }}
 {{- range $p := $r.pull }}
 {{- if eq $p "proxyCache" }}
 {{- range $proxy }}{{ $perms = append $perms (dict "project" . "access" $pullAccess) }}{{ end }}

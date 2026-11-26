@@ -37,14 +37,12 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | autoBuild.resyncSchedule | string | `"*/30 * * * *"` |  |
 | autoBuild.secretStore | string | `"workflows"` |  |
 | autoBuild.staleRunSeconds | int | `7200` |  |
-| autoBuild.stateConfigMap | string | `"auto-build-state"` |  |
 | autoBuild.workflowTemplate | string | `"auto-build"` |  |
 | buildWorkflows.enabled | bool | `true` | Language stack build workflows (`buildWorkflows.{stacks,platforms,secrets}`: `go`, `nextjs`, `elixir`, `ruby`, `dockerfile`) and chart deploy workflow (`helmChartWorkflow`). |
 | buildWorkflows.git.allowedRepositoryPrefixes | list | `[]` |  |
 | buildWorkflows.github.agent.namespace | string | `"openchoreo-workflow-plane"` |  |
 | buildWorkflows.github.agent.serviceAccount | string | `"cluster-agent-workflowplane"` |  |
 | buildWorkflows.github.apiURL | string | `""` |  |
-| buildWorkflows.github.appSecret | string | `"build-github-app"` |  |
 | buildWorkflows.github.key | string | `"promotion-gate-github"` | Per-run GitHub App installation tokens (`buildWorkflows.github`) for the run's one repository (ESO `GithubAccessToken` generator; `contents: write` for builds, `read` for charts), no PAT. |
 | buildWorkflows.github.permissions.contents | string | `"write"` |  |
 | buildWorkflows.github.readPermissions.contents | string | `"read"` |  |
@@ -57,7 +55,7 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | buildWorkflows.secrets.harbor.key | string | `"harbor"` |  |
 | buildWorkflows.secrets.harbor.property | string | `"builder-secret"` |  |
 | buildWorkflows.secrets.harbor.robot | string | `"robot$builder"` |  |
-| buildWorkflows.signing | object | `{"transparencyLog":false}` | insecure-ignore-tlog=true`. true: also upload to public Rekor (needs egress to Sigstore). Per installation in installations/<inst>/addons/openchoreo-platform/values.yaml. docs/build-plane.md "Signing". |
+| buildWorkflows.signing.transparencyLog | bool | `false` |  |
 | buildWorkflows.stacks[0].checkEnv.RUN_LINT | string | `"true"` |  |
 | buildWorkflows.stacks[0].checkEnv.RUN_VULNCHECK | string | `"true"` |  |
 | buildWorkflows.stacks[0].checkImage | string | `"docker.io/library/golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9"` |  |
@@ -116,8 +114,6 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | deploymentPipeline.environments | list | `["development","staging","production"]` | `[development, staging, production]`. |
 | deploymentPipeline.name | string | `"default"` |  |
 | helmChartWorkflow.enabled | bool | `true` |  |
-| helmChartWorkflow.name | string | `"helm-chart"` |  |
-| helmChartWorkflow.workflowTemplate | string | `"koorikla-helm-chart"` |  |
 | installation.githubOrg | string | `"https://github.com/Sparky-stack"` |  |
 | openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
 | openchoreo.observability.enabled | bool | `true` |  |
@@ -127,9 +123,11 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | openchoreo.workflowPlane.enabled | bool | `true` |  |
 | previews.botLabel | string | `"preview"` |  |
 | previews.enabled | bool | `false` |  |
+| previews.expiredLabel | string | `"preview-expired"` |  |
 | previews.grantedLabel | string | `"preview-granted"` |  |
 | previews.maxPerTenant | int | `2` |  |
 | previews.skipBots | bool | `true` |  |
+| previews.ttl | string | `"48h"` |  |
 | previews.waitingLabel | string | `"preview-waiting"` |  |
 | promotion.freezeWindows[0].end | string | `"Mon 08:00"` |  |
 | promotion.freezeWindows[0].environments[0] | string | `"production"` |  |
@@ -145,8 +143,6 @@ Renders platform-owned OpenChoreo resources on `mgmt`: the org namespace (`defau
 | promotion.gitOnly.writers[0] | string | `"system:serviceaccount:argocd:argocd-application-controller"` |  |
 | promotion.restrictedGroups[0] | string | `"developers"` |  |
 | promotionGate.apiURL | string | `""` |  |
-| promotionGate.baseBranch | string | `"main"` |  |
-| promotionGate.bindingPath | string | `"deploy/openchoreo/release-bindings/{environment}.yaml"` |  |
 | promotionGate.clientID | string | `"openchoreo-promotion-gate"` |  |
 | promotionGate.clientSecret.key | string | `"promotion-gate"` |  |
 | promotionGate.clientSecret.property | string | `"client-secret"` |  |

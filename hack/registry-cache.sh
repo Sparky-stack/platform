@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 # Host pull-through registry caches for the local installation (docs/dev-environment.md "Registry caches").
 # Usage: hack/registry-cache.sh up|status|clean|k3s-config <out-file>        (task cache:status, task cache:clean)
-#
-# One `registry` container per upstream in installations/local/installation.yaml registry.hostCache.mirrors, named
-# platform-cache-<upstream with dots as dashes>, on docker network kind with a named volume of the same name. They are
-# not part of any k3d cluster, so `task down` keeps them and the next `task up` pulls every image from local disk.
-# k3d mgmt nodes get them as containerd mirrors through `k3d cluster create --registry-config` (k3s-config); CAPD
-# nodes through charts/cluster capi-registries.yaml. containerd falls back to the upstream when a cache is down.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/portable.sh
+source hack/lib/portable.sh
 
 INST_FILE="installations/${INST:-local}/installation.yaml"
 # registry 3.0.0 (distribution), multi-arch index digest (docs/conventions.md invariant 9).
@@ -20,14 +16,11 @@ mirrors() { yq '.registry.hostCache.mirrors[] | .upstream + " " + .remote' "$INS
 # name <upstream>: container + volume name, also the CAPD/k3d mirror host (charts/cluster derives it the same way).
 name() { echo "platform-cache-${1//./-}"; }
 
-# low_disk: true when Docker's data dir is on this host (native Linux) and has less than REGISTRY_CACHE_MIN_FREE_GIB
-# (default 10) free. A full cache is several GiB on top of the node image stores; Docker Desktop VMs are not checked.
+# low_disk: true when Docker's host data dir has less than REGISTRY_CACHE_MIN_FREE_GIB (default 10) free.
 low_disk() {
-  local root free_k
+  local root
   root=$(docker info -f '{{.DockerRootDir}}' 2>/dev/null | tr -d '\r')
-  [[ -d "$root" ]] || return 1
-  free_k=$(df -Pk "$root" | awk 'NR == 2 { print $4 }')
-  (( free_k < ${REGISTRY_CACHE_MIN_FREE_GIB:-10} * 1024 * 1024 ))
+  [[ -d "$root" ]] && (( $(free_gb "$root") < ${REGISTRY_CACHE_MIN_FREE_GIB:-10} ))
 }
 
 cmd_up() {

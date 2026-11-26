@@ -131,13 +131,8 @@ ensure_namespace() {
   NS=$1 yq -n '.apiVersion = "v1" | .kind = "Namespace" | .metadata.name = strenv(NS)' | kapply
 }
 
-# secret_manifest <ns> <name> <spec>... -> v1 Secret on stdout. Specs name where a value is, never the value itself:
-#   key=VAR             data key from shell variable VAR (any scope; `vals[2]` works too)
-#   key=@FILE           data key from the content of FILE
-#   label:key=VAR       metadata label / annotation from shell variable VAR
-#   annotation:key=VAR
-# Values reach yq through its environment or a file it reads itself: never a process argument (`ps` shows argv to every
-# local user). Git Bash safe: no process substitution, no temp files.
+# secret_manifest <ns> <name> <spec>... -> v1 Secret on stdout (key=VAR, key=@FILE, label:k=VAR, annotation:k=VAR).
+# Values reach yq via env/file only (never argv); Git Bash safe (no process substitution or temp files).
 secret_manifest() {
   local __sm_ns=$1 __sm_name=$2 __sm_spec __sm_key __sm_ref __sm_val __sm_path __sm_expr __sm_i=0
   local __sm_filter='.apiVersion = "v1" | .kind = "Secret" | .metadata.name = strenv(NAME) | .metadata.namespace = strenv(NS) | .type = "Opaque"'
@@ -204,12 +199,7 @@ token_warnings() {
 }
 
 # resolve_github_creds <allow gh: 1|0> -> GH_MODE (app|token|gh|none), GH_LOGIN, GH_SECRET, GH_SRC.
-# Read access for Argo CD, least privilege first (docs/forking.md "Credentials"):
-#   GITHUB_APP_ID + GITHUB_APP_INSTALLATION_ID + GITHUB_APP_PRIVATE_KEY_FILE   GitHub App, Contents: read (preferred)
-#   PLATFORM_GITHUB_TOKEN [+ PLATFORM_GITHUB_USER]                             fine-grained PAT, Contents: read
-#   GITHUB_TOKEN [+ GITHUB_USER]                                               same, legacy name (warns)
-#   gh CLI login (local only; broad OAuth token; NO_GH=1 skips it)
-#   none                                                                       public fork: Argo CD needs no creds
+# Precedence: GITHUB_APP_* > PLATFORM_GITHUB_TOKEN > GITHUB_TOKEN > gh CLI (local, NO_GH=1 skips) > none (docs/forking.md).
 resolve_github_creds() {
   GH_MODE=none; GH_LOGIN=""; GH_SECRET=""; GH_SRC=""
   if [[ -n "${GITHUB_APP_ID:-}${GITHUB_APP_INSTALLATION_ID:-}${GITHUB_APP_PRIVATE_KEY_FILE:-}" ]]; then
@@ -329,10 +319,8 @@ save_lab_login() {
   printf '%s=%s\n' "$1" "$2" >> "$file"
 }
 
-# seed_generated_secret <secret> <key>[=<fixed value>|=@strong|=@<length>|=@hex32|=@login:<VAR>] ...: generates each
-# missing property once and keeps existing values on re-runs. @strong satisfies upper/lower/digit/special password
-# policies. @login:<VAR> is a lab login: the value of VAR in lab_logins_file wins; without one, the existing value (or
-# else rand_login) is appended to that file, so the next clean rebuild seeds the same password.
+# seed_generated_secret <secret> <key>[=<fixed>|=@strong|=@<len>|=@hex32|=@login:<VAR>]...: generate missing keys once,
+# keep existing values; @login:<VAR> persists across `task down && up` in lab_logins_file.
 seed_generated_secret() {
   local name=$1 existing; shift
   existing=$(get_secret_yaml platform-secrets "$name") \
@@ -554,25 +542,21 @@ cmd_secrets() {
   fi
 }
 
-# gate_app_enabled -> true|false|"": root app value secrets.githubGateApp.enabled. kubernetes backend: true iff
-# promotion-gate-github is seeded and installation.yaml does not say false; other backends: "" (installation.yaml decides).
+# gate_app_enabled -> true|false|"": kubernetes backend enables secrets.githubGateApp iff promotion-gate-github exists
+# and installation.yaml does not set false; other backends return "" so installation.yaml decides.
 gate_app_enabled() {
   [[ "$BACKEND" == kubernetes ]] || return 0
-  if [[ "$(yq '.secrets.githubGateApp.enabled' "$INST_FILE")" == false ]]; then
-    echo false
-  elif kubectl --context "$CTX" -n platform-secrets get secret promotion-gate-github -o name >/dev/null 2>&1; then
+  if [[ "$(yq '.secrets.githubGateApp.enabled' "$INST_FILE")" != false ]] \
+    && kubectl --context "$CTX" -n platform-secrets get secret promotion-gate-github -o name >/dev/null 2>&1; then
     echo true
   else
     echo false
   fi
 }
 
-# registry_cache_enabled -> true|false: installation.yaml registry.hostCache.enabled unless REGISTRY_CACHE=0. A root app
-# parameter, so CAPD nodes mirror to the host caches (hack/registry-cache.sh) only while they run.
+# registry_cache_enabled -> true|false: installation.yaml registry.hostCache.enabled unless REGISTRY_CACHE=0.
 registry_cache_enabled() {
-  if [[ "${REGISTRY_CACHE:-1}" == 0 ]]; then
-    echo false
-  elif [[ "$(yq '.registry.hostCache.enabled // false' "$INST_FILE")" == true ]]; then
+  if [[ "${REGISTRY_CACHE:-1}" != 0 && "$(yq '.registry.hostCache.enabled // false' "$INST_FILE")" == true ]]; then
     echo true
   else
     echo false

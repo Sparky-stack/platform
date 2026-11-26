@@ -1,10 +1,5 @@
-{{- /*
-OpenSearch for data-plane collectors (Fluent Bit container logs, k8s events): TLS passthrough on the plane's Gateway
-listener `tls` (SNI opensearch.observability.<host>) -> Service opensearch:9200 (OpenSearch's own TLS + basic auth).
-The logs module renders this route only for its operator mode (openSearchCluster); single-node mode needs it here.
-The route targets its own Service opensearch-passthrough (same pods): the logs module's BackendConfigPolicy on Service
-`opensearch` makes kgateway originate TLS to it, which breaks passthrough (TLS inside TLS; clients see no ServerHello).
-*/ -}}
+{{- /* TLSRoute for single-node OpenSearch via dedicated Service opensearch-passthrough (Service `opensearch` has a
+BackendConfigPolicy that originates TLS in kgateway and breaks passthrough). */ -}}
 {{- $gw := index .Values "openchoreo-observability-plane" "gateway" }}
 {{- if and $gw.tlsPassthrough.enabled (index .Values "observability-logs-opensearch" "openSearch" "enabled") }}
 apiVersion: v1

@@ -21,11 +21,7 @@ in values.schema.json.
 {{- fail (printf "openchoreo-observability-plane.gateway.tlsPassthrough.port (%v) must equal openchoreo.observability.tlsPort (%v)" $obs.gateway.tlsPassthrough.port $o.tlsPort) }}
 {{- end }}
 {{- $baseURL := printf "http://%s:%v" $observer $o.httpPort }}
-{{- $found := false }}
-{{- range $obs.observer.extraEnvs }}
-{{- if and (eq .name "OBSERVER_BASE_URL") (eq .value $baseURL) }}{{ $found = true }}{{ end }}
-{{- end }}
-{{- if not $found }}
+{{- if not (has (dict "name" "OBSERVER_BASE_URL" "value" $baseURL) $obs.observer.extraEnvs) }}
 {{- fail (printf "openchoreo-observability-plane.observer.extraEnvs OBSERVER_BASE_URL must be %s" $baseURL) }}
 {{- end }}
 {{- $obsHost := printf "observability.%s" $host }}
@@ -56,12 +52,7 @@ sizes GC threads and thread pools for every host CPU and outgrows the memory lim
 {{- if not $cpu }}
 {{- fail "observability-logs-opensearch.openSearch.resources.limits.cpu is required (the JVM's -XX:ActiveProcessorCount pins to it)" }}
 {{- end }}
-{{- $n := 0 }}
-{{- if hasSuffix "m" $cpu }}
-{{- $n = divf (trimSuffix "m" $cpu | float64) 1000 | ceil | int }}
-{{- else }}
-{{- $n = $cpu | float64 | ceil | int }}
-{{- end }}
+{{- $n := ternary (divf (trimSuffix "m" $cpu | float64) 1000) ($cpu | float64) (hasSuffix "m" $cpu) | ceil | int }}
 {{- $flag := printf "-XX:ActiveProcessorCount=%d" $n }}
 {{- if not (has $flag (splitList " " (toString $os.opensearchJavaOpts))) }}
 {{- fail (printf "observability-logs-opensearch.openSearch.opensearchJavaOpts must contain %s (= resources.limits.cpu %s, rounded up)" $flag $cpu) }}

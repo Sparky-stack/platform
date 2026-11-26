@@ -1,17 +1,4 @@
-{{- /*
-Auto-build webhook on mgmt (values.yaml autoBuildWebhook, docs/build-plane.md "Auto-build"): GitHub App push ->
-Workflow auto-build in workflows-<org ns> (condition: _helpers.tpl ae.autoBuildWebhook; checks: validate.yaml). Objects:
-  ExternalSecret github-webhook   HMAC secret of the GitHub App webhook (store platform)
-  EventSource github              POST <endpoint>: X-Hub-Signature-256 validated (unsigned/forged payloads -> 400);
-                                  never calls GitHub (no token: hooks are configured on the App, not managed here)
-  HTTPRoute auto-build-webhook    exposes exactly POST <endpoint> on the control-plane Gateway's TLS listener
-  Sensor auto-build               push to a branch of a repository of installation.githubOrg -> Workflow from
-                                  WorkflowTemplate auto-build in workflows-<org ns> with that repository's clone URL
-  RBAC + ValidatingAdmissionPolicy the Sensor may create Workflows there, and only that one shape
-The Workflow reconciles the repository's opted-in Components like a poll (addon openchoreo-platform), so a forged,
-replayed or redelivered push can at most cause one extra reconcile, never a build of a commit that is not the branch
-head, and never a second build of the same commit.
-*/ -}}
+{{- /* GitHub App push webhook on mgmt: HMAC-verified EventSource + Sensor + VAP starting WorkflowTemplate auto-build in workflows-<org ns> (docs/build-plane.md "Auto-build"). */ -}}
 {{- if eq (include "ae.autoBuildWebhook" .) "true" }}
 {{- $w := .Values.autoBuildWebhook }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}

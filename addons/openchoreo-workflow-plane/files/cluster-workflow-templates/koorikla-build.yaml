@@ -1,23 +1,6 @@
-# ClusterWorkflowTemplate koorikla-build: the build pipeline behind the per-stack OpenChoreo ClusterWorkflows (addon
-# openchoreo-platform, files/cluster-workflows). Same scripts and toolbox as the ci/ GitHub Actions workflows (parity):
-#
-#   checkout ─┬─ check (stack toolchain image + ci/scripts/<stack>/check.sh) ─┐
-#             └─ scan-fs (scan-fs.sh: Trivy on lockfiles) ──────────────────────────────┴─ build (rootless BuildKit,
-#   multi-arch, push by digest, SLSA provenance) ─┬─ scan-image (scan-image.sh, every platform) ─┬─ sign (sign-image.sh:
-#                                                 └─ sbom (sbom.sh, syft SPDX) ──────────────────┘  cosign signature +
-#   vuln attestation, + SBOM attestation) ── gitops (commit the image ref into the app repo's Workload; Argo CD syncs it,
-#   autoDeploy releases it to the first environment). Git stays the source of truth: nothing writes Workloads into the
-#   cluster.
-#
-# Template = data, scripts = versioned files: every step runs one script from ci/scripts/workflow/ (shipped in the
-# toolbox image, values TOOLBOX_IMAGE, at /opt/koorikla-ci/scripts). This file holds only the DAG, parameters, env,
-# volumes, security context and resources. Steps in another image (check: the stack toolchain; build: BuildKit) run a
-# copy that an init container puts on the pod's /ci volume. docs/build-plane.md explains the pipeline.
-#
-# Rendered verbatim by addons/openchoreo-workflow-plane (templates/cluster-workflow-templates.yaml) except the
-# @@...@@ image placeholders. Argo expressions ({{...}}) are untouched by Helm because the file is never templated.
-# Every pod: non-root (65532), RuntimeDefault seccomp, no privilege escalation, all capabilities dropped (Pod Security
-# restricted) except `build` (rootless BuildKit, see its comment).
+# ClusterWorkflowTemplate koorikla-build: DAG and pod specs for per-stack OpenChoreo ClusterWorkflows (docs/build-plane.md).
+# Every step runs a versioned script from ci/scripts/workflow/ in @@TOOLBOX_IMAGE@@ (copied to /ci for check and build).
+# Rendered verbatim except @@...@@ image placeholders so Argo {{...}} expressions bypass Helm.
 apiVersion: argoproj.io/v1alpha1
 kind: ClusterWorkflowTemplate
 metadata:
@@ -179,12 +162,7 @@ spec:
                 - { name: commit-sha, value: "{{tasks.checkout.outputs.parameters.commit-sha}}" }
                 - { name: short-sha, value: "{{tasks.checkout.outputs.parameters.short-sha}}" }
 
-    # --- source ------------------------------------------------------------------------------------------------------
-    # checkout.sh: shallow fetch of the requested commit (or branch head) and the loop guard (a commit that only touches
-    # the GitOps directory is not rebuilt). Build guards (guards.sh, sourced by checkout.sh and gitops.sh): the run's git
-    # token only ever reaches GIT_ALLOWED_PREFIXES (rendered by addon openchoreo-platform from installation.githubOrg;
-    # the ClusterWorkflow schema checks the same pattern first, this is the second line), refs and paths are checked
-    # against option injection and traversal, and a missing token Secret fails the run with the reason.
+    # --- source (checkout.sh + guards.sh: GIT_ALLOWED_PREFIXES, ref/path validation, GitOps loop guard; docs/build-plane.md)
     - name: checkout
       retryStrategy:
         limit: "3"
@@ -225,10 +203,7 @@ spec:
     # flags) into an env file: toolchain images carry neither the scripts nor jq. check.sh runs the stack check from that
     # copy. Caches live on the run's volume.
     - name: check
-      # Infrastructure retry: a step whose pod was killed under it (a k3s/node restart ends every container with exit
-      # 255 "Unknown", as happened mid-bootstrap when etcd stalled and k3s lost its leader lease) or that hit an Argo
-      # error (pod creation rejected) runs again. A step that failed on its own exit code is not retried. Without this
-      # one restart fails the whole run, and auto-build's missing-digest rebuild is named once per digest.
+      # Retry pods killed by a node/k3s restart (exit 255) or Argo pod-creation error, never a failed step exit code.
       retryStrategy: &infra-retry
         limit: "2"
         retryPolicy: Always
@@ -355,12 +330,7 @@ spec:
       volumes:
         - { name: tmp, emptyDir: {} }
 
-    # --- image build: rootless BuildKit (no Docker daemon, no DinD, not privileged) --------------------------------
-    # Justification for the two relaxations below (Pod Security baseline/restricted reject them): rootless BuildKit
-    # creates user namespaces (rootlesskit) and mounts inside them, which the RuntimeDefault seccomp and AppArmor
-    # profiles block. The container still runs as uid 1000 without privilege escalation or added capabilities, and
-    # --oci-worker-no-process-sandbox avoids needing a PID namespace. Per-arch images: --opt platform builds every
-    # platform (cross-compiling Dockerfiles need no emulation; RUN steps of a foreign arch need QEMU binfmt on the node).
+    # --- image build: rootless BuildKit (uid 1000; Unconfined seccomp/AppArmor + SETUID/SETGID for rootlesskit userns; docs/build-plane.md)
     - name: build
       retryStrategy: *infra-retry
       inputs:
@@ -535,13 +505,7 @@ spec:
       volumes:
         - { name: tmp, emptyDir: {} }
 
-    # --- GitOps hand-off ---------------------------------------------------------------------------------------------
-    # gitops.sh (build guards again, see checkout): commit the signed image ref (tag + digest) and source commit into the
-    # app repo's Workload manifest (only a real Workload under deploy/openchoreo/, no symlink out of it). Argo CD
-    # syncs it (Application <project>-<app>, charts/tenant); with autoDeploy the Component controller cuts a
-    # ComponentRelease and binds the first pipeline environment. The commit goes through the GitHub contents API with
-    # the run's App installation token, so GitHub authors, commits and signs it as the App's bot (no git identity, no
-    # push credential); `sha` makes it a compare-and-swap, a concurrent commit (409) re-reads the branch and retries.
+    # --- GitOps hand-off (gitops.sh: CAS commit of the signed image ref via the GitHub contents API; docs/build-plane.md)
     - name: gitops
       inputs:
         parameters:
