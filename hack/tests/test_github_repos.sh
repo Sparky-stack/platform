@@ -227,5 +227,9 @@ assert_eq "$(yq ea '[select(.kind == "Team")] | length' "$teams_out")" "4" "loca
 assert_eq "$(yq ea '[select(.kind == "Team") | select(.spec.forProvider.privacy != "closed")] | length' "$teams_out")" "0" "all Teams have privacy closed"
 assert_eq "$(yq ea '[select(.kind == "Team") | select(.spec.managementPolicies[] == "Delete")] | length' "$teams_out")" "0" "Team excludes Delete policy"
 assert_eq "$(yq ea '[select(.kind == "TeamRepository")] | length' "$teams_out")" "8" "local renders 8 TeamRepository objects"
+assert_eq "$(yq ea '[select(.kind == "Team") | select(.metadata.annotations["crossplane.io/external-name"] == null)] | length' "$teams_out")" "0" \
+  "local Teams carry their GitHub id (external-name): a rebuilt Crossplane adopts them instead of a 422 create"
+assert_eq "$(yq ea 'select(.kind == "TeamRepository" and .metadata.name == "qa-hello-world") | .metadata.annotations["crossplane.io/external-name"]' "$teams_out")" \
+  "20876273:hello-world" "TeamRepository external-name is <team id>:<repo>"
 assert_eq "$(yq ea '[select(.kind == "TeamRepository") | select(.spec.managementPolicies[] == "Delete")] | length' "$teams_out")" "0" "TeamRepository excludes Delete policy"
 finish
