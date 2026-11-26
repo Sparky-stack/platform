@@ -114,7 +114,7 @@ rules:
     verbs: [create]
   - apiGroups: [""]
     resources: [configmaps]
-    resourceNames: [{{ $a.stateConfigMap }}]
+    resourceNames: [{{ $name }}-state]
     verbs: [get, update]
   # Argo's executor (init/wait) reports step results with the pod's token.
   - apiGroups: [argoproj.io]
@@ -290,7 +290,7 @@ spec:
         env:
           - { name: ORG_NAMESPACE, value: {{ $org | quote }} }
           - { name: STATE_NAMESPACE, value: {{ $ns | quote }} }
-          - { name: STATE_CONFIGMAP, value: {{ $a.stateConfigMap | quote }} }
+          - { name: STATE_CONFIGMAP, value: {{ printf "%s-state" $name | quote }} }
           - { name: TOKEN_FILE, value: /var/run/secrets/auto-build/token }
           - { name: ALLOWED_PREFIXES, value: {{ include "build.gitPrefixes" . | quote }} }
           - { name: MAX_RUNS, value: {{ $a.maxRunsPerPass | toString | quote }} }
@@ -310,8 +310,8 @@ spec:
           - { name: PREVIEW_TOKEN_FILE, value: /var/run/secrets/auto-build-previews/token }
           - { name: PREVIEW_OPT_IN_ANNOTATION, value: {{ $pa.optIn.annotation | quote }} }
           - { name: PREVIEW_OPT_IN_VALUE, value: {{ $pa.optIn.value | quote }} }
-          - { name: PREVIEW_EXPIRED_LABEL, value: {{ $pv.expiredLabel | default "preview-expired" | quote }} }
-          - { name: PREVIEW_TTL, value: {{ $pv.ttl | default "48h" | quote }} }
+          - { name: PREVIEW_EXPIRED_LABEL, value: {{ $pv.expiredLabel | quote }} }
+          - { name: PREVIEW_TTL, value: {{ $pv.ttl | quote }} }
           # the cap Kyverno platform-preview-cap enforces (same installation.yaml key): the pass grants at most this many
           - { name: PREVIEW_MAX_PER_TENANT, value: {{ $pv.maxPerTenant | toString | quote }} }
           - { name: PREVIEW_GRANTED_LABEL, value: {{ $pv.grantedLabel | quote }} }

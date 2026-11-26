@@ -1,12 +1,5 @@
-# Platform ClusterResourceType postgresql (#70, docs/data-services.md "PostgreSQL from OpenChoreo"): renders the
-# platform's PostgreSQL API (platform.koorikla.io/v1alpha1 PostgreSQL, a namespaced Crossplane v2 XR of addon
-# crossplane) into the cell namespace. Never a raw CNPG Cluster: Kyverno denies those to everyone but the platform, and
-# the XR picks the backend of the data plane's cluster (CloudNativePG locally, RDS / Cloud SQL / Flexible Server in the
-# cloud). The connection Secret <name>-app (host, port, dbname, username, password, uri) is created on the data plane
-# by the backend; only its name and keys reach the control plane.
-# Only on data planes that run addon crossplane: OpenChoreo 1.3.3 gives ResourceTypes no validations and no
-# dataplane.annotations, so the check is the mgmt admission policy platform-data-plane-capabilities (addon
-# kyverno-policies) on ResourceReleaseBindings, keyed on the annotation below.
+# Platform ClusterResourceType postgresql (docs/data-services.md#postgresql-from-openchoreo): renders a Crossplane
+# PostgreSQL XR into the cell and exposes connection Secret <name>-app; requires addon crossplane on the data plane.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterResourceType
 metadata:

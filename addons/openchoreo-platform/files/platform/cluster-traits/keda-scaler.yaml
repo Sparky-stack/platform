@@ -1,9 +1,5 @@
-# Platform ClusterTrait keda-scaler (#70, docs/data-services.md "KEDA and OpenChoreo workloads"): a KEDA ScaledObject
-# for the component's Deployment. Like upstream's horizontal-pod-autoscaler trait it removes /spec/replicas from the
-# rendered Deployment, so the cluster agent's server-side apply stops owning the field and KEDA's HPA keeps it.
-# Only on data planes that run addon keda: the ClusterDataPlane carries the fleet file's addon opt-ins as annotations
-# (charts/cluster), OpenChoreo 1.3.3 exposes them to CEL as dataplane.annotations, and the pre-render validation fails
-# the ReleaseBinding elsewhere with a message instead of an apply error.
+# Platform ClusterTrait keda-scaler (docs/data-services.md#keda-and-openchoreo-workloads): renders a KEDA ScaledObject
+# and removes /spec/replicas from the Deployment; preRenderValidation requires addon keda on the data plane.
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterTrait
 metadata:

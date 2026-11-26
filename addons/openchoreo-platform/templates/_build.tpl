@@ -67,7 +67,7 @@ gitops.enabled false (e.g. PR previews) gets readPermissions instead (nothing to
 {{- $perms := .permissions }}
 {{- with .root }}
 {{- $g := .Values.buildWorkflows.github }}
-{{- $app := $g.appSecret }}
+{{- $app := "build-github-app" }}
 {{- $s := .Values.buildWorkflows.secrets }}
 {{- $host := include "build.registryHost" . }}
 {{- $harbor := eq (toString .Values.registry.type) "harbor" }}
