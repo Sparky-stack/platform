@@ -66,7 +66,8 @@ extract_images() {
         if [[ -n "$b" ]]; then yq -n -N "\"$b\" | @base64d | from_yaml | $keys" 2>/dev/null || true; fi
       done
     fi
-  } | tr -d '\r' | grep -E '^[a-z0-9]' || true
+  # Exclude static UI asset paths (e.g. Thunder flow button icons: assets/images/icons/github.svg).
+  } | tr -d '\r' | grep -E '^[a-z0-9]' | grep -Ev '\.(svg|png|jpe?g|gif|webp|ico)$' || true
   if grep -q 'IMAGE' "$f"; then
     yq -N '(.. | select(tag == "!!map" and has("name") and has("value"))
         | select((.name | tag) == "!!str" and (.name | test("IMAGE")) and (.value | tag) == "!!str") | .value),
