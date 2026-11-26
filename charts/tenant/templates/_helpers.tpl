@@ -38,7 +38,7 @@ around the end of the week. Cron day of week: Sun=0 .. Sat=6.
 {{- $end := include "tenant.minuteOfWeek" .end | atoi -}}
 {{- $dur := mod (add (sub $end $start) 10080) 10080 -}}
 {{- $parts := regexSplit "[ :]" .start -1 -}}
-{{- $cronDay := index (dict "Sun" 0 "Mon" 1 "Tue" 2 "Wed" 3 "Thu" 4 "Fri" 5 "Sat" 6) (index $parts 0) -}}
+{{- $cronDay := mod (add (div $start 1440) 1) 7 -}}
 schedule: {{ printf "%d %d * * %d" (atoi (index $parts 2)) (atoi (index $parts 1)) $cronDay | quote }}
 duration: {{ if eq (mod $dur 60) 0 }}{{ printf "%dh" (div $dur 60) }}{{ else }}{{ printf "%dh%dm" (div $dur 60) (mod $dur 60) }}{{ end }}
 {{- end }}
