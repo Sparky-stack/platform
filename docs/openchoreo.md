@@ -181,6 +181,7 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 | Store (ClusterSecretStore) | Used for |
 |---|---|
 | `platform`, key `openchoreo` | properties `thunder-admin-password`, `admin-user-password`, `developer-user-password`, `backstage-client-secret`, `backstage-backend-secret`, `service-mcp-client-secret` (alphanumeric; seeded by `task secrets` locally, the three passwords from the [lab logins file](dev-environment.md#lab-logins); created by the operator in aws/vault) |
+| `platform`, key `github-login` (optional) | properties `github-client-id`, `github-client-secret`, `thunder-client-secret` for [Sign in with GitHub](#sign-in-with-github); seeded by `task secrets` when `~/.config/koorikla-platform/github-login.{json,secret}` exist (skipped otherwise) |
 | `mgmt-fleet` (ns fleet, read-only) | `<name>-agent-tls` -> CRS payload `<name>-openchoreo-agent` (ExternalSecret in ns fleet) |
 | `mgmt-openchoreo` (ns openchoreo-control-plane, read-only) | `cluster-gateway-ca` (`ca.crt` only) -> CRS payload `openchoreo-gateway-ca` (ExternalSecret in ns **fleet**) |
 | `default` (workload clusters) | `ClusterDataPlane.spec.secretStoreRef`; platform secrets on the data plane. Refuses tenant (cell) namespaces when `secrets.tenantStores.enabled` |
@@ -189,6 +190,14 @@ curl --resolve development-default.dev1.apps.localhost:19080:$NODE_IP \
 Thunder users: `admin@openchoreo.dev` (group `platform-engineers` -> OpenChoreo role `admin`) and `developer@openchoreo.dev`
 (group `developers` -> read-only org-wide; `developer` in non-prod `demo`), passwords from the `openchoreo` key. Thunder console: user `admin`,
 `thunder-admin-password`.
+
+### Sign in with GitHub
+
+When enabled (`secrets.githubLogin.enabled: true` on the root app, plus `mgmt.addons.dex: true` and `githubLogin.enabled: true` on `addons/thunder`), the Thunder login screen for Backstage and `occ` adds **Continue with GitHub** next to username/password:
+
+1. **GitHub OAuth App -> Dex (`addons/dex`)**: Dex v2.46.1 (isolated single-replica memory-backed addon on `http://dex.openchoreo.localhost:8080`, reached in-cluster via the `*.openchoreo.localhost` CoreDNS rewrite) authenticates with GitHub (`read:org`, `teamNameField: slug`, `useLoginAsID: true`) and emits `groups: ["<org>:<team>", ...]`. Dex is temporary until `thunder-id/thunderid#7069` adds native GitHub teams claims.
+2. **Dex -> Thunder (`addons/thunder`)**: Thunder loads the OIDC `connection` declaratively (`identity_provider: composite`, immutable in Thunder Console) with `authorizationMapping.rules` mapping each `<org>:<team>` in `groups` (`valueType: array`, `operator: includes`) to the matching Thunder group UUID, `sync.groupsAndRoles: override_all` (team additions and removals take effect on the next login), and JIT provisioning (`allowAuthenticationWithoutLocalUser: true` + `ProvisioningExecutor`, user type `openchoreo-user`).
+3. **Thunder -> OpenChoreo**: OpenChoreo still trusts one issuer (Thunder) and evaluates the existing `groups` bindings ([Teams and roles](github-repos.md#teams-and-roles)). Demo password users stay active as a local fallback; if `~/.config/koorikla-platform/github-login.{json,secret}` are absent, `task secrets` skips seeding and the stack runs with demo users only. Fork setup: [forking.md](forking.md#sign-in-with-github-optional).
 
 ### Developer access is per project
 

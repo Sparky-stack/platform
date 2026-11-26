@@ -137,6 +137,8 @@ without `Delete`) and its `TeamRepository` permissions.
 | `qa` | Org-wide read-only (`cluster-reader` + `namespace-reader`) | `hello-world`: `triage`, `platform`: `pull` |
 | `release-managers` | Org-wide read-only; production promotion via PR approval (`CODEOWNERS`) | `hello-world`: `maintain`, `platform`: `pull` |
 
+At console/CLI login, Dex reads the signed-in user's GitHub team slugs and Thunder maps `<org>:<team>` onto the matching Thunder group with `override_all` sync, so adding or removing a user in GitHub updates OpenChoreo access on the next login ([Sign in with GitHub](openchoreo.md#sign-in-with-github)). Every OpenChoreo `groups` binding is guarded against Thunder's mapping rules by `hack/tests/test_gitops_contracts.sh`.
+
 ## Not covered yet
 
 Actions variables, GitHub environments with required reviewers, and App installation membership (the provider's

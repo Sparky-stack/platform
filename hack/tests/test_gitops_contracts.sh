@@ -548,4 +548,38 @@ agent="$(yq '.buildWorkflows.github.agent.namespace + "/" + .buildWorkflows.gith
 assert_eq "$(A="$agent" yq 'select(.kind == "ServiceAccount" and (.metadata.namespace + "/" + .metadata.name) == strenv(A)) | .metadata.name' \
   "$TMP/wp-all.yaml")" "${agent#*/}" "buildWorkflows.github.agent is the workflow-plane cluster agent's ServiceAccount"
 
+# 19. Sign in with GitHub (Dex + Thunder 1.1.1 authorizationMapping): every OpenChoreo authz group (claim: groups)
+#     has a Thunder authorizationMapping rule (<org>:<team> -> that group's UUID) with sync.groupsAndRoles: override_all,
+#     and Dex + Thunder agree on issuer, org, clientId, redirectUri and store key.
+dex_values="$ROOT/addons/dex/values.yaml"
+oc_cp_values="$ROOT/addons/openchoreo-control-plane/values.yaml"
+helm template thunder "$ROOT/addons/thunder" --namespace thunder \
+  --set githubLogin.enabled=true --set secrets.githubLogin.enabled=true > "$TMP/thunder-gh.yaml"
+yq -N 'select(.kind == "ConfigMap" and .metadata.name == "thunder-github-login") | .data["github-dex-connection.yaml"]' \
+  "$TMP/thunder-gh.yaml" > "$TMP/thunder-gh-conn.yaml"
+yq -N 'select(.kind == "ConfigMap" and .metadata.name == "thunder-bootstrap") | .data["50-user-schema-and-users.yaml"]' \
+  "$TMP/thunder-gh.yaml" > "$TMP/thunder-users.yaml"
+gh_org=$(yq '.githubLogin.org' "$thunder_values")
+assert_eq "$(yq '.dex.config.connectors[0].config.orgs[0].name' "$dex_values")" "$gh_org" \
+  "github-login: Dex GitHub org == Thunder githubLogin.org"
+assert_eq "$(yq '.dex.config.issuer' "$dex_values")" "$(yq '.githubLogin.issuer' "$thunder_values")" \
+  "github-login: Dex issuer == Thunder githubLogin.issuer"
+assert_eq "$(yq '.dex.config.staticClients[0].id' "$dex_values")" "$(yq '.githubLogin.clientId' "$thunder_values")" \
+  "github-login: Dex staticClient id == Thunder githubLogin.clientId"
+assert_eq "$(yq '.dex.config.staticClients[0].redirectURIs[0]' "$dex_values")" "$(yq '.redirectUri' "$TMP/thunder-gh-conn.yaml")" \
+  "github-login: Dex staticClient redirectURI == Thunder connection redirectUri"
+assert_eq "$(yq '.secrets.remoteKey' "$dex_values")" "$(yq '.githubLogin.clientSecret.remoteKey' "$thunder_values")" \
+  "github-login: Dex and Thunder read the same store key (github-login)"
+assert_eq "$(yq '.attributeConfiguration.sync.groupsAndRoles' "$TMP/thunder-gh-conn.yaml")" "override_all" \
+  "github-login: Thunder connection syncs groupsAndRoles with override_all"
+assert_eq "$(yq '.attributeConfiguration.authorizationMapping.rules[0].valueType' "$TMP/thunder-gh-conn.yaml")" "array" \
+  "github-login: Thunder authorizationMapping evaluates groups claim as array"
+while IFS= read -r grp; do
+  [[ -n "$grp" ]] || continue
+  gid=$(G="$grp" yq 'select(.resource_type == "group" and .name == strenv(G)) | .id' "$TMP/thunder-users.yaml" | tr -d '\r')
+  assert_match "$gid" '^[0-9a-f-]+$' "github-login: OpenChoreo authz group '$grp' exists in Thunder bootstrap"
+  rule_target=$(V="$gh_org:$grp" yq '.attributeConfiguration.authorizationMapping.rules[0].values[] | select(.operator == "includes" and .value == strenv(V)) | .targets[0] | .type + ":" + .id' "$TMP/thunder-gh-conn.yaml" | tr -d '\r')
+  assert_eq "$rule_target" "group:$gid" "github-login: OpenChoreo authz group '$grp' has authorizationMapping rule $gh_org:$grp -> group:$gid"
+done < <(yq '.openchoreo-control-plane.openchoreoApi.config.security.authorization.bootstrap.mappings[] | select(.entitlement.claim == "groups") | .entitlement.value' "$oc_cp_values" | tr -d '\r' | sort -u)
+
 finish
