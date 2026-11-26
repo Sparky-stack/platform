@@ -3,6 +3,7 @@
 # Job, CronJob or reconcile script; the Harbor provider runs on mgmt only (addon crossplane values/role-mgmt.yaml) and
 # activates exactly the kinds addon harbor renders. Reads every render (RENDERED_DIR: hack/test.sh's, or hack/render.sh's
 # when run on its own).
+# scoped-ci full-if: upjet-harbor|harbor\.m\.upbound\.io
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 

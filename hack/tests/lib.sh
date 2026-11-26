@@ -125,6 +125,24 @@ kc_valid() {
   fi
 }
 
+assert_kc_valid() { assert_eq "$(kc_valid "$1")" yes "$2 passes kubeconform -strict"; }
+
+# assert_kyverno_not_excluded <namespace>: guard that neither Kyverno nor kyverno-policies excludes a workload-policed ns.
+assert_kyverno_not_excluded() {
+  local ns=$1 f
+  for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do
+    assert_eq "$(grep -cE "^ *- $ns( |$)" "$ROOT/$f" || true)" 0 "$ns not excluded from Kyverno ($f)"
+  done
+}
+
+# assert_pss_baseline <manifest> <yq-kinds-expr> <label>: check rendered workloads against Pod Security baseline.
+assert_pss_baseline() {
+  local file=$1 kinds=$2 label=$3 hits
+  hits=$(yq "select($kinds)" "$file" 2>/dev/null \
+    | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
+  assert_eq "$hits" "" "$label"
+}
+
 # --- renders: reuse hack/test.sh's (RENDERED_DIR) when present ------------------------------------------------------
 
 # need_renders: RENDERED_DIR = the renders of this hack/test.sh run (only the changed charts' in a scoped run); a suite
