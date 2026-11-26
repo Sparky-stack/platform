@@ -10,23 +10,7 @@ Isolation is enforced three times: store default excludes tenant namespaces (sto
 {{- $cluster := (.Values.cluster).name }}
 {{- /* In tenant namespaces every store reference must be SecretStore storeName: a namespaced SecretStore ref always
        resolves in the object's own namespace. Never a ClusterSecretStore, a ClusterGenerator or another store. */}}
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: platform-tenant-externalsecret-store
-  labels:
-    app.kubernetes.io/part-of: tenant-secrets
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    namespaceSelector:
-      matchExpressions:
-        - { key: {{ $t.tenantLabel }}, operator: Exists }
-    resourceRules:
-      - apiGroups: [external-secrets.io]
-        apiVersions: ["*"]
-        operations: [CREATE, UPDATE]
-        resources: [externalsecrets]
+{{- include "secret-stores.tenantVapHeader" (dict "name" "platform-tenant-externalsecret-store" "tenantLabel" $t.tenantLabel "resource" "externalsecrets") }}
   validations:
     - expression: {{ printf "!has(object.spec.secretStoreRef) || ((!has(object.spec.secretStoreRef.kind) || object.spec.secretStoreRef.kind == 'SecretStore') && object.spec.secretStoreRef.name == '%s')" $t.storeName | quote }}
       message: {{ printf "tenant namespaces may only use their own SecretStore %s (never a ClusterSecretStore or another store)" $t.storeName | quote }}
@@ -36,45 +20,13 @@ spec:
       message: {{ printf "dataFrom[].sourceRef: tenant namespaces may only use SecretStore %s and no ClusterGenerator" $t.storeName | quote }}
 ---
 {{- /* Same rule for PushSecrets; a label selector could match a store the tenant does not own. */}}
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: platform-tenant-pushsecret-store
-  labels:
-    app.kubernetes.io/part-of: tenant-secrets
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    namespaceSelector:
-      matchExpressions:
-        - { key: {{ $t.tenantLabel }}, operator: Exists }
-    resourceRules:
-      - apiGroups: [external-secrets.io]
-        apiVersions: ["*"]
-        operations: [CREATE, UPDATE]
-        resources: [pushsecrets]
+{{- include "secret-stores.tenantVapHeader" (dict "name" "platform-tenant-pushsecret-store" "tenantLabel" $t.tenantLabel "resource" "pushsecrets") }}
   validations:
     - expression: {{ printf "!has(object.spec.secretStoreRefs) || object.spec.secretStoreRefs.all(r, !has(r.labelSelector) && (!has(r.kind) || r.kind == 'SecretStore') && has(r.name) && r.name == '%s')" $t.storeName | quote }}
       message: {{ printf "tenant namespaces may only push to their own SecretStore %s (no ClusterSecretStore, no label selector)" $t.storeName | quote }}
 ---
 {{- /* Tenants cannot create or change SecretStores in their namespaces: only the generator below (storeWriters). */}}
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: platform-tenant-secretstores-platform-owned
-  labels:
-    app.kubernetes.io/part-of: tenant-secrets
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    namespaceSelector:
-      matchExpressions:
-        - { key: {{ $t.tenantLabel }}, operator: Exists }
-    resourceRules:
-      - apiGroups: [external-secrets.io]
-        apiVersions: ["*"]
-        operations: [CREATE, UPDATE]
-        resources: [secretstores]
+{{- include "secret-stores.tenantVapHeader" (dict "name" "platform-tenant-secretstores-platform-owned" "tenantLabel" $t.tenantLabel "resource" "secretstores") }}
   validations:
     - expression: {{ printf "request.userInfo.username in %s" (toJson $t.storeWriters) | quote }}
       message: "SecretStores in tenant namespaces are platform-rendered (Kyverno GeneratingPolicy platform-tenant-secret-store)"
