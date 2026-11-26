@@ -58,22 +58,7 @@ spec:
 {{ include "byo.pushSecret" (dict "root" . "name" (printf "%s-push-falco-escalation" $name) "source" (printf "%s-falco-escalation" $name)
       "namespace" $ns "remoteName" "falcosidekick-escalation") }}
 {{- else }}
-apiVersion: addons.cluster.x-k8s.io/v1beta2
-kind: ClusterResourceSet
-metadata:
-  name: {{ $name }}-falco-escalation
-  namespace: fleet
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-    argocd.argoproj.io/sync-wave: "1"
-spec:
-  strategy: Reconcile
-  clusterSelector:
-    matchLabels:
-      platform.koorikla.io/name: {{ $name }}
-  resources:
-    - kind: Secret
-      name: {{ $name }}-falco-escalation
+{{ include "capi.clusterResourceSet" (dict "cluster" $name "name" (printf "%s-falco-escalation" $name) "skipDryRun" true "resources" (list (dict "kind" "Secret" "name" (printf "%s-falco-escalation" $name)))) }}
 {{- end }}
 {{- end }}
 {{- end }}
