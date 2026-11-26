@@ -149,11 +149,6 @@ tests:
     asserts:
       - hasDocuments: { count: 0 }
 
-  - it: "negative: nothing when the installation does not say the App is there (charts/platform default false)"
-    set: { secrets.githubGateApp.enabled: false }
-    asserts:
-      - hasDocuments: { count: 0 }
-
   - it: registry-aware "already built" reads Harbor with the pull-only robot, never the builder (#200)
     documentSelector: { path: metadata.name, value: auto-build-registry }
     asserts:

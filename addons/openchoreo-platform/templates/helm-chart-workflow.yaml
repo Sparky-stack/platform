@@ -7,7 +7,7 @@ package, push to <registry>/charts/<chart> (OCI) and cosign-sign with the platfo
 apiVersion: openchoreo.dev/v1alpha1
 kind: ClusterWorkflow
 metadata:
-  name: {{ .Values.helmChartWorkflow.name }}
+  name: helm-chart
   labels:
     app.kubernetes.io/part-of: openchoreo
   annotations:
@@ -57,7 +57,7 @@ spec:
       executor:
         serviceAccountName: workflow-sa
       workflowTemplateRef:
-        name: {{ .Values.helmChartWorkflow.workflowTemplate }}
+        name: koorikla-helm-chart
         clusterScope: true
       arguments:
         parameters:
