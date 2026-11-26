@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 # Git hook commands behind prek.toml (task hooks:install / task hooks:run; docs/dev-environment.md "Git hooks").
-# prek passes the matching files: the staged ones on `git commit`, every tracked one with --all-files (CI).
-#   hack/hooks.sh gitleaks <file>...     secrets in the staged (index) content of the files
-#   hack/hooks.sh py-compile <file>...   Python syntax (python -m py_compile without writing .pyc files)
-#   hack/hooks.sh chart-lock <file>...   Chart.lock in sync with Chart.yaml for the charts the files belong to
-#   hack/hooks.sh helm-docs <file>...    chart README.md in sync with helm-docs for the charts the files belong to
-#   hack/hooks.sh reference-docs         docs/reference/ in sync with the XRDs and OpenChoreo types (gen-reference.py)
-#   hack/hooks.sh charts <file>...       helm lint + template + kubeconform (+ helm unittest) for those charts only,
-#                                        via `CHARTS=... hack/test.sh` (same rendering as `task test`)
-#   hack/hooks.sh commit-msg <msg-file>  warn (never fail) when the subject is not a conventional commit
+# Subcommands: gitleaks, py-compile, chart-lock, helm-docs, reference-docs, charts, commit-msg, chart-dirs.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -72,12 +64,6 @@ cmd_chart_lock() {
     if grep -q '^dependencies:' "$d/Chart.yaml"; then locked+=("$d"); fi
   done
   (( ${#locked[@]} > 0 )) || return 0
-  if [[ ! -f hack/lib/chartlock.py ]]; then
-    # The offline Chart.lock digest check (helm's own hash) lands with hack/lib/chartlock.py; until then `task test`
-    # catches a stale lock on a clean checkout (helm dependency build refuses it).
-    echo "SKIP chart-lock: hack/lib/chartlock.py not on this branch yet (${#locked[@]} chart(s) with dependencies)"
-    return 0
-  fi
   py hack/lib/chartlock.py "${locked[@]}"
 }
 
