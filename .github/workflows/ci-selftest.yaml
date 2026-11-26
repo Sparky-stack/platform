@@ -7,7 +7,7 @@ name: selftest
 on:
   workflow_dispatch:
   pull_request:
-    paths:
+    paths: &paths
       - '.github/workflows/app-*.yaml'
       - '.github/workflows/ci-selftest.yaml'
       - 'ci/fixtures/**'
@@ -18,15 +18,7 @@ on:
       - '.release-please-manifest.json'
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/app-*.yaml'
-      - '.github/workflows/ci-selftest.yaml'
-      - 'ci/fixtures/**'
-      - 'ci/scripts/**'
-      - 'ci/tests/**'
-      - '.github/workflows/release.yaml'
-      - 'release-please-config.json'
-      - '.release-please-manifest.json'
+    paths: *paths
 
 concurrency:
   group: selftest-${{ github.ref }}

@@ -104,7 +104,7 @@ jobs:
         id: detect
         env:
           WORKDIR: ${{ inputs.working_directory }}
-        run: bash "$CI_SCRIPTS/nextjs/detect.sh"
+        run: bash "$CI_SCRIPTS/node/detect.sh"
 
       - name: Set up pnpm
         if: steps.detect.outputs.pm == 'pnpm'

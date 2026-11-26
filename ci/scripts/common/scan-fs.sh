@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Trivy filesystem scan of dependency lockfiles (go.sum, mix.lock,
-# Gemfile.lock, package-lock.json, pnpm-lock.yaml, yarn.lock, uv.lock,
-# Cargo.lock, ...), or of a build-generated SBOM (SBOM_FILE, e.g. the
-# CycloneDX BOM of a Maven/Gradle build: exact resolved dependencies).
+# Trivy scan of dependency lockfiles (SCAN_PATH) or a build-generated SBOM (SBOM_FILE).
 #
 # Env in:
 #   SCAN_PATH        directory to scan, default .
@@ -59,11 +56,8 @@ trivy convert --quiet --format sarif --output "${out}/trivy-fs.sarif" "${out}/tr
 emit_output fs_sarif "${out}/trivy-fs.sarif"
 
 targets="$(jq -r '[.Results[]?.Target] | join(", ")' "${out}/trivy-fs.json")"
-n="$(jq --arg sev "${fail_sev}" '
-      ($sev | split(",")) as $s
-      | [.Results[]?.Vulnerabilities[]? | select(.Severity as $v | $s | index($v))]
-      | length' "${out}/trivy-fs.json")"
-summary="$(jq -r '[.Results[]?.Vulnerabilities[]?.Severity] | group_by(.) | map("\(.[0])=\(length)") | join(" ")' "${out}/trivy-fs.json")"
+n="$(trivy_count_sev "${out}/trivy-fs.json" "${fail_sev}")"
+summary="$(trivy_summary "${out}/trivy-fs.json")"
 log "targets: ${targets:-none}; ${summary:-no vulnerabilities}; failing on ${fail_sev}: ${n}"
 step_summary "- Trivy fs \`${path}\` (${targets:-no lockfiles}): ${summary:-no vulnerabilities}; ${n} at ${fail_sev}"
 
