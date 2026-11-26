@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
-# Render every chart the way Argo CD would, into one directory that hack/test.sh validates and every suite in
-# hack/tests/ reads as RENDERED_DIR (hack/tests/lib.sh need_renders):
-#   platform-standalone.yaml, platform-<inst>.yaml         charts/platform, standalone + per installation
-#   cluster-<inst>-<cluster>.yaml                          charts/cluster (scope cluster) per installation x cluster file
-#   addon-<addon>-standalone.yaml                          every addon on its own (catalog server/label parameters)
-#   addon-<addon>-<inst>-<mgmt|cluster>.yaml               every addon layered like its ApplicationSet, on every
-#                                                          cluster it runs on (hack/lib/addons.sh)
-# Usage: hack/render.sh <out dir> [chart dir...]   chart dirs (addons/x, or a catalog `path` chart) limit the addon
-#        renders; charts/platform and charts/cluster always render (addons read them). Addons render JOBS at a time
-#        (default: CPU count). Chart dependencies are built first (hack/deps.sh, a no-op when present).
+# Render every chart the way Argo CD would into <out dir> (read by hack/test.sh and hack/tests/ via RENDERED_DIR).
+# Usage: hack/render.sh <out dir> [chart dir...]   (charts/platform and charts/cluster always render; JOBS=CPU count)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/portable.sh
@@ -16,14 +8,8 @@ source hack/lib/portable.sh
 # shellcheck source=lib/addons.sh
 source hack/lib/addons.sh
 
-MGMT_SERVER=https://kubernetes.default.svc   # = charts/platform cluster-mgmt.yaml
-# Opt-in mgmt addons (catalog default false) rendered with every installation's values even where not switched on, so
-# a values change cannot break them unnoticed. external-dns has its own suite (hack/tests/test_external_dns.sh: it
-# must fail where dns.provider is none).
+# Opt-in mgmt addons (catalog default false) rendered with every installation's values so values changes cannot break them.
 FORCED_OPT_IN="agentgateway finops-opencost"
-
-# runs_on <provider> <catalog providers, one per line>: an empty list means every provider.
-runs_on() { [[ -z "$2" ]] || grep -qx "$1" <<<"$2"; }
 
 # render_addon <chart dir>: the standalone render (addons/* only: a catalog `path` chart such as charts/cluster in
 # scope fleet has its own) and one per installation x cluster the addon runs on. Reads $OUT, writes cluster labels and
@@ -63,11 +49,11 @@ render_addon() {
       m_toggle=$(yq ".mgmt.addons[\"$addon\"]" "$y")   # no // : yq treats false as empty
       if [[ "$m_toggle" == true ]] || { [[ "$m_toggle" != false && "$addon_default" != false ]]; } \
         || { [[ "$m_toggle" != false ]] && [[ " $FORCED_OPT_IN " == *" $addon "* ]]; }; then
-        if runs_on "$m_prov" "$providers"; then
+        if addon_runs_on "$m_prov" "$providers"; then
           labels=$WORK/labels-$inst-mgmt.yaml   # mgmt's cluster labels (catalog clusterLabelParameters, label-selected files)
           read_lines vargs addon_helm_args "$addon" "$inst_dir" "$WORK/platform-$inst.yaml" mgmt "$m_name" "$m_prov" \
             "$(yq '.mgmt.environment // "mgmt"' "$y")" "$(yq '.mgmt.region // "local"' "$y")" \
-            "$(yq '.mgmt.cni // "flannel"' "$y")" "$MGMT_SERVER" "$labels"
+            "$(yq '.mgmt.cni // "flannel"' "$y")" "$ADDONS_MGMT_SERVER" "$labels"
           helm template "$release" "$dir" --namespace "$ns" "${vargs[@]}" > "$OUT/addon-$addon-$inst-mgmt.yaml"
         fi
       else
@@ -80,10 +66,9 @@ render_addon() {
       [[ -f "$cf" ]] || continue
       c_name=$(yq '.name' "$cf")
       c_prov=$(yq '.provider // "docker"' "$cf")
-      runs_on "$c_prov" "$providers" || continue
-      labels=$WORK/labels-$inst-$c_name.yaml   # as charts/cluster renders them: mesh group/network, derived toggles
-      c_toggle=$(yq ".[\"addons.platform.koorikla.io/$addon\"]" "$labels" 2>/dev/null || true)
-      [[ -n "$c_toggle" && "$c_toggle" != "null" ]] || c_toggle=$(yq ".addons[\"$addon\"]" "$cf")
+      addon_runs_on "$c_prov" "$providers" || continue
+      labels=$WORK/labels-$inst-$c_name.yaml
+      c_toggle=$(addon_cluster_toggle "$addon" "$cf" "$labels")
       if [[ "$c_toggle" == false ]] || { [[ "$addon_default" == false ]] && [[ "$c_toggle" != true ]]; }; then
         echo "  SKIP addons/$addon ($inst/$c_name): disabled by label"
         continue
@@ -104,7 +89,7 @@ if [[ "${1:-}" == --addon ]]; then
   exit 0
 fi
 
-[[ $# -ge 1 ]] || { sed -n '2,12p' "$0" >&2; exit 2; }
+[[ $# -ge 1 ]] || { sed -n '2,3p' "$0" >&2; exit 2; }
 OUT=$1; shift
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
