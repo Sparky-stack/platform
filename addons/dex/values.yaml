@@ -45,6 +45,13 @@ dex:
     capabilities:
       drop:
         - ALL
+  # The image renders its config template into /tmp at start; read-only root needs a writable /tmp.
+  volumes:
+    - name: tmp
+      emptyDir: {}
+  volumeMounts:
+    - name: tmp
+      mountPath: /tmp
 
   resources:
     requests:

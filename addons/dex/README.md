@@ -62,6 +62,10 @@ Wrapper chart for Dex (`0.26.0` / `v2.46.1`). Runs on `mgmt` as a temporary OIDC
 | dex.securityContext.allowPrivilegeEscalation | bool | `false` |  |
 | dex.securityContext.capabilities.drop[0] | string | `"ALL"` |  |
 | dex.securityContext.readOnlyRootFilesystem | bool | `true` |  |
+| dex.volumeMounts[0].mountPath | string | `"/tmp"` |  |
+| dex.volumeMounts[0].name | string | `"tmp"` |  |
+| dex.volumes[0].emptyDir | object | `{}` |  |
+| dex.volumes[0].name | string | `"tmp"` |  |
 | openchoreo.controlPlane.host | string | `"openchoreo.localhost"` |  |
 | secrets.name | string | `"dex-secrets"` |  |
 | secrets.remoteKey | string | `"github-login"` |  |
