@@ -8,72 +8,13 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 source "$ROOT/hack/lib/portable.sh"
+# shellcheck source=openbao_lib.sh
+source "$(dirname "$0")/openbao_lib.sh"
 
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; IN="$TMP/inputs"
 mkdir -p "$S/mounts" "$S/certs" "$S/auth" "$S/policies" "$S/roles" "$S/writes" "$S/entities" "$BIN" "$IN"
-cat > "$BIN/bao" <<'FAKE'
-#!/usr/bin/env bash
-# fake bao: state under $FAKE_STATE, every call appended to $FAKE_STATE/calls
-set -u
-S=$FAKE_STATE
-printf '%s %s\n' "${BAO_TOKEN:-none}" "$*" >> "$S/calls"
-enc() { printf '%s' "$1" | tr '/' '_'; }
-field=""
-args=("$@")
-cmd=${args[0]}; args=("${args[@]:1}")
-if [[ "$cmd" =~ ^(read|write)$ && "${args[0]:-}" == -field=* ]]; then field=${args[0]#-field=}; args=("${args[@]:1}"); fi
-case "$cmd" in
-  read)
-    p=${args[0]}
-    case "$p" in
-      sys/mounts/*) [[ -e "$S/mounts/$(enc "${p#sys/mounts/}")" ]] ;;
-      sys/auth/*) [[ -e "$S/auth/$(enc "${p#sys/auth/}")" ]] && { [[ -z "$field" ]] || echo "auth_jwt_${p#sys/auth/}"; } ;;
-      identity/entity/name/*) [[ -e "$S/entities/${p##*/}" ]] && echo "id-${p##*/}" ;;
-      */cert/ca) m=${p%/cert/ca}; [[ -e "$S/certs/$(enc "$m")" ]] && echo "-----BEGIN CERTIFICATE----- $m" ;;
-      *) exit 2 ;;
-    esac ;;
-  write)
-    p=${args[0]}; rest=("${args[@]:1}")
-    # a member whose JWKS OpenBao cannot fetch (API server down / issuer discovery not public): the config write fails
-    if [[ "$p" == auth/*/config && "${rest[*]}" == *unreachable* ]]; then
-      echo "Error writing data to $p: Code: 400. * error checking jwks URL: 403 system:anonymous" >&2; exit 2
-    fi
-    printf '%s\n' "${rest[@]}" > "$S/writes/$(enc "$p")"
-    case "$p" in
-      auth/kubernetes/login) for a in "${rest[@]}"; do [[ "$a" == role=* ]] && echo "tok-${a#role=}"; done; true ;;
-      identity/entity/name/*) touch "$S/entities/${p##*/}" ;;
-      */root/generate/internal) touch "$S/certs/$(enc "${p%/root/generate/internal}")" ;;
-      */intermediate/generate/internal) echo "-----BEGIN CERTIFICATE REQUEST-----" ;;
-      */root/sign-intermediate) echo "-----BEGIN CERTIFICATE----- int" ;;
-      */intermediate/set-signed) touch "$S/certs/$(enc "${p%/intermediate/set-signed}")" ;;
-      */roles/*) cp "$S/writes/$(enc "$p")" "$S/roles/$(enc "$p")" ;;
-    esac ;;
-  delete) case "${args[0]}" in identity/entity/name/*) rm -f "$S/entities/${args[0]##*/}" ;; *) exit 2 ;; esac ;;
-  secrets)
-    sub=${args[0]}
-    if [[ "$sub" == enable ]]; then for a in "${args[@]}"; do [[ "$a" == -path=* ]] && touch "$S/mounts/$(enc "${a#-path=}")"; done; fi
-    exit 0 ;;
-  auth)
-    sub=${args[0]}
-    case "$sub" in
-      enable) for a in "${args[@]}"; do [[ "$a" == -path=* ]] && touch "$S/auth/$(enc "${a#-path=}")"; done; exit 0 ;;
-      disable) rm -f "$S/auth/$(enc "${args[1]}")" ;;
-      list) printf 'Path Type Accessor\n---- ---- --------\nkubernetes/ kubernetes a1\ntoken/ token a2\n'
-            for f in "$S"/auth/*; do [[ -e "$f" ]] && printf '%s/ jwt x\n' "$(basename "$f")"; done; exit 0 ;;
-    esac ;;
-  policy)
-    sub=${args[0]}
-    case "$sub" in
-      write) cat > "$S/policies/${args[1]}" ;;
-      delete) rm -f "$S/policies/${args[1]}" ;;
-      list) printf 'default\nroot\nplatform-mesh-config\n'; ls "$S/policies" ;;
-    esac ;;
-  list) exit 2 ;;
-  *) echo "fake bao: unhandled $*" >&2; exit 3 ;;
-esac
-FAKE
-chmod +x "$BIN/bao"
+fake_bin_bao "$BIN"
 
 # Environment exactly as the chart renders it for the Job and the CronJob (groups local + prod).
 render_env() {
@@ -96,7 +37,7 @@ run() {   # run [env file]: the Job (default) or the CronJob environment
     unset BAO_TOKEN BAO_BOOTSTRAP_TOKEN
     sh addons/openbao/files/mesh-reconcile.sh ) > "$TMP/out" 2>&1
 }
-wr() { cat "$S/writes/$(printf '%s' "$1" | tr '/' '_')" 2>/dev/null; }
+wr() { openbao_wr "$1"; }
 
 member dev1 local
 member prod1 prod
@@ -250,8 +191,8 @@ rm -f "$IN"/*
 V=addons/openbao/values.yaml
 cfg=$(helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
   --set 'mesh.groups={local}' -s charts/openbao/templates/server-config-configmap.yaml | yq '.data["extraconfig-from-values.hcl"]')
-role_sas() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" '$0 ~ "path *= \"" p "\"" {f=1} f && /bound_service_account_names/ && !n++ {sub(/.*= /, ""); print}'; }
-role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k && !n++ {sub(/.*= /, ""); print}'; }
+role_field() { openbao_role_field "$cfg" "$1" "$2"; }
+role_sas() { role_field "$1" bound_service_account_names; }
 assert_eq "$(role_sas "$(yq .reconcile.loginRole $V)")" "[\"$(yq .reconcile.serviceAccount $V)\", \"$(yq .reconcile.bootstrapServiceAccount $V)\"]" "self-init: reconcile.loginRole is bound to the CronJob and Job ServiceAccounts"
 assert_eq "$(role_sas "$(yq .reconcile.bootstrapLoginRole $V)")" "[\"$(yq .reconcile.bootstrapServiceAccount $V)\"]" "self-init: reconcile.bootstrapLoginRole is bound to the Job ServiceAccount only"
 assert_eq "$(role_sas mesh-ca-read)" "[\"$(yq .caPublic.pkiReader $V)\"]" "self-init: mesh-ca-read is bound to caPublic.pkiReader"

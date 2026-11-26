@@ -5,5 +5,5 @@ type: application
 version: 0.1.0
 dependencies:
   - name: thunderid
-    version: 1.0.1          # = THUNDER_VERSION of OpenChoreo 1.3.3 (install/k3d/k3d-install.sh)
+    version: 1.1.1          # bumped from OpenChoreo 1.3.3's 1.0.1
     repository: oci://ghcr.io/thunder-id/helm-charts
