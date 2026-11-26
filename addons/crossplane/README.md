@@ -65,7 +65,7 @@ Wrapper chart for Crossplane v2 (`2.4.3`) on workload clusters (on mgmt: core + 
 | githubRepos.resources.limits.memory | string | `"512Mi"` |  |
 | githubRepos.resources.requests.cpu | string | `"10m"` |  |
 | githubRepos.resources.requests.memory | string | `"128Mi"` |  |
-| githubRepos.teams | object | `{}` | GitHub org teams by slug: `{ description, repositories: { <repo>: <permission> } }` (membership stays in GitHub). |
+| githubRepos.teams | object | `{}` | GitHub org teams by slug: `{ id, description, repositories: { <repo>: <permission> } }`; `id` (numeric) adopts an existing team. Membership stays in GitHub. |
 | harborProvider.activate[0] | string | `"registries.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[1] | string | `"projects.harbor.m.crossplane.io"` |  |
 | harborProvider.activate[2] | string | `"replications.harbor.m.crossplane.io"` |  |

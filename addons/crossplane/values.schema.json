@@ -495,6 +495,11 @@
                     "admin"
                   ]
                 }
+              },
+              "id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Numeric GitHub team id: adopt the existing team (crossplane.io/external-name) instead of creating it."
               }
             }
           }
