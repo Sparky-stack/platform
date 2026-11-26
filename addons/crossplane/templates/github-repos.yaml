@@ -133,6 +133,9 @@ metadata:
   namespace: {{ $ns }}
   annotations:
     {{- include "crossplane.syncAnnotations" "3" | nindent 4 }}
+    {{- with $cfg.id }}
+    crossplane.io/external-name: {{ int64 . | quote }}   # adopt the existing team (its numeric id) instead of creating it
+    {{- end }}
 spec:
   managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
   providerConfigRef:
@@ -151,6 +154,9 @@ metadata:
   namespace: {{ $ns }}
   annotations:
     {{- include "crossplane.syncAnnotations" "3" | nindent 4 }}
+    {{- with $cfg.id }}
+    crossplane.io/external-name: {{ printf "%d:%s" (int64 .) $repo | quote }}
+    {{- end }}
 spec:
   managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
   providerConfigRef:

@@ -21,23 +21,29 @@ githubRepos:
         - "checks / vet, lint, test, govulncheck"
         - "checks / manifests / OpenChoreo manifests"
       bypassApps: [5788333]                   # koorikla-promotion-gate: GitOps hand-off commits, promotion PRs
+  # id: the team's numeric GitHub id, so a rebuilt Crossplane adopts the existing team instead of failing to create it
+  # (gh api orgs/<org>/teams -q '.[]|"\(.slug) \(.id)"'). Omit it only for a team that does not exist yet.
   teams:
     platform-engineers:
+      id: 20876274
       description: "Platform engineers: cluster admins, platform repo admins, and break-glass maintainers"
       repositories:
         platform: admin
         hello-world: maintain
     developers:
+      id: 20876272
       description: "Application developers: push to app repos, deploy to non-prod, read-only elsewhere"
       repositories:
         hello-world: push
         platform: pull
     qa:
+      id: 20876273
       description: "QA engineers: triage app repos and read-only platform visibility"
       repositories:
         hello-world: triage
         platform: pull
     release-managers:
+      id: 20876276
       description: "Release managers: approve production promotions and maintain app repos"
       repositories:
         hello-world: maintain

@@ -137,6 +137,11 @@ without `Delete`) and its `TeamRepository` permissions.
 | `qa` | Org-wide read-only (`cluster-reader` + `namespace-reader`) | `hello-world`: `triage`, `platform`: `pull` |
 | `release-managers` | Org-wide read-only; production promotion via PR approval (`CODEOWNERS`) | `hello-world`: `maintain`, `platform`: `pull` |
 
+Each team in git carries its numeric GitHub `id` (`gh api orgs/<org>/teams -q '.[]|"\(.slug) \(.id)"'`). Crossplane uses
+it as `crossplane.io/external-name`, so a clean rebuild adopts the existing team; without it the create fails with
+"Name must be unique for this org". Leave `id` out only for a team that does not exist yet, then add it after the
+first sync.
+
 ## Not covered yet
 
 Actions variables, GitHub environments with required reviewers, and App installation membership (the provider's
