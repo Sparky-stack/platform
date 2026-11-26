@@ -73,12 +73,12 @@ spec:
         url: {{ .Values.installation.githubOrg | quote }}
         {{- if eq $rcAuth "githubApp" }}
         # Argo CD mints short-lived installation tokens from the App key itself (docs/forking.md).
-        githubAppID: '{{ "{{" }} .githubAppID {{ "}} " | trim }}'
-        githubAppInstallationID: '{{ "{{" }} .githubAppInstallationID {{ "}} " | trim }}'
-        githubAppPrivateKey: '{{ "{{" }} .githubAppPrivateKey {{ "}} " | trim }}'
+        githubAppID: '{{`{{ .githubAppID }}`}}'
+        githubAppInstallationID: '{{`{{ .githubAppInstallationID }}`}}'
+        githubAppPrivateKey: '{{`{{ .githubAppPrivateKey }}`}}'
         {{- else }}
-        username: '{{ "{{" }} .username {{ "}} " | trim }}'
-        password: '{{ "{{" }} .token {{ "}} " | trim }}'
+        username: '{{`{{ .username }}`}}'
+        password: '{{`{{ .token }}`}}'
         {{- end }}
 {{- /*
 Store workflows: the only store ClusterWorkflowPlane default (${workflowplane.secretStore}) points at, so build and

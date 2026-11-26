@@ -106,3 +106,24 @@ spec:
             namespace: {{ $ns }}
     {{- end }}
 {{- end -}}
+
+{{- /* Shared header + matchConstraints for the tenant-namespace ValidatingAdmissionPolicies (tenant-stores.yaml). */ -}}
+{{- define "secret-stores.tenantVapHeader" -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ .name }}
+  labels:
+    app.kubernetes.io/part-of: tenant-secrets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - { key: {{ .tenantLabel }}, operator: Exists }
+    resourceRules:
+      - apiGroups: [external-secrets.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [{{ .resource }}]
+{{- end -}}

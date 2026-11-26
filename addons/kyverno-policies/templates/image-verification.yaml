@@ -54,25 +54,22 @@ trusted at all, so its images fail trusted-registries instead of skipping signat
 {{- $trusted := $iv.extraTrustedPrefixes | default list }}
 {{- if $iv.github.enabled }}{{ $trusted = concat $iv.github.prefixes $trusted }}{{ end }}
 {{- $trusted = concat $trusted $platformPrefixes }}
-{{- /* Operand images of the data-service operators, trusted as whole digest references (#327, #256): CloudNativePG
-imageCatalog + operator, MOCO mysqlImageCatalog + agent. Their values come from the catalog (sharedValueFiles). */ -}}
-{{- $operand := list }}
+{{- /* Operand images of data-service operators, trusted by full digest (#327, #256; from catalog sharedValueFiles). */ -}}
 {{- $cat := .Values.imageCatalog | default dict }}
-{{- if $cat.enabled }}{{ range $k := keys ($cat.images | default dict) | sortAlpha }}{{ $operand = append $operand (index $cat.images $k) }}{{ end }}{{ end }}
-{{- $op := (index .Values "cloudnative-pg" | default dict).image | default dict }}
-{{- if and $operand $op.repository }}{{ $operand = append $operand (printf "%s:%s" $op.repository (toString $op.tag)) }}{{ end }}
-{{- range $operand }}
-{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: CloudNativePG image %q (addons/cloudnative-pg values) is not pinned by digest" .) }}{{ end }}
+{{- $operandSpecs := list
+  (dict "label" "CloudNativePG" "src" "addons/cloudnative-pg" "images" (ternary ($cat.images | default dict) dict (not (not $cat.enabled))) "extra" ((index .Values "cloudnative-pg" | default dict).image | default dict))
+  (dict "label" "MOCO" "src" "addons/moco" "images" (.Values.mysqlImageCatalog | default dict) "extra" (((index .Values "moco" | default dict).agent | default dict).image | default dict))
+}}
+{{- $operand := list }}
+{{- range $spec := $operandSpecs }}
+{{- $imgs := list }}
+{{- range $k := keys $spec.images | sortAlpha }}{{ $imgs = append $imgs (index $spec.images $k) }}{{ end }}
+{{- if and $imgs $spec.extra.repository }}{{ $imgs = append $imgs (printf "%s:%s" $spec.extra.repository (toString $spec.extra.tag)) }}{{ end }}
+{{- range $imgs }}
+{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: %s image %q (%s values) is not pinned by digest" $spec.label . $spec.src) }}{{ end }}
 {{- end }}
-{{- $mocoOperand := list }}
-{{- $myCat := .Values.mysqlImageCatalog | default dict }}
-{{- range $k := keys $myCat | sortAlpha }}{{ $mocoOperand = append $mocoOperand (index $myCat $k) }}{{ end }}
-{{- $agent := ((index .Values "moco" | default dict).agent | default dict).image | default dict }}
-{{- if and $mocoOperand $agent.repository }}{{ $mocoOperand = append $mocoOperand (printf "%s:%s" $agent.repository (toString $agent.tag)) }}{{ end }}
-{{- range $mocoOperand }}
-{{- if not (regexMatch "^[^@]+@sha256:[0-9a-f]{64}$" .) }}{{ fail (printf "imageVerification: MOCO image %q (addons/moco values) is not pinned by digest" .) }}{{ end }}
+{{- $operand = concat $operand $imgs }}
 {{- end }}
-{{- $operand = concat $operand $mocoOperand }}
 {{- $usedAttestations := list }}
 {{- range $sources }}{{ range .attestations }}{{ $usedAttestations = append $usedAttestations . }}{{ end }}{{ end }}
 {{- range $action := keys $byAction | sortAlpha }}

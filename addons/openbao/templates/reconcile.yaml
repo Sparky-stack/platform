@@ -10,13 +10,7 @@ Both administer the CA: protect namespace openbao (who may create pods there may
 {{- $groups := include "openbao-addon.groups" . | fromJsonArray }}
 {{- $p := .Values.pki }}
 {{- $m := .Values.memberAuth }}
-{{- $env := list
-  (dict "name" "BAO_ADDR" "value" (printf "https://%s-active.%s.svc:8200" .Release.Name .Release.Namespace))
-  (dict "name" "BAO_CACERT" "value" "/openbao/tls/ca.crt")
-  (dict "name" "HOME" "value" "/tmp")
-  (dict "name" "INPUT_DIR" "value" "/inputs")
-  (dict "name" "TOKEN_FILE" "value" "/var/run/secrets/openbao/token")
-  (dict "name" "LOGIN_ROLE" "value" $r.loginRole)
+{{- $env := concat (include "openbao-addon.reconcileBaseEnv" (dict "root" . "dirName" "INPUT_DIR" "dirValue" "/inputs" "loginRole" $r.loginRole) | fromJsonArray) (list
   (dict "name" "MESH_GROUPS" "value" (join " " $groups))
   (dict "name" "INSTALLATION" "value" .Values.installation.name)
   (dict "name" "TRUST_DOMAIN" "value" $p.trustDomain)
@@ -33,28 +27,14 @@ Both administer the CA: protect namespace openbao (who may create pods there may
   (dict "name" "MEMBER_ROLE" "value" $m.role)
   (dict "name" "MEMBER_POLICY" "value" $m.policy)
   (dict "name" "MEMBER_TOKEN_TTL" "value" $m.tokenTTL)
-}}
+) }}
 {{- $jobEnv := concat $env (list
   (dict "name" "BOOTSTRAP_LOGIN_ROLE" "value" $r.bootstrapLoginRole)
   (dict "name" "FAIL_ON_NO_MEMBER" "value" "false")) }}
 {{- $cronEnv := append $env (dict "name" "FAIL_ON_NO_MEMBER" "value" "true") }}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ $r.serviceAccount }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-automountServiceAccountToken: false
+{{- include "openbao-addon.serviceAccount" (dict "root" . "name" $r.serviceAccount) }}
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ $r.bootstrapServiceAccount }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-automountServiceAccountToken: false
+{{- include "openbao-addon.serviceAccount" (dict "root" . "name" $r.bootstrapServiceAccount) }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -92,29 +72,4 @@ spec:
     spec:
       {{- include "openbao-addon.reconcilePod" (dict "root" $ "sa" $r.bootstrapServiceAccount "env" $jobEnv "script" "mesh-reconcile" "inputs" $inputs) | nindent 6 }}
 ---
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: mesh-reconcile
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "openbao-addon.labels" . | nindent 4 }}
-  annotations:
-    # Final wave (no hook in it): a run fails until a group CA exists or while every member is unreachable, i.e. the
-    # CronJob may be Degraded. Argo CD fails a sync on a Degraded resource of an earlier wave, not of the final one.
-    argocd.argoproj.io/sync-wave: "2"
-spec:
-  schedule: {{ $r.schedule | quote }}
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 2
-  jobTemplate:
-    spec:
-      backoffLimit: 2
-      activeDeadlineSeconds: 240
-      ttlSecondsAfterFinished: 3600
-      template:
-        metadata:
-          labels: { app.kubernetes.io/name: mesh-reconcile }
-        spec:
-          {{- include "openbao-addon.reconcilePod" (dict "root" $ "sa" $r.serviceAccount "env" $cronEnv "script" "mesh-reconcile" "inputs" $inputs) | nindent 10 }}
+{{- include "openbao-addon.reconcileCronJob" (dict "root" $ "name" "mesh-reconcile" "schedule" $r.schedule "sa" $r.serviceAccount "env" $cronEnv "inputs" $inputs) }}
