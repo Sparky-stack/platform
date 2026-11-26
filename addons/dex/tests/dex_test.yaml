@@ -117,3 +117,15 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'must use secretEnv'
+  - it: read-only root filesystem keeps a writable /tmp (the image renders its config there)
+    template: charts/dex/templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: tmp, mountPath: /tmp }
+      - contains:
+          path: spec.template.spec.volumes
+          content: { name: tmp, emptyDir: {} }
