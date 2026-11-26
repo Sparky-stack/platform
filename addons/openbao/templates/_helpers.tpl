@@ -18,6 +18,62 @@ app.kubernetes.io/part-of: openbao
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
+{{- /* ServiceAccount with no automounted token, shared by reconcilers and readers. Context: dict root name. */ -}}
+{{- define "openbao-addon.serviceAccount" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" .root | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}
+
+{{- /* Base env prefix shared by the three reconcilers (preserves exact order for checksum/config). */ -}}
+{{- define "openbao-addon.reconcileBaseEnv" -}}
+{{- toJson (list
+  (dict "name" "BAO_ADDR" "value" (printf "https://%s-active.%s.svc:8200" .root.Release.Name .root.Release.Namespace))
+  (dict "name" "BAO_CACERT" "value" "/openbao/tls/ca.crt")
+  (dict "name" "HOME" "value" "/tmp")
+  (dict "name" .dirName "value" .dirValue)
+  (dict "name" "TOKEN_FILE" "value" "/var/run/secrets/openbao/token")
+  (dict "name" "LOGIN_ROLE" "value" .loginRole)
+) -}}
+{{- end }}
+
+{{- /* Final-wave CronJob wrapper shared by mesh-, policy- and tenant-reconcile. */ -}}
+{{- define "openbao-addon.reconcileCronJob" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "openbao-addon.labels" .root | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"    # final wave: a failing run never fails the sync
+spec:
+  schedule: {{ .schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: {{ .name }} }
+          {{- with .checksum }}
+          annotations:
+            checksum/config: {{ . }}
+          {{- end }}
+        spec:
+          {{- include "openbao-addon.reconcilePod" (dict "root" .root "sa" .sa "env" .env "script" .name "inputs" .inputs) | nindent 10 }}
+{{- end }}
+
 {{- /* Pod spec shared by the three reconcilers (mesh-, tenant-, policy-reconcile): POSIX sh + bao CLI from the OpenBao
 image, no Kubernetes API access, a 10-minute projected token as the only credential. Context: dict root sa env script
 inputs; script = ConfigMap name and files/<script>.sh, inputs = list of {name, secret, path} (may be empty). */ -}}

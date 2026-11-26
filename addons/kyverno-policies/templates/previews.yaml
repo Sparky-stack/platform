@@ -112,42 +112,24 @@ spec:
       expression: "object.metadata.?labels[?'platform.koorikla.io/preview'].orValue('') == 'true'"
     - name: expired
       expression: 'int(time.now()) > variables.expiresAt + duration("{{ $g.ttlGrace }}").getSeconds()'
----
-# Kyverno's controllers: list Environments for the cap (admission), policy readiness (reports), delete expired ones
-# (cleanup).
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: kyverno:admission-controller:preview-environments
-  labels:
-    rbac.kyverno.io/aggregate-to-admission-controller: "true"
-rules:
-  - apiGroups: [openchoreo.dev]
-    resources: [environments]
-    verbs: [get, list, watch]
----
-# The MutatingPolicy is only Ready (and the Argo CD app Healthy) once the reports controller may read its match kind.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: kyverno:reports-controller:preview-environments
-  labels:
-    rbac.kyverno.io/aggregate-to-reports-controller: "true"
-rules:
-  - apiGroups: [openchoreo.dev]
-    resources: [environments]
-    verbs: [get, list, watch]
+{{- /* Kyverno controllers: admission (cap), reports (MutatingPolicy readiness), cleanup (TTL deletion). */ -}}
+{{- range $role := list
+  (dict "ctrl" "admission-controller" "verbs" (list "get" "list" "watch"))
+  (dict "ctrl" "reports-controller" "verbs" (list "get" "list" "watch"))
+  (dict "ctrl" "cleanup-controller" "verbs" (list "get" "list" "watch" "delete"))
+}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kyverno:cleanup-controller:preview-environments
+  name: kyverno:{{ $role.ctrl }}:preview-environments
   labels:
-    rbac.kyverno.io/aggregate-to-cleanup-controller: "true"
+    rbac.kyverno.io/aggregate-to-{{ $role.ctrl }}: "true"
 rules:
   - apiGroups: [openchoreo.dev]
     resources: [environments]
-    verbs: [get, list, watch, delete]
+    verbs: [{{ join ", " $role.verbs }}]
+{{- end }}
 {{- end }}
 {{- if $g.namespaces }}
 {{- if $g.environments }}

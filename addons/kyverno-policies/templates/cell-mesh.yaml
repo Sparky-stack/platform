@@ -13,6 +13,7 @@ The opt-out switches content, never the selector: Kyverno keeps a synchronized o
 {{- $ae := .Values.ambientEnrollment }}
 {{- if $ae.enabled }}
 {{- $cells := dict "sel" $ae.cellNamespaceSelector "mode" "{ key: istio.io/dataplane-mode, operator: NotIn, values: [none] }" }}
+{{- $specCtx := dict "root" . "cells" $cells }}
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
@@ -25,21 +26,7 @@ metadata:
       pods from the peers OpenChoreo's per-component NetworkPolicy admits (same namespace, platform system components),
       and kubelet probes from ambient's link-local SNAT source 169.254.7.127.
 spec:
-  evaluation:
-    synchronize:
-      enabled: true
-    generateExisting:
-      enabled: true
-  matchConstraints:
-    resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [namespaces]
-    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
-  matchConditions:
-    - name: never-platform-namespaces
-      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  {{- include "kp.cellMeshSpec" $specCtx | nindent 2 }}
   generate:
     - template:
         interpolate: cel
@@ -68,10 +55,7 @@ spec:
               # probes, and Kubernetes NetworkPolicy"). Cilium sees it as world, not host, so OpenChoreo's policy drops
               # every probe (startup probe kills, CrashLoopBackOff). Any port: probe ports are per component. Nothing
               # else can use the source: it is host-local (never routed) and Cilium refuses spoofed pod sources.
-              - from:
-                {{- range .Values.mesh.probeSourceCIDRs }}
-                  - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
-                {{- end }}
+              {{- include "kp.probeIngress" . | nindent 14 }}
 {{- if $ae.strimzi.enabled }}
 ---
 apiVersion: policies.kyverno.io/v1
@@ -86,21 +70,7 @@ metadata:
       Strimzi operator no longer generates (addon strimzi STRIMZI_NETWORK_POLICY_GENERATION=false, #210): Kafka pods
       admit the cell's own pods and the listed platform peers on any port (HBONE 15008 included), and kubelet probes.
 spec:
-  evaluation:
-    synchronize:
-      enabled: true
-    generateExisting:
-      enabled: true
-  matchConstraints:
-    resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [namespaces]
-    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
-  matchConditions:
-    - name: never-platform-namespaces
-      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  {{- include "kp.cellMeshSpec" $specCtx | nindent 2 }}
   generate:
     - template:
         interpolate: cel
@@ -133,10 +103,7 @@ spec:
                     podSelector: { matchLabels: {{ .podLabels | toJson }} }
                   {{- end }}
               # Kubelet probes after istio-cni's SNAT (see platform-mesh-hbone above).
-              - from:
-                {{- range .Values.mesh.probeSourceCIDRs }}
-                  - ipBlock: { cidr: {{ if contains ":" . }}{{ . | quote }}{{ else }}{{ . }}{{ end }} }
-                {{- end }}
+              {{- include "kp.probeIngress" . | nindent 14 }}
 {{- end }}
 {{- if $ae.mtls.strict }}
 ---
@@ -151,21 +118,7 @@ metadata:
       PeerAuthentication default (STRICT) in every ambient-enrolled cell namespace, so ztunnel accepts only mesh mTLS.
       PERMISSIVE in a cell with the namespace label {{ $ae.mtls.optOutLabel }}=permissive.
 spec:
-  evaluation:
-    synchronize:
-      enabled: true
-    generateExisting:
-      enabled: true
-  matchConstraints:
-    resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [namespaces]
-    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
-  matchConditions:
-    - name: never-platform-namespaces
-      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  {{- include "kp.cellMeshSpec" $specCtx | nindent 2 }}
   generate:
     - template:
         interpolate: cel
@@ -192,21 +145,7 @@ metadata:
       own workloads and the listed platform identities (gateway, telemetry agent, data-service operators), so a
       workload of another cell is refused. Allows everything in a cell with {{ $ae.mtls.optOutLabel }}=permissive.
 spec:
-  evaluation:
-    synchronize:
-      enabled: true
-    generateExisting:
-      enabled: true
-  matchConstraints:
-    resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [namespaces]
-    {{- include "kp.cellObjectSelector" $cells | nindent 4 }}
-  matchConditions:
-    - name: never-platform-namespaces
-      expression: '!(object.metadata.name in {{ .Values.platformNamespaces | toJson }})'
+  {{- include "kp.cellMeshSpec" $specCtx | nindent 2 }}
   generate:
     - template:
         interpolate: cel
