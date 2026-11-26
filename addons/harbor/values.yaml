@@ -19,12 +19,7 @@ registry:
     - { upstream: cr.openchoreo.dev, project: openchoreo }
     - { upstream: gcr.io, project: gcr }
 
-# --- platform glue -----------------------------------------------------------------------------------------------
-# Secrets (never committed; seeded by `task secrets` locally, created by the operator in aws/vault):
-#   key `harbor`: admin-password, secret-key (16 chars), core-secret, csrf-key (32 chars), jobservice-secret,
-#                 registry-http-secret, registry-password, database-password, builder-secret, nodes-secret
-#                 (robot secrets: >= 8 chars with upper, lower and digit - Harbor's password policy)
-#   key `platform-ghcr`: token (GHCR proxy cache + replication of ghcr.io/koorikla/*; read:packages)
+# --- platform glue (secret properties: docs/conventions.md "Secret keys") --------------------------------------
 secrets:
   # -- Pulls Harbor admin, robot, and component credentials (`secrets.{store,remoteKey,ghcrKey,ghcrUsername,secretName}`) from `ClusterSecretStore/platform`.
   store: platform

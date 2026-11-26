@@ -1,14 +1,5 @@
-{{- /*
-Setup Job of the logs module (index templates, ISM retention policies, alerting webhook): the module's own Job
-(observability-logs-opensearch 0.7.0 templates/opensearch-setup-logs/job.yaml) is a plain resource. When it fails
-(restartPolicy OnFailure, backoffLimit 6: about 13 minutes of retries, e.g. OpenSearch slow on a clean bootstrap) the
-failed Job is terminal: Argo CD re-applies the unchanged manifest, nothing runs again and the app stays Degraded (#192).
-So the module's Job is off (openSearchSetup.enabled: false in values.yaml) and the same container runs here as an Argo
-CD PostSync hook, like the tracing module's setup Job: after every sync, once OpenSearch is Healthy; a failure fails the
-operation, Argo CD's unlimited retry recreates the Job (BeforeHookCreation). The setup is idempotent.
-Values: observability-logs-opensearch.openSearchSetup (image, openSearchSecretName, dataRetentionTime); `run: true`
-renders it (the module's `enabled` must stay false, else two Jobs; templates/validate.yaml).
-*/ -}}
+{{- /* Runs the logs module's idempotent OpenSearch setup as an Argo CD PostSync hook (BeforeHookCreation) so a slow-boot
+timeout is retried on the next sync instead of leaving a terminal failed Job (#192; openSearchSetup.enabled stays false). */ -}}
 {{- $sub := index .Values "observability-logs-opensearch" }}
 {{- $s := $sub.openSearchSetup }}
 {{- if $s.run }}

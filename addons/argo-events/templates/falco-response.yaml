@@ -15,11 +15,7 @@ data:
   falco_response.py: |
     {{- .Files.Get "files/falco_response.py" | nindent 4 }}
 ---
-{{- /* ServiceAccount tokens follow the promotion gate's executor-only pattern: no step container gets one by default
-(automountServiceAccountToken: false); Argo's executor (init/wait containers) uses falco-response-executor, which may
-only report step outputs. Only enrich and record, which talk to the Kubernetes API, opt in (ServiceAccount
-falco-response: read OpenChoreo RenderedReleases/Environments, write Events in the org namespace, no data-plane
-access). The steps that call endpoints outside the cluster API (rca, notify: template `call`) run without a token. */}}
+{{- /* Executor-only SA token pattern: init/wait use falco-response-executor (workflowtaskresults only); only enrich/record mount falco-response's token (docs/observability.md). */}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -176,13 +172,7 @@ spec:
           - { name: CLUSTER, value: {{ `"{{workflow.parameters.cluster}}"` }} }
           - { name: ORG_NAMESPACE, value: {{ $ns | quote }} }
           - { name: MINIMUM_PRIORITY, value: {{ .Values.falco.minimumPriority | quote }} }
-        resources: {{- toYaml $r.resources | nindent 10 }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities: { drop: [ALL] }
-        volumeMounts:
-          - { name: scripts, mountPath: /scripts, readOnly: true }
+        {{- include "ae.falcoScriptTrailer" $r.resources | nindent 8 }}
     - name: record                            # Kubernetes API (Event): ServiceAccount falco-response
       automountServiceAccountToken: true
       inputs:
@@ -195,13 +185,7 @@ spec:
         env:
           - { name: CONTEXT, value: {{ `"{{inputs.parameters.context}}"` }} }
           - { name: WORKFLOW_NAME, value: {{ `"{{workflow.name}}"` }} }
-        resources: {{- toYaml $r.resources | nindent 10 }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities: { drop: [ALL] }
-        volumeMounts:
-          - { name: scripts, mountPath: /scripts, readOnly: true }
+        {{- include "ae.falcoScriptTrailer" $r.resources | nindent 8 }}
     - name: call                              # endpoints outside the cluster API (rca, notify): no ServiceAccount token
       inputs:
         parameters:
@@ -220,11 +204,5 @@ spec:
           - name: NOTIFY_TOKEN
             valueFrom: { secretKeyRef: { name: falco-notify, key: token, optional: true } }
           {{- end }}
-        resources: {{- toYaml $r.resources | nindent 10 }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities: { drop: [ALL] }
-        volumeMounts:
-          - { name: scripts, mountPath: /scripts, readOnly: true }
+        {{- include "ae.falcoScriptTrailer" $r.resources | nindent 8 }}
 {{- end }}

@@ -1,10 +1,4 @@
-{{- /*
-ClusterSecretStore mgmt-harbor: read-only, name-scoped access to Secret harbor/harbor-ca-bundle (templates/pki.yaml),
-whose ca.crt is the registry CA's PUBLIC certificate. ESO's kubernetes provider reads a remoteRef with one GET and
-validates the store with a SelfSubjectRulesReview that accepts a name-scoped get rule, so no list/watch and no other
-Secret of this namespace (admin password, serving key) is reachable. Consumers: charts/cluster capi-registries.yaml
-(ns fleet, node bootstrap) and the build ClusterWorkflows (workflows-<org ns>, push/scan/sign trust).
-*/ -}}
+{{- /* ClusterSecretStore mgmt-harbor: name-scoped GET of Secret harbor/harbor-ca-bundle (public ca.crt only) for fleet and workflows-* (docs/build-plane.md). */ -}}
 {{- $p := .Values.caPublic }}
 {{- include "koorikla-lib.esoSecretReader" (dict "name" $p.store "secret" $p.secretName
     "namespace" .Release.Namespace) }}
