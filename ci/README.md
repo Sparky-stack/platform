@@ -307,7 +307,7 @@ Workflows are thin: each step calls `scripts/<stack>/*.sh` or `scripts/common/*.
 | `common/git-push-change.sh` | commit paths if changed, push with rebase/retry |
 | `common/generate-check.sh` | code generation must leave a clean tree |
 | `workflow/*.sh` | the in-cluster template steps (checkout, check, build, scan, sbom, sign, gitops, helm package); Linux pod images only (GNU userland; `build.sh` is POSIX sh for BuildKit) |
-| `go/check.sh`, `python/check.sh`, `node/{detect,setup-pm,check}.sh`, `nextjs/{detect,check}.sh`, `rust/check.sh`, `java/{detect,check}.sh`, `elixir/check.sh`, `ruby/check.sh`, `helm/{check,package-push,registry-meta}.sh` | stack checks |
+| `go/check.sh`, `python/check.sh`, `node/{detect,setup-pm,check}.sh`, `nextjs/check.sh`, `rust/check.sh`, `java/{detect,check}.sh`, `elixir/check.sh`, `ruby/check.sh`, `helm/{check,package-push,registry-meta}.sh` | stack checks |
 | `crossplane/{install-cli,package-name,validate-render,xpkg-build,xpkg-push,provider-xpkg}.sh` | Crossplane CLI, validation/render tests, packaging |
 
 

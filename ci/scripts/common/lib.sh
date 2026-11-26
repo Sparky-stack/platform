@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
-# Common helpers for ci/scripts. Sourced, never executed directly.
-#
-# Portability contract for every script under scripts/:
-#   - bash >= 3.2 (macOS /bin/bash): no associative arrays, no mapfile/readarray,
-#     no ${var,,}/${var^^}, no `&>>`, no `|&`, no `declare -n`.
-#   - BSD and GNU userland: no `sed -i`, no `readlink -f`, no GNU-only flags.
-#   - Inputs are environment variables, outputs are files (plus GITHUB_OUTPUT
-#     when running in GitHub Actions). See README "Script contract".
+# Common helpers for ci/scripts (sourced; bash 3.2 + BSD/GNU portable; ci/README.md#script-contract-both-runners).
 set -euo pipefail
 
 log() {
@@ -109,4 +102,14 @@ has_file() {
     [[ -e "$f" ]] && return 0
   done
   return 1
+}
+
+# trivy_count_sev JSON FAIL_SEV - count vulnerabilities in JSON matching comma-separated FAIL_SEV.
+trivy_count_sev() {
+  jq --arg sev "$2" '($sev | split(",")) as $s | [.Results[]?.Vulnerabilities[]? | select(.Severity as $v | $s | index($v))] | length' "$1"
+}
+
+# trivy_summary JSON - one-line "CRITICAL=1 HIGH=2" summary of vulnerabilities in JSON.
+trivy_summary() {
+  jq -r '[.Results[]?.Vulnerabilities[]?.Severity] | group_by(.) | map("\(.[0])=\(length)") | join(" ")' "$1"
 }

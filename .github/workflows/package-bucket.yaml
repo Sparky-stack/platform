@@ -1,10 +1,6 @@
 name: package-bucket
 
-# The bucket API Configuration package (packages/bucket): PRs validate + render only; pushes to main and
-# release tags (bucket-vX.Y.Z, release-please component "bucket") build, push to
-# ghcr.io/koorikla/platform/bucket, cosign keyless sign and attest SLSA provenance.
-# Status: layout - no cluster installs it yet (packages/bucket/README.md); enabling it adds the pin to
-# addons/crossplane.
+# Crossplane Project packages/bucket (docs/crossplane.md): validate + render on PRs; build, push and sign on main/tags.
 
 on:
   workflow_dispatch:

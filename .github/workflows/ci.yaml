@@ -80,9 +80,5 @@ jobs:
       - name: Check Istio ambient probe SNAT CIDRs on mesh chart bump
         run: |
           if git diff --name-only HEAD^1 HEAD | grep -qx 'addons/mesh/Chart.yaml'; then
-            for t in $(bash hack/changed-units.sh --tests addons/mesh); do
-              if [[ "$t" == "hack/check-istio-probe-cidr.sh" ]]; then
-                bash "$t"
-              fi
-            done
+            bash hack/check-istio-probe-cidr.sh
           fi

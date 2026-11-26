@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# Validate a Crossplane configuration package and run render tests.
-#
-#  1. `crossplane resource validate` of every XRD/Composition (and function
-#     inputs) against Crossplane core + dependency schemas (from crossplane.yaml).
-#  2. Validate every example XR against the XRDs.
-#  3. For every example XR: `crossplane composition render` with the matching
-#     Composition (spec.crossplane.compositionRef.name, else compositeTypeRef),
-#     validate the composed resources, and diff against
-#     $RENDER_DIR/expected/<example file name> when that file exists.
+# Validate a Crossplane configuration package (XRDs, Compositions, examples) and diff composition renders against expected.
 #
 # Env in:
 #   PACKAGE_ROOT     package root containing crossplane.yaml or crossplane-project.yaml, default .
@@ -60,34 +52,25 @@ if [[ -n "${CACHE_DIR:-}" ]]; then
 fi
 
 # Collect package YAML (everything except examples, tests, dot-dirs).
+extensions="${meta}"
 : >"${tmp}/xrds.list"
 : >"${tmp}/comps.list"
+: >"${tmp}/package.yaml"
 find . -type f \( -name '*.yaml' -o -name '*.yml' \) \
   -not -path './.*' -not -path "./${examples}/*" -not -path "./${render_dir}/*" \
   -not -path './tests/*' -not -path './_output/*' -not -path './schemas/*' \
   -not -name 'crossplane.yaml' -not -name 'crossplane-project.yaml' | LC_ALL=C sort >"${tmp}/files.list"
 while IFS= read -r f <&3; do
-  # One kind per document of a multi-document file.
   kinds="$(yq -r '.kind' "$f" 2>/dev/null || true)"
-  case "${kinds}" in *CompositeResourceDefinition*) echo "$f" >>"${tmp}/xrds.list" ;; esac
+  case "${kinds}" in *CompositeResourceDefinition*) echo "$f" >>"${tmp}/xrds.list"; extensions="${extensions},${f}" ;; esac
   if printf '%s\n' "${kinds}" | grep -qx Composition; then echo "$f" >>"${tmp}/comps.list"; fi
+  { printf -- '---\n'; cat "$f"; printf '\n'; } >>"${tmp}/package.yaml"
 done 3<"${tmp}/files.list"
 
 [[ -s "${tmp}/xrds.list" ]] || die "no CompositeResourceDefinition found"
 [[ -s "${tmp}/comps.list" ]] || die "no Composition found"
 
-extensions="${meta}"
-while IFS= read -r f; do extensions="${extensions},${f}"; done <"${tmp}/xrds.list"
-
 # 1. Package objects.
-: >"${tmp}/package.yaml"
-while IFS= read -r f; do
-  {
-    printf -- '---\n'
-    cat "$f"
-    printf '\n'
-  } >>"${tmp}/package.yaml"
-done <"${tmp}/files.list"
 log "validate package objects against Crossplane + dependency schemas"
 # shellcheck disable=SC2086
 crossplane resource validate ${cache_args} "${meta}" "${tmp}/package.yaml"

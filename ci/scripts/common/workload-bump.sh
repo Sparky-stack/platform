@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Point an OpenChoreo Workload at a new image: rewrite spec.container.image
-# to <repo>:<tag>@sha256:<digest> (production admission accepts only digest
-# references; the tag keeps it readable) and spec.source.commit to the built
-# commit, with yq. Comments survive; the rest of the file keeps its content,
-# in yq's layout (2-space indent, no blank lines), exactly like the in-cluster
-# GitOps step. Commit/push is done by git-push-change.sh.
+# Point an OpenChoreo Workload at <repo>:<tag>@sha256:<digest> and spec.source.commit via yq (ci/README.md#workload-bump-gitops-hand-off).
 #
 # Env in:
 #   WORKLOAD_FILE  default deploy/openchoreo/workload.yaml

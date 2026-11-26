@@ -1,10 +1,6 @@
 name: package-valkey
 
-# The valkey API Configuration package (packages/valkey): PRs validate + render only; pushes to main and
-# release tags (valkey-vX.Y.Z, release-please component "valkey") build, push to
-# ghcr.io/koorikla/platform/valkey, cosign keyless sign and attest SLSA provenance.
-# Status: layout - no cluster installs it yet (packages/valkey/README.md); enabling it adds the pin to
-# addons/crossplane.
+# Crossplane Project packages/valkey (docs/crossplane.md): validate + render on PRs; build, push and sign on main/tags.
 
 on:
   workflow_dispatch:

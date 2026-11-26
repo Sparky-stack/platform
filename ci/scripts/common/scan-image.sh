@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Trivy vulnerability scan of a (multi-arch) container image.
-#
-# Every platform is scanned once to JSON; SARIF (code scanning) and the
-# cosign-vuln predicate are derived from the first platform's report with
-# `trivy convert`, so the registry is hit once per platform.
+# Trivy vulnerability scan of a (multi-arch) container image; SARIF and cosign-vuln come from trivy convert on the first platform.
 #
 # Env in:
 #   IMAGE_REF        image to scan (required): repo@sha256:... or local tag
@@ -68,11 +64,8 @@ for p in $(csv_words "${platforms}"); do
   trivy image ${common_args} ${plat_args} --format json --output "${json}" "${IMAGE_REF}"
   [[ -n "${first_json}" ]] || first_json="${json}"
 
-  n="$(jq --arg sev "${fail_sev}" '
-        ($sev | split(",")) as $s
-        | [.Results[]?.Vulnerabilities[]? | select(.Severity as $v | $s | index($v))]
-        | length' "${json}")"
-  summary="$(jq -r '[.Results[]?.Vulnerabilities[]?.Severity] | group_by(.) | map("\(.[0])=\(length)") | join(" ")' "${json}")"
+  n="$(trivy_count_sev "${json}" "${fail_sev}")"
+  summary="$(trivy_summary "${json}")"
   log "${p}: ${summary:-no vulnerabilities} (failing on ${fail_sev}: ${n})"
   step_summary "- Trivy \`${p}\`: ${summary:-no vulnerabilities}; ${n} at ${fail_sev}"
   total_fail=$((total_fail + n))
