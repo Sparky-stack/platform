@@ -122,7 +122,7 @@ for inst_dir in installations/*; do
   # Full feature set, as with the platform GitHub App seeded (bootstrap.sh sets this on the root app; default false):
   # the addon renders then include auto-build and the preview token.
   helm template platform charts/platform --namespace argocd --values "$y" \
-    --set secrets.githubGateApp.enabled=true > "$OUT/platform-$inst.yaml"
+    --set secrets.githubGateApp.enabled=true --set secrets.githubLogin.enabled=true > "$OUT/platform-$inst.yaml"
   cp "$OUT/platform-$inst.yaml" "$WORK/platform-$inst.yaml"   # addon_helm_args writes valuesObject files next to it
   yq 'select(.kind == "Secret" and .metadata.name == "in-cluster") | .metadata.labels' "$OUT/platform-$inst.yaml" \
     > "$WORK/labels-$inst-mgmt.yaml"

@@ -1,0 +1,6 @@
+dependencies:
+- name: dex
+  repository: oci://ghcr.io/dexidp/helm-charts
+  version: 0.26.0
+digest: sha256:6b5a4b1262c7b0cb2f092b4db62878239bfbd22474937b1e8f9d650552c99477
+generated: "2026-11-26T03:30:31.007399402+02:00"

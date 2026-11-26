@@ -52,6 +52,7 @@ for ns in $(yq '.addons[].namespace' "$ROOT/charts/platform/values.yaml" | sort 
     reloader) continue ;;      # reloader meets PSS restricted: policed like a workload (check 9c)
     keda|strimzi|cnpg-system|moco-system) continue ;;   # opt-in data-service operators meet PSS restricted: policed (test_data_services.sh, addons/moco tests)
     crossplane-system) continue ;;          # Crossplane core, Functions, providers meet PSS restricted: policed (test_crossplane_render.sh)
+    dex) continue ;;                        # Dex OIDC broker meets PSS restricted: policed like a workload (check 9e)
   esac
   assert_match "$kp_ns" "\"$ns\"" "catalog namespace $ns is a Kyverno-excluded platform namespace"
 done
@@ -274,6 +275,16 @@ for cm in $bs_cms; do
     | .metadata.labels[strenv(K)] // "<none>"' "$TMP/cp-backstage.yaml")
   assert_eq "$got" "${rel_sel#*=}" "Backstage ConfigMap $cm carries the mgmt reloader label $rel_sel"
 done
+
+# 9e. dex is NOT a Kyverno-excluded platform namespace: its pod meets Pod Security restricted.
+assert_kyverno_not_excluded dex
+helm template dex "$ROOT/addons/dex" --namespace dex > "$TMP/dex-pss.yaml"
+dex_pod='select(.kind == "Deployment") | .spec.template.spec'
+assert_eq "$(yq "$dex_pod | .securityContext.runAsNonRoot" "$TMP/dex-pss.yaml")" true "dex pod runAsNonRoot"
+assert_eq "$(yq "$dex_pod | .securityContext.seccompProfile.type" "$TMP/dex-pss.yaml")" RuntimeDefault "dex seccomp RuntimeDefault"
+assert_eq "$(yq "$dex_pod | .containers[0].securityContext.allowPrivilegeEscalation" "$TMP/dex-pss.yaml")" false "dex no privilege escalation"
+assert_eq "$(yq "$dex_pod | .containers[0].securityContext.readOnlyRootFilesystem" "$TMP/dex-pss.yaml")" true "dex readOnlyRootFilesystem"
+assert_eq "$(yq -o=json -I=0 "$dex_pod | .containers[0].securityContext.capabilities.drop" "$TMP/dex-pss.yaml")" '["ALL"]' "dex drops ALL capabilities"
 
 # 9. Harbor is NOT a Kyverno-excluded platform namespace: its pods meet Pod Security baseline, so the Audit policies
 #    report on it like any workload (no blanket exclusion, no PolicyException needed). Guard both halves.

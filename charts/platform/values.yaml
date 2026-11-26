@@ -49,6 +49,10 @@ secrets:
   # fail without it (#192). bootstrap.sh sets it for backend kubernetes; docs/forking.md.
   githubGateApp:
     enabled: false
+  # GitHub OAuth client + Dex<->Thunder secret seeded (key github-login): enables Dex and Thunder's GitHub login flow.
+  # bootstrap.sh sets it for backend kubernetes when ~/.config/koorikla-platform/github-login.{json,secret} exist.
+  githubLogin:
+    enabled: false
 
 # Addon catalog: one ApplicationSet addon-<name> per entry (templates/appset-addons.yaml). It deploys addons/<name>
 # (or `path`) to every Argo CD cluster whose secret labels match:
@@ -122,6 +126,8 @@ addons:
   openbao:                         { namespace: openbao,                         roles: [mgmt],            default: false }
 
   # === OpenChoreo (docs/openchoreo.md, docs/build-plane.md) ===========================================================
+  # Temporary OIDC broker bridging GitHub org teams -> Thunder groups until thunder-id/thunderid#7069; opt-in on mgmt.
+  dex:                             { namespace: dex,                             roles: [mgmt],            default: false }
   thunder:                         { namespace: thunder,                         roles: [mgmt],            default: true }
   openchoreo-control-plane:
     namespace: openchoreo-control-plane

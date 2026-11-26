@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dex
+description: Dex OIDC broker on mgmt - bridges GitHub org teams to ThunderID until thunder-id/thunderid#7069
+type: application
+version: 0.1.0
+dependencies:
+  - name: dex
+    version: 0.26.0
+    repository: oci://ghcr.io/dexidp/helm-charts

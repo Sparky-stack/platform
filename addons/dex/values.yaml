@@ -1,0 +1,110 @@
+# Dex OIDC broker on mgmt: temporary bridge between a GitHub OAuth App (org team slugs) and ThunderID until
+# thunder-id/thunderid#7069 adds native GitHub teams claims. Isolated in its own addon so removing it is one PR.
+
+secrets:
+  # -- ExternalSecret pulling GitHub OAuth credentials and the Dex<->Thunder client secret from `ClusterSecretStore/platform`.
+  store: platform
+  remoteKey: github-login
+  name: dex-secrets
+
+# --- installation.yaml (defaults so `helm template` works standalone); templates/validate.yaml checks host alignment ---
+openchoreo:
+  controlPlane:
+    host: openchoreo.localhost
+
+dex:
+  fullnameOverride: dex
+
+  # -- Single replica with `storage.type: memory`: Dex only holds short-lived OAuth state during the GitHub redirect
+  # (Thunder owns user sessions and refresh tokens), so memory storage avoids CRDs, ClusterRole, DB, and leftover CRDs
+  # when Dex is removed. For HA production, switch to `storage.type: kubernetes` + `rbac.create: true` (or postgres).
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/dexidp/dex
+    # -- Multi-arch index digest of `v2.46.1` (`amd64`, `arm64`, `arm/v7`, `ppc64le`, `s390x`).
+    tag: v2.46.1@sha256:65b72ca0f4b0bf6d4ada84ec21da8851782563404ac7b8f926923d27ceced9ab
+    pullPolicy: IfNotPresent
+
+  # Memory storage needs no CRDs or Kubernetes API access.
+  rbac:
+    create: false
+    createClusterScoped: false
+
+  # Pod Security restricted (image default user is dex:dex = 1001:1001).
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+  ingress:
+    enabled: false
+
+  httpRoute:
+    # -- Exposes `dex.<openchoreo.controlPlane.host>` via `openchoreo-control-plane/gateway-default`.
+    enabled: true
+    parentRefs:
+      - name: gateway-default
+        namespace: openchoreo-control-plane
+    hostnames:
+      - dex.openchoreo.localhost
+
+  envVars:
+    - name: GITHUB_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: dex-secrets
+          key: github-client-id
+    - name: GITHUB_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-secrets
+          key: github-client-secret
+    - name: THUNDER_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: dex-secrets
+          key: thunder-client-secret
+
+  config:
+    issuer: http://dex.openchoreo.localhost:8080
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    oauth2:
+      skipApprovalScreen: true
+    connectors:
+      - type: github
+        id: github
+        name: GitHub
+        config:
+          clientID: $GITHUB_CLIENT_ID
+          clientSecret: $GITHUB_CLIENT_SECRET
+          redirectURI: http://dex.openchoreo.localhost:8080/callback
+          orgs:
+            - name: Sparky-stack
+          teamNameField: slug
+          useLoginAsID: true
+    staticClients:
+      - id: thunder
+        name: ThunderID
+        secretEnv: THUNDER_CLIENT_SECRET
+        redirectURIs:
+          - http://thunder.openchoreo.localhost:8080/gate/callback

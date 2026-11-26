@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addon dex (platform keys; dex.* is the upstream chart's)",
+  "type": "object",
+  "required": ["secrets", "openchoreo", "dex"],
+  "properties": {
+    "cluster": {
+      "description": "Cluster metadata injected by the addon ApplicationSet.",
+      "type": "object"
+    },
+    "secrets": {
+      "description": "ExternalSecret pulling GitHub OAuth credentials and the Thunder OIDC client secret from ClusterSecretStore/platform.",
+      "type": "object",
+      "required": ["store", "remoteKey", "name"],
+      "properties": {
+        "store": {
+          "description": "ClusterSecretStore name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "remoteKey": {
+          "description": "Remote secret key holding github-client-id, github-client-secret, and thunder-client-secret.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "Kubernetes Secret name created in the dex namespace.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "openchoreo": {
+      "description": "installation.yaml openchoreo: Dex's host is dex.<controlPlane.host> (templates/validate.yaml).",
+      "type": "object",
+      "required": ["controlPlane"],
+      "properties": {
+        "controlPlane": {
+          "type": "object",
+          "required": ["host"],
+          "properties": {
+            "host": {
+              "description": "OpenChoreo control-plane host (Dex issuer and Thunder callback derive from it).",
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            }
+          }
+        }
+      }
+    },
+    "dex": {
+      "description": "Upstream Dex chart values.",
+      "type": "object"
+    }
+  }
+}

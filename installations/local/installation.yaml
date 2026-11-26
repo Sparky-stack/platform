@@ -16,6 +16,7 @@ mgmt:
   addons:                                     # addons.platform.koorikla.io/<addon> overrides for mgmt
     openbao: true                             # Istio mesh CA (OpenBao: one root + intermediate per mesh.groups entry)
     crossplane: true                          # Harbor provider (registry.type harbor); GitHub repo governance (addons/crossplane/cluster-mgmt.yaml)
+    dex: true                                 # Sign in with GitHub via Dex (active when secrets.githubLogin.enabled)
 
 secrets:
   backend: kubernetes                         # kubernetes | aws | vault

@@ -62,6 +62,9 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | addons.crossplane.roles[1] | string | `"workload"` |  |
 | addons.crossplane.serverSideDiff | bool | `true` |  |
 | addons.crossplane.valuesFromAddons[0] | string | `"moco"` |  |
+| addons.dex.default | bool | `false` |  |
+| addons.dex.namespace | string | `"dex"` |  |
+| addons.dex.roles[0] | string | `"mgmt"` |  |
 | addons.external-dns.clusterIdParameters[0] | string | `"external-dns.txtOwnerId"` |  |
 | addons.external-dns.default | bool | `false` |  |
 | addons.external-dns.installationParameters."external-dns.domainFilters" | string | `"{{ printf \"{%s}\" (join \",\" .Values.dns.domainFilters) }}"` |  |
@@ -207,6 +210,7 @@ Root GitOps chart of an installation. Renders Argo CD `AppProject`s (`platform`,
 | registry.hostCache.enabled | bool | `false` |  |
 | registry.type | string | `"external"` |  |
 | secrets.githubGateApp.enabled | bool | `false` |  |
+| secrets.githubLogin.enabled | bool | `false` |  |
 | sourceIntegrity.enabled | bool | `false` | Enables Git commit signature verification for `platform`, `fleet`, and `tenant` `AppProject`s. |
 | sourceIntegrity.keys[0] | string | `"B5690EEEBB952194"` |  |
 | sourceIntegrity.mode | string | `"head"` |  |

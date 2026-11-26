@@ -1,0 +1,43 @@
+{{- /* Dex's public host must match dex.<openchoreo.controlPlane.host>, and credentials must arrive via env vars (never inline). */ -}}
+{{- $cpHost := .Values.openchoreo.controlPlane.host }}
+{{- $wantDex := printf "dex.%s" $cpHost }}
+{{- $wantThunder := printf "thunder.%s" $cpHost }}
+{{- if not (has $wantDex (.Values.dex.httpRoute.hostnames | default list)) }}
+{{- fail (printf "dex.httpRoute.hostnames must contain %s (openchoreo.controlPlane.host)" $wantDex) }}
+{{- end }}
+{{- if not (contains $wantDex (.Values.dex.config.issuer | default "")) }}
+{{- fail (printf "dex.config.issuer must point at %s" $wantDex) }}
+{{- end }}
+{{- range $c := (.Values.dex.config.connectors | default list) }}
+  {{- if eq $c.type "github" }}
+    {{- $redir := $c.config.redirectURI | default "" }}
+    {{- if not (and (contains $wantDex $redir) (hasSuffix "/callback" $redir)) }}
+      {{- fail (printf "dex github connector redirectURI must point at %s (.../callback)" $wantDex) }}
+    {{- end }}
+    {{- if not (hasPrefix "$" ($c.config.clientID | default "")) }}
+      {{- fail "dex github connector clientID must reference an env var (e.g. $GITHUB_CLIENT_ID), never an inline literal" }}
+    {{- end }}
+    {{- if not (hasPrefix "$" ($c.config.clientSecret | default "")) }}
+      {{- fail "dex github connector clientSecret must reference an env var (e.g. $GITHUB_CLIENT_SECRET), never an inline literal" }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- range $sc := (.Values.dex.config.staticClients | default list) }}
+  {{- if hasKey $sc "secret" }}
+    {{- fail (printf "dex staticClient %s must use secretEnv, never an inline secret" $sc.id) }}
+  {{- end }}
+  {{- if eq $sc.id "thunder" }}
+    {{- if not ($sc.secretEnv | default "") }}
+      {{- fail "dex staticClient thunder must set secretEnv" }}
+    {{- end }}
+    {{- $cbOk := false }}
+    {{- range $u := ($sc.redirectURIs | default list) }}
+      {{- if and (contains $wantThunder $u) (hasSuffix "/gate/callback" $u) }}
+        {{- $cbOk = true }}
+      {{- end }}
+    {{- end }}
+    {{- if not $cbOk }}
+      {{- fail (printf "dex staticClient thunder redirectURIs must include %s (.../gate/callback)" $wantThunder) }}
+    {{- end }}
+  {{- end }}
+{{- end }}

@@ -187,6 +187,16 @@
               "description": "Render auto-build and PR previews (#192)."
             }
           }
+        },
+        "githubLogin": {
+          "type": "object",
+          "description": "GitHub OAuth App + Dex<->Thunder secret key (github-login) present in the store.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable Dex and Thunder Sign in with GitHub."
+            }
+          }
         }
       }
     },

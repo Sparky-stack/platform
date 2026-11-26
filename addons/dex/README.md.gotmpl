@@ -1,0 +1,19 @@
+{{- define "chart.purpose" -}}
+Wrapper chart for Dex (`0.26.0` / `v2.46.1`). Runs on `mgmt` as a temporary OIDC broker mapping GitHub org teams (`Sparky-stack:<team>`) into the OIDC `groups` claim for ThunderID until `thunder-id/thunderid#7069` ships native GitHub teams support.
+{{- end -}}
+
+{{- define "chart.whereItRuns" -}}
+- **Roles / providers:** `roles: [mgmt]`, all providers (`namespace: dex`).
+- **Catalog label:** `addons.platform.koorikla.io/dex` (`default: false`, opt-in with `"true"` on `mgmt` when `secrets.githubLogin.enabled` is true).
+{{- end -}}
+
+{{- define "chart.day2Notes" -}}
+- Uses single-replica `storage.type: memory` with `rbac.create: false` (no CRDs, no DB, clean removal in one PR); for HA production switch to `storage.type: kubernetes` + `rbac.create: true` or postgres.
+- Credentials arrive via `ExternalSecret/dex-secrets` from `ClusterSecretStore/platform` (`github-login`); `templates/validate.yaml` rejects inline literals and host drift.
+- `coredns-local` already rewrites `*.openchoreo.localhost` to `gateway-default`, so Thunder reaches `http://dex.openchoreo.localhost:8080` from inside the cluster.
+{{- end -}}
+
+{{- define "chart.links" -}}
+- [OpenChoreo](../../docs/openchoreo.md#sign-in-with-github)
+- [GitHub teams and roles](../../docs/github-repos.md#teams-and-roles)
+{{- end -}}

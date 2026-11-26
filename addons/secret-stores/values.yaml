@@ -88,6 +88,7 @@ platformStore:
     - argocd                           # platform-repo-creds (this chart)
     - fleet                            # <cluster>-registries, <cluster>-seed-* (charts/cluster); hetzner (charts/cluster scope fleet)
     - capa-system                      # capa-variables (charts/cluster scope fleet, AWS)
+    - dex                              # dex-secrets (addon dex: GitHub OAuth + Thunder client secret)
     - thunder                          # thunder-bootstrap (addon thunder)
     - openchoreo-control-plane         # backstage-secrets (addon openchoreo-control-plane)
     - openchoreo-observability-plane   # opensearch-admin-credentials, observer-secret (addon openchoreo-observability-plane)

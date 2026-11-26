@@ -24,7 +24,7 @@ Every store and its identity (ServiceAccount, plus a reader Role on the kubernet
 | dns.provider | string | `"none"` |  |
 | dnsStore.namespaces | list | `["external-dns"]` | Isolates Cloudflare `DNS:Edit` credentials in `ClusterSecretStore/dns` (`external-dns` only, with `secrets.dnsStore`). |
 | installation.githubOrg | string | `"https://github.com/Sparky-stack"` |  |
-| platformStore.namespaces | list | `["argocd","fleet","capa-system","thunder","openchoreo-control-plane","openchoreo-observability-plane","falco","argo-events","harbor","openbao","external-dns","agentgateway-system","crossplane-system"]` | Explicit `mgmt` namespaces permitted to reference `ClusterSecretStore/platform`. |
+| platformStore.namespaces | list | `["argocd","fleet","capa-system","dex","thunder","openchoreo-control-plane","openchoreo-observability-plane","falco","argo-events","harbor","openbao","external-dns","agentgateway-system","crossplane-system"]` | Explicit `mgmt` namespaces permitted to reference `ClusterSecretStore/platform`. |
 | previewToken.githubKey | string | `"promotion-gate-github"` |  |
 | previewToken.namespace | string | `"argocd"` |  |
 | previewToken.permissions.pull_requests | string | `"read"` |  |

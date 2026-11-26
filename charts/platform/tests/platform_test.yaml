@@ -511,3 +511,37 @@ tests:
           value: true
         template: appset-addons.yaml
         documentSelector: { path: metadata.name, value: addon-secret-stores }
+
+  - it: addon-dex is opt-in on mgmt only and gated on secrets.githubLogin.enabled
+    set:
+      mgmt.addons.dex: true
+    asserts:
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: addons.platform.koorikla.io/dex, operator: In, values: ["true"] }
+        template: appset-addons.yaml
+        documentSelector: { path: metadata.name, value: addon-dex }
+      - contains:
+          path: spec.generators[0].clusters.selector.matchExpressions
+          content: { key: platform.koorikla.io/role, operator: In, values: [mgmt] }
+        template: appset-addons.yaml
+        documentSelector: { path: metadata.name, value: addon-dex }
+      - equal:
+          path: 'metadata.labels["addons.platform.koorikla.io/dex"]'
+          value: "false"
+        template: cluster-mgmt.yaml
+
+  - it: enables addon-dex on in-cluster when secrets.githubLogin.enabled is true
+    set:
+      mgmt.addons.dex: true
+      secrets.githubLogin.enabled: true
+    asserts:
+      - equal:
+          path: 'metadata.labels["addons.platform.koorikla.io/dex"]'
+          value: "true"
+        template: cluster-mgmt.yaml
+      - equal:
+          path: spec.template.spec.source.helm.valuesObject.secrets.githubLogin.enabled
+          value: true
+        template: appset-addons.yaml
+        documentSelector: { path: metadata.name, value: addon-thunder }
