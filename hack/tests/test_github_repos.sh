@@ -14,6 +14,7 @@
 #      promotion PRs flowing (bypassApps always, platform-engineers by pull request only) and requires the declared checks from
 #      GitHub Actions; status.url comes from the observed repository.
 # Part 2 needs a Linux Docker engine; without one (macOS / Windows CI runners) it is skipped, part 1 still runs.
+# scoped-ci full-if: upjet-github|github\.m\.upbound\.io|githubRepos
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
