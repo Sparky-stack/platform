@@ -9,30 +9,13 @@
 # hack/tests/openbao_integration.sh (opt-in, docker), which also proves the 403s.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=openbao_lib.sh
+source "$(dirname "$0")/openbao_lib.sh"
 
 cd "$ROOT"
 S="$TMP/state"; BIN="$TMP/bin"; PD="$TMP/policies"
-mkdir -p "$S/policies" "$S/roles" "$BIN" "$PD"
-cat > "$BIN/bao" <<'FAKE'
-#!/usr/bin/env bash
-# fake bao: state under $FAKE_STATE, every call appended to $FAKE_STATE/calls
-set -u
-S=$FAKE_STATE
-printf '%s %s\n' "${BAO_TOKEN:-none}" "$*" >> "$S/calls"
-case "$1 ${2:-}" in
-  "write -field=token")
-    [[ -e "$S/login-fails" ]] && { echo "Code: 400. * invalid role name" >&2; exit 2; }
-    for a in "$@"; do [[ "$a" == role=* ]] && echo "tok-${a#role=}"; done; true ;;
-  "read -field=policy") n=${3##*/}; [[ -e "$S/policies/$n" ]] || exit 2; cat "$S/policies/$n" ;;
-  "policy write") cp "$4" "$S/policies/$3" ;;
-  "policy delete") rm -f "$S/policies/$3" ;;
-  "list sys/policies/acl") printf 'Keys\n----\n'; ls "$S/policies" ;;
-  "token revoke") ;;
-  write\ auth/kubernetes/role/*) r=${2##*/}; shift 2; printf '%s\n' "$@" > "$S/roles/$r" ;;
-  *) echo "fake bao: unhandled $*" >&2; exit 3 ;;
-esac
-FAKE
-chmod +x "$BIN/bao"
+mkdir -p "$S/policies" "$S/roles" "$S/writes" "$BIN" "$PD"
+fake_bin_bao "$BIN"
 
 helm template openbao addons/openbao --namespace openbao --values installations/local/installation.yaml \
   --set secrets.tenantStores.enabled=true -s templates/policy-reconcile.yaml \
@@ -105,7 +88,7 @@ for r in tenant-config tenant-writer; do
 done
 V=addons/openbao/values.yaml
 assert_eq "$(yq .tenantSecrets.loginRole $V)" tenant-config "tenant-reconcile logs in with the role the policy reconciler writes"
-role_field() { printf '%s\n' "$cfg" | awk -v p="auth/kubernetes/role/$1" -v k="$2" '$0 ~ "path *= \"" p "\"" {f=1} f && $1 == k && !n++ {sub(/.*= /, ""); print}'; }
+role_field() { openbao_role_field "$cfg" "$1" "$2"; }
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" bound_service_account_names)" "[\"$(yq .policyReconciler.serviceAccount $V)\"]" "self-init: policyReconciler.loginRole bound to policyReconciler.serviceAccount only"
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" bound_service_account_namespaces)" '["openbao"]' "self-init: ... in namespace openbao"
 assert_eq "$(role_field "$(yq .policyReconciler.loginRole $V)" token_policies)" "[\"$(yq .policyReconciler.loginRole $V)\"]" "self-init: ... with its own policy only"

@@ -241,24 +241,18 @@ if ! "$PYTHON" -c 'import zoneinfo; zoneinfo.ZoneInfo("Europe/Tallinn")' >/dev/n
   finish
   exit 0
 fi
-if out=$(cd "$dir" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_gate 2>&1); then
-  assert_eq ok ok "gate.py unit tests"
-else
-  echo "$out" >&2
-  assert_eq failed ok "gate.py unit tests"
-fi
-if out=$(cd "$ROOT/addons/argo-events/files" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_falco_response 2>&1); then
-  assert_eq ok ok "falco_response.py unit tests"
-else
-  echo "$out" >&2
-  assert_eq failed ok "falco_response.py unit tests"
-fi
-if out=$(cd "$ROOT/addons/openchoreo-platform/files/auto-build" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q test_auto_build 2>&1); then
-  assert_eq ok ok "auto_build.py unit tests"
-else
-  echo "$out" >&2
-  assert_eq failed ok "auto_build.py unit tests"
-fi
+for py_suite in \
+  "addons/openchoreo-platform/files/promotion-gate:test_gate:gate.py unit tests" \
+  "addons/argo-events/files:test_falco_response:falco_response.py unit tests" \
+  "addons/openchoreo-platform/files/auto-build:test_auto_build:auto_build.py unit tests"; do
+  IFS=: read -r py_dir py_mod py_label <<<"$py_suite"
+  if out=$(cd "$ROOT/$py_dir" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest -q "$py_mod" 2>&1); then
+    assert_eq ok ok "$py_label"
+  else
+    echo "$out" >&2
+    assert_eq failed ok "$py_label"
+  fi
+done
 # shellcheck disable=SC2016  # literal template marker
 hits=$(grep -c -e '{{' "$ROOT/addons/openchoreo-platform/files/auto-build/auto_build.py" || true)
 assert_eq "$hits" "0" "auto_build.py contains no Argo template markers"
