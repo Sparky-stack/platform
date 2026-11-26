@@ -3,7 +3,7 @@ by ESO, and a Role letting OpenChoreo's workflow-plane agent apply each run's Gi
 {{- if and .Values.openchoreo.workflowPlane.enabled .Values.buildWorkflows.enabled }}
 {{- $g := .Values.buildWorkflows.github }}
 {{- $ns := printf "workflows-%s" .Values.openchoreo.orgNamespace }}
-{{ include "platform.githubAppSecret" (dict "name" $g.appSecret "namespace" $ns "store" $g.secretStore "key" $g.key) }}
+{{ include "platform.githubAppSecret" (dict "name" "build-github-app" "namespace" $ns "store" $g.secretStore "key" $g.key) }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
