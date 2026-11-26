@@ -2,6 +2,26 @@
 
 Platform releases (`vX.Y.Z`), maintained by release-please ([docs/releases.md](docs/releases.md)).
 
+## [0.11.0](https://github.com/Sparky-stack/platform/compare/v0.10.0...v0.11.0) (2026-11-26)
+
+
+### Features
+
+* **bootstrap:** stable lab login passwords from ~/.config/koorikla-platform/lab-logins.env ([#417](https://github.com/Sparky-stack/platform/issues/417)) ([f2f6b45](https://github.com/Sparky-stack/platform/commit/f2f6b4535ac679fe8d3185d10710f5ee8378c723))
+* **bootstrap:** task status lists every UI with its URL and password command; README activates mise ([#414](https://github.com/Sparky-stack/platform/issues/414)) ([7fff319](https://github.com/Sparky-stack/platform/commit/7fff319126179ef9cb2041d235fcc0c51f6dd0f5))
+* four GitHub org teams as platform roles ([#420](https://github.com/Sparky-stack/platform/issues/420)) ([7a1020c](https://github.com/Sparky-stack/platform/commit/7a1020c62f4ce264e0b6bc80b8c19caf37c2b86a))
+* **github:** repo governance as code with provider-upjet-github on mgmt, existing repos Observe-only ([#100](https://github.com/Sparky-stack/platform/issues/100)) ([#413](https://github.com/Sparky-stack/platform/issues/413)) ([42d6eb7](https://github.com/Sparky-stack/platform/commit/42d6eb768d35b6a81b64f350ac86f95dfd51e1a3))
+* **harbor:** declarative Harbor config via provider-upjet-harbor, Crossplane on mgmt ([#394](https://github.com/Sparky-stack/platform/issues/394)) ([#411](https://github.com/Sparky-stack/platform/issues/411)) ([8449df1](https://github.com/Sparky-stack/platform/commit/8449df12329e4d0bd3f86cbe52689bc3400257e5))
+* **identity:** sign in with GitHub, teams -&gt; Thunder groups via Dex ([#429](https://github.com/Sparky-stack/platform/issues/429)) ([3f46872](https://github.com/Sparky-stack/platform/commit/3f46872558a6e3e720e3d7f33b75ca5a5f36b765))
+
+
+### Bug Fixes
+
+* **crossplane:** adopt existing GitHub teams by id so clean rebuilds converge ([#430](https://github.com/Sparky-stack/platform/issues/430)) ([a2ade17](https://github.com/Sparky-stack/platform/commit/a2ade17f133e7dccb7453ddf3e13277932aa4004))
+* **dex:** writable /tmp under the read-only root filesystem ([#431](https://github.com/Sparky-stack/platform/issues/431)) ([d20582c](https://github.com/Sparky-stack/platform/commit/d20582c1a291eff6bb06b9a5ebb0bfda013b038b))
+* **previews:** no preview until the auto-build pass grants a slot of the tenant cap ([#385](https://github.com/Sparky-stack/platform/issues/385)) ([#409](https://github.com/Sparky-stack/platform/issues/409)) ([9072afd](https://github.com/Sparky-stack/platform/commit/9072afde6fc1572f937de07f28b45d2aaaa98b0e))
+* **templates:** golden-path services under Create &gt; Component in the OpenChoreo console ([#415](https://github.com/Sparky-stack/platform/issues/415)) ([401c8d8](https://github.com/Sparky-stack/platform/commit/401c8d8efcecde236a87192ebfda5f18e07f0c39))
+
 ## [0.10.0](https://github.com/koorikla/platform/compare/v0.9.0...v0.10.0) (2026-11-22)
 
 
