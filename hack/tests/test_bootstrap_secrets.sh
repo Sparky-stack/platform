@@ -98,7 +98,7 @@ chmod +x "$BIN/"*
 PEM="$TMP/app.pem"
 printf -- '-----BEGIN FAKE KEY-----\nFAKEPEMBODY\n-----END FAKE KEY-----\n' > "$PEM"
 chmod 600 "$PEM"
-SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY|FAKEKEEP'
+SECRETS='github_pat_FAKE|ghp_FAKE|gho_FAKE|GHCRFAKE|FAKEPEMBODY|FAKECOSIGNKEY|FAKEKEEP|GHLOGINFakeSec'
 
 # run <name> <call> [VAR=val ...]: run a bootstrap function in a clean environment; sets RC, OUT (stdout+stderr,
 # colours stripped) and HLOG (calls, apply.N.yaml).
@@ -497,5 +497,40 @@ assert_eq "$RC" 0 "byo unseeded: not fatal"
 assert_eq "$(applied byo-byo-test)" "" "byo unseeded: nothing applied"
 assert_eq "$(has "$OUT" 'byo-byo-test: no .BYO_KUBECONFIG_BYO_TEST and no k3d cluster byo-test')" yes "byo unseeded: warns"
 rm -f "$BYOF"
+
+# --- github-login: OAuth App files + stable @strong Dex<->Thunder secret --------------------------------------------
+GHL="$TMP/ghlogin-cfg"; GHL_DIR="$GHL/koorikla-platform"
+run ghlogin_missing "seed_github_login_secret" XDG_CONFIG_HOME="$GHL"
+assert_eq "$RC" 0 "github-login missing: rc"
+assert_eq "$(applied github-login)" "" "github-login missing: nothing applied"
+assert_match "$OUT" 'skipping GitHub login' "github-login missing: one-line note"
+mkdir -p "$GHL_DIR"
+printf '{"client_id":"Ov23liTestClient","owner":"Sparky-stack","redirect_uri":"http://dex.openchoreo.localhost:8080/callback"}\n' > "$GHL_DIR/github-login.json"
+printf 'GHLOGINFakeSec999\n' > "$GHL_DIR/github-login.secret"
+chmod 600 "$GHL_DIR/github-login.secret"
+run ghlogin_seed "seed_github_login_secret" XDG_CONFIG_HOME="$GHL"
+assert_eq "$RC" 0 "github-login present: rc"
+assert_eq "$(keys github-login)" "github-client-id,github-client-secret,thunder-client-secret" "github-login: keys"
+assert_eq "$(val github-login github-client-id)" Ov23liTestClient "github-login: client_id from json"
+assert_eq "$(val github-login github-client-secret)" GHLOGINFakeSec999 "github-login: client_secret from secret file"
+dex1=$(val github-login thunder-client-secret)
+assert_match "$dex1" '^Px9![A-Za-z0-9]{24}$' "github-login: thunder-client-secret is @strong"
+assert_eq "$(grep -cF -- "$dex1" "$HLOG/out" || true)" 0 "github-login: dex secret never in output"
+assert_eq "$(grep -cF -- "$dex1" "$HLOG/calls" || true)" 0 "github-login: dex secret never in argv"
+assert_eq "$(has "$OUT" 'group/others')" no "github-login: mode 600 secret file has no mode warning"
+# Clean rebuild (empty store): same thunder-client-secret from lab-logins.env.
+run ghlogin_rebuild "seed_github_login_secret" XDG_CONFIG_HOME="$GHL" FAKE_SECRET_DIR="$TMP/empty"
+assert_eq "$(hs "$(val github-login thunder-client-secret)")" "$(hs "$dex1")" "github-login: rebuild keeps same dex secret"
+# Root app parameter secrets.githubLogin.enabled follows platform-secrets/github-login.
+mkdir -p "$TMP/ghlogin-seeded"; printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: github-login\n' > "$TMP/ghlogin-seeded/github-login.yaml"
+ghl_param() { printf '%s\n' "$OUT" | yq -r '.spec.source.helm.parameters // [] | map(select(.name == "secrets.githubLogin.enabled")) | .[0].value // "none"'; }
+run root_ghl_on "root_app_manifest" FAKE_SECRET_DIR="$TMP/ghlogin-seeded"
+assert_eq "$(ghl_param)" true "root app: github-login seeded -> secrets.githubLogin.enabled=true"
+run root_ghl_off "root_app_manifest" FAKE_SECRET_DIR="$TMP/empty"
+assert_eq "$(ghl_param)" false "root app: no github-login -> secrets.githubLogin.enabled=false"
+yq -i '.secrets.githubLogin.enabled = false' "$LOCAL_INST"
+run root_ghl_forced "root_app_manifest" FAKE_SECRET_DIR="$TMP/ghlogin-seeded"
+assert_eq "$(ghl_param)" false "root app: installation.yaml false wins over seeded github-login"
+nra true
 
 finish

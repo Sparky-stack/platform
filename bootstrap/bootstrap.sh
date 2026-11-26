@@ -301,7 +301,10 @@ rand_login() {
 
 # --- lab logins: the local lab's UI passwords live in a file outside the cluster, so they survive `task down && up` ---
 
-lab_logins_file() { printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/koorikla-platform/lab-logins.env"; }
+config_dir() { printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/koorikla-platform"; }
+lab_logins_file() { printf '%s\n' "$(config_dir)/lab-logins.env"; }
+github_login_json() { printf '%s\n' "$(config_dir)/github-login.json"; }
+github_login_secret_file() { printf '%s\n' "$(config_dir)/github-login.secret"; }
 
 # lab_login <VAR>: the value of VAR=... in the lab logins file, "" without file or line. Read line by line, never sourced.
 lab_login() {
@@ -390,6 +393,35 @@ seed_harbor_secret() {
 # regenerated: OpenBao's storage is encrypted with it and self-initialisation creates no recovery keys.
 seed_openbao_secret() {
   seed_generated_secret openbao-unseal key=@hex32
+}
+
+# GitHub OAuth App credentials (addons dex + thunder: Sign in with GitHub). Reads client_id from github-login.json and
+# client_secret from github-login.secret (mode 600) under config_dir(), and generates a stable @strong Dex<->Thunder
+# client secret persisted in lab-logins.env. Missing files skip GitHub login so demo users still work.
+seed_github_login_secret() {
+  local j s cid csec dex_sec existing saved perms
+  j=$(github_login_json); s=$(github_login_secret_file)
+  if [[ ! -r "$j" || ! -r "$s" ]]; then
+    log "  github-login: $j / $s not found; skipping GitHub login (demo users still work)"
+    return 0
+  fi
+  perms=$(file_group_other_perms "$s")
+  [[ -z "$perms" || "$perms" == "------" ]] \
+    || warn "$s is accessible by group/others (mode ...${perms}): chmod 600 it"
+  cid=$(yq -r '.client_id // ""' "$j" | tr -d '\r\n')
+  [[ -n "$cid" ]] || die "github-login: $j has no client_id"
+  csec=$(tr -d '\r\n' < "$s")
+  [[ -n "$csec" ]] || die "github-login: $s is empty"
+  existing=$(get_secret_yaml platform-secrets github-login) \
+    || die "failed to look up secret platform-secrets/github-login in context '$CTX'; refusing to generate or overwrite secrets"
+  saved=$(lab_login DEX_THUNDER_CLIENT_SECRET); dex_sec=$saved
+  [[ -z "$dex_sec" && -n "$existing" ]] \
+    && dex_sec=$(printf '%s\n' "$existing" | yq -r '.data["thunder-client-secret"] // ""' 2>/dev/null | b64dec 2>/dev/null || true)
+  [[ -n "$dex_sec" ]] || dex_sec="Px9!$(rand_alnum)"
+  [[ -z "$saved" ]] && save_lab_login DEX_THUNDER_CLIENT_SECRET "$dex_sec"
+  # shellcheck disable=SC2034  # cid, csec, dex_sec are read by apply_secret through their names
+  apply_secret platform-secrets github-login github-client-id=cid github-client-secret=csec thunder-client-secret=dex_sec
+  log "  github-login: GitHub OAuth client from $j (Dex<->Thunder secret in $(lab_logins_file))"
 }
 
 # Platform cosign key pair for in-cluster builds, generated once with the build steps' toolbox image (no host install;
@@ -542,6 +574,7 @@ cmd_secrets() {
   seed_harbor_secret
   seed_cosign_secret
   seed_openbao_secret
+  seed_github_login_secret
   log "  openchoreo, openchoreo-observability, harbor, cosign-platform, openbao-unseal: generated once, kept on re-runs"
   log "  console, Thunder and Harbor admin passwords: $(lab_logins_file) (kept across task down/up)"
   local perms
@@ -567,6 +600,19 @@ gate_app_enabled() {
   fi
 }
 
+# github_login_enabled -> true|false|"": root app value secrets.githubLogin.enabled. kubernetes backend: true iff
+# github-login is seeded and installation.yaml does not say false; other backends: "" (installation.yaml decides).
+github_login_enabled() {
+  [[ "$BACKEND" == kubernetes ]] || return 0
+  if [[ "$(yq '.secrets.githubLogin.enabled' "$INST_FILE")" == false ]]; then
+    echo false
+  elif kubectl --context "$CTX" -n platform-secrets get secret github-login -o name >/dev/null 2>&1; then
+    echo true
+  else
+    echo false
+  fi
+}
+
 # registry_cache_enabled -> true|false: installation.yaml registry.hostCache.enabled unless REGISTRY_CACHE=0. A root app
 # parameter, so CAPD nodes mirror to the host caches (hack/registry-cache.sh) only while they run.
 registry_cache_enabled() {
@@ -579,11 +625,11 @@ registry_cache_enabled() {
   fi
 }
 
-# root_app_manifest: bootstrap/root-app.yaml for this installation (repo, revision, value file, gate_app_enabled).
+# root_app_manifest: bootstrap/root-app.yaml for this installation (repo, revision, value file, gate/login toggles).
 root_app_manifest() {
   REPO_URL="$REPO_URL" REVISION="$REVISION" INST_NAME="$INST" GATE="$(gate_app_enabled)" \
-    CACHE="$(registry_cache_enabled)" \
-    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"] | .spec.source.helm.parameters = [{"name": "registry.hostCache.enabled", "value": strenv(CACHE)}] | with(select(strenv(GATE) != ""); .spec.source.helm.parameters += [{"name": "secrets.githubGateApp.enabled", "value": strenv(GATE)}])' \
+    GH_LOGIN="$(github_login_enabled)" CACHE="$(registry_cache_enabled)" \
+    yq '.spec.source.repoURL = strenv(REPO_URL) | .spec.source.targetRevision = strenv(REVISION) | .spec.source.helm.valueFiles = ["../../installations/" + strenv(INST_NAME) + "/installation.yaml"] | .spec.source.helm.parameters = [{"name": "registry.hostCache.enabled", "value": strenv(CACHE)}] | with(select(strenv(GATE) != ""); .spec.source.helm.parameters += [{"name": "secrets.githubGateApp.enabled", "value": strenv(GATE)}]) | with(select(strenv(GH_LOGIN) != ""); .spec.source.helm.parameters += [{"name": "secrets.githubLogin.enabled", "value": strenv(GH_LOGIN)}])' \
     bootstrap/root-app.yaml
 }
 
