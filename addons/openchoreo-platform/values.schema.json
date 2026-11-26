@@ -372,16 +372,6 @@
           "description": "Commit status context.",
           "minLength": 1
         },
-        "baseBranch": {
-          "type": "string",
-          "description": "Branch the gate opens PRs against.",
-          "minLength": 1
-        },
-        "bindingPath": {
-          "type": "string",
-          "description": "Path of the ReleaseBinding file in the app repo ({environment} placeholder).",
-          "minLength": 1
-        },
         "smoke": {
           "type": "object",
           "description": "HTTP smoke test.",
@@ -539,12 +529,6 @@
               "description": "Store key of the platform GitHub App.",
               "minLength": 1
             },
-            "appSecret": {
-              "type": "string",
-              "description": "ExternalSecret with the App credentials in workflows-<org>.",
-              "minLength": 1,
-              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
-            },
             "secretStore": {
               "type": "string",
               "description": "ClusterSecretStore (addon secret-stores) the ExternalSecret reads from.",
@@ -588,7 +572,6 @@
           },
           "required": [
             "key",
-            "appSecret",
             "permissions",
             "readPermissions",
             "tokenRefreshInterval"
@@ -687,12 +670,6 @@
           "type": "integer",
           "description": "Stop when GitHub rate limit falls below this.",
           "minimum": 0
-        },
-        "stateConfigMap": {
-          "type": "string",
-          "description": "ConfigMap with the pass state.",
-          "minLength": 1,
-          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
         },
         "secretStore": {
           "type": "string",
@@ -822,6 +799,17 @@
           "type": "boolean",
           "description": "Render preview RBAC and passes."
         },
+        "ttl": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Preview lifetime before expiry (e.g. 48h)."
+        },
+        "expiredLabel": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+          "description": "PR label applied when a preview expires."
+        },
         "maxPerTenant": {
           "type": "integer",
           "minimum": 1,
@@ -858,18 +846,6 @@
         "enabled": {
           "type": "boolean",
           "description": "Render it."
-        },
-        "name": {
-          "type": "string",
-          "description": "ClusterWorkflow name.",
-          "minLength": 1,
-          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
-        },
-        "workflowTemplate": {
-          "type": "string",
-          "description": "ClusterWorkflowTemplate.",
-          "minLength": 1,
-          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
         }
       }
     }

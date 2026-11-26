@@ -6,6 +6,7 @@
 {{- $name := .Values.name }}
 {{- $nr := .Values.nodeRegistry }}
 {{- $host := .Values.registry.host }}
+{{- $dockerAuth := printf "dict \"auths\" (dict %s (dict \"username\" %s \"password\" .nodesSecret \"auth\" (printf \"%%s:%%s\" %s .nodesSecret | b64enc))) | toJson" (quote $host) (quote $nr.robot) (quote $nr.robot) }}
 {{- if eq (include "capi.byo" .) "true" }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -60,7 +61,7 @@ spec:
       engineVersion: v2
       type: kubernetes.io/dockerconfigjson
       data:   # gitleaks:allow: ESO template; the pull-only robot secret comes from the store
-        .dockerconfigjson: '{{ printf "{{ dict \"auths\" (dict %s (dict \"username\" %s \"password\" .nodesSecret \"auth\" (printf \"%%s:%%s\" %s .nodesSecret | b64enc))) | toJson }}" (quote $host) (quote $nr.robot) (quote $nr.robot) }}'
+        .dockerconfigjson: '{{ printf "{{ %s }}" $dockerAuth }}'
   data:
     - secretKey: nodesSecret
       remoteRef: { key: {{ $nr.secretKey }}, property: {{ $nr.secretProperty }} }
@@ -109,7 +110,7 @@ spec:
             namespace: {{ $iv.namespace }}
           type: kubernetes.io/dockerconfigjson
           data:
-            .dockerconfigjson: {{ printf "{{ dict \"auths\" (dict %s (dict \"username\" %s \"password\" .nodesSecret \"auth\" (printf \"%%s:%%s\" %s .nodesSecret | b64enc))) | toJson | b64enc }}" (quote $host) (quote $nr.robot) (quote $nr.robot) }}
+            .dockerconfigjson: {{ printf "{{ %s | b64enc }}" $dockerAuth }}
   data:
     - secretKey: cosignPub
       remoteRef: { key: {{ $iv.cosignKey }}, property: cosign.pub }
@@ -122,22 +123,7 @@ spec:
           kind: ClusterSecretStore
           name: {{ $nr.caStore }}
 ---
-apiVersion: addons.cluster.x-k8s.io/v1beta2
-kind: ClusterResourceSet
-metadata:
-  name: {{ $name }}-image-verification
-  namespace: fleet
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-    argocd.argoproj.io/sync-wave: "1"   # after its payload (wave 0) and the Cluster: docs/providers.md "Sync waves of a cluster app"
-spec:
-  strategy: Reconcile
-  clusterSelector:
-    matchLabels:
-      platform.koorikla.io/name: {{ $name }}
-  resources:
-    - kind: Secret
-      name: {{ $name }}-image-verification
+{{ include "capi.clusterResourceSet" (dict "cluster" $name "name" (printf "%s-image-verification" $name) "skipDryRun" true "resources" (list (dict "kind" "Secret" "name" (printf "%s-image-verification" $name)))) }}
 {{- end }}
 {{- end }}
 {{- end }}

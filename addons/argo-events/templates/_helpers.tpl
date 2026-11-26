@@ -61,3 +61,14 @@ container:
         - ALL
     readOnlyRootFilesystem: true
 {{- end }}
+
+{{- /* Shared container tail (resources, restricted securityContext, /scripts mount) for falco-response steps. */ -}}
+{{- define "ae.falcoScriptTrailer" -}}
+resources: {{- toYaml . | nindent 2 }}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+volumeMounts:
+  - { name: scripts, mountPath: /scripts, readOnly: true }
+{{- end }}

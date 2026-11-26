@@ -169,22 +169,65 @@ for s in "${suites[@]}"; do
   ) &
 done
 
+apply_cases() {   # apply_cases <policy(@RES@)> <dir> <crd|-> <prefix> <who|res|want>...
+  local pol=$1 dir=$2 crd=$3 prefix=$4 c who res want uargs=() cargs=()
+  shift 4
+  [[ "$crd" == - ]] || cargs=(--crd-paths "$crd")
+  for c in "$@"; do
+    IFS='|' read -r who res want <<<"$c"
+    uargs=(); [[ "$who" == - ]] || uargs=(--userinfo "$dir/$who.yaml")
+    "$KYVERNO" apply "${pol//@RES@/$res}" --resource "$dir/$res.yaml" ${uargs[@]+"${uargs[@]}"} \
+      --values-file "$dir/values.yaml" ${cargs[@]+"${cargs[@]}"} > "$TMP/$prefix-$who-$res.out" 2>&1 || true
+  done
+}
+assert_apply_cases() {
+  local label=$1 dir=$2 prefix=$3 c who res want
+  shift 3
+  for c in "$@"; do
+    IFS='|' read -r who res want <<<"$c"
+    assert_match "$(cat "$TMP/$prefix-$who-$res.out")" "$want" "$label: $who applying $dir/$res.yaml -> $want"
+  done
+}
+
+OCP_CASES=(
+  'argocd|resources|pass: 1, fail: 0, warn: 0, error: 0'
+  'api|resources|pass: 0, fail: 1, warn: 0, error: 0'
+  'argocd|smuggled|pass: 0, fail: 5, warn: 0, error: 0'
+  'argocd|resource-bindings|pass: 1, fail: 0, warn: 0, error: 0'
+  'api|resource-bindings|pass: 0, fail: 1, warn: 0, error: 0'
+  'argocd|resource-bindings-smuggled|pass: 0, fail: 4, warn: 0, error: 0'
+)
+AE_CASES=(
+  'sensor|allowed|pass: 1, fail: 0, warn: 0, error: 0'
+  'sensor|denied|pass: 0, fail: 13, warn: 0, error: 0'
+)
+AB_CASES=(
+  'sensor|allowed|pass: 1, fail: 0, warn: 0, error: 0'
+  'sensor|denied|pass: 0, fail: 7, warn: 0, error: 0'
+  'agent|denied|pass: 0, fail: 0, warn: 0, error: 0'
+)
+SS_CASES=(
+  'tenant|externalsecrets|pass: 2, fail: 4, warn: 0, error: 0'
+  'tenant|secretstores|pass: 0, fail: 1, warn: 0, error: 0'
+  'kyverno|secretstores|pass: 1, fail: 0, warn: 0, error: 0'
+)
+XP_CASES=(
+  'tenant|raw-objects|pass: 0, fail: 4, warn: 0, error: 0, skip: 0'
+  'crossplane|raw-objects|pass: 0, fail: 0, warn: 0, error: 0, skip: 4'
+  'tenant|platform-namespace|pass: 0, fail: 0, warn: 0, error: 0, skip: 1'
+  'tenant|xrs|pass: 1, fail: 2, warn: 0, error: 0, skip: 0'
+)
+
 # Native VAP: promotion to gated environments only through git (Argo CD)
 ocp="$ROOT/addons/openchoreo-platform"
 (
   helm show crds "$cp_chart" | yq 'select(.metadata.name == "releasebindings.openchoreo.dev" or .metadata.name == "resourcereleasebindings.openchoreo.dev")' > "$TMP/rb-crd.yaml"
   helm template openchoreo-platform "$ocp" --namespace default -s templates/promotion-git-only.yaml > "$TMP/vap.yaml"
-  for c in argocd:resources api:resources argocd:smuggled argocd:resource-bindings api:resource-bindings \
-    argocd:resource-bindings-smuggled; do
-    who=${c%%:*}; res=${c#*:}
-    "$KYVERNO" apply "$TMP/vap.yaml" --resource "$ocp/tests/vap/$res.yaml" --userinfo "$ocp/tests/vap/$who.yaml" \
-      --values-file "$ocp/tests/vap/values.yaml" --crd-paths "$TMP/rb-crd.yaml" > "$TMP/ocp-$who-$res.out" 2>&1 || true
-  done
+  apply_cases "$TMP/vap.yaml" "$ocp/tests/vap" "$TMP/rb-crd.yaml" ocp "${OCP_CASES[@]}"
 ) &
 
 # Native VAP: Workflows in argo-events run only WorkflowTemplate falco-response (the Sensor's pin)
-# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule - spec kept, except
-# shutdown/suspend - is pinned by the addon's helm-unittest and was checked against a real API server in #77.)
+# (The kyverno CLI evaluates native VAPs as CREATE only, oldObject unset: the UPDATE rule is pinned by helm-unittest.)
 ae="$ROOT/addons/argo-events"
 wp_chart="$ROOT/addons/openchoreo-workflow-plane"
 [[ -d "$wp_chart/charts" ]] || helm dependency build "$wp_chart" >/dev/null
@@ -193,21 +236,13 @@ wp_chart="$ROOT/addons/openchoreo-workflow-plane"
   yq 'select(.kind == "CustomResourceDefinition" and .metadata.name == "workflows.argoproj.io")' "$TMP/wp.yaml" > "$TMP/wf-crd.yaml"
   helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true -s templates/workflow-admission.yaml \
     > "$TMP/ae-vap.yaml"
-  for res in allowed denied; do
-    "$KYVERNO" apply "$TMP/ae-vap.yaml" --resource "$ae/tests/vap/$res.yaml" --userinfo "$ae/tests/vap/sensor.yaml" \
-      --values-file "$ae/tests/vap/values.yaml" --crd-paths "$TMP/wf-crd.yaml" > "$TMP/ae-$res.out" 2>&1 || true
-  done
+  apply_cases "$TMP/ae-vap.yaml" "$ae/tests/vap" "$TMP/wf-crd.yaml" ae "${AE_CASES[@]}"
   # auto-build webhook (#164): the Sensor's Workflows in the run namespace run only WorkflowTemplate auto-build;
   # other creators there (OpenChoreo's agent: builds, gates) are not matched.
   helm template argo-events "$ae" --namespace argo-events --set workflowPlane=true \
     --set openchoreo.workflowPlane.autoBuild=webhook --set secrets.githubGateApp.enabled=true -s templates/auto-build-webhook.yaml \
     | yq 'select(.kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding")' > "$TMP/ab-vap.yaml"
-  for c in sensor:allowed sensor:denied agent:denied; do
-    who=${c%%:*}; res=${c#*:}
-    "$KYVERNO" apply "$TMP/ab-vap.yaml" --resource "$ae/tests/vap-auto-build/$res.yaml" \
-      --userinfo "$ae/tests/vap-auto-build/$who.yaml" --values-file "$ae/tests/vap-auto-build/values.yaml" \
-      --crd-paths "$TMP/wf-crd.yaml" > "$TMP/ab-$who-$res.out" 2>&1 || true
-  done
+  apply_cases "$TMP/ab-vap.yaml" "$ae/tests/vap-auto-build" "$TMP/wf-crd.yaml" ab "${AB_CASES[@]}"
 ) &
 
 # Native VAPs of addon secret-stores: tenant namespaces use only their own SecretStore (per-tenant OpenBao stores)
@@ -221,16 +256,10 @@ eso="$ROOT/addons/external-secrets"
   helm template secret-stores "$ss" --namespace external-secrets -f "$ss/values/role-workload.yaml" \
     --set secrets.tenantStores.enabled=true --set cluster.name=dev1 --set mesh.ca.host=openbao.example.test \
     -s templates/tenant-stores.yaml > "$TMP/ss-tenant.yaml"
-  # one policy per run (the CLI applies every given VAP to every given resource; namespaceSelector and resource rules
-  # are pinned by the addon's helm-unittest)
   for p in externalsecrets:platform-tenant-externalsecret-store secretstores:platform-tenant-secretstores-platform-owned; do
     yq "select(.metadata.name == \"${p#*:}\")" "$TMP/ss-tenant.yaml" > "$TMP/ss-vap-${p%%:*}.yaml"
   done
-  for c in tenant:externalsecrets tenant:secretstores kyverno:secretstores; do
-    who=${c%%:*}; res=${c#*:}
-    "$KYVERNO" apply "$TMP/ss-vap-$res.yaml" --resource "$ss/tests/vap/$res.yaml" --userinfo "$ss/tests/vap/$who.yaml" \
-      --values-file "$ss/tests/vap/values.yaml" --crd-paths "$TMP/eso-crds.yaml" > "$TMP/ss-$who-$res.out" 2>&1 || true
-  done
+  apply_cases "$TMP/ss-vap-@RES@.yaml" "$ss/tests/vap" "$TMP/eso-crds.yaml" ss "${SS_CASES[@]}"
 ) &
 
 # Kyverno GeneratingPolicy of addon openbao (#267): a tenant descriptor per preview ProjectReleaseBinding
@@ -249,11 +278,7 @@ xp="$ROOT/addons/crossplane"
 [[ -d "$xp/charts" ]] || helm dependency build "$xp" >/dev/null
 (
   helm template crossplane "$xp" --namespace crossplane-system -s templates/policies.yaml > "$TMP/xp-policies.yaml"
-  for c in raw-objects:tenant raw-objects:crossplane platform-namespace:tenant xrs:tenant; do
-    res=${c%%:*}; who=${c#*:}
-    "$KYVERNO" apply "$TMP/xp-policies.yaml" --resource "$xp/tests/kyverno/$res.yaml" \
-      --userinfo "$xp/tests/kyverno/$who.yaml" --values-file "$xp/tests/kyverno/values.yaml" > "$TMP/xp-$res-$who.out" 2>&1 || true
-  done
+  apply_cases "$TMP/xp-policies.yaml" "$xp/tests/kyverno" - xp "${XP_CASES[@]}"
 ) &
 # PR previews on mgmt (templates/previews.yaml, #168): the expiry stamp and the TTL DeletingPolicy stay here because
 # both are relative to the current time (kyverno test fixtures are static); the cap is suite tests/kyverno/previews.
@@ -287,44 +312,12 @@ for s in "${suites[@]}"; do
 done
 [[ "${KYVERNO_ONLINE:-0}" == "1" ]] || echo "  SKIP signatures, signatures-transition (needs network: KYVERNO_ONLINE=1)"
 
-# who:resources:expected  (staging bindings are out of scope and not counted)
-for c in argocd:resources:'pass: 1, fail: 0, warn: 0, error: 0' api:resources:'pass: 0, fail: 1, warn: 0, error: 0' \
-  argocd:smuggled:'pass: 0, fail: 5, warn: 0, error: 0' argocd:resource-bindings:'pass: 1, fail: 0, warn: 0, error: 0' \
-  api:resource-bindings:'pass: 0, fail: 1, warn: 0, error: 0' argocd:resource-bindings-smuggled:'pass: 0, fail: 4, warn: 0, error: 0'; do
-  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
-  out=$(cat "$TMP/ocp-$who-$res.out")
-  assert_match "$out" "$want" "VAP openchoreo-gated-bindings-from-git: $who applying tests/vap/$res.yaml -> $want"
-done
-
+assert_apply_cases "VAP openchoreo-gated-bindings-from-git" tests/vap ocp "${OCP_CASES[@]}"
 assert_nonempty "$(yq '.metadata.name' "$TMP/wf-crd.yaml")" "Argo Workflow CRD rendered from addon openchoreo-workflow-plane"
-for c in allowed:'pass: 1, fail: 0' denied:'pass: 0, fail: 13'; do
-  res=${c%%:*}; want=${c#*:}
-  out=$(cat "$TMP/ae-$res.out")
-  assert_match "$out" "$want, warn: 0, error: 0" "VAP argo-events-workflows-falco-response-only: tests/vap/$res.yaml -> $want"
-done
-for c in sensor:allowed:'pass: 1, fail: 0, warn: 0, error: 0' sensor:denied:'pass: 0, fail: 7, warn: 0, error: 0' \
-  agent:denied:'pass: 0, fail: 0, warn: 0, error: 0'; do
-  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
-  out=$(cat "$TMP/ab-$who-$res.out")
-  assert_match "$out" "$want" "VAP argo-events-auto-build-workflows: $who applying tests/vap-auto-build/$res.yaml -> $want"
-done
-
-# who:resources:expected
-for c in tenant:externalsecrets:'pass: 2, fail: 4' tenant:secretstores:'pass: 0, fail: 1' kyverno:secretstores:'pass: 1, fail: 0'; do
-  who=${c%%:*}; rest=${c#*:}; res=${rest%%:*}; want=${rest#*:}
-  out=$(cat "$TMP/ss-$who-$res.out")
-  assert_match "$out" "$want, warn: 0, error: 0" "secret-stores tenant VAPs: $who applying tests/vap/$res.yaml -> $want"
-done
-
-# resources:userinfo:expected
-for c in raw-objects:tenant:'pass: 0, fail: 4, warn: 0, error: 0, skip: 0' \
-  raw-objects:crossplane:'pass: 0, fail: 0, warn: 0, error: 0, skip: 4' \
-  platform-namespace:tenant:'pass: 0, fail: 0, warn: 0, error: 0, skip: 1' \
-  xrs:tenant:'pass: 1, fail: 2, warn: 0, error: 0, skip: 0'; do
-  res=${c%%:*}; rest=${c#*:}; who=${rest%%:*}; want=${rest#*:}
-  out=$(cat "$TMP/xp-$res-$who.out")
-  assert_match "$out" "$want" "crossplane policies: $who applying tests/kyverno/$res.yaml -> $want"
-done
+assert_apply_cases "VAP argo-events-workflows-falco-response-only" tests/vap ae "${AE_CASES[@]}"
+assert_apply_cases "VAP argo-events-auto-build-workflows" tests/vap-auto-build ab "${AB_CASES[@]}"
+assert_apply_cases "secret-stores tenant VAPs" tests/vap ss "${SS_CASES[@]}"
+assert_apply_cases "crossplane policies" tests/kyverno xp "${XP_CASES[@]}"
 
 # previews: stamp = now + 48h (unix seconds, within the test's clock window)
 out=$(cat "$TMP/pv-stamp.out")

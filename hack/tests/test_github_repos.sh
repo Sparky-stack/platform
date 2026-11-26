@@ -20,14 +20,16 @@ source "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 # shellcheck source=../lib/portable.sh
 source hack/lib/portable.sh
+# shellcheck source=crossplane_render_lib.sh
+source "$(dirname "$0")/crossplane_render_lib.sh"
 
 ADDON=addons/crossplane
 FILES=$ADDON/files/github-repository
 FIX=hack/tests/github-repos
 SCHEMAS_DIR=$(native_path "${SCHEMAS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/koorikla-platform/schemas}")
 [[ -f "$SCHEMAS_DIR/repo.github.m.upbound.io/repositoryruleset_v1alpha1.json" ]] || SCHEMAS_DIR="$SCHEMAS_DIR" ./hack/schemas.sh >/dev/null
-kc() { assert_eq "$(kc_valid "$1")" yes "$2 passes kubeconform -strict"; }   # kc <file> <label>
-q() { yq -N "$1" "$2" | tr -d '\r' | sed '/^$/d'; }   # q <expr> <file> (blank lines of non-matching documents dropped)
+kc() { assert_kc_valid "$1" "$2"; }
+q() { xp_yq "$1" "$2"; }
 need_renders
 shopt -s nullglob
 
@@ -103,30 +105,10 @@ assert_eq "$(q 'select(.kind == "GitHubRepository") | .metadata.name' "$RENDERED
   "hello-world platform " "local mgmt declares Sparky-stack/platform and Sparky-stack/hello-world"
 
 # --- 2. crossplane render -----------------------------------------------------------------------------------------------
-if ! command -v crossplane >/dev/null 2>&1; then
-  echo "  SKIP crossplane render: crossplane CLI not found (mise install)"
-  finish; exit 0
-fi
-if [[ "$(docker info --format '{{.OSType}}' 2>/dev/null | tr -d '\r')" != linux ]]; then
-  echo "  SKIP crossplane render: needs a Linux Docker engine (functions run as containers)"
-  finish; exit 0
-fi
+xp_check_docker
 XP_IMAGE="$(yq -r '.crossplane.image.repository + ":" + .crossplane.image.tag' "$ADDON/values.yaml" | tr -d '\r')"
-# One Docker network and one container per Function for the run (test_crossplane_render.sh explains why), removed on exit.
-XP_NET="koorikla-xp-github-$$-$RANDOM"
-xp_cleanup() {
-  local ids
-  ids=$( (docker ps -aq --filter "name=$XP_NET-"; docker ps -aq --filter "network=$XP_NET") 2>/dev/null | sort -u | tr '\n' ' ')
-  # shellcheck disable=SC2086 # word-split container ids
-  [[ -z "${ids// /}" ]] || docker rm -f $ids >/dev/null 2>&1 || true
-  docker network rm "$XP_NET" >/dev/null 2>&1 || true
-  rm -rf "$TMP"
-}
-trap xp_cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-docker network create --label koorikla.platform/test=crossplane-render --label "koorikla.platform/owner-pid=$$" \
-  --label "koorikla.platform/owner-host=$(uname -n)" "$XP_NET" >/dev/null
+# One Docker network and one container per Function for the run (crossplane_render_lib.sh), removed on exit.
+xp_render_init koorikla-xp-github
 fns=""
 for fn in function-go-templating function-auto-ready; do
   fns="${fns}---
@@ -144,9 +126,8 @@ spec:
 "
 done
 printf '%s' "$fns" > "$TMP/functions.yaml"
-for img in "$XP_IMAGE" $(yq -N -r '.spec.package' "$TMP/functions.yaml" | tr -d '\r'); do
-  docker image inspect "$img" >/dev/null 2>&1 || retry_with_backoff 4 2 docker pull -q "$img" >/dev/null
-done
+pkgs=(); read_lines pkgs yq -N -r '.spec.package' "$TMP/functions.yaml"
+xp_pull_images "$XP_IMAGE" ${pkgs[@]+"${pkgs[@]}"}
 
 # render <case> <xr> [observed]: composed objects -> $TMP/out-<case>.yaml, XR -> $TMP/xrout-<case>.yaml
 render() {
@@ -164,7 +145,7 @@ render() {
   kc "$TMP/out-$c.yaml" "crossplane render $c: composed resources"
   assert_eq "$(q '.status.conditions[] | select(.type == "Synced") | .status' "$TMP/xrout-$c.yaml")" True "crossplane render $c: XR Synced"
 }
-kinds() { yq -N '.kind' "$1" | tr -d '\r' | sed '/^$/d' | LC_ALL=C sort | uniq -c | awk '{print $2 "=" $1}' | tr '\n' ' '; }
+kinds() { xp_kinds "$1"; }
 policies() { q '[.kind, (.spec.managementPolicies | join(","))] | join(":")' "$1" | LC_ALL=C sort -u | tr '\n' ' '; }
 RULESET='select(.kind == "RepositoryRuleset") | .spec.forProvider'
 

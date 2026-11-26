@@ -205,12 +205,8 @@ for inst_file in "$ROOT"/installations/*/installation.yaml; do
     "bootstrap/k3d-mgmt.yaml publishes mesh.ca.port $port on the load balancer ($(basename "$(dirname "$inst_file")"))"
   assert_match "$(yq ".ports[] | select(.port | test(\":$port:$port\$\")) | .port" "$ROOT/bootstrap/k3d-mgmt.yaml")" '^127\.0\.0\.1:' "mesh.ca.port $port bound to loopback only"
 done
-for f in addons/kyverno-policies/values.yaml addons/kyverno/values.yaml; do   # in Kyverno's scope like harbor
-  assert_eq "$(grep -cE '^ *- openbao$' "$ROOT/$f" || true)" 0 "openbao not excluded from Kyverno ($f)"
-done
-ob_pss=$(yq 'select(.kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob")' "$TMP/openbao.yaml" 2>/dev/null \
-  | grep -E 'privileged: true|host(Network|PID|IPC): true|hostPath:|hostPort:|^ *add:' || true)
-assert_eq "$ob_pss" "" "OpenBao workloads meet Pod Security baseline"
+assert_kyverno_not_excluded openbao
+assert_pss_baseline "$TMP/openbao.yaml" '.kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob"' "OpenBao workloads meet Pod Security baseline"
 
 ia_params=$(yq 'select(.kind == "ApplicationSet" and .metadata.name == "addon-mesh") | .spec.template.spec.source.helm.parameters[] | .name + "=" + .value' "$TMP/platform.yaml")
 assert_match "$ia_params" 'global.network=\{\{ index .metadata.labels "mesh.platform.koorikla.io/network" \}\}' "mesh network comes from the mesh network label"

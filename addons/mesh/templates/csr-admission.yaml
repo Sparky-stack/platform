@@ -1,19 +1,5 @@
-{{- /*
-The Vault Issuer signs any SPIFFE identity of the trust domain that this cluster's OpenBao role allows, and cert-manager's
-internal approver approves every CertificateRequest. So who may ask is limited here (failurePolicy Fail, Deny):
-  platform-mesh-ca-requests      CertificateRequests for Issuer openbao-mesh: created only by istio-csr (workload
-                                 certs for ztunnel/istiod clients, its own serving cert) or cert-manager's controller
-                                 (from an admitted Certificate)
-  platform-mesh-ca-certificates  Certificates for Issuer openbao-mesh: only the chart's istiod Certificate (in this
-                                 namespace), never a CA
-  platform-mesh-ca-issuers       only Issuer openbao-mesh may use ServiceAccount istio-csr-openbao or request the
-                                 audience vault://istio-system/openbao-mesh: OpenBao accepts any token of that subject
-                                 with that audience, so a second Vault Issuer in istio-system (serviceAccountRef with
-                                 audiences: [vault://istio-system/openbao-mesh]) would bypass the two policies above.
-                                 Issuers of other namespaces cannot name this ServiceAccount (serviceAccountRef is
-                                 namespace-local) and get another subject; ClusterIssuers are covered all the same.
-OpenBao enforces the rest server-side (allowed DNS names, spiffe://<trust domain>/ns/<ns>/sa/<sa> URIs, TTL).
-*/ -}}
+{{- /* Restricts who may create CertificateRequests/Certificates for Issuer openbao-mesh or bind ServiceAccount istio-csr-openbao,
+since cert-manager auto-approves requests and OpenBao trusts any token with that SA and audience (docs/multicluster.md). */ -}}
 {{- $a := .Values.admission }}
 {{- if and .Values.mesh.csr.enabled $a.enabled }}
 {{- $sa := .Values.issuer.serviceAccount }}
